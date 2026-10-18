@@ -1175,20 +1175,34 @@ fn contrast_ratio(a: paint.Color, b: paint.Color) -> f32 {
 }
 
 // Under the Neper look in its Dark palette an ink that reads below 4.5:1 on the lightest dark surface (the page,
-// a selected row) is lifted toward white until it does, keeping its hue; every other look and palette gets the ink
+// a selected row) is lifted toward white until it does (5.0 in the code: the measured fill of a selected row is a little lighter than the token), keeping its hue; every other look and palette gets the ink
 // back unchanged, so the light pictures do not move.
+fn same_color(a: paint.Color, b: paint.Color) -> bool {
+    ret a.red == b.red && a.green == b.green && a.blue == b.blue
+}
+
 fn lift_ink(t: *const ThemeTokens, ink: paint.Color) -> paint.Color {
     if t.palette != .Dark || t.profile != .Neper { ret ink }
     var ground = color(t, .SurfaceVariant)
     let selection = color(t, .Selection)
     if rel_luminance(selection) > rel_luminance(ground) { ground = selection }
+    // the palette's own inks for a light fill (on-primary on the accent) stay as they are: lifting them would erase them
+    if same_color(ink, color(t, .OnPrimary)) || same_color(ink, color(t, .OnSecondary)) || same_color(ink, color(t, .OnTertiary)) { ret ink }
+    if same_color(ink, color(t, .OnError)) || same_color(ink, color(t, .OnSuccess)) || same_color(ink, color(t, .OnWarning)) || same_color(ink, color(t, .InverseOnSurface)) { ret ink }
     var share: f32 = 0.0
     var out = ink
-    while contrast_ratio(out, ground) < 4.6 && share < 1.0 {
+    while contrast_ratio(out, ground) < 5.0 && share < 1.0 {
         share += 0.05
         out = mix(ink, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: ink.alpha }, share)
     }
     ret out
+}
+
+// The edge of an interactive frame (list, read-only field): OutlineVariant, which is a divider's ink, reads 2.0:1 on the Neper
+// dark page, so that look takes a fixed ink at 3.9:1 on the page and 3.5:1 on a container; everything else is unchanged.
+fn frame_ink(t: *const ThemeTokens) -> paint.Color {
+    if t.palette == .Dark && t.profile == .Neper { ret hex_raw(0x707380u32) }
+    ret color(t, .OutlineVariant)
 }
 
 // A control's look under its state, resolved once at build: pressed darkens toward

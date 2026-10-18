@@ -1,0 +1,403 @@
+{
+ "label": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/label.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in label. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/button.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in button, button_arrows, button_hover, button_kinds, button_shift, button_states. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round. The round's first finding: lift_ink had pushed the dark on-primary label (#003062) toward white on the light accent (1.1:1); it is back at 7.7:1.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/checkbox.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in checkbox, checkbox_dialog, checkbox_hover, checkbox_states. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/radio.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in radio, radio_dialog, radio_hover, radio_states. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/radio_group.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in radio_group, radio_group_dialog, radio_group_states. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/text_edit.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no contrast violation in edits_dialog, edits_hover, edits_states, text_edit, but the sheet is not ready for the reason in the gaps.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The Windows THotKey replica in edits_states and edits_hover is a pixel-baked light grey frame and white face (6100 px, 1.8:1 label); it is a Windows-only cell the Neper sheet also draws, and leaving it out would change the light Neper PNG",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/spin_edit.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in spin_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/combo_box.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in combo_box, combo_hover. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/image_combo_box.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no contrast violation in image_combo_box, but the sheet is not ready for the reason in the gaps.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The Disabled cell is identical to the enabled one: control.image_select has no disabled look outside the Windows profile (a Neper-wide gap; fixing it changes the light PNG)",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in date_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/mask_edit.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in mask_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/memo.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in memo. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/button_edit.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in button_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/token_edit.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in token_edit, token_edit_dialog. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/check_list_box.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in check_list_box, check_list_box_dialog, check_list_box_hover, check_list_box_states. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/progress_bar.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in progress_bar. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/group_box.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in group_box, group_box_dialog. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/page_control.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in page_control. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/splitter.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in splitter. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/status_bar.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in status_bar. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/toolbar_button.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no contrast violation in toolbar_button, but the sheet is not ready for the reason in the gaps.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The Disabled glyph looks the same as the enabled one: the Neper glyph button draws no disabled look (a Neper-wide gap; fixing it changes the light PNG)",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/menu_bar.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no contrast violation in menu_bar, menu_bar-open, but the sheet is not ready for the reason in the gaps.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The open drop-down is not rendered by the Neper menu_bar sheet (light neither): only the bar is judged; the dropdown panel is judged through popup_menu-hover",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no contrast violation in popup_menu, popup_menu-hover, popup_menu_admin, popup_menu_cardart, popup_menu_cards, popup_menu_dialog, popup_menu_file, popup_menu_help, popup_menu_online, popup_menu_reports, popup_menu_search, popup_menu_tools, popup_menu_view, but the sheet is not ready for the reason in the gaps.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The other popup_menu_* sheets render empty under Neper (light too): Windows-only menu pictures, so only popup_menu and popup_menu-hover are checked",
+     "A hover row on a disabled item is a state layer of 1.1:1 on the panel (decorative, the item is disabled)",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/hint.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in hint. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/scroll_bar.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in scroll_bar. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/list_box.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in list_box. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/tree_list.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no contrast violation in tree_list, tree_list_rules, but the sheet is not ready for the reason in the gaps.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "tree_list_rules is the Windows conditional-formatting list grid: its header carries a light grey top line (#D0D2D5) and frame lines (#828790) from the shared grid chrome, not mapped to dark tokens",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/vertical_grid.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no violation in vertical_grid. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/data_grid.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no contrast violation in data_grid, data_grid_bottom, data_grid_dialogs, data_grid_main, data_grid_sort_states, data_grid_top, but the sheet is not ready for the reason in the gaps.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Light baked v3 pixels remain: the indicator icons, star, filter funnel, navigator buttons, and the white column rules in data_grid_top/main/bottom/sort_states are 96 DPI capture tiles and grid-look constants",
+     "The v3 dialogs of datagrid.e (page setup, format rules, statistics) are hard-coded light colours and Windows-only",
+     "Row inks are lifted generically against the dark row, not mapped per card colour",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/dialog.png",
+    "notes": "Round 22: scripts/neper_dark_contrast.py finds no contrast violation in dialog, dialog_message, dialog_wide, but the sheet is not ready for the reason in the gaps.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "The dialog panel (#292A2F) has no edge on the #0C0D10 scrim (1.4:1) and its shadow does not read on dark: it is a container, not a component boundary, but a frame_ink border would help (not added: new chrome)",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ }
+}
