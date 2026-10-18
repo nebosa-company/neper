@@ -99,13 +99,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_cmap { ret tthint.Unsupported }
     let (sub, has_sub) = shape.cmap_subtable(bytes, cmap)
     if !has_sub { ret tthint.Unsupported }
-    // 'l' is a stem 62..132 wide and 576 tall in ClearType, three pixels advance.
+    // 'l' is the stem GDI draws from 64 to 134 and 576 tall in ClearType, three pixels advance.
     let lg = shape.glyph_of(bytes, sub, 108u32)
     let (l, l_error) = ttglyph.hint_glyph(h, a, 12i64, lg, true)
     if l_error != ok || l.n != 4usize || l.adv != 192i64 { ret tthint.Trap }
-    if l.cur[0usize] != 132i64 || l.cur[2usize] != 62i64 || l.cur[5usize] != 576i64 { ret tthint.Trap }
-    if glyph_sum(h, a, bytes, sub, "labelmoRS", true) != 15469979i64 { ret tthint.Trap }
+    if l.cur[0usize] != 134i64 || l.cur[2usize] != 64i64 || l.cur[5usize] != 576i64 { ret tthint.Trap }
+    if glyph_sum(h, a, bytes, sub, "labelmoRS", true) != 15483273i64 { ret tthint.Trap }
     if glyph_sum(h, a, bytes, sub, "labelmoRS", false) != 15505486i64 { ret tthint.Trap }
-    if image_sum(h, a, bytes, sub, "Sample label") != 272076851i64 { ret tthint.Trap }
+    if image_sum(h, a, bytes, sub, "Sample label") != 271674872i64 { ret tthint.Trap }
     ret ok
 }

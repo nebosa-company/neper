@@ -58,7 +58,8 @@ type Hinter = struct {
     zone: [2]Zone,
     code_lo: usize, code_hi: usize, ip: usize, depth: usize, steps: usize,
     ppem: i64, xs: i64, cleartype: bool, composite: bool,
-    sr_per: i64, sr_phase: i64, sr_thr: i64
+    sr_per: i64, sr_phase: i64, sr_thr: i64,
+    wbw: i64
 }
 // What `hint_glyph` answers: the points of the outline (x, y interleaved, 26.6, x relative to the glyph's left phantom point),
 // whether each is on the curve (bit 0 of `tags`), the last point of each contour and the glyph's advance in this mode.
@@ -253,6 +254,12 @@ fn open(a: *mem.Arena, data: []const u8) -> (*Hinter, err) {
     if lo_error != ok { ret (zero, NoRoom) }
     let (hi, hi_error) = mem.alloc[usize](a, h.max_fdefs + 1usize)
     if hi_error != ok { ret (zero, NoRoom) }
+    var f = 0usize
+    while f <= h.max_fdefs {
+        lo[f] = 0usize
+        hi[f] = 0usize
+        f += 1usize
+    }
     h.fdef_lo = lo
     h.fdef_hi = hi
     let (stack, stack_error) = mem.alloc[i64](a, h.max_stack + 96usize)
@@ -740,7 +747,9 @@ fn vm_shpix(h: *Hinter) {
     while k < h.gs.lp {
         let p = vm_pop(h)
         if h.fail { ret }
-        if vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }
+        // GDI's ClearType ignores a shift of a whole pixel or more along x (the font's tweaks for the black-and-white advance).
+        let big = h.cleartype && h.gs.free_y == 0i64 && (d >= 64i64 || d <= -64i64)
+        if !big && vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }
         k += 1i64
     }
     h.gs.lp = 1i64
@@ -762,7 +771,19 @@ fn vm_ip(h: *Hinter) {
     } else {
         old_range = vm_dualproj(h, z1.orus[2usize * r2] - z0.orus[2usize * r1], z1.orus[2usize * r2 + 1usize] - z0.orus[2usize * r1 + 1usize])
     }
-    let cur_range = vm_project(h, z1.cur[2usize * r2] - z0.cur[2usize * r1], z1.cur[2usize * r2 + 1usize] - z0.cur[2usize * r1 + 1usize])
+    var cur_range = vm_project(h, z1.cur[2usize * r2] - z0.cur[2usize * r1], z1.cur[2usize * r2 + 1usize] - z0.cur[2usize * r1 + 1usize])
+    // Along x in ClearType, a point interpolated against the glyph's right phantom point takes that point where GDI puts it: the
+    // advance the rounding grid gives (to 1/16 pixel) scaled by hinted width over unhinted width, so a stem lands where the
+    // advance-fitted glyph has it.
+    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && r2 + 3usize == z1.n && h.wbw != 0i64 {
+        let n = z1.n
+        let a_adv = z1.org[2usize * (n - 3usize)] - z1.org[2usize * (n - 4usize)]
+        if a_adv > 0i64 {
+            let grid_adv = ((a_adv + 2i64) / 4i64) * 4i64
+            let eff = i64(math.floor[f64](f64(grid_adv) * f64(h.wbw) / f64(a_adv) + 0.5f64))
+            cur_range = eff - (z0.cur[2usize * r1] - z1.cur[2usize * (n - 4usize)])
+        }
+    }
     var k = 0i64
     while k < h.gs.lp {
         let p = vm_pop(h)
@@ -869,6 +890,18 @@ fn vm_mdap(h: *Hinter, round: bool) {
     if round {
         let cur = vm_project(h, z.cur[2usize * pi], z.cur[2usize * pi + 1usize])
         d = vm_round(h, cur) - cur
+        // A point IP placed along x already carries the scale of the advance fitting: it is rounded on the unscaled grid and
+        // scaled again.
+        if vm_is_x(h) && h.gs.gep0 == 1usize && z.ipd[pi] && h.wbw != 0i64 {
+            let n = z.n
+            let a_adv = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
+            if a_adv > 0i64 {
+                let scale = f64(h.wbw) / f64(a_adv)
+                let unscaled = i64(math.floor[f64](f64(cur) / scale + 0.5f64))
+                let grid = vm_round(h, unscaled)
+                d = i64(math.floor[f64](f64(grid) * scale + 0.5f64)) - cur
+            }
+        }
     }
     vm_move(h, h.gs.gep0, pi, d)
     h.gs.rp0 = p

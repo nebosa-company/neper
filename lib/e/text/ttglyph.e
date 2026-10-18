@@ -63,6 +63,11 @@ fn size_of(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, cleartype: bool) -> (usi
     s.cvt = cvt[0usize..h.cvt_count]
     let (storage, storage_error) = mem.alloc[i64](a, h.max_storage + 1usize)
     if storage_error != ok { ret (si, tthint.NoRoom) }
+    var z = 0usize
+    while z < h.max_storage {
+        storage[z] = 0i64
+        z += 1usize
+    }
     s.storage = storage[0usize..h.max_storage]
     let (twi, twi_error) = tthint.zone_new(a, h.max_twilight + 4usize, 1usize)
     if twi_error != ok { ret (si, tthint.NoRoom) }
@@ -166,6 +171,8 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.xs = s.xscale
     h.cleartype = s.cleartype
     h.composite = composite
+    h.wbw = 0i64
+    if s.cleartype { h.wbw = bw_adv }
     h.gs = s.gs
     h.sp = 0usize
     var k = 0usize
