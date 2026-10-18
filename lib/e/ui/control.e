@@ -7668,7 +7668,9 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     if android && !options.enabled { fill = style.layer(fill, style.color(t.tokens, .OnSurface), 0.0) }
     bar.background = paint.Brush { Solid: fill }
     bar.radius = h * 0.5
-    let pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
+    var pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
+    // Android: the bar is centred on its 56 dp, a taller clear button must not grow it.
+    if android { pad_y = style.Length { Px: 0.0 } }
     bar.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: pad_y, right: style.Length { Px: trail }, bottom: pad_y }
     if android && !options.enabled {
         // Disabled: the bar at the 38 % content level.
