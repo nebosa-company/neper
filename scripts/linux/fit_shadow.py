@@ -69,6 +69,12 @@ def popover(nl):
     fit_body("popover", nl, 24.0, 27.07, 158.0, 118.8, a * 255, lambda c, s: (c + (1 - c) * s) * 255, lambda sd, px, py: sd > -0.8)
 
 
+def menu(scheme, nl):
+    """Round 22: the GtkPopoverMenu of menu-edit@1x (body 162 x 230 at (24, 22)); the alpha channel is the shade plus the body."""
+    a = np.asarray(Image.open(REF / scheme / "menu-edit@1x.png").convert("RGBA")).astype(float)[:, :, 3] / 255.0
+    fit_body("menu " + scheme, nl, 24.0, 22.0, 162.0, 230.0, a * 255, lambda c, s: (c + (1 - c) * s) * 255, lambda sd, px, py: sd > -0.8)
+
+
 def glow(scheme):
     im = np.asarray(Image.open(REF / scheme / "columnview@1x.png").convert("RGB")).astype(float)[:, :, 0]
     bg = 255 if scheme == "light" else 30
@@ -93,6 +99,8 @@ if __name__ == "__main__":
     a = sys.argv[1:]
     if a[0] == "alert":
         alert(a[1], int(a[2]) if len(a) > 2 else 3)
+    elif a[0] == "menu":
+        menu(a[1], int(a[2]) if len(a) > 2 else 3)
     elif a[0] == "popover":
         popover(int(a[1]) if len(a) > 1 else 3)
     else:

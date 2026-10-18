@@ -191,3 +191,19 @@ fn card_node(a: *mem.Arena, w: f32, h: f32, face: paint.Color) -> (widget.Node, 
     let (made, made_error) = made_node(a, sh, w, h)
     ret (made, made_error)
 }
+
+// Round 22: the GtkPopoverMenu's shade (fitted to menu-edit@1x by scripts/linux/fit_shadow.py menu: rms 0.6 of 255), round the `w` x `h`
+// surface this node fills; the body is the menu's own box.
+fn menu_node(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
+    var sh: Shade = zero
+    sh.rw = w
+    sh.rh = h
+    sh.radius = 11.1438
+    sh.margin = 30.0
+    sh.count = 3usize
+    sh.layers[0usize] = Layer { oy: 1.0323, spread: 2.1648, sigma: 1.1524, alpha: 0.0817 }
+    sh.layers[1usize] = Layer { oy: 0.0 - 0.2148, spread: 0.6979, sigma: 0.4, alpha: 0.0527 }
+    sh.layers[2usize] = Layer { oy: 1.9128, spread: 4.9148, sigma: 5.7962, alpha: 0.0433 }
+    let (made, made_error) = made_node(a, sh, w, h)
+    ret (made, made_error)
+}
