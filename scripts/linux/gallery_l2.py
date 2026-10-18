@@ -65,6 +65,20 @@ reg("spin_edit", "spin50-disabled", spin50, F.INSENSITIVE)
 reg("spin_edit", "spin-max", lambda: (lambda s: (s.set_value(100), sized(s, 120))[1])(Gtk.SpinButton.new_with_range(0, 100, 1)), F.NORMAL, "value 100: the + arrow disabled")
 reg("mask_edit", "entry-mask-focus", lambda: sized(Gtk.Entry(text="(555) 010-1234"), 200), FOCUS)
 reg("mask_edit", "entry-mask-disabled", lambda: sized(Gtk.Entry(text="(555) 010-1234"), 200), F.INSENSITIVE)
+def dropdown():
+    return sized(Gtk.DropDown.new_from_strings(["First", "Second", "Third"]), 160)
+
+
+class All:
+    """flags on every node of the widget, a spin button's or a drop down's own button included"""
+
+
+reg("combo_box", "dropdown-focus-ring", dropdown, All(), "FOCUS_WITHIN on the drop down and its button, settled")
+class Open:
+    """the popover of the widget is up while its own button is captured"""
+
+
+reg("combo_box", "dropdown-open-button", dropdown, Open(), "the drop down's button while its list is open")
 reg("memo", "textview-focus", lambda: g.memo(), FOCUS)
 reg("memo", "textview-disabled", lambda: g.memo(), F.INSENSITIVE)
 reg("combo_box", "combo-entry-focus", lambda: g.combo_entry(), FOCUS)
@@ -107,6 +121,18 @@ def main():
                 else:
                     arrow(wd, which).set_state_flags(F.PRELIGHT, False)
                 settle(12)
+            elif isinstance(flags, Open):
+                pop = next(c for c in kids(wd) if isinstance(c, Gtk.Popover))
+                pop.popup()
+                settle(12)
+            elif isinstance(flags, All):
+                def every(w):
+                    yield w
+                    for c in kids(w):
+                        yield from every(c)
+                for n in (wd, next(c for c in kids(wd) if c.get_css_name() == "button")):
+                    n.set_state_flags(FOCUS, False)
+                settle(12)
             elif flags != F.NORMAL:
                 for n in deep(wd):
                     n.set_state_flags(F(int(flags) & ~int(F.INSENSITIVE)) if not (flags & F.INSENSITIVE) else F.NORMAL, False)
@@ -116,6 +142,9 @@ def main():
             for s in (1, 2):
                 tex = to_texture(pad, s, bg)
                 tex.save_to_png(f"{OUT}/{scheme}/{name}@{s}x.png")
+            if isinstance(flags, Open):
+                pop.popdown()
+                settle(3)
             manifest.append((scheme, neper, name, f"{scheme}/{name}@1x.png", f"{scheme}/{name}@2x.png", tex.get_width() // 2, tex.get_height() // 2, note))
         win.destroy()
     with open(f"{OUT}/manifest-l2.csv", "w", newline="") as f:

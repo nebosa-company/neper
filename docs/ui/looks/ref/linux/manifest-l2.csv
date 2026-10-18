@@ -13,6 +13,8 @@ light,spin_edit,spin50-disabled,light/spin50-disabled@1x.png,light/spin50-disabl
 light,spin_edit,spin-max,light/spin-max@1x.png,light/spin-max@2x.png,120,34,value 100: the + arrow disabled
 light,mask_edit,entry-mask-focus,light/entry-mask-focus@1x.png,light/entry-mask-focus@2x.png,200,34,
 light,mask_edit,entry-mask-disabled,light/entry-mask-disabled@1x.png,light/entry-mask-disabled@2x.png,200,34,
+light,combo_box,dropdown-focus-ring,light/dropdown-focus-ring@1x.png,light/dropdown-focus-ring@2x.png,160,34,"FOCUS_WITHIN on the drop down and its button, settled"
+light,combo_box,dropdown-open-button,light/dropdown-open-button@1x.png,light/dropdown-open-button@2x.png,160,34,the drop down's button while its list is open
 light,memo,textview-focus,light/textview-focus@1x.png,light/textview-focus@2x.png,220,100,
 light,memo,textview-disabled,light/textview-disabled@1x.png,light/textview-disabled@2x.png,220,100,
 light,combo_box,combo-entry-focus,light/combo-entry-focus@1x.png,light/combo-entry-focus@2x.png,203,34,
@@ -31,6 +33,8 @@ dark,spin_edit,spin50-disabled,dark/spin50-disabled@1x.png,dark/spin50-disabled@
 dark,spin_edit,spin-max,dark/spin-max@1x.png,dark/spin-max@2x.png,120,34,value 100: the + arrow disabled
 dark,mask_edit,entry-mask-focus,dark/entry-mask-focus@1x.png,dark/entry-mask-focus@2x.png,200,34,
 dark,mask_edit,entry-mask-disabled,dark/entry-mask-disabled@1x.png,dark/entry-mask-disabled@2x.png,200,34,
+dark,combo_box,dropdown-focus-ring,dark/dropdown-focus-ring@1x.png,dark/dropdown-focus-ring@2x.png,160,34,"FOCUS_WITHIN on the drop down and its button, settled"
+dark,combo_box,dropdown-open-button,dark/dropdown-open-button@1x.png,dark/dropdown-open-button@2x.png,160,34,the drop down's button while its list is open
 dark,memo,textview-focus,dark/textview-focus@1x.png,dark/textview-focus@2x.png,220,100,
 dark,memo,textview-disabled,dark/textview-disabled@1x.png,dark/textview-disabled@2x.png,220,100,
 dark,combo_box,combo-entry-focus,dark/combo-entry-focus@1x.png,dark/combo-entry-focus@2x.png,203,34,

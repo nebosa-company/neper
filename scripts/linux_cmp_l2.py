@@ -32,6 +32,10 @@ SHEETS = {
     "spin_edit": dict(columns=4, cell_w=130, cell_h=44, cells=[
         "spin50-normal", "spin50-hover-up", "spin50-hover-down", "spin50-active-up", "spin50-active-down", "spin50-focus-ring",
         "spin50-disabled", "spin-normal", "spin-disabled", "spin-max"]),
+    "combo_box": dict(columns=3, box_w=203, cell_w=213, cell_h=44, cells=[
+        "dropdown-normal", "dropdown-hover", "dropdown-active", "dropdown-focus-ring", "dropdown-disabled", "combo-entry",
+        "combo-entry-focus", "combo-entry-disabled"]),
+    "image_combo_box": dict(columns=2, box_w=270, cell_w=280, cell_h=44, cells=["dropdown-ellipsis", None, None, None, None]),
 }
 
 
@@ -112,7 +116,8 @@ def run(name, scheme, png):
         ref = ref_crop(scheme, crop)
         w, h = ref.size
         ox, oy = origin(sh, i)
-        x0 = ox + (sh["cell_w"] - w) // 2
+        # a sheet whose controls differ in width puts them at the left of a `box_w` wide box that the harness centres
+        x0 = ox + (sh["cell_w"] - sh["box_w"]) // 2 if "box_w" in sh else ox + (sh["cell_w"] - w) // 2
         y0 = oy + (sh["cell_h"] - h) // 2
         cut = ours.crop((x0, y0, x0 + w, y0 + h))
         rp, op = ref.load(), cut.load()
@@ -153,6 +158,74 @@ def run(name, scheme, png):
         print("  wrote", p)
 
 
+POPUP = {"combo_box_open": ("dropdown-open", {"light": (255, 255, 255), "dark": (56, 56, 56)})}
+
+
+def run_popup(name, scheme, png):
+    """The open list: the popover is found in our sheet by its colour, the reference crop (shadow margin included, transparent
+    corners over the window colour) is laid on it by the popover's top-left, and the rows from 6 px above the popover down are
+    compared (the button above it is not the reference's)."""
+    crop, colour = POPUP[name]
+    colour = colour[scheme]
+    ref = ref_crop(scheme, crop)
+    rw, rh = ref.size
+    # the reference's own popover rectangle: its fully opaque pixels
+    raw = Image.open(REF / scheme / ("%s@1x.png" % crop)).convert("RGBA")
+    ox_, oy_ = 24, 28
+    pw, ph = 158, 117
+    folder = "linux" if scheme == "light" else "linux-dark"
+    ours = Image.open(LOOKS / folder / (name + ".png")).convert("RGB")
+    W, H = ours.size
+    pix = ours.load()
+    seen = set()
+    best = []
+    for y in range(H):
+        for x in range(W):
+            if pix[x, y] != colour or (x, y) in seen:
+                continue
+            comp, stack = [], [(x, y)]
+            seen.add((x, y))
+            while stack:
+                q = stack.pop()
+                comp.append(q)
+                for d in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    r = (q[0] + d[0], q[1] + d[1])
+                    if 0 <= r[0] < W and 0 <= r[1] < H and r not in seen and pix[r[0], r[1]] == colour:
+                        seen.add(r)
+                        stack.append(r)
+            if len(comp) > len(best):
+                best = comp
+    bx0, bx1 = min(p[0] for p in best), max(p[0] for p in best)
+    by0, by1 = min(p[1] for p in best), max(p[1] for p in best)
+    print(scheme, name, "popover found", bx1 - bx0 + 1, "x", by1 - by0 + 1, "at", bx0, by0, "(reference 158 x 117)")
+    x0, y0 = bx0 - ox_, by0 - oy_
+    cut = ours.crop((x0, y0, x0 + rw, y0 + rh))
+    rp, op = ref.load(), cut.load()
+    mask = grow(ink_mask(ref) | ink_mask(cut), 2, (rw, rh))
+    off = body = inside = 0
+    worst = 0
+    diff = Image.new("RGB", (rw, rh), (0, 0, 0))
+    dp = diff.load()
+    for y in range(oy_ - 6, rh):
+        for x in range(rw):
+            d = max(abs(rp[x, y][k] - op[x, y][k]) for k in range(3))
+            if d > 2 and (x, y) not in mask:
+                off += 1
+                worst = max(worst, d)
+                dp[x, y] = (255, 0, 0)
+                if ox_ <= x < ox_ + pw and oy_ <= y < oy_ + ph:
+                    body += 1
+    print("  off %d (worst %d); inside the popover %d; the rest (shadow, corners) %d" % (off, worst, body, off - body))
+    if png:
+        s = 3
+        out = Image.new("RGB", (rw * s * 3 + 20, rh * s), (128, 128, 128))
+        for k, im in enumerate((ref, cut, diff)):
+            out.paste(im.resize((rw * s, rh * s), Image.NEAREST), (k * (rw * s + 10), 0))
+        p = "D:/Temp/l2/cmp_%s_%s.png" % (name, scheme)
+        out.save(p)
+        print("  wrote", p)
+
+
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     schemes = ["light", "dark"]
@@ -161,4 +234,7 @@ if __name__ == "__main__":
         args = [a for a in args if a not in schemes]
     for n in args:
         for sc in schemes:
-            run(n, sc, "--png" in sys.argv)
+            if n in POPUP:
+                run_popup(n, sc, "--png" in sys.argv)
+            else:
+                run(n, sc, "--png" in sys.argv)
