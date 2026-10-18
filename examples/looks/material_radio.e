@@ -24,7 +24,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     while i < 12usize {
         let row = i / 6usize
         let column = i % 6usize
-        let (node, node_error) = control.material_radio(a, u64(i + 1usize), t, "Label", row == 1usize, &actions[0usize], column != 4usize, column == 5usize)
+        let (node, node_error) = control.material_radio(a, u64(i + 1usize), t, "", row == 1usize, &actions[0usize], column != 4usize, column == 5usize)
         if node_error != ok { ret (0usize, node_error) }
         cells[i] = looks.Cell { caption: states[column], node: node, drive: drive_of(column) }
         i += 1usize
@@ -33,6 +33,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "radio", cells: 12usize, columns: 6usize, cell_w: 108.0, cell_h: 56.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "radio", cells: 12usize, columns: 6usize, cell_w: 72.0, cell_h: 64.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

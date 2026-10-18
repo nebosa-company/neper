@@ -43,7 +43,7 @@ fn menu_cell(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err) {
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, row_error) }
     row[0usize] = widget.stack(0u64, control.sized_style(1.0, 1.0), anchor_parts[0usize..2usize])
-    ret (widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(300.0, 290.0), row[0usize..1usize]), ok)
+    ret (widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(200.0, 340.0), row[0usize..1usize]), ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -61,8 +61,8 @@ fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let plain = looks.Sheet { name: "menu", cells: 1usize, columns: 1usize, cell_w: 320.0, cell_h: 290.0, ctx: zero, build: build }
+    let plain = looks.Sheet { name: "menu", cells: 1usize, columns: 1usize, cell_w: 220.0, cell_h: 345.0, ctx: zero, build: build }
     try looks.run_material(a, &plain)
-    let hover = looks.Sheet { name: "menu_hover", cells: 1usize, columns: 1usize, cell_w: 320.0, cell_h: 290.0, ctx: zero, build: build_hover }
+    let hover = looks.Sheet { name: "menu_hover", cells: 1usize, columns: 1usize, cell_w: 220.0, cell_h: 345.0, ctx: zero, build: build_hover }
     ret looks.run_material(a, &hover)
 }

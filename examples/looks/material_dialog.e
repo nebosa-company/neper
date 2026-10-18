@@ -19,10 +19,18 @@ fn buttons_of(a: *mem.Arena) -> ([]overlay.DialogButton, err) {
     ret (buttons[0usize..2usize], ok)
 }
 
+// md.comp.dialog.supporting-text: body-medium in on-surface-variant.
+fn supporting_options() -> control.TextOptions {
+    var o = control.text_options()
+    o.role = .BodyMedium
+    o.color = .OnSurfaceVariant
+    ret o
+}
+
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (buttons, buttons_error) = buttons_of(a)
     if buttons_error != ok { ret (0usize, buttons_error) }
-    let (body, body_error) = control.text(a, 102u64, "A dialog is a type of modal window that appears in front of app content to provide critical information, or prompt for a decision to be made.", t, control.text_options())
+    let (body, body_error) = control.text(a, 102u64, "A dialog is a type of modal window that appears in front of app content to provide critical information, or prompt for a decision to be made.", t, supporting_options())
     if body_error != ok { ret (0usize, body_error) }
     let (dialog, dialog_error) = overlay.dialog(a, 100u64, t, "Basic dialog title", body, buttons, true, true)
     if dialog_error != ok { ret (0usize, dialog_error) }
@@ -33,7 +41,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 fn build_icon(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (buttons, buttons_error) = buttons_of(a)
     if buttons_error != ok { ret (0usize, buttons_error) }
-    let (body, body_error) = control.text(a, 102u64, "This will reset your app preferences back to their default settings. The following accounts will also be signed out:", t, control.text_options())
+    let (body, body_error) = control.text(a, 102u64, "This will reset your app preferences back to their default settings. The following accounts will also be signed out:", t, supporting_options())
     if body_error != ok { ret (0usize, body_error) }
     let (dialog, dialog_error) = overlay.dialog_with_icon(a, 100u64, t, "Reset settings?", body, buttons, .Refresh, false, true, true)
     if dialog_error != ok { ret (0usize, dialog_error) }

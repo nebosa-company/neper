@@ -21,7 +21,7 @@ type Border = struct { width: f32, color: paint.Color }
 type Shadow = struct { offset: geometry.Point, color: paint.Color }
 // Per-corner radii (D945): all four zero means every corner takes `radius`.
 type Corners = struct { top_left: f32, top_right: f32, bottom_right: f32, bottom_left: f32 }
-type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow, border: Border, radius: f32, shadow: Shadow, corners: Corners }
+type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow, border: Border, radius: f32, shadow: Shadow, corners: Corners, shade: u8 }
 error Invalid
 
 fn finite(v: f32) -> bool {
@@ -89,6 +89,7 @@ fn defaults() -> Style {
         radius: 0.0,
         shadow: Shadow { offset: geometry.Point { x: 0.0, y: 0.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.0) },
         corners: Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 },
+        shade: 0u8,
     }
 }
 
@@ -1271,6 +1272,16 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
     var opacity: f32 = 1.0
     if state.disabled { opacity = 0.5 }
     if state.hovered && elevation != 0u8 { elevation = elevation + 1u8 }
+    // M3: a filled or tonal button lifts to level 1 when hovered, an elevated one sits at 1 and goes to 2 only while hovered (not pressed).
+    if t.profile == .MaterialLike {
+        if variant == .Elevated && !state.disabled { elevation = 1u8 }
+        if variant == .Container { elevation = 3u8 }
+        if state.hovered && !state.pressed && !state.disabled {
+            if variant == .Elevated { elevation = 2u8 }
+            if variant == .Container { elevation = 4u8 }
+            if variant == .Filled || variant == .Tonal { elevation = 1u8 }
+        }
+    }
     ret ResolvedControl { background: background, foreground: foreground, border: border, border_width: border_width, focus_ring: focus_ring, opacity: opacity, radius: t.radii.sm, elevation: elevation, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 0.0, min_height: 0.0, corners: zero }
 }
 

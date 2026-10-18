@@ -19,7 +19,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             var options = control.progress_options()
             options.phase = 0.0 - 1.0
             if marquee { options.phase = 0.45 }
-            let (n, e) = control.progress_bar_of(a, u64(i + 1usize), t, "Loading", values[column], marquee, 120.0, options)
+            let (n, e) = control.progress_bar_of(a, u64(i + 1usize), t, "Loading", values[column], marquee, 240.0, options)
             node = n
             made = e
         } else {
@@ -35,6 +35,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "progress", cells: 10usize, columns: 5usize, cell_w: 140.0, cell_h: 60.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "progress", cells: 10usize, columns: 5usize, cell_w: 270.0, cell_h: 64.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }
