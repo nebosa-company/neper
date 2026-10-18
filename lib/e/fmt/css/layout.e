@@ -992,6 +992,14 @@ fn resolve_edges(l: *Layout, b: u32, cbw: f64) {
         let bb2 = bx(l, b)
         if bb2.coll { bb2.border = bb2.cbd }
     }
+    // The collapsed-border model gives the table no padding.
+    if bb.inner == .Table && bx(l, b).coll {
+        var pi = 0usize
+        while pi < 4usize {
+            bx(l, b).padding[pi] = 0.0f64
+            pi += 1usize
+        }
+    }
 }
 
 fn resolve_margins_fixed(l: *Layout, b: u32, cbw: f64) {
