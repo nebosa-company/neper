@@ -17,6 +17,9 @@ Usage (repository root, Git Bash or PowerShell):
     python scripts/looks_scale_check.py checkbox radio        # some sheets (their apps are run whole)
     python scripts/looks_scale_check.py --scale 1.5           # one scale
     python scripts/looks_scale_check.py --report              # also writes docs/ui/looks/scale-report.md
+The linux_* apps run Linux (docs/ui/looks/linux) and Linux dark (linux-dark): their sheets are named `linux:<name>` and
+`linux-dark:<name>` (the Windows names stay as they were), e.g. `python scripts/looks_scale_check.py linux:data_grid`; run_linux of
+lib/e/ui/looks.e reads NEPER_LOOKS_SCALE and NEPER_LOOKS_NOTEXT as run_all does. `--discover linux_data_grid ...` finds their arguments.
 Needs the compiler (NEPER_SELF, build/windows/neper-self.exe or the main checkout's) and numpy + Pillow.
 """
 import math
@@ -37,6 +40,20 @@ SCALES = [1.25, 1.5, 2.0]
 # Apps that are not Windows sheets (the other flavors, and the scale_* sheets, which put controls on fractional
 # positions on purpose, so they are for the eye).
 SKIP_APP = re.compile(r"^(cup_|material_|scale_tiles$)")
+# The apps that draw the Linux look write docs/ui/looks/linux and linux-dark (a sheet name there is prefixed with its folder).
+LOOK_DIRS = ("windows", "linux", "linux-dark")
+
+
+def only_look(app):
+    return "linux" if app.startswith("linux_") else "windows"
+
+
+def split_name(name):
+    """('linux-dark', 'data_grid') for 'linux-dark:data_grid'; ('windows', name) for a Windows sheet."""
+    if ":" in name:
+        folder, stem = name.split(":", 1)
+        return folder, stem
+    return "windows", name
 # The popup menu draws strokes as vector art (the placeholder icons), which do not scale by whole pixels, so only its
 # long runs (frame, separators) are compared.
 MIN_RUN_OF = {"popup_menu": 16, "toolbar_button": 16, "page_control": 16, "image_combo_box": 12}  # (the toolbar, tab and list-item glyphs are vector stand-ins too)
@@ -168,7 +185,8 @@ def build(app, work):
 
 def same_as_committed(work, name):
     """Whether the 1.0 picture the run wrote is the committed docs/ui/looks/windows picture (text and all)."""
-    committed = ROOT / "docs/ui/looks/windows" / f"{name}.png"
+    folder, stem = split_name(name)
+    committed = ROOT / "docs/ui/looks" / folder / f"{stem}.png"
     if not committed.exists():
         return False
     try:
@@ -179,7 +197,7 @@ def same_as_committed(work, name):
 
 def render(app, args, scale, work, notext=True, exact=True):
     """Runs the app at `scale`; returns an error text or None."""
-    env = dict(os.environ, NEPER_LOOKS_EXACT="1", NEPER_LOOKS_SCALE=str(scale), NEPER_LOOKS_ONLY="windows",
+    env = dict(os.environ, NEPER_LOOKS_EXACT="1", NEPER_LOOKS_SCALE=str(scale), NEPER_LOOKS_ONLY=only_look(app),
                NEPER_LOOKS_OUT=str(work / f"out{scale}"))
     if notext:
         env["NEPER_LOOKS_NOTEXT"] = "1"
@@ -194,16 +212,21 @@ def render(app, args, scale, work, notext=True, exact=True):
 
 def png_of(work, name, scale):  # work: the app's folder
     suffix = "" if scale == 1.0 else ("@2x" if scale == 2.0 else f"@{scale}x")
-    return np.asarray(Image.open(work / f"out{scale}" / "windows" / f"{name}{suffix}.png").convert("RGB")).astype(int)
+    folder, stem = split_name(name)
+    return np.asarray(Image.open(work / f"out{scale}" / folder / f"{stem}{suffix}.png").convert("RGB")).astype(int)
 
 
 def sheets_in(work, scale):
-    folder = work / f"out{scale}" / "windows"
-    if not folder.exists():
-        return set()
     tail = "" if scale == 1.0 else ("@2x" if scale == 2.0 else f"@{scale}x")
-    return {p.stem[:len(p.stem) - len(tail)] for p in folder.glob("*.png")
-            if p.stem.endswith(tail) and (scale != 1.0 or "@" not in p.stem) and not p.stem.endswith("-vs-ref" + tail)}
+    found = set()
+    for look in LOOK_DIRS:
+        folder = work / f"out{scale}" / look
+        if not folder.exists():
+            continue
+        prefix = "" if look == "windows" else look + ":"
+        found |= {prefix + p.stem[:len(p.stem) - len(tail)] for p in folder.glob("*.png")
+                  if p.stem.endswith(tail) and (scale != 1.0 or "@" not in p.stem) and not p.stem.endswith("-vs-ref" + tail)}
+    return found
 
 
 def edge(v, scale):
@@ -402,13 +425,16 @@ def main():
     if report:
         args.remove("--report")
     wanted = set(args)
+    for w in list(wanted):  # `linux:<name>` stands for the Light and the Dark sheet
+        if w.startswith("linux:"):
+            wanted.add("linux-dark:" + w[6:])
     result = {s: {} for s in scales}  # result[scale][sheet] = (checked, matched) or an error text
     misses_of = {}
     with tempfile.TemporaryDirectory(prefix="looks-scale-") as tmp:
         work = Path(tmp)
         chosen = apps()
         if wanted:
-            chosen = [a for a in chosen if any(w == a or w.startswith(a + "_") or a.startswith(w + "_") for w in wanted)]
+            chosen = [a for a in chosen if any(w == a or w.startswith(a + "_") or a.startswith(w + "_") or w.replace("linux-dark:", "linux_").replace("linux:", "linux_") .startswith(a) for w in wanted)]
         for a in chosen:
             (work / a).mkdir()
         errors = [build(a, work / a) for a in chosen]  # the compiler does not run twice at once (arena exhausted)
