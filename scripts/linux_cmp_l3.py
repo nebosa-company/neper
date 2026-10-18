@@ -81,6 +81,13 @@ sheet("popup_menu", 2, 210, 278, [("menu-edit", EDIT_INK), ("menu-view", VIEW_IN
 sheet("popup_menu-hover", 1, 210, 278, [("menu-edit-hover", EDIT_INK)])
 sheet("popup_menu-active", 1, 210, 278, [("menu-edit-active", EDIT_INK)])
 
+sheet("page_control", 2, 390, 150, [
+    ("notebook-top", [(22, 11, 74, 26), (103, 11, 168, 26), (198, 11, 239, 26), (75, 73, 183, 95)]),
+    ("notebook-left", [(12, 19, 76, 33), (12, 63, 76, 81), (12, 107, 76, 121), (155, 63, 258, 83)]),
+    ("adw-tabbar", [(19, 15, 76, 29), (90, 17, 101, 28), (153, 15, 206, 29), (279, 15, 342, 29), (163, 69, 215, 83)]),
+    ("adw-viewswitcher", [(22, 3, 39, 21), (43, 3, 100, 21), (137, 3, 155, 21), (159, 3, 227, 21), (110, 24, 130, 48)]),
+])
+
 
 def origin(sh, i):
     col, row = i % sh["columns"], i // sh["columns"]

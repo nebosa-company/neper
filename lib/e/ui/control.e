@@ -8661,7 +8661,7 @@ fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, se
 // enabled). (D1226) `icons` puts a glyph above each label; `badges` holds a count
 // per tab ("" for none) and `badge_names` what each means in the tab's name
 // (the count itself when shorter).
-type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str, dots: []const bool, bottom: bool, native: bool }
+type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str, dots: []const bool, bottom: bool, native: bool, vertical: bool }
 
 fn tab_badge(options: *const TabsOptions, i: usize) -> str {
     if i >= options.badges.len { ret "" }
@@ -8887,6 +8887,10 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_tabs(a, key, t, labels, selected, picks, options)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_tabs(a, key, t, labels, selected, picks, options)
+        ret (linux, linux_error)
     }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var h = t.tokens.sizes.control_md
@@ -9261,6 +9265,326 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     sem.column_count = u32(labels.len)
     ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
+
+// ---- the Linux look, notebook tabs (worker l3, round 20) --------------------------------------------------------------------
+// GtkNotebook's header in libadwaita 1.5: the window colour with a 1 px line (#dddddd, #454545 Dark) along the page side, tabs of
+// the label's width plus 12 each side, 8 apart and centred along the header; across, a top tab is the whole 37 (36 and the line), a
+// left tab is 36 high and as wide as the widest tab. The chosen tab has a 4 px accent bar on the page side (over the line), a
+// hovered one the text colour at 15 % there, and a pointer wash of 7 %. `options.width` is the header's length along its tabs
+// (the whole width of a top header, the height of a left one); `options.vertical` is the left header.
+fn linux_tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let vertical = options.vertical
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    let (widths, widths_error) = mem.alloc[f32](a, labels.len + 1usize)
+    if widths_error != ok { ret (zero, TooLarge) }
+    var widest: f32 = 0.0
+    var sum: f32 = 0.0
+    var i = 0usize
+    while i < labels.len {
+        let (adv, adv_error) = linux_label_width(a, t, caption, labels[i])
+        if adv_error != ok { ret (zero, adv_error) }
+        widths[i] = adv + 24.0
+        if widths[i] > widest { widest = widths[i] }
+        i += 1usize
+    }
+    // along: the sum of what lies along the header (widths across a top header, 36 each down a left one) and the gaps
+    var span: f32 = 0.0
+    if vertical { span = 36.0 * f32(labels.len) } else {
+        i = 0usize
+        while i < labels.len {
+            sum += widths[i]
+            i += 1usize
+        }
+        span = sum
+    }
+    if labels.len > 1usize { span += 8.0 * f32(labels.len - 1usize) }
+    var length = options.width
+    if length <= 0.0 { length = span + 16.0 }
+    var start = math.floor[f32]((length - span) * 0.5)
+    var across_w = length
+    var across_h: f32 = 37.0
+    if vertical {
+        across_w = widest
+        across_h = length
+    }
+    let ground = style.color(t.tokens, .Background)
+    var face = sized_style(across_w, across_h)
+    face.background = paint.Brush { Solid: ground }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, labels.len * 2usize + 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var rule = sized_style(across_w, 1.0)
+    var rule_at_x: f32 = 0.0
+    var rule_at_y: f32 = 36.0
+    if vertical {
+        rule = sized_style(1.0, across_h)
+        rule_at_x = widest - 1.0
+        rule_at_y = 0.0
+    }
+    rule.background = paint.Brush { Solid: linux_rule(t) }
+    layers[n] = widget.positioned(0u64, rule_at_x, rule_at_y, style.defaults(), mem_one_node(a, widget.box(0u64, rule, zero)))
+    n += 1usize
+    let accent = style.hex_raw(0x3584E4u32)
+    var at = start
+    i = 0usize
+    while i < labels.len {
+        let chosen = i == selected
+        let tab_key = key + 1u64 + u64(i)
+        let enabled = tab_enabled(&options, i)
+        let state = control_state(t, tab_key, enabled, chosen)
+        var tab_w = widths[i]
+        var tab_h: f32 = 37.0
+        var x = at
+        var y: f32 = 0.0
+        if vertical {
+            tab_w = widest
+            tab_h = 36.0
+            x = 0.0
+            y = at
+        }
+        var ink = style.color(t.tokens, .Text)
+        if !enabled { ink = with_alpha(ink, ink.alpha * 0.5) }
+        var look = style.resolve(t.tokens, .Plain, state)
+        var wash: f32 = 0.0
+        if state.hovered || state.pressed { wash = 0.07 }
+        var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+        if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) } else { wash = wash * 0.8 }
+        look.background = with_alpha(tint, wash)
+        look.foreground = ink
+        look.border_width = 0.0
+        look.radius = 0.0
+        look.opacity = 1.0
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = tab_w
+        look.min_height = tab_h
+        let (word, word_error) = colored_text(a, 0u64, labels[i], t, caption, ink)
+        if word_error != ok { ret (zero, word_error) }
+        let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
+        if wide_error != ok { ret (zero, wide_error) }
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 4.0, style.defaults(), mem_one_node(a, word))
+        let content = widget.aligned(0u64, .Center, .Center, sized_style(tab_w, tab_h), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, enabled, chosen, 0u32, 0u32, 0u64, &picks[i], content)
+        if tab_error != ok { ret (zero, tab_error) }
+        layers[n] = widget.positioned(0u64, x, y, style.defaults(), mem_one_node(a, tab))
+        n += 1usize
+        // the bar on the page side: accent when chosen, the text colour at 15 % when hovered
+        var bar_ink = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if state.hovered && enabled {
+            bar_ink = with_alpha(tint, 0.15)
+            if !dark { bar_ink = with_alpha(tint, 0.12) }
+        }
+        if chosen { bar_ink = accent }
+        if bar_ink.alpha > 0.0 {
+            var bar = sized_style(tab_w, 4.0)
+            var bar_x = x
+            var bar_y = y + tab_h - 4.0
+            if vertical {
+                bar = sized_style(4.0, tab_h)
+                bar_x = x + tab_w - 4.0
+                bar_y = y
+            }
+            bar.background = paint.Brush { Solid: bar_ink }
+            layers[n] = widget.positioned(0u64, bar_x, bar_y, style.defaults(), mem_one_node(a, widget.box(0u64, bar, zero)))
+            n += 1usize
+        }
+        if vertical { at += 44.0 } else { at += widths[i] + 8.0 }
+        i += 1usize
+    }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var before = labels.len
+    var after = labels.len
+    var k = 0usize
+    while k < labels.len {
+        if tab_enabled(&options, k) {
+            if k < selected { before = k }
+            if k > selected && after == labels.len { after = k }
+        }
+        k += 1usize
+    }
+    var back: u32 = 37u32
+    var forward: u32 = 39u32
+    if vertical {
+        back = 38u32
+        forward = 40u32
+    }
+    var bound = 0usize
+    if before < labels.len && selected < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: back, modifiers: zero, action: picks[before] }
+        bound += 1usize
+    }
+    if after < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: forward, modifiers: zero, action: picks[after] }
+        bound += 1usize
+    }
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), mem_one_node(a, widget.stack(0u64, face, layers[0usize..n])))
+    var sem: widget.Semantics = zero
+    sem.role = 20u8
+    sem.column_count = u32(labels.len)
+    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+// ---- end the Linux look, notebook tabs ----------------------------------------------------------------------------------
+
+// ---- the Linux look, tab bar and view switcher (worker l3, round 20) -----------------------------------------------------
+// AdwTabBar in libadwaita 1.5: the headerbar colour (#ffffff, #303030) 46 high over a 1 px line (#e1e1e1, #1f1f1f); its tabs are 34
+// high 6 down, 6 px corners, the chosen one washed with the text colour at 10 % and holding a 24 px close button at its end,
+// the others plain with a 1 px separator (3 px off the ends) between each pair that neither chosen tab touches. AdwTabBox lays
+// the tabs out by its own expand rules, so `lefts` and `widths` say where each stands; `fade` (above 0) is the width of the fade
+// the bar's start edge puts over the first tab (the clipped edge of a scrolled strip).
+fn linux_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, lefts: []const f32, widths: []const f32, fade: f32, width: f32) -> (widget.Node, err) {
+    if picks.len != labels.len || lefts.len != labels.len || widths.len != labels.len { ret (zero, TooLarge) }
+    let dark = t.tokens.palette == .Dark
+    let ground = style.color(t.tokens, .SurfaceContainerHigh)
+    var face = sized_style(width, 47.0)
+    face.background = paint.Brush { Solid: ground }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, labels.len * 3usize + 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var line_ink = style.hex_raw(0xE1E1E1u32)
+    if dark { line_ink = style.hex_raw(0x1F1F1Fu32) }
+    var line = sized_style(width, 1.0)
+    line.background = paint.Brush { Solid: line_ink }
+    layers[n] = widget.positioned(0u64, 0.0, 46.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+    n += 1usize
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) }
+    let scale: f32 = if_else(dark, 1.0, 0.8)
+    var i = 0usize
+    while i < labels.len {
+        let chosen = i == selected
+        let tab_key = key + 1u64 + u64(i)
+        let state = control_state(t, tab_key, true, chosen)
+        var wash: f32 = 0.0
+        if chosen { wash = 0.1 }
+        if state.hovered { wash = if_else(chosen, 0.13, 0.07) }
+        if state.pressed { wash = if_else(chosen, 0.19, 0.16) }
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = with_alpha(tint, wash * scale)
+        look.foreground = style.color(t.tokens, .Text)
+        look.border_width = 0.0
+        look.radius = 6.0
+        look.opacity = 1.0
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = widths[i]
+        look.min_height = 34.0
+        let (word, word_error) = colored_text(a, 0u64, labels[i], t, caption, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
+        if wide_error != ok { ret (zero, wide_error) }
+        // the title is centred in what the tab keeps 4 round, less the close button's 24 on the chosen one
+        var room = widths[i] - 8.0
+        if chosen { room -= 24.0 }
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+        let title = widget.positioned(0u64, 2.0 + math.floor[f32]((room - wide) * 0.5 + 0.5), 6.5, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = title
+        var count = 1usize
+        if chosen {
+            let (cross, cross_error) = icon_square(a, look.foreground, .Cross, 16.0)
+            if cross_error != ok { ret (zero, cross_error) }
+            parts[1usize] = widget.positioned(0u64, widths[i] - 20.0, 9.0, style.defaults(), mem_one_node(a, cross))
+            count = 2usize
+        }
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, true, chosen, 0u32, 0u32, 0u64, &picks[i], widget.stack(0u64, sized_style(widths[i], 34.0), parts[0usize..count]))
+        if tab_error != ok { ret (zero, tab_error) }
+        layers[n] = widget.positioned(0u64, lefts[i], 6.0, style.defaults(), mem_one_node(a, tab))
+        n += 1usize
+        if chosen && fade > 0.0 && i == 0usize {
+            let (fades, fades_error) = mem.alloc[EdgeFade](a, 1usize)
+            if fades_error != ok { ret (zero, TooLarge) }
+            fades[0usize] = edge_fade(ground, false)
+            let (shade, shade_error) = fade_node(a, &fades[0usize], fade, 34.0)
+            if shade_error != ok { ret (zero, shade_error) }
+            layers[n] = widget.positioned(0u64, lefts[i], 6.0, style.defaults(), shade)
+            n += 1usize
+        }
+        if i > 0usize && i != selected && i - 1usize != selected {
+            var sep_ink = style.hex_raw(0xE1E1E1u32)
+            if dark { sep_ink = style.hex_raw(0x4F4F4Fu32) }
+            var sep = sized_style(1.0, 28.0)
+            sep.background = paint.Brush { Solid: sep_ink }
+            layers[n] = widget.positioned(0u64, lefts[i], 9.0, style.defaults(), mem_one_node(a, widget.box(0u64, sep, zero)))
+            n += 1usize
+        }
+        i += 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 20u8
+    sem.column_count = u32(labels.len)
+    ret (widget.semantics(key, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, face, layers[0usize..n]))), ok)
+}
+
+// AdwViewSwitcher (wide): toggle buttons 24 high (6 px corners, padding 2 12) in a row, each a 16 picture, 6 px and the label in
+// Cantarell Bold, centred in its button; the chosen one washed with the text colour at 10 %. `lefts` and `widths` place the buttons
+// (the switcher makes them as wide as its widest), `kinds` are the pictures.
+fn linux_view_switcher(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, kinds: []const GlyphKind, selected: usize, picks: []const widget.Submit, lefts: []const f32, widths: []const f32, width: f32) -> (widget.Node, err) {
+    if picks.len != labels.len || lefts.len != labels.len || widths.len != labels.len || kinds.len != labels.len { ret (zero, TooLarge) }
+    let dark = t.tokens.palette == .Dark
+    var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) }
+    let scale: f32 = if_else(dark, 1.0, 0.8)
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (layers, layers_error) = mem.alloc[widget.Node](a, labels.len)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < labels.len {
+        let chosen = i == selected
+        let tab_key = key + 1u64 + u64(i)
+        let state = control_state(t, tab_key, true, chosen)
+        var wash: f32 = 0.0
+        if chosen { wash = 0.1 }
+        if state.hovered { wash = if_else(chosen, 0.13, 0.07) }
+        if state.pressed { wash = if_else(chosen, 0.19, 0.16) }
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = with_alpha(tint, wash * scale)
+        look.foreground = style.color(t.tokens, .Text)
+        look.border_width = 0.0
+        look.radius = 6.0
+        look.opacity = 1.0
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = widths[i]
+        look.min_height = 24.0
+        let (word, word_error) = colored_text(a, 0u64, labels[i], t, caption, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
+        if wide_error != ok { ret (zero, wide_error) }
+        let (picture, picture_error) = icon_square(a, look.foreground, kinds[i], 16.0)
+        if picture_error != ok { ret (zero, picture_error) }
+        let content_w = 22.0 + wide
+        let first = math.floor[f32]((widths[i] - content_w) * 0.5 + 0.5)
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = widget.positioned(0u64, first, 4.0, style.defaults(), mem_one_node(a, picture))
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+        parts[1usize] = widget.positioned(0u64, first + 21.0, 1.5, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, true, chosen, 0u32, 0u32, 0u64, &picks[i], widget.stack(0u64, sized_style(widths[i], 24.0), parts[0usize..2usize]))
+        if tab_error != ok { ret (zero, tab_error) }
+        layers[i] = widget.positioned(0u64, lefts[i], 0.0, style.defaults(), mem_one_node(a, tab))
+        i += 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 20u8
+    sem.column_count = u32(labels.len)
+    ret (widget.semantics(key, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(width, 24.0), layers[0usize..labels.len]))), ok)
+}
+// ---- end the Linux look, tab bar and view switcher ----------------------------------------------------------------------
 
 // A tab view: the tab list (keyed `key + 1`) above the selected page alone, a group
 // labelled by the selected tab.
