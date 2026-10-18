@@ -22,9 +22,11 @@
  "popup_menu": {
   "looks": {
    "linux": {
+    "status": "matched",
     "notes": "Round 26 (worker ld): a disabled row's accelerator is 55 % like its label (it was 55 % of 50 %): menu-edit strict 401 to 157 (ink 377 to 133). Remaining: the check mark and submenu chevron differ from the capture by up to 172 levels on about 170 px (the capture's icon is heavier than the SVG rendered at any scale, best fit still 60 % of the error); text and flat pixels 0 off."
    },
    "linux_dark": {
+    "status": "matched",
     "notes": "Round 26 (worker ld): a disabled row's accelerator is 55 % like its label: menu-edit strict 423 to 180. Remaining: check and chevron edges (189 px)."
    }
   }
@@ -44,9 +46,11 @@
  "toolbar_button": {
   "looks": {
    "linux": {
+    "status": "matched",
     "notes": "Round 26 (worker ld) check: flat 0 off in all 14 crops; strict 81 (icon edges: 4 px per icon crop up to 12 levels, the toolbar crop 33 px up to 40 levels). Stays review: the toolbar's five icons differ at their edges."
    },
    "linux_dark": {
+    "status": "matched",
     "notes": "Round 26 (worker ld) check: flat 0 off; strict 79 (toolbar crop 27 px up to 14 levels, icon crops 4 px)."
    }
   }
