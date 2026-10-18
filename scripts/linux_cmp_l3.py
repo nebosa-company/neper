@@ -63,6 +63,14 @@ sheet("status_bar", 1, 430, 60, [
     ("actionbar", [(6, 9, 76, 25), (292, 9, 354, 25)]),
 ])
 
+ICON_INK = [(8, 8, 25, 25)]
+sheet("toolbar_button", 2, 430, 60,
+      [("button-icon-%s" % st, ICON_INK) for st in ("normal", "hover", "active", "focus", "disabled")]
+      + [("button-flat-icon-%s" % st, ICON_INK) for st in ("normal", "hover", "active", "focus", "disabled")]
+      + [("toggle-on", [(15, 7, 67, 27)]), ("toggle-off", [(15, 7, 67, 27)]),
+         ("headerbar", [(15, 15, 30, 30), (192, 13, 228, 30), (275, 16, 290, 29), (316, 16, 330, 30), (353, 16, 367, 30), (390, 16, 404, 30)]),
+         ("toolbar", [(15, 14, 31, 31), (60, 15, 77, 30), (107, 14, 122, 31), (165, 15, 182, 31), (211, 14, 228, 31)])])
+
 
 def origin(sh, i):
     col, row = i % sh["columns"], i // sh["columns"]

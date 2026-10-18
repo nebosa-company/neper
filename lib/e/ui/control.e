@@ -3259,6 +3259,10 @@ fn toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, se
         let (win, win_error) = windows_button(a, key, t, label, widget.spacer(0u64, 0.0), false, true, selected, zero, action, options)
         ret (win, win_error)
     }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_toggle_button(a, key, t, label, selected, action, options)
+        ret (linux, linux_error)
+    }
     var shown: style.ControlVariant = options.variant
     if selected { shown = .Filled }
     var state = control_state(t, key, options.enabled, false)
@@ -10297,6 +10301,11 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = windows_glyph_toggle(a, key, t, kind, label, action, true, selected)
         ret (flat, flat_error)
+    }
+    // The Linux look (worker l3): a flat icon button, 6 px corners, the pressed wash while on (GtkToggleButton:checked).
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_glyph_toggle(a, key, t, kind, label, action, side, glyph_size, selected)
+        ret (linux, linux_error)
     }
     let state = control_state(t, key, true, selected)
     var muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -20319,6 +20328,43 @@ fn linux_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, pic
     let (node, node_error) = pressable(a, key, t, 3u8, name, look, options.enabled, false, action, row)
     ret (node, node_error)
 }
+// ---- the Linux look, toggle buttons (worker l3, round 20) ----------------------------------------------------------
+// GtkToggleButton: a button whose checked state is the pressed wash (black 23.6 %, white 29.2 % Dark; the default Tonal face
+// unchecked). The icon form is the flat 34 px button (9 px padding round a 16 px glyph).
+fn linux_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, true, selected)
+    var look = style.adwaita_resolve(t.tokens, .Plain, state)
+    look.padding = (side - glyph_size) * 0.5
+    look.padding_y = look.padding
+    look.min_width = side
+    look.min_height = side
+    let (mark, mark_error) = icon_square(a, look.foreground, kind, glyph_size)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, selected, action, mark)
+    ret (node, node_error)
+}
+
+fn linux_toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    var state = control_state(t, key, options.enabled, selected)
+    if options.focused && options.enabled { state.focus_visible = true }
+    var look = style.adwaita_resolve(t.tokens, .Tonal, state)
+    look.padding = 17.0
+    look.padding_y = look.padding_y - 1.0
+    if options.width > 0.0 { look.min_width = options.width }
+    if options.height > 0.0 { look.min_height = options.height }
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if word_error != ok { ret (zero, word_error) }
+    let (wide, wide_error) = linux_label_width(a, t, caption, label)
+    if wide_error != ok { ret (zero, wide_error) }
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+    let row = widget.aligned(0u64, .Center, .Center, sized_style(wide, 21.0), mem_one_node(a, held))
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, selected, action, row)
+    ret (node, node_error)
+}
+// ---- end the Linux look, toggle buttons -------------------------------------------------------------------------------
 // ---- end the Linux look ---------------------------------------------------------------------------------
 
 // ---- round 11: the native Windows 11 light tooltip (ref/windows-native/light/tooltip-rest@1x, 126 x 20) ----------------------
