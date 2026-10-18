@@ -9490,7 +9490,7 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             parts[3usize] = widget.box(0u64, mark, zero)
             var column_style = style.defaults()
             column_style.height = style.Length { Px: h }
-            column_style.min_width = style.Length { Px: least }
+            if t.tokens.profile == .MaterialLike { column_style.min_width = style.Length { Px: least } }
             column_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
             var across: ui_layout.CrossAlign = .Stretch
             if t.tokens.profile == .MaterialLike {

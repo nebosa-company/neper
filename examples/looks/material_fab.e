@@ -1,5 +1,5 @@
 // The Android look's floating action buttons and icon buttons, docs/ui/looks/material/fab.png: small, regular, large and
-// extended FABs, and the four icon button kinds (standard, filled, tonal, outlined) off, toggled, hovered, pressed and
+// extended FABs (and the hovered, focused and pressed ones), and the four icon button kinds (standard, filled, tonal, outlined) off, toggled, hovered, pressed and
 // disabled. Run from the repository root.
 
 use e.mem
@@ -51,10 +51,26 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[6usize + j] = looks.Cell { caption: states[column], node: node, drive: drive }
         j += 1usize
     }
-    ret (30usize, ok)
+    // Rows 5 to 7: the small, regular and large FAB hovered, focused and pressed; the extended FAB focused.
+    let more_names = [10]str{ "Small, hovered", "Small, focused", "Small, pressed", "Regular, hovered", "Regular, focused", "Regular, pressed", "Large, hovered", "Large, focused", "Large, pressed", "Extended, focused" }
+    var k = 0usize
+    while k < 10usize {
+        var size: control.FabSize = .Extended
+        if k < 3usize { size = .Small }
+        if k >= 3usize && k < 6usize { size = .Default }
+        if k >= 6usize && k < 9usize { size = .Large }
+        let (node, node_error) = control.material_fab(a, u64(2000usize + k * 4usize), t, .Edit, "Compose", &actions[0usize], size)
+        if node_error != ok { ret (0usize, node_error) }
+        var drive: looks.Drive = .Focus
+        if k < 9usize && k % 3usize == 0usize { drive = .Hover }
+        if k < 9usize && k % 3usize == 2usize { drive = .Press }
+        cells[30usize + k] = looks.Cell { caption: more_names[k], node: node, drive: drive }
+        k += 1usize
+    }
+    ret (40usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "fab", cells: 30usize, columns: 6usize, cell_w: 150.0, cell_h: 108.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "fab", cells: 40usize, columns: 6usize, cell_w: 150.0, cell_h: 108.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }
