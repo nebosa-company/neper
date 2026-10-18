@@ -3088,6 +3088,11 @@ fn bind_name(it: *Interp, f: *Frame, name: str, val: Value, mode: u8) -> err {
 
 fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err {
     let pn = f.prog.nodes[usize(pid)]
+    if pn.kind == ast.N_CALL && mode == 0u8 {
+        let (cv0, ce0) = eval(it, f, pid)
+        if ce0 != ok { ret ce0 }
+        ret throw_reference(it, "Invalid assignment target")
+    }
     if pn.kind == ast.N_IDENT {
         ret bind_name(it, f, pn.text, val, mode)
     }
@@ -3979,6 +3984,11 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
         ret (rt4, re4)
     }
     if k == ast.N_UPDATE {
+        if f.prog.nodes[usize(n.a)].kind == ast.N_CALL {
+            let (cv0, ce0) = eval(it, f, n.a)
+            if ce0 != ok { ret (undefv(), ce0) }
+            ret (undefv(), throw_reference(it, "Invalid assignment target"))
+        }
         let (rt5, re5) = eval_update(it, f, n)
         ret (rt5, re5)
     }
@@ -4368,6 +4378,12 @@ fn eval_update(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
 
 fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     let tn = f.prog.nodes[usize(n.a)]
+    if tn.kind == ast.N_CALL {
+        // Web compatibility: the call runs, then the assignment is a ReferenceError.
+        let (cv0, ce0) = eval(it, f, n.a)
+        if ce0 != ok { ret (undefv(), ce0) }
+        ret (undefv(), throw_reference(it, "Invalid assignment target"))
+    }
     let logical = (n.flags & ast.F_OPTIONAL) != 0u16
     if n.op == ast.O_ASSIGN && !logical {
         if tn.kind == ast.N_IDENT {

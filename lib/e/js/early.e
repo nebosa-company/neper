@@ -392,6 +392,8 @@ fn check_assign_target(c: *Ctx, id: u32, allow_pattern: bool) -> err {
     if n.kind == ast.N_MEMBER {
         ret check_expr(c, id)
     }
+    // Web compatibility: a call as an assignment target is a runtime ReferenceError in sloppy code.
+    if n.kind == ast.N_CALL && !c.strict { ret check_expr(c, id) }
     if allow_pattern && (n.kind == ast.N_ARRAY || n.kind == ast.N_OBJECT) && n.op != 1u8 { ret check_pattern(c, id, false, true) }
     ret fail(c, id, "Invalid left-hand side in assignment")
 }
@@ -468,7 +470,7 @@ fn check_expr(c: *Ctx, id: u32) -> err {
     }
     if k == ast.N_UPDATE {
         let tn = node(c, n.a)
-        if !is_simple_target(c, n.a) { ret fail(c, id, "Invalid left-hand side expression in update operation") }
+        if !is_simple_target(c, n.a) && !(node(c, n.a).kind == ast.N_CALL && !c.strict) { ret fail(c, id, "Invalid left-hand side expression in update operation") }
         ret check_assign_target(c, n.a, false)
     }
     if k == ast.N_BINARY || k == ast.N_LOGICAL {
@@ -490,7 +492,7 @@ fn check_expr(c: *Ctx, id: u32) -> err {
         if n.op == ast.O_ASSIGN && (n.flags & ast.F_OPTIONAL) == 0u16 {
             try check_assign_target(c, n.a, true)
         } else {
-            if !is_simple_target(c, n.a) { ret fail(c, id, "Invalid left-hand side in assignment") }
+            if !is_simple_target(c, n.a) && !(node(c, n.a).kind == ast.N_CALL && !c.strict) { ret fail(c, id, "Invalid left-hand side in assignment") }
             try check_assign_target(c, n.a, false)
         }
         ret check_expr(c, n.b)
