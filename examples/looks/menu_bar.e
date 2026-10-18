@@ -57,6 +57,9 @@ fn bar(a: *mem.Arena, t: *const control.Theme, action: widget.Submit, base: widg
         toggles[i] = action
         var commands: []const navigation.BarCommand = zero
         commands = cards[0usize..6usize]
+        // Neper dark's open sheet: the menu hangs under the bar and must fit the sheet's window (238 px) or it is moved up over the
+        // titles; Neper's rows are taller than v3's, so it shows the first four commands (the light picture keeps all six).
+        if open == 1usize && only_cards && t.tokens.profile == .Neper && t.tokens.palette == .Dark { commands = cards[0usize..4usize] }
         menus[i] = navigation.BarMenu { label: titles[i], commands: commands }
         i += 1usize
     }
@@ -100,9 +103,18 @@ fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     if action_error != ok { ret (0usize, action_error) }
     let (menu_bar, bar_error) = bar(a, t, *action, 10000u64, 1usize, true)
     if bar_error != ok { ret (0usize, bar_error) }
-    let (shifted, shifted_error) = placed(a, menu_bar, 0.0, 4.0, 520.0, 190.0)
+    var top: f32 = 4.0
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark { top = 0.0 }  // room for the panel's edge
+    let (shifted, shifted_error) = placed(a, menu_bar, 0.0, top, 520.0, 190.0)
     if shifted_error != ok { ret (0usize, shifted_error) }
-    cells[0usize] = looks.Cell { caption: "Open (Cards)", node: shifted, drive: .None }
+    var drive: looks.Drive = .None
+    // Neper dark: an open Neper menu fades in over frames, so a resting cell shows none. Driven (the pointer parked in the cell's
+    // corner, off the menu), the frames run and the menu is drawn; the light picture is left as it is.
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark {
+        drive = .Settle
+        looks.aim(0usize, 240.0, -90.0)
+    }
+    cells[0usize] = looks.Cell { caption: "Open (Cards)", node: shifted, drive: drive }
     ret (1usize, ok)
 }
 
@@ -193,5 +205,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let sheet = looks.Sheet { name: "menu_bar", cells: 3usize, columns: 1usize, cell_w: 782.0, cell_h: 26.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
     let open_sheet = looks.Sheet { name: "menu_bar-open", cells: 1usize, columns: 1usize, cell_w: 520.0, cell_h: 190.0, ctx: zero, build: build_open }
-    ret looks.run_all(a, &open_sheet)
+    try looks.run_all(a, &open_sheet)
+    looks.aim(0usize, 0.0, 0.0)  // the aim outlives the sheet in this process
+    ret ok
 }

@@ -35,8 +35,9 @@ use e.ui.widget
 type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, MaterialDark, CupertinoDark, NeperDark, Linux, LinuxDark }
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
-// focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
-type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress }
+// focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected), Settle (the pointer over it as Hover, then
+// four more frames of 100 ms so that a fade-in, an open menu's, has finished).
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress, Settle }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -431,7 +432,7 @@ fn render(rig: *Rig, root: widget.Node, path: str) -> err {
 
 // What a driven cell needs the runtime to have seen before its frame.
 fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
-    if drive == .Hover { ret testing.hover(&rig.harness, x, y) }
+    if drive == .Hover || drive == .Settle { ret testing.hover(&rig.harness, x, y) }
     if drive == .FocusHover {
         // The keyboard focus in an edit (the click lands 60 px left of the point), then the pointer over the point.
         try testing.tap(&rig.harness, x - 60.0, y)
@@ -538,7 +539,7 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
             var shot = first_shot
             // (pickers) A hover that opens something lands on the element the first frame
             // built: the pointer moves again over that layout, and the frame is taken again.
-            if drive == .Hover || drive == .FocusHover {
+            if drive == .Hover || drive == .FocusHover || drive == .Settle {
                 drop_shot(rig)
                 try testing.hover(&rig.harness, cx, cy)
                 step += 1i64
@@ -550,6 +551,22 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
                 let (shot_two, shot_two_error) = shoot(rig, tree_two, step)
                 if shot_two_error != ok { ret (zero, shot_two_error) }
                 shot = shot_two
+            }
+            if drive == .Settle {
+                var more = 0usize
+                while more < 4usize {
+                    drop_shot(rig)
+                    step += 1i64
+                    let pass_more = begin(rig)
+                    let (rebuilt, rebuilt_error) = s.build(s.ctx, pass_more, &t, cells)
+                    if rebuilt_error != ok { ret (zero, rebuilt_error) }
+                    let (tree_more, tree_more_error) = sheet(pass_more, &t, cells[0usize..rebuilt], s.columns, s.cell_w, s.cell_h)
+                    if tree_more_error != ok { ret (zero, tree_more_error) }
+                    let (shot_more, shot_more_error) = shoot(rig, tree_more, step)
+                    if shot_more_error != ok { ret (zero, shot_more_error) }
+                    shot = shot_more
+                    more += 1usize
+                }
             }
             let x0 = usize(origin.x * rig.scale + 0.5)
             let y0 = usize(origin.y * rig.scale + 0.5)
