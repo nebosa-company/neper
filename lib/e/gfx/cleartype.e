@@ -2,9 +2,13 @@
 // ClearType renderer draws: every pixel row is sampled by five scanlines (at the tenths 0.1, 0.3, ... 0.9 of the row), each
 // scanline by six samples across a pixel (at the twelfths 1/12, 3/12, ...), and the coverage of a pixel's red, green and blue
 // subpixels is the number of set samples in the six-sample window centred on the subpixel (columns 2m-2 .. 2m+3 for subpixel m,
-// so neighbouring subpixels share four of six), divided by five and rounded half up to 0..6 sixths. Where an edge is slanted
-// the scanline takes its crossing at the row's centre (an edge that does not reach the centre is taken at the endpoint nearest
-// it), as GDI's does: a diagonal stem is the same width on every scanline of a row.
+// so neighbouring subpixels share four of six), divided by five and rounded half up to 0..6 sixths.
+//
+// The outline is kept as the curves it is, split where a quadratic turns in y into pieces that run one way, and not flattened:
+// a piece that reaches the middle of a pixel row is taken at that middle for all five scanlines of the row (the edge is the same
+// on each, however slanted or curved), and a piece that ends inside the row is taken at its end nearest the middle. That is how
+// GDI's coverage of a bowl or a diagonal has the crisp 2-4-6 ramps and the half-column 1-3-5 ones it has, which a flattened
+// outline sampled scanline by scanline blurs into 1-2-3-4-5-6.
 //
 // `blend` composes the 0..6 coverage onto a colour as GDI does, a gamma of 1.2 on each channel:
 // out = ((1 - a) * bg^1.2 + a * fg^1.2)^(1/1.2) with a = k / 6, per channel.
@@ -16,13 +20,13 @@ use e.math
 use e.mem
 use e.text.tthint
 
-const MAX_EDGES: usize = 24000usize
+const MAX_PIECES: usize = 6000usize
 const MAX_CROSS: usize = 160usize
 const MAX_COLS: usize = 6144usize
-const SEGMENTS: usize = 16usize
-const MAX_BUFFER: usize = 6291456usize
+const MAX_BUFFER: usize = 3145728usize
 
-type Scratch = struct { ex0: []f64, ey0: []f64, ex1: []f64, ey1: []f64, n: usize, counts: []i64, kbuf: []u8, kx0: i64, ky0: i64, kw: usize, kh: usize, cx: [160]f64, cd: [160]i64, over: bool }
+// A piece is a line (`quad` false) or a quadratic from (x0, y0) by control (cx, cy) to (x1, y1), monotone in y.
+type Scratch = struct { x0: []f64, y0: []f64, cx: []f64, cy: []f64, x1: []f64, y1: []f64, quad: []bool, n: usize, counts: []i64, kbuf: []u8, kx0: i64, ky0: i64, kw: usize, kh: usize, hx: [160]f64, hd: [160]i64, over: bool }
 
 fn scratch(a: *mem.Arena) -> (*Scratch, err) {
     let (cells, cells_error) = mem.alloc[Scratch](a, 1usize)
@@ -30,22 +34,31 @@ fn scratch(a: *mem.Arena) -> (*Scratch, err) {
     let sc = &cells[0usize]
     var blank: Scratch = zero
     *sc = blank
-    let (ex0, e0) = mem.alloc[f64](a, MAX_EDGES)
+    let (x0, e0) = mem.alloc[f64](a, MAX_PIECES)
     if e0 != ok { ret (zero, e0) }
-    let (ey0, e1) = mem.alloc[f64](a, MAX_EDGES)
+    let (y0, e1) = mem.alloc[f64](a, MAX_PIECES)
     if e1 != ok { ret (zero, e1) }
-    let (ex1, e2) = mem.alloc[f64](a, MAX_EDGES)
+    let (cx, e2) = mem.alloc[f64](a, MAX_PIECES)
     if e2 != ok { ret (zero, e2) }
-    let (ey1, e3) = mem.alloc[f64](a, MAX_EDGES)
+    let (cy, e3) = mem.alloc[f64](a, MAX_PIECES)
     if e3 != ok { ret (zero, e3) }
-    let (counts, e4) = mem.alloc[i64](a, MAX_COLS + 24usize)
+    let (x1, e4) = mem.alloc[f64](a, MAX_PIECES)
     if e4 != ok { ret (zero, e4) }
-    let (kbuf, e5) = mem.alloc[u8](a, MAX_BUFFER)
+    let (y1, e5) = mem.alloc[f64](a, MAX_PIECES)
     if e5 != ok { ret (zero, e5) }
-    sc.ex0 = ex0
-    sc.ey0 = ey0
-    sc.ex1 = ex1
-    sc.ey1 = ey1
+    let (quad, e6) = mem.alloc[bool](a, MAX_PIECES)
+    if e6 != ok { ret (zero, e6) }
+    let (counts, e7) = mem.alloc[i64](a, MAX_COLS + 24usize)
+    if e7 != ok { ret (zero, e7) }
+    let (kbuf, e8) = mem.alloc[u8](a, MAX_BUFFER)
+    if e8 != ok { ret (zero, e8) }
+    sc.x0 = x0
+    sc.y0 = y0
+    sc.cx = cx
+    sc.cy = cy
+    sc.x1 = x1
+    sc.y1 = y1
+    sc.quad = quad
     sc.counts = counts
     sc.kbuf = kbuf
     ret (sc, ok)
@@ -72,37 +85,57 @@ fn coverage(sc: *Scratch, px: i64, py: i64, sub: usize) -> i64 {
     ret i64(sc.kbuf[(usize(py - sc.ky0) * sc.kw + usize(px - sc.kx0)) * 3usize + sub])
 }
 
-fn edge(sc: *Scratch, x0: f64, y0: f64, x1: f64, y1: f64) {
-    if y0 == y1 { ret }
-    if sc.n >= MAX_EDGES {
+fn add_line(sc: *Scratch, ax: f64, ay: f64, bx: f64, by: f64) {
+    if ay == by { ret }
+    if sc.n >= MAX_PIECES {
         sc.over = true
         ret
     }
-    sc.ex0[sc.n] = x0
-    sc.ey0[sc.n] = y0
-    sc.ex1[sc.n] = x1
-    sc.ey1[sc.n] = y1
+    sc.x0[sc.n] = ax
+    sc.y0[sc.n] = ay
+    sc.x1[sc.n] = bx
+    sc.y1[sc.n] = by
+    sc.quad[sc.n] = false
     sc.n += 1usize
 }
 
-fn quad(sc: *Scratch, x0: f64, y0: f64, cx: f64, cy: f64, x1: f64, y1: f64) {
-    var px = x0
-    var py = y0
-    var k = 1usize
-    while k <= SEGMENTS {
-        let t = f64(k) / f64(SEGMENTS)
-        let u = 1.0f64 - t
-        let x = u * u * x0 + 2.0f64 * t * u * cx + t * t * x1
-        let y = u * u * y0 + 2.0f64 * t * u * cy + t * t * y1
-        edge(sc, px, py, x, y)
-        px = x
-        py = y
-        k += 1usize
+fn add_monotone(sc: *Scratch, ax: f64, ay: f64, qx: f64, qy: f64, bx: f64, by: f64) {
+    if ay == by { ret }
+    if sc.n >= MAX_PIECES {
+        sc.over = true
+        ret
+    }
+    sc.x0[sc.n] = ax
+    sc.y0[sc.n] = ay
+    sc.cx[sc.n] = qx
+    sc.cy[sc.n] = qy
+    sc.x1[sc.n] = bx
+    sc.y1[sc.n] = by
+    sc.quad[sc.n] = true
+    sc.n += 1usize
+}
+
+// A quadratic, cut where its y turns round.
+fn add_quad(sc: *Scratch, ax: f64, ay: f64, qx: f64, qy: f64, bx: f64, by: f64) {
+    let den = ay - 2.0f64 * qy + by
+    var t = -1.0f64
+    if den != 0.0f64 { t = (ay - qy) / den }
+    if t > 0.0f64 && t < 1.0f64 {
+        let a1x = ax + (qx - ax) * t
+        let a1y = ay + (qy - ay) * t
+        let b1x = qx + (bx - qx) * t
+        let b1y = qy + (by - qy) * t
+        let mx = a1x + (b1x - a1x) * t
+        let my = a1y + (b1y - a1y) * t
+        add_monotone(sc, ax, ay, a1x, a1y, mx, my)
+        add_monotone(sc, mx, my, b1x, b1y, bx, by)
+    } else {
+        add_monotone(sc, ax, ay, qx, qy, bx, by)
     }
 }
 
-// The outline's contours as straight edges in device 26.6 units: the pen is a whole pixel, `baseline` the device row of the baseline.
-fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) {
+// The outline's contours as pieces in device 26.6 units: the pen is a whole pixel, the glyph's left phantom point on it.
+fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64) {
     sc.n = 0usize
     sc.over = false
     let ox = f64(pen * 64i64 - o.pp1x)
@@ -135,7 +168,6 @@ fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) {
         } else {
             curx = ox + f64(o.cur[2usize * first] + o.cur[2usize * last]) / 2.0f64
             cury = f64(o.cur[2usize * first + 1usize] + o.cur[2usize * last + 1usize]) / 2.0f64
-            start = first + count - 1usize
         }
         let firstx = curx
         let firsty = cury
@@ -152,9 +184,9 @@ fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) {
             let y = f64(o.cur[2usize * index + 1usize])
             if (o.tags[index] & 1i64) != 0i64 {
                 if !has_ctrl {
-                    edge(sc, curx, cury, x, y)
+                    add_line(sc, curx, cury, x, y)
                 } else {
-                    quad(sc, curx, cury, ctrlx, ctrly, x, y)
+                    add_quad(sc, curx, cury, ctrlx, ctrly, x, y)
                     has_ctrl = false
                 }
                 curx = x
@@ -163,7 +195,7 @@ fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) {
                 if has_ctrl {
                     let mx = (ctrlx + x) / 2.0f64
                     let my = (ctrly + y) / 2.0f64
-                    quad(sc, curx, cury, ctrlx, ctrly, mx, my)
+                    add_quad(sc, curx, cury, ctrlx, ctrly, mx, my)
                     curx = mx
                     cury = my
                 }
@@ -173,44 +205,78 @@ fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) {
             }
         }
         if has_ctrl {
-            quad(sc, curx, cury, ctrlx, ctrly, firstx, firsty)
+            add_quad(sc, curx, cury, ctrlx, ctrly, firstx, firsty)
         } else if curx != firstx || cury != firsty {
-            edge(sc, curx, cury, firstx, firsty)
+            add_line(sc, curx, cury, firstx, firsty)
         }
         first = last + 1usize
     }
 }
 
-// One scanline's spans into the column counts: the winding rule over the edges crossing `yc`, an edge's x taken at `yrow`.
+// The x of piece `e` where its y is `y`.
+fn piece_x(sc: *Scratch, e: usize, y: f64) -> f64 {
+    let ax = sc.x0[e]
+    let ay = sc.y0[e]
+    let bx = sc.x1[e]
+    let by = sc.y1[e]
+    if !sc.quad[e] {
+        let t = (y - ay) / (by - ay)
+        ret ax + t * (bx - ax)
+    }
+    let qx = sc.cx[e]
+    let qy = sc.cy[e]
+    let a = ay - 2.0f64 * qy + by
+    let b = 2.0f64 * (qy - ay)
+    let c = ay - y
+    var t = 0.0f64
+    var small = a
+    if small < 0.0f64 { small = 0.0f64 - small }
+    if small < 0.000000000001f64 {
+        t = (0.0f64 - c) / b
+    } else {
+        var disc = b * b - 4.0f64 * a * c
+        if disc < 0.0f64 { disc = 0.0f64 }
+        let r = math.sqrt[f64](disc)
+        let t1 = (0.0f64 - b + r) / (2.0f64 * a)
+        let t2 = (0.0f64 - b - r) / (2.0f64 * a)
+        if t1 >= 0.0f64 && t1 <= 1.0f64 { t = t1 } else { t = t2 }
+    }
+    if t < 0.0f64 { t = 0.0f64 }
+    if t > 1.0f64 { t = 1.0f64 }
+    let u = 1.0f64 - t
+    ret u * u * ax + 2.0f64 * t * u * qx + t * t * bx
+}
+
+// One scanline's spans into the column counts: the winding rule over the pieces crossing `yc`, a piece's x taken at `yrow`.
 fn scanline(sc: *Scratch, yc: f64, yrow: f64, xlo64: f64, cols: usize) {
     var m = 0usize
     var e = 0usize
     while e < sc.n {
-        let y0 = sc.ey0[e]
-        let y1 = sc.ey1[e]
+        let y0 = sc.y0[e]
+        let y1 = sc.y1[e]
         if (y0 <= yc) != (y1 <= yc) {
-            var yy = yrow
-            if (y0 <= yrow) == (y1 <= yrow) {
+            var x = 0.0f64
+            if (y0 <= yrow) != (y1 <= yrow) {
+                x = piece_x(sc, e, yrow)
+            } else {
                 var d0 = y0 - yrow
                 var d1 = y1 - yrow
                 if d0 < 0.0f64 { d0 = 0.0f64 - d0 }
                 if d1 < 0.0f64 { d1 = 0.0f64 - d1 }
-                if d0 < d1 { yy = y0 } else { yy = y1 }
+                if d0 < d1 { x = sc.x0[e] } else { x = sc.x1[e] }
             }
-            let t = (yy - y0) / (y1 - y0)
-            let x = sc.ex0[e] + t * (sc.ex1[e] - sc.ex0[e])
             var dir = -1i64
             if y1 > y0 { dir = 1i64 }
             if m < MAX_CROSS {
                 // Insertion by (x, direction).
                 var at = m
-                while at > 0usize && (sc.cx[at - 1usize] > x || (sc.cx[at - 1usize] == x && sc.cd[at - 1usize] > dir)) {
-                    sc.cx[at] = sc.cx[at - 1usize]
-                    sc.cd[at] = sc.cd[at - 1usize]
+                while at > 0usize && (sc.hx[at - 1usize] > x || (sc.hx[at - 1usize] == x && sc.hd[at - 1usize] > dir)) {
+                    sc.hx[at] = sc.hx[at - 1usize]
+                    sc.hd[at] = sc.hd[at - 1usize]
                     at = at - 1usize
                 }
-                sc.cx[at] = x
-                sc.cd[at] = dir
+                sc.hx[at] = x
+                sc.hd[at] = dir
                 m += 1usize
             }
         }
@@ -219,10 +285,10 @@ fn scanline(sc: *Scratch, yc: f64, yrow: f64, xlo64: f64, cols: usize) {
     var w = 0i64
     var i = 0usize
     while i + 1usize < m {
-        w = w + sc.cd[i]
+        w = w + sc.hd[i]
         if w != 0i64 {
-            let xa = sc.cx[i]
-            let xb = sc.cx[i + 1usize]
+            let xa = sc.hx[i]
+            let xb = sc.hx[i + 1usize]
             var ka = i64(math.ceil[f64]((xa - xlo64) * 6.0f64 / 64.0f64 - 0.5f64 - 0.000000001f64))
             var kb = i64(math.floor[f64]((xb - xlo64) * 6.0f64 / 64.0f64 - 0.5f64 + 0.000000001f64))
             if ka < 0i64 { ka = 0i64 }
@@ -237,10 +303,10 @@ fn scanline(sc: *Scratch, yc: f64, yrow: f64, xlo64: f64, cols: usize) {
     }
 }
 
-// Rasterises the outline into the buffer (clipped to its window). False when the glyph has too many edges or is too wide.
+// Rasterises the outline into the buffer (clipped to its window). False when the glyph has too many pieces or is too wide.
 fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) -> bool {
     if o.n == 0usize { ret true }
-    flatten(sc, o, pen, baseline)
+    flatten(sc, o, pen)
     if sc.over { ret false }
     var minx = o.cur[0usize]
     var maxx = minx
@@ -266,6 +332,7 @@ fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) ->
     let subs = usize(hi - lo) * 3usize
     var r = y_hi - 1i64
     while r >= y_lo {
+        // The device row of pixel row r (up from the baseline).
         let row = baseline - 1i64 - r
         if row >= sc.ky0 && row < sc.ky0 + i64(sc.kh) {
             var z = 0usize
@@ -307,8 +374,12 @@ fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) ->
 
 // GDI's gamma-1.2 blend of one channel: `bg` and `fg` in 0..1, `k` the coverage in sixths, and the result in 0..1.
 fn blend(bg: f32, fg: f32, k: i64) -> f32 {
-    if k <= 0i64 { ret bg }
-    let a = f64(k) / 6.0f64
+    ret blend_a(bg, fg, f64(k) / 6.0f64)
+}
+
+// The same blend for a coverage `a` in 0..1 (a clip mask or the brush's alpha scales the sixths).
+fn blend_a(bg: f32, fg: f32, a: f64) -> f32 {
+    if !(a > 0.0f64) { ret bg }
     let b = math.pow[f64](f64(bg), 1.2f64)
     let f = math.pow[f64](f64(fg), 1.2f64)
     let v = math.pow[f64]((1.0f64 - a) * b + a * f, 1.0f64 / 1.2f64)
