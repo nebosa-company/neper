@@ -12,7 +12,18 @@ fn arg(args: []const js.Value, i: usize) -> js.Value {
 
 // --- parse
 
-type P = struct { s: str, i: usize }
+type P = struct { s: str, i: usize, want: bool, recs: list.List[Rec], last: usize }
+
+// A parse record (for the reviver's `context`): the parsed value, its source text when it is a primitive, and its children.
+type Rec = struct { value: js.Value, source: str, kids: list.List[usize], keys: list.List[str] }
+
+const NO_REC: usize = 18446744073709551615usize
+
+fn add_rec(it: *js.Interp, p: *P, v: js.Value, source: str, kids: list.List[usize], keys: list.List[str]) -> err {
+    try list.push[Rec](&p.recs, Rec { value: v, source: source, kids: kids, keys: keys })
+    p.last = p.recs.len - 1usize
+    ret ok
+}
 
 fn skip_ws(p: *P) {
     while p.i < p.s.len && (p.s[p.i] == 32u8 || p.s[p.i] == 9u8 || p.s[p.i] == 10u8 || p.s[p.i] == 13u8) { p.i += 1usize }
@@ -98,9 +109,18 @@ fn parse_value(it: *js.Interp, p: *P, depth: u32) -> (js.Value, err) {
     if c == 123u8 {
         p.i += 1usize
         let o = js.new_plain(it)
+        var okids: list.List[usize] = zero
+        var okeys: list.List[str] = zero
+        if p.want {
+            let (kl, kle) = list.init[usize](it.a, 4usize)
+            let (nl2, nle) = list.init[str](it.a, 4usize)
+            okids = kl
+            okeys = nl2
+        }
         skip_ws(p)
         if p.i < p.s.len && p.s[p.i] == 125u8 {
             p.i += 1usize
+            if p.want { try add_rec(it, p, js.obj_value(o), "", okids, okeys) }
             ret (js.obj_value(o), ok)
         }
         while true {
@@ -113,6 +133,10 @@ fn parse_value(it: *js.Interp, p: *P, depth: u32) -> (js.Value, err) {
             p.i += 1usize
             let (v, ve) = parse_value(it, p, depth + 1u32)
             if ve != ok { ret (js.undefv(), ve) }
+            if p.want {
+                try list.push[usize](&okids, p.last)
+                try list.push[str](&okeys, k)
+            }
             let (done, de) = js.define_own(it, o, js.key_of(k), js.data_desc(v, js.P_DEFAULT))
             if de != ok { ret (js.undefv(), de) }
             skip_ws(p)
@@ -125,19 +149,28 @@ fn parse_value(it: *js.Interp, p: *P, depth: u32) -> (js.Value, err) {
                 ret (js.undefv(), syntax(it, p))
             }
         }
+        if p.want { try add_rec(it, p, js.obj_value(o), "", okids, okeys) }
         ret (js.obj_value(o), ok)
     }
     if c == 91u8 {
         p.i += 1usize
         let a = js.new_array(it)
+        var akids: list.List[usize] = zero
+        var akeys: list.List[str] = zero
+        if p.want {
+            let (kl2, kle2) = list.init[usize](it.a, 4usize)
+            akids = kl2
+        }
         skip_ws(p)
         if p.i < p.s.len && p.s[p.i] == 93u8 {
             p.i += 1usize
+            if p.want { try add_rec(it, p, js.obj_value(a), "", akids, akeys) }
             ret (js.obj_value(a), ok)
         }
         while true {
             let (v2, ve2) = parse_value(it, p, depth + 1u32)
             if ve2 != ok { ret (js.undefv(), ve2) }
+            if p.want { try list.push[usize](&akids, p.last) }
             try js.array_push(it, a, v2)
             skip_ws(p)
             if p.i < p.s.len && p.s[p.i] == 44u8 {
@@ -149,23 +182,29 @@ fn parse_value(it: *js.Interp, p: *P, depth: u32) -> (js.Value, err) {
                 ret (js.undefv(), syntax(it, p))
             }
         }
+        if p.want { try add_rec(it, p, js.obj_value(a), "", akids, akeys) }
         ret (js.obj_value(a), ok)
     }
+    let src_start = p.i
     if c == 34u8 {
         let (s, se) = parse_string(it, p)
         if se != ok { ret (js.undefv(), se) }
+        if p.want { try add_rec(it, p, js.str_value(s), p.s[src_start..p.i], zero, zero) }
         ret (js.str_value(s), ok)
     }
     if str.starts_with(p.s[p.i..], "true") {
         p.i += 4usize
+        if p.want { try add_rec(it, p, js.bool_value(true), p.s[src_start..p.i], zero, zero) }
         ret (js.bool_value(true), ok)
     }
     if str.starts_with(p.s[p.i..], "false") {
         p.i += 5usize
+        if p.want { try add_rec(it, p, js.bool_value(false), p.s[src_start..p.i], zero, zero) }
         ret (js.bool_value(false), ok)
     }
     if str.starts_with(p.s[p.i..], "null") {
         p.i += 4usize
+        if p.want { try add_rec(it, p, js.null_value(), p.s[src_start..p.i], zero, zero) }
         ret (js.null_value(), ok)
     }
     if c == 45u8 || (c >= 48u8 && c <= 57u8) {
@@ -192,14 +231,32 @@ fn parse_value(it: *js.Interp, p: *P, depth: u32) -> (js.Value, err) {
             while p.i < p.s.len && p.s[p.i] >= 48u8 && p.s[p.i] <= 57u8 { p.i += 1usize }
             if p.i == es { ret (js.undefv(), syntax(it, p)) }
         }
-        ret (js.num_value(js.string_to_number(it.a, p.s[start..p.i])), ok)
+        let nv = js.num_value(js.string_to_number(it.a, p.s[start..p.i]))
+        if p.want { try add_rec(it, p, nv, p.s[start..p.i], zero, zero) }
+        ret (nv, ok)
     }
     ret (js.undefv(), syntax(it, p))
 }
 
-fn revive(it: *js.Interp, holder: *js.Obj, key: js.Key, reviver: js.Value) -> (js.Value, err) {
+fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value {
+    let (cell, ce) = mem.alloc[js.Value](it.a, 3usize)
+    if ce != ok { ret js.zero_args() }
+    cell[0usize] = x
+    cell[1usize] = y
+    cell[2usize] = z
+    ret cell[0usize..3usize]
+}
+
+fn revive(it: *js.Interp, p: *P, rec_in: usize, holder: *js.Obj, key: js.Key, reviver: js.Value) -> (js.Value, err) {
     let (val, ve) = js.get_prop(it, holder, key, js.obj_value(holder))
     if ve != ok { ret (js.undefv(), ve) }
+    // The record only describes the value that was parsed: a replaced value has no source and no child records.
+    var rec = NO_REC
+    if rec_in != NO_REC && js.same_value(p.recs.items[rec_in].value, val) { rec = rec_in }
+    let context = js.new_plain(it)
+    if rec != NO_REC && !js.is_object(val) {
+        let ce0 = js.define_data(it, context, js.key_of("source"), js.str_value(p.recs.items[rec].source), js.P_DEFAULT)
+    }
     if js.is_object(val) {
         let vo = js.as_object(val)
         if vo.class == js.C_ARRAY {
@@ -208,7 +265,9 @@ fn revive(it: *js.Interp, holder: *js.Obj, key: js.Key, reviver: js.Value) -> (j
             var i = 0.0f64
             while i < len {
                 let ik = js.key_of(js.number_to_string(it.a, i))
-                let (nv, ne) = revive(it, vo, ik, reviver)
+                var child = NO_REC
+                if rec != NO_REC && usize(i) < p.recs.items[rec].kids.len { child = p.recs.items[rec].kids.items[usize(i)] }
+                let (nv, ne) = revive(it, p, child, vo, ik, reviver)
                 if ne != ok { ret (js.undefv(), ne) }
                 if js.is_undefined(nv) {
                     let dd = js.delete_prop(it, vo, ik)
@@ -225,7 +284,18 @@ fn revive(it: *js.Interp, holder: *js.Obj, key: js.Key, reviver: js.Value) -> (j
             while k < keys.len {
                 let (pr, found) = js.get_own(it, vo, keys[k])
                 if found && !js.is_symbol_key(keys[k]) && (pr.flags & js.P_ENUMERABLE) != 0u8 {
-                    let (nv2, ne2) = revive(it, vo, keys[k], reviver)
+                    var child2 = NO_REC
+                    if rec != NO_REC && !js.is_symbol_key(keys[k]) {
+                        var q = p.recs.items[rec].keys.len
+                        while q > 0usize {
+                            q -= 1usize
+                            if str.eq(p.recs.items[rec].keys.items[q], keys[k].name) {
+                                child2 = p.recs.items[rec].kids.items[q]
+                                break
+                            }
+                        }
+                    }
+                    let (nv2, ne2) = revive(it, p, child2, vo, keys[k], reviver)
                     if ne2 != ok { ret (js.undefv(), ne2) }
                     if js.is_undefined(nv2) {
                         let dd2 = js.delete_prop(it, vo, keys[k])
@@ -238,27 +308,61 @@ fn revive(it: *js.Interp, holder: *js.Obj, key: js.Key, reviver: js.Value) -> (j
             }
         }
     }
-    let (r, re) = js.call_function(it, reviver, js.obj_value(holder), js.two_args(it, js.key_to_value(key), val))
+    let (r, re) = js.call_function(it, reviver, js.obj_value(holder), three_args(it, js.key_to_value(key), val, js.obj_value(context)))
     ret (r, re)
 }
 
 fn json_parse(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (text, te) = js.to_string(it, arg(args, 0usize))
     if te != ok { ret (js.undefv(), te) }
-    var p = P { s: text, i: 0usize }
+    let reviver = arg(args, 1usize)
+    var p = P { s: text, i: 0usize, want: js.is_callable(reviver), recs: zero, last: NO_REC }
+    if p.want {
+        let (rl, rle) = list.init[Rec](it.a, 16usize)
+        p.recs = rl
+    }
     let (v, ve) = parse_value(it, &p, 0u32)
     if ve != ok { ret (js.undefv(), ve) }
     skip_ws(&p)
     if p.i < p.s.len { ret (js.undefv(), syntax(it, &p)) }
-    let reviver = arg(args, 1usize)
     if js.is_callable(reviver) {
         let root = js.new_plain(it)
         let (done, de) = js.define_own(it, root, js.key_of(""), js.data_desc(v, js.P_DEFAULT))
         if de != ok { ret (js.undefv(), de) }
-        let (r, re) = revive(it, root, js.key_of(""), reviver)
+        let (r, re) = revive(it, &p, p.last, root, js.key_of(""), reviver)
         ret (r, re)
     }
     ret (v, ok)
+}
+
+fn is_raw_json(v: js.Value) -> bool {
+    ret js.is_object(v) && js.as_object(v).class == js.C_OBJECT && str.eq(js.as_object(v).text, "rawJSON")
+}
+
+fn json_is_raw_json(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    ret (js.bool_value(is_raw_json(arg(args, 0usize))), ok)
+}
+
+fn json_raw_json(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (text, te) = js.to_string(it, arg(args, 0usize))
+    if te != ok { ret (js.undefv(), te) }
+    if text.len == 0usize { ret (js.undefv(), js.throw_syntax(it, "JSON.rawJSON: empty text")) }
+    let first = text[0usize]
+    let last = text[text.len - 1usize]
+    if first == 9u8 || first == 10u8 || first == 13u8 || first == 32u8 || last == 9u8 || last == 10u8 || last == 13u8 || last == 32u8 {
+        ret (js.undefv(), js.throw_syntax(it, "JSON.rawJSON: text starts or ends with whitespace"))
+    }
+    if first == 123u8 || first == 91u8 { ret (js.undefv(), js.throw_syntax(it, "JSON.rawJSON: text must be a primitive")) }
+    var p = P { s: text, i: 0usize, want: false, recs: zero, last: NO_REC }
+    let (v, ve) = parse_value(it, &p, 0u32)
+    if ve != ok { ret (js.undefv(), ve) }
+    skip_ws(&p)
+    if p.i < p.s.len { ret (js.undefv(), syntax(it, &p)) }
+    let o = js.new_obj(it, js.C_OBJECT, js.null_obj())
+    let de = js.define_data(it, o, js.key_of("rawJSON"), js.str_value(text), js.P_ENUMERABLE)
+    o.extensible = false
+    o.text = "rawJSON"
+    ret (js.obj_value(o), ok)
 }
 
 // --- stringify
@@ -320,6 +424,13 @@ fn ser(it: *js.Interp, st: *S, holder: *js.Obj, key: js.Key, value_in: js.Value,
         } else if o.class == js.C_BOOLEAN || o.class == js.C_BIGINT {
             value = o.prim
         }
+    }
+    if is_raw_json(value) {
+        let (rv, rve) = js.get_value(it, value, js.key_of("rawJSON"))
+        if rve != ok { ret ("", false, rve) }
+        let (rs, rse) = js.to_string(it, rv)
+        if rse != ok { ret ("", false, rse) }
+        ret (rs, true, ok)
     }
     switch value {
     case .Big as bigv:
@@ -532,6 +643,8 @@ fn install_json(it: *js.Interp) {
     let e0 = js.define_data(it, it.global, js.key_of("JSON"), js.obj_value(j), js.P_HIDDEN)
     let e1 = js.define_data(it, j, js.key_of_symbol(it.sym_to_string_tag), js.str_value("JSON"), js.P_CONFIGURABLE)
     it.last = j
+    js.add_method(it, it.last, "rawJSON", 1u32, json_raw_json)
+    js.add_method(it, it.last, "isRawJSON", 1u32, json_is_raw_json)
     js.add_method(it, it.last, "parse", 2u32, json_parse)
     js.add_method(it, it.last, "stringify", 3u32, json_stringify)
 }
