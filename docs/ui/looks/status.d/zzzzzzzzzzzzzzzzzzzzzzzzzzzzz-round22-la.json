@@ -1,0 +1,148 @@
+{
+ "combo_box": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/combo_box.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: every closed state (normal, hover, active, focus ring, disabled, combo entry rest, focus, disabled) 0 flat px off, glyphs counted 0 to 3. The drop-down arrow now sits 10 px from the end as in GTK (it was 7 px left). The ring is a drawn band of 5.85 / 4 px corner radii (GTK: about 6 / 4; the generic border drew 5.7 / 3.7), and in the combo entry the button's divider lies over the ring's end as in GTK. The open list is as audit 11 left it.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/combo_box.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/text_edit.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: all 12 states 0 flat px off, glyphs counted 0 to 4 (the entry's text now takes whole pixel advances as Pango does). The search entry's magnifier and clear icon and the password eye were drawn 14 px wide because the row shrank them when the editor asked for the whole width; the value now gets the room that is left, so the icons are 16 px and 0 flat px off.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/text_edit.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/spin_edit.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: all 10 states and the vertical-class capture 0 or 1 flat px off, glyphs counted 0 to 3. The value text starts 6 px in (it was 9) and uses tabular figures with whole pixel advances; spin-vertical (libadwaita's vertical class on a horizontal spin button: 98 x 35, 34 px buttons, no dividers, a top border on the up button) is drawn by control.spin_box_linux_tall, 0 flat px off. The lone-digit differences of audit 10 are gone.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/spin_edit.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/mask_edit.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: rest, hover, focus, disabled 0 flat px off, glyphs counted 0 to 1 (whole pixel advances: the digits drifted up to 2 px along the string before).",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/mask_edit.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/date_edit.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: the menu button 0 flat px off (arrow included), and the calendar 0 flat px off in Light, 1 in Dark (3 levels), glyphs counted 3 to 4 at 0,0 and 5 to 6 off 1 px placement. The day numbers use the font's tabular figures (GTK's calendar does: the 1 has a foot), the columns are 37.83 px apart from 2 px in (the old 4.6 px padding hid a flex shrink), the chosen day's box is 34 x 25 at 194, the weekday names sit 1 px higher, the header arrows 0.5 px further in. No GTK capture of the open popover.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/date_edit.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/image_combo_box.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: the captured state (248 x 34, a long text) 0 flat px off including the arrow (audit 10: 6 px), glyphs counted 19 (the clipped text and its ellipsis). Same drop down as the combo box with the picture added.",
+    "gaps": [
+     "No GTK capture with a picture: its position (16 px, 6 px before the text) is a guess",
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/image_combo_box.png",
+    "notes": "Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "No GTK capture with a picture: its position (16 px, 6 px before the text) is a guess",
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ }
+}

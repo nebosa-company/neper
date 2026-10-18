@@ -1175,20 +1175,34 @@ fn contrast_ratio(a: paint.Color, b: paint.Color) -> f32 {
 }
 
 // Under the Neper look in its Dark palette an ink that reads below 4.5:1 on the lightest dark surface (the page,
-// a selected row) is lifted toward white until it does, keeping its hue; every other look and palette gets the ink
+// a selected row) is lifted toward white until it does (5.0 in the code: the measured fill of a selected row is a little lighter than the token), keeping its hue; every other look and palette gets the ink
 // back unchanged, so the light pictures do not move.
+fn same_color(a: paint.Color, b: paint.Color) -> bool {
+    ret a.red == b.red && a.green == b.green && a.blue == b.blue
+}
+
 fn lift_ink(t: *const ThemeTokens, ink: paint.Color) -> paint.Color {
     if t.palette != .Dark || t.profile != .Neper { ret ink }
     var ground = color(t, .SurfaceVariant)
     let selection = color(t, .Selection)
     if rel_luminance(selection) > rel_luminance(ground) { ground = selection }
+    // the palette's own inks for a light fill (on-primary on the accent) stay as they are: lifting them would erase them
+    if same_color(ink, color(t, .OnPrimary)) || same_color(ink, color(t, .OnSecondary)) || same_color(ink, color(t, .OnTertiary)) { ret ink }
+    if same_color(ink, color(t, .OnError)) || same_color(ink, color(t, .OnSuccess)) || same_color(ink, color(t, .OnWarning)) || same_color(ink, color(t, .InverseOnSurface)) { ret ink }
     var share: f32 = 0.0
     var out = ink
-    while contrast_ratio(out, ground) < 4.6 && share < 1.0 {
+    while contrast_ratio(out, ground) < 5.0 && share < 1.0 {
         share += 0.05
         out = mix(ink, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: ink.alpha }, share)
     }
     ret out
+}
+
+// The edge of an interactive frame (list, read-only field): OutlineVariant, which is a divider's ink, reads 2.0:1 on the Neper
+// dark page, so that look takes a fixed ink at 3.9:1 on the page and 3.5:1 on a container; everything else is unchanged.
+fn frame_ink(t: *const ThemeTokens) -> paint.Color {
+    if t.palette == .Dark && t.profile == .Neper { ret hex_raw(0x707380u32) }
+    ret color(t, .OutlineVariant)
 }
 
 // A control's look under its state, resolved once at build: pressed darkens toward
@@ -1766,12 +1780,32 @@ fn adwaita_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
         // On a coloured button the ring is the face's own colour, so nothing shows: none is drawn.
         if !suggested && !destructive {
             ring = color(t, .FocusRing)
-            stroke = 1.86
+            stroke = 2.0
         }
     }
     var opacity: f32 = 1.0
-    if state.disabled { opacity = 0.5 }
+    // `button.flat:disabled:not(:checked)` is `filter: opacity(0.3)`, every other button 0.5
+    if state.disabled {
+        opacity = 0.5
+        if flat && !state.selected { opacity = 0.3 }
+    }
     ret ResolvedControl { background: face, foreground: ink, border: ring, border_width: stroke, focus_ring: 0.0, opacity: opacity, radius: t.radii.sm, elevation: 0u8, padding: 10.0, padding_start: 0.0, padding_y: 7.5, custom_padding: true, min_width: 0.0, min_height: 34.0, corners: zero }
+}
+// A coloured Linux button (suggested-action, destructive-action) is two layers in GTK: its background colour, then a
+// `background-image` wash (white 10 % hovered, black 20 % pressed), each antialiased on its own at the corners, so a corner pixel is
+// not the pre-mixed face's. Answers whether the variant is coloured, the base colour and the wash (clear at rest).
+fn adwaita_layers(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) -> (bool, paint.Color, paint.Color) {
+    let suggested = variant == .Filled || variant == .Default
+    let destructive = variant == .Danger
+    var base = hex_raw(0x3584E4u32)
+    if destructive {
+        base = hex_raw(0xE01B24u32)
+        if t.palette == .Dark { base = hex_raw(0xC01C28u32) }
+    }
+    var wash = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if state.hovered && !state.pressed { wash = paint.rgba(1.0, 1.0, 1.0, 0.1) }
+    if state.pressed || state.selected { wash = paint.rgba(0.0, 0.0, 0.0, 0.2) }
+    ret (suggested || destructive, base, wash)
 }
 // ---- end Linux look -----------------------------------------------------------------------------
 // looks5: the hovered minimise or maximise button's wash over the dark caption (states/hover-caption-minimize-main, -maximize-main).

@@ -1,0 +1,229 @@
+{
+ "checkbox": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/checkbox.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 0 px off counting every pixel outside text ink, 0 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Tick and bullet are 14 x 14 baked alpha masks"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/checkbox.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 0 px off counting every pixel outside text ink, 0 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Tick and bullet are 14 x 14 baked alpha masks"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/radio.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 0 px off counting every pixel outside text ink, 0 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Tick and bullet are 14 x 14 baked alpha masks"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/radio.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 0 px off counting every pixel outside text ink, 0 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Tick and bullet are 14 x 14 baked alpha masks"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/radio_group.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 0 px off counting every pixel outside text ink, 0 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Tick and bullet are 14 x 14 baked alpha masks"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/radio_group.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 0 px off counting every pixel outside text ink, 0 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Tick and bullet are 14 x 14 baked alpha masks"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/label.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 0 px off counting every pixel outside text ink, 0 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": []
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/label.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 0 px off counting every pixel outside text ink, 0 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": []
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/button.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 38 px off counting every pixel outside text ink, 110 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/button.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 47 px off counting every pixel outside text ink, 123 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/progress_bar.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 50 px off counting every pixel outside text ink, 50 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Spinner is a 32 x 32 baked alpha tile of libadwaita's icon, rotated bilinearly"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/progress_bar.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 104 px off counting every pixel outside text ink, 108 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Spinner is a 32 x 32 baked alpha tile of libadwaita's icon, rotated bilinearly"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/group_box.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 1 px off counting every pixel outside text ink, 714 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: caption text sits 2 px off horizontally against the capture"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/group_box.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 0 px off counting every pixel outside text ink, 714 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Text not yet pixel exact in this sheet: caption text sits 2 px off horizontally against the capture"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/button_edit.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 9 px off counting every pixel outside text ink, 203 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: entry text sits 1 px high"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/button_edit.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 5 px off counting every pixel outside text ink, 200 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: entry text sits 1 px high"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/toolbar_button.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 12 px off counting every pixel outside text ink, 231 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: headerbar and toolbar label rows sit about 1 px off"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/toolbar_button.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 12 px off counting every pixel outside text ink, 229 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: headerbar and toolbar label rows sit about 1 px off"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/vertical_grid.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 11 px off counting every pixel outside text ink, 2458 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: cell and header text positions were tuned for the old unhinted text"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/vertical_grid.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 11 px off counting every pixel outside text ink, 2459 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: cell and header text positions were tuned for the old unhinted text"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/dialog.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 52 px off counting every pixel outside text ink, 2375 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: title and body text positions were tuned for the old unhinted text"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/dialog.png",
+    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 29 px off counting every pixel outside text ink, 2350 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
+    "gaps": [
+     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
+     "Text not yet pixel exact in this sheet: title and body text positions were tuned for the old unhinted text"
+    ]
+   }
+  }
+ }
+}

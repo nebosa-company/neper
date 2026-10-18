@@ -36,7 +36,7 @@ type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, Material
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
-type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover }
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -73,8 +73,8 @@ fn segoe_bold_path() -> str { ret "C:/Windows/Fonts/segoeuib.ttf" }
 fn tahoma_bold_path() -> str { ret "C:/Windows/Fonts/tahomabd.ttf" }
 // The Linux look's Cantarell (SIL OFL, converted from the distro's OTF to TrueType by scripts/linux/otf2ttf.py: this text
 // engine reads glyf outlines only), font ids 13 and 14, read by `run_linux` alone (so the other looks need nothing).
-fn cantarell_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Regular.ttf" }
-fn cantarell_bold_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Bold.ttf" }
+fn cantarell_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Regular.otf" }
+fn cantarell_bold_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Bold.otf" }
 
 // The tokens of a look, Light palette. Cupertino and Material are planned: the Neper tokens
 // with the matching profile, so a control that branches on it can start to.
@@ -273,6 +273,8 @@ fn set_look(rig: *Rig, look: Look) {
     style.set_windark(look == .WindowsDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
     scene.set_pixel_exact(rig.tokens.profile == .Windows)
+    scene.set_fine_curves(rig.tokens.profile == .Linux)
+    scene.set_cff_text(rig.tokens.profile == .Linux)
     // The Windows profile draws text as ClearType (hinted, per-subpixel coverage); every other look keeps the greyscale fill.
     // NEPER_TEXT_AA=grayscale draws the Windows looks that way too, NEPER_TEXT_AA=cleartype draws every look in ClearType.
     var text_aa = scene.TextAa.Grayscale
@@ -446,6 +448,14 @@ fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
         try testing.tab(&rig.harness, false)
         try testing.tab(&rig.harness, true)
         ret testing.hover(&rig.harness, -500.0, -500.0)
+    }
+    if drive == .FocusPress {
+        // round 22: the keyboard focus in an edit (the click lands 60 px left of the point), then a button at the point held down.
+        // (two clicks, one a little above the point: the edit is hit by the one that lands inside it)
+        try testing.tap(&rig.harness, x - 60.0, y - 8.0)
+        try testing.tap(&rig.harness, x - 60.0, y)
+        try testing.hover(&rig.harness, x, y)
+        ret testing.send(&rig.harness, input.Event { PointerDown: testing.pointer_at(x, y) })
     }
     if drive == .SelectPress {
         // An edit with its text selected and an end button pressed (a button edit's ellipsis): the click that focuses the

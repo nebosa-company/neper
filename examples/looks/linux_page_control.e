@@ -69,7 +69,7 @@ fn view_switcher(a: *mem.Arena, t: *const control.Theme, picks: []const widget.S
     let labels = [2]str{ "General", "Advanced" }
     let kinds = [2]control.GlyphKind{ .Picture, .Picture }
     let lefts = [2]f32{ 0.0, 122.0 }
-    let widths = [2]f32{ 121.0, 121.0 }
+    let widths = [2]f32{ 120.0, 121.0 }
     let (switcher, switcher_error) = control.linux_view_switcher(a, 3000u64, t, labels[0usize..2usize], kinds[0usize..2usize], 0usize, picks, lefts[0usize..2usize], widths[0usize..2usize], 243.0)
     if switcher_error != ok { ret (zero, switcher_error) }
     let (said, said_error) = control.text(a, 0u64, "A", t, control.text_options())

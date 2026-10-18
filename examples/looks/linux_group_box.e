@@ -34,9 +34,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if card_child_error != ok { ret (0usize, card_child_error) }
     let (card, card_error) = control.group_box_of(a, 1u64, t, "", options, mem_one(a, card_child))
     if card_error != ok { ret (0usize, card_error) }
-    // The 80 high card and the 89 high frame share a cell 101 high: the card (with its 1 px ring, 82) stands in an 83 high holder, so
+    // The 80 high card and the 89 high frame share a cell 101 high: the card stands in an 81 high holder, so
     // both land on whole pixels like the reference crops.
-    let held = widget.aligned(0u64, .Start, .Start, control.sized_style(202.0, 83.0), mem_one(a, card))
+    let box = widget.aligned(0u64, .Start, .Start, control.sized_style(200.0, 80.0), mem_one(a, card))
+    let held = widget.aligned(0u64, .Start, .Start, control.sized_style(200.0, 81.0), mem_one(a, box))
     cells[0usize] = looks.Cell { caption: "card", node: held, drive: .None }
     var framed = control.group_options()
     framed.width = 202.0

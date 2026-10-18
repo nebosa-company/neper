@@ -10,9 +10,9 @@ use e.ui.widget
 fn noop_change(ctx: *void, value: f32) -> err { ret ok }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let names = [11]str{ "progress 0", "progress 40", "progress 100", "osd 60", "level bar", "spinner", "scale", "scale hover", "scale pressed", "scale focus", "scale disabled" }
+    let names = [12]str{ "progress 0", "progress 40", "progress 100", "osd 60", "level bar", "spinner", "scale", "scale hover", "scale pressed", "scale focus", "scale disabled", "scale marks" }
     var i = 0usize
-    while i < 11usize {
+    while i < 12usize {
         var options = control.progress_options()
         let key = u64((i + 1usize) * 10usize)
         var node: widget.Node = zero
@@ -23,9 +23,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             w = 200.0
             h = 34.0
             let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
-            let (made, made_error) = control.slider(a, key, t, "Scale", 40.0, 0.0, 100.0, 0.0, change, i != 10usize)
-            if made_error != ok { ret (0usize, made_error) }
-            node = made
+            if i == 11usize {
+                h = 47.0
+                let (marked, marked_error) = control.slider_marked(a, key, t, "Scale", 40.0, 0.0, 100.0, 0.0, change, true)
+                if marked_error != ok { ret (0usize, marked_error) }
+                node = marked
+            } else {
+                let (made, made_error) = control.slider(a, key, t, "Scale", 40.0, 0.0, 100.0, 0.0, change, i != 10usize)
+                if made_error != ok { ret (0usize, made_error) }
+                node = made
+            }
             if i == 7usize { drive = .Hover }
             if i == 8usize { drive = .Press }
             if i == 9usize { drive = .Focus }
@@ -50,15 +57,15 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             node = made
         }
         let x = f32(usize(210.0 - w) / 2usize)
-        let y = f32(usize(44.0 - h) / 2usize)
-        let holder = widget.positioned(0u64, x, y, control.sized_style(210.0, 44.0), control.widget_one_of(a, node))
-        cells[i] = looks.Cell { caption: names[i], node: widget.stack(0u64, control.sized_style(210.0, 44.0), control.widget_one_of(a, holder)), drive: drive }
+        let y = f32(usize(47.0 - h) / 2usize)
+        let holder = widget.positioned(0u64, x, y, control.sized_style(210.0, 47.0), control.widget_one_of(a, node))
+        cells[i] = looks.Cell { caption: names[i], node: widget.stack(0u64, control.sized_style(210.0, 47.0), control.widget_one_of(a, holder)), drive: drive }
         i += 1usize
     }
-    ret (11usize, ok)
+    ret (12usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "progress_bar", cells: 11usize, columns: 3usize, cell_w: 210.0, cell_h: 44.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "progress_bar", cells: 12usize, columns: 3usize, cell_w: 210.0, cell_h: 47.0, ctx: zero, build: build }
     ret looks.run_linux(a, &sheet)
 }

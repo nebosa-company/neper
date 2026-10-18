@@ -111,16 +111,38 @@ fn metrics_of(choice: FontChoice) -> Metrics {
     ret Metrics { ascent: f32(ascent) * choice.size / f32(em), descent: f32(down) * choice.size / f32(em) }
 }
 
+// round 22, la: the pseudo-language "tnum" shapes with the font's tabular figures (GtkCalendar's day numbers).
+var tabular_feature: [1]shape.Feature = zero
+
 fn shape_options(rtl: bool, language: str, size: f32) -> shape.Options {
     var o: shape.Options = zero
     if rtl { o.direction = .RightToLeft }
     o.language = language
+    // the pseudo-language "pngo": Pango's whole pixel advances at the font's size (the Linux look)
+    if language.len == 4usize && language[0usize] == 112u8 && language[1usize] == 110u8 && language[2usize] == 103u8 && language[3usize] == 111u8 {
+        o.language = ""
+        o.script = 1818326126u32
+        o.ppem = 2147483648u32 | u32(size * 64.0 + 0.5)
+    }
     // round 13: the pseudo-language "kern" asks for Latin shaping with the font's kern feature: Segoe UI has no DFLT script in its GPOS, so
     // an unset script finds no features at all, while the native Windows 11 edit controls kern ("Te" is 1.17 px tighter at 12 px).
     if language.len == 4usize && language[0usize] == 107u8 && language[1usize] == 101u8 && language[2usize] == 114u8 && language[3usize] == 110u8 {
         o.script = 1818326126u32
         o.language = ""
         o.ppem = u32(size + 0.5)
+    }
+    if language.len == 4usize && language[0usize] == 116u8 && language[1usize] == 110u8 && language[2usize] == 117u8 && language[3usize] == 109u8 {
+        o.language = ""
+        tabular_feature[0usize] = shape.Feature { tag: 1953396077u32, value: 1u32, start: 0usize, end: 16777216usize }
+        o.features = tabular_feature[0usize..1usize]
+    }
+    // "tnkn": the tabular figures with whole pixel advances (a GtkSpinButton's text)
+    if language.len == 4usize && language[0usize] == 116u8 && language[1usize] == 110u8 && language[2usize] == 107u8 && language[3usize] == 110u8 {
+        o.script = 1818326126u32
+        o.language = ""
+        o.ppem = u32(size + 0.5)
+        tabular_feature[0usize] = shape.Feature { tag: 1953396077u32, value: 1u32, start: 0usize, end: 16777216usize }
+        o.features = tabular_feature[0usize..1usize]
     }
     ret o
 }

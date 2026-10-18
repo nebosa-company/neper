@@ -9,6 +9,7 @@ use e.ui.control
 use e.ui.looks
 use e.ui.navigation
 use e.ui.style
+use e.ui.winmenuicon
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
@@ -150,6 +151,8 @@ fn parse_items(a: *mem.Arena, action: widget.Submit, text: str, room: usize, sub
             c.glyph = .Picture
             if has_flag(flags, 116u8) { c.glyph = .Table }
             if has_flag(flags, 109u8) { c.glyph = .Sigma }
+            let id = winmenuicon.find(label, !c.enabled)
+            if id < 1000usize { c.art = id + 1usize }
         }
         // x: the highlighted row (a keyboard's selection in the captures).
         c.selected = has_flag(flags, 120u8)

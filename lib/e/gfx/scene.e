@@ -26,6 +26,7 @@ use e.gfx.cleartype
 use e.gfx.geometry
 use e.gfx.image
 use e.gfx.paint
+use e.text.cffhint
 use e.text.layout
 use e.text.shape
 use e.text.tthint
@@ -62,13 +63,13 @@ type BuilderState = struct { commands: []Command, count: usize, finished: bool, 
 // A texture is premultiplied RGBA, four floats per pixel.
 type Texture = struct { live: bool, generation: u32, width: u32, height: u32, pixels: []f32 }
 type Scene = struct { live: bool, released: bool, generation: u32, storage: []u8, has_storage: bool, arena: mem.Arena, commands: []Command, count: usize }
-type FontEntry = struct { id: shape.FontId, data: []const u8, upem: f32, loca: usize, glyf: usize, glyf_len: usize, long_loca: bool, glyph_count: usize }
+type FontEntry = struct { id: shape.FontId, data: []const u8, upem: f32, loca: usize, glyf: usize, glyf_len: usize, long_loca: bool, glyph_count: usize, cff: *cffhint.Cff }
 type Edge = struct { x0: f32, y0: f32, x1: f32, y1: f32 }
 type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
-type RendererState = struct { hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
+type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
 type TargetState = struct { target: *gpu.Target }
 
 // ------------------------------------------------------------------ the builder
@@ -125,6 +126,31 @@ fn set_pixel_exact_at_one(on: bool) {
 
 fn pixel_exact_at_one_on() -> bool {
     ret pixel_exact_at_one
+}
+
+// The Linux look flattens a cubic into about twice the segments (a 6 px corner: 10 instead of 5), the chord error Cairo leaves
+// under GTK's rounded boxes; the coarse count under-covers a corner pixel by 4 %. Set by `ui.looks.set_look` and `control.focus_look`.
+var fine_curves: bool = false
+
+fn set_fine_curves(on: bool) {
+    fine_curves = on
+}
+
+fn fine_curves_on() -> bool {
+    ret fine_curves
+}
+
+// The Linux look hints CFF text as FreeType's Adobe engine does (`e.text.cffhint`): glyphs at whole pixel pen positions on a whole pixel
+// baseline, the outline hinted at the device size. Off, a CFF font is drawn unhinted through the same transform as a TrueType one.
+// Set by `ui.looks.set_look` and `control.focus_look`.
+var cff_text: bool = false
+
+fn set_cff_text(on: bool) {
+    cff_text = on
+}
+
+fn cff_text_on() -> bool {
+    ret cff_text
 }
 
 fn set_text_hidden(hidden: bool) {
@@ -417,17 +443,25 @@ fn register_font(r: *Renderer, font: shape.Font) -> err {
     let (loca_at, loca_len, has_loca) = font_table(font.data, font.face_index, 1819239265u32)
     let (glyf_at, glyf_len, has_glyf) = font_table(font.data, font.face_index, 1735162214u32)
     let (maxp_at, maxp_len, has_maxp) = font_table(font.data, font.face_index, 1835104368u32)
-    if !has_head || !has_loca || !has_glyf || !has_maxp || head_len < 54usize || maxp_len < 6usize { ret Invalid }
+    if !has_head || !has_maxp || head_len < 54usize || maxp_len < 6usize { ret Invalid }
     entry.upem = f32(be16(font.data, head_at + 18usize))
     if !(entry.upem > 0.0) { ret Invalid }
-    entry.long_loca = be16(font.data, head_at + 50usize) == 1u32
-    entry.loca = loca_at
-    entry.glyf = glyf_at
-    entry.glyf_len = glyf_len
     entry.glyph_count = usize(be16(font.data, maxp_at + 4usize))
-    var unit_size = 2usize
-    if entry.long_loca { unit_size = 4usize }
-    if (entry.glyph_count + 1usize) * unit_size > loca_len { ret Invalid }
+    if has_loca && has_glyf {
+        entry.long_loca = be16(font.data, head_at + 50usize) == 1u32
+        entry.loca = loca_at
+        entry.glyf = glyf_at
+        entry.glyf_len = glyf_len
+        var unit_size = 2usize
+        if entry.long_loca { unit_size = 4usize }
+        if (entry.glyph_count + 1usize) * unit_size > loca_len { ret Invalid }
+    } else {
+        // an OpenType font with CFF outlines (Cantarell, in the Linux look): read by `e.text.cffhint`
+        let (cffs, cffs_error) = mem.alloc[cffhint.Cff](s.arena, 1usize)
+        if cffs_error != ok { ret TooLarge }
+        if !cffhint.open(&cffs[0usize], font.data) { ret Invalid }
+        entry.cff = &cffs[0usize]
+    }
     // A registered id is replaced, not doubled.
     var i = 0usize
     while i < s.font_count {
@@ -919,8 +953,31 @@ fn flat_quad(f: *Flattener, control: geometry.Point, end: geometry.Point) -> err
     ret ok
 }
 
+// How many equal parts Cairo cuts a cubic into (its tolerance 0.1): it halves until the control points lie within 0.1 of the chord,
+// a halving taking a quarter of the distance (fitted on GTK's own corners and discs: radius 4, 6, 10, 13 and 15 all come out at 8).
+fn cairo_segments(p0: geometry.Point, c1: geometry.Point, c2: geometry.Point, p3: geometry.Point) -> usize {
+    let dx = p3.x - p0.x
+    let dy = p3.y - p0.y
+    let len = math.sqrt[f32](dx * dx + dy * dy)
+    var d1 = distance(p0, c1)
+    var d2 = distance(p0, c2)
+    if len > 0.0001 {
+        d1 = math.abs[f32]((c1.x - p0.x) * dy - (c1.y - p0.y) * dx) / len
+        d2 = math.abs[f32]((c2.x - p0.x) * dy - (c2.y - p0.y) * dx) / len
+    }
+    var worst = d1
+    if d2 > worst { worst = d2 }
+    var n = 1usize
+    while n < 64usize && worst > 0.1 * f32(n * n) { n *= 2usize }
+    // Cairo's fixed-point rounding keeps a 4 px arc at 8 parts as well (the progress bar's ends, the focus ring's inner corner)
+    if n == 4usize && worst >= 1.2 { n = 8usize }
+    ret n
+}
+
 fn flat_cubic(f: *Flattener, c1: geometry.Point, c2: geometry.Point, end: geometry.Point) -> err {
-    let n = segments_for(distance(f.current, c1) + distance(c1, c2) + distance(c2, end))
+    let polygon = distance(f.current, c1) + distance(c1, c2) + distance(c2, end)
+    var n = segments_for(polygon)
+    if fine_curves { n = cairo_segments(f.current, c1, c2, end) }
     let p0 = f.current
     var i = 1usize
     while i <= n {
@@ -1694,7 +1751,9 @@ fn text_edges(s: *RendererState, f: *Flattener, text: DrawText) -> err {
         while ri < line.runs.len {
             let run = &line.runs[ri]
             let (font_index, has_font) = font_of(s, run.run.font)
-            if has_font {
+            if has_font && mem.address_of(s.fonts[font_index].cff) != 0usize {
+                try cff_run(s, f, &s.fonts[font_index], text, run)
+            } else if has_font {
                 let font = &s.fonts[font_index]
                 let scale = run.size / font.upem
                 var pen = text.origin.x + run.origin.x
@@ -1712,6 +1771,154 @@ fn text_edges(s: *RendererState, f: *Flattener, text: DrawText) -> err {
             ri += 1usize
         }
         l += 1usize
+    }
+    ret ok
+}
+
+// ---------------------------------------------------------- CFF text (e.text.cffhint)
+
+fn cff_ready(s: *RendererState) -> bool {
+    if mem.address_of(s.cff_engine) != 0usize { ret true }
+    let (engines, engines_error) = mem.alloc[cffhint.Engine](s.arena, 1usize)
+    if engines_error != ok { ret false }
+    let (outs, outs_error) = mem.alloc[cffhint.Outline](s.arena, 1usize)
+    if outs_error != ok { ret false }
+    s.cff_engine = &engines[0usize]
+    s.cff_out = &outs[0usize]
+    ret true
+}
+
+// A cubic as FreeType's gray rasteriser cuts it: halves until the control points are within half a pixel (in 1/256 px units, the
+// 2p3 - 3p2 + p0 and p3 - 3p1 + 2p0 tests of `gray_render_cubic`), the first half first; `f.current` is the start.
+fn flat_cubic_ft(f: *Flattener, c1: geometry.Point, c2: geometry.Point, p3: geometry.Point) -> err {
+    // the arcs still to do are (p0, p1, p2, p3) quadruples on a stack, each with its depth
+    var arcs: [64]geometry.Point = zero
+    var depths: [16]usize = zero
+    var count = 1usize
+    arcs[0usize] = f.current
+    arcs[1usize] = c1
+    arcs[2usize] = c2
+    arcs[3usize] = p3
+    var guard = 0usize
+    while count > 0usize && guard < 4096usize {
+        guard += 1usize
+        let top = (count - 1usize) * 4usize
+        let a0 = arcs[top]
+        let a1 = arcs[top + 1usize]
+        let a2 = arcs[top + 2usize]
+        let a3 = arcs[top + 3usize]
+        let depth_now = depths[count - 1usize]
+        var split = false
+        if math.abs[f32](256.0 * (2.0 * a3.x - 3.0 * a2.x + a0.x)) > 128.0 { split = true }
+        if math.abs[f32](256.0 * (2.0 * a3.y - 3.0 * a2.y + a0.y)) > 128.0 { split = true }
+        if math.abs[f32](256.0 * (a3.x - 3.0 * a1.x + 2.0 * a0.x)) > 128.0 { split = true }
+        if math.abs[f32](256.0 * (a3.y - 3.0 * a1.y + 2.0 * a0.y)) > 128.0 { split = true }
+        if split && depth_now < 12usize && count < 15usize {
+            let m01 = geometry.Point { x: (a0.x + a1.x) * 0.5, y: (a0.y + a1.y) * 0.5 }
+            let m12 = geometry.Point { x: (a1.x + a2.x) * 0.5, y: (a1.y + a2.y) * 0.5 }
+            let m23 = geometry.Point { x: (a2.x + a3.x) * 0.5, y: (a2.y + a3.y) * 0.5 }
+            let m012 = geometry.Point { x: (m01.x + m12.x) * 0.5, y: (m01.y + m12.y) * 0.5 }
+            let m123 = geometry.Point { x: (m12.x + m23.x) * 0.5, y: (m12.y + m23.y) * 0.5 }
+            let mid = geometry.Point { x: (m012.x + m123.x) * 0.5, y: (m012.y + m123.y) * 0.5 }
+            // the right half replaces this arc, the left half goes on top of it (done first)
+            arcs[top] = mid
+            arcs[top + 1usize] = m123
+            arcs[top + 2usize] = m23
+            arcs[top + 3usize] = a3
+            depths[count - 1usize] = depth_now + 1usize
+            arcs[count * 4usize] = a0
+            arcs[count * 4usize + 1usize] = m01
+            arcs[count * 4usize + 2usize] = m012
+            arcs[count * 4usize + 3usize] = mid
+            depths[count] = depth_now + 1usize
+            count += 1usize
+            continue
+        }
+        try flat_line(f, a3)
+        count -= 1usize
+    }
+    ret ok
+}
+
+// A CFF outline into the flattener: a hinted one is in 26.6 pixels (y up) and goes to (`ox`, `oy`) as it is (ma 1, md -1); an unhinted one is in
+// font units and goes through the affine as a TrueType glyph does.
+fn cff_emit(f: *Flattener, o: *const cffhint.Outline, ox: f32, oy: f32, ma: f32, mb: f32, mc: f32, md: f32) -> err {
+    var p = 0usize
+    var i = 0usize
+    var open = false
+    while i < o.n {
+        let kind = o.kind[i]
+        var pts: [3]geometry.Point = zero
+        var k = 0usize
+        var count = 1usize
+        if kind == 2u8 { count = 3usize }
+        while k < count {
+            var ux: f32 = 0.0
+            var uy: f32 = 0.0
+            if o.hinted {
+                ux = f32(o.x[p + k] >> 10u32) / 64.0
+                uy = f32(o.y[p + k] >> 10u32) / 64.0
+            } else {
+                ux = f32(o.x[p + k]) / 65536.0
+                uy = f32(o.y[p + k]) / 65536.0
+            }
+            pts[k] = geometry.Point { x: ox + ma * ux + mb * uy, y: oy + mc * ux + md * uy }
+            k += 1usize
+        }
+        if kind == 0u8 {
+            if open { try flat_close(f) }
+            try flat_end(f)
+            f.current = pts[0usize]
+            f.start = pts[0usize]
+            f.open = true
+            open = true
+        } else if kind == 1u8 {
+            try flat_line(f, pts[0usize])
+        } else {
+            try flat_cubic_ft(f, pts[0usize], pts[1usize], pts[2usize])
+        }
+        p += count
+        i += 1usize
+    }
+    if open { try flat_close(f) }
+    ret ok
+}
+
+// One run of a CFF font: hinted at the device size on whole pixels when the transform is a plain scale and the look asks for it,
+// otherwise unhinted through the full transform.
+fn cff_run(s: *RendererState, f: *Flattener, font: *const FontEntry, text: DrawText, run: *const layout.GlyphRun) -> err {
+    if !cff_ready(s) { ret ok }
+    let t = f.t
+    let at = geometry.transform_point(t, geometry.Point { x: text.origin.x + run.origin.x, y: text.origin.y + run.origin.y })
+    let plain = t.m01 == 0.0 && t.m10 == 0.0 && t.m00 > 0.0 && t.m00 == t.m11
+    var g = 0usize
+    if cff_text && plain {
+        let size = run.size * t.m00
+        let size26 = i64(math.floor[f32](size * 64.0 + 0.5))
+        // a half pixel goes down (GTK lays out on whole pixels, a centred box can land on .5)
+        var pen = math.ceil[f32](at.x - 0.5)
+        let base = math.ceil[f32](at.y - 0.5)
+        while g < run.run.glyphs.len {
+            let glyph = run.run.glyphs[g]
+            if cffhint.outline(s.cff_engine, font.cff, usize(glyph.id), size26, true, s.cff_out) {
+                try cff_emit(f, s.cff_out, pen, base, 1.0, 0.0, 0.0, 0.0 - 1.0)
+            }
+            pen = pen + f32(pen_px(glyph.advance_x * size))
+            g += 1usize
+        }
+        ret ok
+    }
+    let scale = run.size / font.upem
+    var pen = text.origin.x + run.origin.x
+    let baseline = text.origin.y + run.origin.y
+    while g < run.run.glyphs.len {
+        let glyph = run.run.glyphs[g]
+        let origin = geometry.transform_point(t, geometry.Point { x: pen + glyph.offset_x * run.size, y: baseline - glyph.offset_y * run.size })
+        if cffhint.outline(s.cff_engine, font.cff, usize(glyph.id), 0i64, false, s.cff_out) {
+            try cff_emit(f, s.cff_out, origin.x, origin.y, scale * t.m00, 0.0 - scale * t.m01, scale * t.m10, 0.0 - scale * t.m11)
+        }
+        pen = pen + glyph.advance_x * run.size
+        g += 1usize
     }
     ret ok
 }
