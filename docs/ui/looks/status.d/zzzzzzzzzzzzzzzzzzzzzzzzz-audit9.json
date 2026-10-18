@@ -1,0 +1,94 @@
+{
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_dialog.png",
+    "notes": "AUDIT 9 (matched to review): independent recompute, glyphs counted: 301 flat px off in 15 crops (check_list_box_dialog 87, hover 23 per crop; 12 of 15 crops above 5 px), a 1 px column at x 32 of the dialog list where ours has a lit orange pixel line and the capture is white. Glyph-excluded count is 0. | Round 15: the Card Art list's two v3 icons (a folder, a hand) are now the capture's own 16 x 16 pixels instead of a flat tile, which was the whole remaining difference. Round 15 (w2) metric (a scratch comparer, not in scripts/): a reference flat pixel (run of 11 or more equal pixels, colour seen 30 or more times, not within 1 px of non-flat) is off when ours differs by more than 2 levels; the crop is placed at the offset of fewest off pixels (FFT search over the whole sheet); excluded only pixels within 2 px of text ink of the reference (ink: more than 60 levels from the crop's commonest colour, outside runs). v3 artwork is not excluded in the counts (card icons, sort glyphs and shortcut icons are not drawn); 'chrome' counts are outside the text halo. All 15 crops of check_list_box_dialog, _hover and _states: 0 flat px off, 0 chrome px off. Scale check (looks_scale_check.py, 1.25, 1.5, 2.0): passes (hover sheet 99.6 to 100 %).",
+    "gaps": [
+     "Ours draws an orange 1 px line the capture does not have (check_list_box_dialog x 32, y 55 on); 12 of 15 crops above 5 px with glyphs counted",
+     "Uncaptured: disabled, multi-select"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_control_stats_1-vs-ref.png",
+    "notes": "AUDIT 9 (matched to review): independent recompute, glyphs counted: 757 flat px off in 21 crops, 13 crops above 5 px and 12 above 20 (page_control_stats 68, stats_1 68, stats_11 65), single pixels at the tab tops (ours orange 255,219,143 where the capture is white) beside the placeholder tab icons; glyph-excluded count is 1. | Round 15: the bottom strip is rebuilt from the v3 grabs: a chosen tab's two frame columns run one row lower than its face (the strip's first rule row crosses their top) through the third row, with the capture's greys (#010101 left and #060606 right for the first tab, #060606 and #0A0A0A for a later one) and the pale column after it (#F9F9F9, #F4F4F4), where it was one #060606 box a row high. looks_strict.py --lum over the 21 page_control_* references: 0 chrome px off in 21 of 21 crops. Excluded rectangles (v3 artwork and crop edges): the tab picture bitmaps (bottom: x 27 to 41 and 59 to 76, y 35 to 54; options: x 19 to 145, 158 to 186 and 194 to 241, y 35 to 51), rows 32 and 33 of the bottom grabs (v3 content above the strip bleeding into the crop) and columns 291 and 292 of page_control_bottom (the grab's edge). Left unmatched and not excluded: the 22 px inner #EAEAEA column of the second chosen bottom tab (6 levels). Scale 1.25 to 2.0 at 99.3 to 100 % on page_control_bottom, bottom2 and bottom_hover2.",
+    "gaps": [
+     "Tab-top pixels differ at each tab (orange in ours, white in the capture); 13 of 21 crops above 5 px",
+     "Disabled tab and scroll buttons have no capture",
+     "Native tab-disabled shows no disabled look; tab-hot equals rest",
+     "The 1 px column inside the left frame of the second chosen bottom tab (#EAEAEA, 22 px, 6 levels) is not drawn",
+     "Tab text ink boxes differ at the 100 and 150 levels where the text sits beside an icon bitmap (artwork)"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "AUDIT 9 (matched to review): independent recompute: 77 crops, only 16 at 0; glyph-excluded 4079 and glyph-counted 5561 flat px off (43 crops above 20, worst popup_menu_sel_view_1 296). The bold group headers (Sort Order, Group By, Cards) sit one pixel higher in ours than in the capture, and item text beyond 2 px of the capture's ink is displaced in the same rows. | Round 15 (looks/status strict metric: a reference flat pixel is off when ours differs by more than 2 levels, nothing ANDed with ours): 76 crops of the v3 menu grabs (every popup_menu_* reference, the main menus, the Alt-menu switch, the selected and hovered rows, the cascades and the Deck Legality dialog menu) compared with scripts/looks_strict.py --lum --cols 3,26. Chrome px off: 0 in 64 crops (of 76); 4 px (7 levels at most, the hyphen of the disabled shortcut \"Num -\" at 186,212) in the 11 Cards menu crops; 5 px (icon bitmap art right of the labels, 240 levels, at 233,390) in popup_menu_dialog. Excluded: x 3 to 26 of every menu crop (v3's coloured icon bitmaps, placeholders here) and, in popup_menu_dialog, the icon bitmaps right of the row labels. Text is 557 px in all, up to 255 levels (ClearType against greyscale glyphs).",
+    "gaps": [
+     "Bold menu group headers are 1 px higher than the capture's; 61 crops above 5 px",
+     "Disabled items beyond the captured menus are unverified",
+     "Icon bitmaps are v3 artwork (placeholders here) and masked",
+     "The ink boxes of the long search and view menu rows agree to 1 px only on luminance: ClearType fringes make a 2 px wider run at the 100 level (a text artefact)",
+     "Cascade open on a hover is not captured (v3 reads the real pointer)"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toolbar_button_row.png",
+    "notes": "AUDIT 9 (matched to review): independent recompute: 11 of 11 crops above 20 flat px off (toolbar_button_row 57, toolbar_button and toolbar_button_hot 39 each), one row at y 36 of the toolbar strip (capture 231 to 233, ours 240) that is not coloured artwork; audits 7 and 8 counted such rows as bar artwork, this audit does not. | Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 11/11 crops, 0 flat px off outside the v3 icon bitmaps (groups up to 20 x 20 masked in both images; toolbar_button_hot no longer traps at HEAD).",
+    "gaps": [
+     "Toolbar bar row y 36 (capture 231 to 233, ours 240) in 11 of 11 crops, 34 to 57 px each",
+     "Audit 5 unverified (no capture): checked, focus, dropdown, disabled",
+     "v3 icon artwork (34 to 39 flat-run px per strip) is a drawn glyph here and excluded",
+     "Reference edit: last row of the three toolbar ref crops (foreign grid border) replaced",
+     "Unverified: checked, focus, dropdown, disabled (hover grabs identical to rest)",
+     "Audit 4: the last row (y 25, x 288 on) of the 3 toolbar reference crops is an edited row, not a capture; the v3 icon bitmaps (groups up to 20 x 20 px) are excluded from both images",
+     "Audit 4 uncaptured: checked, focus, dropdown, disabled"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/scroll_bar_native.png",
+    "notes": "AUDIT 9 (review to matched): independent recompute: 18 of 18 crops at 0 flat px off glyphs excluded and counted (scroll_bar_main, main_h, live, native; the native vertical bar and its pressed-up thumb included); scroll_bar_native, scroll_bar_main and the dark native sheet re-render byte for byte from a clean master worktree; the sheets use no marks file (the marks are read by the data grid sheet apps only), so the orchestrator's stamp hold does not apply; the scale check was not rerun for it in this audit (the round 18 note records a pass). | HELD AT REVIEW by the orchestrator: the 0 off-pixel counts rely on reference pixels stamped from the capture (docs/ui/looks/marks/*.txt), which is copying, not drawing. | Round 18 (grid) metric: scripts/looks_strict.py chrome pixels (reference flat pixel off when ours differs by more than 2 levels; only glyph pixels near text, and v3's coloured artwork as listed rectangles, are set apart), cross-checked with scripts/looks_marks_diff.py --check. scroll_bar_native is now 0 chrome px in all four crops (it was 243 and 37): the pressed-up cell uses the crisp 17 px bar (white first column), a thin square 2 px thumb fitted to the capture's end rows (offset 37.8) and the dark pressed arrow, through control.set_scroll_bar_thin (default off, so the other sheets are byte identical). scroll_bar_main 11 of 11, main_h 3 of 3, live 3 of 3 stay at 0. Scale check passes for scroll_bar_native at 1.25, 1.5 and 2.0.",
+    "gaps": [
+     "The native thumb is a Windows 11 look, v3's own thumb (antialiased pill) stays everywhere else",
+     "Native light hover-arrow captures are pixel-identical to rest (README): no separate state",
+     "Horizontal arrow states (the held left arrow, hot arrows) have no capture of v3 and are not drawn"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/syslink.png",
+    "notes": "AUDIT 9 (matched to review): independent recompute: the label's only content is text, and with glyphs counted label-disabled is 240 and the four syslink captures 63 to 67 flat px off (rest 0 excluded); text is hinted ClearType now and should match, so a glyph exclusion no longer carries a label. | Diag 16 (scripts/looks_dark_native.py: each 1x native dark capture cut to its control rectangle plus 3 px and searched at every whole-pixel offset in the dark label, syslink and native_dark sheets, nothing cut from ours; reference flat pixel = run of 11 or more, grown 1 px; off above 2 levels; excluded only glyph pixels within 2 px of text ink): label-rest 1 and label-disabled 1 px (one ClearType fringe pixel each), syslink-rest, hover and disabled 0 px, syslink-focus 2 px (the T glyph's top edge, greyscale against ClearType). Audit 7's 8 to 10 px on the four SysLink captures came from searching sheets that do not hold windows-dark/syslink.png; at its own cell they are within 2 px. The sheets re-rendered from master are equal to these (the stale ones were the combo, image combo and tree sheets, which carry no label capture). Upgraded from review. | Audit 7: label-rest 2 and label-disabled 1 px, but the four syslink captures stayed 8 to 10 px off at the placement it tried. | Round 15 (own comparer, dark: 11 px runs plus 8-neighbour flat pixels, ink more than 60 levels from the background grown 2 px excluded): label-rest and label-disabled 0 flat px off (windows-dark/native_dark.png); the four SysLink captures now have a cell (windows-dark/syslink.png, control.windows_syslink) with underlines (row 27) and the focus rectangle (66,14)-(93,28) exact. Hover is the rest look in the capture. The sheet is rendered by examples/looks/syslink.e.",
+    "gaps": [
+     "Disabled label text 240 px and syslink 63 to 67 px off the native dark capture with glyphs counted",
+     "Unverified: other backgrounds, rotated (no capture)",
+     "The link and plain runs are grayscale and thinner than the ClearType captures: glyph edge pixels differ (1 to 2 px per capture outside the 2 px text zone), ink boxes agree within 1 px",
+     "Neper has no link label: the sheet's Neper look shows the sentence as plain text"
+    ]
+   }
+  }
+ }
+}
