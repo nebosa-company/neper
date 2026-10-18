@@ -1593,6 +1593,19 @@ fn compute_tree(c: *Context, d: *const dom.Dom, ua: []const cascade.Rule, author
     let author_sheet = new_sheet(c.a, author, true)
     let root_style = initial_style()
     try compute_below(c, &m, d, &ua_sheet, &author_sheet, d.root, &root_style, out)
+    // The principal writing mode of the page comes from `<body>` when the root has one.
+    let root_el = dom.first_element_child(d, d.root)
+    if root_el != html.NONE {
+        var kid = dom.first_element_child(d, root_el)
+        while kid != html.NONE {
+            if dom.is_html_named(d, kid, "body") {
+                out[usize(root_el)].writing_mode = out[usize(kid)].writing_mode
+                kid = html.NONE
+            } else {
+                kid = dom.next_element_sibling(d, kid)
+            }
+        }
+    }
     ret ok
 }
 

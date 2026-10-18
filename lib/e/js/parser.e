@@ -2069,17 +2069,42 @@ fn parse_module_binding(p: *Parser) -> (str, err) {
     ret (s, ok)
 }
 
+// The specifier with its import attribute `type` after a NUL byte.
+fn typed_spec(a: *mem.Arena, spec: str, kind: str) -> str {
+    let (b, be) = str.builder(a, spec.len + kind.len + 2usize)
+    if be != ok { ret spec }
+    var out = b
+    let e1 = str.push(&out, spec)
+    let e2 = str.push_byte(&out, 0u8)
+    let e3 = str.push(&out, kind)
+    ret str.done(&out)
+}
+
 fn parse_module_source(p: *Parser) -> (str, err) {
     if p.tok.kind != lex.T_STR { ret ("", fail(p, "expected a module specifier")) }
-    let s = p.tok.text
+    var s = p.tok.text
     try adv(p)
-    // Import attributes (`with { type: "json" }`) are read and ignored.
-    if is_k(p, "with") && !p.tok.nl {
+    // Import attributes (`with { type: "json" }`) are checked for shape and duplicate keys; `type` rides on the specifier after a NUL.
+    if is_k(p, "with") {
         try adv(p)
         try expect_p(p, "{")
+        let (kl, kle) = list.init[str](p.a, 4usize)
+        var keys = kl
         while !is_p(p, "}") {
-            if p.tok.kind == lex.T_EOF { ret ("", fail(p, "unexpected end of input")) }
+            if p.tok.kind != lex.T_IDENT && p.tok.kind != lex.T_STR { ret ("", fail(p, "expected an import attribute key")) }
+            let key = p.tok.text
+            var k = 0usize
+            while k < keys.len {
+                if str.eq(keys.items[k], key) { ret ("", fail(p, "Duplicate import attribute key")) }
+                k += 1usize
+            }
+            try list.push[str](&keys, key)
             try adv(p)
+            try expect_p(p, ":")
+            if p.tok.kind != lex.T_STR { ret ("", fail(p, "an import attribute value must be a string")) }
+            if str.eq(key, "type") { s = typed_spec(p.a, s, p.tok.text) }
+            try adv(p)
+            if is_p(p, ",") { try adv(p) } else if !is_p(p, "}") { ret ("", fail(p, "expected , or } in import attributes")) }
         }
         try adv(p)
     }

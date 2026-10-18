@@ -19,7 +19,7 @@ type Import = struct { request: usize, import_name: str, local: str }
 type Export = struct { export_name: str, local: str, request: i64, import_name: str }
 
 type Module = struct {
-    url: str, prog: *ast.Program, env: *js.Env,
+    url: str, kind: str, prog: *ast.Program, env: *js.Env,
     requested: list.List[str], deps: list.List[*Module],
     imports: list.List[Import], locals: list.List[Export], indirects: list.List[Export], stars: list.List[usize],
     status: u8, has_tla: bool, namespace: *js.Obj, has_ns: bool,
@@ -264,13 +264,75 @@ fn add_export_name(it: *js.Interp, names: *list.List[str], name: str) -> err {
 // --- creating modules
 
 fn find(it: *js.Interp, url: str) -> (*Module, bool) {
+    let (m, has) = find_typed(it, url, "")
+    ret (m, has)
+}
+
+// A module is identified by its address and its import attribute `type` ("" for script text).
+fn find_typed(it: *js.Interp, url: str, kind: str) -> (*Module, bool) {
     var i = 0usize
     while i < it.modules.len {
         let m = module_of(it.modules.items[i])
-        if str.eq(m.url, url) { ret (m, true) }
+        if str.eq(m.url, url) && str.eq(m.kind, kind) { ret (m, true) }
         i += 1usize
     }
     ret (zero, false)
+}
+
+// A specifier as the parser leaves it: the address, then NUL and the `type` attribute when there is one.
+fn split_spec(spec: str) -> (str, str) {
+    var i = 0usize
+    while i < spec.len {
+        if spec[i] == 0u8 { ret (spec[0usize..i], spec[i + 1usize..]) }
+        i += 1usize
+    }
+    ret (spec, "")
+}
+
+fn push_js_string(b: *str.Builder, text: str) {
+    let e0 = str.push_byte(b, 34u8)
+    var i = 0usize
+    while i < text.len {
+        let c = text[i]
+        if c == 34u8 || c == 92u8 {
+            let e1 = str.push_byte(b, 92u8)
+            let e2 = str.push_byte(b, c)
+        } else if c == 10u8 {
+            let e3 = str.push(b, "\\n")
+        } else if c == 13u8 {
+            let e4 = str.push(b, "\\r")
+        } else if c == 226u8 && i + 2usize < text.len && text[i + 1usize] == 128u8 && (text[i + 2usize] == 168u8 || text[i + 2usize] == 169u8) {
+            if text[i + 2usize] == 168u8 { let e5 = str.push(b, "\\u2028") } else { let e6 = str.push(b, "\\u2029") }
+            i += 3usize
+            continue
+        } else {
+            let e7 = str.push_byte(b, c)
+        }
+        i += 1usize
+    }
+    let e8 = str.push_byte(b, 34u8)
+}
+
+// A JSON (`type: "json"`) or text (`type: "text"`) module: a module whose only export is its default, built from the source.
+fn new_synthetic_module(it: *js.Interp, url: str, source: str, kind: str) -> (*Module, err) {
+    let (b, be) = str.builder(it.a, source.len * 2usize + 64usize)
+    if be != ok { ret (zero, js.throw_range(it, "out of memory")) }
+    var out = b
+    if str.eq(kind, "json") {
+        let e1 = str.push(&out, "export default JSON.parse(")
+        push_js_string(&out, source)
+        let e2 = str.push(&out, ");")
+    } else if str.eq(kind, "text") {
+        let e3 = str.push(&out, "export default ")
+        push_js_string(&out, source)
+        let e4 = str.push(&out, ";")
+    } else {
+        ret (zero, js.throw_syntax(it, js.str_concat3(it, "Unsupported module type '", kind, "'")))
+    }
+    let (m, me) = new_module(it, url, str.done(&out))
+    if me != ok { ret (zero, me) }
+    m.kind = kind
+    ret (m, ok)
 }
 
 // Parses `source` as a module named `url` and registers it; a syntax error is thrown as a SyntaxError.

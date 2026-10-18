@@ -7044,6 +7044,15 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (h, _m) = layout_children(&l, vp, viewport_width, viewport_height, &fc, false)
     let vb2 = bx(&l, vp)
     vb2.h = maxf(viewport_height, h)
+    // A page whose principal flow is vertical-rl starts at the right edge of the viewport.
+    var rk = vb2.first
+    while rk != NONE {
+        let rb = bx(&l, rk)
+        if rb.inner != .Text && rb.inner != .Marker && mode_code(bstyle(&l, rk)) == 1u8 {
+            rb.x = maxf(0.0f64, viewport_width - rb.w - rb.margin[1usize])
+        }
+        rk = bx(&l, rk).next
+    }
     positioned_pass(&l, vp)
     extent_pass(&l, vp, 0.0f64, 0.0f64)
     l.doc_width = maxf(l.doc_width, viewport_width)

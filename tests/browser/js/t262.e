@@ -32,7 +32,7 @@ fn features_of(meta: str) -> str {
 
 fn skipped_feature(full_meta: str) -> bool {
     let meta = features_of(full_meta)
-    let feats = "Intl|Temporal|IsHTMLDDA|ShadowRealm|import-attributes|source-phase-imports|decorators|json-modules|tail-call-optimization|regexp-duplicate-named-groups|await-dictionary|canonical-tz|iterator-includes|Iterator.prototype.join|iterator-chunking|immutable-arraybuffer|import-defer|regexp-unicode-property-escapes|"
+    let feats = "Intl|Temporal|IsHTMLDDA|ShadowRealm|source-phase-imports|decorators|tail-call-optimization|regexp-duplicate-named-groups|await-dictionary|canonical-tz|iterator-includes|Iterator.prototype.join|iterator-chunking|immutable-arraybuffer|import-defer|regexp-unicode-property-escapes|"
     var start = 0usize
     var i = 0usize
     while i < feats.len {
@@ -147,17 +147,23 @@ fn join_path(a: *mem.Arena, base: str, rel: str) -> str {
 }
 
 // Resolves a module specifier against the referring module's file and loads it from disk.
-fn load_module(it: *js.Interp, referrer: str, spec: str) -> (*void, err) {
+fn load_module(it: *js.Interp, referrer: str, spec_in: str) -> (*void, err) {
+    let (spec, kind) = module.split_spec(spec_in)
     var rel_ok = false
     if spec.len > 1usize && spec[0usize] == 46u8 && (spec[1usize] == 47u8 || spec[1usize] == 46u8) { rel_ok = true }
     if spec.len > 0usize && spec[0usize] == 47u8 { rel_ok = true }
     if !rel_ok { ret (zero, js.throw_type(it, cat3(it.a, "Cannot resolve module specifier ", spec, ""))) }
     let resolved = join_path(it.a, dir_part(referrer), spec)
-    let (found, has) = module.find(it, resolved)
+    let (found, has) = module.find_typed(it, resolved, kind)
     if has { ret (mem.cast[*void](found), ok) }
     let (src, fe) = fs.read_file(it.a, resolved, 8388608usize)
     if fe != ok { ret (zero, js.throw_type(it, cat3(it.a, "Cannot find module ", resolved, ""))) }
     let text: str = src
+    if kind.len > 0usize {
+        let (sm, sme) = module.new_synthetic_module(it, resolved, text, kind)
+        if sme != ok { ret (zero, sme) }
+        ret (mem.cast[*void](sm), ok)
+    }
     let (m, me) = module.new_module(it, resolved, text)
     if me != ok { ret (zero, me) }
     ret (mem.cast[*void](m), ok)

@@ -768,7 +768,8 @@ fn n_net(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Valu
 // --- modules
 
 // The module loader of a page: a specifier is a URL resolved against the referring module, fetched through the page.
-fn load_module_hook(it: *js.Interp, referrer: str, spec: str) -> (*void, err) {
+fn load_module_hook(it: *js.Interp, referrer: str, spec_in: str) -> (*void, err) {
+    let (spec, kind) = module.split_spec(spec_in)
     let h = host_of(it)
     if !h.has_fetch { ret (zero, js.throw_type(it, "modules cannot be loaded here")) }
     var rel_ok = false
@@ -785,10 +786,15 @@ fn load_module_hook(it: *js.Interp, referrer: str, spec: str) -> (*void, err) {
     let (u, ue) = url.parse(it.a, spec, &b, true)
     if ue != ok { ret (zero, js.throw_type(it, js.str_concat3(it, "Failed to resolve module specifier '", spec, "'"))) }
     let href = url.href(it.a, &u, true)
-    let (found, has) = module.find(it, href)
+    let (found, has) = module.find_typed(it, href, kind)
     if has { ret (mem.cast[*void](found), ok) }
     let (text, status, reached) = h.fetch_fn(h.fetch_ctx, href, referrer)
     if !reached || status < 200u16 || status >= 300u16 { ret (zero, js.throw_type(it, js.str_concat3(it, "Failed to fetch dynamically imported module: ", href, ""))) }
+    if kind.len > 0usize {
+        let (sm, sme) = module.new_synthetic_module(it, href, text, kind)
+        if sme != ok { ret (zero, sme) }
+        ret (mem.cast[*void](sm), ok)
+    }
     let (m, me) = module.new_module(it, href, text)
     if me != ok { ret (zero, me) }
     ret (mem.cast[*void](m), ok)

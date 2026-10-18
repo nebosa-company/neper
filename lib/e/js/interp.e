@@ -4219,16 +4219,67 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
             if se != ok { ret (undefv(), se) }
             spec = sv
         }
+        var opts = undefv()
         if n.c > 1u32 {
             let (ov, oe) = eval(it, f, f.prog.kids[usize(n.b) + 1usize])
             if oe != ok { ret (undefv(), oe) }
+            opts = ov
         }
-        let (iv, ie) = it.module_hook(it, 1u8, spec, f.prog)
+        // The specifier is converted first, then the options are checked; either failing rejects the promise.
+        let (specs, spe) = to_string(it, spec)
+        if spe != ok {
+            if spe != Throw { ret (undefv(), spe) }
+            let (rp, rpe) = rejected_promise(it, it.thrown)
+            ret (rp, rpe)
+        }
+        let (ty, ve) = check_import_options(it, opts)
+        if ve != ok {
+            if ve != Throw { ret (undefv(), ve) }
+            let (rp2, rpe2) = rejected_promise(it, it.thrown)
+            ret (rp2, rpe2)
+        }
+        var full_spec = specs
+        if ty.len > 0usize { full_spec = str_concat3(it, specs, "\0", ty) }
+        let (iv, ie) = it.module_hook(it, 1u8, str_value(full_spec), f.prog)
         ret (iv, ie)
     }
     if k == ast.N_PRIVATE { ret (undefv(), throw_syntax(it, "unexpected private name")) }
     if k == ast.N_SUPER { ret (undefv(), throw_syntax(it, "'super' keyword unexpected here")) }
     ret (undefv(), throw_syntax(it, "unsupported expression"))
+}
+
+fn rejected_promise(it: *Interp, reason: Value) -> (Value, err) {
+    let (p, pe) = new_promise(it)
+    if pe != ok { ret (undefv(), pe) }
+    let re = promise_reject(it, p, reason)
+    ret (obj_value(p), ok)
+}
+
+// The second argument of `import()`: undefined, or an object whose `with` is undefined or an object of string values.
+fn check_import_options(it: *Interp, opts: Value) -> (str, err) {
+    var kind = ""
+    if is_undefined(opts) { ret (kind, ok) }
+    if !is_object(opts) { ret ("", throw_type(it, "The second argument of import() must be an object")) }
+    let (w, we) = get_value(it, opts, key_of("with"))
+    if we != ok { ret ("", we) }
+    if is_undefined(w) { ret (kind, ok) }
+    if !is_object(w) { ret ("", throw_type(it, "The 'with' option of import() must be an object")) }
+    let wo = as_object(w)
+    let (keys, ke) = own_keys(it, wo)
+    if ke != ok { ret ("", ke) }
+    var i = 0usize
+    while i < keys.len {
+        let key = keys[i]
+        i += 1usize
+        if is_symbol_key(key) { continue }
+        let (d, found) = get_own(it, wo, key)
+        if !found || (d.flags & P_ENUMERABLE) == 0u8 { continue }
+        let (v, ve) = get_prop(it, wo, key, w)
+        if ve != ok { ret ("", ve) }
+        if !is_string(v) { ret ("", throw_type(it, "Import attribute values must be strings")) }
+        if !is_symbol_key(key) && str.eq(key.name, "type") { kind = value_str(v) }
+    }
+    ret (kind, ok)
 }
 
 fn is_symbol_value(v: Value) -> bool {
