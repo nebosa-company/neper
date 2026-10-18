@@ -11583,7 +11583,7 @@ fn spin_box_full(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         ret (win, win_error)
     }
     if t.tokens.profile == .CupertinoLike {
-        let (cup, cup_error) = cupertino_spin_box(a, key, t, label, buffer, value, low, high, step, change, typed, width)
+        let (cup, cup_error) = cupertino_spin_box(a, key, t, label, buffer, value, low, high, step, change, typed, width, enabled, invalid)
         ret (cup, cup_error)
     }
     if t.tokens.profile == .Linux {
@@ -20287,15 +20287,17 @@ fn cupertino_stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 }
 
 // The spin box in the Cupertino idiom: the rounded text field and the stepper pill beside it.
-fn cupertino_spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
-    let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
+fn cupertino_spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, enabled: bool, invalid: bool) -> (widget.Node, err) {
+    let (buttons, shortcuts, pair_error) = step_pair_enabled(a, t, key + 1u64, key + 2u64, value, low, high, step, change, enabled)
     if pair_error != ok { ret (zero, pair_error) }
     let len = write_i64(buffer, value)
     var options = field_options()
     options.width = width
+    options.enabled = enabled
+    options.invalid = invalid
     let (editor, editor_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
     if editor_error != ok { ret (zero, editor_error) }
-    let (pill, pill_error) = cup_step_pill(a, t, key + 1u64, key + 2u64, &shortcuts[0usize].action, &shortcuts[1usize].action, value > low, value < high)
+    let (pill, pill_error) = cup_step_pill(a, t, key + 1u64, key + 2u64, &shortcuts[0usize].action, &shortcuts[1usize].action, enabled && value > low, enabled && value < high)
     if pill_error != ok { ret (zero, pill_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }

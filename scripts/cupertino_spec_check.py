@@ -385,7 +385,7 @@ def run():
         "slider": [(0, 3, "focus"), (0, 4, "disabled")],
         "text_edit": [(1, 3, "focus"), (1, 5, "disabled"), (1, 6, "invalid"), (1, 7, "read only")],
         "search_field": [(0, 3, "focus"), (0, 4, "disabled")],
-        "spin_edit": [(0, 3, "hover"), (0, 4, "pressed"), (0, 5, "focus"), (0, 6, "disabled")],
+        "spin_edit": [(0, 3, "hover"), (0, 4, "pressed"), (0, 5, "focus"), (0, 6, "disabled"), (7, 10, "spin box disabled"), (7, 11, "spin box invalid")],
         "combo_box": [(0, 1, "hover"), (0, 2, "pressed"), (0, 3, "focus")],
         "dialog": [(2, 4, "pressed button")],
         "page_control": [(5, 8, "bar pressed"), (5, 9, "bar disabled"), (0, 3, "strip focus"), (0, 4, "strip disabled")],
