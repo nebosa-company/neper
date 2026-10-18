@@ -1,0 +1,37 @@
+scheme,neper_control,name,png_1x,png_2x,w_1x,h_1x,note
+light,text_edit,entry-focus-ring,light/entry-focus-ring@1x.png,light/entry-focus-ring@2x.png,200,34,FOCUS_WITHIN on the entry and its text child
+light,text_edit,entry-error-focus,light/entry-error-focus@1x.png,light/entry-error-focus@2x.png,200,34,
+light,text_edit,entry-selected,light/entry-selected@1x.png,light/entry-selected@2x.png,200,34,"select_region(0,-1) with focus"
+light,spin_edit,spin-focus-ring,light/spin-focus-ring@1x.png,light/spin-focus-ring@2x.png,120,34,FOCUS_WITHIN on the spin button and its text child
+light,spin_edit,spin50-normal,light/spin50-normal@1x.png,light/spin50-normal@2x.png,120,34,value 50: both arrows enabled
+light,spin_edit,spin50-hover-up,light/spin50-hover-up@1x.png,light/spin50-hover-up@2x.png,120,34,pointer over the + arrow
+light,spin_edit,spin50-hover-down,light/spin50-hover-down@1x.png,light/spin50-hover-down@2x.png,120,34,pointer over the - arrow
+light,spin_edit,spin50-active-up,light/spin50-active-up@1x.png,light/spin50-active-up@2x.png,120,34,+ arrow pressed
+light,spin_edit,spin50-active-down,light/spin50-active-down@1x.png,light/spin50-active-down@2x.png,120,34,- arrow pressed
+light,spin_edit,spin50-focus-ring,light/spin50-focus-ring@1x.png,light/spin50-focus-ring@2x.png,120,34,"FOCUS_WITHIN on the spin button and its text, arrows left alone"
+light,spin_edit,spin50-disabled,light/spin50-disabled@1x.png,light/spin50-disabled@2x.png,120,34,
+light,spin_edit,spin-max,light/spin-max@1x.png,light/spin-max@2x.png,120,34,value 100: the + arrow disabled
+light,mask_edit,entry-mask-focus,light/entry-mask-focus@1x.png,light/entry-mask-focus@2x.png,200,34,
+light,mask_edit,entry-mask-disabled,light/entry-mask-disabled@1x.png,light/entry-mask-disabled@2x.png,200,34,
+light,memo,textview-focus,light/textview-focus@1x.png,light/textview-focus@2x.png,220,100,
+light,memo,textview-disabled,light/textview-disabled@1x.png,light/textview-disabled@2x.png,220,100,
+light,combo_box,combo-entry-focus,light/combo-entry-focus@1x.png,light/combo-entry-focus@2x.png,203,34,
+light,combo_box,combo-entry-disabled,light/combo-entry-disabled@1x.png,light/combo-entry-disabled@2x.png,203,34,
+dark,text_edit,entry-focus-ring,dark/entry-focus-ring@1x.png,dark/entry-focus-ring@2x.png,200,34,FOCUS_WITHIN on the entry and its text child
+dark,text_edit,entry-error-focus,dark/entry-error-focus@1x.png,dark/entry-error-focus@2x.png,200,34,
+dark,text_edit,entry-selected,dark/entry-selected@1x.png,dark/entry-selected@2x.png,200,34,"select_region(0,-1) with focus"
+dark,spin_edit,spin-focus-ring,dark/spin-focus-ring@1x.png,dark/spin-focus-ring@2x.png,120,34,FOCUS_WITHIN on the spin button and its text child
+dark,spin_edit,spin50-normal,dark/spin50-normal@1x.png,dark/spin50-normal@2x.png,120,34,value 50: both arrows enabled
+dark,spin_edit,spin50-hover-up,dark/spin50-hover-up@1x.png,dark/spin50-hover-up@2x.png,120,34,pointer over the + arrow
+dark,spin_edit,spin50-hover-down,dark/spin50-hover-down@1x.png,dark/spin50-hover-down@2x.png,120,34,pointer over the - arrow
+dark,spin_edit,spin50-active-up,dark/spin50-active-up@1x.png,dark/spin50-active-up@2x.png,120,34,+ arrow pressed
+dark,spin_edit,spin50-active-down,dark/spin50-active-down@1x.png,dark/spin50-active-down@2x.png,120,34,- arrow pressed
+dark,spin_edit,spin50-focus-ring,dark/spin50-focus-ring@1x.png,dark/spin50-focus-ring@2x.png,120,34,"FOCUS_WITHIN on the spin button and its text, arrows left alone"
+dark,spin_edit,spin50-disabled,dark/spin50-disabled@1x.png,dark/spin50-disabled@2x.png,120,34,
+dark,spin_edit,spin-max,dark/spin-max@1x.png,dark/spin-max@2x.png,120,34,value 100: the + arrow disabled
+dark,mask_edit,entry-mask-focus,dark/entry-mask-focus@1x.png,dark/entry-mask-focus@2x.png,200,34,
+dark,mask_edit,entry-mask-disabled,dark/entry-mask-disabled@1x.png,dark/entry-mask-disabled@2x.png,200,34,
+dark,memo,textview-focus,dark/textview-focus@1x.png,dark/textview-focus@2x.png,220,100,
+dark,memo,textview-disabled,dark/textview-disabled@1x.png,dark/textview-disabled@2x.png,220,100,
+dark,combo_box,combo-entry-focus,dark/combo-entry-focus@1x.png,dark/combo-entry-focus@2x.png,203,34,
+dark,combo_box,combo-entry-disabled,dark/combo-entry-disabled@1x.png,dark/combo-entry-disabled@2x.png,203,34,
