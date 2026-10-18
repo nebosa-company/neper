@@ -71,6 +71,16 @@ sheet("toolbar_button", 2, 430, 60,
          ("headerbar", [(15, 15, 30, 30), (192, 13, 228, 30), (275, 16, 290, 29), (316, 16, 330, 30), (353, 16, 367, 30), (390, 16, 404, 30)]),
          ("toolbar", [(15, 14, 31, 31), (60, 15, 77, 30), (107, 14, 122, 31), (165, 15, 182, 31), (211, 14, 228, 31)])])
 
+# popover rows (top, bottom) and the ink of their label and accelerator (x ranges measured on the reference)
+EDIT_ROWS = [(28, 60, 43, 75, 127, 167), (60, 92, 44, 73, 88, 167), (105, 137, 43, 63, 127, 166),
+             (137, 169, 43, 73, 127, 166), (169, 201, 43, 77, 127, 166), (214, 246, 43, 101, 127, 167)]
+EDIT_INK = [r for (y0, y1, a0, a1, b0, b1) in EDIT_ROWS for r in ((a0 - 1, y0 + 6, a1 + 1, y1 - 6), (b0 - 1, y0 + 6, b1 + 1, y1 - 6))]
+VIEW_INK = [(41, 34, 57, 52), (63, 34, 152, 56), (63, 66, 152, 88), (63, 111, 116, 131), (63, 143, 106, 163),
+            (63, 175, 111, 195), (157, 177, 166, 193), (63, 220, 136, 240), (147, 220, 167, 240)]
+sheet("popup_menu", 2, 210, 278, [("menu-edit", EDIT_INK), ("menu-view", VIEW_INK)])
+sheet("popup_menu-hover", 1, 210, 278, [("menu-edit-hover", EDIT_INK)])
+sheet("popup_menu-active", 1, 210, 278, [("menu-edit-active", EDIT_INK)])
+
 
 def origin(sh, i):
     col, row = i % sh["columns"], i // sh["columns"]
@@ -182,10 +192,12 @@ def heat(name, crop):
         print("wrote", path)
 
 
-def offs(name, crop, scheme="light"):
-    """List the pixels of one cell that are off by more than 2 levels: crop x, y, reference, ours."""
+def offs(name, crop, scheme="light", strict=""):
+    """List the pixels of one cell that are off by more than 2 levels: crop x, y, reference, ours. With a fourth word, only
+    the pixels the strict metric counts (flat in the reference and outside the ink rects)."""
     sh = SHEETS[name]
     idx = [c for c, _ in sh["cells"]].index(crop)
+    inks = sh["cells"][idx][1]
     c = crop_image(scheme, crop)
     x0, y0 = crop_at(sh, idx, c)
     ref = Image.open(REF / "composite" / scheme / (name + ".png")).convert("RGB")
@@ -194,6 +206,12 @@ def offs(name, crop, scheme="light"):
         for x in range(-3, c.width + 3):
             p, q = ref.getpixel((x0 + x, y0 + y)), ours.getpixel((x0 + x, y0 + y))
             if max(abs(p[k] - q[k]) for k in range(3)) > 2:
+                if strict:
+                    if any(a - 2 <= x <= cc + 2 and b - 2 <= y <= d + 2 for (a, b, cc, d) in inks):
+                        continue
+                    if any(max(abs(ref.getpixel((x0 + x + dx, y0 + y + dy))[k] - p[k]) for k in range(3)) > 2
+                           for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+                        continue
                 print("%3d,%3d ref %02x%02x%02x ours %02x%02x%02x" % ((x, y) + p + q))
 
 

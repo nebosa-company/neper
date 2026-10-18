@@ -3,3 +3,11 @@ light,hint,tooltip-real,light/tooltip-real@1x.png,light/tooltip-real@2x.png,95,3
 dark,hint,tooltip-real,dark/tooltip-real@1x.png,dark/tooltip-real@2x.png,95,33,tooltip.background > box > label as GtkTooltipWindow builds it
 light,menu_bar,menubar-selected,light/menubar-selected@1x.png,light/menubar-selected@2x.png,129,28,the second title (Edit) in the :selected state a hover or open menu gives
 dark,menu_bar,menubar-selected,dark/menubar-selected@1x.png,dark/menubar-selected@2x.png,129,28,the second title (Edit) in the :selected state a hover or open menu gives
+light,popup_menu,menu-edit,light/menu-edit@1x.png,light/menu-edit@2x.png,210,278,"GtkPopoverMenu, no arrow: shortcuts, a disabled row, sections"
+light,popup_menu,menu-edit-hover,light/menu-edit-hover@1x.png,light/menu-edit-hover@2x.png,210,278,the same with the Paste row hovered
+light,popup_menu,menu-edit-active,light/menu-edit-active@1x.png,light/menu-edit-active@2x.png,210,278,the same with the Paste row pressed
+light,popup_menu,menu-view,light/menu-view@1x.png,light/menu-view@2x.png,210,278,"checks, radios, a submenu and an accelerator"
+dark,popup_menu,menu-edit,dark/menu-edit@1x.png,dark/menu-edit@2x.png,210,278,"GtkPopoverMenu, no arrow: shortcuts, a disabled row, sections"
+dark,popup_menu,menu-edit-hover,dark/menu-edit-hover@1x.png,dark/menu-edit-hover@2x.png,210,278,the same with the Paste row hovered
+dark,popup_menu,menu-edit-active,dark/menu-edit-active@1x.png,dark/menu-edit-active@2x.png,210,278,the same with the Paste row pressed
+dark,popup_menu,menu-view,dark/menu-view@1x.png,dark/menu-view@2x.png,210,278,"checks, radios, a submenu and an accelerator"

@@ -57,8 +57,90 @@ def menubar(selected=-1):
     return b
 
 
+def walk(w):
+    yield w
+    c = w.get_first_child()
+    while c:
+        yield from walk(c)
+        c = c.get_next_sibling()
+
+
+def menu_model(kind):
+    m = Gio.Menu()
+    def item(label, action, accel=None, target=None):
+        it = Gio.MenuItem.new(label, action)
+        if target:
+            it.set_action_and_target_value(action, GLib.Variant.new_string(target))
+        if accel:
+            it.set_attribute_value("accel", GLib.Variant.new_string(accel))
+        return it
+    if kind == "edit":
+        s1 = Gio.Menu(); s1.append_item(item("Undo", "m.undo", "<Control>z")); s1.append_item(item("Redo", "m.redo", "<Control><Shift>z"))
+        s2 = Gio.Menu(); s2.append_item(item("Cut", "m.cut", "<Control>x")); s2.append_item(item("Copy", "m.copy", "<Control>c")); s2.append_item(item("Paste", "m.paste", "<Control>v"))
+        s3 = Gio.Menu(); s3.append_item(item("Select All", "m.all", "<Control>a"))
+        for sec in (s1, s2, s3):
+            m.append_section(None, sec)
+    else:
+        s1 = Gio.Menu(); s1.append_item(item("Show Toolbar", "m.toolbar")); s1.append_item(item("Show Sidebar", "m.sidebar"))
+        s2 = Gio.Menu()
+        s2.append_item(item("as Icons", "m.view", None, "icons")); s2.append_item(item("as List", "m.view", None, "list"))
+        sub = Gio.Menu(); sub.append("Name", "m.undo"); s2.append_submenu("Sort By", sub)
+        s3 = Gio.Menu(); s3.append_item(item("Full Screen", "m.full", "F11"))
+        for sec in (s1, s2, s3):
+            m.append_section(None, sec)
+    return m
+
+
+def actions():
+    g = Gio.SimpleActionGroup()
+    for n in ("undo", "cut", "copy", "paste", "all", "full"):
+        g.add_action(Gio.SimpleAction.new(n, None))
+    redo = Gio.SimpleAction.new("redo", None); redo.set_enabled(False); g.add_action(redo)
+    g.add_action(Gio.SimpleAction.new_stateful("toolbar", None, GLib.Variant.new_boolean(True)))
+    g.add_action(Gio.SimpleAction.new_stateful("sidebar", None, GLib.Variant.new_boolean(False)))
+    g.add_action(Gio.SimpleAction.new_stateful("view", GLib.VariantType.new("s"), GLib.Variant.new_string("icons")))
+    return g
+
+
+def popup_menu(kind, hover=""):
+    def b():
+        mb = Gtk.MenuButton(label="Menu")
+        pop = Gtk.PopoverMenu.new_from_model(menu_model(kind))
+        pop.set_has_arrow(False)
+        mb.set_popover(pop)
+        mb.insert_action_group("m", actions())
+        mb._open = True
+        mb._hover = hover
+        return mb
+    return b
+
+
 ROWS = [("hint", "tooltip-real", tooltip_real, F.NORMAL, "tooltip.background > box > label as GtkTooltipWindow builds it"),
+        ("popup_menu", "menu-edit", popup_menu("edit"), F.NORMAL, "GtkPopoverMenu, no arrow: shortcuts, a disabled row, sections"),
+        ("popup_menu", "menu-edit-hover", popup_menu("edit", "Paste"), F.NORMAL, "the same with the Paste row hovered"),
+        ("popup_menu", "menu-edit-active", popup_menu("edit", "Paste:active"), F.NORMAL, "the same with the Paste row pressed"),
+        ("popup_menu", "menu-view", popup_menu("view"), F.NORMAL, "checks, radios, a submenu and an accelerator"),
         ("menu_bar", "menubar-selected", menubar(1), F.NORMAL, "the second title (Edit) in the :selected state a hover or open menu gives")]
+
+
+def popover_texture(mb, scale):
+    """The popover of a menu button on its own surface; no window is active under Xvfb, so the backdrop flag is cleared."""
+    pop = mb.get_popover()
+    mb.popup()
+    G.settle(10)
+    for w in walk(pop):
+        w.unset_state_flags(F.BACKDROP)
+    # the first row takes the keyboard selection when the popover opens: clear it, then set the asked state on one row
+    for w in walk(pop):
+        if w.get_css_name() == "modelbutton":
+            w.unset_state_flags(F.SELECTED | F.FOCUSED | F.FOCUS_VISIBLE | F.PRELIGHT | F.ACTIVE)
+            if mb._hover and w.get_property("text") == mb._hover.split(":")[0]:
+                w.set_state_flags(F.PRELIGHT | (F.ACTIVE if mb._hover.endswith(":active") else F.NORMAL), False)
+    G.settle(4)
+    tex = G.to_texture(pop, scale)
+    mb.popdown()
+    G.settle(3)
+    return tex
 
 
 def main():
@@ -86,7 +168,10 @@ def main():
                 items = list(kids(wd))
                 items[wd._select].set_state_flags(F.SELECTED, False)
                 G.settle(3)
-            texs = {s: G.to_texture(pad, s, None) for s in (1, 2)}
+            if getattr(wd, "_open", False):
+                texs = {s: popover_texture(wd, s) for s in (1, 2)}
+            else:
+                texs = {s: G.to_texture(pad, s, None) for s in (1, 2)}
             for s, tex in texs.items():
                 tex.save_to_png(f"{OUT}/{scheme}/{name}@{s}x.png")
             rows.append((scheme, neper, name, f"{scheme}/{name}@1x.png", f"{scheme}/{name}@2x.png", texs[1].get_width(), texs[1].get_height(), note))
