@@ -408,7 +408,7 @@ fn inherit_from(parent: *const Style) -> Style {
 }
 
 fn inherited_extra(name: str) -> bool {
-    ret nm(",text-shadow,font-variant-caps,font-variant-ligatures,font-variant-numeric,font-variant-east-asian,font-feature-settings,font-variation-settings,font-kerning,font-stretch,font-optical-sizing,font-size-adjust,hyphens,text-rendering,caret-color,accent-color,image-rendering,quotes,text-justify,text-decoration-skip-ink,color-scheme,orphans,widows,line-break,text-size-adjust,pointer-events,user-select,paint-order,fill,stroke,stroke-width,fill-opacity,stroke-opacity,text-anchor,font-synthesis,hanging-punctuation,text-wrap,", name)
+    ret nm(",text-shadow,font-variant-caps,font-variant-ligatures,font-variant-numeric,font-variant-east-asian,font-feature-settings,font-variation-settings,font-kerning,font-stretch,font-optical-sizing,font-size-adjust,hyphens,text-rendering,caret-color,accent-color,image-rendering,quotes,text-justify,text-decoration-skip-ink,color-scheme,orphans,widows,line-break,text-size-adjust,pointer-events,user-select,paint-order,fill,stroke,stroke-width,fill-opacity,stroke-opacity,text-anchor,font-synthesis,hanging-punctuation,text-wrap,text-align-last,text-wrap-mode,text-wrap-style,white-space-collapse,text-emphasis-style,text-emphasis-color,text-emphasis-position,text-underline-position,text-underline-offset,", name)
 }
 
 // --- Reading one longhand into the style.

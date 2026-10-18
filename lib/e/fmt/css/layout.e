@@ -137,6 +137,20 @@ fn detach(l: *Layout, child: u32) {
 fn anon_style(l: *Layout, parent_style: u32, display: style.Display) -> u32 {
     var s = style.inherit_from(st(l, parent_style))
     s.display = display
+    // The inherited properties without a field of their own pass through.
+    let (kept, ke) = list.init[style.Extra](l.a, 4usize)
+    if ke == ok {
+        var klist = kept
+        let pe = st(l, parent_style).extras
+        var xi = 0usize
+        while xi < pe.len {
+            if style.inherited_extra(pe[xi].name) {
+                let pushed = list.push[style.Extra](&klist, pe[xi])
+            }
+            xi += 1usize
+        }
+        s.extras = list.slice_const[style.Extra](&klist)
+    }
     // An anonymous box has no borders: the initial width of `medium` must not become a used width.
     var bi = 0usize
     while bi < 4usize {
