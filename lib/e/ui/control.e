@@ -9490,8 +9490,17 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             parts[3usize] = widget.box(0u64, mark, zero)
             var column_style = style.defaults()
             column_style.height = style.Length { Px: h }
+            column_style.min_width = style.Length { Px: least }
             column_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
-            content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..4usize])
+            var across: ui_layout.CrossAlign = .Stretch
+            if t.tokens.profile == .MaterialLike {
+                // md-primary-tab: the indicator is as wide as the label (the tab itself shares the bar).
+                let (said, _fit, _base, said_error) = run_metrics_faced(a, t, caption, labels[i])
+                if said_error != ok { ret (zero, said_error) }
+                parts[3usize] = widget.box(0u64, with_width(mark, max_of(24.0, said)), zero)
+                across = .Center
+            }
+            content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: across, gap: 0.0 }, column_style, parts[0usize..4usize])
         }
         if !enabled { look.background = with_alpha(ink, 0.0) }
         let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, named, look, enabled, chosen, 0u32, 0u32, 0u64, &picks[i], content)
