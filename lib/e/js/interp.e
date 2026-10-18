@@ -141,7 +141,7 @@ type Interp = struct {
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
     sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
-    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32
+    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool
 }
 
 fn root_realm(it: *Interp) -> *Interp {
@@ -1504,7 +1504,8 @@ fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (boo
                 ret (true, ok)
             }
         }
-        let (existing, has) = get_own(it, ro, key)
+        let (existing, has, geo) = get_own_e(it, ro, key)
+        if geo != ok { ret (false, geo) }
         if has {
             if (existing.flags & P_ACCESSOR) != 0u8 { ret (false, ok) }
             if (existing.flags & P_WRITABLE) == 0u8 { ret (false, ok) }
@@ -4877,7 +4878,9 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
         ret (v7, e7)
     }
     if k == ast.N_REGEX {
+        it.rx_quiet = f.prog.internal
         let (rv, re4) = make_regexp(it, n.text, n.text2)
+        it.rx_quiet = false
         ret (rv, re4)
     }
     if k == ast.N_SPREAD { ret (undefv(), throw_syntax(it, "unexpected spread")) }
@@ -6919,7 +6922,8 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
                     s += 1usize
                 }
                 if dup { continue }
-                let (p, found) = get_own(it, cur, key)
+                let (p, found, goe) = get_own_e(it, cur, key)
+                if goe != ok { ret (normal(), goe) }
                 if !found { continue }
                 let pe = list.push[Key](&seen, key)
                 if (p.flags & P_ENUMERABLE) == 0u8 { continue }
@@ -7414,6 +7418,7 @@ fn eval_source(it: *Interp, source: str) -> (Value, err) {
     if ce != ok { ret (undefv(), throw_range(it, "out of memory")) }
     cell[0usize] = parsed.program
     cell[0usize].url = it.script_url
+    cell[0usize].internal = it.loading_internal
     let (rt1, re1) = run_program(it, &cell[0usize])
     ret (rt1, re1)
 }

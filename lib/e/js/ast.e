@@ -173,5 +173,5 @@ type Node = struct {
 type TemplateStr = struct { cooked: str, raw: str, valid: bool }
 
 type Program = struct {
-    nodes: []const Node, kids: []const u32, strs: []const TemplateStr, root: u32, source: str, url: str, module: *void, is_module: bool
+    nodes: []const Node, kids: []const u32, strs: []const TemplateStr, root: u32, source: str, url: str, module: *void, is_module: bool, internal: bool
 }

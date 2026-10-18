@@ -12,7 +12,7 @@ fn arg(args: []const js.Value, i: usize) -> js.Value {
     ret js.undefv()
 }
 
-type Compiled = struct { re: rx.Regex, source: str, flags: str, legacy: bool, realm: *js.Interp }
+type Compiled = struct { re: rx.Regex, source: str, flags: str, legacy: bool, realm: *js.Interp, quiet: bool }
 
 fn compiled_of(o: *js.Obj) -> *Compiled { ret mem.cast[*Compiled](o.data) }
 
@@ -160,7 +160,7 @@ fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str, legacy
     let o = js.new_obj(it, js.C_REGEXP, proto)
     let (cell, me) = mem.alloc[Compiled](it.a, 1usize)
     if me != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
-    cell[0usize] = Compiled { re: re, source: source, flags: flags, legacy: legacy, realm: it }
+    cell[0usize] = Compiled { re: re, source: source, flags: flags, legacy: legacy, realm: it, quiet: it.rx_quiet }
     o.data = mem.cast[*void](&cell[0usize])
     let pe = js.define_data(it, o, js.key_of("lastIndex"), js.num_value(0.0f64), js.P_WRITABLE)
     ret (js.obj_value(o), ok)
@@ -271,7 +271,9 @@ fn builtin_exec(it: *js.Interp, r: *js.Obj, s: str) -> (js.Value, err) {
     }
     let start = usize(m.caps[0usize])
     let end = usize(m.caps[1usize])
-    if c.legacy && c.realm == it {
+    if c.quiet {
+        // The built-in library's own patterns leave the legacy RegExp statics alone.
+    } else if c.legacy && c.realm == it {
         it.rx_valid = true
         it.rx_input_ok = true
         it.rx_input = s

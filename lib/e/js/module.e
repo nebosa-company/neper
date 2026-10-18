@@ -24,7 +24,7 @@ type Module = struct {
     imports: list.List[Import], locals: list.List[Export], indirects: list.List[Export], stars: list.List[usize],
     status: u8, has_tla: bool, namespace: *js.Obj, has_ns: bool,
     failure: js.Value, failed: bool, meta: *js.Obj, has_meta: bool,
-    dfs: u32, dfs_anc: u32, cycle_root: *Module, has_root: bool, async_order: u32, pending: u32, parents: list.List[*Module], cap: *js.Obj, has_cap: bool
+    loaded: bool, dfs: u32, dfs_anc: u32, cycle_root: *Module, has_root: bool, async_order: u32, pending: u32, parents: list.List[*Module], cap: *js.Obj, has_cap: bool
 }
 
 // Module statuses.
@@ -425,6 +425,17 @@ fn resolve_export(it: *js.Interp, m: *Module, name: str, set: *list.List[Visited
     var i = 0usize
     while i < m.locals.len {
         if str.eq(m.locals.items[i].export_name, name) {
+            // `import ... ; export { x }` re-exports the imported binding itself.
+            var im = 0usize
+            while im < m.imports.len {
+                let imp = m.imports.items[im]
+                im += 1usize
+                if !str.eq(imp.local, m.locals.items[i].local) || str.eq(imp.import_name, "*defer*") || str.eq(imp.import_name, "*source*") { continue }
+                let idep = m.deps.items[imp.request]
+                if str.eq(imp.import_name, "*") { ret (Resolved { found: true, ambiguous: false, module: idep, binding: "", is_ns: true }, ok) }
+                let (ir, ire) = resolve_export(it, idep, imp.import_name, set)
+                ret (ir, ire)
+            }
             ret (Resolved { found: true, ambiguous: false, module: m, binding: m.locals.items[i].local, is_ns: false }, ok)
         }
         i += 1usize
@@ -662,9 +673,24 @@ fn link_inner(it: *js.Interp, m: *Module, stack: *list.List[*Module]) -> err {
     ret ok
 }
 
+// Loads every module of the graph before any is linked, so export resolution can walk modules not yet visited.
+fn load_all(it: *js.Interp, m: *Module) -> err {
+    if m.loaded { ret ok }
+    m.loaded = true
+    try load_dependencies(it, m)
+    var i = 0usize
+    while i < m.deps.len {
+        try load_all(it, m.deps.items[i])
+        i += 1usize
+    }
+    ret ok
+}
+
 // Loads and links `m` and everything it imports. On failure the modules that were being linked go back to unlinked.
 fn link(it: *js.Interp, m: *Module) -> err {
     var stack = try list.init[*Module](it.a, 8usize)
+    let le = load_all(it, m)
+    if le != ok { ret le }
     let e = link_inner(it, m, &stack)
     if e != ok {
         var i = 0usize

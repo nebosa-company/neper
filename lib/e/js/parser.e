@@ -2158,6 +2158,12 @@ fn parse_statement(p: *Parser) -> (u32, err) {
 fn parse_module_name(p: *Parser) -> (str, bool, err) {
     if p.tok.kind == lex.T_STR {
         let s = p.tok.text
+        // A module export name must be well-formed Unicode: a surrogate code point (U+D800..U+DFFF, 0xED 0xA0..0xBF in WTF-8) is lone.
+        var q = 0usize
+        while q + 1usize < s.len {
+            if s[q] == 237u8 && s[q + 1usize] >= 160u8 { ret ("", false, fail(p, "a module export name must be well-formed Unicode")) }
+            q += 1usize
+        }
         try adv(p)
         ret (s, true, ok)
     }
@@ -2502,7 +2508,7 @@ fn parse_goal_in(a: *mem.Arena, source: str, module: bool, eo: *const early.Eval
     if p.strict { p.nodes.items[usize(root)].flags = ast.F_STRICT }
     if p.top_await { p.nodes.items[usize(root)].flags = p.nodes.items[usize(root)].flags | ast.F_ASYNC }
     close_hoist(&p, root, 0usize)
-    out.program = ast.Program { nodes: list.slice_const[ast.Node](&p.nodes), kids: list.slice_const[u32](&p.kids), strs: list.slice_const[ast.TemplateStr](&p.strs), root: root, source: source, url: "", module: zero, is_module: module }
+    out.program = ast.Program { nodes: list.slice_const[ast.Node](&p.nodes), kids: list.slice_const[u32](&p.kids), strs: list.slice_const[ast.TemplateStr](&p.strs), root: root, source: source, url: "", module: zero, is_module: module, internal: false }
     // Static semantics beyond the grammar.
     let (early_result, early_error) = early.check_in(a, &out.program, eo)
     if early_error != ok {

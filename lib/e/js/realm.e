@@ -1593,6 +1593,15 @@ fn tz_database(it: *js.Interp) -> (tz.Database, bool) {
     ret (db, true)
 }
 
+// __fnRealmGlobal(f): the global object of the realm a function belongs to (bound functions answer their target's).
+fn fn_realm_global_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    if args.len == 0usize || !js.is_object(args[0usize]) { ret (js.obj_value(it.global), ok) }
+    var o = js.as_object(args[0usize])
+    while o.class == js.C_BOUND { o = o.bound_target }
+    if o.class == js.C_FUNCTION && o.realm != js.null_interp() { ret (js.obj_value(o.realm.global), ok) }
+    ret (js.obj_value(it.global), ok)
+}
+
 // __tzLinks(): the IANA link table as "target alias" lines.
 fn tz_links_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (text, te) = tzpack.links(js.root_realm(it).a)
@@ -1651,6 +1660,7 @@ fn install_host(it: *js.Interp) {
     js.add_method(it, it.global, "__tzNames", 0u32, tz_names_native)
     js.add_method(it, it.global, "__tzOffset", 2u32, tz_offset_native)
     js.add_method(it, it.global, "__tzLinks", 0u32, tz_links_native)
+    js.add_method(it, it.global, "__fnRealmGlobal", 1u32, fn_realm_global_native)
 }
 
 // --- bootstrap
@@ -1764,6 +1774,7 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     let e5 = js.define_data(it, it.global, js.key_of("eval"), js.obj_value(ev), js.P_HIDDEN)
     let (psrc, pse) = prelude.source(a)
     if pse != ok { ret (it, pse) }
+    it.loading_internal = true
     let (pv, pe) = js.eval_source(it, psrc)
     if pe != ok { ret (it, pe) }
     if donor == js.null_interp() {
@@ -1776,6 +1787,7 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     if ise != ok { ret (it, ise) }
     let (iv, ie) = js.eval_source(it, isrc)
     if ie != ok { ret (it, ie) }
+    it.loading_internal = false
     install_shadow_realm(it)
     let (sev, see) = js.get_prop(it, it.global, js.key_of("SuppressedError"), js.obj_value(it.global))
     if see == ok && js.is_object(sev) { it.suppressed_ctor = js.as_object(sev) }
