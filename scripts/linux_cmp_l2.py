@@ -36,6 +36,8 @@ SHEETS = {
         "dropdown-normal", "dropdown-hover", "dropdown-active", "dropdown-focus-ring", "dropdown-disabled", "combo-entry",
         "combo-entry-focus", "combo-entry-disabled"]),
     "image_combo_box": dict(columns=2, box_w=270, cell_w=280, cell_h=44, cells=["dropdown-ellipsis", None, None, None, None]),
+    "date_edit": dict(columns=3, cell_w=140, cell_h=44, cells=["date-button", None, None]),
+    "date_edit_calendar": dict(columns=1, cell_w=281, cell_h=246, cells=["calendar"]),
 }
 
 

@@ -20539,6 +20539,38 @@ fn linux_dropdown(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
 
 // A drop down with an optional 16 px picture before the value (an image combo box); `width` 0 is its natural width.
 fn linux_dropdown_core(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, lead: widget.Node, has_lead: bool, width: f32, height: f32, enabled: bool, open: bool, choices: []const str, active: usize, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit) -> (widget.Node, err) {
+    let (boxed, w, boxed_error) = linux_menu_button(a, key, t, label, shown, lead, has_lead, width, height, enabled, open, toggle, false)
+    if boxed_error != ok { ret (zero, boxed_error) }
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting_wide(a, key, t, label, boxed, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle, w)
+    ret (made, made_error)
+}
+
+// `linux_label_width` with an advance of exactly a half pixel (a digit of the bold face is 8.5) rounded down, as Pango's hinted metrics do.
+fn linux_label_width_half_down(a: *mem.Arena, t: *const Theme, caption: TextOptions, label: str) -> (f32, err) {
+    var ascii = true
+    var i = 0usize
+    while i < label.len {
+        if label[i] >= 128u8 { ascii = false }
+        i += 1usize
+    }
+    if !ascii {
+        let (advance, fit, baseline, whole_error) = run_metrics_faced(a, t, caption, label)
+        ret (f32(u32(fit + 0.5)), whole_error)
+    }
+    var sum: f32 = 0.0
+    i = 0usize
+    while i < label.len {
+        let (advance, fit, baseline, letter_error) = run_metrics_faced(a, t, caption, label[i..i + 1usize])
+        if letter_error != ok { ret (0.0, letter_error) }
+        sum += f32(u32(advance + 0.49))
+        i += 1usize
+    }
+    ret (sum, ok)
+}
+
+// The face of a drop down or menu button (see linux_dropdown); answers the node and the width it came to.
+fn linux_menu_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, lead: widget.Node, has_lead: bool, width: f32, height: f32, enabled: bool, open: bool, toggle: *const widget.Submit, tight: bool) -> (widget.Node, f32, err) {
     let state = control_state(t, key, enabled, false)
     var look = style.adwaita_resolve(t.tokens, .Tonal, state)
     look.border_width = 0.0
@@ -20547,22 +20579,29 @@ fn linux_dropdown_core(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     caption.role = .Label
     caption.wrap = .None
     let (word, word_error) = colored_text(a, 0u64, shown, t, caption, look.foreground)
-    if word_error != ok { ret (zero, word_error) }
-    let (wide, wide_error) = linux_label_width(a, t, caption, shown)
-    if wide_error != ok { ret (zero, wide_error) }
+    if word_error != ok { ret (zero, 0.0, word_error) }
+    let (wide, wide_error) = linux_label_width_half_down(a, t, caption, shown)
+    if wide_error != ok { ret (zero, 0.0, wide_error) }
     var picture_w: f32 = 0.0
     if has_lead { picture_w = 16.0 + 6.0 }
-    let natural = 10.0 + picture_w + wide + 6.0 + 16.0 + 10.0
+    // A GtkMenuButton (a date edit's) keeps its arrow 3 px from the label and 9 from the end.
+    var gap: f32 = 6.0
+    var rim: f32 = 10.0
+    if tight {
+        gap = 3.0
+        rim = 9.0
+    }
+    let natural = 10.0 + picture_w + wide + gap + 16.0 + rim
     var w = width
     if !(w > 0.0) { w = natural }
-    var end_pad: f32 = 10.0
+    var end_pad: f32 = rim
     if w >= natural + 7.0 { end_pad = 17.0 }
-    let label_w = max_zero(w - 10.0 - end_pad - picture_w - 6.0 - 16.0)
+    let label_w = max_zero(w - 10.0 - end_pad - picture_w - gap - 16.0)
     let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
     let (arrow, arrow_error) = adwicon.icon(a, adwicon.pan_down(), look.foreground, 16.0)
-    if arrow_error != ok { ret (zero, arrow_error) }
+    if arrow_error != ok { ret (zero, 0.0, arrow_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
-    if parts_error != ok { ret (zero, TooLarge) }
+    if parts_error != ok { ret (zero, 0.0, TooLarge) }
     var clipped = style.defaults()
     clipped.width = style.Length { Px: label_w }
     clipped.height = style.Length { Px: 21.0 }
@@ -20576,7 +20615,7 @@ fn linux_dropdown_core(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     used += 1usize
     parts[used] = arrow
     used += 1usize
-    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), parts[0usize..used])
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), parts[0usize..used])
     look.custom_padding = true
     look.padding_start = 10.0
     look.padding = end_pad
@@ -20586,15 +20625,12 @@ fn linux_dropdown_core(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (face_button, face_button_error) = pressable_states(a, key, t, 3u8, label, look, enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, row)
-    if face_button_error != ok { ret (zero, face_button_error) }
+    if face_button_error != ok { ret (zero, 0.0, face_button_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
-    if layers_error != ok { ret (zero, TooLarge) }
+    if layers_error != ok { ret (zero, 0.0, TooLarge) }
     layers[0usize] = face_button
     layers[1usize] = linux_ring_layer(w, height, linux_ring_color(t, 0u32), state.focus_visible && enabled, 5.85, 5.85)
-    let boxed = widget.stack(0u64, sized_style(w, height), layers[0usize..2usize])
-    var none: []const widget.Node = zero
-    let (made, made_error) = suggesting_wide(a, key, t, label, boxed, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle, w)
-    ret (made, made_error)
+    ret (widget.stack(0u64, sized_style(w, height), layers[0usize..2usize]), w, ok)
 }
 
 fn linux_combo_entry(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {

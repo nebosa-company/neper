@@ -12,6 +12,8 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.ui.accessibility
+use e.ui.adwicon_l2 as adwicon
+use e.ui.linuxshadow_l2 as linuxshadow
 use e.ui.animation
 use e.ui.control
 use e.ui.input
@@ -3666,6 +3668,10 @@ fn iso_week_of(count: i64) -> i64 {
 // (D1277) Up and Down skip a week whose every day is unavailable.
 // (D1388) Its names follow the theme language (de, fr, es; English otherwise).
 fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], marks: CalendarMarks) -> (widget.Node, err) {
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_calendar(a, key, t, label, shown, selected, has_selected, today, has_today, show, pick)
+        ret (gtk, gtk_error)
+    }
     let year = i64(shown.year)
     let month = i64(shown.month)
     if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
@@ -4725,7 +4731,13 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         anchor = key + 2u64
     }
     var head: widget.Node = zero
-    if footer.typing && t.tokens.profile == .Windows {
+    if t.tokens.profile == .Linux {
+        // GNOME: a menu button showing the date, its calendar in a popover (no typed field).
+        let (face, face_width, face_error) = control.linux_menu_button(a, key, t, label, caption, zero, false, 0.0, 34.0, true, open, trigger, true)
+        if face_error != ok { ret (zero, face_error) }
+        head = face
+        anchor = key
+    } else if footer.typing && t.tokens.profile == .Windows {
         // The Windows look (docs/ui/looks, pickers): v3's TcxDateEdit, an edit with a drop button.
         var typed_look = control.field_options()
         typed_look.width = 120.0
@@ -4806,7 +4818,23 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
             raised_style.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 6.0 } }
             gap_below = 0.0
         }
-        let (lifted, lifted_error) = dismissable(a, base + 1u64, anchor, .Below, label, widget.box(0u64, raised_style, inside[0usize..1usize]), toggle, gap_below)
+        var body_node = widget.box(0u64, raised_style, inside[0usize..1usize])
+        if t.tokens.profile == .Linux {
+            // A GNOME popover: the popover colour, 12 px corners, 6 px of padding, its soft shadow painted under it.
+            raised_style = control.linux_popover_style(t, 0.0, 0usize)
+            raised_style.width = style.Length { Px: 281.0 }
+            raised_style.height = style.Length { Px: 248.0 }
+            raised_style.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 6.0 } }
+            let (shade, shade_error) = linuxshadow.node(a, 281.0, 248.0, 6.0, 6.0, style.color(t.tokens, .SurfaceBright))
+            if shade_error != ok { ret (zero, shade_error) }
+            let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
+            if stacked_error != ok { ret (zero, TooLarge) }
+            stacked[0usize] = shade
+            stacked[1usize] = inside[0usize]
+            body_node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, raised_style, stacked[0usize..2usize])
+            gap_below = 7.074
+        }
+        let (lifted, lifted_error) = dismissable(a, base + 1u64, anchor, .Below, label, body_node, toggle, gap_below)
         if lifted_error != ok { ret (zero, lifted_error) }
         popup_node = lifted
     }
@@ -8315,3 +8343,276 @@ fn dialog_cupertino(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     dialog_held[0usize] = made
     ret (widget.box(key + 8192u64, style.defaults(), dialog_held[0usize..1usize]), ok)
 }
+
+// ---- round 20, l2: the Linux look's calendar (GtkCalendar in libadwaita 1.5) ---------------------------------------------
+// 269 x 236: a 1 px frame (the text view's colours) round the view colour; a 34 high header of two groups (month: previous, the name,
+// next; year: the same) over a 1 px rule in the border colour; the weekday names, then six rows of days 28 high in seven equal columns,
+// the days of the neighbouring months at 30 % of the text colour; the chosen day is a 34 x 25 box in the accent with a white number.
+fn linux_turn_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, svg: str, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, false)
+    var tint = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if state.hovered || state.pressed {
+        var over: f32 = 0.056
+        if state.pressed { over = 0.124 }
+        if t.tokens.palette == .Dark {
+            over = 0.068
+            if state.pressed { over = 0.151 }
+            tint = paint.rgba(1.0, 1.0, 1.0, over)
+        } else {
+            tint = paint.rgba(0.0, 0.0, 0.0, over)
+        }
+    }
+    let (mark, mark_error) = adwicon.icon(a, svg, style.color(t.tokens, .Text), 16.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    var face = control.sized_style(32.0, 34.0)
+    face.background = paint.Brush { Solid: tint }
+    face.radius = 6.0
+    let held = widget.aligned(0u64, .Center, .Center, face, widget_pair(a, mark))
+    let region = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_pair(a, held))
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_pair(a, region)), ok)
+}
+
+fn widget_pair(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret zero }
+    held[0usize] = node
+    ret held[0usize..1usize]
+}
+
+// One group of the header: a turn button, the centred name, a turn button, `width` wide.
+fn linux_head_group(a: *mem.Arena, t: *const control.Theme, back: widget.Node, name: str, forward: widget.Node, width: f32) -> (widget.Node, err) {
+    var caption = control.text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    let (word, word_error) = control.colored_text(a, 0u64, name, t, caption, style.color(t.tokens, .Text))
+    if word_error != ok { ret (zero, word_error) }
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = back
+    parts[1usize] = widget.aligned(0u64, .Center, .Center, grow, widget_pair(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), widget_pair(a, word))))
+    parts[2usize] = forward
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width, 34.0), parts[0usize..3usize]), ok)
+}
+
+fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+    let year = i64(shown.year)
+    let month = i64(shown.month)
+    if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
+    let days = time.days_in_month(year, month)
+    let week_start = week_start_of(t.language)
+    let first_weekday = (weekday_of(year, month, 1i64) + 7i64 - i64(week_start)) % 7i64
+    // Previous, next, previous year, next year; then 42 cells (the days of the grid).
+    let (turns, turns_error) = mem.alloc[DayPick](a, 46usize)
+    if turns_error != ok { ret (zero, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 46usize)
+    if actions_error != ok { ret (zero, TooLarge) }
+    var previous = time.Date { year: shown.year, month: shown.month - 1u8, day: 1u8 }
+    if shown.month == 1u8 { previous = time.Date { year: shown.year - 1i32, month: 12u8, day: 1u8 } }
+    var next = time.Date { year: shown.year, month: shown.month + 1u8, day: 1u8 }
+    if shown.month == 12u8 { next = time.Date { year: shown.year + 1i32, month: 1u8, day: 1u8 } }
+    turns[0usize] = DayPick { day: previous, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[1usize] = DayPick { day: next, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[2usize] = DayPick { day: time.Date { year: shown.year - 1i32, month: shown.month, day: 1u8 }, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[3usize] = DayPick { day: time.Date { year: shown.year + 1i32, month: shown.month, day: 1u8 }, pick: show, runtime: t.runtime, focus: 0u64 }
+    var n = 0usize
+    while n < 4usize {
+        actions[n] = widget.Submit { ctx: mem.cast[*void](&turns[n]), invoke: day_fire }
+        n += 1usize
+    }
+    let ink = style.color(t.tokens, .Text)
+    let dim = control.with_alpha(ink, ink.alpha * 0.3)
+    // The header.
+    let (month_back, mb_error) = linux_turn_button(a, key + 1u64, t, adwicon.pan_start(), "Previous month", &actions[0usize])
+    if mb_error != ok { ret (zero, mb_error) }
+    let (month_forward, mf_error) = linux_turn_button(a, key + 2u64, t, adwicon.pan_end(), "Next month", &actions[1usize])
+    if mf_error != ok { ret (zero, mf_error) }
+    let (year_back, yb_error) = linux_turn_button(a, key + 4001u64, t, adwicon.pan_start(), "Previous year", &actions[2usize])
+    if yb_error != ok { ret (zero, yb_error) }
+    let (year_forward, yf_error) = linux_turn_button(a, key + 4002u64, t, adwicon.pan_end(), "Next year", &actions[3usize])
+    if yf_error != ok { ret (zero, yf_error) }
+    let (year_bytes, year_bytes_error) = mem.alloc[u8](a, 12usize)
+    if year_bytes_error != ok { ret (zero, TooLarge) }
+    let year_len = control.write_i64(year_bytes, year)
+    let (month_group, month_group_error) = linux_head_group(a, t, month_back, month_name_in(month, t.language), month_forward, 138.0)
+    if month_group_error != ok { ret (zero, month_group_error) }
+    let (year_group, year_group_error) = linux_head_group(a, t, year_back, year_bytes[0usize..year_len], year_forward, 112.0)
+    if year_group_error != ok { ret (zero, year_group_error) }
+    let (head_parts, head_parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if head_parts_error != ok { ret (zero, TooLarge) }
+    head_parts[0usize] = month_group
+    head_parts[1usize] = widget.box(0u64, control.sized_style(15.0, 1.0), zero)
+    head_parts[2usize] = year_group
+    var head_style = control.sized_style(267.0, 34.0)
+    head_style.padding = style.EdgeLengths { left: style.Length { Px: 0.5 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let head = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head_parts[0usize..3usize])
+    var rule = control.sized_style(267.0, 1.0)
+    rule.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
+    // The weekday names.
+    let (names, names_error) = mem.alloc[widget.Node](a, 7usize)
+    if names_error != ok { ret (zero, TooLarge) }
+    var column_share = style.defaults()
+    column_share.width = style.Length { Px: 37.83 }
+    column_share.height = style.Length { Px: 28.0 }
+    var weekday = 0usize
+    while weekday < 7usize {
+        var caption = control.text_options()
+        caption.role = .Body
+        caption.wrap = .None
+        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_full((week_start + weekday) % 7usize)[0usize..3usize], t, caption, ink)
+        if name_error != ok { ret (zero, name_error) }
+        names[weekday] = widget.aligned(0u64, .Center, .Start, column_share, widget_pair(a, widget.padded(0u64, 0.0, 4.5, 0.0, 0.0, style.defaults(), widget_pair(a, name_node))))
+        weekday += 1usize
+    }
+    // The days: six rows of seven, the neighbouring months' days dim.
+    var tab_day = 1usize
+    if has_selected && selected.year == shown.year && selected.month == shown.month && selected.day >= 1u8 && i64(selected.day) <= days { tab_day = usize(selected.day) }
+    if !has_selected && has_today && today.year == shown.year && today.month == shown.month && today.day >= 1u8 && i64(today.day) <= days { tab_day = usize(today.day) }
+    var focused_day = 1usize
+    while focused_day <= usize(days) {
+        if widget.focus_within(t.runtime, key + 3u64 + u64(focused_day)) {
+            tab_day = focused_day
+            break
+        }
+        focused_day += 1usize
+    }
+    let before_days = time.days_in_month(i64(previous.year), i64(previous.month))
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 6usize)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var week = 0usize
+    while week < 6usize {
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 7usize)
+        if cells_error != ok { ret (zero, TooLarge) }
+        var column = 0usize
+        while column < 7usize {
+            let slot = i64(week * 7usize + column) - first_weekday
+            var date = time.Date { year: shown.year, month: shown.month, day: 1u8 }
+            var inside = true
+            if slot < 0i64 {
+                inside = false
+                date = time.Date { year: previous.year, month: previous.month, day: u8(before_days + slot + 1i64) }
+            } else if slot >= days {
+                inside = false
+                date = time.Date { year: next.year, month: next.month, day: u8(slot - days + 1i64) }
+            } else {
+                date = time.Date { year: shown.year, month: shown.month, day: u8(slot + 1i64) }
+            }
+            let index = 4usize + week * 7usize + column
+            var day_key = key + 3u64 + u64(date.day)
+            if !inside { day_key = key + 300u64 + u64(index) }
+            turns[index] = DayPick { day: date, pick: pick, runtime: t.runtime, focus: day_key }
+            actions[index] = widget.Submit { ctx: mem.cast[*void](&turns[index]), invoke: day_fire }
+            let chosen = has_selected && same_date(date, selected)
+            var digit_color = ink
+            if !inside { digit_color = dim }
+            if chosen { digit_color = style.color(t.tokens, .OnPrimary) }
+            let state = control.control_state(t, day_key, true, chosen)
+            var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            if chosen {
+                fill = style.color(t.tokens, .Primary)
+            } else if state.hovered || state.pressed {
+                var over: f32 = 0.056
+                if state.pressed { over = 0.124 }
+                if t.tokens.palette == .Dark {
+                    over = 0.068
+                    if state.pressed { over = 0.151 }
+                    fill = paint.rgba(1.0, 1.0, 1.0, over)
+                } else {
+                    fill = paint.rgba(0.0, 0.0, 0.0, over)
+                }
+            }
+            let (digits, digits_error) = mem.alloc[u8](a, 4usize)
+            if digits_error != ok { ret (zero, TooLarge) }
+            let digit_count = control.write_i64(digits, i64(date.day))
+            var caption = control.text_options()
+            caption.role = .Body
+            caption.wrap = .None
+            let (label_node, label_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], t, caption, digit_color)
+            if label_error != ok { ret (zero, label_error) }
+            var box_style = control.sized_style(34.0, 25.0)
+            box_style.background = paint.Brush { Solid: fill }
+            box_style.radius = 6.0
+            let digits_held = widget.aligned(0u64, .Center, .Center, box_style, widget_pair(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), widget_pair(a, label_node))))
+            let (spoken, spoken_error) = mem.alloc[u8](a, 40usize)
+            if spoken_error != ok { ret (zero, TooLarge) }
+            var said = control.copy_text(spoken, weekday_full(usize(weekday_of(i64(date.year), i64(date.month), i64(date.day)))))
+            said += control.copy_text(spoken[said..40usize], ", ")
+            said += control.write_i64(spoken[said..40usize], i64(date.day))
+            said += control.copy_text(spoken[said..40usize], " ")
+            said += control.copy_text(spoken[said..40usize], month_name_in(i64(date.month), t.language))
+            said += control.copy_text(spoken[said..40usize], " ")
+            said += control.write_i64(spoken[said..40usize], i64(date.year))
+            var press_look = style.resolve(t.tokens, .Plain, state)
+            press_look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            press_look.border_width = 0.0
+            press_look.custom_padding = true
+            press_look.padding = 0.0
+            press_look.padding_start = 0.0
+            press_look.padding_y = 0.0
+            press_look.min_width = 0.0
+            press_look.min_height = 28.0
+            let (pressed, pressed_error) = control.pressable_states_fill(a, day_key, t, 3u8, spoken[0usize..said], press_look, true, chosen, 0u32, 0u32, 0u64, &actions[index], true, widget.aligned(0u64, .Center, .Center, control.sized_style(34.0, 28.0), widget_pair(a, digits_held)))
+            if pressed_error != ok { ret (zero, pressed_error) }
+            var tabbed = pressed
+            if inside {
+                let (stop, stop_error) = calendar_tab_stop(a, pressed, usize(date.day) == tab_day)
+                if stop_error != ok { ret (zero, stop_error) }
+                tabbed = stop
+            }
+            var cell_node = tabbed
+            if inside {
+                let (moves, moves_error) = mem.alloc[DayMove](a, 4usize)
+                if moves_error != ok { ret (zero, TooLarge) }
+                let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 4usize)
+                if move_actions_error != ok { ret (zero, TooLarge) }
+                moves[0usize] = DayMove { shown: shown, target: moved_date(date, -1i64), show: show, runtime: t.runtime, calendar: key }
+                moves[1usize] = DayMove { shown: shown, target: moved_date(date, 1i64), show: show, runtime: t.runtime, calendar: key }
+                moves[2usize] = DayMove { shown: shown, target: moved_date(date, -7i64), show: show, runtime: t.runtime, calendar: key }
+                moves[3usize] = DayMove { shown: shown, target: moved_date(date, 7i64), show: show, runtime: t.runtime, calendar: key }
+                var mk = 0usize
+                while mk < 4usize {
+                    move_actions[mk] = widget.Submit { ctx: mem.cast[*void](&moves[mk]), invoke: day_move_fire }
+                    mk += 1usize
+                }
+                let (day_keys, day_keys_error) = mem.alloc[widget.Shortcut](a, 4usize)
+                if day_keys_error != ok { ret (zero, TooLarge) }
+                day_keys[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: move_actions[0usize] }
+                day_keys[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: move_actions[1usize] }
+                day_keys[2usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: move_actions[2usize] }
+                day_keys[3usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: move_actions[3usize] }
+                cell_node = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: day_keys[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), widget_pair(a, tabbed))
+            }
+            var share = style.defaults()
+            share.width = style.Length { Px: 37.83 }
+            share.height = style.Length { Px: 28.0 }
+            cells[column] = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, cell_node))
+            column += 1usize
+        }
+        var row_style = control.sized_style(267.0, 28.0)
+        row_style.padding.left = style.Length { Px: 3.4 }
+        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[0usize..7usize])
+        week += 1usize
+    }
+    let (body, body_error) = mem.alloc[widget.Node](a, 4usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = head
+    body[1usize] = widget.box(0u64, rule, zero)
+    var weekday_row = control.sized_style(267.0, 28.0)
+    weekday_row.margin.top = style.Length { Px: 1.5 }
+    weekday_row.padding.left = style.Length { Px: 3.4 }
+    body[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, weekday_row, names[0usize..7usize])
+    body[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..6usize])
+    var frame = control.sized_style(269.0, 236.0)
+    frame.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    var edge = style.hex(0xDDDDDDu32)
+    if t.tokens.palette == .Dark { edge = style.hex(0x454545u32) }
+    frame.border = style.Border { width: 1.0, color: edge }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+    ret (widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, body[0usize..4usize]), ok)
+}
+// ---- end round 20, l2 -------------------------------------------------------------------------------------------------
