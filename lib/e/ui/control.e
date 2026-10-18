@@ -2977,7 +2977,8 @@ fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: 
 fn windows_label_faced(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: u32, ink_in: paint.Color, underline: bool, width: f32, face: u32, box_w: f32, phase: f32, linear: bool) -> (widget.Node, err) {
     // Windows 11 dark: a label colour the author chose dark (v3's #33486C, #336CCC) is lifted toward white so it reads on #202020.
     var ink = ink_in
-    if t.tokens.palette == .Dark && ink_in.red * 0.299 + ink_in.green * 0.587 + ink_in.blue * 0.114 < 0.5 { ink = style.mix(ink_in, style.hex_raw(0xFFFFFFu32), 0.55) }
+    // (the palette's own ink on an inverse face, the Neper dark hint's, is kept)
+    if t.tokens.palette == .Dark && !style.same_color(ink_in, style.color(t.tokens, .InverseOnSurface)) && ink_in.red * 0.299 + ink_in.green * 0.587 + ink_in.blue * 0.114 < 0.5 { ink = style.mix(ink_in, style.hex_raw(0xFFFFFFu32), 0.55) }
     var options = text_options()
     options.face = face
     options.size = size
@@ -10335,7 +10336,7 @@ fn win5_hot_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // and left, #696969 at the bottom and right, Tahoma 11 text 3 in and 2 down. A grid's hint (TcxHintWindow, hover-hint-grid-header-name):
 // a #F9F9F9 face (#F6F6F6 under the top line) in a #646464 line on top and left, #949494 at the foot, the text 7 in and 5 down in grey.
 // `width` and `height` 0: the text's (7 over it and 20 tall; 10 and 25).
-type Win5Hint = struct { grid: bool }
+type Win5Hint = struct { grid: bool, neper_dark: bool, face: paint.Color }
 
 fn win5_hint_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let m = mem.cast[*Win5Hint](ctx)
@@ -10343,6 +10344,10 @@ fn win5_hint_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let y = area.y
     let w = area.width
     let h = area.height
+    if m.neper_dark {
+        // Neper dark: the palette's own tooltip (inverse surface, as the rich hint), not the v3 bevel
+        ret win3_rect(b, x, y, w, h, m.face)
+    }
     if m.grid {
         try win3_rect(b, x, y, w, h, style.hex(16382457u32))
         try win3_rect(b, x, y + 1.0, w, 1.0, style.hex(16119286u32))
@@ -10380,6 +10385,8 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     words.wrap = .None
     var ink = style.color(t.tokens, .Text)
     if grid { ink = style.hex(6713980u32) }
+    let neper_dark = t.tokens.profile == .Neper && t.tokens.palette == .Dark
+    if neper_dark { ink = style.color(t.tokens, .InverseOnSurface) }
     // looks9: v3 sets the hint's characters on GDI's whole pixel advances (Tahoma 12 px on the toolbar's, 11 px on the grid's): the hinted
     // label (it keeps a pixel of inset left and above, which the offsets below leave out)
     var one_line = true
@@ -10436,7 +10443,7 @@ fn win5_hint(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text: str, gr
     }
     let (cells, cells_error) = mem.alloc[Win5Hint](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
-    cells[0usize] = Win5Hint { grid: grid }
+    cells[0usize] = Win5Hint { grid: grid, neper_dark: neper_dark, face: style.color(t.tokens, .InverseSurface) }
     var none: []const widget.Node = zero
     let face = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win5_hint_paint, state: widget.bytes_of[Win5Hint](&cells[0usize]) } }, style: sized_style(w, h), children: none }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
@@ -19585,7 +19592,7 @@ fn cup_button_weight(variant: style.ControlVariant) -> u32 {
     ret 600u32
 }
 
-// The Cupertino button: iOS configuration sizes 28 / 34 / 44 (options.height; 0 is 34, or 22 for the macOS
+// The Cupertino button: iOS configuration sizes 28 / 34 / 50 (options.height; 0 is 34, or 22 for the macOS
 // bezel `Outlined`), `picture` before the caption when `has_icon`, a spinner over the hidden caption when loading.
 fn cupertino_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
     let state = control_state(t, key, options.enabled, false)

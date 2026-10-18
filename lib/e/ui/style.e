@@ -829,7 +829,17 @@ fn windows_accent(t: *const ThemeTokens) -> paint.Color {
 // `windows_dark_enter` sets the colour map (`set_windark`) from a theme at the entry of a control; the maps are above.
 fn windows_dark_enter(t: *const ThemeTokens) {
     windark_on = t.profile == .Windows && t.palette == .Dark
+    neperdark_on = t.profile == .Neper && t.palette == .Dark
 }
+
+// Neper dark: the v3 grid's light literals (gl.rgb) take a dark tint of themselves; set with the same entry as the Windows dark map.
+var neperdark_on: bool = false
+
+fn set_neperdark(on: bool) {
+    neperdark_on = on
+}
+
+fn neperdark_active() -> bool { ret neperdark_on }
 
 fn windows_dark_on() -> bool { ret windark_on }
 // ---- end looks-polish palettes -----------------------------------------------------------------

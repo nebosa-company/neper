@@ -202,8 +202,8 @@ def run():
             sc = "@1.5x " if scale == 1.5 else ""
             t = tag + sc
 
-            # --- buttons: iOS configuration heights 44 / 34 / 28, macOS regular push button 22, large 28
-            for name, idx, want_h in (("large", 25, 44), ("medium", 26, 34), ("small", 27, 28)):
+            # --- buttons: iOS configuration heights 50 / 34 / 28, macOS regular push button 22, large 28
+            for name, idx, want_h in (("large", 25, 50), ("medium", 26, 34), ("small", 27, 28)):
                 crop = cell(scheme, "button", idx, scale)
                 m = size_of(crop, S["blue"], bg, scale)
                 check(t + "button %s height" % name, m and m[1], want_h, 1.0, "pt")
