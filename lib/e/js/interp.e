@@ -1784,6 +1784,11 @@ fn define_own(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err) {
         try define_accessor_raw(it, o, key, g2, s2, flags2)
         ret (true, ok)
     }
+    if cur_accessor && !to_data {
+        // A generic descriptor only changes the attributes of an accessor.
+        try define_accessor_raw(it, o, key, cur.getter, cur.setter, flags2)
+        ret (true, ok)
+    }
     var w = (cur.flags & P_WRITABLE) != 0u8
     var val2 = cur.value
     if cur_accessor {

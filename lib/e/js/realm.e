@@ -796,8 +796,16 @@ fn install_error_type(it: *js.Interp, name: str, proto: *js.Obj, native: js.Nati
     ret ctor
 }
 
+// Error.isError(arg): whether arg has an [[ErrorData]] slot.
+fn error_is_error(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let v = arg(args, 0usize)
+    if !js.is_object(v) { ret (js.bool_value(false), ok) }
+    ret (js.bool_value(js.as_object(v).class == js.C_ERROR), ok)
+}
+
 fn install_errors(it: *js.Interp) {
     let base = install_error_type(it, "Error", it.protos.error_proto, error_ctor, js.null_obj(), false)
+    js.add_method(it, base, "isError", 1u32, error_is_error)
     js.add_method(it, it.protos.error_proto, "toString", 0u32, error_proto_to_string)
     let e1 = install_error_type(it, "TypeError", it.protos.type_error, type_error_ctor, base, true)
     let e2 = install_error_type(it, "RangeError", it.protos.range_error, range_error_ctor, base, true)
