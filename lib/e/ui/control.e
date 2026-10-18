@@ -19331,7 +19331,7 @@ fn cup_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
             let dy = 0.0 - math.cos[f32](angle)
             var color = m.color
             color.alpha = m.color.alpha * cup_tick_alpha(i, head, count)
-            try cup_line(m, b, cx + dx * r * 0.52, cy + dy * r * 0.52, cx + dx * r * 0.96, cy + dy * r * 0.96, color, m.a)
+            try cup_line(m, b, cx + dx * r * 0.52, cy + dy * r * 0.52, cx + dx * (r - m.a * 0.5), cy + dy * (r - m.a * 0.5), color, m.a)
             i += 1usize
         }
         ret ok

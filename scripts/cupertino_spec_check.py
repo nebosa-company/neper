@@ -263,6 +263,13 @@ def run():
             m = size_of(cell(scheme, "progress_bar", 3, scale), mode(cell(scheme, "progress_bar", 3, scale), (bg,)), bg, scale)
             check(t + "thick progress track thickness", m and m[1], 6, 1.0, "pt")
 
+            # --- activity indicator: medium 20, large 37
+            for idx, want in ((7, 20), (8, 37)):
+                crop = cell(scheme, "progress_bar", idx, scale)
+                ys, xs = np.where(np.abs(crop - np.array(bg)).max(axis=2) > 3)
+                side = max(xs.max() - xs.min() + 1, ys.max() - ys.min() + 1) / scale
+                check(t + "activity indicator %d diameter" % want, side, want, 2.5, "pt")
+
             # --- alert 270 wide
             crop = cell(scheme, "dialog", 0, scale)
             face = mode(crop, (bg,))
