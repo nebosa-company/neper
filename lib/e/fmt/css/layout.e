@@ -1229,23 +1229,35 @@ fn text_advance(l: *const Layout, s: *const style.Style, text: str) -> f64 {
 }
 
 fn apply_transform(l: *const Layout, s: *const style.Style, text: str) -> str {
-    if s.text_transform == .None || s.text_transform == .FullWidth { ret text }
-    let (out, e) = mem.alloc[u8](l.a, text.len)
+    if s.text_transform == .None { ret text }
+    let (out, e) = mem.alloc[u8](l.a, text.len * 3usize + 4usize)
     if e != ok { ret text }
-    mem.copy[u8](out, text)
-    var i = 0usize
+    var used = 0usize
+    var at = 0usize
     var word_start = true
-    while i < out.len {
-        let c = out[i]
-        if s.text_transform == .Uppercase && c >= 97u8 && c <= 122u8 { out[i] = c - 32u8 }
-        if s.text_transform == .Lowercase && c >= 65u8 && c <= 90u8 { out[i] = c + 32u8 }
-        if s.text_transform == .Capitalize {
-            if word_start && c >= 97u8 && c <= 122u8 { out[i] = c - 32u8 }
-            word_start = is_space_byte(c) || c == 45u8 || c == 40u8
+    while at < text.len {
+        let (scalar, width) = unicode.read_utf8(text, at)
+        at += width
+        var mapped = scalar
+        if s.text_transform == .Uppercase {
+            if scalar == 223u32 {
+                out[used] = 83u8
+                out[used + 1usize] = 83u8
+                used += 2usize
+                continue
+            }
+            mapped = unicode.to_upper_simple(scalar)
+        } else if s.text_transform == .Lowercase {
+            mapped = unicode.to_lower_simple(scalar)
+        } else if s.text_transform == .Capitalize {
+            if word_start { mapped = unicode.to_upper_simple(scalar) }
+            word_start = scalar == 32u32 || scalar == 9u32 || scalar == 10u32 || scalar == 45u32 || scalar == 40u32
+        } else if s.text_transform == .FullWidth {
+            if scalar == 32u32 { mapped = 12288u32 } else if scalar >= 33u32 && scalar <= 126u32 { mapped = scalar + 65248u32 }
         }
-        i += 1usize
+        used = unicode.write_utf8(mapped, out, used)
     }
-    ret out
+    ret out[..used]
 }
 
 // The text of a text box with white space processed for its style (`white-space`), hard breaks marked by '\n'.
