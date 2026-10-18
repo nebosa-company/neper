@@ -347,6 +347,8 @@ fn rules_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key) -> (widge
     top_a.background = paint.Brush { Solid: gl.rgb(0xA7AAB0u32) }
     var top_b = looks.size_style(662.0, 1.0)
     top_b.background = paint.Brush { Solid: gl.rgb(0xD5D7DAu32) }
+    // Neper dark: the frame is the palette's frame ink, not the Windows greys
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark { top_a.background = paint.Brush { Solid: style.frame_ink(t.tokens) } }
     held_nodes[0usize] = widget.box(0u64, top_a, zero)
     held_nodes[1usize] = widget.box(0u64, top_b, zero)
     held_nodes[2usize] = node
@@ -357,6 +359,7 @@ fn rules_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key) -> (widge
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, held_nodes[0usize..3usize])
     var wrap = looks.size_style(664.0, 257.0)
     wrap.background = paint.Brush { Solid: gl.rgb(0x828790u32) }
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark { wrap.background = paint.Brush { Solid: style.frame_ink(t.tokens) } }
     wrap.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, wrap, column[0usize..1usize]), ok)
 }

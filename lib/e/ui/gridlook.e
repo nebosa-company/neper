@@ -110,6 +110,11 @@ fn rgb(value: u32) -> paint.Color {
     let r = (value >> 16u32) & 255u32
     let g = (value >> 8u32) & 255u32
     let b = value & 255u32
+    if style.neperdark_active() {
+        // a light fill or rule of the v3 grid (white, greys, pale tints) is a dark tint of itself on the Neper dark page
+        if (r + g + b) / 3u32 >= 200u32 { ret style.hex_raw(((14u32 + r / 10u32) * 65536u32) + ((15u32 + g / 10u32) * 256u32) + (20u32 + b / 10u32)) }
+        ret style.hex_raw(value)
+    }
     if !style.windark_active() { ret style.hex_raw(value) }
     if r == g && g == b { ret style.hex(value) }
     if value == 0x0078D7u32 || value == 0xA6D2FFu32 { ret style.hex_raw(0x264F78u32) }
@@ -205,7 +210,7 @@ fn neper_dark_of(current: Look, base: Look) -> Look {
     look.even = rgb(0x12131Au32)
     look.odd = rgb(0x1A1C23u32)
     look.selected = rgb(0x34435Fu32)
-    look.selected_line = rgb(0xB3C5FFu32)
+    look.selected_line = raw(0xB3C5FFu32)
     look.line = rgb(0x363840u32)
     look.group_row = rgb(0x22242Bu32)
     look.footer_cell = rgb(0x24262Du32)
@@ -1009,7 +1014,9 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         let gi = u32(pix_digit(m.pix[at + 2usize]) * 16.0 + pix_digit(m.pix[at + 3usize]))
         let bi = u32(pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize]))
         // (round 7) under the Windows dark map the bitmap's pixels take their dark counterpart (a no-op in light)
-        let shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
+        var shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
+        // Neper dark: a dark glyph pixel of the bitmap (the row arrow, the star's outline) is drawn in light ink so that it reads on the dark tile
+        if style.neperdark_active() && (ri + gi + bi) / 3u32 < 110u32 { shown = style.hex_raw((225u32 - ri / 2u32) * 65536u32 + (226u32 - gi / 2u32) * 256u32 + (233u32 - bi / 2u32)) }
         let px = f32(col) - f32(m.skip)
         let py = f32(n / m.cols)
         // round 18: 'ZZZZZZ' is a transparent pixel

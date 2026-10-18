@@ -272,6 +272,7 @@ fn set_look(rig: *Rig, look: Look) {
     rig.tokens = theme_for(look)
     // The Windows dark look maps the light literals of its tile painters (style.hex) to dark; nothing else does.
     style.set_windark(look == .WindowsDark)
+    style.set_neperdark(look == .NeperDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
     scene.set_pixel_exact(rig.tokens.profile == .Windows)
     scene.set_fine_curves(rig.tokens.profile == .Linux)
