@@ -144,12 +144,6 @@ fn add_quad(sc: *Scratch, ax: f64, ay: f64, qx: f64, qy: f64, bx: f64, by: f64) 
 }
 
 // The outline's contours as pieces in device 26.6 units: the pen is a whole pixel, the glyph's left phantom point on it.
-// The x of point `i` of a hinted outline in 26.6 pixels: the fitted glyphs of ClearType carry it finer than the grid.
-fn point_x(o: *const tthint.Outline, i: usize) -> f64 {
-    if o.fine && (raster_mode & 16i64) == 0i64 { ret f64(o.fx[i]) / f64(tthint.CT_FINE) }
-    ret f64(o.cur[2usize * i])
-}
-
 fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64) {
     sc.n = 0usize
     sc.over = false
@@ -178,10 +172,10 @@ fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64) {
         var curx = 0.0f64
         var cury = 0.0f64
         if found {
-            curx = ox + point_x(o, start)
+            curx = ox + f64(o.cur[2usize * start])
             cury = f64(o.cur[2usize * start + 1usize])
         } else {
-            curx = ox + (point_x(o, first) + point_x(o, last)) / 2.0f64
+            curx = ox + f64(o.cur[2usize * first] + o.cur[2usize * last]) / 2.0f64
             cury = f64(o.cur[2usize * first + 1usize] + o.cur[2usize * last + 1usize]) / 2.0f64
         }
         let firstx = curx
@@ -195,7 +189,7 @@ fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64) {
             var index = first + k
             if found { index = first + (start - first + 1usize + k) % count }
             k += 1usize
-            let x = ox + point_x(o, index)
+            let x = ox + f64(o.cur[2usize * index])
             let y = f64(o.cur[2usize * index + 1usize])
             if (o.tags[index] & 1i64) != 0i64 {
                 if !has_ctrl {

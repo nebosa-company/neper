@@ -519,9 +519,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if str.eq(args[i], "--cut") && i + 1usize < args.len {
             ttglyph.set_cut(i64(trace_code_number(args[i + 1usize])))
             i += 1usize
-        } else if str.eq(args[i], "--exp") && i + 1usize < args.len {
-            ttglyph.set_experiment(i64(trace_code_number(args[i + 1usize])))
-            i += 1usize
         } else if str.eq(args[i], "--noprog") {
             ttglyph.set_skip_programs(true)
         } else if str.eq(args[i], "--verbose") {
@@ -581,8 +578,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bw_buf_error != ok { ret bw_buf_error }
     let (ct_buf, ct_buf_error) = mem.alloc[u8](ha, 600000usize)
     if ct_buf_error != ok { ret ct_buf_error }
-    let (stem_buf, stem_buf_error) = mem.alloc[u8](ha, 200000usize)
-    if stem_buf_error != ok { ret stem_buf_error }
     var failures = 0usize
     if verbose { try io.printf["arena {} of {}\n"](a.off, a.cap) }
     var total = Totals { glyphs: 0usize, ink: 0usize, px_ok: 0usize, px_same: 0usize, ink_px_ok: 0usize, bw_ok: 0usize, ink_bw_ok: 0usize, adv_ok: 0usize, bw_pts: 0usize, bw_pts_ok: 0usize }
@@ -749,7 +744,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var line_hint_points = 0usize
         var bw_len = 0usize
         var ct_len = 0usize
-        var stem_len = 0usize
         var code = 32usize
         while code < 256usize {
             let idx = code - 32usize
@@ -761,7 +755,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let col = idx % 16usize
             let row = idx / 16usize
             if trace_code.len > 0usize && usize(code) == trace_code_number(trace_code) { ttglyph.set_trace_glyph(i64(gid)) } else { ttglyph.set_trace_glyph(-1i64) }
-            ttglyph.reset_stems()
             let (ct, ct_error) = ttglyph.hint_glyph(hinters[fi], ha, at.px, gid, true)
             if !cleartype.begin(sc, 0i64, 0i64, at.cw, at.ch) { ret tthint.NoRoom }
             if ct_error == ok {
@@ -771,18 +764,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if dump_dir.len > 0usize {
                 if ct_error == ok {
                     ct_len = outline_line(ct_buf, ct_len, code, &ct)
-                    // the stems (MIRP pairs along x) the program made, in a line of their own: S code rp0 p rp0 p ...
-                    var st = append(stem_buf, stem_len, "S ")
-                    st = append_int(stem_buf, st, i64(code))
-                    var si = 0usize
-                    while si < tthint.stem_count_now() {
-                        st = append(stem_buf, st, " ")
-                        st = append_int(stem_buf, st, tthint.stem_entry(2usize * si))
-                        st = append(stem_buf, st, " ")
-                        st = append_int(stem_buf, st, tthint.stem_entry(2usize * si + 1usize))
-                        si += 1usize
-                    }
-                    stem_len = append(stem_buf, st, "\n")
                 }
                 let (bwo, bwo_error) = ttglyph.hint_glyph(hinters[fi], ha, at.px, gid, false)
                 if bwo_error == ok { bw_len = outline_line(bw_buf, bw_len, code, &bwo) }
@@ -881,9 +862,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (o3, o3_error) = str.concat(a, o1, ".ct.txt")
             if o3_error != ok { ret o3_error }
             try fs.write_file(a, o3, ct_buf[0usize..ct_len])
-            let (o4, o4_error) = str.concat(a, o1, ".stems.txt")
-            if o4_error != ok { ret o4_error }
-            try fs.write_file(a, o4, stem_buf[0usize..stem_len])
         }
         if write_exact {
             exact_len = append(exact_buf, exact_len, name)
