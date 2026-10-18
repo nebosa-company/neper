@@ -1211,6 +1211,20 @@ fn check_stmt(c: *Ctx, id: u32) -> err {
         if default_count > 1usize { ret fail(c, id, "More than one default clause in switch statement") }
         try check_switch_scope(c, all)
         c.in_switch += 1u32
+        // The case clauses share one lexical scope: its declarations block Annex B hoisting of functions nested inside.
+        var cm = 0usize
+        while cm < usize(n.c) {
+            let csm = node(c, kid(c, n.b, cm))
+            annexb_mark(c, csm.b, csm.c)
+            cm += 1usize
+        }
+        let smark = c.lexstack.len
+        var cp = 0usize
+        while cp < usize(n.c) {
+            let csp = node(c, kid(c, n.b, cp))
+            push_lex(c, csp.b, csp.c, true)
+            cp += 1usize
+        }
         var ck = 0usize
         var result: err = ok
         while ck < usize(n.c) && result == ok {
@@ -1218,6 +1232,7 @@ fn check_stmt(c: *Ctx, id: u32) -> err {
             result = check_stmt_list(c, cs3.b, cs3.c)
             ck += 1usize
         }
+        c.lexstack.len = smark
         c.in_switch -= 1u32
         ret result
     }
