@@ -20818,3 +20818,17 @@ fn linux_check_box(a: *mem.Arena, t: *const Theme, chosen: bool, state: style.Co
     ret (widget.stack(0u64, sized_style(20.0, 20.0), pair[0usize..2usize]), ok)
 }
 // ---- end the Linux look, lists (worker l4) ----------------------------------------------------------------------------
+
+// ---- the Linux look, framed views (worker l4, round 20) -----------------------------------------------------------------
+// A scrolled window frame, 1 px: the borders colour over the window (black 11.6 % Light, white 15 % Dark), as the opaque pixel the
+// library draws, 221 and 69, since the frame's own face runs under its edge here.
+fn linux_frame_for(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hex_raw(0x454545u32) }
+    ret style.hex_raw(0xDDDDDDu32)
+}
+// The rule under a view header: the borders colour over the view (black 11.8 % Light, white 15 % Dark: 225 and 64).
+fn linux_rule_edge_for(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret paint.rgba(1.0, 1.0, 1.0, 0.1493) }
+    ret paint.rgba(0.0, 0.0, 0.0, 0.1176)
+}
+// ---- end the Linux look, framed views (worker l4) -----------------------------------------------------------------------

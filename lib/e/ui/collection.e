@@ -5585,6 +5585,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     // looks (docs/ui/looks): the Windows tree list is v3's TcxTreeList, drawn with the measured
     // table look (rows of 19, stripes, the #A6D2FF selection) and +/- boxes for twisties.
     let win = tabled && t.tokens.profile == .Windows
+    let lin = tabled && t.tokens.profile == .Linux
     var win_look = zero_look()
     if win {
         style.windows_dark_enter(t.tokens)
@@ -5598,7 +5599,9 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     let (drags, drags_error) = mem.alloc[TreeRowDrag](a, count)
     if drags_error != ok { ret (none, TooLarge) }
     let touch = density_of(t) == 2usize
-    let step = control.if_else(touch, 24.0, 20.0)
+    var step = control.if_else(touch, 24.0, 20.0)
+    // the Linux look (libadwaita 1.5 tree view): 17 px a level, rows of 23
+    if lin { step = 18.0 }
     var row_extent = extent
     if !(row_extent > 0.0) {
         row_extent = control.if_else(touch, 48.0, 32.0)
@@ -5644,11 +5647,18 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         let entry = visible[i]
         let open = entry.open
         let chosen = is_selected(selected, entry.key)
-        let lined = tabled && !win && i + 1usize < count
+        let lined = tabled && !win && !lin && i + 1usize < count
         let tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         // The twisty, or its blank for a leaf.
         var twisty = widget.box(0u64, control.sized_style(24.0, 24.0), zero)
         if win { twisty = widget.box(0u64, control.sized_style(14.0, tall), zero) }
+        if lin { twisty = widget.box(0u64, control.sized_style(23.0, tall), zero) }
+        if lin && entry.branch {
+            toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
+            let (arrow, arrow_error) = linux_expander(a, t, open, tall)
+            if arrow_error != ok { ret (none, arrow_error) }
+            twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(23.0, tall), one_node(a, arrow))
+        }
         if win && entry.branch {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
             var box_shape = gl.Shape.TreePlus
@@ -5666,7 +5676,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 2.0 }, right: flat, bottom: flat }
             twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, hit, box_held[0usize..1usize])
         }
-        if entry.branch && !win {
+        if entry.branch && !win && !lin {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
             var kind: control.GlyphKind = .ChevronRight
             if open && t.tokens.motion.reduced { kind = .ChevronDown }
@@ -5723,7 +5733,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         if lead_error != ok { ret (none, TooLarge) }
         lead[0usize] = indent
         lead[1usize] = twisty
-        lead[2usize] = widget.box(0u64, control.sized_style(control.if_else(win, 0.0, 8.0), 0.0), zero)
+        lead[2usize] = widget.box(0u64, control.sized_style(control.if_else(win || lin, 0.0, 8.0), 0.0), zero)
         var lead_count = 3usize
         if options.numbered {
             let (digits, digits_error) = mem.alloc[u8](a, 48usize)
@@ -5778,7 +5788,17 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             var row_index = entry.index
             if win { row_index = i }
             if win { row_pad = win_look.pad }
-            let (tabled_row, tabled_error) = table_row_full(a, t, columns, cells, entry.key, row_index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, row_pad, false, false, zero, false, 0u32, win_look)
+            var tabled_row: widget.Node = zero
+            var tabled_error: err = ok
+            if lin {
+                let (linux_row, linux_error) = linux_tree_row(a, t, columns, cells, entry.key, tall, chosen, pick, toggle, entry.branch)
+                tabled_row = linux_row
+                tabled_error = linux_error
+            } else {
+                let (full_row, full_error) = table_row_full(a, t, columns, cells, entry.key, row_index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, row_pad, false, false, zero, false, 0u32, win_look)
+                tabled_row = full_row
+                tabled_error = full_error
+            }
             if tabled_error != ok { ret (none, tabled_error) }
             made = tabled_row
             // (D1506) A tree table's row drags as a tree's does: an outer region
@@ -5994,7 +6014,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         }
         i += 1usize
     }
-    if tabled && !win {
+    if tabled && !win && !lin {
         i = first
         while i + 1usize < stop {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
@@ -6267,6 +6287,12 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var head_height = header_height(t)
     var head_pad = cell_padding(t)
     var row_height_of = extent
+    let lin = t.tokens.profile == .Linux
+    // the Linux look: a 30 high header under a 1 px rule (libadwaita 1.5 tree view), rows of 23
+    if lin {
+        head_height = 31.0
+        if !(row_height_of > 0.0) { row_height_of = 23.0 }
+    }
     if t.tokens.profile == .Windows {
         style.windows_dark_enter(t.tokens)
         head_look = windows_table_look()
@@ -6276,8 +6302,16 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         head_pad = head_look.pad
         if !(row_height_of > 0.0) { row_height_of = gl.v3().row_height }
     }
-    let (head, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, head_pad, 0.0, 0u64, no_flags, no_flags, head_look)
-    if head_error != ok { ret (zero, head_error) }
+    var head: widget.Node = zero
+    if lin {
+        let (linux_head, linux_head_error) = linux_tree_header(a, key, t, columns, sort_column, sort, reorder)
+        if linux_head_error != ok { ret (zero, linux_head_error) }
+        head = linux_head
+    } else {
+        let (generic_head, generic_head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, head_pad, 0.0, 0u64, no_flags, no_flags, head_look)
+        if generic_head_error != ok { ret (zero, generic_head_error) }
+        head = generic_head
+    }
     var width: f32 = 0.0
     var c = 0usize
     while c < columns.len {
@@ -6304,6 +6338,8 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         var scroll_thumb = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
         // looks3-e: under the Windows profile v3's bar stands beside the table (below); the viewport's own thumb is invisible
         if t.tokens.profile == .Windows { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
+        // libadwaita's overlay scroll bar is not drawn until the pointer moves it
+        if lin { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
         parts[1usize] = widget.scroll(key + 2u64, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: scroll_thumb, change: options.scrolled, virtual_first: table_first, virtual_count: table_total, virtual_extent: row_extent, fades: false, virtual_extras: zero }, view_style, rows)
         part_count = 2usize
     } else {
@@ -6325,6 +6361,7 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     column_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     // looks3-e: the empty part of a v3 tree list is the window colour
     if t.tokens.profile == .Windows { column_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
+    if lin { column_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) } }
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..part_count])
@@ -6354,6 +6391,16 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
             beside[1usize] = widget.stack(0u64, style.defaults(), lit[0usize..2usize])
         }
         column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), beside[0usize..2usize])
+    }
+    if lin {
+        // the scrolled window's 1 px frame
+        var frame = control.sized_style(width + 2.0, head_height + options.height + 2.0)
+        if !(options.height > 0.0) { frame = style.defaults() }
+        frame.border = style.Border { width: 1.0, color: control.linux_frame_for(t) }
+        frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+        frame.overflow = .Clip
+        frame.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+        column_node[0usize] = widget.box(0u64, frame, one_node(a, column_node[0usize]))
     }
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_TREE_GRID
@@ -11633,3 +11680,114 @@ fn mem_one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
     nodes[0usize] = node
     ret nodes[0usize..1usize]
 }
+
+// ---- the Linux look, tree view and column view (worker l4, round 20) -------------------------------------------------------
+// libadwaita 1.5 / GTK 4.14 tree view in a framed scrolled window: a 30 high header (the titles at 40 % of the foreground)
+// over a 1 px rule that skips the pixel where the second column starts, rows 23 high, the disclosure arrow 12 wide at 4 px.
+fn linux_dim(t: *const control.Theme) -> paint.Color {
+    let ink = style.color(t.tokens, .OnSurface)
+    ret paint.Color { red: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha * 0.4 }
+}
+
+// The disclosure arrow in a 22 x tall holder: a filled triangle 12 wide and 6.5 high (the foreground at 56 %), down when open, right when shut.
+fn linux_expander(a: *mem.Arena, t: *const control.Theme, open: bool, tall: f32) -> (widget.Node, err) {
+    let ink = style.color(t.tokens, .OnSurface)
+    let tint = paint.Color { red: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha * 0.7 }
+    let (tri, tri_error) = control.cup_mark(a, 17u32, tint, tint, 0.0, 0.0, 12.0, 6.5)
+    if tri_error != ok { ret (zero, tri_error) }
+    var box = control.sized_style(12.0, 12.0)
+    box.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 2.75 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    var drawn = widget.box(0u64, box, one_node(a, tri))
+    if !open { drawn = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0 - 1.5707963, offset: zero }, control.sized_style(12.0, 12.0), one_node(a, drawn)) }
+    var holder = control.sized_style(23.0, tall)
+    holder.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: (tall - 12.0) * 0.5 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.box(0u64, holder, one_node(a, drawn)), ok)
+}
+
+// The header: a cell per column (a tap sorts, a drag reorders, as the generic header does) and the rule under them.
+fn linux_tree_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, sort: widget.Change[usize], reorder: widget.Change[Reorder]) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, columns.len)
+    if cells_error != ok { ret (zero, TooLarge) }
+    let (drags, drags_error) = mem.alloc[HeaderDrag](a, columns.len)
+    if drags_error != ok { ret (zero, TooLarge) }
+    let (rules, rules_error) = mem.alloc[widget.Node](a, 2usize * columns.len)
+    if rules_error != ok { ret (zero, TooLarge) }
+    var rule_n = 0usize
+    var i = 0usize
+    while i < columns.len {
+        let header_key = key + 1u64 + 2u64 * u64(i)
+        drags[i] = HeaderDrag { runtime: t.runtime, column: i, sort: sort, reorder: reorder }
+        var caption = control.text_options()
+        caption.role = .Label
+        caption.size = 12.0
+        caption.wrap = .None
+        caption.max_lines = 1u32
+        let (title, title_error) = control.colored_text(a, 0u64, columns[i].title, t, caption, linux_dim(t))
+        if title_error != ok { ret (zero, title_error) }
+        var head_style = control.sized_style(columns[i].width, 30.0)
+        head_style.padding = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+        head_style.overflow = .Clip
+        control.focus_look(t)
+        let inside = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, control.sized_style(control.max_zero(columns[i].width - 9.0), 30.0), one_node(a, title))
+        let tapped = widget.region(header_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: header_gesture }, gestures: 1u8 | 2u8 | 4u8 | 8u8, enabled: true, focusable: true }, head_style, one_node(a, inside))
+        var sem: widget.Semantics = zero
+        sem.role = 32u8
+        sem.label = columns[i].title
+        sem.column = u32(i + 1usize)
+        sem.column_count = u32(columns.len)
+        sem.actions = accessibility.ACTION_PRESS
+        sem.on_action = widget.Change[u32] { ctx: ctx_of(&drags[i]), invoke: header_action }
+        if i == sort_column { sem.states = accessibility.STATE_SELECTED }
+        cells[i] = widget.semantics(0u64, sem, style.defaults(), one_node(a, tapped))
+        // the rule under the cell; a column after the first starts it one pixel late
+        var rule_width = columns[i].width
+        if i > 0usize {
+            rules[rule_n] = widget.box(0u64, control.sized_style(1.0, 1.0), zero)
+            rule_n += 1usize
+            rule_width -= 1.0
+        }
+        var line = control.sized_style(rule_width, 1.0)
+        line.background = paint.Brush { Solid: control.linux_rule_edge_for(t) }
+        rules[rule_n] = widget.box(0u64, line, zero)
+        rule_n += 1usize
+        i += 1usize
+    }
+    let head_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..columns.len])
+    let under = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rules[0usize..rule_n])
+    let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+    if both_error != ok { ret (zero, TooLarge) }
+    both[0usize] = head_row
+    both[1usize] = under
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), both[0usize..2usize]), ok)
+}
+
+// A row of the Linux tree: the cells at their columns' widths (the first runs its own indent, the others start 4 px in), the fill of
+// a chosen or hovered boxed-list row over all of it.
+fn linux_tree_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool) -> (widget.Node, err) {
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, columns.len)
+    if boxed_error != ok { ret (zero, TooLarge) }
+    var total: f32 = 0.0
+    var c = 0usize
+    while c < columns.len {
+        var cell_style = control.sized_style(columns[c].width, extent)
+        cell_style.overflow = .Clip
+        if c > 0usize { cell_style.padding = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } } }
+        var sem: widget.Semantics = zero
+        sem.role = 14u8
+        sem.label = columns[c].title
+        sem.column = u32(c + 1usize)
+        boxed[c] = widget.semantics(0u64, sem, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell_style, one_node(a, cells[c]))))
+        total += columns[c].width
+        c += 1usize
+    }
+    let (picks, picks_error) = mem.alloc[RowPick](a, 1usize)
+    if picks_error != ok { ret (zero, TooLarge) }
+    picks[0usize] = RowPick { key: row_key, pick: pick, double: double, has_double: has_double, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
+    let state = control.control_state(t, row_key, true, selected)
+    var row_style = control.sized_style(total, extent)
+    row_style.background = paint.Brush { Solid: control.linux_row_fill(t, state, selected) }
+    control.focus_look(t)
+    let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), boxed[0usize..columns.len])
+    ret (widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&picks[0usize]), invoke: row_pick_gesture }, gestures: 5u8, enabled: true, focusable: true }, row_style, one_node(a, line)), ok)
+}
+// ---- end the Linux look, tree view (worker l4) -------------------------------------------------------------------------
