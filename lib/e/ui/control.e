@@ -19067,7 +19067,11 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     if message_error != ok { ret (zero, message_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    var grown = message
+    // md.comp.snackbar: 14 dp above and below the text (48 for a line, 68 for two).
+    let (message_held, message_held_error) = mem.alloc[widget.Node](a, 1usize)
+    if message_held_error != ok { ret (zero, TooLarge) }
+    message_held[0usize] = message
+    var grown = widget.padded(0u64, 0.0, 14.0, 0.0, 14.0, style.defaults(), message_held[0usize..1usize])
     grown.style.width = style.Length { Flex: 1.0 }
     parts[0usize] = grown
     var at = 1usize
@@ -19088,7 +19092,7 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     sheet.radius = 4.0
     sheet.width = style.Length { Px: width }
     sheet.min_height = style.Length { Px: 48.0 }
-    sheet.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 3.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[3]) }
+    sheet.shade = 3u8
     sheet.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }

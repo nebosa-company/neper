@@ -85,8 +85,8 @@ html.notext svg.i { opacity: 0; }
 /* ---- CSS-spec parts (no Material Web component) ---- */
 .snackbar { box-sizing: border-box; display: flex; align-items: center; width: 344px; min-height: 48px; padding: 0 8px 0 16px; border-radius: 4px;
   background: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface);
-  box-shadow: 0 3px 3px -2px rgba(0,0,0,.2), 0 3px 4px 0 rgba(0,0,0,.14), 0 1px 8px 0 rgba(0,0,0,.12);
-  font: 400 14px/20px Roboto; letter-spacing: .25px; }
+  position: relative; font: 400 14px/20px Roboto; letter-spacing: .25px; }
+.snackbar md-elevation { --md-elevation-level: 3; }
 .snackbar .txt { flex: 1; padding: 14px 0; }
 .snackbar .act { font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-inverse-primary); padding: 10px 12px; border-radius: 20px; }
 .snackbar .x { width: 40px; height: 40px; display: grid; place-items: center; color: var(--md-sys-color-inverse-on-surface); }
@@ -286,9 +286,11 @@ for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
 add("dialog-rest", `<md-dialog open><div slot="headline">Basic dialog title</div><form slot="content" method="dialog" style="width:348px">A dialog is a type of modal window that appears in front of app content to provide critical information, or prompt for a decision to be made.</form><div slot="actions"><md-text-button>Cancel</md-text-button><md-text-button>Accept</md-text-button></div></md-dialog>`, { target: "md-dialog", shadow: ".container" });
 add("dialog-icon", `<md-dialog open><div slot="icon">${ic("search")}</div><div slot="headline">Reset settings?</div><form slot="content" method="dialog" style="width:348px">This will reset your app preferences back to their default settings. The following accounts will also be signed out:</form><div slot="actions"><md-text-button>Cancel</md-text-button><md-text-button>Accept</md-text-button></div></md-dialog>`, { target: "md-dialog", shadow: ".container" });
 // snackbar / tooltip / navigation bar / app bar / search bar / badge / date picker: CSS from the spec
-add("snackbar-rest", `<div class="snackbar"><span class="txt">Single-line snackbar</span></div>`);
-add("snackbar-action", `<div class="snackbar"><span class="txt">Single-line snackbar</span><span class="act">Action</span></div>`);
-add("snackbar-action-close", `<div class="snackbar"><span class="txt">Single-line snackbar</span><span class="act">Action</span><span class="x">${ic("close")}</span></div>`);
+const SB = (text, act, close) => `<div class="snackbar"><md-elevation></md-elevation><span class="txt">${text}</span>${act ? '<span class="act">Undo</span>' : ""}${close ? `<span class="x">${ic("close")}</span>` : ""}</div>`;
+add("snackbar-rest", SB("Deck saved"));
+add("snackbar-action", SB("Card removed from the deck", true));
+add("snackbar-action-close", SB("Card removed from the deck", true, true));
+add("snackbar-two-lines", SB("The price refresh failed because the server could not be reached.", true));
 add("tooltip-plain", `<div class="tooltip">Tooltip text</div>`);
 add("tooltip-rich", `<div class="rich-tooltip"><div class="t">Rich tooltip</div><div class="b">Rich tooltips bring attention to a particular element or feature.</div><div class="a">Action</div></div>`);
 const nav = (on, state, label) => `<div class="navbar">` + ["home:Home", "search:Search", "star:Starred", "person:Profile"].map((s, i) => {

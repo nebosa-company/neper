@@ -50,3 +50,6 @@ SHEETS["list"] = {"columns": 4, "cell_w": 350, "cell_h": 96, "cells": [
 
 SHEETS["dialog"] = {"columns": 1, "cell_w": 330, "cell_h": 300, "at": (-9, 16), "cells": ["dialog-rest"]}
 SHEETS["dialog_icon"] = {"columns": 1, "cell_w": 330, "cell_h": 340, "at": (-9, 26), "cells": ["dialog-icon"]}
+
+SHEETS["snackbar"] = {"columns": 2, "cell_w": 360, "cell_h": 84, "cells": [
+    "snackbar-rest", "snackbar-action", "snackbar-action-close", "snackbar-two-lines", None, None]}

@@ -119,8 +119,8 @@ light,chips,chip-suggestion-hover,light/chip-suggestion-hover@1x.png,light/chip-
 light,chips,chip-suggestion-pressed,light/chip-suggestion-pressed@1x.png,light/chip-suggestion-pressed@2x.png,104,32,margin=16
 light,chips,chip-suggestion-rest,light/chip-suggestion-rest@1x.png,light/chip-suggestion-rest@2x.png,104,32,margin=16
 light,date_picker,date-picker-rest,light/date-picker-rest@1x.png,light/date-picker-rest@2x.png,360,461,margin=16
-light,dialog,dialog-icon,light/dialog-icon@1x.png,light/dialog-icon@2x.png,280,228,margin=16
-light,dialog,dialog-rest,light/dialog-rest@1x.png,light/dialog-rest@2x.png,560,208,margin=16
+light,dialog,dialog-icon,light/dialog-icon@1x.png,light/dialog-icon@2x.png,348,268,margin=16
+light,dialog,dialog-rest,light/dialog-rest@1x.png,light/dialog-rest@2x.png,348,248,margin=16
 light,elevation-level0-rest,elevation-level0-rest,light/elevation-level0-rest@1x.png,light/elevation-level0-rest@2x.png,200,144,margin=16
 light,elevation-level1-rest,elevation-level1-rest,light/elevation-level1-rest@1x.png,light/elevation-level1-rest@2x.png,200,144,margin=16
 light,elevation-level2-rest,elevation-level2-rest,light/elevation-level2-rest@1x.png,light/elevation-level2-rest@2x.png,200,144,margin=16
@@ -254,6 +254,7 @@ light,slider,slider-ticks-rest,light/slider-ticks-rest@1x.png,light/slider-ticks
 light,snackbar,snackbar-action-close,light/snackbar-action-close@1x.png,light/snackbar-action-close@2x.png,344,48,margin=16
 light,snackbar,snackbar-action,light/snackbar-action@1x.png,light/snackbar-action@2x.png,344,48,margin=16
 light,snackbar,snackbar-rest,light/snackbar-rest@1x.png,light/snackbar-rest@2x.png,344,48,margin=16
+light,snackbar,snackbar-two-lines,light/snackbar-two-lines@1x.png,light/snackbar-two-lines@2x.png,344,68,margin=16
 light,switch,switch-off-disabled,light/switch-off-disabled@1x.png,light/switch-off-disabled@2x.png,52,32,margin=16
 light,switch,switch-off-focus,light/switch-off-focus@1x.png,light/switch-off-focus@2x.png,52,32,margin=16
 light,switch,switch-off-hover,light/switch-off-hover@1x.png,light/switch-off-hover@2x.png,52,32,margin=16
@@ -427,8 +428,8 @@ dark,chips,chip-suggestion-hover,dark/chip-suggestion-hover@1x.png,dark/chip-sug
 dark,chips,chip-suggestion-pressed,dark/chip-suggestion-pressed@1x.png,dark/chip-suggestion-pressed@2x.png,104,32,margin=16
 dark,chips,chip-suggestion-rest,dark/chip-suggestion-rest@1x.png,dark/chip-suggestion-rest@2x.png,104,32,margin=16
 dark,date_picker,date-picker-rest,dark/date-picker-rest@1x.png,dark/date-picker-rest@2x.png,360,461,margin=16
-dark,dialog,dialog-icon,dark/dialog-icon@1x.png,dark/dialog-icon@2x.png,280,228,margin=16
-dark,dialog,dialog-rest,dark/dialog-rest@1x.png,dark/dialog-rest@2x.png,560,208,margin=16
+dark,dialog,dialog-icon,dark/dialog-icon@1x.png,dark/dialog-icon@2x.png,348,268,margin=16
+dark,dialog,dialog-rest,dark/dialog-rest@1x.png,dark/dialog-rest@2x.png,348,248,margin=16
 dark,elevation-level0-rest,elevation-level0-rest,dark/elevation-level0-rest@1x.png,dark/elevation-level0-rest@2x.png,200,144,margin=16
 dark,elevation-level1-rest,elevation-level1-rest,dark/elevation-level1-rest@1x.png,dark/elevation-level1-rest@2x.png,200,144,margin=16
 dark,elevation-level2-rest,elevation-level2-rest,dark/elevation-level2-rest@1x.png,dark/elevation-level2-rest@2x.png,200,144,margin=16
@@ -562,6 +563,7 @@ dark,slider,slider-ticks-rest,dark/slider-ticks-rest@1x.png,dark/slider-ticks-re
 dark,snackbar,snackbar-action-close,dark/snackbar-action-close@1x.png,dark/snackbar-action-close@2x.png,344,48,margin=16
 dark,snackbar,snackbar-action,dark/snackbar-action@1x.png,dark/snackbar-action@2x.png,344,48,margin=16
 dark,snackbar,snackbar-rest,dark/snackbar-rest@1x.png,dark/snackbar-rest@2x.png,344,48,margin=16
+dark,snackbar,snackbar-two-lines,dark/snackbar-two-lines@1x.png,dark/snackbar-two-lines@2x.png,344,68,margin=16
 dark,switch,switch-off-disabled,dark/switch-off-disabled@1x.png,dark/switch-off-disabled@2x.png,52,32,margin=16
 dark,switch,switch-off-focus,dark/switch-off-focus@1x.png,dark/switch-off-focus@2x.png,52,32,margin=16
 dark,switch,switch-off-hover,dark/switch-off-hover@1x.png,dark/switch-off-hover@2x.png,52,32,margin=16
