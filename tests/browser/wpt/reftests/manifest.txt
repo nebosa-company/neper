@@ -183,3 +183,4 @@ grid-lanes-rows-001.html | grid-lanes-rows-001-ref.html | match
 logical-ua-001.html | logical-ua-001-ref.html | match
 logical-ua-002.html | logical-ua-002-ref.html | match
 url-unterminated-001.html | url-unterminated-001-ref.html | match
+bidi-word-order-001.html | bidi-word-order-001-ref.html | match
