@@ -124,7 +124,7 @@ type Protos = struct {
 }
 
 // Shared by a main realm and the agent realms ($262.agent) it starts, each on its own thread.
-type Waiter = struct { used: bool, notified: bool, buf: *Obj, byte: usize, seq: u64 }
+type Waiter = struct { used: bool, notified: bool, buf: *Obj, byte: usize, seq: u64, is_async: bool, promise: *Obj, owner: *Interp, deadline: f64 }
 type AgentHub = struct {
     lock: sync.Mutex, cond: sync.Condition, waiters: [64]Waiter, wseq: u64,
     live: u32, starting: u32, receivers: u32, pending: u32, shutdown: bool,
@@ -7647,11 +7647,58 @@ fn run_job(it: *Interp, j: Job) -> err {
 }
 
 // Runs queued promise jobs until none are left.
+fn now_ms() -> f64 {
+    let (t, te) = time.monotonic()
+    ret f64(t.nanos) / 1000000.0f64
+}
+
+// Settles the async waiters of this realm's thread that were notified or timed out; true while any are still pending.
+fn pump_waiters(it: *Interp) -> bool {
+    let (h, has) = hub_peek(it)
+    if !has { ret false }
+    let root = root_realm(it)
+    while true {
+        var found = 64usize
+        var pending = false
+        var result = "ok"
+        sync.mutex_lock(&h.lock)
+        var s = 0usize
+        while s < 64usize && found == 64usize {
+            let w = h.waiters[s]
+            if w.used && w.is_async && root_realm(w.owner) == root {
+                if w.notified {
+                    found = s
+                } else if now_ms() >= w.deadline {
+                    found = s
+                    result = "timed-out"
+                } else {
+                    pending = true
+                }
+            }
+            s += 1usize
+        }
+        if found == 64usize {
+            sync.mutex_unlock(&h.lock)
+            ret pending
+        }
+        let w2 = h.waiters[found]
+        h.waiters[found].used = false
+        sync.mutex_unlock(&h.lock)
+        let pr = promise_resolve_with(w2.owner, w2.promise, str_value(result))
+    }
+    ret false
+}
+
 fn run_jobs(it: *Interp) -> err {
     var i = 0usize
     while i < it.jobs.len {
         let j = it.jobs.items[i]
         i += 1usize
+        // A busy promise loop (a polled timer) must still see Atomics.waitAsync waiters settle.
+        if (i & 63usize) == 0usize {
+            let (hh, has_hub) = hub_peek(it)
+            if has_hub { let pw = pump_waiters(it) }
+        }
         let e = run_job(it, j)
         if e != ok { ret e }
     }

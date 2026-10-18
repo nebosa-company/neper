@@ -272,7 +272,7 @@ fn at_wait(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
         ret (js.undefv(), js.throw_range(it, "too many Atomics.wait waiters"))
     }
     h.wseq += 1u64
-    h.waiters[slot] = js.Waiter { used: true, notified: false, buf: t.buffer, byte: t.offset + idx * js.ta_elem_size(kind), seq: h.wseq }
+    h.waiters[slot] = js.Waiter { used: true, notified: false, buf: t.buffer, byte: t.offset + idx * js.ta_elem_size(kind), seq: h.wseq, is_async: false, promise: js.null_obj(), owner: it, deadline: 0.0f64 }
     let (t0, t0e) = time.monotonic()
     while !h.waiters[slot].notified && !h.shutdown {
         let (t1, t1e) = time.monotonic()
@@ -289,6 +289,87 @@ fn at_wait(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     ret (js.str_value("timed-out"), ok)
 }
 
+fn now_ms() -> f64 {
+    let (t, te) = time.monotonic()
+    ret f64(t.nanos) / 1000000.0f64
+}
+
+fn wait_result(it: *js.Interp, is_async: bool, v: js.Value) -> js.Value {
+    let r = js.new_plain(it)
+    let e1 = js.define_data(it, r, js.key_of("async"), js.bool_value(is_async), js.P_DEFAULT)
+    let e2 = js.define_data(it, r, js.key_of("value"), v, js.P_DEFAULT)
+    ret js.obj_value(r)
+}
+
+fn at_wait_async(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (o, oe) = validate_integer(it, arg(args, 0usize), true)
+    if oe != ok { ret (js.undefv(), oe) }
+    if !js.buf_of(js.ta_of(o).buffer).is_shared { ret (js.undefv(), js.throw_type(it, "Atomics.waitAsync requires a shared typed array")) }
+    let (idx, ie) = validate_access(it, o, arg(args, 1usize))
+    if ie != ok { ret (js.undefv(), ie) }
+    let kind = js.ta_of(o).kind
+    let (cv, ce) = coerce_value(it, kind, arg(args, 2usize))
+    if ce != ok { ret (js.undefv(), ce) }
+    let (tn, te) = js.to_number(it, arg(args, 3usize))
+    if te != ok { ret (js.undefv(), te) }
+    let (raw, re) = js.ta_raw_of(it, kind, cv)
+    if re != ok { ret (js.undefv(), re) }
+    var mask = ALL_ONES
+    if js.ta_elem_size(kind) < 8usize { mask = (1u64 << u64(js.ta_elem_size(kind) * 8usize)) - 1u64 }
+    var limit = js.infinity()
+    if !js.is_nan(tn) { limit = tn }
+    if limit < 0.0f64 { limit = 0.0f64 }
+    let h = js.hub_of(it)
+    let t = js.ta_of(o)
+    sync.mutex_lock(&h.lock)
+    let cur = js.ta_raw_of_typed(kind, js.ta_get_index(it, o, idx))
+    if (cur & mask) != (raw & mask) {
+        sync.mutex_unlock(&h.lock)
+        ret (wait_result(it, false, js.str_value("not-equal")), ok)
+    }
+    if limit == 0.0f64 {
+        sync.mutex_unlock(&h.lock)
+        ret (wait_result(it, false, js.str_value("timed-out")), ok)
+    }
+    var slot = 64usize
+    var s = 0usize
+    while s < 64usize && slot == 64usize {
+        if !h.waiters[s].used { slot = s }
+        s += 1usize
+    }
+    if slot == 64usize {
+        sync.mutex_unlock(&h.lock)
+        ret (js.undefv(), js.throw_range(it, "too many Atomics.waitAsync waiters"))
+    }
+    let (p, pe) = js.new_promise(it)
+    if pe != ok {
+        sync.mutex_unlock(&h.lock)
+        ret (js.undefv(), pe)
+    }
+    h.wseq += 1u64
+    h.waiters[slot] = js.Waiter { used: true, notified: false, buf: t.buffer, byte: t.offset + idx * js.ta_elem_size(kind), seq: h.wseq, is_async: true, promise: p, owner: it, deadline: now_ms() + limit }
+    sync.mutex_unlock(&h.lock)
+    ret (wait_result(it, true, js.obj_value(p)), ok)
+}
+
+// The host event loop for a test: keeps settling Atomics.waitAsync promises until none is pending or `done` says to stop.
+fn settle(it: *js.Interp) {
+    var rounds = 0u32
+    var m = sync.mutex()
+    var c = sync.condition()
+    while rounds < 4000u32 {
+        let (d0, done) = str.find(it.last_print, "Test262:AsyncTestComplete")
+        if done { break }
+        let more = js.pump_waiters(it)
+        let jr = js.run_jobs(it)
+        if !more { break }
+        sync.mutex_lock(&m)
+        let w = sync.condition_wait_for(&c, &m, time.millis(5i64))
+        sync.mutex_unlock(&m)
+        rounds += 1u32
+    }
+}
+
 fn install_atomics(it: *js.Interp) {
     let a = js.new_plain(it)
     let e0 = js.define_data(it, it.global, js.key_of("Atomics"), js.obj_value(a), js.P_HIDDEN)
@@ -303,6 +384,7 @@ fn install_atomics(it: *js.Interp) {
     js.add_method(it, a, "store", 3u32, at_store)
     js.add_method(it, a, "sub", 3u32, at_sub)
     js.add_method(it, a, "wait", 4u32, at_wait)
+    js.add_method(it, a, "waitAsync", 4u32, at_wait_async)
     js.add_method(it, a, "xor", 3u32, at_xor)
     let e1 = js.define_data(it, a, js.key_of_symbol(it.sym_to_string_tag), js.str_value("Atomics"), js.P_CONFIGURABLE)
 }

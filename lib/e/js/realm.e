@@ -1182,6 +1182,10 @@ fn agent_main(c: *AgentCtx) {
     h.starting -= 1u32
     sync.condition_broadcast(&h.cond)
     while !h.shutdown {
+        sync.mutex_unlock(&h.lock)
+        let pend = js.pump_waiters(it)
+        let jr0 = js.run_jobs(it)
+        sync.mutex_lock(&h.lock)
         let (cb, ce) = js.get_prop(it, ag, js.key_of("__cb"), js.obj_value(ag))
         let (lf, le) = js.get_prop(it, ag, js.key_of("__left"), js.obj_value(ag))
         if ce == ok && le == ok && js.to_boolean(lf) { break }
@@ -1196,7 +1200,7 @@ fn agent_main(c: *AgentCtx) {
             if cre == ok { let je2 = js.run_jobs(it) }
             sync.mutex_lock(&h.lock)
         } else {
-            let w = sync.condition_wait_for(&h.cond, &h.lock, time.millis(50i64))
+            let w = sync.condition_wait_for(&h.cond, &h.lock, time.millis(5i64))
         }
     }
     h.live -= 1u32

@@ -8,6 +8,7 @@
 use e.data.list as list
 use e.fs
 use e.io
+use e.js.b_atomics as b_atomics
 use e.js.interp as js
 use e.js.module as module
 use e.js.parser as jsparse
@@ -366,6 +367,7 @@ fn run_all(ctx: *Ctx) {
                         if e == ok {
                             let je = js.run_jobs(it)
                             if je != ok { e = je }
+                            b_atomics.settle(it)
                         }
                     }
                     if e == js.Throw {
