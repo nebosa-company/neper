@@ -34,6 +34,7 @@ use e.ui.winedit
 use e.ui.winmark
 use e.ui.winnative
 use e.ui.wintile
+use e.ui.wintoolicon
 use e.ui.winpx
 
 // What a page is set in: the theme's tokens, the fonts in preference order, the
@@ -16206,6 +16207,12 @@ fn windows_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: G
 
 // The same for a button at x `along` of v3's 800 px window (the greys of the box drift along it).
 fn windows_glyph_toggle_at(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool, along: f32) -> (widget.Node, err) {
+    let (node, node_error) = windows_glyph_toggle_art(a, key, t, kind, label, action, enabled, checked, along, 1000usize)
+    ret (node, node_error)
+}
+
+// The same with v3's own picture `art` (a tile of e.ui.wintoolicon; 1000 = none, the drawn glyph) in the Windows light look.
+fn windows_glyph_toggle_art(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool, along: f32, art: usize) -> (widget.Node, err) {
     style.windows_dark_enter(t.tokens)
     let state = control_state(t, key, enabled, checked)
     var look = windows_bar_look(state, style.hex(4210752u32))
@@ -16214,8 +16221,20 @@ fn windows_glyph_toggle_at(a: *mem.Arena, key: widget.Key, t: *const Theme, kind
     var ink = look.foreground
     if !enabled { ink = style.hex(13158600u32) }
     if !enabled && style.windows_dark_on() { ink = style.hex_raw(0x6B6B6Bu32) }
-    let (mark, mark_error) = icon_square(a, ink, kind, 16.0)
-    if mark_error != ok { ret (zero, mark_error) }
+    var mark: widget.Node = zero
+    if art < 1000usize && !style.windows_dark_on() {
+        let atlas = wintoolicon.atlas()
+        let (tile, tile_error) = wintile.tile_node(a, 16usize, 17usize, atlas[art * 272usize..art * 272usize + 272usize])
+        if tile_error != ok { ret (zero, tile_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, held_error) }
+        held[0usize] = tile
+        mark = widget.padded(0u64, f32(wintoolicon.dx(art)), 0.0, 0.0, 0.0, sized_style(16.0, 16.0), held[0usize..1usize])
+    } else {
+        let (glyph_mark, glyph_error) = icon_square(a, ink, kind, 16.0)
+        if glyph_error != ok { ret (zero, glyph_error) }
+        mark = glyph_mark
+    }
     var content = mark
     let boxed = enabled && !state.selected && (state.hovered || state.pressed) && !style.windows_dark_on()
     if enabled && state.pressed && style.windows_dark_on() {
