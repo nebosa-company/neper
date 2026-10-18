@@ -10,6 +10,7 @@ use e.algo.hash as hash
 use e.gfx.geometry
 use e.gfx.paint
 use e.ui.accessibility
+use e.ui.adwicon_l2 as adwicon
 use e.ui.animation
 use e.ui.control
 use e.ui.gridlook as gl
@@ -11904,24 +11905,24 @@ fn linux_rows_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, spec:
         trail = track
     }
     if spec.kind == 3u8 {
-        let (pencil, pencil_error) = control.stroked_glyph(a, ink, .Edit, 19.0, 1.6)
+        let (pencil, pencil_error) = adwicon.icon(a, adwicon.document_edit(), ink, 16.0)
         if pencil_error != ok { ret (zero, pencil_error) }
         trail = pencil
     }
     if spec.kind == 4u8 {
         let (value, value_error) = linux_row_text(a, t, spec.value, 14.667, ink)
         if value_error != ok { ret (zero, value_error) }
-        let (arrow, arrow_error) = control.cup_mark(a, 17u32, ink, ink, 0.0, 0.0, 12.0, 6.0)
+        let (arrow, arrow_error) = adwicon.icon(a, adwicon.pan_down(), ink, 16.0)
         if arrow_error != ok { ret (zero, arrow_error) }
         let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
         if both_error != ok { ret (zero, TooLarge) }
         both[0usize] = value
-        both[1usize] = arrow
-        trail = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), both[0usize..2usize])
+        both[1usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one_node(a, arrow))
+        trail = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 7.0 }, style.defaults(), both[0usize..2usize])
     }
     var trail_style = style.defaults()
     trail_style.height = style.Length { Px: 54.0 }
-    trail_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: control.if_else(spec.kind == 1u8, 2.0, 0.0) }, right: style.Length { Px: control.if_else(spec.kind == 3u8, 22.0, 14.0) }, bottom: style.Length { Px: control.if_else(spec.kind == 4u8, 2.0, 0.0) } }
+    trail_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: control.if_else(spec.kind == 1u8, 2.0, 0.0) }, right: style.Length { Px: control.if_else(spec.kind == 3u8, 23.0, 14.0) }, bottom: style.Length { Px: control.if_else(spec.kind == 4u8, 2.0, 0.0) } }
     let ends = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, trail_style, one_node(a, trail))
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }

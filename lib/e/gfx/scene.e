@@ -932,7 +932,7 @@ fn flat_quad(f: *Flattener, control: geometry.Point, end: geometry.Point) -> err
 }
 
 // How many equal parts Cairo cuts a cubic into (its tolerance 0.1): it halves until the control points lie within 0.1 of the chord,
-// a halving taking a quarter of the distance (fitted on GTK's own corners and discs: radius 6, 10 and 15 all come out at 8).
+// a halving taking a quarter of the distance (fitted on GTK's own corners and discs: radius 4, 6, 10, 13 and 15 all come out at 8).
 fn cairo_segments(p0: geometry.Point, c1: geometry.Point, c2: geometry.Point, p3: geometry.Point) -> usize {
     let dx = p3.x - p0.x
     let dy = p3.y - p0.y
@@ -946,7 +946,9 @@ fn cairo_segments(p0: geometry.Point, c1: geometry.Point, c2: geometry.Point, p3
     var worst = d1
     if d2 > worst { worst = d2 }
     var n = 1usize
-    while n < 64usize && worst > 0.095 * f32(n * n) { n *= 2usize }
+    while n < 64usize && worst > 0.1 * f32(n * n) { n *= 2usize }
+    // Cairo's fixed-point rounding keeps a 4 px arc at 8 parts as well (the progress bar's ends, the focus ring's inner corner)
+    if n == 4usize && worst >= 1.2 { n = 8usize }
     ret n
 }
 

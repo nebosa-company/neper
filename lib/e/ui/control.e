@@ -22300,13 +22300,20 @@ fn linux_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     }
     let body = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, parts[0usize..count])
     var shell = style.defaults()
-    shell.radius = 13.0
-    if options.variant == .Filled { shell.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } } }
-    if options.variant == .Filled { shell.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.04) } }
     if !options.enabled { shell.opacity = 0.5 }
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
+    if options.variant == .Filled {
+        // the card's three shadows, a layer under the body that spills outside the box
+        let (shade, shade_error) = linuxshadow.card_shadow_node(a)
+        if shade_error != ok { ret (zero, shade_error) }
+        let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+        if both_error != ok { ret (zero, TooLarge) }
+        both[0usize] = shade
+        both[1usize] = body
+        ret (widget.semantics(key, sem, shell, mem_one_node(a, widget.stack(0u64, style.defaults(), both[0usize..2usize]))), ok)
+    }
     ret (widget.semantics(key, sem, shell, mem_one_node(a, body)), ok)
 }
 // ---- end the Linux look, group boxes ----------------------------------------------------------------------------
@@ -22314,41 +22321,7 @@ fn linux_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
 // ---- the Linux look, button edit (round 20, worker l1) ----------------------------------------------------------
 // An entry (34 high, 6 px corners, black 8 % / white 9.6 % face, text from 9) with a flat icon button in its last 34 px behind
 // a 1 px rule of the same ink (GtkEntry with a trailing GtkButton, libadwaita 1.5). The icon stands in for the symbolic
-// folder-open: an outline folder, 16 x 14 at 176, 10.
-fn linux_folder_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let g = mem.cast[*Glyph](ctx)
-    let (pb, pb_error) = geometry.path_builder(g.arena, 16usize, 24usize)
-    if pb_error != ok { ret TooLarge }
-    var builder = pb
-    try geometry.move_to(&builder, geometry.Point { x: area.x + 1.0, y: area.y + 12.5 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 1.0, y: area.y + 2.0 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 6.0, y: area.y + 2.0 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 8.0, y: area.y + 4.0 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 13.0, y: area.y + 4.0 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 13.0, y: area.y + 6.0 })
-    try geometry.move_to(&builder, geometry.Point { x: area.x + 1.5, y: area.y + 12.5 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 3.5, y: area.y + 6.5 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 14.5, y: area.y + 6.5 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 12.5, y: area.y + 12.5 })
-    try geometry.close_path(&builder)
-    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: g.color }, stroke: paint.Stroke { width: 1.7, cap: .Round, join: .Round, miter_limit: 4.0 } } })
-}
-
-fn linux_folder(a: *mem.Arena, color: paint.Color) -> (widget.Node, err) {
-    let (made, made_error) = stroked_glyph(a, color, .Check, 16.0, 1.7)
-    if made_error != ok { ret (zero, made_error) }
-    var out = made
-    switch out.kind {
-    case .Custom as c:
-        var painted = c
-        painted.paint = linux_folder_paint
-        out.kind = widget.Kind { Custom: painted }
-    default:
-        out = out
-    }
-    ret (out, ok)
-}
-
+// folder-open (libadwaita's own SVG).
 fn linux_button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, action: *const widget.Submit, button_label: str, options: FieldOptions) -> (widget.Node, err) {
     let dark = t.tokens.palette == .Dark
     var w = options.width
@@ -22361,19 +22334,20 @@ fn linux_button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var face = sized_style(w, h)
     face.radius = 6.0
     face.background = paint.Brush { Solid: wash }
-    if edit_state.focus_visible && options.enabled { face.border = style.Border { width: 1.86, color: with_alpha(style.color(t.tokens, .FocusRing), 0.49) } }
+    if edit_state.focus_visible && options.enabled { face.border = style.Border { width: 2.0, color: style.color(t.tokens, .FocusRing) } }
     let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
     let (editor, editor_error) = bare_field(a, key, t, label, buffer, len, change, submit, w - 6.0 - 34.0, h, 14.667, none, none)
     if editor_error != ok { ret (zero, editor_error) }
     var rule = sized_style(1.0, h)
     rule.background = paint.Brush { Solid: wash }
-    let (folder, folder_error) = linux_folder(a, style.color(t.tokens, .Text))
+    let (folder, folder_error) = adwicon.icon(a, adwicon.folder_open(), style.color(t.tokens, .Text), 16.0)
     if folder_error != ok { ret (zero, folder_error) }
     let state = control_state(t, key + 1u64, usable, false)
     var look = style.adwaita_resolve(t.tokens, .Plain, state)
     look.radius = 6.0
     look.custom_padding = true
-    look.padding = 8.5
+    look.padding = 9.0
+    look.padding_start = 8.0
     look.padding_y = 9.0
     look.min_width = 33.0
     look.min_height = 34.0
@@ -22400,8 +22374,7 @@ fn linux_linked_buttons(a: *mem.Arena, key: widget.Key, t: *const Theme, labels:
     let n = labels.len
     let (parts, parts_error) = mem.alloc[widget.Node](a, n)
     if parts_error != ok { ret (zero, TooLarge) }
-    var rule = paint.rgba(0.0, 0.0, 0.0, 0.08)
-    if t.tokens.palette == .Dark { rule = paint.rgba(1.0, 1.0, 1.0, 0.096) }
+    var at: f32 = 0.0
     var i = 0usize
     while i < n {
         var options = button_options()
@@ -22412,31 +22385,21 @@ fn linux_linked_buttons(a: *mem.Arena, key: widget.Key, t: *const Theme, labels:
         caption.wrap = .None
         let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
         if wide_error != ok { ret (zero, wide_error) }
-        var width = wide + 34.0
-        // Every button but the first owns the rule on its left edge, drawn over its face.
-        if i > 0usize { width = width + 1.0 }
+        let width = wide + 34.0
         options.width = width
         // A near-zero radius stands for "square": a zero `corners` would give the button its plain 6.
         var rounded = style.Corners { top_left: 0.01, top_right: 0.01, bottom_right: 0.01, bottom_left: 0.01 }
-        if i == 0usize { rounded = style.Corners { top_left: 6.0, top_right: 0.01, bottom_right: 0.01, bottom_left: 6.0 } }
-        if i == n - 1usize { rounded = style.Corners { top_left: 0.01, top_right: 6.0, bottom_right: 6.0, bottom_left: 0.01 } }
+        if i == 0usize { rounded = style.Corners { top_left: 6.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 6.0 } }
+        if i == n - 1usize { rounded = style.Corners { top_left: 0.0, top_right: 6.0, bottom_right: 6.0, bottom_left: 0.0 } }
         if n == 1usize { rounded = style.Corners { top_left: 6.0, top_right: 6.0, bottom_right: 6.0, bottom_left: 6.0 } }
         let (one, one_error) = linux_button_shaped(a, key + u64(i), t, labels[i], widget.spacer(0u64, 0.0), false, &actions[i], options, rounded)
         if one_error != ok { ret (zero, one_error) }
-        if i == 0usize {
-            parts[i] = one
-        } else {
-            var line = sized_style(1.0, 34.0)
-            line.background = paint.Brush { Solid: rule }
-            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
-            if pair_error != ok { ret (zero, TooLarge) }
-            pair[0usize] = one
-            pair[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
-            parts[i] = widget.stack(0u64, sized_style(width, 34.0), pair[0usize..2usize])
-        }
+        // GTK overlaps neighbours by 1 px: that column is two translucent faces, which is the rule between the buttons.
+        parts[i] = widget.positioned(0u64, at, 0.0, style.defaults(), mem_one_node(a, one))
+        at = at + width - 1.0
         i += 1usize
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), parts[0usize..n]), ok)
+    ret (widget.stack(0u64, sized_style(at + 1.0, 34.0), parts[0usize..n]), ok)
 }
 // ---- end the Linux look, linked buttons -------------------------------------------------------------------------
 

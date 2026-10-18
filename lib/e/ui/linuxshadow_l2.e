@@ -20,7 +20,7 @@ use e.ui.widget
 type Layer = struct { oy: f32, spread: f32, sigma: f32, alpha: f32 }
 
 // The body rectangle is [area.x + rl, area.y + rt] wide `rw` and high `rh`, with corners of `radius`; `margin` px round it are shaded; `face` is painted (alpha = coverage) when `own_face`.
-type Shade = struct { rl: f32, rt: f32, rw: f32, rh: f32, radius: f32, margin: f32, face: paint.Color, own_face: bool, count: usize, layers: [4]Layer }
+type Shade = struct { rl: f32, rt: f32, rw: f32, rh: f32, radius: f32, margin: f32, face: paint.Color, own_face: bool, count: usize, layers: [4]Layer, fill: bool }
 
 fn measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -107,8 +107,13 @@ fn shade_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let sh = mem.cast[*Shade](ctx)
     let l = area.x + sh.rl
     let t = area.y + sh.rt
-    let r = l + sh.rw
-    let bt = t + sh.rh
+    var r = l + sh.rw
+    var bt = t + sh.rh
+    // `fill`: the body is the node's own area, `rw` and `rh` only grow it
+    if sh.fill {
+        r = area.x + area.width + sh.rw
+        bt = area.y + area.height + sh.rh
+    }
     let x0 = i32(math.floor[f32](l - sh.margin))
     let x1 = i32(math.ceil[f32](r + sh.margin))
     let y0 = i32(math.floor[f32](t - sh.margin))
@@ -190,4 +195,27 @@ fn card_node(a: *mem.Arena, w: f32, h: f32, face: paint.Color) -> (widget.Node, 
     sh.layers[2usize] = Layer { oy: 4.1836, spread: 19.6311, sigma: 8.3439, alpha: 0.033 }
     let (made, made_error) = made_node(a, sh, w, h)
     ret (made, made_error)
+}
+
+// ---- round 22, worker lb: the shade of a `.card` (box-shadow: 0 0 0 1px .03, 0 1px 3px 1px .07, 0 2px 6px 2px .03, radius 12) ----
+// A node that fills the stack it sits in (the card's own box) and paints the three shadows outside it. GTK blurs with three box blurs, 3 px
+// (a box of 1: none) and 6 px (a box of 7, a sigma of 3.5); the layers are the same three, a Gaussian standing for the boxes.
+fn card_shadow_node(a: *mem.Arena) -> (widget.Node, err) {
+    var sh: Shade = zero
+    sh.radius = 12.0
+    sh.margin = 24.0
+    sh.count = 3usize
+    sh.fill = true
+    sh.layers[0usize] = Layer { oy: 0.0, spread: 1.0, sigma: 0.32, alpha: 0.03 }
+    sh.layers[1usize] = Layer { oy: 1.0, spread: 1.0, sigma: 0.32, alpha: 0.07 }
+    sh.layers[2usize] = Layer { oy: 2.0, spread: 2.0, sigma: 3.46, alpha: 0.03 }
+    let (specs, specs_error) = mem.alloc[Shade](a, 1usize)
+    if specs_error != ok { ret (zero, specs_error) }
+    specs[0usize] = sh
+    var s = style.defaults()
+    s.width = style.Length { Percent: 100.0 }
+    s.height = style.Length { Percent: 100.0 }
+    s.position = .Absolute
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&specs[0usize]), measure: measure, paint: shade_paint, state: widget.bytes_of[Shade](&specs[0usize]) } }, style: s, children: none }, ok)
 }
