@@ -106,6 +106,17 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (label_node, label_error) = control.colored_text(a, 0u64, text, t, caption, ink)
     if label_error != ok { ret (zero, label_error) }
     parts[0usize] = label_node
+    if linux {
+        // GTK's label is a whole number of pixels wide (hinted advances), so the tooltip's edges fall on pixel columns
+        let (wide, wide_error) = control.linux_label_width(a, t, caption, text)
+        if wide_error != ok { ret (zero, wide_error) }
+        var held = style.defaults()
+        held.width = style.Length { Px: wide }
+        let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
+        if boxed_error != ok { ret (zero, TooLarge) }
+        boxed[0usize] = label_node
+        parts[0usize] = widget.box(0u64, held, boxed[0usize..1usize])
+    }
     var n = 1usize
     if shortcut.len > 0usize {
         caption.wrap = .None
