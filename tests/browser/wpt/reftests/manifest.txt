@@ -153,3 +153,4 @@ colrule-001.html | colrule-001-ref.html | match
 abspos-inline-static-001.html | abspos-inline-static-001-ref.html | match
 caption-outside-table-box-001.html | caption-outside-table-box-001-ref.html | match
 fixed-table-min-width-001.html | fixed-table-min-width-001-ref.html | match
+row-background-spacing-001.html | row-background-spacing-001-ref.html | match

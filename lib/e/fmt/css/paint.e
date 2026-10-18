@@ -688,8 +688,55 @@ fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
         dh = bb.h - td.cap_t - td.cap_b
     }
     paint_box_shadow(p, s, x, dy, bb.w, dh)
-    paint_background(p, b, s, x, dy, bb.w, dh)
+    if (bb.inner == .Row || bb.inner == .RowGroup) && !bb.coll {
+        paint_row_background(p, b, s, x, y, bb.w, bb.h)
+    } else {
+        paint_background(p, b, s, x, dy, bb.w, dh)
+    }
     if !bb.coll { paint_borders(p, s, x, dy, bb.w, dh) }
+}
+
+// A row or row group in the separate borders model paints its background only under its cells, not under the spacing.
+fn paint_row_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64) {
+    var t = p.l.boxes.items[usize(b)].parent
+    while t != layout.NONE && p.l.boxes.items[usize(t)].inner != .Table { t = p.l.boxes.items[usize(t)].parent }
+    if t == layout.NONE || p.l.boxes.items[usize(t)].aux2 == 0u32 {
+        paint_background(p, b, s, x, y, w, h)
+        ret
+    }
+    let td = p.l.tables.items[usize(p.l.boxes.items[usize(t)].aux2 - 1u32)]
+    let (ox, oy) = layout.abs_origin(p.l, b)
+    // The box the background is placed against spans exactly its cells (the outer spacing is not part of it).
+    var minx = 1000000000.0f64
+    var miny = 1000000000.0f64
+    var maxx = -1000000000.0f64
+    var maxy = -1000000000.0f64
+    var pass = 0usize
+    while pass < 2usize {
+        var ci = 0usize
+        while ci < td.cells.len {
+            let info = td.cells.items[ci]
+            ci += 1usize
+            let rb = td.row_box[info.row]
+            var mine = rb == b
+            if !mine && rb != layout.NONE && p.l.boxes.items[usize(rb)].parent == b { mine = true }
+            if !mine { continue }
+            let (cx, cy) = layout.abs_origin(p.l, info.box)
+            let cb = &p.l.boxes.items[usize(info.box)]
+            if pass == 0usize {
+                minx = minf(minx, cx)
+                miny = minf(miny, cy)
+                maxx = maxf(maxx, cx + cb.w)
+                maxy = maxf(maxy, cy + cb.h)
+            } else {
+                save(p)
+                emit(p, scene.Command { Clip: scene.Clip { Rect: grect(x + cx - ox, y + cy - oy, cb.w, cb.h) } })
+                paint_background(p, b, s, x + minx - ox, y + miny - oy, maxx - minx, maxy - miny)
+                restore(p)
+            }
+        }
+        pass += 1usize
+    }
 }
 
 // --- Text and inline content.
