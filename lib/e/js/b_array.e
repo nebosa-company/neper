@@ -1183,11 +1183,14 @@ fn install_array(it: *js.Interp) {
     js.add_method(it, it.protos.array, "keys", 0u32, array_keys)
     js.add_method(it, it.protos.array, "entries", 0u32, array_entries)
     let values = js.make_native(it, "values", 0u32, array_values)
+    it.array_values_fn = values
     let e5 = js.define_data(it, it.protos.array, js.key_of("values"), js.obj_value(values), js.P_HIDDEN)
     let e6 = js.define_data(it, it.protos.array, js.key_of_symbol(it.sym_iterator), js.obj_value(values), js.P_HIDDEN)
     // Iterator prototypes.
     let self_fn = js.make_native(it, "[Symbol.iterator]", 0u32, iterator_proto_self)
     let e7 = js.define_data(it, it.protos.iterator, js.key_of_symbol(it.sym_iterator), js.obj_value(self_fn), js.P_HIDDEN)
     js.add_method(it, it.protos.array_iterator, "next", 0u32, array_iterator_next)
+    let (anx, anxe) = js.get_prop(it, it.protos.array_iterator, js.key_of("next"), js.obj_value(it.protos.array_iterator))
+    if anxe == ok && js.is_object(anx) { it.array_next_fn = js.as_object(anx) }
     let e8 = js.define_data(it, it.protos.array_iterator, js.key_of_symbol(it.sym_to_string_tag), js.str_value("Array Iterator"), js.P_CONFIGURABLE)
 }

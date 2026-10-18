@@ -487,8 +487,10 @@ fn n_qs(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value
     if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
     let (sel, se) = sarg(it, args, 1usize)
     if se != ok { ret (js.undefv(), se) }
+    // The selector and matcher are scratch: the answer is a number, so the arena goes back to where it was.
     let mark = mem.mark(it.a)
     let (found, e) = dom.query_selector(it.a, h.d, id, sel)
+    mem.reset(it.a, mark)
     if e != ok { ret (js.num_value(-2.0f64), ok) }
     ret (idv(found), ok)
 }
@@ -500,13 +502,26 @@ fn n_qsa(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Valu
     if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
     let (sel, se) = sarg(it, args, 1usize)
     if se != ok { ret (js.undefv(), se) }
+    // Pass one counts the matches in scratch memory; pass two fills an array sized for them, again in scratch memory.
+    let mark1 = mem.mark(it.a)
+    let (buf1, be1) = mem.alloc[dom.NodeId](it.a, h.d.used + 1usize)
+    if be1 != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    let (n, e) = dom.query_selector_all(it.a, h.d, id, sel, buf1)
+    mem.reset(it.a, mark1)
+    if e != ok { ret (js.null_value(), ok) }
+    let arr = js.new_array(it)
+    js.reserve_elems(it, arr, n)
+    let mark2 = mem.mark(it.a)
     let (buf, be) = mem.alloc[dom.NodeId](it.a, h.d.used + 1usize)
     if be != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
-    let (n, e) = dom.query_selector_all(it.a, h.d, id, sel, buf)
-    if e != ok { ret (js.null_value(), ok) }
-    let (arr, ae) = collect(it, h, buf, n)
-    if ae != ok { ret (js.undefv(), ae) }
-    ret (arr, ok)
+    let (n2, e2) = dom.query_selector_all(it.a, h.d, id, sel, buf)
+    var i = 0usize
+    while i < n2 {
+        try js.array_push(it, arr, idv(buf[i]))
+        i += 1usize
+    }
+    mem.reset(it.a, mark2)
+    ret (js.obj_value(arr), ok)
 }
 
 // matches(id, selector): true/false, or null for a syntax error.
@@ -516,7 +531,9 @@ fn n_matches(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.
     if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
     let (sel, se) = sarg(it, args, 1usize)
     if se != ok { ret (js.undefv(), se) }
+    let mark = mem.mark(it.a)
     let (m, e) = dom.matches(it.a, h.d, id, sel)
+    mem.reset(it.a, mark)
     if e != ok { ret (js.null_value(), ok) }
     ret (js.bool_value(m), ok)
 }
@@ -527,7 +544,9 @@ fn n_closest(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.
     if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
     let (sel, se) = sarg(it, args, 1usize)
     if se != ok { ret (js.undefv(), se) }
+    let mark = mem.mark(it.a)
     let (c, e) = dom.closest(it.a, h.d, id, sel)
+    mem.reset(it.a, mark)
     if e != ok { ret (js.num_value(-2.0f64), ok) }
     ret (idv(c), ok)
 }

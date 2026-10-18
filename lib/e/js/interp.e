@@ -127,7 +127,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
 }
@@ -3013,14 +3013,20 @@ fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Va
     }
     if (n.flags & ast.F_USES_ARGS) != 0u16 && !is_arrow {
         let ao = new_obj(it, C_ARGUMENTS, it.protos.arguments)
+        reserve_elems(it, ao, args.len)
+        reserve_props(it, ao, 3usize)
         var k = 0usize
         while k < args.len {
             let pe = list.push[Value](&ao.elems, args[k])
             k += 1usize
         }
         try define_data(it, ao, key_of("length"), num_value(f64(args.len)), P_HIDDEN)
-        let (vals, ve) = get_prop(it, it.protos.array, key_of("values"), obj_value(it.protos.array))
-        if ve == ok { try define_data(it, ao, key_of_symbol(it.sym_iterator), vals, P_HIDDEN) }
+        if it.array_values_fn != null_obj() {
+            try define_data(it, ao, key_of_symbol(it.sym_iterator), obj_value(it.array_values_fn), P_HIDDEN)
+        } else {
+            let (vals, ve) = get_prop(it, it.protos.array, key_of("values"), obj_value(it.protos.array))
+            if ve == ok { try define_data(it, ao, key_of_symbol(it.sym_iterator), vals, P_HIDDEN) }
+        }
         if !f.strict { try define_data(it, ao, key_of("callee"), obj_value(fo), P_HIDDEN) }
         try declare(it, f.env, "arguments", obj_value(ao), 0u8)
     }
@@ -3299,11 +3305,32 @@ fn get_iterator(it: *Interp, v: Value) -> (Iter, err) {
     var iter: Iter = zero
     iter.obj = iobj
     iter.next = nx
+    // A plain array walked by the built-in array iterator needs no result objects: step it in place.
+    if is_object(nx) && it.array_next_fn != null_obj() && as_object(nx) == it.array_next_fn {
+        let io = as_object(iobj)
+        if io.class == C_ITERATOR && io.proto == it.protos.array_iterator && io.aux != null_obj() && io.aux.class == C_ARRAY && str.eq(io.text, "array-values") {
+            iter.is_array = true
+        }
+    }
     ret (iter, ok)
 }
 
 // One step: (value, done).
 fn iterator_step(it: *Interp, iter: Iter) -> (Value, bool, err) {
+    if iter.is_array {
+        let io = as_object(iter.obj)
+        let arr = io.aux
+        if arr == null_obj() { ret (undefv(), true, ok) }
+        if io.num >= array_length(arr) {
+            io.aux = null_obj()
+            ret (undefv(), true, ok)
+        }
+        let at = io.num
+        io.num = at + 1.0f64
+        let (ev, ee) = get_index(it, arr, at)
+        if ee != ok { ret (undefv(), true, ee) }
+        ret (ev, false, ok)
+    }
     let (r, re) = call_function(it, iter.next, iter.obj, zero_args())
     if re != ok { ret (undefv(), true, re) }
     if !is_object(r) { ret (undefv(), true, throw_type(it, "Iterator result is not an object")) }

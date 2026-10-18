@@ -1382,7 +1382,9 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
     while k <= n {
         // break-all adds a break between any two letters, never before a space.
         // break-spaces: every preserved space can end a line.
-        let all_here = lb_anywhere || (s.word_break == .BreakAll && !(k < n && scal[k] == 32u32)) || (s.white_space == .BreakSpaces && scal[k - 1usize] == 32u32)
+        // `anywhere` and `word-break: break-word` count in the intrinsic (min-content) sizes too; `break-word` only when needed.
+        let intrinsic_any = bd.cbw < 0.0f64 && (s.overflow_wrap == .Anywhere || s.word_break == .BreakWord)
+        let all_here = lb_anywhere || intrinsic_any || (s.word_break == .BreakAll && !(k < n && scal[k] == 32u32)) || (s.white_space == .BreakSpaces && scal[k - 1usize] == 32u32)
         // `break-spaces`: every preserved space is a wrap opportunity of its own and takes up room.
         let bspace = s.white_space == .BreakSpaces && scal[k - 1usize] == 32u32
         let cut_here = k == n || opp[k] != 0u8 || all_here || scal[k - 1usize] == 10u32 || bspace

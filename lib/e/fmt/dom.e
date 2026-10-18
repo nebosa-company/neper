@@ -757,7 +757,49 @@ fn compile_selectors(a: *mem.Arena, text: str) -> ([]const selector.RuleSelector
     if token_error != ok { ret (zero, SyntaxError) }
     let (chosen, chosen_error) = selector.parse_selector_list_for_rule(a, text, tokens)
     if chosen_error != ok || chosen.len == 0usize { ret (zero, SyntaxError) }
+    // A style rule drops the selectors it can not represent; the selector APIs reject the whole list instead.
+    let segments = selector.split_top_level_comma(a, tokens)
+    if segments.len != chosen.len { ret (zero, SyntaxError) }
+    var i = 0usize
+    while i < chosen.len {
+        if !selector_known(chosen[i].selector) { ret (zero, SyntaxError) }
+        i += 1usize
+    }
     ret (chosen, ok)
+}
+
+fn known_pseudo_class(name: str) -> bool {
+    let names = ",active,any-link,autofill,blank,buffering,checked,current,default,defined,dir,disabled,empty,enabled,first-child,first-of-type,focus,focus-visible,focus-within,fullscreen,future,has,host,host-context,hover,in-range,indeterminate,invalid,is,lang,last-child,last-of-type,link,local-link,matches,modal,muted,not,nth-child,nth-last-child,nth-last-of-type,nth-of-type,only-child,only-of-type,open,optional,out-of-range,past,paused,picture-in-picture,placeholder-shown,playing,popover-open,read-only,read-write,required,root,scope,seeking,stalled,state,target,target-within,user-invalid,user-valid,valid,visited,volume-locked,where,-webkit-any,-moz-any,"
+    if name.len == 0usize { ret false }
+    var start = 1usize
+    var i = 1usize
+    while i < names.len {
+        if names[i] == 44u8 {
+            if str.eq(names[start..i], name) { ret true }
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+fn selector_known(sel: selector.Selector) -> bool {
+    var c = 0usize
+    while c < sel.compounds.len {
+        var p = 0usize
+        while p < sel.compounds[c].parts.len {
+            let part = sel.compounds[c].parts[p]
+            if part.kind == .PseudoClass && !known_pseudo_class(part.name) { ret false }
+            var k = 0usize
+            while k < part.subs.len {
+                if !selector_known(part.subs[k]) { ret false }
+                k += 1usize
+            }
+            p += 1usize
+        }
+        c += 1usize
+    }
+    ret true
 }
 
 fn any_selector(m: *const cssm.Matcher, chosen: []const selector.RuleSelector, el: NodeId) -> bool {
