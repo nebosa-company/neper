@@ -4755,7 +4755,7 @@ $gfxSvgTextFacesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $gfxSvgTextFacesWritten -ne 'executable written') { throw 'gfx_svg_text_faces emission failed' }
 & $gfxSvgTextFacesPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text_faces check failed: exit $LASTEXITCODE" }
-# e.text.tthint: Segoe UI at 12 px hinted in both modes against the Python reference interpreter's values (passes when the font is absent).
+# e.text.tthint and e.gfx.cleartype: Segoe UI at 12 px hinted in both modes and drawn in ClearType against the Python reference interpreter's values (passes when the font is absent).
 $textTthintPath = Join-Path $testBuild 'text-tthint-selfhost.exe'
 $textTthintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_tthint\src\main.e') $repo 'x64' 'windows' $textTthintPath -j 2
 if ($LASTEXITCODE -ne 0 -or $textTthintWritten -ne 'executable written') { throw 'text_tthint emission failed' }

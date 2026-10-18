@@ -4236,7 +4236,7 @@ gfx_svg_text_faces_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$gfx_svg_text_faces_written" = 'executable written' ]
 chmod +x "$test_build/gfx-svg-text-faces-selfhost"
 "$test_build/gfx-svg-text-faces-selfhost"
-# e.text.tthint: Segoe UI at 12 px hinted in both modes against the Python reference interpreter's values (passes when the font is absent).
+# e.text.tthint and e.gfx.cleartype: Segoe UI at 12 px hinted in both modes and drawn in ClearType against the Python reference interpreter's values (passes when the font is absent).
 text_tthint_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_tthint/src/main.e" "$repo" x64 linux "$test_build/text-tthint-selfhost" -j 2)
 [ "$text_tthint_written" = 'executable written' ]
 chmod +x "$test_build/text-tthint-selfhost"
