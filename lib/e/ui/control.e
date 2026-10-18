@@ -4378,7 +4378,8 @@ fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: pain
         var piece = options
         var size = options.size
         if size == 0.0 { size = 11.0 }
-        if natural > 0.0 {
+        // ClearType sets a whole-pixel size at GDI's hinted advances itself, so the word keeps its size.
+        if natural > 0.0 && scene.text_aa_mode() != .ClearType {
             size = size * hinted / natural
             if size < 10.0 { size = 10.0 }
             if size > 12.0 { size = 12.0 }
