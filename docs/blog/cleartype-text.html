@@ -199,6 +199,20 @@
         <li><strong>The numbers are for the dark theme.</strong> The light captures are checked with <code>LOOKS_THEME=light</code>, but the figures here do not cover them.</li>
       </ul>
 
+      <h2>Is it good enough?</h2>
+      <p>For making the Windows look read like Windows, yes. Across the 77 captures the count of differing pixels fell by about 63 percent. What remains is mostly a stem sitting one pixel off, or a colour fringe slightly too strong or too weak. You can see it when the text is zoomed to 8x, as in the pictures above, but not at normal size. It is also optional: only the Windows look uses it, and <code>NEPER_TEXT_AA=grayscale</code> turns it off.</p>
+      <p>For being <em>pixel-exact</em>, no, and we do not claim it. A control only counts as matched in our progress tracking when the text edges are judged separately from the shapes around them. Counting every text pixel as well still fails several controls: the popup menu, the check list box, the page control, the toolbar button and the disabled label in the dark theme.</p>
+
+      <h2>What it would take to be pixel-exact</h2>
+      <p>It is possible if we limit it to the fonts and sizes the Windows look actually uses, Segoe UI and Tahoma at about six sizes. It is not realistic for arbitrary fonts. The gap has four causes:</p>
+      <ul>
+        <li><strong>The interpreter is not bit-identical.</strong> Windows' own scan converter has fixed-point rounding rules, instruction quirks and dropout handling that differ from ours, especially in Tahoma's older hinting programs.</li>
+        <li><strong>The blend is one fit for everything.</strong> GDI blends with gamma tables that depend on the text colour, plus the ClearType tuner settings. We use a single fitted blend (gamma 1.2).</li>
+        <li><strong>Fonts and settings are unverified.</strong> The capture machine's font versions and ClearType settings may differ from the files we read.</li>
+        <li><strong>Some captures are not GDI.</strong> Windows 11 controls often draw with DirectWrite, which rounds differently from GDI, and the v3 program uses GDI.</li>
+      </ul>
+      <p>The plan is to build a ground-truth oracle first: a small native program that renders every glyph of the used fonts, sizes and text colours with real GDI. We then diff our hinted outlines and rasterised pixels against thousands of known glyphs instead of a few screenshots, fix the interpreter until every glyph agrees, fit the blend per text colour, record the fonts and settings, and add a test that fails if any glyph differs. We have not started on this; until we do, treat the figures above as close, not exact.</p>
+
       <h2>Try it</h2>
       <p>The design record is D5163 in <code>docs/decisions.md</code>, and <code>docs/ui/looks-howto.md</code> has the section on rendering the sheets. To reproduce the table, render the Windows dark sheets and run the check from the repository root:</p>
       <pre><code><span class="prompt">$</span> LOOKS_GLYPHS=1 python -I scripts/looks_dark_native.py
