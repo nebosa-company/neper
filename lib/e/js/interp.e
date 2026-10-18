@@ -127,7 +127,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
 }
@@ -1240,6 +1240,7 @@ fn private_set(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (
 fn private_install(it: *Interp, o: *Obj, key: Key, kind: u8, val: Value) -> err {
     let (at, found) = index_of_prop(o, key)
     let z = null_obj()
+    if !found && !o.extensible && o.class != C_PROXY { ret throw_type(it, "Cannot add a private member to a non-extensible object") }
     if kind == 2u8 || kind == 3u8 {
         if found {
             if (o.props.items[at].flags & P_ACCESSOR) == 0u8 { ret throw_type(it, "Cannot initialize private methods of class twice on the same object") }
@@ -1336,16 +1337,25 @@ fn get_value(it: *Interp, base: Value, key: Key) -> (Value, err) {
 }
 
 fn str_concat3(it: *Interp, x: str, y: str, z: str) -> str {
-    let (a1, e1) = str.concat(it.a, x, y)
-    if e1 != ok { ret x }
-    let (a2, e2) = str.concat(it.a, a1, z)
-    if e2 != ok { ret a1 }
-    ret a2
+    ret str_concat(it, str_concat(it, x, y), z)
 }
 
+// WTF-8: a trailing high surrogate followed by a leading low surrogate must fuse into one 4-byte code point.
 fn str_concat(it: *Interp, x: str, y: str) -> str {
     if x.len == 0usize { ret y }
     if y.len == 0usize { ret x }
+    if x.len >= 3usize && y.len >= 3usize && x[x.len - 3usize] == 237u8 && x[x.len - 2usize] >= 160u8 && x[x.len - 2usize] <= 175u8 && y[0usize] == 237u8 && y[1usize] >= 176u8 {
+        let hi = (u32(x[x.len - 2usize] & 15u8) << 6u32) | u32(x[x.len - 1usize] & 63u8)
+        let lo = (u32(y[1usize] & 15u8) << 6u32) | u32(y[2usize] & 63u8)
+        let cp = 65536u32 + (hi << 10u32) + lo
+        let (b, be) = str.builder(it.a, x.len + y.len + 4usize)
+        if be != ok { ret x }
+        var out = b
+        let h = str.push(&out, x[0usize..x.len - 3usize])
+        put_cp(&out, cp)
+        let t = str.push(&out, y[3usize..y.len])
+        ret str.done(&out)
+    }
     let (r, e) = str.concat(it.a, x, y)
     if e != ok { ret x }
     ret r
@@ -1542,6 +1552,7 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
             }
             ret to_boolean(hv)
         }
+        if cur.class == C_NAMESPACE && !is_symbol_key(key) { ret ns_has_export(cur, key.name) }
         let (p, found) = get_own(it, cur, key)
         if found { ret true }
         if cur.class == C_TYPEDARRAY && !is_symbol_key(key) {
@@ -1557,8 +1568,7 @@ fn has_property(it: *Interp, o: *Obj, key: Key) -> bool {
 fn delete_prop(it: *Interp, o: *Obj, key: Key) -> bool {
     if o.class == C_NAMESPACE {
         if is_symbol_key(key) { ret key.sym != it.sym_to_string_tag }
-        let (nv, found, ne) = ns_read(it, o, key.name)
-        ret !found
+        ret !ns_has_export(o, key.name)
     }
     if o.class == C_PROXY {
         let (dv, de) = px_call(it, PX_DELETE, o, key, undefv(), undefv())
@@ -2577,7 +2587,9 @@ fn upd(c: Completion, v: Value) -> Completion {
 // Whether the `with` object of `e` binds `name` (own or inherited, minus @@unscopables).
 fn with_has(it: *Interp, e: *Env, name: str) -> (bool, err) {
     let key = key_of(name)
-    if !has_property(it, e.with_obj, key) { ret (false, ok) }
+    let (present, pre) = has_property_e(it, e.with_obj, key)
+    if pre != ok { ret (false, pre) }
+    if !present { ret (false, ok) }
     let (u, ue) = get_prop(it, e.with_obj, key_of_symbol(it.sym_unscopables), obj_value(e.with_obj))
     if ue != ok { ret (false, ue) }
     if is_object(u) {
@@ -2617,7 +2629,9 @@ fn get_in_scope_s(it: *Interp, holder: *Env, name: str, strict: bool) -> (Value,
     if holder != null_env() {
         if holder.has_with {
             let key = key_of(name)
-            if !has_property(it, holder.with_obj, key) {
+            let (present, pre) = has_property_e(it, holder.with_obj, key)
+            if pre != ok { ret (undefv(), pre) }
+            if !present {
                 if strict { ret (undefv(), throw_reference(it, str_concat(it, name, " is not defined"))) }
                 ret (undefv(), ok)
             }
@@ -2648,7 +2662,8 @@ fn put_in_scope(it: *Interp, f: *Frame, holder: *Env, name: str, val: Value) -> 
     if holder != null_env() {
         if holder.has_with {
             let wkey = key_of(name)
-            let still = has_property(it, holder.with_obj, wkey)
+            let (still, stille) = has_property_e(it, holder.with_obj, wkey)
+            if stille != ok { ret stille }
             if f.strict && !still { ret throw_reference(it, str_concat(it, name, " is not defined")) }
             let (done, se) = set_prop(it, holder.with_obj, wkey, val, obj_value(holder.with_obj))
             if se != ok { ret se }
@@ -4268,7 +4283,7 @@ fn eval_callee(it: *Interp, f: *Frame, id: u32) -> (Value, Value, err) {
         let (base, be) = eval(it, f, n.a)
         if be != ok { ret (undefv(), undefv(), be) }
         if (n.flags & ast.F_OPTIONAL) != 0u16 && is_nullish(base) { ret (undefv(), undefv(), OptShort) }
-        let (key, ke) = member_key(it, f, n)
+        let (key, ke) = member_key_b(it, f, n, base)
         if ke != ok { ret (undefv(), undefv(), ke) }
         let (fv, fe) = get_value(it, base, key)
         ret (fv, base, fe)
@@ -4462,7 +4477,7 @@ fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
         let (base, be) = eval(it, f, n.a)
         if be != ok { ret (undefv(), be) }
         if (n.flags & ast.F_OPTIONAL) != 0u16 && is_nullish(base) { ret (undefv(), OptShort) }
-        let (key, ke) = member_key(it, f, n)
+        let (key, ke) = member_key_b(it, f, n, base)
         if ke != ok { ret (undefv(), ke) }
         let (v2, ve) = get_value(it, base, key)
         ret (v2, ve)
@@ -4843,6 +4858,12 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     if n.op == ast.O_DELETE {
         let an2 = f.prog.nodes[usize(n.a)]
         if an2.kind == ast.N_MEMBER {
+            if f.prog.nodes[usize(an2.a)].kind == ast.N_SUPER {
+                // `delete super.x` evaluates the reference (this, key expression) and then always fails.
+                let (dsb, dskv, dsre) = super_ref(it, f, an2)
+                if dsre != ok { ret (undefv(), dsre) }
+                ret (undefv(), throw_reference(it, "Unsupported reference to 'super'"))
+            }
             let (base, be) = eval(it, f, an2.a)
             if be != ok { ret (undefv(), be) }
             let (key, ke) = member_key(it, f, an2)
@@ -4898,6 +4919,20 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     if n.op == ast.O_NEG { ret (num_value(-num), ok) }
     if n.op == ast.O_BITNOT { ret (num_value(f64(~to_int32_value(num))), ok) }
     ret (undefv(), ok)
+}
+
+// ToNumeric(old) and that value plus `delta` (a Number or a BigInt, as `old` is).
+fn bump_numeric(it: *Interp, old: Value, delta: f64) -> (Value, Value, err) {
+    let (numv, ne) = to_numeric(it, old)
+    if ne != ok { ret (undefv(), undefv(), ne) }
+    if is_bigint(numv) {
+        let (one, ioe) = bigint.from_i64(it.a, i64(delta))
+        if ioe != ok { ret (undefv(), undefv(), big_error(it, ioe)) }
+        let (nb, nbe) = bigint.add(it.a, big_of(numv), one)
+        if nbe != ok { ret (undefv(), undefv(), big_error(it, nbe)) }
+        ret (numv, big_value(nb), ok)
+    }
+    ret (numv, num_value(num_of(numv) + delta), ok)
 }
 
 // Reads the current value of an assignment tgt and answers a closure-free writer: (value, base, key).
@@ -4961,14 +4996,13 @@ fn eval_update(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
             if oe2 != ok { ret (undefv(), oe2) }
             old2 = ov2
         }
-        let (num2, ne2) = to_number(it, old2)
-        if ne2 != ok { ret (undefv(), ne2) }
-        let nv2 = num2 + delta
+        let (oldn, newn, bne) = bump_numeric(it, old2, delta)
+        if bne != ok { ret (undefv(), bne) }
         var pe = ok
-        if is_super { pe = super_write(it, f, sbase, key, num_value(nv2)) } else { pe = put(it, base, key, num_value(nv2), f.strict) }
+        if is_super { pe = super_write(it, f, sbase, key, newn) } else { pe = put(it, base, key, newn, f.strict) }
         if pe != ok { ret (undefv(), pe) }
-        if prefix { ret (num_value(nv2), ok) }
-        ret (num_value(num2), ok)
+        if prefix { ret (newn, ok) }
+        ret (oldn, ok)
     }
     ret (undefv(), throw_syntax(it, "Invalid left-hand side expression in postfix operation"))
 }
@@ -5009,6 +5043,19 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
                 let (b, be) = eval(it, f, tn.a)
                 if be != ok { ret (undefv(), be) }
                 base = b
+                // A computed key is converted only after the right-hand side ran (and the base was checked).
+                if (tn.flags & ast.F_COMPUTED) != 0u16 {
+                    let (kraw, kre) = eval(it, f, tn.b)
+                    if kre != ok { ret (undefv(), kre) }
+                    let (rv, rve) = eval(it, f, n.b)
+                    if rve != ok { ret (undefv(), rve) }
+                    if is_nullish(base) { ret (undefv(), throw_type(it, "Cannot set properties of null or undefined")) }
+                    let (kk3, kke3) = to_property_key(it, kraw)
+                    if kke3 != ok { ret (undefv(), kke3) }
+                    let pe3 = put(it, base, kk3, rv, f.strict)
+                    if pe3 != ok { ret (undefv(), pe3) }
+                    ret (rv, ok)
+                }
                 let (k2, ke) = member_key(it, f, tn)
                 if ke != ok { ret (undefv(), ke) }
                 key = k2
@@ -5431,6 +5478,7 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
             }
             let (done, de) = define_own(it, holder, key, data_desc(obj_value(fo), P_HIDDEN))
             if de != ok { ret (undefv(), de) }
+            if !done { ret (undefv(), throw_type(it, "Cannot redefine a class member")) }
         } else {
             var prefix = "get "
             if mn2.op == ast.M_SET { prefix = "set " }
@@ -5460,6 +5508,7 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
             }
             let (done2, de2) = define_own(it, holder, key, d)
             if de2 != ok { ret (undefv(), de2) }
+            if !done2 { ret (undefv(), throw_type(it, "Cannot redefine a class member")) }
         }
     }
     if fields.len > 0usize {
@@ -6344,8 +6393,10 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
             if !is_empty_value(abc.value) { last = abc.value }
             if abc.kind != CK_NORMAL {
                 let (aleave, aprop) = loop_exit(abc, labels)
-                let acl2 = async_iterator_close(it, f, aiter)
-                if acl2 != ok { ret (normal(), acl2) }
+                if aleave || aprop {
+                    let acl2 = async_iterator_close(it, f, aiter)
+                    if acl2 != ok { ret (normal(), acl2) }
+                }
                 if aprop { ret (upd(abc, last), ok) }
                 if aleave { break }
             }
@@ -6368,8 +6419,10 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
         if !is_empty_value(bc2.value) { last = bc2.value }
         if bc2.kind != CK_NORMAL {
             let (leave2, prop2) = loop_exit(bc2, labels)
-            let cle2 = iterator_close(it, iter)
-            if cle2 != ok { ret (normal(), cle2) }
+            if leave2 || prop2 {
+                let cle2 = iterator_close(it, iter)
+                if cle2 != ok { ret (normal(), cle2) }
+            }
             if prop2 { ret (upd(bc2, last), ok) }
             if leave2 { break }
         }
@@ -8112,6 +8165,17 @@ fn zero_entries() -> []const NsEntry {
 
 // The value of export `name` of namespace object `o`: (value, exists, error); reading an uninitialised binding is a
 // ReferenceError.
+// Whether the module namespace exports `name` (no binding is read, so an uninitialised one counts).
+fn ns_has_export(o: *Obj, name: str) -> bool {
+    let nd = mem.cast[*NsData](o.data)
+    var i = 0usize
+    while i < nd.entries.len {
+        if str.eq(nd.entries[i].name, name) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
 fn ns_read(it: *Interp, o: *Obj, name: str) -> (Value, bool, err) {
     let nd = mem.cast[*NsData](o.data)
     var i = 0usize
@@ -8223,6 +8287,8 @@ fn proto_set(it: *Interp, o: *Obj, v: Value) -> (bool, err) {
         if e != ok { ret (false, e) }
         ret (to_boolean(r), ok)
     }
+    // Object.prototype is an immutable prototype exotic object.
+    if o == o.realm.protos.object { ret (same_value(v, if_proto_value(o)), ok) }
     if is_null(v) {
         if !o.extensible && o.has_proto { ret (false, ok) }
         o.has_proto = false
@@ -8244,6 +8310,11 @@ fn proto_set(it: *Interp, o: *Obj, v: Value) -> (bool, err) {
     o.proto = np
     o.has_proto = true
     ret (true, ok)
+}
+
+fn if_proto_value(o: *Obj) -> Value {
+    if !o.has_proto { ret null_value() }
+    ret obj_value(o.proto)
 }
 
 fn prevent_extensions(it: *Interp, o: *Obj) -> (bool, err) {

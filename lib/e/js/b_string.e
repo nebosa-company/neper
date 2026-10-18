@@ -87,8 +87,6 @@ fn from_char_code(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
         if u2 >= 55296u32 && u2 <= 56319u32 && k < n && units_buf[k] >= 56320u32 && units_buf[k] <= 57343u32 {
             js.put_cp(&out, 65536u32 + ((u2 - 55296u32) << 10u32) + (units_buf[k] - 56320u32))
             k += 1usize
-        } else if u2 >= 55296u32 && u2 <= 57343u32 {
-            js.put_cp(&out, 65533u32)
         } else {
             js.put_cp(&out, u2)
         }
@@ -113,9 +111,7 @@ fn from_code_point(it: *js.Interp, this_val: js.Value, args: []const js.Value) -
     }
     var k = 0usize
     while k < n {
-        var c = cps[k]
-        if c >= 55296u32 && c <= 57343u32 { c = 65533u32 }
-        js.put_cp(&out, c)
+        js.put_cp(&out, cps[k])
         k += 1usize
     }
     ret (js.str_value(str.done(&out)), ok)
@@ -553,7 +549,7 @@ fn string_concat_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -
 fn string_split(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if js.is_nullish(this_val) { ret (js.undefv(), js.throw_type(it, "String.prototype.split called on null or undefined")) }
     let sep = arg(args, 0usize)
-    if !js.is_nullish(sep) {
+    if js.is_object(sep) {
         let (splitter, se0) = js.get_value(it, sep, js.key_of_symbol(it.sym_split))
         if se0 != ok { ret (js.undefv(), se0) }
         if !js.is_nullish(splitter) {
@@ -689,7 +685,7 @@ fn replace_impl(it: *js.Interp, this_val: js.Value, args: []const js.Value, all:
     if js.is_nullish(this_val) { ret (js.undefv(), js.throw_type(it, "String.prototype.replace called on null or undefined")) }
     let search = arg(args, 0usize)
     let rep = arg(args, 1usize)
-    if !js.is_nullish(search) {
+    if js.is_object(search) {
         if all {
             let (isre, ire) = is_regexp_value(it, search)
             if ire != ok { ret (js.undefv(), ire) }
@@ -798,7 +794,7 @@ fn string_replace_all(it: *js.Interp, this_val: js.Value, args: []const js.Value
 fn delegate(it: *js.Interp, this_val: js.Value, args: []const js.Value, sym: *js.Sym, extra_flags: str) -> (js.Value, err) {
     if js.is_nullish(this_val) { ret (js.undefv(), js.throw_type(it, "String.prototype method called on null or undefined")) }
     let pat = arg(args, 0usize)
-    if !js.is_nullish(pat) {
+    if js.is_object(pat) {
         let (m, me) = js.get_value(it, pat, js.key_of_symbol(sym))
         if me != ok { ret (js.undefv(), me) }
         if !js.is_nullish(m) {
@@ -849,13 +845,10 @@ fn string_search(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
 fn string_iterator(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (s, se) = this_str(it, this_val)
     if se != ok { ret (js.undefv(), se) }
-    let iter = js.new_obj(it, js.C_ITERATOR, it.protos.iterator)
+    let iter = js.new_obj(it, js.C_ITERATOR, it.str_iter_proto)
     iter.text = "string"
     iter.prim = js.str_value(s)
     iter.num = 0.0f64
-    // The string-iterator prototype is found through `next` on the object itself.
-    let nf = js.make_native(it, "next", 0u32, string_iterator_next)
-    let e1 = js.define_data(it, iter, js.key_of("next"), js.obj_value(nf), js.P_HIDDEN)
     ret (js.obj_value(iter), ok)
 }
 
@@ -880,6 +873,10 @@ fn result_object(it: *js.Interp, v: js.Value, done: bool) -> *js.Obj {
 }
 
 fn install_string(it: *js.Interp) {
+    // %StringIteratorPrototype%
+    it.str_iter_proto = js.new_obj(it, js.C_OBJECT, it.protos.iterator)
+    js.add_method(it, it.str_iter_proto, "next", 0u32, string_iterator_next)
+    let eti = js.define_data(it, it.str_iter_proto, js.key_of_symbol(it.sym_to_string_tag), js.str_value("String Iterator"), js.P_CONFIGURABLE)
     let proto = it.protos.string
     let ctor = js.make_native(it, "String", 1u32, string_ctor)
     ctor.ctor_kind = js.K_BASE

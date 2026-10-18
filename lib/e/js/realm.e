@@ -74,6 +74,11 @@ fn object_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js.V
     if oe != ok { ret (js.undefv(), oe) }
     var tag = "Object"
     if o.class == js.C_ARRAY { tag = "Array" }
+    if o.class == js.C_PROXY {
+        let (pa, pae) = js.is_array_e(it, js.obj_value(o))
+        if pae != ok { ret (js.undefv(), pae) }
+        if pa { tag = "Array" } else if js.is_callable(js.obj_value(o)) { tag = "Function" }
+    }
     if o.class == js.C_FUNCTION || o.class == js.C_BOUND { tag = "Function" }
     if o.class == js.C_ERROR { tag = "Error" }
     if o.class == js.C_BOOLEAN { tag = "Boolean" }
@@ -102,8 +107,10 @@ fn object_proto_is_prototype_of(it: *js.Interp, this_val: js.Value, args: []cons
     var guard = 0u32
     while guard < 100000u32 {
         guard += 1u32
-        if !cur.has_proto { ret (js.bool_value(false), ok) }
-        cur = cur.proto
+        let (pv, pe) = js.proto_get(it, cur)
+        if pe != ok { ret (js.undefv(), pe) }
+        if !js.is_object(pv) { ret (js.bool_value(false), ok) }
+        cur = js.as_object(pv)
         if cur == o { ret (js.bool_value(true), ok) }
     }
     ret (js.bool_value(false), ok)
@@ -137,31 +144,9 @@ fn object_set_proto(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 }
 
 fn set_prototype(it: *js.Interp, o: *js.Obj, v: js.Value) -> err {
-    if o.class == js.C_PROXY {
-        let (done, de) = js.proto_set(it, o, v)
-        if de != ok { ret de }
-        if !done { ret js.throw_type(it, "Cannot set prototype of this object") }
-        ret ok
-    }
-    if js.is_null(v) {
-        if !o.extensible && o.has_proto { ret js.throw_type(it, "Cannot set prototype of non-extensible object") }
-        o.has_proto = false
-        o.proto = js.null_obj()
-        ret ok
-    }
-    let np = js.as_object(v)
-    if o.has_proto && o.proto == np { ret ok }
-    if !o.extensible { ret js.throw_type(it, "Cannot set prototype of non-extensible object") }
-    var cur = np
-    var guard = 0u32
-    while guard < 100000u32 {
-        guard += 1u32
-        if cur == o { ret js.throw_type(it, "Cyclic __proto__ value") }
-        if !cur.has_proto { break }
-        cur = cur.proto
-    }
-    o.proto = np
-    o.has_proto = true
+    let (done, de) = js.proto_set(it, o, v)
+    if de != ok { ret de }
+    if !done { ret js.throw_type(it, "Cannot set the prototype of this object") }
     ret ok
 }
 
@@ -584,7 +569,8 @@ fn lookup_accessor(it: *js.Interp, this_val: js.Value, key_arg: js.Value, want_g
     var guard = 0u32
     while guard < 100000u32 {
         guard += 1u32
-        let (p, found) = js.get_own(it, cur, k)
+        let (p, found, ge) = js.get_own_e(it, cur, k)
+        if ge != ok { ret (js.undefv(), ge) }
         if found {
             if (p.flags & js.P_ACCESSOR) == 0u8 { ret (js.undefv(), ok) }
             if want_getter {
@@ -594,8 +580,10 @@ fn lookup_accessor(it: *js.Interp, this_val: js.Value, key_arg: js.Value, want_g
             if p.setter == js.null_obj() { ret (js.undefv(), ok) }
             ret (js.obj_value(p.setter), ok)
         }
-        if !cur.has_proto { break }
-        cur = cur.proto
+        let (pv, pe) = js.proto_get(it, cur)
+        if pe != ok { ret (js.undefv(), pe) }
+        if !js.is_object(pv) { break }
+        cur = js.as_object(pv)
     }
     ret (js.undefv(), ok)
 }
@@ -761,7 +749,8 @@ fn function_proto_has_instance(it: *js.Interp, this_val: js.Value, args: []const
 
 fn function_proto_noop(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (js.undefv(), ok) }
 
-fn function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+// CreateDynamicFunction: `kind` 0 function, 1 generator, 2 async function, 3 async generator.
+fn dynamic_function(it: *js.Interp, args: []const js.Value, kind: u8) -> (js.Value, err) {
     // new Function(p1, p2, ..., body)
     var params = ""
     var body = ""
@@ -778,14 +767,90 @@ fn function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
         if be != ok { ret (js.undefv(), be) }
         body = b
     }
-    let src = js.str_concat(it, js.str_concat(it, js.str_concat(it, js.str_concat(it, "(function anonymous(", params), "\n) {\n"), body), "\n})")
+    var prefix = "(function anonymous("
+    var fallback = it.protos.function
+    if kind == 1u8 {
+        prefix = "(function* anonymous("
+        fallback = it.protos.gen_function
+    } else if kind == 2u8 {
+        prefix = "(async function anonymous("
+        fallback = it.protos.async_function
+    } else if kind == 3u8 {
+        prefix = "(async function* anonymous("
+        fallback = it.protos.async_gen_function
+    }
+    let src = js.str_concat(it, js.str_concat(it, js.str_concat(it, js.str_concat(it, prefix, params), "\n) {\n"), body), "\n})")
+    // Taking the prototype from new.target happens before the code is compiled.
+    var proto = fallback
+    var custom = false
+    if it.has_new_target {
+        let nto = js.as_object(it.new_target)
+        let (pv, pe) = js.proto_value_of(it, nto, fallback)
+        if pe != ok { ret (js.undefv(), pe) }
+        proto = pv
+        custom = true
+    }
     let (v, e) = js.eval_source(it, src)
+    if e != ok { ret (js.undefv(), e) }
+    if custom && js.is_object(v) {
+        let fo = js.as_object(v)
+        fo.proto = proto
+        fo.has_proto = true
+    }
+    ret (v, ok)
+}
+
+fn function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (v, e) = dynamic_function(it, args, 0u8)
     ret (v, e)
+}
+
+fn generator_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (v, e) = dynamic_function(it, args, 1u8)
+    ret (v, e)
+}
+
+fn async_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (v, e) = dynamic_function(it, args, 2u8)
+    ret (v, e)
+}
+
+fn async_generator_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (v, e) = dynamic_function(it, args, 3u8)
+    ret (v, e)
+}
+
+// %GeneratorFunction%, %AsyncFunction% and %AsyncGeneratorFunction%: not globals, reached through the prototypes' `constructor`.
+fn install_function_kinds(it: *js.Interp) {
+    var kind = 1u8
+    while kind <= 3u8 {
+        var name = "GeneratorFunction"
+        var native: js.NativeFn = generator_function_ctor
+        var proto = it.protos.gen_function
+        if kind == 2u8 {
+            name = "AsyncFunction"
+            native = async_function_ctor
+            proto = it.protos.async_function
+        } else if kind == 3u8 {
+            name = "AsyncGeneratorFunction"
+            native = async_generator_function_ctor
+            proto = it.protos.async_gen_function
+        }
+        let c = js.make_native(it, name, 1u32, native)
+        c.ctor_kind = js.K_BASE
+        // The constructors themselves inherit from %Function%.
+        c.proto = it.function_ctor
+        c.has_proto = true
+        let e1 = js.define_data(it, c, js.key_of("prototype"), js.obj_value(proto), 0u8)
+        let e2 = js.define_data(it, proto, js.key_of("constructor"), js.obj_value(c), js.P_CONFIGURABLE)
+        kind += 1u8
+    }
 }
 
 fn install_function(it: *js.Interp) {
     let proto = it.protos.function
     let ctor = make_ctor(it, "Function", 1u32, function_ctor, proto)
+    it.function_ctor = ctor
     js.add_method(it, proto, "call", 1u32, function_proto_call)
     js.add_method(it, proto, "apply", 2u32, function_proto_apply)
     js.add_method(it, proto, "bind", 1u32, function_proto_bind)
@@ -1177,6 +1242,7 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     b_number.install_math(it)
     b_json.install_json(it)
     b_control.install_generators(it)
+    install_function_kinds(it)
     b_control.install_promise(it)
     b_control.install_reflect(it)
     b_collections.install_map(it)

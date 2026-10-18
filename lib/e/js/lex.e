@@ -251,14 +251,8 @@ fn put_unit(b: *str.Builder, src: str, c: i64, after: usize) -> usize {
             if lo >= 56320i64 && lo <= 57343i64 {
                 cp = 65536i64 + (c - 55296i64) * 1024i64 + (lo - 56320i64)
                 end = lo_end
-            } else {
-                cp = 65533i64
             }
-        } else {
-            cp = 65533i64
         }
-    } else if c >= 56320i64 && c <= 57343i64 {
-        cp = 65533i64
     }
     put_cp(b, u32(cp))
     ret end
@@ -341,7 +335,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
             t.big = true
             at += 1usize
         }
-        if at < src.len && is_id_part(src[at]) { ret fail(lx, "identifier directly after number") }
+        if at < src.len && id_part_at(src, at) { ret fail(lx, "identifier directly after number") }
         lx.pos = at
         t.end = at
         ret ok
@@ -366,7 +360,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
             lx.pos = k
             t.end = k
             if k < src.len && (src[k] == 95u8 || src[k] == 110u8) { ret fail(lx, "legacy octal literals cannot have separators or be BigInts") }
-            if k < src.len && is_id_part(src[k]) { ret fail(lx, "identifier directly after number") }
+            if k < src.len && id_part_at(src, k) { ret fail(lx, "identifier directly after number") }
             ret ok
         }
     }
@@ -440,7 +434,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
     }
     t.num = v3
     t.big = is_big
-    if at < src.len && is_id_part(src[at]) { ret fail(lx, "identifier directly after number") }
+    if at < src.len && id_part_at(src, at) { ret fail(lx, "identifier directly after number") }
     lx.pos = at
     t.end = at
     ret ok

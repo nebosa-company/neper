@@ -42,6 +42,7 @@ fn uri_encode(it: *js.Interp, s: str, unescaped_extra: str) -> (str, err) {
             i += 1usize
             continue
         }
+        if c == 237u8 && i + 1usize < s.len && s[i + 1usize] >= 160u8 { ret ("", js.throw_value(it, js.make_error(it, it.protos.uri_error, "URI malformed"))) }
         // A character is percent-encoded byte by byte over its UTF-8 form.
         var n = 1usize
         if c >= 192u8 { n = 2usize }
@@ -455,6 +456,11 @@ fn string_is_well_formed(it: *js.Interp, this_val: js.Value, args: []const js.Va
     if js.is_nullish(this_val) { ret (js.undefv(), js.throw_type(it, "String.prototype.isWellFormed called on null or undefined")) }
     let (s, se) = js.to_string(it, this_val)
     if se != ok { ret (js.undefv(), se) }
+    var i = 0usize
+    while i + 1usize < s.len {
+        if s[i] == 237u8 && s[i + 1usize] >= 160u8 { ret (js.bool_value(false), ok) }
+        i += 1usize
+    }
     ret (js.bool_value(true), ok)
 }
 
@@ -462,7 +468,20 @@ fn string_to_well_formed(it: *js.Interp, this_val: js.Value, args: []const js.Va
     if js.is_nullish(this_val) { ret (js.undefv(), js.throw_type(it, "String.prototype.toWellFormed called on null or undefined")) }
     let (s, se) = js.to_string(it, this_val)
     if se != ok { ret (js.undefv(), se) }
-    ret (js.str_value(s), ok)
+    let (b, be) = str.builder(it.a, s.len + 4usize)
+    if be != ok { ret (js.str_value(s), ok) }
+    var out = b
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 237u8 && i + 2usize < s.len && s[i + 1usize] >= 160u8 {
+            js.put_cp(&out, 65533u32)
+            i += 3usize
+        } else {
+            let pb = str.push_byte(&out, s[i])
+            i += 1usize
+        }
+    }
+    ret (js.str_value(str.done(&out)), ok)
 }
 
 fn install_misc(it: *js.Interp) {

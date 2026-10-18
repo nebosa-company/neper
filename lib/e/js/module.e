@@ -140,6 +140,11 @@ fn collect(it: *js.Interp, m: *Module) -> err {
             }
             continue
         }
+        // `export ... from` requests a module too: the requests keep their order of appearance across imports and re-exports.
+        if sn.kind == ast.N_EXPORT && (sn.op == ast.X_STAR || sn.op == ast.X_STAR_AS || (sn.op == ast.X_LIST && sn.c == 1u32)) {
+            let (rq0, rqe0) = add_request(it, m, sn.text)
+            if rqe0 != ok { ret js.throw_range(it, "out of memory") }
+        }
         var inner = sid
         if sn.kind == ast.N_EXPORT && (sn.op == ast.X_DECL || sn.op == ast.X_DEFAULT_DECL) { inner = sn.a }
         let ik = prog.nodes[usize(inner)].kind

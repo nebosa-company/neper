@@ -402,6 +402,16 @@ fn quote(it: *js.Interp, s: str) -> str {
             let hex = "0123456789abcdef"
             let a9 = str.push_byte(&out, hex[usize(c >> 4u8)])
             let a10 = str.push_byte(&out, hex[usize(c & 15u8)])
+        } else if c == 237u8 && i + 2usize < s.len && s[i + 1usize] >= 160u8 {
+            let u = (u32(s[i + 1usize] & 15u8) << 6u32) | u32(s[i + 2usize] & 63u8) | 55296u32 | (u32(s[i + 1usize] & 16u8) << 6u32)
+            let hex2 = "0123456789abcdef"
+            let a12 = str.push(&out, "\\u")
+            let a13 = str.push_byte(&out, hex2[usize((u >> 12u32) & 15u32)])
+            let a14 = str.push_byte(&out, hex2[usize((u >> 8u32) & 15u32)])
+            let a15 = str.push_byte(&out, hex2[usize((u >> 4u32) & 15u32)])
+            let a16 = str.push_byte(&out, hex2[usize(u & 15u32)])
+            i += 3usize
+            continue
         } else {
             let a11 = str.push_byte(&out, c)
         }

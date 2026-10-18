@@ -1516,7 +1516,7 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
         var accessor = 0u8
         if (is_k(p, "get") || is_k(p, "set")) && !is_async && !is_gen {
             let nx3 = try peek(p)
-            if !(nx3.kind == lex.T_PUNCT && (str.eq(nx3.text, "(") || str.eq(nx3.text, "=") || str.eq(nx3.text, ";") || str.eq(nx3.text, "}"))) {
+            if !(nx3.kind == lex.T_PUNCT && (str.eq(nx3.text, "(") || str.eq(nx3.text, "=") || str.eq(nx3.text, ";") || str.eq(nx3.text, "}") || (nx3.nl && str.eq(nx3.text, "*")))) {
                 if is_k(p, "get") { accessor = 1u8 } else { accessor = 2u8 }
                 try adv(p)
             }

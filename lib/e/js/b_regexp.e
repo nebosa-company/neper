@@ -71,7 +71,7 @@ fn from_units(it: *js.Interp, units: []const u16, from: usize, to: usize) -> str
                 continue
             }
         }
-        if u >= 55296u32 && u <= 57343u32 { js.put_cp(&out, 65533u32) } else { js.put_cp(&out, u) }
+        js.put_cp(&out, u)
         i += 1usize
     }
     ret str.done(&out)
