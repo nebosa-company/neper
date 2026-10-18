@@ -18,6 +18,8 @@ use e.ui.style
 use e.ui.gridlook as gl
 use e.ui.looks
 use e.ui.widget
+use e.ui.wintile
+use e.ui.wintreeicon
 
 type Flags = struct { checked: bool, expanded: bool, part: usize }
 var flags: Flags = zero
@@ -212,6 +214,17 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
         let (date, date_error) = control.text(a, 0u64, child_date(usize(node - 200u64)), t, date_options)
         if date_error != ok { ret date_error }
         *out = widget.padded(0u64, date_pad, 0.0, 0.0, 0.0, style.defaults(), one_of(a, date))
+        ret ok
+    }
+    // v3's edition pictures sit in the ES column of the Windows light list (e.ui.wintreeicon)
+    if node >= 200u64 && column == 1usize && t.tokens.profile == .Windows && t.tokens.palette != .Dark && usize(node - 200u64) < wintreeicon.count() {
+        let k = usize(node - 200u64)
+        let atlas = wintreeicon.atlas()
+        let (tile, tile_error) = wintile.tile_node(a, wintreeicon.w(), wintreeicon.h(), atlas[k * 352usize..k * 352usize + 352usize])
+        if tile_error != ok { ret tile_error }
+        var held = style.defaults()
+        held.margin = style.EdgeLengths { left: style.Length { Px: -2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        *out = widget.padded(0u64, 0.0, 0.0, 0.0, 0.0, held, one_of(a, tile))
         ret ok
     }
     if column != 2usize {

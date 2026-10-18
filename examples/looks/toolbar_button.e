@@ -15,9 +15,9 @@ use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn glyph(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: widget.Key, kind: control.GlyphKind, label: str, enabled: bool, checked: bool, along: f32) -> (widget.Node, err) {
+fn glyph(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: widget.Key, kind: control.GlyphKind, label: str, enabled: bool, checked: bool, along: f32, art: usize) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
-        let (flat, flat_error) = control.windows_glyph_toggle_at(a, key, t, kind, label, action, enabled, checked, along)
+        let (flat, flat_error) = control.windows_glyph_toggle_art(a, key, t, kind, label, action, enabled, checked, along, art)
         ret (flat, flat_error)
     }
     let (round, round_error) = control.glyph_toggle(a, key, t, kind, label, action, 32.0, 18.0, checked)
@@ -27,7 +27,7 @@ fn glyph(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, k
 // One bar of `buttons` (a group of the sizes in `groups` between separators), `width` wide;
 // under Windows a closed dxBar strip as v3 draws it, elsewhere a plain row.
 // `mask` has a 1 for each enabled button; `bar_x` is the bar's x in the row (the greys of a hot box drift along the window).
-fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, groups: []const usize, width: f32, lead: u32, mask: str, first_rule: usize, bar_x: f32) -> (widget.Node, err) {
+fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, groups: []const usize, width: f32, lead: u32, mask: str, first_rule: usize, bar_x: f32, art: usize, hot_art: bool) -> (widget.Node, err) {
     let kinds = [9]control.GlyphKind{ .Add, .Edit, .Search, .Filter, .Settings, .Refresh, .ArrowUp, .ArrowDown, .Check }
     let (nodes, nodes_error) = mem.alloc[widget.Node](a, 16usize)
     if nodes_error != ok { ret (zero, nodes_error) }
@@ -47,7 +47,12 @@ fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, b
         var j = 0usize
         while j < groups[g] {
             let along = 8.0 + bar_x + 11.0 + 23.0 * f32(b) + 6.0 * f32(g)
-            let (button, button_error) = glyph(a, t, action, base + u64(b), kinds[b % 9usize], "Tool", b < mask.len && mask[b] == 49u8, false, along)
+            var pic = 1000usize
+            if art < 1000usize {
+                pic = art + b
+                if hot_art && (pic == 14usize || pic == 15usize) { pic += 11usize }
+            }
+            let (button, button_error) = glyph(a, t, action, base + u64(b), kinds[b % 9usize], "Tool", b < mask.len && mask[b] == 49u8, false, along, pic)
             if button_error != ok { ret (zero, button_error) }
             nodes[n] = button
             n += 1usize
@@ -68,12 +73,12 @@ fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, b
 
 // The two bars at the left of v3's second toolbar row (the buttons disabled, as captured):
 // 2 + 2 + 1 + 3 buttons, then 4 + 2 + 3.
-fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, enabled: bool, full: bool) -> (widget.Node, err) {
+fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, base: widget.Key, enabled: bool, full: bool, hot_art: bool) -> (widget.Node, err) {
     let first = [4]usize{ 2usize, 2usize, 1usize, 3usize }
     let second = [3]usize{ 4usize, 2usize, 3usize }
     if t.tokens.profile != .Windows {
         // the Neper look keeps its round glyph buttons in one row, no separators
-        let (plain, plain_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, "111111111", 0usize, 0.0)
+        let (plain, plain_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, "111111111", 0usize, 0.0, 1000usize, false)
         ret (plain, plain_error)
     }
     // Standard: all disabled; Cards: the last three enabled (the first six are greyed, as captured)
@@ -83,9 +88,9 @@ fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, ba
         left_mask = "111111111"
         right_mask = "111111111"
     }
-    let (left, left_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, left_mask, 0usize, 0.0)
+    let (left, left_error) = strip(a, t, action, base, first[0usize..4usize], 215.0, 16777215u32, left_mask, 0usize, 0.0, 0usize, hot_art)
     if left_error != ok { ret (zero, left_error) }
-    let (right, right_error) = strip(a, t, action, base + 20u64, second[0usize..3usize], 232.0, 15987699u32, right_mask, 3usize, 215.0)
+    let (right, right_error) = strip(a, t, action, base + 20u64, second[0usize..3usize], 232.0, 15987699u32, right_mask, 3usize, 215.0, 8usize, hot_art)
     if right_error != ok { ret (zero, right_error) }
     let (both, both_error) = mem.alloc[widget.Node](a, 4usize)
     if both_error != ok { ret (zero, both_error) }
@@ -95,9 +100,9 @@ fn bars(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, ba
     // Search (6 buttons) and Help (2), at the right of those two in v3's row: enabled in the capture, the pictures stand-ins.
     let third = [1]usize{ 6usize }
     let fourth = [1]usize{ 2usize }
-    let (search, search_error) = strip(a, t, action, base + 40u64, third[0usize..1usize], 151.0, 15132390u32, "111000", 0usize, 447.0)
+    let (search, search_error) = strip(a, t, action, base + 40u64, third[0usize..1usize], 151.0, 15132390u32, "111000", 0usize, 447.0, 17usize, hot_art)
     if search_error != ok { ret (zero, search_error) }
-    let (help, help_error) = strip(a, t, action, base + 60u64, fourth[0usize..1usize], 59.0, 14540253u32, "11", 0usize, 598.0)
+    let (help, help_error) = strip(a, t, action, base + 60u64, fourth[0usize..1usize], 59.0, 14540253u32, "11", 0usize, 598.0, 23usize, hot_art)
     if help_error != ok { ret (zero, help_error) }
     both[2usize] = search
     both[3usize] = help
@@ -111,7 +116,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     let action = &actions[0usize]
-    let (bar, bar_error) = bars(a, t, action, 100u64, false, false)
+    let (bar, bar_error) = bars(a, t, action, 100u64, false, false, false)
     if bar_error != ok { ret (0usize, bar_error) }
     cells[0usize] = looks.Cell { caption: "Bars (Windows: v3 second toolbar row, disabled as captured)", node: bar, drive: .None }
     let captions = [9]str{ "Rest", "Hover", "Pressed", "Focus", "Checked", "Disabled", "Caption", "Caption hover", "Caption disabled" }
@@ -120,7 +125,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var node: widget.Node = zero
         var node_error: err = ok
         if i < 6usize {
-            let (g, g_error) = glyph(a, t, action, 200u64 + u64(i), .Search, "Search", i != 5usize, i == 4usize, 466.0)
+            let (g, g_error) = glyph(a, t, action, 200u64 + u64(i), .Search, "Search", i != 5usize, i == 4usize, 466.0, 1000usize)
             node = g
             node_error = g_error
         } else if t.tokens.profile == .Windows {
@@ -160,7 +165,7 @@ fn build_hot(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
     let xs = [9]f32{ 384.0, 407.0, 466.0, 489.0, 512.0, 617.0, 640.0, 466.0, 512.0 }
     var i = 0usize
     while i < 9usize {
-        let (row, row_error) = bars(a, t, &actions[0usize], 1000u64 * u64(i + 1usize), false, true)
+        let (row, row_error) = bars(a, t, &actions[0usize], 1000u64 * u64(i + 1usize), false, true, true)
         if row_error != ok { ret (0usize, row_error) }
         let dx = 657.0 - (xs[i] - 8.0) - 11.0
         let (shown, shown_error) = placed(a, row, dx, 1314.0, 26.0)
@@ -178,7 +183,7 @@ fn build_row(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
-    let (bar, bar_error) = bars(a, t, &actions[0usize], 100u64, false, true)
+    let (bar, bar_error) = bars(a, t, &actions[0usize], 100u64, false, true, false)
     if bar_error != ok { ret (0usize, bar_error) }
     cells[0usize] = looks.Cell { caption: "Toolbar row (Standard, Cards, Search, Help)", node: bar, drive: .None }
     ret (1usize, ok)

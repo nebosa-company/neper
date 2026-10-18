@@ -37,6 +37,8 @@ use e.ui.winedit
 use e.ui.winmark
 use e.ui.winnative
 use e.ui.wintile
+use e.ui.winpageicon
+use e.ui.wintoolicon
 use e.ui.winpx
 
 // What a page is set in: the theme's tokens, the fonts in preference order, the
@@ -7108,6 +7110,13 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
         if veil_error != ok { ret (zero, veil_error) }
         stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
+        layers_at += 1usize
+    }
+    if dark_bar {
+        // the themed bar belongs to DarkMode_Explorer, whose frame is white (edit-multiline-explorer)
+        let (rimmed, rimmed_error) = win_explorer_frame(a, w + 1.0, h)
+        if rimmed_error != ok { ret (zero, rimmed_error) }
+        stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, rimmed))
         layers_at += 1usize
     }
     if dark_bar {
@@ -16261,6 +16270,12 @@ fn windows_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: G
 
 // The same for a button at x `along` of v3's 800 px window (the greys of the box drift along it).
 fn windows_glyph_toggle_at(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool, along: f32) -> (widget.Node, err) {
+    let (node, node_error) = windows_glyph_toggle_art(a, key, t, kind, label, action, enabled, checked, along, 1000usize)
+    ret (node, node_error)
+}
+
+// The same with v3's own picture `art` (a tile of e.ui.wintoolicon; 1000 = none, the drawn glyph) in the Windows light look.
+fn windows_glyph_toggle_art(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, enabled: bool, checked: bool, along: f32, art: usize) -> (widget.Node, err) {
     style.windows_dark_enter(t.tokens)
     let state = control_state(t, key, enabled, checked)
     var look = windows_bar_look(state, style.hex(4210752u32))
@@ -16269,8 +16284,20 @@ fn windows_glyph_toggle_at(a: *mem.Arena, key: widget.Key, t: *const Theme, kind
     var ink = look.foreground
     if !enabled { ink = style.hex(13158600u32) }
     if !enabled && style.windows_dark_on() { ink = style.hex_raw(0x6B6B6Bu32) }
-    let (mark, mark_error) = icon_square(a, ink, kind, 16.0)
-    if mark_error != ok { ret (zero, mark_error) }
+    var mark: widget.Node = zero
+    if art < 1000usize && !style.windows_dark_on() {
+        let atlas = wintoolicon.atlas()
+        let (tile, tile_error) = wintile.tile_node(a, 16usize, 17usize, atlas[art * 272usize..art * 272usize + 272usize])
+        if tile_error != ok { ret (zero, tile_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, held_error) }
+        held[0usize] = tile
+        mark = widget.padded(0u64, f32(wintoolicon.dx(art)), 0.0, 0.0, 0.0, sized_style(16.0, 16.0), held[0usize..1usize])
+    } else {
+        let (glyph_mark, glyph_error) = icon_square(a, ink, kind, 16.0)
+        if glyph_error != ok { ret (zero, glyph_error) }
+        mark = glyph_mark
+    }
     var content = mark
     let boxed = enabled && !state.selected && (state.hovered || state.pressed) && !style.windows_dark_on()
     if enabled && state.pressed && style.windows_dark_on() {
@@ -18400,6 +18427,14 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
         let (picture, picture_error) = icon_square(a, ink, picture_kind, 16.0)
         if picture_error != ok { ret (zero, picture_error) }
         row_parts[0usize] = picture
+        // v3's own bitmap of the tab (e.ui.winpageicon), in the light look only
+        let art = winpageicon.find(plain_label)
+        if art < 1000usize && !win_dark(t) {
+            let atlas = winpageicon.atlas()
+            let (tile, tile_error) = wintile.tile_node(a, 16usize, 16usize, atlas[art * 256usize..art * 256usize + 256usize])
+            if tile_error != ok { ret (zero, tile_error) }
+            row_parts[0usize] = tile
+        }
         row_parts[1usize] = said
         count = 2usize
         h = 22.0
@@ -21902,7 +21937,7 @@ fn win_native_balloon(a: *mem.Arena, key: widget.Key, t: *const Theme, title: st
     layers[0usize] = chrome
     layers[1usize] = widget.positioned(0u64, 12.0, 30.0, style.defaults(), widget_one_of(a, disc))
     layers[2usize] = widget.positioned(0u64, 33.0, 28.0, style.defaults(), widget_one_of(a, head_node))
-    layers[3usize] = widget.positioned(0u64, 33.0, 49.0, style.defaults(), widget_one_of(a, body_node))
+    layers[3usize] = widget.positioned(0u64, 33.0, 48.0, style.defaults(), widget_one_of(a, body_node))
     ret (widget.stack(key, sized_style(159.0, 74.0), layers[0usize..4usize]), ok)
 }
 
@@ -22300,6 +22335,48 @@ fn win_dark_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err
     ret win3_rect(b, area.x + 8.0, top + long - 1.0, 2.0, 1.0, style.hex_raw(0x858585u32))
 
 }
+// ---- round 22: the DarkMode_Explorer edit frame (edit-multiline-explorer): a two row white rim with rounded corners and a grey foot ---
+// Rows from the top: #ECECEC then #FEFEFE (corners #5D5D5D #D6D6D6 / #DCDCDC #FAFAFA); at the foot #FEFEFE (corners #DFDFDF #DDDDDD) then #838383
+// (corners #696969 #8C8C8C); the left columns #ECECEC and #FEFEFE, the right ones #F7F7F7 and #E6E6E6.
+fn win_explorer_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    try win3_rect(b, x + 2.0, y, w - 4.0, 1.0, style.hex_raw(0xECECECu32))
+    try win3_rect(b, x + 2.0, y + 1.0, w - 4.0, 1.0, style.hex_raw(0xFEFEFEu32))
+    try win3_rect(b, x, y + 2.0, 1.0, h - 4.0, style.hex_raw(0xECECECu32))
+    try win3_rect(b, x + 1.0, y + 2.0, 1.0, h - 4.0, style.hex_raw(0xFEFEFEu32))
+    try win3_rect(b, x + w - 2.0, y + 2.0, 1.0, h - 4.0, style.hex_raw(0xF7F7F7u32))
+    try win3_rect(b, x + w - 1.0, y + 2.0, 1.0, h - 4.0, style.hex_raw(0xE6E6E6u32))
+    try win3_rect(b, x + 2.0, y + h - 2.0, w - 4.0, 1.0, style.hex_raw(0xFEFEFEu32))
+    try win3_rect(b, x + 2.0, y + h - 1.0, w - 4.0, 1.0, style.hex_raw(0x838383u32))
+    try win3_rect(b, x, y, 1.0, 1.0, style.hex_raw(0x5D5D5Du32))
+    try win3_rect(b, x + 1.0, y, 1.0, 1.0, style.hex_raw(0xD6D6D6u32))
+    try win3_rect(b, x, y + 1.0, 1.0, 1.0, style.hex_raw(0xDCDCDCu32))
+    try win3_rect(b, x + 1.0, y + 1.0, 1.0, 1.0, style.hex_raw(0xFAFAFAu32))
+    try win3_rect(b, x + w - 2.0, y, 1.0, 1.0, style.hex_raw(0xD0D0D0u32))
+    try win3_rect(b, x + w - 1.0, y, 1.0, 1.0, style.hex_raw(0x5B5B5Bu32))
+    try win3_rect(b, x + w - 2.0, y + 1.0, 1.0, 1.0, style.hex_raw(0xF3F3F3u32))
+    try win3_rect(b, x + w - 1.0, y + 1.0, 1.0, 1.0, style.hex_raw(0xD6D6D6u32))
+    try win3_rect(b, x, y + h - 2.0, 1.0, 1.0, style.hex_raw(0xDFDFDFu32))
+    try win3_rect(b, x + 1.0, y + h - 2.0, 1.0, 1.0, style.hex_raw(0xDDDDDDu32))
+    try win3_rect(b, x, y + h - 1.0, 1.0, 1.0, style.hex_raw(0x696969u32))
+    try win3_rect(b, x + 1.0, y + h - 1.0, 1.0, 1.0, style.hex_raw(0x8C8C8Cu32))
+    try win3_rect(b, x + w - 2.0, y + h - 2.0, 1.0, 1.0, style.hex_raw(0xDDDDDDu32))
+    try win3_rect(b, x + w - 1.0, y + h - 2.0, 1.0, 1.0, style.hex_raw(0xDADADAu32))
+    try win3_rect(b, x + w - 2.0, y + h - 1.0, 1.0, 1.0, style.hex_raw(0x8C8C8Cu32))
+    ret win3_rect(b, x + w - 1.0, y + h - 1.0, 1.0, 1.0, style.hex_raw(0x696969u32))
+}
+
+fn win_explorer_frame(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[WinDarkBar](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = WinDarkBar { first: 0u32, rows: 0u32, lines: 1u32 }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_explorer_frame_paint, state: widget.bytes_of[WinDarkBar](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
+}
+
 // ---- round 15, w2: the Card Art check list's two v3 icons (a folder, a hand), the live capture's 16 x 16 pixels as RRGGBB --------
 fn check_art_icon(first: bool) -> str {
     if first { ret "FFFFFFF4E6CAEFD9AFEED8ACEED8ACEED8ACEDD7A9E8CB91EDE0C1E4DEC58DCACE72BDCAD7CCA2F1DFBAFDFAF5FFFFFFFFFFFFE9CF9AF3DC98F5DF9AF4DF9AF4DF9AF1DA95E5C583F3E5B6F3EEC3C2E4C8B3DCC6EAE0A3E8CA8AFBF5EBFFFFFFFFFFFFE5C88DF9E7A2FCEBA6FCEAA5FCEAA5FAE9A4F0DA95E8CD89E9CE8AEACF8BEACF8BEAD08CE2C17BFAF4E8FFFFFFFFFFFFE3C68BF3DD97F2DA95F2D995F5DE98F8E39EF9E5A0F1DB95F0D893F0D893F0D893F0DA95E1C07AF9F4E8FFFFFFFFFEFEE1C488E5C783EED18CF3D892F5DB95F7DE98F7DF99F7E29CF7E39CF7E39CF7E39CF9E7A1E0C07AF9F3E7FFFFFFF8F2E6E0C182E9CA84DDBD78CBAC66C9A964D8B973EFD48EF3DA93F4DC94F4DC94F4DC94F7E19ADDBD76F8F3E7FFFFFFEAD8B4E8C784E0BF78C6B07ECBC0A5CCC4ACC3B186D7BA77EED28BF0D68EF1D78FF1D78FF4DC95DAB972F8F2E6FFFFFFDEC38FF3D18DD0AD67C3C1B2CAD8E4CCDCEAC7CCCAC7AA6EEBCD85EBCD85EDD188EED289F2D790D7B56EF7F1E6FFFFFFD8BC83F5D38FD3AF68C9CFCED3E1F0D5E3F2D1DDE8CCB075EBCB83E3C47CEACB82ECCD84F0D38BD4B16AF7F1E5FFFFFFDAC290EDCB87E0BD74D7CCB1E4E8EAE7EEF3DDD8C7DBBC7BE7C67EDCBB74E7C77DE9C97FEECF86D0AD66F6F0E4FFFFFFE0CEAAE0BE7BEFCD85E6C88AE5CFA0E5D1A5E4C88EE8C67FD3B26BDAB971E9C77EEBCA80EFCE85C7A45CF4EEE2FFFFFFD4BA87ECCA87E3C07BE3C07BEECC87F0CE89E5C27CCEAB66B7944FBC9A54C29F59C3A05AC4A15BBFA063F4EFE5FFFFFFE6C582DDBA75D4BA87C9AD75C5A565C5A463C7A96FCFBA8FDDCEB2DFD2B8DFD2B8DFD2B8DFD2B8E6DCC7FBF9F6FFFFFFDBB874D0BA8FE9E1D0E6DDCBDFD3BCDED2BAE3D9C5F1ECE2FDFCFBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBDA677D2CBBFE6E6E4ECECECEFEFEFF3F3F3F6F6F6F9F9F9FBFBFBFDFDFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE3DDD1EEEDECF2F2F2F3F3F3F5F5F5F8F8F8F9F9F9FBFBFBFDFDFDFEFEFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" }
