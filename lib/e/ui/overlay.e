@@ -106,6 +106,17 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (label_node, label_error) = control.colored_text(a, 0u64, text, t, caption, ink)
     if label_error != ok { ret (zero, label_error) }
     parts[0usize] = label_node
+    if linux {
+        // GTK's label is a whole number of pixels wide (hinted advances), so the tooltip's edges fall on pixel columns
+        let (wide, wide_error) = control.linux_label_width(a, t, caption, text)
+        if wide_error != ok { ret (zero, wide_error) }
+        var held = style.defaults()
+        held.width = style.Length { Px: wide }
+        let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
+        if boxed_error != ok { ret (zero, TooLarge) }
+        boxed[0usize] = label_node
+        parts[0usize] = widget.box(0u64, held, boxed[0usize..1usize])
+    }
     var n = 1usize
     if shortcut.len > 0usize {
         caption.wrap = .None
@@ -643,52 +654,72 @@ fn context_menu_touch_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
 // GtkPopoverMenu in libadwaita 1.5: `popover.menu > contents` in the popover colour (#ffffff, #383838), 12 px corners and 6 px
 // round 32 high rows (6 px corners, 12 px sides) whose wash is the text colour at 10 % (19 % pressed); a section break is a 1 px
 // line (#e1e1e1, #565656) with 6 px above and below; the accelerator is the text colour at 55 %, 12 px after the label; a
-// disabled row is the whole row at 50 %. The soft shadow under the surface is drawn by `linux_menu_shadow`.
+// disabled row is the whole row at 50 %. The soft shadow round the surface is drawn by `linux_menu_shadow` (e.ui.linuxshadow_l2, fitted).
 fn linux_menu_rule(t: *const control.Theme) -> paint.Color {
     if t.tokens.palette == .Dark { ret style.hex_raw(0x565656u32) }
     ret style.hex_raw(0xE1E1E1u32)
 }
 
-// The popover's shadow as measured on the library's own render: alpha per pixel of distance outside the edge (1 to 15), the same
-// on every side but for the whole shadow standing one pixel lower.
-type LinuxShadow = struct { arena: *mem.Arena }
-
-fn linux_shadow_alpha(d: usize) -> f32 {
-    let profile = [16]f32{ 0.0, 35.0, 23.0, 15.0, 9.0, 7.0, 5.0, 4.0, 4.0, 3.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0 }
-    if d >= 16usize { ret 0.0 }
-    ret profile[d] / 255.0
+// A node as big as the panel it sits under (it fills its stack) that paints the shadow round it.
+fn linux_menu_shadow(a: *mem.Arena, key: widget.Key, across: f32, down: f32) -> (widget.Node, err) {
+    let (made, made_error) = linuxshadow.menu_node(a, across, down)
+    if made_error != ok { ret (zero, made_error) }
+    var node = made
+    node.key = key
+    node.style.position = .Absolute
+    ret (node, ok)
 }
 
-fn linux_shadow_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+// Round 22 (lc): the arrow of a popover opened from a button (GTK's popover arrow). A 45 degree triangle 26 wide and 13 high on the
+// surface's top edge whose centre is `linux_arrow_x` from the surface's left (below 0: no arrow), a 1 px rim (the face at 86 %) on its two
+// slanted sides and the face inside; set with `linux_menu_arrow_at` before the menu is built.
+var linux_arrow_x: f32 = zero
+var linux_arrow_on: bool = zero
+
+fn linux_menu_arrow_at(x: f32) {
+    linux_arrow_x = x
+    linux_arrow_on = x >= 0.0
+}
+
+type LinuxArrow = struct { arena: *mem.Arena, x: f32, face: paint.Color, rim: paint.Color }
+
+fn linux_arrow_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
 }
 
-fn linux_shadow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let shadow = mem.cast[*LinuxShadow](ctx)
-    // from the outermost ring in: each fill adds what the next one in leaves of the measured total
-    var e: usize = 15usize
-    while e >= 1usize {
-        var own = 1.0 - (1.0 - linux_shadow_alpha(e)) / (1.0 - linux_shadow_alpha(e + 1usize))
-        if own < 0.0 { own = 0.0 }
-        let grow = f32(e)
-        let rect = geometry.Rect { x: area.x - grow, y: area.y - grow + 1.0, width: area.width + 2.0 * grow, height: area.height + 2.0 * grow }
-        let (path, path_error) = widget.rounded_path(shadow.arena, rect, 12.0 + grow)
-        if path_error != ok { ret path_error }
-        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, own) } } })
-        e -= 1usize
-    }
-    ret ok
+fn linux_arrow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let arrow = mem.cast[*LinuxArrow](ctx)
+    let cx = area.x + arrow.x
+    let top = area.y - 13.0
+    let edge: f32 = 1.4142135
+    // the rim: the whole triangle; the face: the triangle one pixel inside, carried 2 px into the body so the seam is the face
+    let (rim_path, rim_error) = geometry.path_builder(arrow.arena, 4usize, 4usize)
+    if rim_error != ok { ret rim_error }
+    var rim = rim_path
+    try geometry.move_to(&rim, geometry.Point { x: cx, y: top })
+    try geometry.line_to(&rim, geometry.Point { x: cx + 12.0, y: area.y })
+    try geometry.line_to(&rim, geometry.Point { x: cx - 12.0, y: area.y })
+    try geometry.close_path(&rim)
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&rim), brush: paint.Brush { Solid: arrow.rim } } })
+    let (face_path, face_error) = geometry.path_builder(arrow.arena, 4usize, 4usize)
+    if face_error != ok { ret face_error }
+    var face = face_path
+    let run = 12.0 - edge
+    try geometry.move_to(&face, geometry.Point { x: cx, y: top + edge })
+    try geometry.line_to(&face, geometry.Point { x: cx + run + 2.0, y: area.y + 2.0 })
+    try geometry.line_to(&face, geometry.Point { x: cx - run - 2.0, y: area.y + 2.0 })
+    try geometry.close_path(&face)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&face), brush: paint.Brush { Solid: arrow.face } } })
 }
 
-// A node as big as the panel it sits under (it fills its stack) that paints the shadow round it.
-fn linux_menu_shadow(a: *mem.Arena, key: widget.Key, across: f32, down: f32) -> (widget.Node, err) {
-    let (shadows, shadows_error) = mem.alloc[LinuxShadow](a, 1usize)
-    if shadows_error != ok { ret (zero, TooLarge) }
-    shadows[0usize] = LinuxShadow { arena: a }
+fn linux_menu_arrow(a: *mem.Arena, across: f32, down: f32, face: paint.Color, rim: paint.Color) -> (widget.Node, err) {
+    let (arrows, arrows_error) = mem.alloc[LinuxArrow](a, 1usize)
+    if arrows_error != ok { ret (zero, TooLarge) }
+    arrows[0usize] = LinuxArrow { arena: a, x: linux_arrow_x, face: face, rim: rim }
     var fill = control.sized_style(across, down)
     fill.position = .Absolute
     var none: []const widget.Node = zero
-    ret (widget.Node { key: key, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&shadows[0usize]), measure: linux_shadow_measure, paint: linux_shadow_paint, state: widget.bytes_of[LinuxShadow](&shadows[0usize]) } }, style: fill, children: none }, ok)
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&arrows[0usize]), measure: linux_arrow_measure, paint: linux_arrow_paint, state: widget.bytes_of[LinuxArrow](&arrows[0usize]) } }, style: fill, children: none }, ok)
 }
 
 fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
@@ -725,7 +756,7 @@ fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, 
         if c.radio {
             var circle = control.sized_style(18.0, 18.0)
             circle.radius = 9.0
-            circle.border = style.Border { width: 1.0, color: control.with_alpha(ink, ink.alpha * 0.3 / 0.8) }
+            circle.border = style.Border { width: 1.0, color: control.with_alpha(ink, ink.alpha * 0.236 / 0.8) }
             let (dot, dot_error) = mem.alloc[widget.Node](a, 1usize)
             if dot_error != ok { ret (zero, TooLarge) }
             var count = 0usize
@@ -738,12 +769,12 @@ fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, 
             }
             mark = widget.aligned(0u64, .Center, .Center, circle, dot[0usize..count])
         } else if c.checked {
-            let (tick, tick_error) = control.icon_square(a, ink, .Check, 14.0)
+            let (tick, tick_error) = adwicon.icon(a, adwicon.object_select(), ink, 17.0)
             if tick_error != ok { ret (zero, tick_error) }
             mark = widget.aligned(0u64, .Center, .Center, control.sized_style(18.0, 18.0), control.widget_one_of(a, tick))
         }
         var slot_box = style.defaults()
-        slot_box.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
+        slot_box.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - 2.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
         parts[p] = widget.box(0u64, slot_box, control.widget_one_of(a, mark))
         p += 1usize
     }
@@ -770,9 +801,11 @@ fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, 
         p += 1usize
     }
     if has_submenu {
-        let (arrow, arrow_error) = control.icon_square(a, control.with_alpha(ink, ink.alpha * 0.3 / 0.8), .ChevronRight, 16.0)
+        let (arrow, arrow_error) = adwicon.icon(a, adwicon.go_next(), control.with_alpha(ink, ink.alpha * 0.25 / 0.8), 16.0)
         if arrow_error != ok { ret (zero, arrow_error) }
-        parts[p] = widget.padded(0u64, 6.0, 0.0, 0.0, 0.0, style.defaults(), control.widget_one_of(a, arrow))
+        // the capture's chevron sits 2 px right of and 1 px below the icon's own box
+        let seat = widget.positioned(0u64, 2.0, 1.0, style.defaults(), control.widget_one_of(a, arrow))
+        parts[p] = widget.padded(0u64, 6.0, 0.0, 0.0, 0.0, style.defaults(), control.widget_one_of(a, widget.stack(0u64, control.sized_style(16.0, 16.0), control.widget_one_of(a, seat))))
         p += 1usize
     }
     var line_style = style.defaults()
@@ -1116,6 +1149,8 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         caption.role = .Body
         caption.wrap = .None
         var across: f32 = 108.0
+        // the popover of a menu button is 133 wide in the capture whatever its rows ask for
+        if linux_arrow_on { across = 121.0 }
         var down: f32 = 12.0
         var m = 0usize
         while m < commands.len {
@@ -1147,11 +1182,19 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     if linux {
         let (shadow, shadow_error) = linux_menu_shadow(a, 0u64, linux_across, linux_down)
         if shadow_error != ok { ret (zero, shadow_error) }
-        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
         if layers_error != ok { ret (zero, TooLarge) }
         layers[0usize] = shadow
         layers[1usize] = column[0usize]
-        column[0usize] = widget.stack(0u64, control.sized_style(linux_across, linux_down), layers[0usize..2usize])
+        var layer_count = 2usize
+        if linux_arrow_on {
+            let face = style.color(t.tokens, .SurfaceBright)
+            let (pointer, pointer_error) = linux_menu_arrow(a, linux_across, linux_down, face, paint.rgba(face.red * 0.86, face.green * 0.86, face.blue * 0.86, 1.0))
+            if pointer_error != ok { ret (zero, pointer_error) }
+            layers[2usize] = pointer
+            layer_count = 3usize
+        }
+        column[0usize] = widget.stack(0u64, control.sized_style(linux_across, linux_down), layers[0usize..layer_count])
     }
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)

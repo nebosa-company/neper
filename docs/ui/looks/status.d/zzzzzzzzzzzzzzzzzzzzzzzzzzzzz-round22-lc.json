@@ -1,0 +1,272 @@
+{
+ "status_bar": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/status_bar.png",
+    "notes": "ROUND 22 (worker lc): The header bar's add, menu and window control icons are the adwaita symbolic icons (list-add, open-menu, window-minimize, -maximize, -close) through control.linux_glyph_square instead of Neper strokes. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). headerbar-subtitle 0 flat px off (was 41), actionbar 0 (was 14), both schemes; 2 antialiased px off by at most 5 levels in the close icon; max 1 level over every flat pixel.",
+    "gaps": [
+     "Progress items, glyph items, tones and pressable panels of the status bar are not captured; they keep the Material layout with these colours",
+     "The window controls are drawn by the sheet, not by window.e (which has its own 36 high Linux caption)"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/status_bar.png",
+    "notes": "ROUND 22 (worker lc): The header bar's add, menu and window control icons are the adwaita symbolic icons (list-add, open-menu, window-minimize, -maximize, -close) through control.linux_glyph_square instead of Neper strokes. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). headerbar-subtitle 0 flat px off (was 41), actionbar 0 (was 14), both schemes; 2 antialiased px off by at most 5 levels in the close icon; max 1 level over every flat pixel.",
+    "gaps": [
+     "Progress items, glyph items, tones and pressable panels of the status bar are not captured; they keep the Material layout with these colours",
+     "The window controls are drawn by the sheet, not by window.e (which has its own 36 high Linux caption)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/page_control.png",
+    "notes": "ROUND 22 (worker lc): Tab close mark and header icons are the adwaita symbolic icons, 4 px nearer the title as in the capture; the view switcher picture is the capture's small full colour missing-image drawing (50 coloured runs, 14 x 12 px, solved from the Light and Dark captures: the only small baked picture here), the chosen button 120 wide. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). notebook top and left 0, tab bar 0 (was 64), view switcher 0 (was 105) flat px off, Light and Dark; 2 antialiased px off.",
+    "gaps": [
+     "The tab bar's and view switcher's tab positions are passed in (lefts and widths measured on the capture); libadwaita's expand-tabs rules are not reproduced",
+     "The tab bar's fade is a clipped-strip artefact of the capture drawn as a 36 px gradient; a tab bar at rest has none",
+     "Hover and pressed tabs follow the stylesheet but the library's crops have no such state; close-button hover, overflow arrows, drag indicator and the switcher's narrow policy are not built",
+     "The view switcher's picture is the library's missing-image drawing, not an icon a real app would show"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/page_control.png",
+    "notes": "ROUND 22 (worker lc): Tab close mark and header icons are the adwaita symbolic icons, 4 px nearer the title as in the capture; the view switcher picture is the capture's small full colour missing-image drawing (50 coloured runs, 14 x 12 px, solved from the Light and Dark captures: the only small baked picture here), the chosen button 120 wide. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). notebook top and left 0, tab bar 0 (was 64), view switcher 0 (was 105) flat px off, Light and Dark; 2 antialiased px off.",
+    "gaps": [
+     "The tab bar's and view switcher's tab positions are passed in (lefts and widths measured on the capture); libadwaita's expand-tabs rules are not reproduced",
+     "The tab bar's fade is a clipped-strip artefact of the capture drawn as a 36 px gradient; a tab bar at rest has none",
+     "Hover and pressed tabs follow the stylesheet but the library's crops have no such state; close-button hover, overflow arrows, drag indicator and the switcher's narrow policy are not built",
+     "The view switcher's picture is the library's missing-image drawing, not an icon a real app would show"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/tree_list.png",
+    "notes": "ROUND 22 (worker lc): The disclosure arrow is the adwaita pan-down at 17 px (fitted: the capture's triangle is 12.7 x 6.3 px, 2 px from the frame, centred on the row; the shut arrow is pan-end, no capture). Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). scripts/linux_cmp_lc.py l4: treeview and treeview-selected 54 px off in Light, 51 in Dark, counting every pixel (before 120 / 123 up to 98 levels), all at the arrow's antialiased edge within 3 to 4 levels; 0 flat px off.",
+    "gaps": [
+     "Resize grip and header keyboard shortcuts are not drawn in this look; sort by tap and reorder by drag are kept",
+     "The shut-branch triangle (pointing right) has no capture",
+     "Hover and pressed rows have no capture",
+     "Sort arrow in the header is not drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/tree_list.png",
+    "notes": "ROUND 22 (worker lc): The disclosure arrow is the adwaita pan-down at 17 px (fitted: the capture's triangle is 12.7 x 6.3 px, 2 px from the frame, centred on the row; the shut arrow is pan-end, no capture). Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). scripts/linux_cmp_lc.py l4: treeview and treeview-selected 54 px off in Light, 51 in Dark, counting every pixel (before 120 / 123 up to 98 levels), all at the arrow's antialiased edge within 3 to 4 levels; 0 flat px off.",
+    "gaps": [
+     "Resize grip and header keyboard shortcuts are not drawn in this look; sort by tap and reorder by drag are kept",
+     "The shut-branch triangle (pointing right) has no capture",
+     "Hover and pressed rows have no capture",
+     "Sort arrow in the header is not drawn"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/popup_menu.png",
+    "notes": "ROUND 22 (worker lc): The stepped shadow is replaced by three fitted Gaussian layers (scripts/linux/fit_shadow.py menu, rms 0.6 of 255) drawn by e.ui.linuxshadow_l2: 416 px off round the surface become 24 (the corners). Check is object-select at 17 px, the submenu chevron go-next, radio rings half a pixel lower and lighter. A menu button's popover with its arrow is a new state (popup_menu-arrow, run linux_popup_menu arrow): the arrow is a drawn 45 degree triangle with a 1 px rim, the surface 133 wide. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). menu-edit, menu-view, hover, active and the arrowed popover: 0 flat px off in Light and Dark (View menu was 6); counting antialiased pixels 246 / 288 (menus), 24 / 45 (hover, active), 174 / 189 (arrowed); the arrow's two edges differ by up to 20 levels.",
+    "gaps": [
+     "Check mark and the radio dot's ring differ from GTK's by antialiasing (up to 40 levels at the tick's corners)",
+     "A row with its submenu open (the arrowed popover shows it hovered), keyboard selection, inline buttons and section headings are not built",
+     "Placement is the caller's; GTK's flipping is not reproduced; the arrow's x is set with overlay.linux_menu_arrow_at before the menu is built",
+     "The 133 px width of the arrowed popover is a constant, not derived from GTK's rules"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/popup_menu.png",
+    "notes": "ROUND 22 (worker lc): The stepped shadow is replaced by three fitted Gaussian layers (scripts/linux/fit_shadow.py menu, rms 0.6 of 255) drawn by e.ui.linuxshadow_l2: 416 px off round the surface become 24 (the corners). Check is object-select at 17 px, the submenu chevron go-next, radio rings half a pixel lower and lighter. A menu button's popover with its arrow is a new state (popup_menu-arrow, run linux_popup_menu arrow): the arrow is a drawn 45 degree triangle with a 1 px rim, the surface 133 wide. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). menu-edit, menu-view, hover, active and the arrowed popover: 0 flat px off in Light and Dark (View menu was 6); counting antialiased pixels 246 / 288 (menus), 24 / 45 (hover, active), 174 / 189 (arrowed); the arrow's two edges differ by up to 20 levels.",
+    "gaps": [
+     "Check mark and the radio dot's ring differ from GTK's by antialiasing (up to 40 levels at the tick's corners)",
+     "A row with its submenu open (the arrowed popover shows it hovered), keyboard selection, inline buttons and section headings are not built",
+     "Placement is the caller's; GTK's flipping is not reproduced; the arrow's x is set with overlay.linux_menu_arrow_at before the menu is built",
+     "The 133 px width of the arrowed popover is a constant, not derived from GTK's rules"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/hint.png",
+    "notes": "ROUND 22 (worker lc): The tooltip is a whole number of pixels wide (the label takes the Linux label width), so its edge columns are clear: 106 and 169 all-pixel offs (Light, Dark) become 24 and 16, all at the 9 px corner arcs within 4 levels; 0 flat px off. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count).",
+    "gaps": [
+     "Only the one-line tooltip is captured: wrapped text, a shortcut and the placement relative to an anchor are not",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/hint.png",
+    "notes": "ROUND 22 (worker lc): The tooltip is a whole number of pixels wide (the label takes the Linux label width), so its edge columns are clear: 106 and 169 all-pixel offs (Light, Dark) become 24 and 16, all at the 9 px corner arcs within 4 levels; 0 flat px off. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count).",
+    "gaps": [
+     "Only the one-line tooltip is captured: wrapped text, a shortcut and the placement relative to an anchor are not",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not."
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/scroll_bar.png",
+    "notes": "ROUND 22 (worker lc): The pill's ends sit on the capture's sub-pixel position (sheet thumb offsets 160.0 and 134.0): the 32 and 28 off pixels at the pill ends become 4 and 0 (3 levels). Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). All eight captured states, 65640 flat px, 0 off.",
+    "gaps": [
+     "The library's lone and classic bars do not change on hover, so hover is the rest picture; the overlay indicator's growth on hover and its look while scrolling are not captured",
+     "The scrolled-classic window is composed by the sheet from a frame and two linux_scroll_bar strips; scroll_area itself is one axis"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/scroll_bar.png",
+    "notes": "ROUND 22 (worker lc): The pill's ends sit on the capture's sub-pixel position (sheet thumb offsets 160.0 and 134.0): the 32 and 28 off pixels at the pill ends become 4 and 0 (3 levels). Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). All eight captured states, 65640 flat px, 0 off.",
+    "gaps": [
+     "The library's lone and classic bars do not change on hover, so hover is the rest picture; the overlay indicator's growth on hover and its look while scrolling are not captured",
+     "The scrolled-classic window is composed by the sheet from a frame and two linux_scroll_bar strips; scroll_area itself is one axis"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/splitter.png",
+    "notes": "ROUND 22 (worker lc): Unchanged: 32410 flat px, 0 off, 0 antialiased px off (re-measured with only text set apart).",
+    "gaps": [
+     "Hover, drag and focus of the paned handle are not captured; the handle looks the same in every state here",
+     "Pane label glyph pixels are masked (Cantarell hinting)",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/splitter.png",
+    "notes": "ROUND 22 (worker lc): Unchanged: 32410 flat px, 0 off, 0 antialiased px off (re-measured with only text set apart).",
+    "gaps": [
+     "Hover, drag and focus of the paned handle are not captured; the handle looks the same in every state here",
+     "Pane label glyph pixels are masked (Cantarell hinting)",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/menu_bar.png",
+    "notes": "ROUND 22 (worker lc): Unchanged: 3803 flat px, 0 off, 0 antialiased px off (re-measured).",
+    "gaps": [
+     "Title text sits about one pixel low and its glyphs are masked",
+     "The bar's open menus (navigation.bar_menu_at) are not styled for this look yet; overlay.menu_of is (popup_menu)",
+     "Pressed titles and keyboard focus are not captured",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/menu_bar.png",
+    "notes": "ROUND 22 (worker lc): Unchanged: 3803 flat px, 0 off, 0 antialiased px off (re-measured).",
+    "gaps": [
+     "Title text sits about one pixel low and its glyphs are masked",
+     "The bar's open menus (navigation.bar_menu_at) are not styled for this look yet; overlay.menu_of is (popup_menu)",
+     "Pressed titles and keyboard focus are not captured",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/list_box.png",
+    "notes": "ROUND 22 (worker lc): Unchanged: rest, selected, hover 0 px off counting every pixel (scripts/linux_cmp_lc.py l4, text set apart only).",
+    "gaps": [
+     "Pressed row is the stylesheet's 7 % wash, no capture",
+     "Hover on a chosen row adds the wash over the selection, no capture",
+     "The card corner glow is a baked picture at 100 %; other scales draw the plain 12 px corner",
+     "The 1.5x sheet is rendered but has no reference"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/list_box.png",
+    "notes": "ROUND 22 (worker lc): Unchanged: rest, selected, hover 0 px off counting every pixel (scripts/linux_cmp_lc.py l4, text set apart only).",
+    "gaps": [
+     "Pressed row is the stylesheet's 7 % wash, no capture",
+     "Hover on a chosen row adds the wash over the selection, no capture",
+     "The card corner glow is a baked picture at 100 %; other scales draw the plain 12 px corner",
+     "The 1.5x sheet is rendered but has no reference"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/check_list_box.png",
+    "notes": "ROUND 22 (worker lc): The baked ticked box lost holes in the Light tick (generator treated the card-coloured tick pixels as transparent): 15 px off up to 202 levels become 0 counting every pixel, Light and Dark; the tick is no longer set apart.",
+    "gaps": [
+     "Only the rest state is captured: hover and keyboard focus of a row use the list box's wash",
+     "Check box tile and card corners are baked pictures at 100 %",
+     "Check box ownership: the check box control's own Linux look is another worker's; this row carries its own"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/check_list_box.png",
+    "notes": "ROUND 22 (worker lc): The baked ticked box lost holes in the Light tick (generator treated the card-coloured tick pixels as transparent): 15 px off up to 202 levels become 0 counting every pixel, Light and Dark; the tick is no longer set apart.",
+    "gaps": [
+     "Only the rest state is captured: hover and keyboard focus of a row use the list box's wash",
+     "Check box tile and card corners are baked pictures at 100 %",
+     "Check box ownership: the check box control's own Linux look is another worker's; this row carries its own"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/data_grid.png",
+    "notes": "ROUND 22 (worker lc): Unchanged: 32 / 34 px off counting every pixel, all within 8 to 9 levels (the scroll glow's soft edge); 0 flat.",
+    "gaps": [
+     "Only the engine's plain columns are styled: filter row, footers, group rows, indicators and cell editors keep the generic look",
+     "Hover and pressed rows have no capture",
+     "The scroll indicator's thumb fills the track and sits at the top: its length and place do not follow the content or the scroll offset",
+     "Sort arrow in the header is not drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/data_grid.png",
+    "notes": "ROUND 22 (worker lc): Unchanged: 32 / 34 px off counting every pixel, all within 8 to 9 levels (the scroll glow's soft edge); 0 flat.",
+    "gaps": [
+     "Only the engine's plain columns are styled: filter row, footers, group rows, indicators and cell editors keep the generic look",
+     "Hover and pressed rows have no capture",
+     "The scroll indicator's thumb fills the track and sits at the top: its length and place do not follow the content or the scroll offset",
+     "Sort arrow in the header is not drawn"
+    ]
+   }
+  }
+ }
+}
