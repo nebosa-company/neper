@@ -1,0 +1,159 @@
+{
+ "checkbox": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/checkbox.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Check button off, on and mixed in rest, hover, pressed, focus and disabled (15 states): 71 x 28 row, 20 x 20 indicator at 4, 4 with 6 px corners, 2 px ring of black 11.6 / 15.6 / 20 %, accent fills #3584e4 / #4990e7 / #2a6ab6, white tick and 12 x 4 dash, 50 % disabled, focus ring 1.78 px at 49 % round the row. 0 flat pixels off; 623 pixels off in all (worst cell 114: ring and indicator corner anti-aliasing, worst 22 levels). The library's switch states (switch-off and switch-on, five each) are in checkbox_switch.png: 1994 pixels off in all, worst cell 347 (focus ring, up to 108 levels in the crop corners).",
+    "gaps": [
+     "Not within tolerance: anti-aliased pixels of the 6 px indicator corners and of the focus ring corners (up to 22 levels); the tick is Neper's stroked path, not Adwaita's check-symbolic (masked)",
+     "Switch: the knob's soft shadow is three stacked translucent discs, not GTK's blur (up to 27 levels); the focus ring round the capsule is approximate (up to 108 levels in the crop corners)",
+     "Label width is the rounded per-letter advance sum (kerning missing); label glyphs are not hinted; text is greyscale",
+     "Not captured: linked check buttons, 150 % and 200 % references"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/checkbox.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Same sheet in the Adwaita dark palette (ring white 15 / 20 / 25 %, fills as Light). 0 flat pixels off; 602 pixels off in all (ring and indicator corners, worst 22 levels). Switch (checkbox_switch.png): 1772 off in all; the dark off knob is #d2d2d2 at rest.",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/radio.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Radio off and on in five states: 69 x 28 row, 20.1 px disc (measured), 2 px ring, accent fills, 8 px white dot, 50 % disabled, focus ring round the row. 0 flat pixels off; 479 off in all, worst cell 132 (focus ring corners 21 levels; the filled disc edge and the dot differ by up to 17 levels in about 65 pixels).",
+    "gaps": [
+     "Not within tolerance: anti-aliased edge of the disc and of the dot (up to 17 levels), focus ring corners (21)",
+     "Label hinting and kerning as in the check button",
+     "Not captured: 150 % and 200 % references"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/radio.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Dark palette: 0 flat pixels off; 487 off in all (disc edge, dot and ring corners, worst 21 levels).",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/radio_group.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). First, Second, Third with the first selected: radios 6 px apart, no frame or caption (GTK's linked check buttons), 79 x 96. 0 flat pixels off; 69 off in all (the selected disc edge, worst 16 levels).",
+    "gaps": [
+     "Not within tolerance: anti-aliased edge of the selected disc and dot",
+     "The framed group with a caption of the Windows look is not drawn here; the caption is only the group's accessible name",
+     "Hover, pressed and focus of a radio inside the group are the radio's (radio.png), not separately captured"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/radio_group.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Dark palette: 0 flat pixels off; 76 off in all (worst 16 levels).",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/label.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Plain label (Cantarell 14.67 px, black 80 %), .dim-label (the same ink at 55 %) and .heading (bold): boxes 63 x 19, 96 x 19 and 58 x 19 as GTK's, ink inside the same rows (plain: 1..63 x 4..15 against 1..62 x 4..14). Every non-glyph pixel matches (nothing but text); the glyphs are not hinted, so about 280, 180 and 260 glyph pixels differ by more than 40 levels.",
+    "gaps": [
+     "Glyph pixels: GTK hints Cantarell, Neper does not (ink 1 px lower and wider on the plain label)",
+     "Width is the sum of rounded one-letter advances (kerning missing: Two measures 2 px wider than GTK's)",
+     "Other label styles (title-1 to title-4, caption, monospace, error, success, warning) are not captured or drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/label.png",
+    "notes": "Dark palette, same three labels (white, the dim one at 55 %); glyphs as in Light.",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/button_edit.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). The one captured state, an entry with a trailing flat icon button (201 x 34): face black 8 %, 6 px corners, text from x 9, 1 px rule at 167, icon at 176, 10. 0 pixels off (worst 1 level) outside the label and the icon. Focus, disabled and hover-over-the-button cells are drawn (focus as the 1.78 px ring inside the edge, disabled at 50 %) but have no reference crop.",
+    "gaps": [
+     "Icon artwork is an outline folder drawn by Neper, not folder-open-symbolic (masked)",
+     "Focus, disabled, read-only, invalid and hover states of the entry with a button are not captured, so they are guesses from the entry and button rules",
+     "Label glyphs are not hinted (about 100 glyph pixels differ by more than 40 levels); the button's own hover wash is the flat button's, not compared"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/button_edit.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Dark palette (face white 9.6 %, rule #4c4c4c): 0 pixels off, worst 2 levels, outside the label and the icon.",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/group_box.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Card (200 x 80, white, 12 px corners, 1 px ring of black 4 % outside the box) and GtkFrame (202 x 89, 1 px black 11.6 % ring, 12 px corners, caption at 4, 5, child from 28 down). The comparison is the crop itself, because the library's crops stop at the widget edge (the card's outer ring and shadow are not in them). Frame: 0 pixels off, worst 2. Card: 74 pixels off in the four corners, worst 21 (the library's soft outer shadow is not reproduced).",
+    "gaps": [
+     "Card corner pixels: GTK's soft shadow beyond the ring (a wash up to 3 px out) is not drawn",
+     "Group descriptions, invalid messages and Neper's collapsible toggle are not drawn under this look (a collapsible box keeps the Neper look)",
+     "Label glyphs are not hinted"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/group_box.png",
+    "notes": "Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Dark palette (card white 8 %, ring black 4 %; frame ring white 15 %): frame 0 off (worst 2), card 24 off in the corners (worst 4).",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/button.png",
+    "notes": "Round 20 adds the pill (a captioned circular button, 112 x 44, five states) and the linked buttons (One, Two, Three, 198 x 34) to the pilot's eight kinds: docs/ui/looks/linux/button_more.png beside button_more-vs-ref.png. The pilot's 35 cells are unchanged (byte-identical PNGs). Pill: 0 to 9 pixels off at rest, hover and disabled, 48 pressed, 169 focused (ring corner anti-aliasing, worst 16 levels). Linked: 172 pixels off (56 flat) because the segment widths are 1 to 2 px off GTK's (dividers at 60 and 125, GTK's at 61 and 124: kerning is missing from the label width). Every captured manifest state of the library's button (circular, default, destructive, flat, suggested, pill, linked) now has a cell.",
+    "gaps": [
+     "Not within tolerance: anti-aliased edge pixels of the focus ring (up to 22 levels) and of the coloured corners; label glyph pixels (GTK hints Cantarell, Neper does not)",
+     "Linked: segment widths come from the rounded per-letter advance sum (kerning ignored: Two is 2 px wider than GTK's), so the dividers sit 1 to 2 px off; hover, pressed and focus of a linked segment are not captured",
+     "Icon artwork is Neper's own glyphs, not Adwaita's symbolic icons; toggle (checked) buttons, the default-response ring, osd and opaque styles are not built",
+     "Not verified at 150 %: the library was rendered at 1x and 2x only; the 1.5x sheet is rendered, not compared",
+     "ControlVariant mapping is a choice: Tonal, Outlined, Elevated and Container are the default button, Filled and Default suggested-action, Danger destructive-action, Plain flat, and a captioned circular button is the pill"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/button.png",
+    "notes": "Same pill and linked sheet in the Adwaita dark palette (button_more.png): pill 0 to 56 pixels off per state, focus 548 (ring edge up to 22 levels), linked 172 off; the pilot's 35 cells are unchanged.",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ }
+}
