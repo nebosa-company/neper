@@ -195,6 +195,11 @@ fn parse_escape_value(p: *Parse, in_class: bool) -> (u32, bool, u8, err) {
             p.i += 1usize
             ret (u32(l % 32i64), false, 0u8, ok)
         }
+        // Annex B: inside a class `\c` also takes a digit or an underscore.
+        if in_class && !p.unicode && ((l >= 48i64 && l <= 57i64) || l == 95i64) {
+            p.i += 1usize
+            ret (u32(l % 32i64), false, 0u8, ok)
+        }
         if !p.unicode {
             // Legacy: the backslash stands for itself and `c` is read next.
             p.i -= 1usize
@@ -1894,7 +1899,7 @@ fn call_cont(m: *M, k: *Cont, pos: i64) -> bool {
     // K_REPEAT: one iteration of the loop finished at `pos`.
     let n2 = m.re.nodes[usize(k.node)]
     // An iteration that consumed nothing ends the loop (after the minimum).
-    if pos == k.pos && k.count >= n2.b {
+    if pos == k.pos && k.count > n2.b {
         ret false
     }
     ret repeat_step(m, k.node, k.count, pos, k.next, k.back)
