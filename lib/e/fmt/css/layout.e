@@ -5073,7 +5073,7 @@ type GItem = struct {
     cmin: f64, cmax: f64, rmin: f64, rmax: f64
 }
 
-type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64 }
+type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64 }
 
 fn extra_text(s: *const style.Style, name: str) -> (str, bool) {
     var i = 0usize
@@ -5200,6 +5200,7 @@ fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List
                     if sz.kind == 0u8 { per += sz.v } else if sz.kind == 1u8 && gp.avail >= 0.0f64 { per += sz.v * gp.avail }
                     tk += 1usize
                 }
+                if per == 0.0f64 && gp.item_min > 0.0f64 { per = gp.item_min }
                 n = 1i64
                 if gp.avail >= 0.0f64 && tl.len > 0usize && per > 0.0f64 {
                     let each = per + gp.gap * f64(tl.len)
@@ -5648,7 +5649,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     if ge != ok { ret (zero, false) }
     let g = &gcell[0usize]
     let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
-    var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64 }
+    var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64, item_min: 0.0f64 }
     g.gap_c = flex_gap(cs.column_gap, maxf(avail_w, 0.0f64))
     g.gap_r = flex_gap(cs.row_gap, maxf(avail_h, 0.0f64))
     // Explicit tracks and line names.
@@ -5665,8 +5666,29 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     var areas = al
     gp.gap = g.gap_c
     gp.avail = avail_w
+    // Masonry: an `auto-fill` of intrinsic tracks is as many as the widest minimum item allows.
+    if cs.lanes {
+        var ik = l.boxes.items[usize(b)].first
+        while ik != NONE {
+            let (isc, iec) = item_axis_specs(l.a, bstyle(l, ik), true)
+            if flex_in(l, ik) && isc.kind == 0u8 && iec.kind == 0u8 {
+                let iks = bstyle(l, ik)
+                resolve_edges(l, ik, maxf(avail_w, 0.0f64))
+                resolve_margins_fixed(l, ik, maxf(avail_w, 0.0f64))
+                let (imn, imx) = content_widths(l, ik)
+                var iw = imn
+                let (iwv, ihas) = resolve_len(iks.width, avail_w)
+                if iks.width.kind == .Px && ihas { iw = to_content_w(l, ik, iwv) }
+                let ibx = bx(l, ik)
+                iw = iw + horizontal_extras(ibx) + ibx.margin[3usize] + ibx.margin[1usize]
+                if iw > gp.item_min { gp.item_min = iw }
+            }
+            ik = l.boxes.items[usize(ik)].next
+        }
+    }
     let (ctext, has_ct) = extra_text(cs, "grid-template-columns")
     if has_ct { gp_list(&gp, ctext, &ctr, &cnames) }
+    gp.item_min = 0.0f64
     gp.gap = g.gap_r
     gp.avail = avail_h
     let (rtext, has_rt) = extra_text(cs, "grid-template-rows")
