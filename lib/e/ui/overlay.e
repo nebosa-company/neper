@@ -70,16 +70,29 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
         entering = 1.0
         leaving = 0.0
     }
+    // The Linux look (worker l3) shows its tooltip at once, as the reference crop is a settled one.
+    if t.tokens.profile == .Linux {
+        entering = 1.0
+        leaving = 0.0
+    }
     if !shown && !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     var ink = style.color(t.tokens, .InverseOnSurface)
     if windows { ink = style.color(t.tokens, .Text) }
     let cupertino = t.tokens.profile == .CupertinoLike
     if cupertino { ink = style.color(t.tokens, .Text) }
+    let linux = t.tokens.profile == .Linux
+    if linux { ink = style.hex_raw(0xFFFFFFu32) }
     var caption = control.text_options()
     caption.role = .BodySmall
     caption.wrap = .Word
     caption.max_lines = 2u32
     if cupertino { caption.size = 11.0 }
+    if linux {
+        // libadwaita's tooltip: the body text on one line (GTK wraps only past its own width limit).
+        caption.role = .Body
+        caption.wrap = .None
+        caption.max_lines = 0u32
+    }
     if windows {
         caption.role = .Body
         // v3's hint does not wrap by itself: its text carries its own line breaks.
@@ -146,6 +159,24 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
     surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, plate, parts[0usize..n])
+    if linux {
+        // (worker l3) tooltip.background: black 80 % with 9 px corners, 6 10 padding and a 1 px white 10 % line round it that
+        // the fill does not run under (background-clip: padding-box), so the line is a box of its own around the fill.
+        var fill = style.defaults()
+        fill.background = paint.Brush { Solid: style.hexa(0x000000u32, 0.8) }
+        fill.radius = 8.0
+        fill.padding = style.EdgeLengths { left: style.Length { Px: 10.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 10.0 }, bottom: style.Length { Px: 6.0 } }
+        var line = style.defaults()
+        line.border = style.Border { width: 1.0, color: style.hexa(0xFFFFFFu32, 0.1) }
+        line.radius = 9.0
+        line.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+        let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if inner_error != ok { ret (zero, TooLarge) }
+        inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, fill, parts[0usize..n])
+        surface[0usize] = widget.box(0u64, line, inner[0usize..1usize])
+        gap_y = 0.0
+        placement = .BelowCenter
+    }
     if windows {
         // looks5 group d: v3's toolbar hint window (#FFFFE1, bevelled), the shortcut in parentheses after the text.
         var hint_line = text
@@ -429,7 +460,9 @@ fn menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 }
 
 fn menu_at_moving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, in_millis: u32, from: f32) -> (widget.Node, err) {
-    let entering = opening_share_over(t, key, open, in_millis)
+    var entering = opening_share_over(t, key, open, in_millis)
+    // The Linux look (worker l3) shows its menus settled, as the reference crops are.
+    if t.tokens.profile == .Linux { entering = 1.0 }
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss)
     if panel_error != ok { ret (zero, panel_error) }
@@ -604,11 +637,173 @@ fn context_menu_touch_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     ret (made, made_error)
 }
 
+// ---- the Linux look, popup menu (worker l3, round 20) -----------------------------------------------------------------
+// GtkPopoverMenu in libadwaita 1.5: `popover.menu > contents` in the popover colour (#ffffff, #383838), 12 px corners and 6 px
+// round 32 high rows (6 px corners, 12 px sides) whose wash is the text colour at 10 % (19 % pressed); a section break is a 1 px
+// line (#e1e1e1, #565656) with 6 px above and below; the accelerator is the text colour at 55 %, 12 px after the label; a
+// disabled row is the whole row at 50 %. The soft shadow under the surface is drawn by `linux_menu_shadow`.
+fn linux_menu_rule(t: *const control.Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hex_raw(0x565656u32) }
+    ret style.hex_raw(0xE1E1E1u32)
+}
+
+// The popover's shadow as measured on the library's own render: alpha per pixel of distance outside the edge (1 to 15), the same
+// on every side but for the whole shadow standing one pixel lower.
+type LinuxShadow = struct { arena: *mem.Arena }
+
+fn linux_shadow_alpha(d: usize) -> f32 {
+    let profile = [16]f32{ 0.0, 35.0, 23.0, 15.0, 9.0, 7.0, 5.0, 4.0, 4.0, 3.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0 }
+    if d >= 16usize { ret 0.0 }
+    ret profile[d] / 255.0
+}
+
+fn linux_shadow_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn linux_shadow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let shadow = mem.cast[*LinuxShadow](ctx)
+    // from the outermost ring in: each fill adds what the next one in leaves of the measured total
+    var e: usize = 15usize
+    while e >= 1usize {
+        var own = 1.0 - (1.0 - linux_shadow_alpha(e)) / (1.0 - linux_shadow_alpha(e + 1usize))
+        if own < 0.0 { own = 0.0 }
+        let grow = f32(e)
+        let rect = geometry.Rect { x: area.x - grow, y: area.y - grow + 1.0, width: area.width + 2.0 * grow, height: area.height + 2.0 * grow }
+        let (path, path_error) = widget.rounded_path(shadow.arena, rect, 12.0 + grow)
+        if path_error != ok { ret path_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, own) } } })
+        e -= 1usize
+    }
+    ret ok
+}
+
+// A node as big as the panel it sits under (it fills its stack) that paints the shadow round it.
+fn linux_menu_shadow(a: *mem.Arena, key: widget.Key, across: f32, down: f32) -> (widget.Node, err) {
+    let (shadows, shadows_error) = mem.alloc[LinuxShadow](a, 1usize)
+    if shadows_error != ok { ret (zero, TooLarge) }
+    shadows[0usize] = LinuxShadow { arena: a }
+    var fill = control.sized_style(across, down)
+    fill.position = .Absolute
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: key, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&shadows[0usize]), measure: linux_shadow_measure, paint: linux_shadow_paint, state: widget.bytes_of[LinuxShadow](&shadows[0usize]) } }, style: fill, children: none }, ok)
+}
+
+fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    var state = control.control_state(t, item_key, c.enabled, false)
+    if c.submenu_open { state.hovered = true }
+    var ink = style.color(t.tokens, .Text)
+    var wash: f32 = 0.0
+    if state.hovered { wash = 0.1 }
+    if state.pressed { wash = 0.19 }
+    var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) } else { wash = wash * 0.8 }
+    if !c.enabled {
+        wash = 0.0
+        ink = control.with_alpha(ink, ink.alpha * 0.5)
+    }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(tint, wash)
+    look.foreground = ink
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 6.0
+    look.custom_padding = true
+    look.padding = 12.0
+    look.padding_y = 6.0
+    look.min_height = 32.0
+    look.min_width = 40.0
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var p = 0usize
+    if slotted {
+        // check and radio boxes are 18 across (14 and 2 round it), start 2 before the label column and end 6 short of the label
+        var mark: widget.Node = widget.box(0u64, control.sized_style(18.0, 18.0), zero)
+        if c.radio {
+            var circle = control.sized_style(18.0, 18.0)
+            circle.radius = 9.0
+            circle.border = style.Border { width: 1.0, color: control.with_alpha(ink, ink.alpha * 0.3 / 0.8) }
+            let (dot, dot_error) = mem.alloc[widget.Node](a, 1usize)
+            if dot_error != ok { ret (zero, TooLarge) }
+            var count = 0usize
+            if c.checked {
+                var centre = control.sized_style(8.0, 8.0)
+                centre.radius = 4.0
+                centre.background = paint.Brush { Solid: ink }
+                dot[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(16.0, 16.0), control.widget_one_of(a, widget.box(0u64, centre, zero)))
+                count = 1usize
+            }
+            mark = widget.aligned(0u64, .Center, .Center, circle, dot[0usize..count])
+        } else if c.checked {
+            let (tick, tick_error) = control.icon_square(a, ink, .Check, 14.0)
+            if tick_error != ok { ret (zero, tick_error) }
+            mark = widget.aligned(0u64, .Center, .Center, control.sized_style(18.0, 18.0), control.widget_one_of(a, tick))
+        }
+        var slot_box = style.defaults()
+        slot_box.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
+        parts[p] = widget.box(0u64, slot_box, control.widget_one_of(a, mark))
+        p += 1usize
+    }
+    var caption = control.text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, c.label, t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    let (wide, wide_error) = control.linux_label_width(a, t, caption, c.label)
+    if wide_error != ok { ret (zero, wide_error) }
+    parts[p] = widget.aligned(0u64, .Center, .Center, control.sized_style(wide, 19.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), control.mem_one_node(a, said))))
+    p += 1usize
+    parts[p] = widget.spacer(0u64, 1.0)
+    p += 1usize
+    let has_submenu = c.submenu.len != 0usize
+    if c.shortcut.len > 0usize && !has_submenu {
+        let faint = control.with_alpha(ink, ink.alpha * 0.55)
+        let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, faint)
+        if keys_error != ok { ret (zero, keys_error) }
+        let (keys_wide, keys_wide_error) = control.linux_label_width(a, t, caption, c.shortcut)
+        if keys_wide_error != ok { ret (zero, keys_wide_error) }
+        let held = widget.aligned(0u64, .Center, .Center, control.sized_style(keys_wide, 19.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), control.mem_one_node(a, keys_node))))
+        parts[p] = widget.padded(0u64, 12.0, 0.0, 0.0, 0.0, style.defaults(), control.widget_one_of(a, held))
+        p += 1usize
+    }
+    if has_submenu {
+        let (arrow, arrow_error) = control.icon_square(a, control.with_alpha(ink, ink.alpha * 0.3 / 0.8), .ChevronRight, 16.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        parts[p] = widget.padded(0u64, 6.0, 0.0, 0.0, 0.0, style.defaults(), control.widget_one_of(a, arrow))
+        p += 1usize
+    }
+    var line_style = style.defaults()
+    line_style.width = style.Length { Percent: 100.0 }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, parts[0usize..p])
+    var sem_states = 0u32
+    if c.checked { sem_states = accessibility.STATE_CHECKED }
+    var semantic_role = 22u8
+    if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+    if c.radio { semantic_role = accessibility.ROLE_MENU_ITEM_RADIO }
+    var sem_actions = 0u32
+    var controls = 0u64
+    var chosen = &c.action
+    if has_submenu {
+        sem_actions = accessibility.ACTION_SHOW_MENU
+        controls = submenu_key
+        chosen = &c.submenu_toggle
+        if c.submenu_open { sem_states = sem_states | accessibility.STATE_EXPANDED }
+    }
+    let (made, made_error) = control.pressable_states(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, sem_actions, controls, chosen, content)
+    ret (made, made_error)
+}
+// ---- end the Linux look, popup menu -----------------------------------------------------------------------------------
+
 // One command of a v2 menu (D975), keyed `item_key`, as `menu_panel` draws it.
 fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_menu_row(a, item_key, submenu_key, t, c, slotted)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_menu_row(a, item_key, submenu_key, t, c, slotted)
+        ret (linux, linux_error)
     }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var row_height = control.if_else(touch, 48.0, 32.0)
@@ -789,7 +984,9 @@ fn menu_back_row(a: *mem.Arena, key: widget.Key, return_key: widget.Key, t: *con
 // led by a Back row and separator.
 fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool, back_label: str, back_target: widget.Key, back: *const widget.Submit) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
-    let around = control.if_else(touch, 8.0, 4.0)
+    var around = control.if_else(touch, 8.0, 4.0)
+    let linux = t.tokens.profile == .Linux
+    if linux { around = 6.0 }
     if touch && allow_submenus {
         var opened = commands.len
         var o = 0usize
@@ -850,6 +1047,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             rule.width = style.Length { Percent: 100.0 }
             rule.height = style.Length { Px: t.tokens.sizes.divider }
             rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            if linux { rule.background = paint.Brush { Solid: linux_menu_rule(t) } }
             lines[0usize] = widget.box(0u64, rule, zero)
             let (rule_body, rule_body_error) = mem.alloc[widget.Node](a, 1usize)
             if rule_body_error != ok { ret (zero, TooLarge) }
@@ -900,9 +1098,59 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         sheet_style.min_width = style.Length { Px: 190.0 }
         sheet_style.max_width = style.Length { Px: 320.0 }
     }
+    var linux_across: f32 = 0.0
+    var linux_down: f32 = 0.0
+    if linux {
+        // popover.menu > contents: the popover colour, 12 px corners, 6 px round the rows, 120 px at least.
+        sheet_style = style.defaults()
+        sheet_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceBright) }
+        sheet_style.radius = 12.0
+        let six = style.Length { Px: 6.0 }
+        sheet_style.padding = style.EdgeLengths { left: six, top: six, right: six, bottom: six }
+        sheet_style.min_width = style.Length { Px: 120.0 }
+        // GTK sizes the surface from its rows: 6 round them, each row its label (and accelerator, check, arrow) between 12 px sides, 32
+        // high, a section break 13. The same sum fixes the box here so the shadow node can be exactly as big.
+        var caption = control.text_options()
+        caption.role = .Body
+        caption.wrap = .None
+        var across: f32 = 108.0
+        var down: f32 = 12.0
+        var m = 0usize
+        while m < commands.len {
+            let cm = &commands[m]
+            let (label_w, label_error) = control.linux_label_width(a, t, caption, cm.label)
+            if label_error != ok { ret (zero, label_error) }
+            var row_w = 24.0 + label_w
+            if slotted { row_w += 22.0 }
+            if cm.submenu.len != 0usize {
+                row_w += 22.0
+            } else if cm.shortcut.len > 0usize {
+                let (keys_w, keys_error) = control.linux_label_width(a, t, caption, cm.shortcut)
+                if keys_error != ok { ret (zero, keys_error) }
+                row_w += 12.0 + keys_w
+            }
+            if row_w > across { across = row_w }
+            down += 32.0
+            if cm.separated && m > 0usize { down += 13.0 }
+            m += 1usize
+        }
+        sheet_style.width = style.Length { Px: across + 12.0 }
+        sheet_style.height = style.Length { Px: down }
+        linux_across = across + 12.0
+        linux_down = down
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..n])
+    if linux {
+        let (shadow, shadow_error) = linux_menu_shadow(a, 0u64, linux_across, linux_down)
+        if shadow_error != ok { ret (zero, shadow_error) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = shadow
+        layers[1usize] = column[0usize]
+        column[0usize] = widget.stack(0u64, control.sized_style(linux_across, linux_down), layers[0usize..2usize])
+    }
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
