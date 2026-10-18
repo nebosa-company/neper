@@ -153,6 +153,7 @@ fn line_terminator(src: str, at: usize) -> usize {
 // Skips whitespace and comments; whether a line terminator was crossed.
 fn skip_space(lx: *Lexer) -> (bool, err) {
     var nl = false
+    let at_start = lx.pos == 0usize
     while lx.pos < lx.src.len {
         let c = lx.src[lx.pos]
         let lt = line_terminator(lx.src, lx.pos)
@@ -197,6 +198,9 @@ fn skip_space(lx: *Lexer) -> (bool, err) {
             }
             if !closed { ret (nl, fail(lx, "unterminated comment")) }
         } else if c == 35u8 && lx.pos == 0usize && lx.src.len > 1usize && lx.src[1usize] == 33u8 {
+            while lx.pos < lx.src.len && line_terminator(lx.src, lx.pos) == 0usize { lx.pos += 1usize }
+        } else if !lx.module && (nl || at_start) && c == 45u8 && lx.pos + 2usize < lx.src.len && lx.src[lx.pos + 1usize] == 45u8 && lx.src[lx.pos + 2usize] == 62u8 {
+            // `-->` at the start of a line is a single-line comment (Annex B).
             while lx.pos < lx.src.len && line_terminator(lx.src, lx.pos) == 0usize { lx.pos += 1usize }
         } else if !lx.module && c == 60u8 && lx.pos + 3usize < lx.src.len && lx.src[lx.pos + 1usize] == 33u8 && lx.src[lx.pos + 2usize] == 45u8 && lx.src[lx.pos + 3usize] == 45u8 {
             while lx.pos < lx.src.len && line_terminator(lx.src, lx.pos) == 0usize { lx.pos += 1usize }
