@@ -10859,6 +10859,13 @@ fn glyph_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // tonal, `secondary-container` with the glyph in `on-secondary-container`, and
 // Selected in the tree.
 fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool) -> (widget.Node, err) {
+    let (node, node_error) = glyph_toggle_state(a, key, t, kind, label, action, side, glyph_size, selected, true)
+    ret (node, node_error)
+}
+
+// `glyph_toggle` that can be disabled. Only Neper dark draws it so (the glyph at the disabled content level, no fill, not pressable);
+// every other look and the Neper light palette draw the enabled picture whatever `enabled` says, as they always did.
+fn glyph_toggle_state(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool, enabled: bool) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = windows_glyph_toggle(a, key, t, kind, label, action, true, selected)
         ret (flat, flat_error)
@@ -10868,7 +10875,8 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
         let (linux, linux_error) = linux_glyph_toggle(a, key, t, kind, label, action, side, glyph_size, selected)
         ret (linux, linux_error)
     }
-    let state = control_state(t, key, true, selected)
+    let off = !enabled && t.tokens.profile == .Neper && t.tokens.palette == .Dark
+    let state = control_state(t, key, !off, selected)
     var muted = style.color(t.tokens, .OnSurfaceVariant)
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = with_alpha(muted, state_opacity(t, state))
@@ -10876,8 +10884,10 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
         muted = style.color(t.tokens, .OnSecondaryContainer)
         look.background = style.layer(style.color(t.tokens, .SecondaryContainer), muted, state_opacity(t, state))
     }
+    if off { muted = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
     look.foreground = muted
     look.border_width = 0.0
+    if off { look.background = paint.rgba(0.0, 0.0, 0.0, 0.0) }
     look.opacity = 1.0
     look.radius = side * 0.5
     look.custom_padding = true
@@ -10898,7 +10908,7 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
     // (D1532) Selected, the glyph is its filled "on" form (docs/ux/components/IconButton).
     let (mark, mark_error) = icon_square_of(a, muted, kind, glyph_size, selected, style.color(t.tokens, .SecondaryContainer))
     if mark_error != ok { ret (zero, mark_error) }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, selected, action, mark)
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, !off, selected, action, mark)
     ret (node, node_error)
 }
 

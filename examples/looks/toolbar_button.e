@@ -20,7 +20,7 @@ fn glyph(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, k
         let (flat, flat_error) = control.windows_glyph_toggle_art(a, key, t, kind, label, action, enabled, checked, along, art)
         ret (flat, flat_error)
     }
-    let (round, round_error) = control.glyph_toggle(a, key, t, kind, label, action, 32.0, 18.0, checked)
+    let (round, round_error) = control.glyph_toggle_state(a, key, t, kind, label, action, 32.0, 18.0, checked, enabled)
     ret (round, round_error)
 }
 
@@ -133,7 +133,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             node = b
             node_error = b_error
         } else {
-            let (b, b_error) = control.button(a, 200u64 + u64(i), t, "Print", action, control.button_options())
+            var caption_options = control.button_options()
+            if i == 8usize && t.tokens.profile == .Neper && t.tokens.palette == .Dark { caption_options.enabled = false }  // Neper dark only: the light picture keeps its three equal cells
+            let (b, b_error) = control.button(a, 200u64 + u64(i), t, "Print", action, caption_options)
             node = b
             node_error = b_error
         }
