@@ -25,6 +25,17 @@ foreach ($spec in @(@('Segoe UI', $segoe), @('Tahoma', $tahoma))) {
     }
   }
 }
+# Probe fonts for the rasteriser (scripts/winnative/probe_fonts.py): unhinted shapes of known geometry, drawn at 16 px.
+$probe = "$bin\probe"; New-Item -ItemType Directory -Force $probe | Out-Null
+python "$PSScriptRoot\probe_fonts.py" $probe
+foreach ($ttf in Get-ChildItem "$probe\NProbe*.ttf") {
+  $env:GLYPHS_FONT = $ttf.FullName
+  & "$bin\glyphs.exe" $raw $ttf.BaseName 400 16 5
+  if ($LASTEXITCODE -ne 0) { throw "probe $($ttf.Name) failed" }
+  Copy-Item $ttf.FullName $raw
+}
+Remove-Item Env:\GLYPHS_FONT
+Copy-Item "$probe\probe.json" $raw
 & "$bin\glyphs.exe" $raw --blend 5
 & "$bin\glyphs.exe" $raw --blend 6
 & "$bin\glyphs.exe" $raw --blend2 5

@@ -9,6 +9,23 @@ use e.mem
 use e.text.shape
 use e.text.tthint
 
+// The glyph programs are not run when set: the points stay as scaled and the phantom points as rounded (the state a program starts from;
+// the oracle tool compares it with a tap font whose glyphs have no programs).
+var skip_programs: bool = zero
+var trace_gid: i64 = -1i64
+
+fn set_trace_glyph(gid: i64) { trace_gid = gid }
+
+fn set_skip_programs(on: bool) { skip_programs = on }
+
+fn set_experiment(n: i64) { tthint.set_exp(n) }
+
+fn set_cut(n: i64) { tthint.set_cut(n) }
+
+fn set_cut_iup(b: bool) { tthint.set_cut_iup(b) }
+
+fn reset_stems() { tthint.reset_stems() }
+
 type Loaded = struct { lv: usize, pp1x: i64, adv: i64 }
 
 fn gl_metrics(h: *tthint.Hinter, gid: usize) -> (i64, i64) {
@@ -142,9 +159,43 @@ fn size_of(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, cleartype: bool) -> (usi
     ret (si, ok)
 }
 
+fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zone, lo: usize, hi: usize, composite: bool) -> err {
+    let n = z.n
+    var i = 0usize
+    while i < 2usize * n {
+        h.save_cur[i] = z.cur[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        h.save_tags[i] = z.tags[i]
+        i += 1usize
+    }
+    let first = gl_run1(h, a, si, gid, z, lo, hi, composite, 0i64)
+    if first != ok || h.ctA == 0i64 || h.ctA == tthint.pix_round(h.ctX) { ret first }
+    // The program fitted the glyph to an advance of its own (a delta of the right phantom point): GDI works with that one from
+    // the start, so the glyph runs again with it.
+    let final_a = h.ctA
+    i = 0usize
+    while i < 2usize * n {
+        z.cur[i] = h.save_cur[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        z.tags[i] = h.save_tags[i]
+        z.sh[i] = 0i64
+        z.ipd[i] = false
+        z.mp[i] = 0i64
+        i += 1usize
+    }
+    z.finex = false
+    ret gl_run1(h, a, si, gid, z, lo, hi, composite, final_a)
+}
+
 // Fills the zone `z` (already holding its points scaled to 26.6) with the glyph program at `lo..hi` run over it. A program that
 // traps leaves the points where they had got to.
-fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zone, lo: usize, hi: usize, composite: bool) -> err {
+fn gl_run1(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zone, lo: usize, hi: usize, composite: bool, force_a: i64) -> err {
     let s = &h.sizes[si]
     let n = z.n
     var bw_adv = 0i64
@@ -163,18 +214,35 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     }
     z.cur[2usize * (n - 4usize)] = tthint.pix_round(z.cur[2usize * (n - 4usize)])
     z.cur[2usize * (n - 3usize)] = tthint.pix_round(z.cur[2usize * (n - 3usize)])
-    if s.cleartype { z.cur[2usize * (n - 3usize)] = z.cur[2usize * (n - 4usize)] + bw_adv }
+    // In ClearType GDI starts the right phantom point at the advance rounded to 1/16 pixel (26.6 first, as scaled), not at the
+    // black-and-white advance: read back from a copy of Segoe UI whose glyphs have no programs, all 189 glyphs of the oracle.
+    if s.cleartype {
+        let scaled = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
+        z.cur[2usize * (n - 3usize)] = z.cur[2usize * (n - 4usize)] + tthint.fdiv(scaled + 2i64, 4i64) * 4i64
+    }
     z.cur[2usize * (n - 2usize) + 1usize] = tthint.pix_round(z.cur[2usize * (n - 2usize) + 1usize])
     z.cur[2usize * (n - 1usize) + 1usize] = tthint.pix_round(z.cur[2usize * (n - 1usize) + 1usize])
-    if (s.ic & 1i64) != 0i64 || hi <= lo { ret ok }
+    if (s.ic & 1i64) != 0i64 || hi <= lo || skip_programs { ret ok }
     h.ppem = s.ppem
     h.xs = s.xscale
     h.cleartype = s.cleartype
     h.composite = composite
-    h.wbw = 0i64
-    if s.cleartype { h.wbw = bw_adv }
+    // The advance fitting of GDI's ClearType (`tthint.ct_scale`): the points a glyph's x program interpolated or paired are stretched
+    // by the device advance over the scaled one when it reaches IUP[x]. Composites are not fitted yet.
+    h.ctA = 0i64
+    h.ctX = 0i64
+    h.ctFixed = false
+    if s.cleartype && !composite && bw_adv > 0i64 {
+        h.ctX = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
+        h.ctA = tthint.pix_round(h.ctX)
+        if force_a != 0i64 {
+            h.ctA = force_a
+            h.ctFixed = true
+        }
+    }
     h.gs = s.gs
     h.sp = 0usize
+    h.ran = true
     var k = 0usize
     while k < h.cvt_count {
         h.cvt_work[k] = s.cvt[k]
@@ -196,8 +264,21 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     }
     h.zone[0usize] = s.twi
     h.zone[1usize] = *z
+    tthint.set_trace(i64(gid) == trace_gid && s.cleartype)
     let run_error = tthint.vm_run(h, lo, hi)
+    tthint.trace_end(h)
+    tthint.set_trace(false)
     ret ok
+}
+
+// The advance of a glyph: GDI takes it from the device metrics table at the sizes the table lists, whatever the hinted phantom point
+// says (every one of the 14000 advances of the oracle agrees with it), in ClearType too, where the pen steps by the same whole pixels.
+// The hinter itself keeps the hinted phantom point for the fitting of the outline.
+fn device_advance(h: *tthint.Hinter, cleartype: bool, ppem: i64, gid: usize, hinted: i64) -> i64 {
+    if cleartype { ret hinted }
+    let (w, found) = tthint.hdmx_width(h, ppem, gid)
+    if found { ret w * 64i64 }
+    ret hinted
 }
 
 // Loads a glyph at a size: its points in a zone of `h.zsets`, the zone's level in the answer. Levels are released by the caller
@@ -460,8 +541,10 @@ fn zone_prepare(z: *tthint.Zone, n: usize, ends: usize) {
     while i < n {
         z.sh[i] = 0i64
         z.ipd[i] = false
+        z.mp[i] = 0i64
         i += 1usize
     }
+    z.finex = false
 }
 
 // The composite glyph's own instructions: after the last component, when it says there are any.
@@ -478,15 +561,19 @@ fn hint_glyph(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, gid: u32, cleartype: 
     let (si, size_error) = size_of(h, a, ppem, cleartype)
     if size_error != ok { ret (out, size_error) }
     h.level = 0usize
+    h.ran = false
     let (loaded, load_error) = gl_load(h, a, si, usize(gid), 0usize)
     if load_error != ok { ret (out, load_error) }
     let z = &h.zsets[loaded.lv]
     out.n = z.n - 4usize
     out.cur = z.cur
+    out.fx = z.fx
+    out.fine = z.finex
+    out.hinted = h.ran
     out.tags = z.tags
     out.ends = z.ends
     out.nends = z.nends
     out.pp1x = loaded.pp1x
-    out.adv = loaded.adv
+    out.adv = device_advance(h, false, ppem, usize(gid), loaded.adv)
     ret (out, ok)
 }

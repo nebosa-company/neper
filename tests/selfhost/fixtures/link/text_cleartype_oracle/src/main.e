@@ -175,6 +175,39 @@ fn load_outlines(a: *mem.Arena, framed: []const u8, ol: []i64, at: []usize) -> b
     ret true
 }
 
+// GDI's hinted points: `code n x y x y ...` per line (26.6 pixels; n points with the four phantom points last), `at[code]` the start of a
+// glyph's run in `hd` (the usize maximum when absent).
+fn load_hinted(a: *mem.Arena, framed: []const u8, hd: []i64, at: []usize) -> bool {
+    let (text, text_error) = gunzip(a, framed, 4000000usize)
+    if text_error != ok { ret false }
+    var i = 0usize
+    while i < 256usize {
+        at[i] = 4294967295usize
+        i += 1usize
+    }
+    var c = Cursor { d: text, at: 0usize }
+    var n = 0usize
+    while true {
+        let (code, more) = next_int(&c)
+        if !more { break }
+        let (count, count_more) = next_int(&c)
+        if !count_more || n + 2usize * usize(count) + 4usize >= hd.len { ret false }
+        if code >= 0i64 && code < 256i64 { at[usize(code)] = n }
+        hd[n] = code
+        hd[n + 1usize] = count
+        n += 2usize
+        var p = 0i64
+        while p < 2i64 * count {
+            let (v, v_more) = next_int(&c)
+            if !v_more { ret false }
+            hd[n] = v
+            n += 1usize
+            p += 1i64
+        }
+    }
+    ret true
+}
+
 // A contour with the on-curve points between two off-curve ones written out, coordinates doubled so the midpoints stay whole:
 // x, y, on per point. Returns the point count.
 fn expand(src: []const i64, n: usize, out: []i64) -> usize {
@@ -314,11 +347,14 @@ fn append_int(buf: []u8, len: usize, v: i64) -> usize {
     ret n
 }
 
-// One outline as a line of integers, x from the pen: code adv ncont { npts { x y on } }.
+// One outline as a line of integers: code adv pp1x ncont { npts { x y on } } { x y }*4, x as the hinter has it (the left phantom point `pp1x`
+// is the pen); the four pairs at the end are the phantom points (left, right, top, bottom).
 fn outline_line(buf: []u8, len: usize, code: usize, out: *const tthint.Outline) -> usize {
     var n = append_int(buf, len, i64(code))
     n = append(buf, n, " ")
     n = append_int(buf, n, tthint.fdiv(out.adv + 32i64, 64i64))
+    n = append(buf, n, " ")
+    n = append_int(buf, n, out.pp1x)
     n = append(buf, n, " ")
     n = append_int(buf, n, i64(out.nends))
     var c = 0usize
@@ -330,17 +366,53 @@ fn outline_line(buf: []u8, len: usize, code: usize, out: *const tthint.Outline) 
         var q = first
         while q <= last {
             n = append(buf, n, " ")
-            n = append_int(buf, n, out.cur[2usize * q] - out.pp1x)
+            n = append_int(buf, n, out.cur[2usize * q])
             n = append(buf, n, " ")
             n = append_int(buf, n, out.cur[2usize * q + 1usize])
             n = append(buf, n, " ")
-            n = append_int(buf, n, out.tags[q] & 1i64)
+            n = append_int(buf, n, (out.tags[q] & 1i64) + ((out.tags[q] >> 3u32) & 3i64) * 2i64)
             q += 1usize
         }
         first = last + 1usize
         c += 1usize
     }
+    var ph = 0usize
+    while ph < 4usize {
+        n = append(buf, n, " ")
+        n = append_int(buf, n, out.cur[2usize * (out.n + ph)])
+        n = append(buf, n, " ")
+        n = append_int(buf, n, out.cur[2usize * (out.n + ph) + 1usize])
+        ph += 1usize
+    }
     ret append(buf, n, "\n")
+}
+
+fn cvt_text(a: *mem.Arena, cvt: []const i64) -> []u8 {
+    let (buf, buf_error) = mem.alloc[u8](a, 16usize * (cvt.len + 1usize))
+    if buf_error != ok { ret zero }
+    var n = 0usize
+    var i = 0usize
+    while i < cvt.len {
+        n = append_int(buf, n, cvt[i])
+        n = append(buf, n, "\n")
+        i += 1usize
+    }
+    ret buf[0usize..n]
+}
+
+fn trace_code_number(t: str) -> usize {
+    var v = 0usize
+    var i = 0usize
+    while i < t.len {
+        if is_digit(t[i]) { v = v * 10usize + usize(t[i] - 48u8) }
+        i += 1usize
+    }
+    ret v
+}
+
+fn font_path_of(over: str, face: usize, weight: i64) -> str {
+    if over.len > 0usize { ret over }
+    ret font_file(face, weight)
 }
 
 fn font_file(face: usize, weight: i64) -> str {
@@ -415,6 +487,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var dir: str = "docs/ui/looks/ref/windows-native/glyphs"
     var only: str = ""
     var dump_dir: str = ""
+    var font_override: str = ""
+    var trace_code: str = ""
     var verbose = false
     var report = false
     var write_exact = false
@@ -429,6 +503,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if str.eq(args[i], "--dump") && i + 1usize < args.len {
             dump_dir = args[i + 1usize]
             i += 1usize
+        } else if str.eq(args[i], "--fontfile") && i + 1usize < args.len {
+            font_override = args[i + 1usize]
+            i += 1usize
+        } else if str.eq(args[i], "--trace") && i + 1usize < args.len {
+            trace_code = args[i + 1usize]
+            i += 1usize
+        } else if str.eq(args[i], "--raster") && i + 1usize < args.len {
+            cleartype.set_raster(i64(trace_code_number(args[i + 1usize])))
+            i += 1usize
+        } else if str.eq(args[i], "--iup") {
+            ttglyph.set_cut_iup(true)
+        } else if str.eq(args[i], "--cutiup") {
+            ttglyph.set_cut(-1i64)
+        } else if str.eq(args[i], "--cut") && i + 1usize < args.len {
+            ttglyph.set_cut(i64(trace_code_number(args[i + 1usize])))
+            i += 1usize
+        } else if str.eq(args[i], "--exp") && i + 1usize < args.len {
+            ttglyph.set_experiment(i64(trace_code_number(args[i + 1usize])))
+            i += 1usize
+        } else if str.eq(args[i], "--noprog") {
+            ttglyph.set_skip_programs(true)
         } else if str.eq(args[i], "--verbose") {
             verbose = true
         } else if str.eq(args[i], "--report") {
@@ -453,31 +548,49 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (e_bytes, e_error) = fs.read_file(a, exact_path, 1000000usize)
         if e_error == ok { expected = e_bytes }
     }
-    let (ol, ol_error) = mem.alloc[i64](a, OL_MAX)
+    // What lives for the whole run (the fonts, their hinters, the rasteriser's storage) goes in its own arena; the rest of an atlas is
+    // read into `a` and dropped when the next one starts.
+    let (hbuf, hbuf_error) = mem.alloc[u8](a, 134217728usize)
+    if hbuf_error != ok { ret hbuf_error }
+    var ha_state = mem.arena_from(hbuf)
+    let ha = &ha_state
+    let (ol, ol_error) = mem.alloc[i64](ha, OL_MAX)
     if ol_error != ok { ret ol_error }
-    let (ol_at, ol_at_error) = mem.alloc[usize](a, 256usize)
+    let (ol_at, ol_at_error) = mem.alloc[usize](ha, 256usize)
     if ol_at_error != ok { ret ol_at_error }
-    let (scratch, scratch_error) = mem.alloc[i64](a, 150000usize)
+    let (hd, hd_error) = mem.alloc[i64](ha, 400000usize)
+    if hd_error != ok { ret hd_error }
+    let (hd_at, hd_at_error) = mem.alloc[usize](ha, 256usize)
+    if hd_at_error != ok { ret hd_at_error }
+    var hint_glyphs_ok = 0usize
+    var hint_glyphs = 0usize
+    var hint_points_ok = 0usize
+    var hint_points = 0usize
+    let (scratch, scratch_error) = mem.alloc[i64](ha, 150000usize)
     if scratch_error != ok { ret scratch_error }
-    let (sc, sc_error) = cleartype.scratch(a)
+    let (sc, sc_error) = cleartype.scratch(ha)
     if sc_error != ok { ret sc_error }
-    var font_data: [4]str = zero
-    var hinters: [4]*tthint.Hinter = zero
-    var subs: [4]usize = zero
-    var font_state: [4]u8 = zero
+    var font_data: [16]str = zero
+    var hinters: [16]*tthint.Hinter = zero
+    var subs: [16]usize = zero
+    var font_state: [16]u8 = zero
     let (exact_buf, exact_buf_error) = mem.alloc[u8](a, 65536usize)
     if exact_buf_error != ok { ret exact_buf_error }
     var exact_len = 0usize
-    let (bw_buf, bw_buf_error) = mem.alloc[u8](a, 600000usize)
+    let (bw_buf, bw_buf_error) = mem.alloc[u8](ha, 600000usize)
     if bw_buf_error != ok { ret bw_buf_error }
-    let (ct_buf, ct_buf_error) = mem.alloc[u8](a, 600000usize)
+    let (ct_buf, ct_buf_error) = mem.alloc[u8](ha, 600000usize)
     if ct_buf_error != ok { ret ct_buf_error }
+    let (stem_buf, stem_buf_error) = mem.alloc[u8](ha, 200000usize)
+    if stem_buf_error != ok { ret stem_buf_error }
     var failures = 0usize
     if verbose { try io.printf["arena {} of {}\n"](a.off, a.cap) }
     var total = Totals { glyphs: 0usize, ink: 0usize, px_ok: 0usize, px_same: 0usize, ink_px_ok: 0usize, bw_ok: 0usize, ink_bw_ok: 0usize, adv_ok: 0usize, bw_pts: 0usize, bw_pts_ok: 0usize }
     var c = Cursor { d: listing, at: 0usize }
     skip_line(&c)
+    let atlas_mark = mem.mark(a)
     while true {
+        mem.reset(a, atlas_mark)
         let (name_lo, name_hi, more) = next_word(&c)
         if !more { break }
         let name: str = listing[name_lo..name_hi]
@@ -489,7 +602,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (pad, pad_more) = next_int(&c)
         if !w_more || !h_more || !cw_more || !ch_more || !asc_more || !pad_more { break }
         // blend ramps are not glyph atlases
-        if name.len < 8usize || (name[0] != 83u8 && name[0] != 84u8) { continue }
+        if name.len < 8usize || (font_override.len == 0usize && name[0] != 83u8 && name[0] != 84u8 && name[0] != 78u8) { continue }
         if only.len > 0usize {
             var found = false
             var s = 0usize
@@ -516,11 +629,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
         at.bg = hex_color(name[nc.at + 7usize..nc.at + 13usize])
         var fi = at.face * 2usize
         if at.weight >= 600i64 { fi += 1usize }
+        // A probe atlas (scripts/winnative/probe_fonts.py) carries its own font next to it.
+        var probe_font = false
+        if name.len > 7usize && str.eq(name[0usize..6usize], "NProbe") && name[6usize] >= 48u8 && name[6usize] <= 57u8 {
+            probe_font = true
+            fi = 4usize + usize(name[6usize] - 48u8)
+        }
         if font_state[fi] == 0u8 {
             font_state[fi] = 2u8
-            let (bytes, read_error) = fs.read_file(a, font_file(at.face, at.weight), 16777216usize)
+            var font_text: str = font_path_of(font_override, at.face, at.weight)
+            if probe_font {
+                let (pd, pd_error) = str.concat(a, dir, "/")
+                if pd_error != ok { ret pd_error }
+                let (pf, pf_error) = str.concat(a, pd, name[0usize..7usize])
+                if pf_error != ok { ret pf_error }
+                let (pt, pt_error) = str.concat(a, pf, ".ttf")
+                if pt_error != ok { ret pt_error }
+                font_text = pt
+            }
+            let (bytes, read_error) = fs.read_file(ha, font_text, 16777216usize)
             if read_error == ok {
-                let (hn, open_error) = tthint.open(a, bytes)
+                let (hn, open_error) = tthint.open(ha, bytes)
                 let font = shape.Font { id: 1u32, data: bytes, face_index: 0u32 }
                 let (cmap, has_cmap) = shape.find_table(font, shape.TAG_CMAP)
                 if open_error == ok && has_cmap {
@@ -548,6 +677,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (ol_bytes, ol_read_error) = fs.read_file(a, ol_path3, 4000000usize)
         if ol_read_error != ok { continue }
         if !load_outlines(a, ol_bytes, ol, ol_at) { continue }
+        // GDI's ClearType-hinted points (tap fonts, scripts/winnative/tapall.py), when this font and size has them
+        var has_hinted = false
+        let (hd_path1, hd_path1_error) = str.concat(a, dir, "/")
+        if hd_path1_error != ok { ret hd_path1_error }
+        let (hd_path2, hd_path2_error) = str.concat(a, hd_path1, name[0usize..dot])
+        if hd_path2_error != ok { ret hd_path2_error }
+        let (hd_path3, hd_path3_error) = str.concat(a, hd_path2, ".hinted.gz")
+        if hd_path3_error != ok { ret hd_path3_error }
+        let (hd_present, hd_present_error) = fs.exists(a, hd_path3)
+        if hd_present_error == ok && hd_present {
+            let (hd_bytes, hd_read_error) = fs.read_file(a, hd_path3, 4000000usize)
+            if hd_read_error == ok { has_hinted = load_hinted(a, hd_bytes, hd, hd_at) }
+        }
         let (png_path, png_path_error) = str.concat(a, dir, "/")
         if png_path_error != ok { ret png_path_error }
         let (png_path2, png_path2_error) = str.concat(a, png_path, name)
@@ -581,13 +723,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
         // the expectation line for this atlas
-        var want: [449]u8 = zero
+        var want: [674]u8 = zero
         var has_want = false
         var line_at = 0usize
         while line_at + name.len + 1usize < expected.len {
             if str.eq(expected[line_at..line_at + name.len], name) && expected[line_at + name.len] == 32u8 {
                 var q = 0usize
-                while q < 449usize && line_at + name.len + 1usize + q < expected.len && expected[line_at + name.len + 1usize + q] != 10u8 {
+                while q < 674usize && line_at + name.len + 1usize + q < expected.len && expected[line_at + name.len + 1usize + q] != 10u8 {
                     want[q] = expected[line_at + name.len + 1usize + q]
                     q += 1usize
                 }
@@ -598,10 +740,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
             line_at += 1usize
         }
         var line_sum = Totals { glyphs: 0usize, ink: 0usize, px_ok: 0usize, px_same: 0usize, ink_px_ok: 0usize, bw_ok: 0usize, ink_bw_ok: 0usize, adv_ok: 0usize, bw_pts: 0usize, bw_pts_ok: 0usize }
-        var marks: [449]u8 = zero
+        var marks: [674]u8 = zero
         marks[224usize] = 32u8
+        marks[449usize] = 32u8
+        var line_hint_ok = 0usize
+        var line_hint = 0usize
+        var line_hint_points_ok = 0usize
+        var line_hint_points = 0usize
         var bw_len = 0usize
         var ct_len = 0usize
+        var stem_len = 0usize
         var code = 32usize
         while code < 256usize {
             let idx = code - 32usize
@@ -612,18 +760,56 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             let col = idx % 16usize
             let row = idx / 16usize
-            let (ct, ct_error) = ttglyph.hint_glyph(hinters[fi], a, at.px, gid, true)
+            if trace_code.len > 0usize && usize(code) == trace_code_number(trace_code) { ttglyph.set_trace_glyph(i64(gid)) } else { ttglyph.set_trace_glyph(-1i64) }
+            ttglyph.reset_stems()
+            let (ct, ct_error) = ttglyph.hint_glyph(hinters[fi], ha, at.px, gid, true)
             if !cleartype.begin(sc, 0i64, 0i64, at.cw, at.ch) { ret tthint.NoRoom }
             if ct_error == ok {
                 if !cleartype.add_glyph(sc, &ct, at.pad, at.pad + at.asc) { ret tthint.NoRoom }
             }
             let diff = compare_cell(sc, img, at, col * at.cw, row * at.ch, dump)
             if dump_dir.len > 0usize {
-                if ct_error == ok { ct_len = outline_line(ct_buf, ct_len, code, &ct) }
-                let (bwo, bwo_error) = ttglyph.hint_glyph(hinters[fi], a, at.px, gid, false)
+                if ct_error == ok {
+                    ct_len = outline_line(ct_buf, ct_len, code, &ct)
+                    // the stems (MIRP pairs along x) the program made, in a line of their own: S code rp0 p rp0 p ...
+                    var st = append(stem_buf, stem_len, "S ")
+                    st = append_int(stem_buf, st, i64(code))
+                    var si = 0usize
+                    while si < tthint.stem_count_now() {
+                        st = append(stem_buf, st, " ")
+                        st = append_int(stem_buf, st, tthint.stem_entry(2usize * si))
+                        st = append(stem_buf, st, " ")
+                        st = append_int(stem_buf, st, tthint.stem_entry(2usize * si + 1usize))
+                        si += 1usize
+                    }
+                    stem_len = append(stem_buf, st, "\n")
+                }
+                let (bwo, bwo_error) = ttglyph.hint_glyph(hinters[fi], ha, at.px, gid, false)
                 if bwo_error == ok { bw_len = outline_line(bw_buf, bw_len, code, &bwo) }
             }
-            let bw = compare_bw(hinters[fi], a, at.px, gid, ol, ol_at[code], scratch)
+            // GDI's hinted points against ours (body points and the left and right phantom points, x and y)
+            var hint_exact = false
+            if has_hinted && hd_at[code] < hd.len && ct_error == ok && usize(hd[hd_at[code] + 1usize]) == ct.n + 4usize {
+                line_hint += 1usize
+                hint_exact = true
+                var pi = 0usize
+                while pi < ct.n + 2usize {
+                    line_hint_points += 1usize
+                    if ct.cur[2usize * pi] == hd[hd_at[code] + 2usize + 2usize * pi] && ct.cur[2usize * pi + 1usize] == hd[hd_at[code] + 3usize + 2usize * pi] {
+                        line_hint_points_ok += 1usize
+                    } else {
+                        hint_exact = false
+                    }
+                    pi += 1usize
+                }
+                if hint_exact { line_hint_ok += 1usize }
+                if hint_exact { marks[450usize + idx] = 49u8 } else { marks[450usize + idx] = 48u8 }
+                if has_want && want[450usize + idx] == 49u8 && !hint_exact {
+                    failures += 1usize
+                    try io.printf["REGRESSION {} code {}: hinted points differ from GDI's\n"](name, code)
+                }
+            }
+            let bw = compare_bw(hinters[fi], ha, at.px, gid, ol, ol_at[code], scratch)
             let ink = ol[ol_at[code] + 9usize] > 0i64
             line_sum.glyphs += 1usize
             if ink { line_sum.ink += 1usize }
@@ -663,6 +849,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
             code += 1usize
         }
         if dump_dir.len > 0usize {
+            // the control value table as the size's `prep` left it, in ClearType (cvt.txt) and black and white (cvt-bw.txt)
+            var sz = 0usize
+            while sz < hinters[fi].size_count {
+                if hinters[fi].sizes[sz].ppem == at.px && hinters[fi].sizes[sz].ready {
+                    let buf = cvt_text(ha, hinters[fi].sizes[sz].cvt)
+                    var suffix: str = ".cvt-bw.txt"
+                    if hinters[fi].sizes[sz].cleartype { suffix = ".cvt.txt" }
+                    let (c1, c1_error) = str.concat(a, dump_dir, "/")
+                    if c1_error != ok { ret c1_error }
+                    let (c2, c2_error) = str.concat(a, c1, name[0usize..dot])
+                    if c2_error != ok { ret c2_error }
+                    let (c3, c3_error) = str.concat(a, c2, suffix)
+                    if c3_error != ok { ret c3_error }
+                    try fs.write_file(a, c3, buf)
+                }
+                sz += 1usize
+            }
             let (d1, d1_error) = str.concat(a, dump_dir, "/")
             if d1_error != ok { ret d1_error }
             let (d2, d2_error) = str.concat(a, d1, name)
@@ -678,13 +881,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (o3, o3_error) = str.concat(a, o1, ".ct.txt")
             if o3_error != ok { ret o3_error }
             try fs.write_file(a, o3, ct_buf[0usize..ct_len])
+            let (o4, o4_error) = str.concat(a, o1, ".stems.txt")
+            if o4_error != ok { ret o4_error }
+            try fs.write_file(a, o4, stem_buf[0usize..stem_len])
         }
         if write_exact {
             exact_len = append(exact_buf, exact_len, name)
             exact_len = append(exact_buf, exact_len, " ")
-            exact_len = append(exact_buf, exact_len, marks[0usize..449usize])
+            exact_len = append(exact_buf, exact_len, marks[0usize..674usize])
             exact_len = append(exact_buf, exact_len, "\n")
         }
+        hint_glyphs_ok += line_hint_ok
+        hint_glyphs += line_hint
+        hint_points_ok += line_hint_points_ok
+        hint_points += line_hint_points
         total.glyphs += line_sum.glyphs
         total.ink += line_sum.ink
         total.px_ok += line_sum.px_ok
@@ -696,11 +906,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         total.bw_pts += line_sum.bw_pts
         total.bw_pts_ok += line_sum.bw_pts_ok
         if report || verbose || write_exact {
-            try io.printf["{}: ink glyphs {} px(<=2) {} px(identical) {} bw-outline {} adv {} bw-points {} of {}\n"](name, line_sum.ink, line_sum.ink_px_ok, line_sum.px_same, line_sum.ink_bw_ok, line_sum.adv_ok, line_sum.bw_pts_ok, line_sum.bw_pts)
+            try io.printf["{}: ink glyphs {} px(<=2) {} px(identical) {} bw-outline {} adv {} bw-points {} of {} hinted {} of {} ({} of {} points)\n"](name, line_sum.ink, line_sum.ink_px_ok, line_sum.px_same, line_sum.ink_bw_ok, line_sum.adv_ok, line_sum.bw_pts_ok, line_sum.bw_pts, line_hint_ok, line_hint, line_hint_points_ok, line_hint_points)
         }
     }
     if report || verbose || write_exact {
-        try io.printf["TOTAL glyphs {} (ink {}): px within 2 levels {} / ink {}, px identical {}, bw outline exact {} / ink {}, advance {}, bw points {} of {}\n"](total.glyphs, total.ink, total.px_ok, total.ink_px_ok, total.px_same, total.bw_ok, total.ink_bw_ok, total.adv_ok, total.bw_pts_ok, total.bw_pts)
+        try io.printf["TOTAL glyphs {} (ink {}): px within 2 levels {} / ink {}, px identical {}, bw outline exact {} / ink {}, advance {}, bw points {} of {}, ClearType points exact for {} of {} glyphs ({} of {} points)\n"](total.glyphs, total.ink, total.px_ok, total.ink_px_ok, total.px_same, total.bw_ok, total.ink_bw_ok, total.adv_ok, total.bw_pts_ok, total.bw_pts, hint_glyphs_ok, hint_glyphs, hint_points_ok, hint_points)
     }
     if write_exact {
         let (out_path, out_path_error) = str.concat(a, dir, "/exact.txt")

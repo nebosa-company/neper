@@ -11,6 +11,7 @@ the advance, not the ClearType outline; the pixels are the ClearType truth.
 import glob
 import gzip
 import os
+import shutil
 import struct
 import sys
 import winreg
@@ -72,6 +73,9 @@ def main():
         if not f.endswith(("README.md", "exact.txt")):
             os.remove(f)
     meta = []
+    for p in sorted(glob.glob(raw + "/NProbe*.ttf")) + [raw + "/probe.json"]:
+        if os.path.exists(p):
+            shutil.copy(p, dst)
     for p in sorted(glob.glob(raw + "/*.outline.txt")):
         outline(p, os.path.join(dst, os.path.basename(p)[:-12] + ".outline.gz"))
     for p in sorted(glob.glob(raw + "/*.bgra")):

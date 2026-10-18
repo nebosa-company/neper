@@ -109,6 +109,9 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (argc < 6) return 2;
+  // GLYPHS_FONT=<file.ttf>: a private font to draw (probe fonts for the rasteriser; the face name is argv[2])
+  const char *own = getenv("GLYPHS_FONT");
+  if (own) { wchar_t wp[1024]; MultiByteToWideChar(CP_ACP, 0, own, -1, wp, 1024); for (wchar_t *q = wp; *q; q++) if (*q == 47) *q = 92; if (!AddFontResourceExW(wp, FR_PRIVATE, 0)) { fprintf(stderr, "cannot load %s\n", own); return 3; } }
   wchar_t face[64]; MultiByteToWideChar(CP_ACP, 0, argv[2], -1, face, 64);
   int weight = atoi(argv[3]), px = atoi(argv[4]), quality = atoi(argv[5]);
   HFONT f = make_font(face, weight, px, quality);
@@ -121,15 +124,19 @@ int main(int argc, char **argv) {
   FILE *o = fopen(path, "wb");
   fprintf(o, "FONT %ls weight %d px %d quality %d ascent %ld descent %ld height %ld\n", got, weight, px, quality, tm.tmAscent, tm.tmDescent, tm.tmHeight);
   int maxadv = 0;
+  // GLYPHS_CELL=<cell w>,<cell h>,<baseline row>: cells of that size, glyphs set on a baseline (the tap fonts draw far from the pen);
+  // GLYPHS_NOOUTLINE=1: no outline dump
+  int tap = getenv("GLYPHS_CELL") != NULL, skip_outline = getenv("GLYPHS_NOOUTLINE") != NULL;
   for (int code = 32; code < 256; code++) {
-    dump_outline(dc, o, code);
+    if (!skip_outline) dump_outline(dc, o, code);
     int wv = 0; GetCharWidth32W(dc, code, code, &wv);
     ABC abc; GetCharABCWidthsW(dc, code, code, &abc);
     fprintf(o, "W %d %d %d %d\n", wv, abc.abcA, abc.abcB, abc.abcC);
     if (wv > maxadv) maxadv = wv;
   }
   fclose(o);
-  int pad = 6, cw = maxadv + 2 * pad, ch = tm.tmHeight + 2 * pad, cols = 16, rows = 14;
+  int pad = 6, cw = maxadv + 2 * pad, ch = tm.tmHeight + 2 * pad, cols = 16, rows = 14, base = pad + tm.tmAscent;
+  if (tap) { sscanf(getenv("GLYPHS_CELL"), "%d,%d,%d", &cw, &ch, &base); }
   int w = cw * cols, h = ch * rows;
   BITMAPINFO bi = {0};
   bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h; bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
@@ -146,11 +153,19 @@ int main(int argc, char **argv) {
     SetTextColor(dc, RGB((fg >> 16) & 255, (fg >> 8) & 255, fg & 255));
     for (int code = 32; code < 256; code++) {
       int i = code - 32; wchar_t ch1 = (wchar_t)code;
-      TextOutW(dc, (i % cols) * cw + pad, (i / cols) * ch + pad, &ch1, 1);
+      // clipped to the cell, so what a glyph draws far from its pen cannot reach the next cell
+      SaveDC(dc);
+      IntersectClipRect(dc, (i % cols) * cw, (i / cols) * ch, (i % cols + 1) * cw, (i / cols + 1) * ch);
+      if (getenv("GLYPHS_READER") && atoi(getenv("GLYPHS_READER")) >= 3) ch1 = 33;  // the control value table readers: '!' leaves the table
+      TextOutW(dc, (i % cols) * cw + pad, (i / cols) * ch + base - tm.tmAscent, &ch1, 1);
+      // GLYPHS_READER=1 or 2: after a tap font's glyph, its reader (U+E000 + code - 32 for 1, U+E100 + code - 32 for 2) on the same pen, which shows
+      // what the glyph left in storage
+      if (getenv("GLYPHS_READER")) { wchar_t rc = (wchar_t)(0xE000 + (atoi(getenv("GLYPHS_READER")) - 1) * 0x100 + code - 32); TextOutW(dc, (i % cols) * cw + pad, (i / cols) * ch + base - tm.tmAscent, &rc, 1); }
+      RestoreDC(dc, -1);
     }
     GdiFlush();
     snprintf(path, sizeof path, "%s/%s.%s-%s.bgra", outdir, tag, fgs, bgs);
-    FILE *b = fopen(path, "wb"); int hdr[6] = {w, h, cw, ch, tm.tmAscent, pad}; fwrite(hdr, 4, 6, b); fwrite(bits, 4, (size_t)w * h, b); fclose(b);
+    FILE *b = fopen(path, "wb"); int hdr[6] = {w, h, cw, ch, base - pad, pad}; fwrite(hdr, 4, 6, b); fwrite(bits, 4, (size_t)w * h, b); fclose(b);
   }
   SelectObject(dc, old);
   return 0;

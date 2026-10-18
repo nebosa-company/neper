@@ -26,7 +26,13 @@ const MAX_COLS: usize = 6144usize
 const MAX_BUFFER: usize = 3145728usize
 
 // A piece is a line (`quad` false) or a quadratic from (x0, y0) by control (cx, cy) to (x1, y1), monotone in y.
-type Scratch = struct { x0: []f64, y0: []f64, cx: []f64, cy: []f64, x1: []f64, y1: []f64, quad: []bool, n: usize, counts: []i64, kbuf: []u8, kx0: i64, ky0: i64, kw: usize, kh: usize, hx: [160]f64, hd: [160]i64, over: bool }
+type Scratch = struct { x0: []f64, y0: []f64, cx: []f64, cy: []f64, x1: []f64, y1: []f64, quad: []bool, n: usize, counts: []i64, line: []i64, kbuf: []u8, kx0: i64, ky0: i64, kw: usize, kh: usize, hx: [160]f64, hd: [160]i64, over: bool }
+
+// Variants of the sampler under test: 1 weights the five lines 1 2 3 2 1, 2 takes a piece's x at the line instead of the row's middle,
+// 4 takes a line along an edge both ways.
+var raster_mode: i64 = zero
+
+fn set_raster(n: i64) { raster_mode = n }
 
 fn scratch(a: *mem.Arena) -> (*Scratch, err) {
     let (cells, cells_error) = mem.alloc[Scratch](a, 1usize)
@@ -52,6 +58,8 @@ fn scratch(a: *mem.Arena) -> (*Scratch, err) {
     if e7 != ok { ret (zero, e7) }
     let (kbuf, e8) = mem.alloc[u8](a, MAX_BUFFER)
     if e8 != ok { ret (zero, e8) }
+    let (line, e9) = mem.alloc[i64](a, MAX_COLS + 24usize)
+    if e9 != ok { ret (zero, e9) }
     sc.x0 = x0
     sc.y0 = y0
     sc.cx = cx
@@ -60,6 +68,7 @@ fn scratch(a: *mem.Arena) -> (*Scratch, err) {
     sc.y1 = y1
     sc.quad = quad
     sc.counts = counts
+    sc.line = line
     sc.kbuf = kbuf
     ret (sc, ok)
 }
@@ -135,6 +144,12 @@ fn add_quad(sc: *Scratch, ax: f64, ay: f64, qx: f64, qy: f64, bx: f64, by: f64) 
 }
 
 // The outline's contours as pieces in device 26.6 units: the pen is a whole pixel, the glyph's left phantom point on it.
+// The x of point `i` of a hinted outline in 26.6 pixels: the fitted glyphs of ClearType carry it finer than the grid.
+fn point_x(o: *const tthint.Outline, i: usize) -> f64 {
+    if o.fine && (raster_mode & 16i64) == 0i64 { ret f64(o.fx[i]) / f64(tthint.CT_FINE) }
+    ret f64(o.cur[2usize * i])
+}
+
 fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64) {
     sc.n = 0usize
     sc.over = false
@@ -163,10 +178,10 @@ fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64) {
         var curx = 0.0f64
         var cury = 0.0f64
         if found {
-            curx = ox + f64(o.cur[2usize * start])
+            curx = ox + point_x(o, start)
             cury = f64(o.cur[2usize * start + 1usize])
         } else {
-            curx = ox + f64(o.cur[2usize * first] + o.cur[2usize * last]) / 2.0f64
+            curx = ox + (point_x(o, first) + point_x(o, last)) / 2.0f64
             cury = f64(o.cur[2usize * first + 1usize] + o.cur[2usize * last + 1usize]) / 2.0f64
         }
         let firstx = curx
@@ -180,7 +195,7 @@ fn flatten(sc: *Scratch, o: *const tthint.Outline, pen: i64) {
             var index = first + k
             if found { index = first + (start - first + 1usize + k) % count }
             k += 1usize
-            let x = ox + f64(o.cur[2usize * index])
+            let x = ox + point_x(o, index)
             let y = f64(o.cur[2usize * index + 1usize])
             if (o.tags[index] & 1i64) != 0i64 {
                 if !has_ctrl {
@@ -247,16 +262,25 @@ fn piece_x(sc: *Scratch, e: usize, y: f64) -> f64 {
     ret u * u * ax + 2.0f64 * t * u * qx + t * t * bx
 }
 
-// One scanline's spans into the column counts: the winding rule over the pieces crossing `yc`, a piece's x taken at `yrow`.
-fn scanline(sc: *Scratch, yc: f64, yrow: f64, xlo64: f64, cols: usize) {
+// One sample line's spans into the column counts: the winding rule over the pieces crossing `yc`, each covered sample worth `wgt`.
+// `upper` flips which end of a piece counts at a y where a piece ends exactly on the line (lower end in, upper out; or the reverse), so
+// a line that runs along an edge counts the edge's samples either way: GDI's samples on the outline are inside. Answers whether a
+// piece had an end on the line, which is when the other convention is worth a second pass.
+fn scanline(sc: *Scratch, yc: f64, yrow: f64, xlo64: f64, cols: usize, wgt: i64, upper: bool, xline: bool) -> bool {
     var m = 0usize
     var e = 0usize
+    var tie = false
     while e < sc.n {
         let y0 = sc.y0[e]
         let y1 = sc.y1[e]
-        if (y0 <= yc) != (y1 <= yc) {
+        if y0 == yc || y1 == yc { tie = true }
+        var crosses = (y0 <= yc) != (y1 <= yc)
+        if upper { crosses = (y0 < yc) != (y1 < yc) }
+        if crosses {
             var x = 0.0f64
-            if (y0 <= yrow) != (y1 <= yrow) {
+            if xline {
+                x = piece_x(sc, e, yc)
+            } else if (y0 <= yrow) != (y1 <= yrow) {
                 x = piece_x(sc, e, yrow)
             } else {
                 var d0 = y0 - yrow
@@ -282,6 +306,7 @@ fn scanline(sc: *Scratch, yc: f64, yrow: f64, xlo64: f64, cols: usize) {
         }
         e += 1usize
     }
+    // The samples of this line, 1 each, so that a sample two spans cover (or two passes) counts once.
     var w = 0i64
     var i = 0usize
     while i + 1usize < m {
@@ -295,12 +320,13 @@ fn scanline(sc: *Scratch, yc: f64, yrow: f64, xlo64: f64, cols: usize) {
             if kb > i64(cols) - 1i64 { kb = i64(cols) - 1i64 }
             var k = ka
             while k <= kb {
-                sc.counts[usize(k) + 12usize] = sc.counts[usize(k) + 12usize] + 1i64
+                sc.line[usize(k) + 12usize] = wgt
                 k += 1i64
             }
         }
         i += 1usize
     }
+    ret tie
 }
 
 // Rasterises the outline into the buffer (clipped to its window). False when the glyph has too many pieces or is too wide.
@@ -329,6 +355,11 @@ fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) ->
     let cols = usize(hi - lo) * 6usize
     if cols > MAX_COLS { ret false }
     let xlo64 = f64(lo * 64i64)
+    var mode = raster_mode & 15i64
+    if mode == 0i64 {
+        mode = 7i64
+        if o.hinted { mode = 12i64 }
+    }
     let subs = usize(hi - lo) * 3usize
     var r = y_hi - 1i64
     while r >= y_lo {
@@ -340,10 +371,37 @@ fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) ->
                 sc.counts[z] = 0i64
                 z += 1usize
             }
+            // Five sample lines to the row at .1 .3 .5 .7 .9, weighted 1 2 3 2 1 (a vertical triangle filter), each a plain
+            // inside-or-not test of six samples to the pixel; a sample line that runs along an outline's edge is taken both ways.
             var j = 0usize
             while j < 5usize {
                 let yc = f64(r * 64i64) + (f64(j) + 0.5f64) * 64.0f64 / 5.0f64
-                scanline(sc, yc, f64(r * 64i64) + 32.0f64, xlo64, cols)
+                var wgt = 1i64
+                if (mode & 8i64) != 0i64 {
+                    wgt = 9i64
+                    if j != 2usize {
+                        j += 1usize
+                        continue
+                    }
+                }
+                if (mode & 1i64) != 0i64 && (mode & 8i64) == 0i64 {
+                    if j == 1usize || j == 3usize { wgt = 2i64 }
+                    if j == 2usize { wgt = 3i64 }
+                }
+                z = 0usize
+                while z < cols + 24usize {
+                    sc.line[z] = 0i64
+                    z += 1usize
+                }
+                let xline = (mode & 2i64) != 0i64
+                let yrow = f64(r * 64i64) + 32.0f64
+                let tie = scanline(sc, yc, yrow, xlo64, cols, wgt, false, xline)
+                if tie && (mode & 4i64) != 0i64 { let again = scanline(sc, yc, yrow, xlo64, cols, wgt, true, xline) }
+                z = 0usize
+                while z < cols + 24usize {
+                    sc.counts[z] = sc.counts[z] + sc.line[z]
+                    z += 1usize
+                }
                 j += 1usize
             }
             var m = 0usize
@@ -356,6 +414,7 @@ fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) ->
                 }
                 if n > 0i64 {
                     var kv = (n * 2i64 + 5i64) / 10i64
+                    if (mode & 9i64) != 0i64 { kv = (n + 4i64) / 9i64 }
                     if kv > 6i64 { kv = 6i64 }
                     let sx = lo * 3i64 + i64(m)
                     let col = sx - sc.kx0 * 3i64
