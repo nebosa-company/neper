@@ -11,6 +11,7 @@ use e.mem
 use e.str
 use e.text.unicode as unicode
 use e.text.uprops as uprops
+use e.text.emoji_seq as emoji_seq
 
 const NONE: u32 = 4294967295u32
 
@@ -816,26 +817,69 @@ fn v_string_disjunction(p: *Parse) -> (CSet, err) {
     ret (set, ok)
 }
 
-// The strings of a property of strings (only Emoji_Keycap_Sequence is built in); `found` is false for other names.
-fn string_property(p: *Parse, name: str) -> (CSet, bool, err) {
-    let (cs, cse) = cset_new(p)
-    if cse != ok { ret (cs, false, cse) }
-    var set = cs
-    if !str.eq(name, "Emoji_Keycap_Sequence") { ret (set, false, ok) }
+fn add_sequences(p: *Parse, set: *CSet, data: str) -> err {
+    var i = 0usize
+    let (l0, le0) = list.init[u32](p.a, 4usize)
+    if le0 != ok { ret le0 }
+    var seq = l0
+    while i + 3usize <= data.len {
+        let cp = u32(data[i]) | (u32(data[i + 1usize]) << 8u32) | (u32(data[i + 2usize]) << 16u32)
+        i += 3usize
+        if cp == 16777215u32 {
+            try cset_add_str(p, set, seq)
+            let (l1, le1) = list.init[u32](p.a, 4usize)
+            if le1 != ok { ret le1 }
+            seq = l1
+        } else {
+            try list.push[u32](&seq, cp)
+        }
+    }
+    ret ok
+}
+
+fn add_keycaps(p: *Parse, set: *CSet) -> err {
     var k = 0u32
     while k < 12u32 {
         var base = 35u32
         if k == 1u32 { base = 42u32 } else if k >= 2u32 { base = 48u32 + k - 2u32 }
         let (l, le) = list.init[u32](p.a, 3usize)
-        if le != ok { ret (set, false, le) }
+        if le != ok { ret le }
         var seq = l
         try list.push[u32](&seq, base)
         try list.push[u32](&seq, 65039u32)
         try list.push[u32](&seq, 8419u32)
-        try cset_add_str(p, &set, seq)
+        try cset_add_str(p, set, seq)
         k += 1u32
     }
-    ret (set, true, ok)
+    ret ok
+}
+
+// The strings of a property of strings; `found` is false for other names. RGI_Emoji is the union of the sequence families.
+fn string_property(p: *Parse, name: str) -> (CSet, bool, err) {
+    let (cs, cse) = cset_new(p)
+    if cse != ok { ret (cs, false, cse) }
+    var set = cs
+    if str.eq(name, "Emoji_Keycap_Sequence") {
+        try add_keycaps(p, &set)
+        ret (set, true, ok)
+    }
+    if str.eq(name, "RGI_Emoji") {
+        try add_keycaps(p, &set)
+        try add_sequences(p, &set, emoji_seq.sequences("Basic_Emoji"))
+        try add_sequences(p, &set, emoji_seq.sequences("RGI_Emoji_Flag_Sequence"))
+        try add_sequences(p, &set, emoji_seq.sequences("RGI_Emoji_Modifier_Sequence"))
+        try add_sequences(p, &set, emoji_seq.sequences("RGI_Emoji_Tag_Sequence"))
+        try add_sequences(p, &set, emoji_seq.sequences("RGI_Emoji_ZWJ_Sequence"))
+        try ranges_norm(p, &set.ranges)
+        ret (set, true, ok)
+    }
+    let data = emoji_seq.sequences(name)
+    if data.len > 0usize {
+        try add_sequences(p, &set, data)
+        try ranges_norm(p, &set.ranges)
+        ret (set, true, ok)
+    }
+    ret (set, false, ok)
 }
 
 // The name inside `{...}` at the cursor, without consuming it.
