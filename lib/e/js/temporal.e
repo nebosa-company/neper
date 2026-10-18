@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 193398)
+    var b = try str.builder(a, 194783)
     try str.push(&b, "// The Temporal built-ins (ISO 8601 calendar; UTC and fixed-offset time zones), evaluated into the main realm after the prelude\n")
     try str.push(&b, "// (generated into temporal.e by scripts/gen_js_prelude.py). Page scripts cannot change how they behave: intrinsics are captured up front.\n")
     try str.push(&b, "(function (global) {\n")
@@ -3578,6 +3578,19 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "      return wrapInstant(Big(t) * NS.ms);\n")
     try str.push(&b, "    }\n")
     try str.push(&b, "  }.toTemporalInstant, 0));\n")
+    try str.push(&b, "  // Intl.DateTimeFormat reads Temporal objects through this (captured and removed by the Intl script).\n")
+    try str.push(&b, "  define(global, '__temporalFormat', function (v) {\n")
+    try str.push(&b, "    if (!isObject(v)) return undefined;\n")
+    try str.push(&b, "    var r;\n")
+    try str.push(&b, "    if (pdSlots.has(v)) { r = pdSlots.get(v); return { type: 'PlainDate', cal: calOf(r), y: r.year, mo: r.month, d: r.day }; }\n")
+    try str.push(&b, "    if (pdtSlots.has(v)) { r = pdtSlots.get(v); return { type: 'PlainDateTime', cal: calOf(r.date), y: r.date.year, mo: r.date.month, d: r.date.day, h: r.time.hour, mi: r.time.minute, s: r.time.second, ms: r.time.millisecond }; }\n")
+    try str.push(&b, "    if (timeSlots.has(v)) { r = timeSlots.get(v); return { type: 'PlainTime', cal: 'iso8601', h: r.hour, mi: r.minute, s: r.second, ms: r.millisecond }; }\n")
+    try str.push(&b, "    if (pymSlots.has(v)) { r = pymSlots.get(v); return { type: 'PlainYearMonth', cal: calOf(r), y: r.year, mo: r.month, d: r.day }; }\n")
+    try str.push(&b, "    if (pmdSlots.has(v)) { r = pmdSlots.get(v); return { type: 'PlainMonthDay', cal: calOf(r), y: r.year, mo: r.month, d: r.day }; }\n")
+    try str.push(&b, "    if (instantSlots.has(v)) return { type: 'Instant', cal: 'iso8601', epochMs: Num(floorDiv(instantSlots.get(v), NS.ms)) };\n")
+    try str.push(&b, "    if (zdtSlots.has(v)) { r = zdtSlots.get(v); return { type: 'ZonedDateTime', cal: r.cal === undefined ? 'iso8601' : r.cal, epochMs: Num(floorDiv(r.ns, NS.ms)), tzId: r.tz.id, tzOffsetMinutes: r.tz.named ? null : r.tz.offset / 60000000000 }; }\n")
+    try str.push(&b, "    return undefined;\n")
+    try str.push(&b, "  });\n")
     try str.push(&b, "  define(global, 'Temporal', Temporal);\n")
     try str.push(&b, "})(globalThis);\n")
     ret (str.done(&b), ok)
