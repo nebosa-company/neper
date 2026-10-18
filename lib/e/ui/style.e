@@ -1193,6 +1193,13 @@ fn lift_ink(t: *const ThemeTokens, ink: paint.Color) -> paint.Color {
     ret out
 }
 
+// The edge of an interactive frame (list, read-only field): OutlineVariant, which is a divider's ink, reads 2.0:1 on the Neper
+// dark page, so that look takes a fixed ink at 3.9:1 on the page and 3.5:1 on a container; everything else is unchanged.
+fn frame_ink(t: *const ThemeTokens) -> paint.Color {
+    if t.palette == .Dark && t.profile == .Neper { ret hex_raw(0x707380u32) }
+    ret color(t, .OutlineVariant)
+}
+
 // A control's look under its state, resolved once at build: pressed darkens toward
 // the background, hover tints toward the text colour, selection tints, invalid
 // borders in the error colour, focus draws the ring, disabled halves the opacity,

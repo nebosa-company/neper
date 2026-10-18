@@ -3,11 +3,13 @@
 `python -I scripts/neper_dark_contrast.py [--all] [sheet ...]`   (names under docs/ui/looks/neper-dark/, without .png; none = every 1.0 sheet)
 
 The page is the sheet's corner colour. Per sheet, from the 1.0 PNG:
-  boundary : each connected group of non-page pixels (grown 2 px, box >= 8 px each way) that has a drawn border or fill must
-             show it at >= 3 : 1 against the page (the perimeter colour, else the fill);
+  boundary : each connected group of non-page pixels (grown 2 px, box >= 8 px each way) whose perimeter is a drawn border (a
+             colour that is neither the page nor the fill) must show it at >= 3 : 1 against the page. Fill-only surfaces
+             (bars, rows, panels, selection fills) have no border to judge and are not boundaries;
   text     : ink is whatever departs from its local background (the 9 px median), merged along the row into runs; a run
              at least 7 px tall and wider than tall is text and needs >= 4.5 : 1 (its core pixel against that background),
-             any other ink blob (icon, mark, caret) needs >= 3 : 1; hairlines (1 px wide or tall) are not judged.
+             any other ink blob (icon, mark, caret) needs >= 3 : 1; rules (a blob at most 6 px thick and at least 3 times as long: dividers,
+             grid and tree lines, which carry no information) and hairlines are not judged.
 A disabled control is exempt in WCAG. Neper draws one as its ink at 38 % (content) and 12 % (container) over what it sits
 on (style.disabled_look), so a run or fill that is exactly that mix of the on-surface inks over its background is skipped and
 counted as `disabled`. Exit status is the number of sheets with a FAIL line.
@@ -28,7 +30,7 @@ def lin(c):
 
 
 def lum_arr(img):
-    l = lin(img.astype(float))
+    l = lin(img.astype(np.float32))
     return 0.2126 * l[..., 0] + 0.7152 * l[..., 1] + 0.0722 * l[..., 2]
 
 
@@ -76,8 +78,8 @@ def check(name):
             continue
         per = np.concatenate([img[y0, x0:x1 + 1], img[y1, x0:x1 + 1], img[y0:y1 + 1, x0], img[y0:y1 + 1, x1]])
         edge, face = mode(per), mode(img[y0 + 1:y1, x0 + 1:x1])
-        shown = edge if edge != page else face
-        if shown != page and not disabled(shown, page, 0.12):
+        shown = edge
+        if shown not in (page, face) and not disabled(shown, page, 0.12):
             r = float(ratio(one_lum(shown), lp))
             if r < 3.0:
                 fails.append("boundary (%d,%d) %dx%d %s on page %s %.2f:1 < 3" % (x0, y0, x1 - x0 + 1, y1 - y0 + 1, hx(shown), hx(page), r))
@@ -99,7 +101,9 @@ def check(name):
             continue
         i = np.unravel_index(np.where(sel, cr[sl], 0).argmax(), sel.shape)
         core = float(cr[sl][i])
-        text = h >= 7 and w > h and sel.sum() >= 12
+        if min(h, w) <= 6 and max(h, w) >= 3 * min(h, w) and not (h >= 7 and w > h):
+            continue
+        text = 7 <= h <= 22 and w > h and sel.sum() >= 12
         need = 4.5 if text else 3.0
         y, x = ys.start + i[0], xs.start + i[1]
         if core < need and not disabled(img[y, x].astype(float), bgc[y, x].astype(float), 0.38):

@@ -6453,7 +6453,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         label_color = edge
     }
     if options.read_only && !options.invalid {
-        edge = style.color(t.tokens, .OutlineVariant)
+        edge = style.frame_ink(t.tokens)
         edge_width = t.tokens.sizes.divider
     }
     var value_color = ink
@@ -8113,7 +8113,7 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     view_style.width = style.Length { Px: width }
     view_style.height = style.Length { Px: f32(rows) * row_height + 8.0 }
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
-    view_style.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+    view_style.border = style.Border { width: t.tokens.sizes.divider, color: style.frame_ink(t.tokens) }
     view_style.radius = t.tokens.radii.sm
     if multi { view_style.radius = t.tokens.radii.md }
     if t.tokens.profile == .MaterialLike && multi { view_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) } }
@@ -12800,7 +12800,7 @@ fn multi_select_list_counted(a: *mem.Arena, key: widget.Key, t: *const Theme, la
     stack[2usize] = list
     var frame = style.defaults()
     frame.width = style.Length { Px: width }
-    frame.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+    frame.border = style.Border { width: t.tokens.sizes.divider, color: style.frame_ink(t.tokens) }
     frame.radius = t.tokens.radii.md
     frame.overflow = .Clip
     let one = style.Length { Px: 1.0 }
