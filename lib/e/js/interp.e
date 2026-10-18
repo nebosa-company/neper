@@ -127,7 +127,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [12]*Obj, ta_protos: [12]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
 }
@@ -2578,7 +2578,7 @@ fn realm_proto(it: *Interp, ctor: *Obj, p: *Obj) -> *Obj {
     if p == it.protos.data_view { ret rl.protos.data_view }
     if p == it.protos.aggregate_error { ret rl.protos.aggregate_error }
     var k = 0usize
-    while k < 12usize {
+    while k < 13usize {
         if p == it.ta_protos[k] { ret rl.ta_protos[k] }
         k += 1usize
     }
@@ -6774,9 +6774,57 @@ type TArr = struct { buffer: *Obj, offset: usize, length: usize, kind: u8, track
 fn buf_of(o: *Obj) -> *Buf { ret mem.cast[*Buf](o.data) }
 fn ta_of(o: *Obj) -> *TArr { ret mem.cast[*TArr](o.data) }
 
+fn is_big_kind(kind: u8) -> bool { ret kind == 10u8 || kind == 11u8 }
+
+fn pow2_exact(e: i64) -> f64 { ret mem.bitcast[f64](u64(e + 1023i64) << 52u64) }
+
+// Half-precision conversions (Float16Array, DataView, Math.f16round).
+fn f16_to_f64(h: u64) -> f64 {
+    let sign = (h >> 15u64) & 1u64
+    let e = i64((h >> 10u64) & 31u64)
+    let m = f64(h & 1023u64)
+    var v = 0.0f64
+    if e == 0i64 { v = m * pow2_exact(-24i64) } else if e == 31i64 {
+        if m != 0.0f64 { ret mem.bitcast[f64](9221120237041090560u64) }
+        v = mem.bitcast[f64](9218868437227405312u64)
+    } else { v = (1.0f64 + m / 1024.0f64) * pow2_exact(e - 15i64) }
+    if sign == 1u64 { ret -v }
+    ret v
+}
+
+fn round_half_even(x: f64) -> f64 {
+    let f = floor(x)
+    let diff = x - f
+    if diff > 0.5f64 || (diff == 0.5f64 && fmod_js(f, 2.0f64) != 0.0f64) { ret f + 1.0f64 }
+    ret f
+}
+
+fn f64_to_f16(n: f64) -> u64 {
+    if n != n { ret 32256u64 }
+    let bits = mem.bitcast[u64](n)
+    let sign = ((bits >> 63u64) & 1u64) << 15u64
+    var a = n
+    if a < 0.0f64 { a = -a }
+    if a == 0.0f64 { ret sign }
+    if a >= 65520.0f64 { ret sign | 31744u64 }
+    if a < 6.103515625e-5f64 {
+        let sub = round_half_even(a * 16777216.0f64)
+        ret sign | u64(sub)
+    }
+    var ex = i64((mem.bitcast[u64](a) >> 52u64) & 2047u64) - 1023i64
+    let mant = a / pow2_exact(ex)
+    var m = round_half_even((mant - 1.0f64) * 1024.0f64)
+    if m >= 1024.0f64 {
+        m = 0.0f64
+        ex += 1i64
+    }
+    if ex > 15i64 { ret sign | 31744u64 }
+    ret sign | (u64(ex + 15i64) << 10u64) | u64(m)
+}
+
 fn ta_elem_size(kind: u8) -> usize {
     if kind == 1u8 || kind == 2u8 || kind == 3u8 { ret 1usize }
-    if kind == 4u8 || kind == 5u8 { ret 2usize }
+    if kind == 4u8 || kind == 5u8 || kind == 12u8 { ret 2usize }
     if kind == 6u8 || kind == 7u8 || kind == 8u8 { ret 4usize }
     ret 8usize
 }
@@ -6816,7 +6864,7 @@ fn read_unit(bytes: []const u8, at: usize, size: usize) -> u64 {
 // The element bits of `v` for a typed array of `kind`: converts like the element setters do (a number for the numeric kinds,
 // a BigInt for BigInt64Array and BigUint64Array).
 fn ta_raw_of(it: *Interp, kind: u8, v: Value) -> (u64, err) {
-    if kind >= 10u8 {
+    if is_big_kind(kind) {
         let (b, be) = to_bigint(it, v)
         if be != ok { ret (0u64, be) }
         ret (bigint.to_u64_wrapping(b), ok)
@@ -6828,7 +6876,7 @@ fn ta_raw_of(it: *Interp, kind: u8, v: Value) -> (u64, err) {
 
 // The same for a value that already has the element type (read back from a typed array): no conversion can fail.
 fn ta_raw_of_typed(kind: u8, v: Value) -> u64 {
-    if kind >= 10u8 { ret bigint.to_u64_wrapping(big_of(v)) }
+    if is_big_kind(kind) { ret bigint.to_u64_wrapping(big_of(v)) }
     ret value_to_raw(kind, num_of(v))
 }
 
@@ -6860,12 +6908,14 @@ fn raw_to_value(it: *Interp, kind: u8, raw: u64) -> Value {
         ret num_value(f64(v3))
     }
     if kind == 8u8 { ret num_value(f64(mem.bitcast[f32](u32(raw & 4294967295u64)))) }
+    if kind == 12u8 { ret num_value(f16_to_f64(raw & 65535u64)) }
     ret num_value(mem.bitcast[f64](raw))
 }
 
 fn value_to_raw(kind: u8, n: f64) -> u64 {
     if kind == 9u8 { ret mem.bitcast[u64](n) }
     if kind == 8u8 { ret u64(mem.bitcast[u32](f32(n))) }
+    if kind == 12u8 { ret f64_to_f16(n) }
     if kind == 3u8 {
         if js_is_nan_value(n) { ret 0u64 }
         if n <= 0.0f64 { ret 0u64 }

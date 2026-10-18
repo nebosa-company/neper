@@ -35,7 +35,7 @@ fn validate_integer(it: *js.Interp, v: js.Value, waitable: bool) -> (*js.Obj, er
     if waitable {
         if kind != 6u8 && kind != 10u8 { ret (js.null_obj(), js.throw_type(it, "Atomics.wait requires an Int32Array or a BigInt64Array")) }
     } else {
-        if kind == 3u8 || kind == 8u8 || kind == 9u8 { ret (js.null_obj(), js.throw_type(it, "Atomics operation requires an integer typed array")) }
+        if kind == 3u8 || kind == 8u8 || kind == 9u8 || kind == 12u8 { ret (js.null_obj(), js.throw_type(it, "Atomics operation requires an integer typed array")) }
     }
     if js.ta_out_of_bounds(o) { ret (js.null_obj(), js.throw_type(it, "typed array is detached or out of bounds")) }
     ret (o, ok)
@@ -56,7 +56,7 @@ fn validate_access(it: *js.Interp, o: *js.Obj, req: js.Value) -> (usize, err) {
 
 // The value to store: a BigInt for the BigInt kinds, else an integer-valued number.
 fn coerce_value(it: *js.Interp, kind: u8, v: js.Value) -> (js.Value, err) {
-    if kind >= 10u8 {
+    if js.is_big_kind(kind) {
         let (b, be) = js.to_bigint(it, v)
         if be != ok { ret (js.undefv(), be) }
         ret (js.big_value(b), ok)

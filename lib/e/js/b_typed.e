@@ -386,6 +386,7 @@ fn kind_name(kind: u8) -> str {
     if kind == 6u8 { ret "Int32Array" }
     if kind == 7u8 { ret "Uint32Array" }
     if kind == 8u8 { ret "Float32Array" }
+    if kind == 12u8 { ret "Float16Array" }
     if kind == 10u8 { ret "BigInt64Array" }
     if kind == 11u8 { ret "BigUint64Array" }
     ret "Float64Array"
@@ -474,7 +475,7 @@ fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Va
         let src = js.ta_of(fo)
         if js.buf_of(src.buffer).detached { ret (js.undefv(), js.throw_type(it, "source typed array is detached")) }
         let n = js.ta_length(fo)
-        if (src.kind >= 10u8) != (kind >= 10u8) { ret (js.undefv(), js.throw_type(it, "Cannot mix BigInt and other types, use explicit conversions")) }
+        if (js.is_big_kind(src.kind)) != (js.is_big_kind(kind)) { ret (js.undefv(), js.throw_type(it, "Cannot mix BigInt and other types, use explicit conversions")) }
         let (o3, oe3) = create_typed(it, kind, proto, n)
         if oe3 != ok { ret (js.undefv(), oe3) }
         var i = 0usize
@@ -537,6 +538,8 @@ fn ctor_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
 fn ctor_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 7u8, args)
     ret (r, e) }
 fn ctor_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 8u8, args)
+    ret (r, e) }
+fn ctor_float16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 12u8, args)
     ret (r, e) }
 fn ctor_bigint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 10u8, args)
     ret (r, e) }
@@ -633,7 +636,7 @@ fn ta_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Val
             tmp[i] = js.ta_get_index(it, so, i)
             i += 1usize
         }
-        if (js.ta_of(so).kind >= 10u8) != (kind >= 10u8) { ret (js.undefv(), js.throw_type(it, "Cannot mix BigInt and other types, use explicit conversions")) }
+        if (js.is_big_kind(js.ta_of(so).kind)) != (js.is_big_kind(kind)) { ret (js.undefv(), js.throw_type(it, "Cannot mix BigInt and other types, use explicit conversions")) }
         var j = 0usize
         while j < n {
             js.ta_set_raw(it, o, usize(offset) + j, js.ta_raw_of_typed(kind, tmp[j]))
@@ -923,7 +926,7 @@ fn ta_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     var rel = js.to_integer(n)
     if rel < 0.0f64 { rel = len + rel }
     var new_value = arg(args, 1usize)
-    if js.ta_of(o).kind >= 10u8 {
+    if js.is_big_kind(js.ta_of(o).kind) {
         let (nb, nbe) = js.to_bigint(it, new_value)
         if nbe != ok { ret (js.undefv(), nbe) }
         new_value = js.big_value(nb)
@@ -1189,11 +1192,11 @@ fn install_typed_arrays(it: *js.Interp) {
     if atse == ok { let e7 = js.define_data(it, it.protos.typed_array, js.key_of("toString"), ats, js.P_HIDDEN) }
     // The concrete constructors.
     var kind = 1u8
-    while kind <= 11u8 {
+    while kind <= 12u8 {
         let proto = js.new_obj(it, js.C_OBJECT, it.protos.typed_array)
         it.ta_protos[usize(kind)] = proto
         var native: js.NativeFn = ctor_int8
-        if kind == 2u8 { native = ctor_uint8 } else if kind == 3u8 { native = ctor_uint8c } else if kind == 4u8 { native = ctor_int16 } else if kind == 5u8 { native = ctor_uint16 } else if kind == 6u8 { native = ctor_int32 } else if kind == 7u8 { native = ctor_uint32 } else if kind == 8u8 { native = ctor_float32 } else if kind == 9u8 { native = ctor_float64 } else if kind == 10u8 { native = ctor_bigint64 } else if kind == 11u8 { native = ctor_biguint64 }
+        if kind == 2u8 { native = ctor_uint8 } else if kind == 3u8 { native = ctor_uint8c } else if kind == 4u8 { native = ctor_int16 } else if kind == 5u8 { native = ctor_uint16 } else if kind == 6u8 { native = ctor_int32 } else if kind == 7u8 { native = ctor_uint32 } else if kind == 8u8 { native = ctor_float32 } else if kind == 9u8 { native = ctor_float64 } else if kind == 10u8 { native = ctor_bigint64 } else if kind == 11u8 { native = ctor_biguint64 } else if kind == 12u8 { native = ctor_float16 }
         let c = js.make_native(it, kind_name(kind), 3u32, native)
         c.ctor_kind = js.K_BASE
         c.proto = it.last_abstract
@@ -1348,9 +1351,13 @@ fn dv_get_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     ret (r, e) }
 fn dv_get_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 7u8)
     ret (r, e) }
+fn dv_get_float16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 12u8)
+    ret (r, e) }
 fn dv_get_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 8u8)
     ret (r, e) }
 fn dv_get_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_get(it, this_val, args, 9u8)
+    ret (r, e) }
+fn dv_set_float16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 12u8)
     ret (r, e) }
 fn dv_set_int8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = dv_set(it, this_val, args, 1u8)
     ret (r, e) }
@@ -1398,6 +1405,7 @@ fn install_data_view(it: *js.Interp) {
     js.add_method(it, it.protos.data_view, "getUint16", 1u32, dv_get_uint16)
     js.add_method(it, it.protos.data_view, "getInt32", 1u32, dv_get_int32)
     js.add_method(it, it.protos.data_view, "getUint32", 1u32, dv_get_uint32)
+    js.add_method(it, it.protos.data_view, "getFloat16", 1u32, dv_get_float16)
     js.add_method(it, it.protos.data_view, "getFloat32", 1u32, dv_get_float32)
     js.add_method(it, it.protos.data_view, "getFloat64", 1u32, dv_get_float64)
     js.add_method(it, it.protos.data_view, "setInt8", 2u32, dv_set_int8)
@@ -1406,6 +1414,7 @@ fn install_data_view(it: *js.Interp) {
     js.add_method(it, it.protos.data_view, "setUint16", 2u32, dv_set_uint16)
     js.add_method(it, it.protos.data_view, "setInt32", 2u32, dv_set_int32)
     js.add_method(it, it.protos.data_view, "setUint32", 2u32, dv_set_uint32)
+    js.add_method(it, it.protos.data_view, "setFloat16", 2u32, dv_set_float16)
     js.add_method(it, it.protos.data_view, "setFloat32", 2u32, dv_set_float32)
     js.add_method(it, it.protos.data_view, "setFloat64", 2u32, dv_set_float64)
 }

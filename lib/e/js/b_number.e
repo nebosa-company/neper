@@ -1001,6 +1001,12 @@ fn math_fround(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
     ret (js.num_value(f64(f32(x))), ok)
 }
 
+fn math_f16round(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (x, e) = m1(it, args)
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.num_value(js.f16_to_f64(js.f64_to_f16(x))), ok)
+}
+
 fn math_clz32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (u, e) = js.to_uint32(it, arg(args, 0usize))
     if e != ok { ret (js.undefv(), e) }
@@ -1069,6 +1075,7 @@ fn install_math(it: *js.Interp) {
     js.add_method(it, it.last, "min", 2u32, math_min)
     js.add_method(it, it.last, "random", 0u32, math_random)
     js.add_method(it, it.last, "fround", 1u32, math_fround)
+    js.add_method(it, it.last, "f16round", 1u32, math_f16round)
     js.add_method(it, it.last, "clz32", 1u32, math_clz32)
     js.add_method(it, it.last, "imul", 2u32, math_imul)
 }
