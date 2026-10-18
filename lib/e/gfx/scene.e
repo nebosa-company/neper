@@ -22,11 +22,14 @@
 use e.gpu
 use e.math
 use e.mem
+use e.gfx.cleartype
 use e.gfx.geometry
 use e.gfx.image
 use e.gfx.paint
 use e.text.layout
 use e.text.shape
+use e.text.tthint
+use e.text.ttglyph
 
 type TextureId = struct { slot: u32, generation: u32 }
 type SceneId = struct { slot: u32, generation: u32 }
@@ -65,7 +68,7 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
-type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
+type RendererState = struct { hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
 type TargetState = struct { target: *gpu.Target }
 
 // ------------------------------------------------------------------ the builder
@@ -81,6 +84,23 @@ fn builder(a: *mem.Arena, max_commands: usize) -> (Builder, err) {
 }
 
 var text_hidden: bool = false
+
+// How text is anti-aliased. `Grayscale` is the renderer's own outline fill, one coverage for the three channels, hinted by
+// nothing. `ClearType` hints a TrueType font with its own instructions (`e.text.tthint`) at the pixel size, whole-pixel
+// placed, and draws it with coverage per red, green and blue subpixel (`e.gfx.cleartype`): the text of Windows' GDI.
+// It needs a font with `glyf` and instructions, a solid brush, a uniform scale and a whole pixel size, and an opaque canvas
+// under the glyphs for the exact blend; any text that is not so is drawn as `Grayscale`. The default is `Grayscale`: a look
+// that wants ClearType sets it (`ui.looks.set_look` does for the Windows profile; NEPER_TEXT_AA=grayscale turns it off).
+type TextAa = enum u8 { Grayscale, ClearType }
+var text_aa: TextAa = zero
+
+fn set_text_aa(mode: TextAa) {
+    text_aa = mode
+}
+
+fn text_aa_mode() -> TextAa {
+    ret text_aa
+}
 
 // The Windows look's pixel-exact mode (D?): when on, a plain rectangle or border that a widget paints at a device scale
 // other than 1 has each edge moved to a whole device pixel (`ui.widget.snapped`), so a 1 px line is never smeared over two
@@ -413,6 +433,7 @@ fn register_font(r: *Renderer, font: shape.Font) -> err {
     while i < s.font_count {
         if s.fonts[i].id == font.id {
             s.fonts[i] = entry
+            s.hint_tried[i] = false
             ret ok
         }
         i += 1usize
@@ -1695,6 +1716,175 @@ fn text_edges(s: *RendererState, f: *Flattener, text: DrawText) -> err {
     ret ok
 }
 
+// ---------------------------------------------------------- ClearType text (see `TextAa`)
+
+// The device line a baseline at `v` sits on: the next whole line at or below it. The layout's baselines are fractional (an ascent
+// of 12.95 px under a whole pixel top) where GDI's are whole lines, and against the native captures rounding to the nearest line
+// put the text a row too high whenever the fraction was under a half (77 dark captures: 25298 flat pixels off, against 18730).
+fn baseline_px(v: f32) -> i64 {
+    ret i64(math.ceil[f32](v - 0.01))
+}
+
+// The whole device pixel a pen at `v` is drawn from.
+fn pen_px(v: f32) -> i64 {
+    ret i64(math.floor[f32](v + 0.5))
+}
+
+// The ClearType buffer and edge storage, made once per renderer.
+fn lcd_ready(s: *RendererState) -> bool {
+    if s.lcd_tried { ret mem.address_of(s.lcd) != 0usize }
+    s.lcd_tried = true
+    let (sc, sc_error) = cleartype.scratch(s.arena)
+    if sc_error != ok { ret false }
+    s.lcd = sc
+    ret true
+}
+
+// The hinter of registered font `fi`, opened on first use; the zero pointer when the font has no instructions to run.
+fn lcd_hinter(s: *RendererState, fi: usize) -> (*tthint.Hinter, bool) {
+    if !s.hint_tried[fi] {
+        s.hint_tried[fi] = true
+        s.hint_ok[fi] = false
+        let (h, open_error) = tthint.open(s.arena, s.fonts[fi].data)
+        if open_error == ok {
+            s.hinters[fi] = h
+            s.hint_ok[fi] = true
+        }
+    }
+    ret (s.hinters[fi], s.hint_ok[fi])
+}
+
+// The whole pixel size a run is drawn at under a scale, 0 when it is not (nearly) one.
+fn lcd_ppem(size: f32, scale: f32) -> i64 {
+    let px = size * scale
+    let r = math.floor[f32](px + 0.5)
+    var gap = px - r
+    if gap < 0.0 { gap = 0.0 - gap }
+    if gap > 0.02 || r < 4.0 || r > 200.0 { ret 0i64 }
+    ret i64(r)
+}
+
+// Draws `text` as ClearType when it can: every run a solid brush, a uniform scale, whole pixel sizes and a hinted font. The
+// text is rasterised into one buffer first and composed onto the canvas after, so a failure part way leaves the canvas as it was
+// and the caller draws the text its usual way (false).
+fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
+    var color: paint.Color = zero
+    switch text.brush {
+    case .Solid as solid:
+        color = solid
+    default:
+        ret false
+    }
+    let t = state.transform
+    if t.m01 != 0.0 || t.m10 != 0.0 || !(t.m00 > 0.0) || t.m00 != t.m11 { ret false }
+    if !lcd_ready(s) { ret false }
+    let sc = s.lcd
+    // The window of device pixels the text can reach.
+    var wx0: i64 = 2147483647i64
+    var wy0: i64 = 2147483647i64
+    var wx1: i64 = -2147483647i64
+    var wy1: i64 = -2147483647i64
+    var l = 0usize
+    while l < text.layout.lines.len {
+        let line = &text.layout.lines[l]
+        var ri = 0usize
+        while ri < line.runs.len {
+            let run = &line.runs[ri]
+            let (fi, has_font) = font_of(s, run.run.font)
+            if !has_font { ret false }
+            let ppem = lcd_ppem(run.size, t.m00)
+            if ppem == 0i64 { ret false }
+            let (probe, has_hinter) = lcd_hinter(s, fi)
+            if !has_hinter { ret false }
+            var span: f32 = 0.0
+            var g = 0usize
+            while g < run.run.glyphs.len {
+                span = span + run.run.glyphs[g].advance_x * run.size * t.m00
+                g += 1usize
+            }
+            let px0 = pen_px(t.m00 * (text.origin.x + run.origin.x) + t.m02)
+            let base = baseline_px(t.m11 * (text.origin.y + run.origin.y) + t.m12)
+            let x0 = px0 - 4i64 - ppem / 2i64
+            let x1 = px0 + pen_px(span) + ppem + 4i64
+            let y0 = base - ppem * 3i64 / 2i64 - 2i64
+            let y1 = base + ppem / 2i64 + 3i64
+            if x0 < wx0 { wx0 = x0 }
+            if y0 < wy0 { wy0 = y0 }
+            if x1 > wx1 { wx1 = x1 }
+            if y1 > wy1 { wy1 = y1 }
+            ri += 1usize
+        }
+        l += 1usize
+    }
+    if wx1 <= wx0 || wy1 <= wy0 { ret false }
+    if wx1 - wx0 > 8192i64 || wy1 - wy0 > 1024i64 { ret false }
+    if !cleartype.begin(sc, wx0, wy0, usize(wx1 - wx0), usize(wy1 - wy0)) { ret false }
+    l = 0usize
+    while l < text.layout.lines.len {
+        let line = &text.layout.lines[l]
+        var ri = 0usize
+        while ri < line.runs.len {
+            let run = &line.runs[ri]
+            let (fi, has_font) = font_of(s, run.run.font)
+            let (hinter, has_hinter) = lcd_hinter(s, fi)
+            let ppem = lcd_ppem(run.size, t.m00)
+            let base = baseline_px(t.m11 * (text.origin.y + run.origin.y) + t.m12)
+            var pen: f32 = t.m00 * (text.origin.x + run.origin.x) + t.m02
+            var g = 0usize
+            while g < run.run.glyphs.len {
+                let glyph = run.run.glyphs[g]
+                let (outline, hint_error) = ttglyph.hint_glyph(hinter, s.arena, ppem, glyph.id, true)
+                if hint_error != ok { ret false }
+                let at = pen_px(pen + glyph.offset_x * run.size * t.m00)
+                if !cleartype.add_glyph(sc, &outline, at, base) { ret false }
+                pen = pen + glyph.advance_x * run.size * t.m00
+                g += 1usize
+            }
+            ri += 1usize
+        }
+        l += 1usize
+    }
+    // Compose: the buffer's pixels inside the scissor (which holds the frame's damage box) and the clip mask.
+    let canvas = s.canvases[state.layer].data
+    let (sx0, sy0, sx1, sy1) = scissor_bounds(s, state.scissor)
+    var x0 = sx0
+    var y0 = sy0
+    var x1 = sx1
+    var y1 = sy1
+    if i64(x0) < wx0 { x0 = usize(wx0) }
+    if i64(y0) < wy0 { y0 = usize(wy0) }
+    if i64(x1) > wx1 { x1 = usize(wx1) }
+    if i64(y1) > wy1 { y1 = usize(wy1) }
+    let premult = paint.premultiply(color)
+    var y = y0
+    while y < y1 {
+        var x = x0
+        while x < x1 {
+            let kr = cleartype.coverage(sc, i64(x), i64(y), 0usize)
+            let kg = cleartype.coverage(sc, i64(x), i64(y), 1usize)
+            let kb = cleartype.coverage(sc, i64(x), i64(y), 2usize)
+            if kr + kg + kb > 0i64 {
+                let index = y * s.width + x
+                let at = index * 4usize
+                var weight: f64 = f64(color.alpha)
+                if state.has_mask { weight = weight * f64(s.masks[state.mask].data[index]) }
+                if canvas[at + 3usize] >= 0.9999 {
+                    canvas[at] = cleartype.blend_a(canvas[at], color.red, f64(kr) / 6.0 * weight)
+                    canvas[at + 1usize] = cleartype.blend_a(canvas[at + 1usize], color.green, f64(kg) / 6.0 * weight)
+                    canvas[at + 2usize] = cleartype.blend_a(canvas[at + 2usize], color.blue, f64(kb) / 6.0 * weight)
+                } else {
+                    var plain: f32 = f32(f64(kr + kg + kb) / 18.0)
+                    if state.has_mask { plain = plain * s.masks[state.mask].data[index] }
+                    blend_pixel(canvas, at, premult, plain)
+                }
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    ret true
+}
+
 fn draw_image(s: *RendererState, state: DrawState, draw: DrawImage) -> err {
     let (slot, slot_error) = texture_slot(s, draw.texture)
     if slot_error != ok { ret slot_error }
@@ -2757,10 +2947,12 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
         case .Image as draw:
             try draw_image(s, current, draw)
         case .Text as text:
-            var f = fill_flattener(s, current.transform)
-            try text_edges(s, &f, text)
-            rasterize_edges(s, coverage)
-            paint_coverage(s, current, coverage, &text.brush)
+            if !(text_aa == .ClearType && draw_text_lcd(s, current, text)) {
+                var f = fill_flattener(s, current.transform)
+                try text_edges(s, &f, text)
+                rasterize_edges(s, coverage)
+                paint_coverage(s, current, coverage, &text.brush)
+            }
         case .OpacityLayer as layer:
             if depth >= MAX_STATES { ret TooLarge }
             if layer_count >= MAX_LAYERS { ret TooLarge }

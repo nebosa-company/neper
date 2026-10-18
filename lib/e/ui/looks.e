@@ -273,6 +273,14 @@ fn set_look(rig: *Rig, look: Look) {
     style.set_windark(look == .WindowsDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
     scene.set_pixel_exact(rig.tokens.profile == .Windows)
+    // The Windows profile draws text as ClearType (hinted, per-subpixel coverage); every other look keeps the greyscale fill.
+    // NEPER_TEXT_AA=grayscale draws the Windows looks that way too, NEPER_TEXT_AA=cleartype draws every look in ClearType.
+    var text_aa = scene.TextAa.Grayscale
+    if rig.tokens.profile == .Windows { text_aa = scene.TextAa.ClearType }
+    let (aa_text, aa_error) = os.env(rig.a, "NEPER_TEXT_AA")
+    if aa_error == ok && strs.eq(aa_text, "grayscale") { text_aa = scene.TextAa.Grayscale }
+    if aa_error == ok && strs.eq(aa_text, "cleartype") { text_aa = scene.TextAa.ClearType }
+    scene.set_text_aa(text_aa)
     let (exact_text, exact_error) = os.env(rig.a, "NEPER_LOOKS_EXACT")
     scene.set_pixel_exact_at_one(exact_error == ok && exact_text.len > 0usize)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
