@@ -1609,6 +1609,81 @@ fn parse_var(p: *Parser, for_head: bool) -> (u32, err) {
     ret (id, ok)
 }
 
+// Whether the current token starts a `using` (1) or `await using` (2) declaration, or neither (0). The name must follow on the same line.
+fn using_ahead(p: *Parser, for_head: bool) -> (u8, err) {
+    if p.tok.kind != lex.T_IDENT || p.tok.escaped { ret (0u8, ok) }
+    if str.eq(p.tok.text, "using") {
+        let t1 = try peek(p)
+        if t1.kind != lex.T_IDENT || t1.nl || is_reserved(t1.text) { ret (0u8, ok) }
+        if for_head && str.eq(t1.text, "of") {
+            // `for (using of = ...;;)` declares `of`; any other `using of` in a head is the identifier `using` then the for-of keyword.
+            let m1 = mark(p)
+            try adv(p)
+            try adv(p)
+            let t3 = p.tok
+            restore(p, m1)
+            if t3.kind == lex.T_PUNCT && str.eq(t3.text, "=") { ret (1u8, ok) }
+            ret (0u8, ok)
+        }
+        ret (1u8, ok)
+    }
+    if str.eq(p.tok.text, "await") && (p.in_async || (p.module && !p.in_function)) {
+        let t1 = try peek(p)
+        if t1.kind != lex.T_IDENT || t1.nl || t1.escaped || !str.eq(t1.text, "using") { ret (0u8, ok) }
+        let m = mark(p)
+        try adv(p)
+        try adv(p)
+        let t2 = p.tok
+        restore(p, m)
+        if t2.kind != lex.T_IDENT || t2.nl || is_reserved(t2.text) { ret (0u8, ok) }
+        ret (2u8, ok)
+    }
+    ret (0u8, ok)
+}
+
+fn parse_using(p: *Parser, kind: u8) -> (u32, err) {
+    let (id, me) = mk(p, ast.N_VAR)
+    if me != ok { ret (ast.NONE, me) }
+    node(p, id).op = ast.D_CONST
+    node(p, id).flags = ast.F_USING
+    if kind == 2u8 {
+        node(p, id).flags = ast.F_USING | ast.F_AWAIT_USING
+        if !p.in_function { p.top_await = true }
+        try adv(p)
+    }
+    try adv(p)
+    let (ids_0, ie) = new_ids(p)
+    var ids = ids_0
+    if ie != ok { ret (ast.NONE, ie) }
+    while true {
+        let (did, de) = mk(p, ast.N_DECL)
+        if de != ok { ret (ast.NONE, de) }
+        if p.tok.kind != lex.T_IDENT { ret (ast.NONE, fail(p, "a using declaration binds plain names")) }
+        let (nid, ne) = mk(p, ast.N_IDENT)
+        if ne != ok { ret (ast.NONE, ne) }
+        node(p, nid).text = p.tok.text
+        if str.eq(p.tok.text, "arguments") { p.uses_args = true }
+        try adv(p)
+        node(p, did).a = nid
+        if is_p(p, "=") {
+            try adv(p)
+            let init = try parse_assign(p)
+            node(p, did).b = init
+        }
+        try list.push[u32](&ids, did)
+        if is_p(p, ",") {
+            try adv(p)
+        } else {
+            break
+        }
+    }
+    let (first, ke) = commit(p, &ids)
+    if ke != ok { ret (ast.NONE, ke) }
+    node(p, id).a = first
+    node(p, id).b = u32(ids.len)
+    ret (id, ok)
+}
+
 fn is_let_decl(p: *Parser) -> (bool, err) {
     if !is_k(p, "let") { ret (false, ok) }
     let nx = try peek(p)
@@ -1635,7 +1710,10 @@ fn parse_for(p: *Parser) -> (u32, err) {
         // no init
     } else {
         let let_decl = try is_let_decl(p)
-        if is_k(p, "var") || is_k(p, "const") || let_decl {
+        let using_kind = try using_ahead(p, true)
+        if using_kind != 0u8 {
+            init = try parse_using(p, using_kind)
+        } else if is_k(p, "var") || is_k(p, "const") || let_decl {
             init = try parse_var(p, true)
         } else {
             let starts_async = is_k(p, "async") && !p.tok.escaped
@@ -1738,6 +1816,14 @@ fn parse_statement(p: *Parser) -> (u32, err) {
                 let v2 = try parse_var(p, false)
                 try consume_semi(p)
                 ret (v2, ok)
+            }
+        }
+        if str.eq(w, "using") || str.eq(w, "await") {
+            let using_kind = try using_ahead(p, false)
+            if using_kind != 0u8 {
+                let v3 = try parse_using(p, using_kind)
+                try consume_semi(p)
+                ret (v3, ok)
             }
         }
         if str.eq(w, "function") {

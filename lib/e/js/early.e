@@ -1190,6 +1190,8 @@ fn check_stmt(c: *Ctx, id: u32) -> err {
             let cs = node(c, kid(c, n.b, ci))
             var si = 0usize
             while si < usize(cs.c) {
+                let swn = node(c, kid(c, cs.b, si))
+                if swn.kind == ast.N_VAR && (swn.flags & ast.F_USING) != 0u16 { ret fail(c, id, "using declarations are not allowed directly in a switch case") }
                 try list.push[u32](&all, kid(c, cs.b, si))
                 si += 1usize
             }
@@ -1373,6 +1375,7 @@ fn check_for_in_of(c: *Ctx, id: u32) -> err {
     head_names = hl
     if head.kind == ast.N_VAR {
         if head.b != 1u32 { ret fail(c, id, "Invalid left-hand side in for-loop: must have a single binding") }
+        if (head.flags & ast.F_USING) != 0u16 && !is_of { ret fail(c, id, "for-in loops cannot declare using bindings") }
         let dn = node(c, kid(c, head.a, 0usize))
         try check_var_decl(c, n.a, true)
         if dn.b != ast.NONE {
@@ -1458,6 +1461,18 @@ fn check_in(a: *mem.Arena, prog: *const ast.Program, eo: *const EvalOpts) -> (Re
     none = nl
     let (l4, e4) = list.init[str](a, 8usize)
     c.lexstack = l4
+    if !prog.is_module {
+        // `using` declarations are for blocks, function bodies and modules, not the top level of a script or eval.
+        var ui = 0usize
+        while ui < usize(root.b) {
+            let un = prog.nodes[usize(prog.kids[usize(root.a) + ui])]
+            if un.kind == ast.N_VAR && (un.flags & ast.F_USING) != 0u16 {
+                var uc2 = Result { message: "using declarations are not allowed at the top level of a script", line: un.line }
+                ret (uc2, EarlyError)
+            }
+            ui += 1usize
+        }
+    }
     push_lex(&c, root.a, root.b, false)
     var e = check_scope(&c, root.a, root.b, true, &none)
     if e == ok { e = check_stmt_list(&c, root.a, root.b) }

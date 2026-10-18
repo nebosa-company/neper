@@ -126,8 +126,8 @@ type Interp = struct {
     a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32,
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
-    sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
+    sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, suppressed_ctor: *Obj, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
 }
@@ -2392,8 +2392,12 @@ fn declare_var(it: *Interp, e: *Env, name: str) -> err {
 
 type Frame = struct {
     prog: *const ast.Program, env: *Env, this_val: Value, has_this: bool, func: *Obj, has_func: bool, new_target: Value,
-    strict: bool, home: *Obj, has_home: bool, args: []const Value, gen: *void, has_gen: bool
+    strict: bool, home: *Obj, has_home: bool, args: []const Value, gen: *void, has_gen: bool,
+    disp: *list.List[DispRes], has_disp: bool
 }
+
+// A resource registered by a `using` declaration: disposed in reverse order when its scope ends.
+type DispRes = struct { value: Value, method: Value, has_method: bool, is_async: bool, discard: bool }
 
 // Completion kinds.
 const CK_NORMAL: u8 = 0u8
@@ -3063,7 +3067,7 @@ fn bind_name(it: *Interp, f: *Frame, name: str, val: Value, mode: u8) -> err {
     if mode == 3u8 { ret declare(it, f.env, name, val, 0u8) }
     if mode == 6u8 || mode == 7u8 {
         var fl = B_LEX
-        if mode == 7u8 { fl = B_LEX | B_CONST }
+        if mode == 7u8 { fl = B_LEX | B_CONST | B_STRICT_CONST }
         let (at, found) = env_index(f.env, name)
         if found && (f.env.vars.items[at].flags & B_TDZ) == 0u8 && mode != 6u8 && false { ret ok }
         if found {
@@ -3223,6 +3227,11 @@ fn eval_named(it: *Interp, f: *Frame, id: u32, name: str) -> (Value, err) {
     }
     let (v2, e2) = eval(it, f, id)
     ret (v2, e2)
+}
+
+// Accessor functions are always named "get x" / "set x".
+fn force_function_name(it: *Interp, fo: *Obj, name: str) {
+    let e = define_data(it, fo, key_of("name"), str_value(name), P_CONFIGURABLE)
 }
 
 fn set_function_name(it: *Interp, v: Value, name: str) {
@@ -4513,7 +4522,7 @@ fn eval_object(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         } else {
             var prefix = "get "
             if pn.op == ast.M_SET { prefix = "set " }
-            set_function_name(it, obj_value(fo), str_concat(it, prefix, key_name_for_function(it, key)))
+            force_function_name(it, fo, str_concat(it, prefix, key_name_for_function(it, key)))
             var d = empty_desc()
             d.has_enumerable = true
             d.enumerable = true
@@ -4781,7 +4790,7 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Val
         } else {
             var prefix = "get "
             if mn2.op == ast.M_SET { prefix = "set " }
-            set_function_name(it, obj_value(fo), str_concat(it, prefix, key_name_for_function(it, key)))
+            force_function_name(it, fo, str_concat(it, prefix, key_name_for_function(it, key)))
             if is_private_member {
                 var akind = 2u8
                 if mn2.op == ast.M_SET { akind = 3u8 }
@@ -4916,7 +4925,7 @@ fn hoist_declarations_in(it: *Interp, f: *Frame, first: u32, count: u32, vscope:
         }
         if sn.kind == ast.N_VAR && sn.op != ast.D_VAR {
             var flags = B_TDZ
-            if sn.op == ast.D_CONST { flags = flags | B_CONST }
+            if sn.op == ast.D_CONST { flags = flags | B_CONST | B_STRICT_CONST }
             var d = 0usize
             while d < usize(sn.b) {
                 let dn = f.prog.nodes[usize(f.prog.kids[usize(sn.a) + d])]
@@ -5005,6 +5014,25 @@ fn has_lexical(f: *const Frame, first: u32, count: u32) -> bool {
 // The statements of a module body: its declarations were instantiated when the module was linked.
 fn exec_module_statements(it: *Interp, f: *Frame, root_id: u32) -> (Completion, err) {
     let bn = f.prog.nodes[usize(root_id)]
+    if !has_using(f, bn.a, bn.b) {
+        let (c0, e0) = exec_module_statements_inner(it, f, root_id)
+        ret (c0, e0)
+    }
+    let (sl, sle) = list.init[DispRes](it.a, 2usize)
+    var scope = sl
+    let saved_disp = f.disp
+    let saved_has = f.has_disp
+    f.disp = &scope
+    f.has_disp = true
+    let (c, e) = exec_module_statements_inner(it, f, root_id)
+    f.disp = saved_disp
+    f.has_disp = saved_has
+    let (c2, e2) = dispose_scope(it, f, &scope, c, e)
+    ret (c2, e2)
+}
+
+fn exec_module_statements_inner(it: *Interp, f: *Frame, root_id: u32) -> (Completion, err) {
+    let bn = f.prog.nodes[usize(root_id)]
     var i = 0usize
     while i < usize(bn.b) {
         let (c, e) = exec(it, f, f.prog.kids[usize(bn.a) + i])
@@ -5015,7 +5043,165 @@ fn exec_module_statements(it: *Interp, f: *Frame, root_id: u32) -> (Completion, 
 }
 
 // The body of a function: declarations hoisted into the call's own scope.
+// --- explicit resource management
+
+fn has_using(f: *const Frame, first: u32, count: u32) -> bool {
+    var i = 0usize
+    while i < usize(count) {
+        let sn = f.prog.nodes[usize(f.prog.kids[usize(first) + i])]
+        i += 1usize
+        if sn.kind == ast.N_VAR && (sn.flags & ast.F_USING) != 0u16 { ret true }
+    }
+    ret false
+}
+
+// Registers the value of a `using` / `await using` initializer with the innermost scope.
+fn add_disposable(it: *Interp, f: *Frame, v: Value, is_await: bool) -> err {
+    if !f.has_disp { ret throw_syntax(it, "using declarations are not allowed here") }
+    if is_nullish(v) {
+        if is_await { try list.push[DispRes](f.disp, DispRes { value: undefv(), method: undefv(), has_method: false, is_async: true, discard: false }) }
+        ret ok
+    }
+    if !is_object(v) { ret throw_type(it, "using declarations need an object, null or undefined") }
+    var method = undefv()
+    var discard = false
+    if is_await {
+        let (am, ame) = get_value(it, v, key_of_symbol(it.sym_async_dispose))
+        if ame != ok { ret ame }
+        if is_nullish(am) {
+            let (sm, sme) = get_value(it, v, key_of_symbol(it.sym_dispose))
+            if sme != ok { ret sme }
+            if is_nullish(sm) { ret throw_type(it, "the value is not async disposable") }
+            method = sm
+            discard = true
+        } else { method = am }
+    } else {
+        let (dm, dme) = get_value(it, v, key_of_symbol(it.sym_dispose))
+        if dme != ok { ret dme }
+        if is_nullish(dm) { ret throw_type(it, "the value is not disposable") }
+        method = dm
+    }
+    if !is_callable(method) { ret throw_type(it, "the dispose method is not callable") }
+    ret list.push[DispRes](f.disp, DispRes { value: v, method: method, has_method: true, is_async: is_await, discard: discard })
+}
+
+// A SuppressedError for `error` suppressing `suppressed`.
+fn suppress(it: *Interp, err_value: Value, suppressed: Value) -> Value {
+    if it.suppressed_ctor == null_obj() { ret err_value }
+    let args = three_values(it, err_value, suppressed, undefv())
+    let (r, re) = construct(it, obj_value(it.suppressed_ctor), args, obj_value(it.suppressed_ctor))
+    if re != ok { ret it.thrown }
+    ret r
+}
+
+// DisposeResources: runs the scope's disposers in reverse; a failure replaces a normal completion or is suppressed by the earlier error.
+fn dispose_scope(it: *Interp, f: *Frame, scope: *list.List[DispRes], c: Completion, e: err) -> (Completion, err) {
+    var has_throw = e == Throw
+    var thrown = undefv()
+    if has_throw { thrown = it.thrown }
+    if e != ok && e != Throw { ret (c, e) }
+    var needs_await = false
+    var has_awaited = false
+    var i = scope.len
+    while i > 0usize {
+        i -= 1usize
+        let r = scope.items[i]
+        if !r.has_method {
+            needs_await = true
+            continue
+        }
+        var (rv, re) = call_function(it, r.method, r.value, zero_args())
+        if re == ok && r.is_async {
+            if r.discard { rv = undefv() }
+            let (av, ae) = await_value(it, f, rv)
+            re = ae
+            has_awaited = true
+        }
+        if re == Throw {
+            if has_throw { thrown = suppress(it, it.thrown, thrown) } else {
+                has_throw = true
+                thrown = it.thrown
+            }
+        } else if re != ok { ret (c, re) }
+    }
+    scope.len = 0usize
+    if needs_await && !has_awaited {
+        let (av2, ae2) = await_value(it, f, undefv())
+        if ae2 == Throw {
+            if has_throw { thrown = suppress(it, it.thrown, thrown) } else {
+                has_throw = true
+                thrown = it.thrown
+            }
+        } else if ae2 != ok { ret (c, ae2) }
+    }
+    if has_throw {
+        it.thrown = thrown
+        ret (normal(), Throw)
+    }
+    ret (c, e)
+}
+
+fn exec_block(it: *Interp, f: *Frame, bn: ast.Node) -> (Completion, err) {
+    if !has_using(f, bn.a, bn.b) {
+        let (c0, e0) = exec_block_inner(it, f, bn)
+        ret (c0, e0)
+    }
+    let (sl, sle) = list.init[DispRes](it.a, 2usize)
+    var scope = sl
+    let saved_disp = f.disp
+    let saved_has = f.has_disp
+    f.disp = &scope
+    f.has_disp = true
+    let (c, e) = exec_block_inner(it, f, bn)
+    f.disp = saved_disp
+    f.has_disp = saved_has
+    let (c2, e2) = dispose_scope(it, f, &scope, c, e)
+    ret (c2, e2)
+}
+
 fn exec_body(it: *Interp, f: *Frame, bid: u32) -> (Completion, err) {
+    let bn = f.prog.nodes[usize(bid)]
+    if !has_using(f, bn.a, bn.b) {
+        let (c0, e0) = exec_body_inner(it, f, bid)
+        ret (c0, e0)
+    }
+    let (sl, sle) = list.init[DispRes](it.a, 2usize)
+    var scope = sl
+    let saved_disp = f.disp
+    let saved_has = f.has_disp
+    f.disp = &scope
+    f.has_disp = true
+    let (c, e) = exec_body_inner(it, f, bid)
+    f.disp = saved_disp
+    f.has_disp = saved_has
+    let (c2, e2) = dispose_scope(it, f, &scope, c, e)
+    ret (c2, e2)
+}
+
+fn exec_for(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Completion, err) {
+    var using_head = false
+    if n.a != ast.NONE {
+        let hn = f.prog.nodes[usize(n.a)]
+        using_head = hn.kind == ast.N_VAR && (hn.flags & ast.F_USING) != 0u16
+    }
+    if !using_head {
+        let (c0, e0) = exec_for_inner(it, f, n, labels)
+        ret (c0, e0)
+    }
+    let (sl, sle) = list.init[DispRes](it.a, 2usize)
+    var scope = sl
+    let saved_disp = f.disp
+    let saved_has = f.has_disp
+    f.disp = &scope
+    f.has_disp = true
+    let (c, e) = exec_for_inner(it, f, n, labels)
+    f.disp = saved_disp
+    f.has_disp = saved_has
+    let (c2, e2) = dispose_scope(it, f, &scope, c, e)
+    ret (c2, e2)
+}
+
+fn exec_body_inner(it: *Interp, f: *Frame, bid: u32) -> (Completion, err) {
     let bn = f.prog.nodes[usize(bid)]
     try hoist_declarations(it, f, bn.a, bn.b)
     var i = 0usize
@@ -5028,7 +5214,7 @@ fn exec_body(it: *Interp, f: *Frame, bid: u32) -> (Completion, err) {
     ret (normal(), ok)
 }
 
-fn exec_block(it: *Interp, f: *Frame, bn: ast.Node) -> (Completion, err) {
+fn exec_block_inner(it: *Interp, f: *Frame, bn: ast.Node) -> (Completion, err) {
     var scoped = false
     let saved = f.env
     if has_lexical(f, bn.a, bn.b) {
@@ -5124,6 +5310,7 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
             let (v, e) = eval_named(it, f, dn.b, target_name(f, dn.a))
             if e != ok { ret (normal(), e) }
             try bind_pattern(it, f, dn.a, v, mode)
+            if (n.flags & ast.F_USING) != 0u16 { try add_disposable(it, f, v, (n.flags & ast.F_AWAIT_USING) != 0u16) }
         }
         ret (normal(), ok)
     }
@@ -5292,7 +5479,7 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
     ret (normal(), throw_syntax(it, "unsupported statement"))
 }
 
-fn exec_for(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Completion, err) {
+fn exec_for_inner(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Completion, err) {
     let saved = f.env
     var per_iteration = false
     var names: [16]str = zero
@@ -5303,7 +5490,7 @@ fn exec_for(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Comple
             f.env = new_env(it, saved)
             var d = 0usize
             var flags = B_TDZ
-            if init.op == ast.D_CONST { flags = flags | B_CONST }
+            if init.op == ast.D_CONST { flags = flags | B_CONST | B_STRICT_CONST }
             while d < usize(init.b) {
                 let dn = f.prog.nodes[usize(f.prog.kids[usize(init.a) + d])]
                 let de = declare_pattern_names(it, f, dn.a, flags)
@@ -5412,7 +5599,7 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
         } else {
             decl_mode = 7u8
             lexical = true
-            flags = flags | B_CONST
+            flags = flags | B_CONST | B_STRICT_CONST
         }
     }
     // The iterated expression is evaluated with the loop variables in their dead zone.
@@ -5541,6 +5728,29 @@ fn for_body(it: *Interp, f: *Frame, n: ast.Node, target_id: u32, v: Value, decl_
     if be != ok {
         f.env = saved
         ret (normal(), be)
+    }
+    let head = f.prog.nodes[usize(n.a)]
+    if head.kind == ast.N_VAR && (head.flags & ast.F_USING) != 0u16 {
+        // `for (using x of ...)`: the binding is disposed at the end of each iteration.
+        let (sl, sle) = list.init[DispRes](it.a, 1usize)
+        var scope = sl
+        let saved_disp = f.disp
+        let saved_has = f.has_disp
+        f.disp = &scope
+        f.has_disp = true
+        let ue = add_disposable(it, f, v, (head.flags & ast.F_AWAIT_USING) != 0u16)
+        var uc = normal()
+        var ux: err = ue
+        if ue == ok {
+            let (c3, e3) = exec(it, f, n.c)
+            uc = c3
+            ux = e3
+        }
+        f.disp = saved_disp
+        f.has_disp = saved_has
+        f.env = saved
+        let (c4, e4) = dispose_scope(it, f, &scope, uc, ux)
+        ret (c4, e4)
     }
     let (c, e) = exec(it, f, n.c)
     f.env = saved
@@ -5743,7 +5953,7 @@ fn hoist_lexical_only(it: *Interp, f: *Frame, first: u32, count: u32) -> err {
         i += 1usize
         if sn.kind == ast.N_VAR && sn.op != ast.D_VAR {
             var flags = B_TDZ
-            if sn.op == ast.D_CONST { flags = flags | B_CONST }
+            if sn.op == ast.D_CONST { flags = flags | B_CONST | B_STRICT_CONST }
             var d = 0usize
             while d < usize(sn.b) {
                 let dn = f.prog.nodes[usize(f.prog.kids[usize(sn.a) + d])]

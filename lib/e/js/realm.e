@@ -906,6 +906,8 @@ fn donor_symbol(d: *js.Interp, name: str) -> *js.Sym {
     if str.eq(name, "species") { ret d.sym_species }
     if str.eq(name, "isConcatSpreadable") { ret d.sym_is_concat_spreadable }
     if str.eq(name, "unscopables") { ret d.sym_unscopables }
+    if str.eq(name, "dispose") { ret d.sym_dispose }
+    if str.eq(name, "asyncDispose") { ret d.sym_async_dispose }
     if str.eq(name, "match") { ret d.sym_match }
     if str.eq(name, "matchAll") { ret d.sym_match_all }
     if str.eq(name, "replace") { ret d.sym_replace }
@@ -937,6 +939,8 @@ fn install_symbol(it: *js.Interp) {
     it.sym_species = well_known(it, it.last, "species")
     it.sym_is_concat_spreadable = well_known(it, it.last, "isConcatSpreadable")
     it.sym_unscopables = well_known(it, it.last, "unscopables")
+    it.sym_dispose = well_known(it, it.last, "dispose")
+    it.sym_async_dispose = well_known(it, it.last, "asyncDispose")
     it.sym_match = well_known(it, it.last, "match")
     it.sym_match_all = well_known(it, it.last, "matchAll")
     it.sym_replace = well_known(it, it.last, "replace")
@@ -1113,6 +1117,8 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     if pse != ok { ret (it, pse) }
     let (pv, pe) = js.eval_source(it, psrc)
     if pe != ok { ret (it, pe) }
+    let (sev, see) = js.get_prop(it, it.global, js.key_of("SuppressedError"), js.obj_value(it.global))
+    if see == ok && js.is_object(sev) { it.suppressed_ctor = js.as_object(sev) }
     ret (it, ok)
 }
 

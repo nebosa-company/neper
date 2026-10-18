@@ -123,6 +123,9 @@ const F_DELEGATE: u16 = 4096u16
 const F_METHOD: u16 = 8192u16
 const F_COVER_INIT: u16 = 16384u16
 const F_DERIVED: u16 = 32768u16
+// On an N_VAR (a const declaration): `using x = ...` and `await using x = ...`.
+const F_USING: u16 = 4u16
+const F_AWAIT_USING: u16 = 64u16
 
 // Operators: unary, update, binary and assignment.
 const O_NEG: u8 = 1u8
