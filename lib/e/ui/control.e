@@ -19592,7 +19592,7 @@ fn cup_button_weight(variant: style.ControlVariant) -> u32 {
     ret 600u32
 }
 
-// The Cupertino button: iOS configuration sizes 28 / 34 / 44 (options.height; 0 is 34, or 22 for the macOS
+// The Cupertino button: iOS configuration sizes 28 / 34 / 50 (options.height; 0 is 34, or 22 for the macOS
 // bezel `Outlined`), `picture` before the caption when `has_icon`, a spinner over the hidden caption when loading.
 fn cupertino_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
     let state = control_state(t, key, options.enabled, false)

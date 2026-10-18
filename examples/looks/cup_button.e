@@ -52,8 +52,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         if row == 5usize {
             if col == 0usize {
-                options.height = 44.0
-                caption = "large 44"
+                options.height = 50.0
+                caption = "large 50"
             }
             if col == 1usize {
                 options.height = 34.0
