@@ -477,6 +477,17 @@ def to_texture(widget, scale, bg=None):
     return widget.get_native().get_renderer().render_texture(sn.to_node(), Graphene.Rect().init(0, 0, w * scale, h * scale))
 
 
+def window_texture(win, scale):
+    """A window's picture at the paintable's own size: its content plus the 5 px shadow margin (560 x 420 for a 550 x 410 window).
+    `to_texture` asks for the widget's size, which squeezes that picture by 0.982 x 0.976 (round 26: the first alert dialog capture was)."""
+    p = Gtk.WidgetPaintable.new(win)
+    w, h = p.get_intrinsic_width(), p.get_intrinsic_height()
+    sn = Gtk.Snapshot()
+    sn.scale(scale, scale)
+    p.snapshot(sn, w, h)
+    return win.get_native().get_renderer().render_texture(sn.to_node(), Graphene.Rect().init(0, 0, w * scale, h * scale))
+
+
 def apply_flags(wd, flags):
     wd.set_state_flags(flags, False)
     for c in kids(wd):  # composite widgets draw state on inner nodes
@@ -525,7 +536,7 @@ def main():
                     d.set_default_response("cancel")
                     d.present(win)
                     settle(12)
-                    texs = {s: to_texture(win, s) for s in (1, 2)}
+                    texs = {s: window_texture(win, s) for s in (1, 2)}
                     d.force_close()
                     settle(3)
                 else:

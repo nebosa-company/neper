@@ -60,8 +60,8 @@ def fit_body(name, nl, cx0, cy0, cw, ch, target, face_of, mask_of):
 def alert(scheme, nl):
     a = np.asarray(Image.open(REF / scheme / "alert-dialog@1x.png").convert("RGB")).astype(float)[:, :, 0]
     face, under = {"light": (250.0, 216.0), "dark": (56.0, 18.0)}[scheme]
-    fit_body("alert " + scheme, nl, 128.0, 134.0, 294.0, 142.0, a, lambda c, s: c * face + (1 - c) * under * (1 - s),
-             lambda sd, px, py: (sd > -0.8) & (sd < 60) & (px > 45) & (px < 505) & (py > 25) & (py < 385))
+    fit_body("alert " + scheme, nl, 130.0, 137.0, 300.0, 146.0, a, lambda c, s: c * face + (1 - c) * under * (1 - s),
+             lambda sd, px, py: (sd > -0.8) & (sd < 60) & (px > 50) & (px < 510) & (py > 30) & (py < 390))
 
 
 def popover(nl):

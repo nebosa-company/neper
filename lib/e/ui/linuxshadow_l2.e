@@ -70,7 +70,21 @@ fn row_cells(sh: *Shade, yc: f32, x0: i32, n: i32, l: f32, t: f32, r: f32, bt: f
     var i: i32 = 0
     while i < n {
         let px = f32(x0 + i) + 0.5
-        let c = math.max[f32](0.0, math.min[f32](1.0, 0.5 - sdf(px, yc, l, t, r, bt, sh.radius)))
+        var c = math.max[f32](0.0, math.min[f32](1.0, 0.5 - sdf(px, yc, l, t, r, bt, sh.radius)))
+        // a corner pixel's coverage is the area inside the arc (Cairo's), not the linear ramp of the distance
+        if sh.own_face && c > 0.0 && c < 1.0 && sh.radius > 2.0 {
+            var inside: i32 = 0
+            var sy: i32 = 0
+            while sy < 8 {
+                var sx: i32 = 0
+                while sx < 8 {
+                    if sdf(px - 0.5 + (f32(sx) + 0.5) / 8.0, yc - 0.5 + (f32(sy) + 0.5) / 8.0, l, t, r, bt, sh.radius) < 0.0 { inside += 1 }
+                    sx += 1
+                }
+                sy += 1
+            }
+            c = f32(inside) / 64.0
+        }
         var s: f32 = 0.0
         if c < 1.0 { s = shade_at(sh, px, yc, l, t, r, bt) }
         if !sh.own_face { s = s * (1.0 - c) }
@@ -177,30 +191,26 @@ fn node(a: *mem.Arena, w: f32, h: f32, dx: f32, dy: f32, body: paint.Color) -> (
     ret (made, made_error)
 }
 
-// The alert card, `w` x `h`: the node fills the card's box and paints the card's face and the shade round it. The card is GTK's fraction of
-// a pixel larger than its layout box, which is the 1 px rim the capture shows.
+// The alert card, `w` x `h`: the node fills the card's box and paints the card's face and the shade round it. Round 26: refitted to the
+// unsqueezed capture (the card is 300 x 146 on whole pixels, no rim fraction; the shade of a Dark card is stronger, its own layers).
 fn card_node(a: *mem.Arena, w: f32, h: f32, face: paint.Color) -> (widget.Node, err) {
     var sh: Shade = zero
-    sh.rl = 0.0 - 0.4149
-    sh.rt = 0.0 - 0.3541
-    sh.rw = w + 0.8298
-    sh.rh = h + 0.7306
-    sh.radius = 13.0085
-    sh.margin = 46.0
+    sh.rw = w
+    sh.rh = h
+    sh.radius = 13.0
+    sh.margin = 62.0
     sh.own_face = true
     sh.face = face
     sh.count = 3usize
-    // The Dark capture's card is a little smaller than the Light one's fit (its rim is at 27, 29 and 26 where this was at 30, 32 and 31): a Dark face
-    // (a dark colour) gives the box back 0.08 px on three sides and 0.2 at the foot.
     if face.red < 0.5 {
-        sh.rl = sh.rl + 0.075
-        sh.rt = sh.rt + 0.077
-        sh.rw = sh.rw - 0.15
-        sh.rh = sh.rh - 0.2
+        sh.layers[0usize] = Layer { oy: 0.0 - 0.2827, spread: 0.1811, sigma: 0.6175, alpha: 0.2010 }
+        sh.layers[1usize] = Layer { oy: 1.6026, spread: 0.0 - 0.2289, sigma: 5.1158, alpha: 0.1938 }
+        sh.layers[2usize] = Layer { oy: 5.5999, spread: 0.0 - 3.3552, sigma: 7.4190, alpha: 0.0906 }
+    } else {
+        sh.layers[0usize] = Layer { oy: 0.0 - 0.0312, spread: 0.6996, sigma: 0.4493, alpha: 0.0703 }
+        sh.layers[1usize] = Layer { oy: 1.4264, spread: 0.0 - 1.4107, sigma: 5.2764, alpha: 0.1067 }
+        sh.layers[2usize] = Layer { oy: 4.1861, spread: 0.0 - 1.7778, sigma: 18.1989, alpha: 0.1302 }
     }
-    sh.layers[0usize] = Layer { oy: 0.1296, spread: 0.777, sigma: 0.5818, alpha: 0.0663 }
-    sh.layers[1usize] = Layer { oy: 2.6152, spread: 3.2317, sigma: 4.2192, alpha: 0.0772 }
-    sh.layers[2usize] = Layer { oy: 4.1836, spread: 19.6311, sigma: 8.3439, alpha: 0.033 }
     let (made, made_error) = made_node(a, sh, w, h)
     ret (made, made_error)
 }

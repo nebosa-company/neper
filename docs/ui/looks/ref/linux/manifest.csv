@@ -158,7 +158,7 @@ light,menu_bar,menubar,light/menubar@1x.png,light/menubar@2x.png,129,28,
 light,popup_menu,popover-menu-open,light/popover-menu-open@1x.png,light/popover-menu-open@2x.png,181,290,popover surface captured on its own
 light,combo_box,dropdown-open,light/dropdown-open@1x.png,light/dropdown-open@2x.png,206,171,popover surface captured on its own
 light,hint,tooltip,light/tooltip@1x.png,light/tooltip@2x.png,73,19,"approximation: the .tooltip CSS node, not the real tooltip surface"
-light,dialog,alert-dialog,light/alert-dialog@1x.png,light/alert-dialog@2x.png,550,410,Adw.AlertDialog over its parent window
+light,dialog,alert-dialog,light/alert-dialog@1x.png,light/alert-dialog@2x.png,560,420,Adw.AlertDialog over its parent window
 dark,label,label,dark/label@1x.png,dark/label@2x.png,63,19,
 dark,label,label-dim,dark/label-dim@1x.png,dark/label-dim@2x.png,96,19,
 dark,label,label-heading,dark/label-heading@1x.png,dark/label-heading@2x.png,58,19,
@@ -318,4 +318,4 @@ dark,menu_bar,menubar,dark/menubar@1x.png,dark/menubar@2x.png,129,28,
 dark,popup_menu,popover-menu-open,dark/popover-menu-open@1x.png,dark/popover-menu-open@2x.png,181,290,popover surface captured on its own
 dark,combo_box,dropdown-open,dark/dropdown-open@1x.png,dark/dropdown-open@2x.png,206,171,popover surface captured on its own
 dark,hint,tooltip,dark/tooltip@1x.png,dark/tooltip@2x.png,73,19,"approximation: the .tooltip CSS node, not the real tooltip surface"
-dark,dialog,alert-dialog,dark/alert-dialog@1x.png,dark/alert-dialog@2x.png,550,410,Adw.AlertDialog over its parent window
+dark,dialog,alert-dialog,dark/alert-dialog@1x.png,dark/alert-dialog@2x.png,560,420,Adw.AlertDialog over its parent window

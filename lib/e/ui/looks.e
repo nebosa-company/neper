@@ -76,6 +76,8 @@ fn tahoma_bold_path() -> str { ret "C:/Windows/Fonts/tahomabd.ttf" }
 // engine reads glyf outlines only), font ids 13 and 14, read by `run_linux` alone (so the other looks need nothing).
 fn cantarell_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Regular.otf" }
 fn cantarell_bold_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Bold.otf" }
+// Cantarell Extra Bold (font id 15): what fontconfig gives GTK for Pango's Ultra-Bold (the alert dialog's heading), a face of its own, not Bold emboldened.
+fn cantarell_extra_bold_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-ExtraBold.otf" }
 
 // The tokens of a look, Light palette. Cupertino and Material are planned: the Neper tokens
 // with the matching profile, so a control that branches on it can start to.
@@ -109,7 +111,7 @@ fn look_dir(look: Look) -> str {
 // The font files and the frame storage, read and allocated by the first rig and shared by the rest.
 var shared_fonts: [6][]u8 = zero
 var shared_fonts_read: bool = false
-var shared_linux: [2][]u8 = zero
+var shared_linux: [3][]u8 = zero
 var shared_linux_read: bool = false
 var shared_storage: []u8 = zero
 
@@ -135,8 +137,11 @@ fn read_linux_fonts(a: *mem.Arena) -> err {
     if regular_error != ok { ret regular_error }
     let (bold, bold_error) = fs.read_file(sa, cantarell_bold_path(), 16777216usize)
     if bold_error != ok { ret bold_error }
+    let (extra, extra_error) = fs.read_file(sa, cantarell_extra_bold_path(), 16777216usize)
+    if extra_error != ok { ret extra_error }
     shared_linux[0usize] = regular
     shared_linux[1usize] = bold
+    shared_linux[2usize] = extra
     shared_linux_read = true
     ret ok
 }
@@ -225,17 +230,19 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     rig.fonts = fonts[0usize..4usize]
     // The Linux look: Cantarell Regular (id 13) and Bold (14) lead, the Windows faces follow for glyphs Cantarell lacks.
     if shared_linux_read {
-        let (gtk, gtk_error) = mem.alloc[shape.Font](a, 6usize)
+        let (gtk, gtk_error) = mem.alloc[shape.Font](a, 7usize)
         if gtk_error != ok { ret (rig, gtk_error) }
         gtk[0usize] = shape.Font { id: 13u32, data: shared_linux[0usize], face_index: 0u32 }
         gtk[1usize] = shape.Font { id: 14u32, data: shared_linux[1usize], face_index: 0u32 }
-        gtk[2usize] = fonts[0usize]
-        gtk[3usize] = fonts[2usize]
-        gtk[4usize] = fonts[1usize]
-        gtk[5usize] = fonts[3usize]
+        gtk[2usize] = shape.Font { id: 15u32, data: shared_linux[2usize], face_index: 0u32 }
+        gtk[3usize] = fonts[0usize]
+        gtk[4usize] = fonts[2usize]
+        gtk[5usize] = fonts[1usize]
+        gtk[6usize] = fonts[3usize]
         try scene.register_font(&rig.renderer, gtk[0usize])
         try scene.register_font(&rig.renderer, gtk[1usize])
-        rig.linux_fonts = gtk[0usize..6usize]
+        try scene.register_font(&rig.renderer, gtk[2usize])
+        rig.linux_fonts = gtk[0usize..7usize]
     }
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })
     if runtime_error != ok { ret (rig, runtime_error) }

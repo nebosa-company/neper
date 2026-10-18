@@ -1,5 +1,5 @@
 // The Linux look's alert dialog against the real GTK 4.14 / libadwaita 1.5 one: docs/ui/looks/linux[-dark]/dialog.png. The library's
-// picture is its 550 x 410 window with an AdwAlertDialog ("Delete file?", Cancel and a destructive Delete) over the dimmed window, so
+// picture is its 550 x 410 window (the capture is 560 x 420 with the shadow margin) with an AdwAlertDialog ("Delete file?", Cancel and a destructive Delete) over the dimmed window, so
 // the sheet is that window: the frame the compositor gives it (five rings of a few levels), the window colour under the scrim, and the
 // card overlay.linux_alert_card draws over it (the open dialog draws the same card over its scrim). Run from the repository root; see
 // docs/ui/looks-howto.md. The strict compare is scripts/linux_cmp_l4.py.
@@ -44,29 +44,28 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if body_error != ok { ret (0usize, body_error) }
     let (card, card_error) = overlay.linux_alert_card(a, 100u64, t, "Delete file?", body, buttons[0usize..2usize])
     if card_error != ok { ret (0usize, card_error) }
-    // The window's content (540 x 400) under the scrim, the card in its middle.
-    var dim = looks.size_style(540.0, 400.0)
+    // The window's content (550 x 410) under the scrim, the card in its middle.
+    var dim = looks.size_style(550.0, 410.0)
     dim.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.136) }
     if t.tokens.palette == .Dark { dim.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.5) } }
-    var window_face = looks.size_style(540.0, 400.0)
+    var window_face = looks.size_style(550.0, 410.0)
     window_face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (0usize, layers_error) }
     layers[0usize] = widget.box(0u64, dim, zero)
-    layers[1usize] = widget.aligned(0u64, .Center, .Center, looks.size_style(540.0, 400.0), one_of(a, card))
+    layers[1usize] = widget.aligned(0u64, .Center, .Center, looks.size_style(550.0, 410.0), one_of(a, card))
     let content = widget.stack(0u64, window_face, layers[0usize..2usize])
-    // The frame: 1 px, two of the lightest, one, one.
-    var rings = [4]u32{ 0xE2E2E2u32, 0xFFFFFFu32, 0xFCFCFCu32, 0xDCDCDCu32 }
-    if t.tokens.palette == .Dark { rings = [4]u32{ 0x4E4E4Eu32, 0x303030u32, 0x323232u32, 0x3Eu32 * 65793u32 } }
-    let d = ring(a, 542.0, 402.0, rings[3usize], 1.0, content)
-    let c = ring(a, 544.0, 404.0, rings[2usize], 1.0, d)
-    let b = ring(a, 548.0, 408.0, rings[1usize], 2.0, c)
-    let window = ring(a, 550.0, 410.0, rings[0usize], 1.0, b)
+    // The shadow margin the capture keeps round the window: 1 px, three of the lightest, one.
+    var rings = [3]u32{ 0xE1E1E1u32, 0xFFFFFFu32, 0xDDDDDDu32 }
+    if t.tokens.palette == .Dark { rings = [3]u32{ 0x4F4F4Fu32, 0x303030u32, 0x454545u32 } }
+    let c = ring(a, 552.0, 412.0, rings[2usize], 1.0, content)
+    let b = ring(a, 558.0, 418.0, rings[1usize], 3.0, c)
+    let window = ring(a, 560.0, 420.0, rings[0usize], 1.0, b)
     cells[0usize] = looks.Cell { caption: "alert", node: window, drive: .None }
     ret (1usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "dialog", cells: 1usize, columns: 1usize, cell_w: 570.0, cell_h: 430.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "dialog", cells: 1usize, columns: 1usize, cell_w: 580.0, cell_h: 440.0, ctx: zero, build: build }
     ret looks.run_linux(a, &sheet)
 }

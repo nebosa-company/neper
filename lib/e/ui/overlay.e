@@ -8701,10 +8701,11 @@ fn dialog_cupertino(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
 }
 
 // ---- the Linux look, alert dialog (worker l4, round 20) -------------------------------------------------------------------------
-// libadwaita 1.5 AdwAlertDialog: a 294 wide card (dialog_bg_color) of 18 px corners, the heading (title-2, 19.9 px bold) and the body
-// centred over a hairline, then the responses side by side, each 41 high with bold labels (destructive in destructive_color,
-// suggested in the accent), a 1 px rule between them. The card's rim and its shadow are baked from the library's picture
-// (e.ui.linux_card); the window's dimming is the scrim.
+// libadwaita 1.5 AdwAlertDialog: a 300 x 146 card (dialog_bg_color) of 13 px corners, the heading (title-2: Cantarell Ultra-Bold 20 px, which
+// fontconfig meets with the Extra Bold face) and the body (14.667 px) centred over a hairline, then the responses side by side, each
+// 43 high with bold labels (destructive in destructive_color, suggested in the accent), a 1 px rule between them. Round 26: these are the
+// real library's numbers (the earlier ones, 294 x 142 and so on, were fitted to a capture squeezed by 0.982 x 0.976, see scripts/linux/
+// gallery.py window_texture). The card's face and its shadow are drawn (e.ui.linuxshadow_l2); the window's dimming is the scrim.
 fn linux_dialog_face(t: *const control.Theme) -> paint.Color {
     if t.tokens.palette == .Dark { ret style.color(t.tokens, .SurfaceBright) }
     ret style.color(t.tokens, .Background)
@@ -8718,11 +8719,12 @@ fn linux_scrim_share(t: *const control.Theme) -> f32 {
 }
 
 fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton) -> (widget.Node, err) {
-    let width: f32 = 294.0
+    let width: f32 = 300.0
     let ink = style.color(t.tokens, .OnSurface)
     var heading = control.text_options()
     heading.role = .Label
     heading.size = 20.0
+    heading.weight = 800u32
     heading.align = .Center
     let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, ink)
     if title_error != ok { ret (zero, title_error) }
@@ -8733,28 +8735,23 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     let flat = style.Length { Px: 0.0 }
     var head_style = style.defaults()
     head_style.width = style.Length { Px: width }
-    head_style.padding = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 22.0 }, right: style.Length { Px: 24.0 }, bottom: flat }
+    head_style.padding = style.EdgeLengths { left: style.Length { Px: 30.0 }, top: style.Length { Px: 23.0 }, right: style.Length { Px: 30.0 }, bottom: flat }
     let titled = widget.semantics(0u64, title_sem, style.defaults(), one_of_node(a, title_node))
     var body_style = style.defaults()
     body_style.width = style.Length { Px: width }
-    body_style.padding = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 9.0 }, right: style.Length { Px: 24.0 }, bottom: style.Length { Px: 24.0 } }
+    body_style.padding = style.EdgeLengths { left: style.Length { Px: 30.0 }, top: style.Length { Px: 10.0 }, right: style.Length { Px: 30.0 }, bottom: style.Length { Px: 25.0 } }
     let (block_parts, block_error) = mem.alloc[widget.Node](a, 2usize)
     if block_error != ok { ret (zero, TooLarge) }
     block_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Start, gap: 0.0 }, head_style, one_of_node(a, titled))
     block_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Start, gap: 0.0 }, body_style, one_of_node(a, message))
     var block_style = style.defaults()
-    block_style.height = style.Length { Px: 99.0 }
+    block_style.height = style.Length { Px: 102.0 }
     let text_block = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, block_style, block_parts[0usize..2usize])
-    // The hairline, one rule straddling two rows (black 8 % and 3.2 %, white 10 % and 4 % Dark).
-    var upper = control.sized_style(width, 1.0)
-    var lower = control.sized_style(width, 1.0)
-    if t.tokens.palette == .Dark {
-        upper.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.1) }
-        lower.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.04) }
-    } else {
-        upper.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.08) }
-        lower.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.032) }
-    }
+    // The hairline: one row, black 11.6 % (250 to 221), white 15 % Dark (56 to 86).
+    var rule = control.sized_style(width, 1.0)
+    var rule_ink = paint.rgba(0.0, 0.0, 0.0, 0.116)
+    if t.tokens.palette == .Dark { rule_ink = paint.rgba(1.0, 1.0, 1.0, 0.15) }
+    rule.background = paint.Brush { Solid: rule_ink }
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * buttons.len)
     if cells_error != ok { ret (zero, TooLarge) }
     var used = 0usize
@@ -8764,7 +8761,7 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
         let state = control.control_state(t, button_key, true, false)
         var look = style.adwaita_resolve(t.tokens, .Plain, state)
         look.radius = 0.0
-        look.min_height = 41.0
+        look.min_height = 43.0
         look.min_width = 0.0
         look.padding = 0.0
         look.padding_y = 0.0
@@ -8780,36 +8777,39 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
         label.wrap = .None
         let (word, word_error) = control.colored_text(a, 0u64, buttons[i].label, t, label, ink_of)
         if word_error != ok { ret (zero, word_error) }
-        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), one_of_node(a, word))
-        let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 41.0), one_of_node(a, held))
+        // GTK centres the label in the button less its 1 px rule: the first button's label box is 123 wide from 14, the next's 122 from 13
+        var shove_left: f32 = 0.0
+        var shove_right: f32 = 0.0
+        if i == 0usize { shove_left = 1.0 } else { shove_right = 2.0 }
+        let held = widget.padded(0u64, shove_left, 0.0, shove_right, 2.0, style.defaults(), one_of_node(a, word))
+        let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 43.0), one_of_node(a, held))
         let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, buttons[i].label, look, true, false, &buttons[i].action, content)
         if pressed_error != ok { ret (zero, pressed_error) }
         cells[used] = pressed
         used += 1usize
         if i + 1usize < buttons.len {
-            var divider = control.sized_style(1.0, 41.0)
+            var divider = control.sized_style(1.0, 43.0)
             divider.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
-            if t.tokens.palette == .Dark { divider.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.145) } } else { divider.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.112) } }
+            divider.background = paint.Brush { Solid: rule_ink }
             cells[used] = widget.box(0u64, divider, zero)
             used += 1usize
         }
         i += 1usize
     }
-    let responses = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 41.0), cells[0usize..used])
-    let (column, column_error) = mem.alloc[widget.Node](a, 4usize)
+    let responses = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 43.0), cells[0usize..used])
+    let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = text_block
-    column[1usize] = widget.box(0u64, upper, zero)
-    column[2usize] = widget.box(0u64, lower, zero)
-    column[3usize] = responses
+    column[1usize] = widget.box(0u64, rule, zero)
+    column[2usize] = responses
     var face = style.defaults()
     face.width = style.Length { Px: width }
     // the shadow node under it paints the card's face (its fractional rim included); this box only clips to the corners
     face.radius = 13.0
     face.overflow = .Clip
-    let card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, column[0usize..4usize])
+    let card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, column[0usize..3usize])
     // the rim and shadow round it, then the card
-    let (shadow, shadow_error) = linux_card.alert_shadow_node(a, width, 142.0, linux_dialog_face(t))
+    let (shadow, shadow_error) = linux_card.alert_shadow_node(a, width, 146.0, linux_dialog_face(t))
     if shadow_error != ok { ret (zero, shadow_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
