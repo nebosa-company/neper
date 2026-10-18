@@ -55,6 +55,11 @@ fn view_menu(a: *mem.Arena, action: widget.Submit) -> ([]overlay.MenuCommand, er
 // The menu's top-left corner on the cell's (24, 22), where the reference crop has its popover surface: it hangs from a 1 px anchor
 // 1 px above.
 fn hung(a: *mem.Arena, t: *const control.Theme, base: widget.Key, commands: []const overlay.MenuCommand, action: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = hung_at(a, t, base, commands, action, 24.0, 21.0, 210.0, 278.0)
+    ret (made, made_error)
+}
+
+fn hung_at(a: *mem.Arena, t: *const control.Theme, base: widget.Key, commands: []const overlay.MenuCommand, action: *const widget.Submit, left: f32, top: f32, w: f32, h: f32) -> (widget.Node, err) {
     let (menu, menu_error) = overlay.menu_at(a, base + 1u64, t, base, "Menu", commands, true, action, .Below, geometry.Point { x: 0.0, y: 0.0 }, 4.0, true)
     if menu_error != ok { ret (zero, menu_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
@@ -64,7 +69,7 @@ fn hung(a: *mem.Arena, t: *const control.Theme, base: widget.Key, commands: []co
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, row_error) }
     row[0usize] = widget.stack(0u64, control.sized_style(1.0, 1.0), parts[0usize..2usize])
-    ret (widget.padded(0u64, 24.0, 21.0, 0.0, 0.0, control.sized_style(210.0, 278.0), row[0usize..1usize]), ok)
+    ret (widget.padded(0u64, left, top, 0.0, 0.0, control.sized_style(w, h), row[0usize..1usize]), ok)
 }
 
 fn actions_of(a: *mem.Arena) -> (*widget.Submit, err) {
@@ -110,11 +115,45 @@ fn build_state(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     ret (1usize, ok)
 }
 
+// The popover of a menu button (the library's first capture, popover-menu-open): the arrow on its top edge 54 px from the surface's
+// start, New, Open, Save, Preferences and Quit insensitive, and the Submenu row under the pointer. The 181 x 290 crop sits in a
+// 210 x 300 cell at (14, 5), so the surface starts at (38, 39).
+fn arrow_menu(a: *mem.Arena, action: widget.Submit) -> ([]overlay.MenuCommand, err) {
+    let (list, list_error) = mem.alloc[overlay.MenuCommand](a, 6usize)
+    if list_error != ok { ret (zero, list_error) }
+    list[0usize] = command(action, "New", "", false, false)
+    list[1usize] = command(action, "Open", "", false, false)
+    list[2usize] = command(action, "Save", "", false, false)
+    list[3usize] = command(action, "Preferences", "", false, true)
+    list[4usize] = command(action, "Submenu", "", true, false)
+    list[4usize].submenu = list[0usize..1usize]
+    list[5usize] = command(action, "Quit", "", false, true)
+    ret (list[0usize..6usize], ok)
+}
+
+fn build_arrow(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (action, action_error) = actions_of(a)
+    if action_error != ok { ret (0usize, action_error) }
+    let (items, items_error) = arrow_menu(a, *action)
+    if items_error != ok { ret (0usize, items_error) }
+    overlay.linux_menu_arrow_at(54.0)
+    let (node, node_error) = hung_at(a, t, 100u64, items, action, 38.0, 38.0, 210.0, 300.0)
+    overlay.linux_menu_arrow_at(0.0 - 1.0)
+    if node_error != ok { ret (0usize, node_error) }
+    cells[0usize] = looks.Cell { caption: "Popover with its arrow, Submenu hovered", node: node, drive: .Hover }
+    looks.aim(0usize, 0.0, 51.0)
+    ret (1usize, ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len > 1usize {
         let (word, word_error) = mem.alloc[str](a, 1usize)
         if word_error != ok { ret word_error }
         word[0usize] = args[1usize]
+        if strs.eq(args[1usize], "arrow") {
+            let arrowed = looks.Sheet { name: "popup_menu-arrow", cells: 1usize, columns: 1usize, cell_w: 210.0, cell_h: 300.0, ctx: zero, build: build_arrow }
+            ret looks.run_linux(a, &arrowed)
+        }
         var name = "popup_menu-hover"
         if strs.eq(args[1usize], "active") { name = "popup_menu-active" }
         let state = looks.Sheet { name: name, cells: 1usize, columns: 1usize, cell_w: 210.0, cell_h: 278.0, ctx: mem.cast[*void](&word[0usize]), build: build_state }

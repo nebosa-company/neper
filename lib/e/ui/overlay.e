@@ -670,6 +670,58 @@ fn linux_menu_shadow(a: *mem.Arena, key: widget.Key, across: f32, down: f32) -> 
     ret (node, ok)
 }
 
+// Round 22 (lc): the arrow of a popover opened from a button (GTK's popover arrow). A 45 degree triangle 26 wide and 13 high on the
+// surface's top edge whose centre is `linux_arrow_x` from the surface's left (below 0: no arrow), a 1 px rim (the face at 86 %) on its two
+// slanted sides and the face inside; set with `linux_menu_arrow_at` before the menu is built.
+var linux_arrow_x: f32 = zero
+var linux_arrow_on: bool = zero
+
+fn linux_menu_arrow_at(x: f32) {
+    linux_arrow_x = x
+    linux_arrow_on = x >= 0.0
+}
+
+type LinuxArrow = struct { arena: *mem.Arena, x: f32, face: paint.Color, rim: paint.Color }
+
+fn linux_arrow_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn linux_arrow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let arrow = mem.cast[*LinuxArrow](ctx)
+    let cx = area.x + arrow.x
+    let top = area.y - 13.0
+    let edge: f32 = 1.4142135
+    // the rim: the whole triangle; the face: the triangle one pixel inside, carried 2 px into the body so the seam is the face
+    let (rim_path, rim_error) = geometry.path_builder(arrow.arena, 4usize, 4usize)
+    if rim_error != ok { ret rim_error }
+    var rim = rim_path
+    try geometry.move_to(&rim, geometry.Point { x: cx, y: top })
+    try geometry.line_to(&rim, geometry.Point { x: cx + 12.0, y: area.y })
+    try geometry.line_to(&rim, geometry.Point { x: cx - 12.0, y: area.y })
+    try geometry.close_path(&rim)
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&rim), brush: paint.Brush { Solid: arrow.rim } } })
+    let (face_path, face_error) = geometry.path_builder(arrow.arena, 4usize, 4usize)
+    if face_error != ok { ret face_error }
+    var face = face_path
+    let run = 12.0 - edge
+    try geometry.move_to(&face, geometry.Point { x: cx, y: top + edge })
+    try geometry.line_to(&face, geometry.Point { x: cx + run + 2.0, y: area.y + 2.0 })
+    try geometry.line_to(&face, geometry.Point { x: cx - run - 2.0, y: area.y + 2.0 })
+    try geometry.close_path(&face)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&face), brush: paint.Brush { Solid: arrow.face } } })
+}
+
+fn linux_menu_arrow(a: *mem.Arena, across: f32, down: f32, face: paint.Color, rim: paint.Color) -> (widget.Node, err) {
+    let (arrows, arrows_error) = mem.alloc[LinuxArrow](a, 1usize)
+    if arrows_error != ok { ret (zero, TooLarge) }
+    arrows[0usize] = LinuxArrow { arena: a, x: linux_arrow_x, face: face, rim: rim }
+    var fill = control.sized_style(across, down)
+    fill.position = .Absolute
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&arrows[0usize]), measure: linux_arrow_measure, paint: linux_arrow_paint, state: widget.bytes_of[LinuxArrow](&arrows[0usize]) } }, style: fill, children: none }, ok)
+}
+
 fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
     let dark = t.tokens.palette == .Dark
     var state = control.control_state(t, item_key, c.enabled, false)
@@ -1097,6 +1149,8 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         caption.role = .Body
         caption.wrap = .None
         var across: f32 = 108.0
+        // the popover of a menu button is 133 wide in the capture whatever its rows ask for
+        if linux_arrow_on { across = 121.0 }
         var down: f32 = 12.0
         var m = 0usize
         while m < commands.len {
@@ -1128,11 +1182,19 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     if linux {
         let (shadow, shadow_error) = linux_menu_shadow(a, 0u64, linux_across, linux_down)
         if shadow_error != ok { ret (zero, shadow_error) }
-        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
         if layers_error != ok { ret (zero, TooLarge) }
         layers[0usize] = shadow
         layers[1usize] = column[0usize]
-        column[0usize] = widget.stack(0u64, control.sized_style(linux_across, linux_down), layers[0usize..2usize])
+        var layer_count = 2usize
+        if linux_arrow_on {
+            let face = style.color(t.tokens, .SurfaceBright)
+            let (pointer, pointer_error) = linux_menu_arrow(a, linux_across, linux_down, face, paint.rgba(face.red * 0.86, face.green * 0.86, face.blue * 0.86, 1.0))
+            if pointer_error != ok { ret (zero, pointer_error) }
+            layers[2usize] = pointer
+            layer_count = 3usize
+        }
+        column[0usize] = widget.stack(0u64, control.sized_style(linux_across, linux_down), layers[0usize..layer_count])
     }
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
