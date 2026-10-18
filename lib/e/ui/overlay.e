@@ -8867,7 +8867,7 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     head_parts[1usize] = widget.box(0u64, control.sized_style(15.0, 1.0), zero)
     head_parts[2usize] = year_group
     var head_style = control.sized_style(267.0, 34.0)
-    head_style.padding = style.EdgeLengths { left: style.Length { Px: 0.5 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    head_style.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     let head = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head_parts[0usize..3usize])
     var rule = control.sized_style(267.0, 1.0)
     rule.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
@@ -8877,6 +8877,7 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     var column_share = style.defaults()
     column_share.width = style.Length { Px: 37.83 }
     column_share.height = style.Length { Px: 28.0 }
+    column_share.min_width = style.Length { Px: 37.83 }
     var weekday = 0usize
     while weekday < 7usize {
         var caption = control.text_options()
@@ -8950,7 +8951,8 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             var caption = control.text_options()
             caption.role = .Body
             caption.wrap = .None
-            let (label_node, label_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], t, caption, digit_color)
+            let tabular = control.Theme { tokens: t.tokens, fonts: t.fonts, language: "tnum", runtime: t.runtime }
+            let (label_node, label_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], &tabular, caption, digit_color)
             if label_error != ok { ret (zero, label_error) }
             var box_style = control.sized_style(34.0, 25.0)
             box_style.background = paint.Brush { Solid: fill }
@@ -9008,11 +9010,13 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             var share = style.defaults()
             share.width = style.Length { Px: 37.83 }
             share.height = style.Length { Px: 28.0 }
-            cells[column] = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, cell_node))
+            share.min_width = style.Length { Px: 37.83 }
+            // GTK's days sit 1.85 px right of the cell's middle
+            cells[column] = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, widget.padded(0u64, 1.7, 0.0, 0.0, 0.0, style.defaults(), widget_pair(a, cell_node))))
             column += 1usize
         }
         var row_style = control.sized_style(267.0, 28.0)
-        row_style.padding.left = style.Length { Px: 4.6 }
+        row_style.padding.left = style.Length { Px: 2.2 }
         rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[0usize..7usize])
         week += 1usize
     }
@@ -9020,9 +9024,9 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = head
     body[1usize] = widget.box(0u64, rule, zero)
-    var weekday_row = control.sized_style(267.0, 28.0)
-    weekday_row.margin.top = style.Length { Px: 1.5 }
-    weekday_row.padding.left = style.Length { Px: 4.6 }
+    var weekday_row = control.sized_style(267.0, 29.0)
+    weekday_row.margin.top = style.Length { Px: 0.5 }
+    weekday_row.padding.left = style.Length { Px: 2.0 }
     body[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, weekday_row, names[0usize..7usize])
     body[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..6usize])
     var frame = control.sized_style(269.0, 236.0)
