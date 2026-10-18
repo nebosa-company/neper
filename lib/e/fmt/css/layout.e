@@ -2529,6 +2529,9 @@ fn used_width_block(l: *Layout, c: u32, cbw: f64, avail: f64) {
     let amr = auto_margin_h(s, 1usize)
     if !aml { ml = resolve_or(s.margin[3usize], base, 0.0f64) }
     if !amr { mr = resolve_or(s.margin[1usize], base, 0.0f64) }
+    let tf_h = trim_flags(l, cb.parent)
+    if (tf_h & 4u8) != 0u8 { ml = 0.0f64 }
+    if (tf_h & 8u8) != 0u8 { mr = 0.0f64 }
     // Which margin absorbs the slack follows the direction of the containing block, not of the box itself.
     var cb_rtl = s.direction == .Rtl
     if cb.parent != NONE { cb_rtl = st(l, l.boxes.items[usize(cb.parent)].style).direction == .Rtl }
@@ -2570,6 +2573,32 @@ fn used_width_block(l: *Layout, c: u32, cbw: f64, avail: f64) {
     cb.w = cw + extras
 }
 
+// `margin-trim` of a block container: bit 1 block-start, 2 block-end, 4 inline-start, 8 inline-end.
+fn trim_flags(l: *Layout, p: u32) -> u8 {
+    if p == NONE { ret 0u8 }
+    let (tv, has_tv) = extra_text(bstyle(l, p), "margin-trim")
+    if !has_tv { ret 0u8 }
+    let toks = cv.split_top_level_spaces(l.a, cv.lower(l.a, cv.trim_ws(tv)))
+    var f = 0u8
+    var i = 0usize
+    while i < toks.len {
+        let t = toks[i]
+        i += 1usize
+        if str.eq(t, "block") { f |= 3u8 }
+        if str.eq(t, "inline") { f |= 12u8 }
+        if str.eq(t, "block-start") { f |= 1u8 }
+        if str.eq(t, "block-end") { f |= 2u8 }
+        if str.eq(t, "inline-start") { f |= 4u8 }
+        if str.eq(t, "inline-end") { f |= 8u8 }
+    }
+    ret f
+}
+
+fn is_flow_sibling(l: *const Layout, k: u32) -> bool {
+    let kb = &l.boxes.items[usize(k)]
+    ret kb.inner != .Marker && kb.inner != .Text && !kb.inline_level && !is_out_of_flow(st(l, kb.style))
+}
+
 fn used_margins_vertical(l: *Layout, c: u32, cbw: f64) {
     let s = bstyle(l, c)
     let cb = bx(l, c)
@@ -2577,6 +2606,28 @@ fn used_margins_vertical(l: *Layout, c: u32, cbw: f64) {
     if base < 0.0f64 { base = 0.0f64 }
     cb.margin[0usize] = resolve_or(s.margin[0usize], base, 0.0f64)
     cb.margin[2usize] = resolve_or(s.margin[2usize], base, 0.0f64)
+    let par = cb.parent
+    let tf = trim_flags(l, par)
+    if (tf & 3u8) != 0u8 {
+        if (tf & 1u8) != 0u8 {
+            var first = true
+            var k = l.boxes.items[usize(par)].first
+            while k != c && k != NONE {
+                if is_flow_sibling(l, k) { first = false }
+                k = l.boxes.items[usize(k)].next
+            }
+            if first { bx(l, c).margin[0usize] = 0.0f64 }
+        }
+        if (tf & 2u8) != 0u8 {
+            var last = true
+            var k2 = l.boxes.items[usize(c)].next
+            while k2 != NONE {
+                if is_flow_sibling(l, k2) { last = false }
+                k2 = l.boxes.items[usize(k2)].next
+            }
+            if last { bx(l, c).margin[2usize] = 0.0f64 }
+        }
+    }
 }
 
 fn in_flow_block(l: *const Layout, c: u32) -> bool {

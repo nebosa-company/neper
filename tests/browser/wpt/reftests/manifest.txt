@@ -169,3 +169,4 @@ grid-row-gap-alias-001.html | grid-row-gap-alias-001-ref.html | match
 named-colors-extended-001.html | named-colors-extended-001-ref.html | match
 clip-rect-001.html | clip-rect-001-ref.html | match
 line-clamp-exact-lines-001.html | line-clamp-exact-lines-001-ref.html | match
+margin-trim-block-001.html | margin-trim-block-001-ref.html | match
