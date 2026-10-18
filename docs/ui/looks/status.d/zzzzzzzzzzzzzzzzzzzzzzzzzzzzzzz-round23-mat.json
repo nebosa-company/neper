@@ -1,0 +1,547 @@
+{
+ "button": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/button.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 50 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 17 px off, worst glyph-only count 59 px.",
+    "gaps": [
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/button.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 50 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 17 px off, worst glyph-only count 59 px.",
+    "gaps": [
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/fab.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 30 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 92 px off, worst glyph-only count 147 px.",
+    "gaps": [
+     "The icon is Neper's glyph, not the Material icon (glyph ink is excluded from the metric)",
+     "Over the line: fab-extended-hover (92)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/fab.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 30 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 4 px off, worst glyph-only count 147 px.",
+    "gaps": [
+     "The icon is Neper's glyph, not the Material icon (glyph ink is excluded from the metric)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "fab": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/fab.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 30 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 92 px off, worst glyph-only count 147 px.",
+    "gaps": [
+     "Extended FAB: a 1 to 2 px difference of the shadow at its ends (fitted shade, level 3 and 4)",
+     "Over the line: fab-extended-hover (92)",
+     "Reference states with no sheet cell: fab-extended-focus, fab-focus, fab-hover, fab-large-focus, fab-large-hover, fab-large-pressed, fab-pressed, fab-primary-rest, fab-secondary-rest, fab-small-focus and 4 more",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/fab.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 30 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 4 px off, worst glyph-only count 147 px.",
+    "gaps": [
+     "Extended FAB: a 1 to 2 px difference of the shadow at its ends (fitted shade, level 3 and 4)",
+     "Reference states with no sheet cell: fab-extended-focus, fab-focus, fab-hover, fab-large-focus, fab-large-hover, fab-large-pressed, fab-pressed, fab-primary-rest, fab-secondary-rest, fab-small-focus and 4 more",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/checkbox.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 18 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 0 px off, worst glyph-only count 0 px.",
+    "gaps": [
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/checkbox.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 18 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 0 px off, worst glyph-only count 0 px.",
+    "gaps": [
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/radio.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 10 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 0 px off, worst glyph-only count 0 px.",
+    "gaps": [
+     "M3 defines no error state for a radio button: the sheet's Error column has no reference",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/radio.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 10 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 0 px off, worst glyph-only count 0 px.",
+    "gaps": [
+     "M3 defines no error state for a radio button: the sheet's Error column has no reference",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "switch": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/switch.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 0 px off, worst glyph-only count 0 px.",
+    "gaps": [
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/switch.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 0 px off, worst glyph-only count 0 px.",
+    "gaps": [
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/text_field.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 12 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 65 px off, worst glyph-only count 24 px.",
+    "gaps": [
+     "The caret is not compared (the reference caret is hidden: it blinks)",
+     "Hover is reached through a region round the field (the runtime hovers regions, not editors)",
+     "Reference states with no sheet cell: text-field-filled-empty-disabled, text-field-filled-empty-error, text-field-filled-icons-rest, text-field-filled-support-rest, text-field-filled-value-hover, text-field-filled-value-rest, text-field-outlined-empty-disabled, text-field-outlined-empty-error, text-field-outlined-icons-rest, text-field-outlined-support-rest and 2 more",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/text_field.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 12 states compared, 2 over the line (off + outside above 0.3 % of the structural pixels); worst state 76 px off, worst glyph-only count 23 px.",
+    "gaps": [
+     "The caret is not compared (the reference caret is hidden: it blinks)",
+     "Hover is reached through a region round the field (the runtime hovers regions, not editors)",
+     "Over the line: text-field-outlined-empty-focus (76), text-field-outlined-value-error (68)",
+     "Reference states with no sheet cell: text-field-filled-empty-disabled, text-field-filled-empty-error, text-field-filled-icons-rest, text-field-filled-support-rest, text-field-filled-value-hover, text-field-filled-value-rest, text-field-outlined-empty-disabled, text-field-outlined-empty-error, text-field-outlined-icons-rest, text-field-outlined-support-rest and 2 more",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/combo_box.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 8 states compared, 5 over the line (off + outside above 0.3 % of the structural pixels); worst state 82 px off, worst glyph-only count 19 px.",
+    "gaps": [
+     "The drop-down arrow is Neper's chevron, Material's is a filled triangle (icon ink)",
+     "The open list is not compared",
+     "Over the line: select-outlined-value-rest (72), select-outlined-value-hover (72), select-outlined-value-focus (82), select-outlined-value-disabled (64), select-outlined-value-error (71)",
+     "Reference states with no sheet cell: select-filled-empty-disabled, select-filled-empty-error, select-filled-empty-focus, select-filled-empty-hover, select-filled-empty-rest, select-filled-value-disabled, select-filled-value-error, select-outlined-empty-disabled, select-outlined-empty-error, select-outlined-empty-focus and 2 more",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/combo_box.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 8 states compared, 4 over the line (off + outside above 0.3 % of the structural pixels); worst state 82 px off, worst glyph-only count 19 px.",
+    "gaps": [
+     "The drop-down arrow is Neper's chevron, Material's is a filled triangle (icon ink)",
+     "The open list is not compared",
+     "Over the line: select-outlined-value-rest (72), select-outlined-value-hover (74), select-outlined-value-focus (82), select-outlined-value-error (74)",
+     "Reference states with no sheet cell: select-filled-empty-disabled, select-filled-empty-error, select-filled-empty-focus, select-filled-empty-hover, select-filled-empty-rest, select-filled-value-disabled, select-filled-value-error, select-outlined-empty-disabled, select-outlined-empty-error, select-outlined-empty-focus and 2 more",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "chip": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/chips.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 217 px off, worst glyph-only count 23 px.",
+    "gaps": [
+     "Input chip: the remove icon is Neper's cross, drawn bolder than Material's",
+     "Chip positions are fractional in the sheet cell (odd widths), so 1 px rims differ",
+     "Over the line: chip-input-focus (217)",
+     "Reference states with no sheet cell: chip-assist-disabled, chip-assist-elevated-disabled, chip-assist-elevated-focus, chip-assist-elevated-hover, chip-assist-elevated-pressed, chip-assist-elevated-rest, chip-assist-icon-disabled, chip-assist-icon-focus, chip-assist-icon-hover, chip-assist-icon-pressed and 15 more",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/chips.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 219 px off, worst glyph-only count 23 px.",
+    "gaps": [
+     "Input chip: the remove icon is Neper's cross, drawn bolder than Material's",
+     "Chip positions are fractional in the sheet cell (odd widths), so 1 px rims differ",
+     "Over the line: chip-input-focus (219)",
+     "Reference states with no sheet cell: chip-assist-disabled, chip-assist-elevated-disabled, chip-assist-elevated-focus, chip-assist-elevated-hover, chip-assist-elevated-pressed, chip-assist-elevated-rest, chip-assist-icon-disabled, chip-assist-icon-focus, chip-assist-icon-hover, chip-assist-icon-pressed and 15 more",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/progress.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 8 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 6 px off, worst glyph-only count 0 px.",
+    "gaps": [
+     "Indeterminate progress and the buffer, four-colour and disabled linear forms are not compared",
+     "Reference states with no sheet cell: progress-linear-buffer, progress-linear-disabled, progress-linear-four-color",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/progress.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 8 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 6 px off, worst glyph-only count 0 px.",
+    "gaps": [
+     "Indeterminate progress and the buffer, four-colour and disabled linear forms are not compared",
+     "Reference states with no sheet cell: progress-linear-buffer, progress-linear-disabled, progress-linear-four-color",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/tabs.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 7 states compared, 5 over the line (off + outside above 0.3 % of the structural pixels); worst state 312 px off, worst glyph-only count 288 px.",
+    "gaps": [
+     "Primary tabs: the label text is 1 px off Material's (glyph ink)",
+     "Tabs with icons use Neper's glyphs",
+     "Over the line: tabs-primary-rest (154), tabs-primary-icons-rest (312), tabs-primary-disabled (166), tabs-primary-hover (226), tabs-primary-pressed (225)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/tabs.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 7 states compared, 5 over the line (off + outside above 0.3 % of the structural pixels); worst state 307 px off, worst glyph-only count 292 px.",
+    "gaps": [
+     "Primary tabs: the label text is 1 px off Material's (glyph ink)",
+     "Tabs with icons use Neper's glyphs",
+     "Over the line: tabs-primary-rest (148), tabs-primary-icons-rest (307), tabs-primary-disabled (162), tabs-primary-hover (221), tabs-primary-pressed (222)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/menu.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 2 over the line (off + outside above 0.3 % of the structural pixels); worst state 651 px off, worst glyph-only count 194 px.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Shortcut text sits where Material Web puts its trailing supporting text (label-small)",
+     "Over the line: menu-rest (651), menu-hover (651)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/menu.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 2 over the line (off + outside above 0.3 % of the structural pixels); worst state 348 px off, worst glyph-only count 161 px.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Shortcut text sits where Material Web puts its trailing supporting text (label-small)",
+     "Over the line: menu-rest (348), menu-hover (348)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/list.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 6 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 467 px off, worst glyph-only count 70 px.",
+    "gaps": [
+     "Material Web has no selected list item and no three-line item: those sheet cells are not compared",
+     "Pressed layer is one level off Material Web's",
+     "Over the line: list-item-two-pressed (467)",
+     "Reference states with no sheet cell: list-item-one-disabled, list-item-one-focus, list-item-one-hover, list-item-one-pressed",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/list.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 6 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 1453 px off, worst glyph-only count 67 px.",
+    "gaps": [
+     "Material Web has no selected list item and no three-line item: those sheet cells are not compared",
+     "Pressed layer is one level off Material Web's",
+     "Over the line: list-item-two-pressed (1453)",
+     "Reference states with no sheet cell: list-item-one-disabled, list-item-one-focus, list-item-one-hover, list-item-one-pressed",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/dialog.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 2 over the line (off + outside above 0.3 % of the structural pixels); worst state 10334 px off, worst glyph-only count 1981 px.",
+    "gaps": [
+     "The paragraph wraps one word earlier in Material Web (a 1 px wider text run)",
+     "Over the line: dialog-rest (10334), dialog-icon (10177)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/dialog.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 2 over the line (off + outside above 0.3 % of the structural pixels); worst state 1872 px off, worst glyph-only count 1968 px.",
+    "gaps": [
+     "The paragraph wraps one word earlier in Material Web (a 1 px wider text run)",
+     "Over the line: dialog-rest (1872), dialog-icon (1649)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "snackbar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/snackbar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 122 px off, worst glyph-only count 48 px.",
+    "gaps": [
+     "Hovered and pressed action are not compared (the pointer of the capture is not over the action)",
+     "Material Web has no snackbar: the reference is plain CSS from the specification with md-elevation",
+     "Over the line: snackbar-action-close (122)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/snackbar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 115 px off, worst glyph-only count 48 px.",
+    "gaps": [
+     "Hovered and pressed action are not compared (the pointer of the capture is not over the action)",
+     "Material Web has no snackbar: the reference is plain CSS from the specification with md-elevation",
+     "Over the line: snackbar-action-close (115)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "navigation_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 5 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 107 px off, worst glyph-only count 272 px.",
+    "gaps": [
+     "Material Web has no navigation bar: the reference is plain CSS from the specification",
+     "Badge placement on the icon is the spec CSS's guess",
+     "Over the line: navigation-bar-four-last (107)",
+     "Reference states with no sheet cell: navigation-bar-hover, navigation-bar-pressed, navigation-bar-rest",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 5 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 105 px off, worst glyph-only count 272 px.",
+    "gaps": [
+     "Material Web has no navigation bar: the reference is plain CSS from the specification",
+     "Badge placement on the icon is the spec CSS's guess",
+     "Over the line: navigation-bar-four-last (105)",
+     "Reference states with no sheet cell: navigation-bar-hover, navigation-bar-pressed, navigation-bar-rest",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "top_app_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/app_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 33 px off, worst glyph-only count 148 px.",
+    "gaps": [
+     "Material Web has no app bar: the reference is plain CSS from the specification",
+     "Medium and large app bars are not compared",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/app_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 33 px off, worst glyph-only count 142 px.",
+    "gaps": [
+     "Material Web has no app bar: the reference is plain CSS from the specification",
+     "Medium and large app bars are not compared",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "search_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/search_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 5622 px off, worst glyph-only count 153 px.",
+    "gaps": [
+     "Material Web has no search bar: the reference is plain CSS from the specification",
+     "Focused states are not compared (caret)",
+     "With text: Neper's clear button is 40 dp and drawn with its own glyph",
+     "Over the line: search-bar-value (5622)",
+     "Reference states with no sheet cell: search-bar-pressed",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/search_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 1 over the line (off + outside above 0.3 % of the structural pixels); worst state 5627 px off, worst glyph-only count 152 px.",
+    "gaps": [
+     "Material Web has no search bar: the reference is plain CSS from the specification",
+     "Focused states are not compared (caret)",
+     "With text: Neper's clear button is 40 dp and drawn with its own glyph",
+     "Over the line: search-bar-value (5627)",
+     "Reference states with no sheet cell: search-bar-pressed",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "badge": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/badge.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 6 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 40 px off, worst glyph-only count 122 px.",
+    "gaps": [
+     "Material Web has no badge: the reference is plain CSS from the specification; the badge's offset on its icon follows that CSS",
+     "Reference states with no sheet cell: badge-large-1, badge-large-99, badge-small",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/badge.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 6 states compared, 0 over the line (off + outside above 0.3 % of the structural pixels); worst state 40 px off, worst glyph-only count 122 px.",
+    "gaps": [
+     "Material Web has no badge: the reference is plain CSS from the specification; the badge's offset on its icon follows that CSS",
+     "Reference states with no sheet cell: badge-large-1, badge-large-99, badge-small",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/tooltip.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 2 over the line (off + outside above 0.3 % of the structural pixels); worst state 6778 px off, worst glyph-only count 280 px.",
+    "gaps": [
+     "The sheet's anchor button lies under the plain tooltip's crop",
+     "The rich tooltip is 20 dp shorter than the specification's",
+     "Over the line: tooltip-plain (1928), tooltip-rich (6778)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/tooltip.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 2 over the line (off + outside above 0.3 % of the structural pixels); worst state 8022 px off, worst glyph-only count 281 px.",
+    "gaps": [
+     "The sheet's anchor button lies under the plain tooltip's crop",
+     "The rich tooltip is 20 dp shorter than the specification's",
+     "Over the line: tooltip-plain (1932), tooltip-rich (8022)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture"
+    ]
+   }
+  }
+ },
+ "slider": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/slider.png",
+    "notes": "No comparison: see the gaps.",
+    "gaps": [
+     "Neper draws the M3 Expressive slider (vertical bar handle, gaps); Material Web draws the classic circle handle: not converted, not compared",
+     "20 reference states captured in docs/ui/looks/ref/material"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/slider.png",
+    "notes": "No comparison: see the gaps.",
+    "gaps": [
+     "Neper draws the M3 Expressive slider (vertical bar handle, gaps); Material Web draws the classic circle handle: not converted, not compared",
+     "20 reference states captured in docs/ui/looks/ref/material"
+    ]
+   }
+  }
+ },
+ "date_picker": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/date_picker.png",
+    "notes": "No comparison: see the gaps.",
+    "gaps": [
+     "Material Web has no date picker and the specification CSS is only a sketch: not compared",
+     "1 reference states captured in docs/ui/looks/ref/material"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "No comparison: see the gaps.",
+    "gaps": [
+     "Material Web has no date picker and the specification CSS is only a sketch: not compared",
+     "1 reference states captured in docs/ui/looks/ref/material"
+    ]
+   }
+  }
+ }
+}

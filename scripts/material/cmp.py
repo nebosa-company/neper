@@ -74,13 +74,16 @@ def run(name, dark, png_dir, only):
         cx = x0 + (sheet["cell_w"] - w) / 2.0 - CROP
         cy = y0 + (sheet["cell_h"] - h) / 2.0 - CROP
         if "at" in sheet:  # a control that is placed, not centred (a menu under its anchor): its top left in the cell
-            cx = x0 + sheet["at"][0] - CROP
-            cy = y0 + sheet["at"][1] - CROP
+            at = sheet["at"][i] if isinstance(sheet["at"][0], tuple) else sheet["at"]  # one point, or one per cell
+            cx = x0 + at[0] - CROP
+            cy = y0 + at[1] - CROP
         # the compared window: our cell box within the crop
         rx0 = max(0, int(round(x0 - cx)))
         ry0 = max(0, int(round(y0 - cy)))
         rx1 = min(ref.shape[1], int(round(x0 + sheet["cell_w"] - cx)))
         ry1 = min(ref.shape[0], int(round(y0 + sheet["cell_h"] - cy)))
+        if sheet.get("full"):  # the control overhangs its cell (a tooltip or a dialog): compare its whole crop
+            rx0, ry0, rx1, ry1 = 0, 0, ref.shape[1], ref.shape[0]
         st = spread(ref) <= 6
         win = np.zeros(st.shape, bool)
         win[ry0:ry1, rx0:rx1] = True
