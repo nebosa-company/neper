@@ -191,12 +191,15 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         // spin: 0 rest, 1 hover up, 2 hover down, 3 pressed up, 4 pressed down, 5 focus, 6 disabled
         // round 15: spin-focus was captured in the blink-off phase of the caret (no orange column); the edit captures show it
         control.set_native_caret_off(i == 5usize)
+        // round 22: the two pressed captures were taken in the caret's on phase (a #DFDFDF line left of the text)
+        control.set_caret_hidden(i != 3usize && i != 4usize)
         let (node, node_error) = spin_cell(a, t, i)
+        control.set_caret_hidden(true)
         control.set_native_caret_off(false)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 1usize || i == 2usize { drive = .Hover }
-        if i == 3usize || i == 4usize { drive = .Press }
+        if i == 3usize || i == 4usize { drive = .FocusPress }
         if i == 5usize { drive = .Select }
         cells[at] = looks.Cell { caption: spin_names[i], node: node, drive: drive }
         at += 1usize

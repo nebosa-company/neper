@@ -36,7 +36,7 @@ type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, Material
 // How a cell's state is produced: None (at rest, or whatever the build made of it, for example
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected).
-type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover }
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -446,6 +446,14 @@ fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
         try testing.tab(&rig.harness, false)
         try testing.tab(&rig.harness, true)
         ret testing.hover(&rig.harness, -500.0, -500.0)
+    }
+    if drive == .FocusPress {
+        // round 22: the keyboard focus in an edit (the click lands 60 px left of the point), then a button at the point held down.
+        // (two clicks, one a little above the point: the edit is hit by the one that lands inside it)
+        try testing.tap(&rig.harness, x - 60.0, y - 8.0)
+        try testing.tap(&rig.harness, x - 60.0, y)
+        try testing.hover(&rig.harness, x, y)
+        ret testing.send(&rig.harness, input.Event { PointerDown: testing.pointer_at(x, y) })
     }
     if drive == .SelectPress {
         // An edit with its text selected and an end button pressed (a button edit's ellipsis): the click that focuses the
