@@ -1,0 +1,32 @@
+{
+ "combo_box": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/combo_box.png",
+    "notes": "AUDIT 11 (review stays): independent recompute with the drawn popover shadow: dropdown-open 0 flat px off (glyphs excluded; the top 22 rows, where the sheet draws the button, ignored) and the shadow matches the 2.0 render against the @2x capture within 3 levels. But the drop-down arrow is 7 px left of the capture's (ours x 129 to 140, GTK x 136 to 147 in the 160 px crop) in normal, hover, active, focus, disabled and open-button: 33 flat px and 37 steep px off per state, up to 184 levels, so the earlier 'every state 0 flat px' only holds with the arrow counted as a glyph. Symbolic icons count, so combo box stays review. Focus rings: dropdown-focus-ring 39 steep px off (ring corners, up to 10 levels), combo-entry-focus 53; the first manifest's dropdown-focus is a different capture of the ring (1 px plus a fractional px, 770 steep px off in Light) that ours does not follow. The combo-entry arrow is in its own button and matches (0 flat). | ROUND 21 (shadow worker): the popover's soft shadow is drawn (three blurred rounded-rectangle layers fitted to the alpha of dropdown-open@1x, sized by the popover), the baked 9-slice and its generator are deleted. scripts/linux_cmp_shadow.py: every state of combo_box and combo_box_open 0 flat px off in both schemes; steep pixels off: focus-ring states 39 / 53 (Light), 48 / 58 (Dark), dark active 17, open list 60 / 32 (before, painter disabled: open list 2066 / 508 flat). Stays review, not matched: the focus ring corners are off by up to 10 levels on those steep pixels and the popover's offset below the button is a guess. Scale check passes at 1.25, 1.5 and 2.0 (closed and open sheets).",
+    "gaps": [
+     "The drop-down arrow sits 7 px left of GTK's (33 flat and 37 steep px per state)",
+     "Focus ring corners: GTK's 2 px outline has a 6 px outer and 4 px inner corner; ours is a border at radius 5.7, whose antialiasing differs by up to 10 levels on about 40 corner pixels per ring (the straight sides match)",
+     "The gap between the button and its popover (7.07 px) is a guess: the capture holds the popover surface alone",
+     "Hover and pressed are the library with state flags forced, not a real pointer",
+     "Rows are 35.5 px in GTK; Neper snaps box heights to whole pixels, so the second and third rows' text can sit 0.5 px off",
+     "The combo box with an entry opens the same popover list (only the drop down's was captured)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/combo_box.png",
+    "notes": "AUDIT 11 (review stays): independent recompute with the drawn popover shadow: dropdown-open 0 flat px off (glyphs excluded; the top 22 rows, where the sheet draws the button, ignored) and the shadow matches the 2.0 render against the @2x capture within 3 levels. But the drop-down arrow is 7 px left of the capture's (ours x 129 to 140, GTK x 136 to 147 in the 160 px crop) in normal, hover, active, focus, disabled and open-button: 33 flat px and 37 steep px off per state, up to 198 levels, so the earlier 'every state 0 flat px' only holds with the arrow counted as a glyph. Symbolic icons count, so combo box stays review. Focus rings: dropdown-focus-ring 48 steep px off (ring corners, up to 10 levels), combo-entry-focus 58; the first manifest's dropdown-focus is a different capture of the ring (1 px plus a fractional px, 770 steep px off in Light) that ours does not follow. The combo-entry arrow is in its own button and matches (0 flat). | ROUND 21 (shadow worker): the popover's soft shadow is drawn (three blurred rounded-rectangle layers fitted to the alpha of dropdown-open@1x, sized by the popover), the baked 9-slice and its generator are deleted. scripts/linux_cmp_shadow.py: every state of combo_box and combo_box_open 0 flat px off in both schemes; steep pixels off: focus-ring states 39 / 53 (Light), 48 / 58 (Dark), dark active 17, open list 60 / 32 (before, painter disabled: open list 2066 / 508 flat). Stays review, not matched: the focus ring corners are off by up to 10 levels on those steep pixels and the popover's offset below the button is a guess. Scale check passes at 1.25, 1.5 and 2.0 (closed and open sheets).",
+    "gaps": [
+     "The drop-down arrow sits 7 px left of GTK's (33 flat and 37 steep px per state)",
+     "Focus ring corners: GTK's 2 px outline has a 6 px outer and 4 px inner corner; ours is a border at radius 5.7, whose antialiasing differs by up to 10 levels on about 40 corner pixels per ring (the straight sides match)",
+     "The gap between the button and its popover (7.07 px) is a guess: the capture holds the popover surface alone",
+     "Hover and pressed are the library with state flags forced, not a real pointer",
+     "Rows are 35.5 px in GTK; Neper snaps box heights to whole pixels, so the second and third rows' text can sit 0.5 px off",
+     "The combo box with an entry opens the same popover list (only the drop down's was captured)"
+    ]
+   }
+  }
+ }
+}
