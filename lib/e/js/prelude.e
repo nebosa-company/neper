@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 58930)
+    var b = try str.builder(a, 59150)
     try str.push(&b, "// Built-ins written in JavaScript, evaluated into every new realm (generated into prelude.e by scripts/gen_js_prelude.py).\n")
     try str.push(&b, "// They only use intrinsics captured up front, so page scripts cannot change how they behave.\n")
     try str.push(&b, "(function (global) {\n")
@@ -868,6 +868,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "    var proto = {\n")
     try str.push(&b, "      setFromBase64(string) {\n")
     try str.push(&b, "        validate(this);\n")
+    try str.push(&b, "        if (this.buffer.immutable) throw new TypeErr('the Uint8Array is backed by an immutable ArrayBuffer');\n")
     try str.push(&b, "        if (typeof string !== 'string') throw new TypeErr('expected a string');\n")
     try str.push(&b, "        var o = options(arguments[1]), alphabet = alphabetOf(o), last = lastOf(o);\n")
     try str.push(&b, "        checkAttached(this);\n")
@@ -878,6 +879,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "      },\n")
     try str.push(&b, "      setFromHex(string) {\n")
     try str.push(&b, "        validate(this);\n")
+    try str.push(&b, "        if (this.buffer.immutable) throw new TypeErr('the Uint8Array is backed by an immutable ArrayBuffer');\n")
     try str.push(&b, "        if (typeof string !== 'string') throw new TypeErr('expected a string');\n")
     try str.push(&b, "        checkAttached(this);\n")
     try str.push(&b, "        var r = fromHex(string, this.length);\n")

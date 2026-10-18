@@ -315,13 +315,26 @@ fn push_js_string(b: *str.Builder, text: str) {
 
 // A JSON (`type: "json"`) or text (`type: "text"`) module: a module whose only export is its default, built from the source.
 fn new_synthetic_module(it: *js.Interp, url: str, source: str, kind: str) -> (*Module, err) {
-    let (b, be) = str.builder(it.a, source.len * 2usize + 64usize)
+    let (b, be) = str.builder(it.a, source.len * 5usize + 128usize)
     if be != ok { ret (zero, js.throw_range(it, "out of memory")) }
     var out = b
     if str.eq(kind, "json") {
         let e1 = str.push(&out, "export default JSON.parse(")
         push_js_string(&out, source)
         let e2 = str.push(&out, ");")
+    } else if str.eq(kind, "bytes") {
+        let e5 = str.push(&out, "export default new Uint8Array(new Uint8Array([")
+        var k = 0usize
+        while k < source.len {
+            if k > 0usize { let e6 = str.push_byte(&out, 44u8) }
+            // Digits are written by hand: the builder must stay the newest allocation of the arena.
+            let bv = u32(source[k])
+            if bv >= 100u32 { let e7 = str.push_byte(&out, u8(48u32 + bv / 100u32)) }
+            if bv >= 10u32 { let e9 = str.push_byte(&out, u8(48u32 + (bv / 10u32) % 10u32)) }
+            let e10 = str.push_byte(&out, u8(48u32 + bv % 10u32))
+            k += 1usize
+        }
+        let e8 = str.push(&out, "]).buffer.transferToImmutable());")
     } else if str.eq(kind, "text") {
         let e3 = str.push(&out, "export default ")
         push_js_string(&out, source)

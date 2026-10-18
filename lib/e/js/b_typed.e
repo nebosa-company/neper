@@ -35,7 +35,7 @@ fn new_buffer_full(it: *js.Interp, proto: *js.Obj, len: usize, max: usize, resiz
         bytes[i] = 0u8
         i += 1usize
     }
-    cell[0usize] = js.Buf { bytes: bytes[0usize..len], detached: false, store: bytes[0usize..max], max: max, resizable: resizable, is_shared: sh }
+    cell[0usize] = js.Buf { bytes: bytes[0usize..len], detached: false, store: bytes[0usize..max], max: max, resizable: resizable, is_shared: sh, immutable: false }
     o.data = mem.cast[*void](&cell[0usize])
     ret (o, ok)
 }
@@ -125,6 +125,7 @@ fn buffer_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     let nb = js.buf_of(js.as_object(nv))
     if nb.detached { ret (js.undefv(), js.throw_type(it, "new ArrayBuffer is detached")) }
     if js.as_object(nv) == o { ret (js.undefv(), js.throw_type(it, "species constructor returned the same buffer")) }
+    if nb.immutable { ret (js.undefv(), js.throw_type(it, "species constructor returned an immutable ArrayBuffer")) }
     if f64(nb.bytes.len) < new_len { ret (js.undefv(), js.throw_type(it, "new ArrayBuffer is too small")) }
     if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
     var k = 0usize
@@ -175,6 +176,7 @@ fn set_buffer_length(b: *js.Buf, n: usize) {
 fn buffer_resize(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (b, o, e) = this_buffer(it, this_val)
     if e != ok { ret (js.undefv(), e) }
+    if b.immutable { ret (js.undefv(), js.throw_type(it, "An immutable ArrayBuffer can not be resized")) }
     if !b.resizable { ret (js.undefv(), js.throw_type(it, "Method ArrayBuffer.prototype.resize called on incompatible receiver")) }
     let (n, ne) = to_index(it, arg(args, 0usize), "Invalid array buffer length")
     if ne != ok { ret (js.undefv(), ne) }
@@ -193,6 +195,7 @@ fn buffer_transfer_common(it: *js.Interp, this_val: js.Value, args: []const js.V
         if ne != ok { ret (js.undefv(), ne) }
         new_len = n
     }
+    if b.immutable { ret (js.undefv(), js.throw_type(it, "An immutable ArrayBuffer can not be transferred")) }
     if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
     var resizable = b.resizable && !fixed
     var cap = usize(new_len)
@@ -343,9 +346,67 @@ fn detach_host(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
     let v = arg(args, 0usize)
     if !js.is_object(v) || js.as_object(v).class != js.C_ARRAYBUFFER { ret (js.undefv(), js.throw_type(it, "not an ArrayBuffer")) }
     let b = js.buf_of(js.as_object(v))
+    if b.immutable { ret (js.undefv(), js.throw_type(it, "An immutable ArrayBuffer can not be detached")) }
     b.detached = true
     b.bytes = b.bytes[0usize..0usize]
     ret (js.null_value(), ok)
+}
+
+fn immutable_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_buffer(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    ret (js.bool_value(b.immutable), ok)
+}
+
+// A new immutable fixed-length buffer holding `len` bytes of `b` from `start` (zero-filled past the end).
+fn immutable_copy(it: *js.Interp, b: *js.Buf, start: usize, len: usize) -> (js.Value, err) {
+    if f64(len) > 2147483647.0f64 { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
+    let (nb, nbe) = new_buffer_full(it, it.protos.array_buffer, len, len, false, false)
+    if nbe != ok { ret (js.undefv(), nbe) }
+    let nbuf = js.buf_of(nb)
+    var k = 0usize
+    while k < len && start + k < b.bytes.len {
+        nbuf.bytes[k] = b.bytes[start + k]
+        k += 1usize
+    }
+    nbuf.immutable = true
+    ret (js.obj_value(nb), ok)
+}
+
+fn buffer_transfer_immutable(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_buffer(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    var new_len = f64(b.bytes.len)
+    if !js.is_undefined(arg(args, 0usize)) {
+        let (n, ne) = to_index(it, arg(args, 0usize), "Invalid array buffer length")
+        if ne != ok { ret (js.undefv(), ne) }
+        new_len = n
+    }
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    if b.immutable { ret (js.undefv(), js.throw_type(it, "An immutable ArrayBuffer can not be transferred")) }
+    let (r, re) = immutable_copy(it, b, 0usize, usize(new_len))
+    if re != ok { ret (js.undefv(), re) }
+    b.detached = true
+    b.bytes = b.bytes[0usize..0usize]
+    ret (r, ok)
+}
+
+fn buffer_slice_immutable(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (b, o, e) = this_buffer(it, this_val)
+    if e != ok { ret (js.undefv(), e) }
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    let len = f64(b.bytes.len)
+    let (first, fe) = barr.rel_index(it, arg(args, 0usize), len, 0.0f64)
+    if fe != ok { ret (js.undefv(), fe) }
+    let (fin, fine) = barr.rel_index(it, arg(args, 1usize), len, len)
+    if fine != ok { ret (js.undefv(), fine) }
+    if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    var new_len = fin - first
+    if new_len < 0.0f64 { new_len = 0.0f64 }
+    // The source may have shrunk while the arguments were coerced.
+    if first + new_len > f64(b.bytes.len) { ret (js.undefv(), js.throw_range(it, "The ArrayBuffer shrank")) }
+    let (r, re) = immutable_copy(it, b, usize(first), usize(new_len))
+    ret (r, re)
 }
 
 fn install_array_buffer(it: *js.Interp) {
@@ -367,6 +428,9 @@ fn install_array_buffer(it: *js.Interp) {
     js.add_method(it, it.protos.array_buffer, "slice", 2u32, buffer_slice)
     js.add_method(it, it.protos.array_buffer, "resize", 1u32, buffer_resize)
     js.add_method(it, it.protos.array_buffer, "transfer", 0u32, buffer_transfer)
+    js.add_getter(it, it.protos.array_buffer, "immutable", immutable_getter)
+    js.add_method(it, it.protos.array_buffer, "transferToImmutable", 0u32, buffer_transfer_immutable)
+    js.add_method(it, it.protos.array_buffer, "sliceToImmutable", 2u32, buffer_slice_immutable)
     js.add_method(it, it.protos.array_buffer, "transferToFixedLength", 0u32, buffer_transfer_fixed)
     install_shared_array_buffer(it)
     let e5 = js.define_data(it, it.protos.array_buffer, js.key_of_symbol(it.sym_to_string_tag), js.str_value("ArrayBuffer"), js.P_CONFIGURABLE)
@@ -615,6 +679,7 @@ fn ta_tag_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
 fn ta_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if !js.is_object(this_val) || js.as_object(this_val).class != js.C_TYPEDARRAY { ret (js.undefv(), js.throw_type(it, "not a typed array")) }
     let o = js.as_object(this_val)
+    if js.ta_immutable(o) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
     let (off, offe) = js.to_number(it, arg(args, 1usize))
     if offe != ok { ret (js.undefv(), offe) }
     let offset = js.to_integer(off)
@@ -700,6 +765,7 @@ fn ta_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
     var count = fin - first
     if count < 0.0f64 { count = 0.0f64 }
     let (r, re) = species_create(it, o, js.one_arg(it, js.num_value(count)), count)
+    if re == ok && js.ta_immutable(r) { ret (js.undefv(), js.throw_type(it, "The result is backed by an immutable ArrayBuffer")) }
     if re != ok { ret (js.undefv(), re) }
     if count > 0.0f64 {
         if js.buf_of(js.ta_of(o).buffer).detached { ret (js.undefv(), js.throw_type(it, "typed array is detached")) }
@@ -722,6 +788,7 @@ fn ta_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
 fn ta_fill(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, ve) = validate_ta(it, this_val)
     if ve != ok { ret (js.undefv(), ve) }
+    if js.ta_immutable(o) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
     let len = f64(js.ta_length(o))
     let (raw, nne) = js.ta_raw_of(it, js.ta_of(o).kind, arg(args, 0usize))
     if nne != ok { ret (js.undefv(), nne) }
@@ -748,6 +815,7 @@ fn ta_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Val
     let cb = arg(args, 0usize)
     if !js.is_callable(cb) { ret (js.undefv(), js.throw_type(it, "callback is not a function")) }
     let (r, re) = species_create(it, o, js.one_arg(it, js.num_value(f64(len))), f64(len))
+    if re == ok && js.ta_immutable(r) { ret (js.undefv(), js.throw_type(it, "The result is backed by an immutable ArrayBuffer")) }
     if re != ok { ret (js.undefv(), re) }
     var k = 0usize
     while k < len {
@@ -778,6 +846,7 @@ fn ta_filter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.
         k += 1usize
     }
     let (r, re) = species_create(it, o, js.one_arg(it, js.num_value(f64(kept.len))), f64(kept.len))
+    if re == ok && js.ta_immutable(r) { ret (js.undefv(), js.throw_type(it, "The result is backed by an immutable ArrayBuffer")) }
     if re != ok { ret (js.undefv(), re) }
     var i = 0usize
     while i < kept.len {
@@ -875,6 +944,7 @@ fn ta_sort(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     if !js.is_undefined(cmp) && !js.is_callable(cmp) { ret (js.undefv(), js.throw_type(it, "comparator must be a function or undefined")) }
     let (o, ve) = validate_ta(it, this_val)
     if ve != ok { ret (js.undefv(), ve) }
+    if js.ta_immutable(o) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
     let (items, se) = sorted_values(it, o, cmp)
     if se != ok { ret (js.undefv(), se) }
     let cur = js.ta_length(o)
@@ -1023,6 +1093,7 @@ fn g_join(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Val
 fn g_reverse(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let ge = guarded(it, this_val)
     if ge != ok { ret (js.undefv(), ge) }
+    if js.ta_immutable(js.as_object(this_val)) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
     let (r, e) = barr.array_reverse(it, this_val, args)
     ret (r, e)
 }
@@ -1047,6 +1118,7 @@ fn g_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value
 fn g_copy_within(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let ge = guarded(it, this_val)
     if ge != ok { ret (js.undefv(), ge) }
+    if js.ta_immutable(js.as_object(this_val)) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
     let (r, e) = barr.array_copy_within(it, this_val, args)
     ret (r, e)
 }
@@ -1100,10 +1172,13 @@ fn ta_from(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     if !js.is_undefined(mapper) && !js.is_callable(mapper) { ret (js.undefv(), js.throw_type(it, "mapper is not a function")) }
     let src = arg(args, 0usize)
     var items: []const js.Value = js.zero_args()
+    var arraylike = false
+    var alo = js.null_obj()
+    var alen = 0.0f64
     let (m, me) = js.get_value(it, src, js.key_of_symbol(it.sym_iterator))
     if me != ok { ret (js.undefv(), me) }
     if !js.is_nullish(m) {
-        let (vals, ie) = js.iterate_to_list(it, src)
+        let (vals, ie) = js.iterate_to_list_from(it, src, m)
         if ie != ok { ret (js.undefv(), ie) }
         items = list.slice_const[js.Value](&vals)
     } else {
@@ -1111,23 +1186,26 @@ fn ta_from(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
         if soe != ok { ret (js.undefv(), soe) }
         let (len, le) = js.length_of(it, so)
         if le != ok { ret (js.undefv(), le) }
-        let (l, lie) = list.init[js.Value](it.a, usize(len) + 1usize)
-        var out = l
-        if lie != ok { ret (js.undefv(), lie) }
-        var k = 0.0f64
-        while k < len {
-            let (v, ve) = js.get_index(it, so, k)
-            if ve != ok { ret (js.undefv(), ve) }
-            try list.push[js.Value](&out, v)
-            k += 1.0f64
-        }
-        items = list.slice_const[js.Value](&out)
+        // The result is made before the elements are read.
+        arraylike = true
+        alo = so
+        alen = len
     }
-    let (r, re) = typed_create(it, this_val, js.one_arg(it, js.num_value(f64(items.len))), f64(items.len))
+    var count = items.len
+    if arraylike { count = usize(alen) }
+    let (r, re) = typed_create(it, this_val, js.one_arg(it, js.num_value(f64(count))), f64(count))
+    if re == ok && js.ta_immutable(r) { ret (js.undefv(), js.throw_type(it, "The result is backed by an immutable ArrayBuffer")) }
     if re != ok { ret (js.undefv(), re) }
     var i = 0usize
-    while i < items.len {
-        var v2 = items[i]
+    while i < count {
+        var v2 = js.undefv()
+        if arraylike {
+            let (av, ave) = js.get_index(it, alo, f64(i))
+            if ave != ok { ret (js.undefv(), ave) }
+            v2 = av
+        } else {
+            v2 = items[i]
+        }
         if js.is_callable(mapper) {
             let (mv, mve) = js.call_function(it, mapper, arg(args, 2usize), js.two_args(it, v2, js.num_value(f64(i))))
             if mve != ok { ret (js.undefv(), mve) }
@@ -1143,6 +1221,7 @@ fn ta_from(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
 fn ta_of_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if !js.is_constructor(this_val) { ret (js.undefv(), js.throw_type(it, "TypedArray.of: this is not a constructor")) }
     let (r, re) = typed_create(it, this_val, js.one_arg(it, js.num_value(f64(args.len))), f64(args.len))
+    if re == ok && js.ta_immutable(r) { ret (js.undefv(), js.throw_type(it, "The result is backed by an immutable ArrayBuffer")) }
     if re != ok { ret (js.undefv(), re) }
     var i = 0usize
     while i < args.len {
@@ -1342,6 +1421,7 @@ fn dv_get(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) 
 fn dv_set(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err) {
     let (d, e) = this_dv(it, this_val)
     if e != ok { ret (js.undefv(), e) }
+    if js.buf_of(d.buffer).immutable { ret (js.undefv(), js.throw_type(it, "The DataView is backed by an immutable ArrayBuffer")) }
     let (n, ne) = js.to_number(it, arg(args, 0usize))
     if ne != ok { ret (js.undefv(), ne) }
     let idx = js.to_integer(n)

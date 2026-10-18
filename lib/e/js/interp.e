@@ -3296,6 +3296,12 @@ type Iter = struct { obj: Value, next: Value, array: *Obj, is_array: bool, pos: 
 fn get_iterator(it: *Interp, v: Value) -> (Iter, err) {
     let (m, me) = get_value(it, v, key_of_symbol(it.sym_iterator))
     if me != ok { ret (zero, me) }
+    let (iter, ie) = get_iterator_from(it, v, m)
+    ret (iter, ie)
+}
+
+// GetIteratorFromMethod: `m` is the already-fetched @@iterator method of `v`.
+fn get_iterator_from(it: *Interp, v: Value, m: Value) -> (Iter, err) {
     if !is_callable(m) { ret (zero, throw_type(it, "object is not iterable")) }
     let (iobj, ie) = call_function(it, m, v, zero_args())
     if ie != ok { ret (zero, ie) }
@@ -3351,6 +3357,22 @@ fn iterator_close(it: *Interp, iter: Iter) -> err {
     if re != ok { ret re }
     if !is_object(r) { ret throw_type(it, "iterator.return() did not return an object") }
     ret ok
+}
+
+// IteratorToList over the already-fetched @@iterator method `m` of `v`.
+fn iterate_to_list_from(it: *Interp, v: Value, m: Value) -> (list.List[Value], err) {
+    let (l, le) = list.init[Value](it.a, 8usize)
+    var out = l
+    if le != ok { ret (out, le) }
+    let (iter, ie) = get_iterator_from(it, v, m)
+    if ie != ok { ret (out, ie) }
+    while true {
+        let (sv, sd, se) = iterator_step(it, iter)
+        if se != ok { ret (out, se) }
+        if sd { break }
+        try list.push[Value](&out, sv)
+    }
+    ret (out, ok)
 }
 
 // Collects an iterable's values.
@@ -7102,7 +7124,7 @@ fn gen_yield_star_async(it: *Interp, f: *Frame, iterable: Value) -> (Value, err)
 // --- typed arrays (the integer-indexed exotic object) and their buffers
 
 // A buffer's bytes are `store[0..len]`; a resizable or growable one keeps room for `max` bytes.
-type Buf = struct { bytes: []u8, detached: bool, store: []u8, max: usize, resizable: bool, is_shared: bool }
+type Buf = struct { bytes: []u8, detached: bool, store: []u8, max: usize, resizable: bool, is_shared: bool, immutable: bool }
 
 type TArr = struct { buffer: *Obj, offset: usize, length: usize, kind: u8, tracking: bool }
 
@@ -7163,6 +7185,9 @@ fn ta_elem_size(kind: u8) -> usize {
     if kind == 6u8 || kind == 7u8 || kind == 8u8 { ret 4usize }
     ret 8usize
 }
+
+// Whether the view's buffer is immutable (its elements can not be written).
+fn ta_immutable(o: *Obj) -> bool { ret buf_of(ta_of(o).buffer).immutable }
 
 // Whether a view no longer fits its buffer (detached, or shrunk below the view's end).
 fn ta_out_of_bounds(o: *Obj) -> bool {
@@ -7281,6 +7306,7 @@ fn ta_get_index(it: *Interp, o: *Obj, idx: usize) -> Value {
 fn ta_set_raw(it: *Interp, o: *Obj, idx: usize, raw: u64) {
     let t = ta_of(o)
     let b = buf_of(t.buffer)
+    if b.immutable { ret }
     let size = ta_elem_size(t.kind)
     var i = 0usize
     while i < size {

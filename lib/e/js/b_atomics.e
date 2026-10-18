@@ -78,6 +78,7 @@ fn read_raw(it: *js.Interp, o: *js.Obj, idx: usize) -> u64 {
 fn rmw(it: *js.Interp, args: []const js.Value, op: u8) -> (js.Value, err) {
     let (o, oe) = validate_integer(it, arg(args, 0usize), false)
     if oe != ok { ret (js.undefv(), oe) }
+    if js.ta_immutable(o) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
     let (idx, ie) = validate_access(it, o, arg(args, 1usize))
     if ie != ok { ret (js.undefv(), ie) }
     let kind = js.ta_of(o).kind
@@ -131,6 +132,7 @@ fn at_load(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
 fn at_store(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = validate_integer(it, arg(args, 0usize), false)
     if oe != ok { ret (js.undefv(), oe) }
+    if js.ta_immutable(o) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
     let (idx, ie) = validate_access(it, o, arg(args, 1usize))
     if ie != ok { ret (js.undefv(), ie) }
     let kind = js.ta_of(o).kind
@@ -147,6 +149,7 @@ fn at_store(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
 fn at_compare_exchange(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = validate_integer(it, arg(args, 0usize), false)
     if oe != ok { ret (js.undefv(), oe) }
+    if js.ta_immutable(o) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
     let (idx, ie) = validate_access(it, o, arg(args, 1usize))
     if ie != ok { ret (js.undefv(), ie) }
     let kind = js.ta_of(o).kind
