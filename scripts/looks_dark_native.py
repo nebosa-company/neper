@@ -1,6 +1,6 @@
 """Strict check of the Windows dark look against the native Windows 11 dark captures (docs/ui/looks/ref/windows-native/dark, 1x).
 
-`python -I scripts/looks_dark_native.py [capture-prefix ...]`   (LOOKS_OURS=<folder> reads the dark sheets from there)
+`python -I scripts/looks_dark_native.py [capture-prefix ...]`   (LOOKS_OURS=<folder> reads the dark sheets from there; LOOKS_THEME=light checks the Light captures against the windows sheets)
 
 Metric. Every capture is cut to its control and popup rectangles plus 3 px and searched at whole-pixel offsets in every dark sheet of the
 matching control and every native_dark sheet (nothing is cut from our sheet); the offset with the fewest flat px off wins. A reference
@@ -24,11 +24,13 @@ from scipy import ndimage
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOOKS = os.path.join(HERE, "..", "docs", "ui", "looks")
 NATIVE = os.path.join(LOOKS, "ref", "windows-native")
-OURS = (os.environ.get("LOOKS_OURS") or os.path.join(LOOKS, "windows-dark")).rstrip("/\\")
+GLYPHS = bool(os.environ.get("LOOKS_GLYPHS"))  # 1: glyph pixels are counted too (nothing is excluded as text)
+THEME = os.environ.get("LOOKS_THEME", "dark")  # "light": the Light captures against the windows sheets
+OURS = (os.environ.get("LOOKS_OURS") or os.path.join(LOOKS, "windows-dark" if THEME == "dark" else "windows")).rstrip("/\\")
 
 # capture prefix -> dark sheets (by name prefix) that may hold it, besides every native_dark* sheet
 SHEETS = {
-    "label": ["label", "syslink"], "syslink": ["label", "syslink"], "button": ["button"],
+    "radio": ["radio"], "label": ["label", "syslink"], "syslink": ["label", "syslink"], "button": ["button"],
     "edit": ["text_edit", "edits", "memo", "spin_edit", "mask_edit"], "spin": ["spin_edit", "edits"],
     "combo": ["combo_box", "image_combo_box"], "menu-popup": ["popup_menu"], "tooltip": ["hint"],
 }
@@ -111,17 +113,17 @@ def sheets_for(capture):
                 b = os.path.basename(f)[:-4]
                 if "@" in b or b.endswith("-vs-ref"):
                     continue
-                if f not in out and (b.startswith("native_dark") or any(b.startswith(p) for p in prefixes)):
+                if f not in out and (b.startswith("native_" + THEME) or any(b.startswith(p) for p in prefixes)):
                     out.append(f)
     return out
 
 
 def check(capture, meta, cache, rects=None):
-    ref = load(os.path.join(NATIVE, "dark", capture))
+    ref = load(os.path.join(NATIVE, THEME, capture))
     x0, y0, x1, y1 = crop_of(meta, rects)
     a = ref[y0:y1, x0:x1]
     flat = flat_mask(a)
-    txt = text_zone(a)
+    txt = np.zeros(a.shape[:2], bool) if GLYPHS else text_zone(a)
     use = flat & ~txt
     h, w = a.shape[:2]
     best = None
@@ -149,9 +151,9 @@ def main():
     prefixes = sys.argv[1:]
     cache = {}
     for key in sorted(meta):
-        if not key.startswith("dark/") or "@1x" not in key:
+        if not key.startswith(THEME + "/") or "@1x" not in key:
             continue
-        cap = key[5:]
+        cap = key[len(THEME) + 1:]
         if prefixes and not any(cap.startswith(p) for p in prefixes):
             continue
         if not any(cap.startswith(k) for k in SHEETS):
