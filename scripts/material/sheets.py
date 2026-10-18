@@ -65,3 +65,7 @@ SHEETS["badge"] = {"columns": 6, "cell_w": 100, "cell_h": 56, "cells": [
 
 SHEETS["tooltip"] = {"columns": 3, "cell_w": 320, "cell_h": 280, "full": True, "at": [(110, 92), (0, 0), (-105, 164)], "cells": [
     "tooltip-plain", None, "tooltip-rich"]}
+
+SHEETS["slider"] = {"columns": 5, "cell_w": 220, "cell_h": 40, "cells": [
+    "slider-rest", "slider-rest-hover", "slider-rest-focus", "slider-rest-pressed", "slider-rest-disabled"] + [
+    "slider-range-%s" % s for s in S5]}

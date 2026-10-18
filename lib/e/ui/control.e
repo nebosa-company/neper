@@ -5347,6 +5347,10 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
         let (linux, linux_error) = linux_scale(a, key, t, label, first, low, high, step, change, enabled)
         ret (linux, linux_error)
     }
+    if t.tokens.profile == .MaterialLike {
+        let (droid, droid_error) = material_slider(a, key, t, label, first, second, range, low, high, step, change, change_second, enabled)
+        ret (droid, droid_error)
+    }
     // v2 (D956, docs/ux/components/Slider): 44 deep for its handle, the active part
     // and the handles `primary`, the rest `secondary-container`; disabled, those are
     // `on-surface` at 38% and 12%.
@@ -5594,6 +5598,150 @@ fn linux_scale_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(across, high_px), layers[0usize..used]))), ok)
 }
 // ---- end the Linux look, scale -----------------------------------------------------------------------------------------------
+
+fn with_width(base: style.Style, width: f32) -> style.Style {
+    var out = base
+    out.width = style.Length { Px: width }
+    ret out
+}
+
+// ---- the Android look, slider (round 26) ------------------------------------------------------------------------------------
+// md-slider (Material Web 2.2, the classic M3 slider): 200 wide, 40 deep, a 4 dp track with round caps running from 18 in to 18 in, the
+// active part `primary` (a range: between its handles), the rest `surface-container-highest`, and a 20 dp circular handle in `primary` with the
+// level-1 shade. Hovered, focused or pressed, a 40 dp state layer in `primary` lies round the handle; disabled, the handle and the active
+// track are `on-surface` at 38 %, the rest at 12 %. No value pill and no ticks (those are md-slider's `labeled` and `ticks`, which the
+// widget does not ask for). The runtime's own slider, drawn transparent, 180 wide from 10 in (its ends stay 8 in), takes the pointer and
+// keys, so the pointer lands on the drawn track.
+fn material_bar(x: f32, width: f32, ink: paint.Color) -> widget.Node {
+    var bar = sized_style(width, 4.0)
+    bar.background = paint.Brush { Solid: ink }
+    bar.radius = 2.0
+    ret widget.positioned(0u64, x, 18.0, bar, zero)
+}
+
+fn material_disc(x: f32, size: f32, ink: paint.Color, shade: u8) -> widget.Node {
+    var disc = sized_style(size, size)
+    disc.background = paint.Brush { Solid: ink }
+    disc.radius = size * 0.5
+    disc.shade = shade
+    ret widget.positioned(0u64, x, 20.0 - size * 0.5, disc, zero)
+}
+
+fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let ink = style.color(t.tokens, .OnSurface)
+    var fill = style.color(t.tokens, .Primary)
+    var rest = style.color(t.tokens, .SurfaceContainerHighest)
+    var knob = fill
+    if !enabled {
+        fill = with_alpha(ink, t.tokens.states.disabled_content)
+        rest = with_alpha(ink, t.tokens.states.disabled_container)
+        knob = style.mix(style.color(t.tokens, .Surface), ink, t.tokens.states.disabled_content)
+    }
+    var layer: f32 = 0.0
+    if enabled { layer = state_opacity(t, state) }
+    let span = high - low
+    var a_share: f32 = 0.0
+    var b_share: f32 = 0.0
+    if span > 0.0 {
+        a_share = (first - low) / span
+        b_share = (second - low) / span
+    }
+    if a_share < 0.0 { a_share = 0.0 }
+    if a_share > 1.0 { a_share = 1.0 }
+    if b_share < 0.0 { b_share = 0.0 }
+    if b_share > 1.0 { b_share = 1.0 }
+    if t.tokens.direction == .RightToLeft {
+        a_share = 1.0 - a_share
+        b_share = 1.0 - b_share
+    }
+    var near = a_share
+    var far = a_share
+    if range {
+        near = math.min[f32](a_share, b_share)
+        far = math.max[f32](a_share, b_share)
+    }
+    // md-slider keeps a range's handles 2 dp further in from each end (its two handles may not overlap the track's caps).
+    var reach: f32 = 164.0
+    var from: f32 = 18.0
+    if range {
+        reach = 160.0
+        from = 20.0
+    }
+    let x_near = from + near * reach
+    let x_far = from + far * reach
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 10usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    let rtl = t.tokens.direction == .RightToLeft
+    if range {
+        layers[used] = material_bar(18.0, x_near - 18.0, rest)
+        used += 1usize
+        layers[used] = material_bar(x_near, x_far - x_near, fill)
+        used += 1usize
+        layers[used] = material_bar(x_far, 182.0 - x_far, rest)
+        used += 1usize
+    } else if rtl {
+        layers[used] = material_bar(18.0, x_near - 18.0, rest)
+        used += 1usize
+        layers[used] = material_bar(x_near, 182.0 - x_near, fill)
+        used += 1usize
+    } else {
+        layers[used] = material_bar(18.0, x_near - 18.0, fill)
+        used += 1usize
+        layers[used] = material_bar(x_near, 182.0 - x_near, rest)
+        used += 1usize
+    }
+    var stops = [2]f32{ x_near, x_far }
+    var count: usize = 1
+    if range { count = 2 }
+    var k: usize = 0
+    while k < count {
+        // A range: the pointer and the press take the nearer end (md-slider: the end handle at the pointer's middle position), a key
+        // focus both; the runtime does not say which handle the pointer is over, so it is the second.
+        var haloed = k + 1usize == count
+        if state.focus_visible && !state.hovered && !state.pressed { haloed = true }
+        if layer > 0.0 && haloed {
+            layers[used] = material_disc(stops[k] - 20.0, 40.0, with_alpha(style.color(t.tokens, .Primary), layer), 0u8)
+            used += 1usize
+        }
+        k += 1usize
+    }
+    k = 0
+    while k < count {
+        var shade: u8 = 1u8
+        if !enabled { shade = 0u8 }
+        layers[used] = material_disc(stops[k] - 10.0, 20.0, knob, shade)
+        used += 1usize
+        k += 1usize
+    }
+    var track_style = sized_style(180.0, 40.0)
+    var track_at: f32 = 10.0
+    if range {
+        track_style = sized_style(176.0, 40.0)
+        track_at = 12.0
+    }
+    track_style.position = .Absolute
+    track_style.margin = style.EdgeLengths { left: style.Length { Px: track_at }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    layers[used] = widget.slider(key, widget.Slider { value: first, second: second, range: range, low: low, high: high, step: step, vertical: false, rtl: rtl, track: clear, fill: clear, thumb: clear, change: change, change_second: change_second, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }, track_style)
+    used += 1usize
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    if !range {
+        let (said, said_error) = mem.alloc[u8](a, 21usize)
+        if said_error != ok { ret (zero, TooLarge) }
+        var rounded = first + 0.5
+        if first < 0.0 { rounded = first - 0.5 }
+        let said_len = write_i64(said, i64(rounded))
+        sem.value = said[0usize..said_len]
+    }
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(200.0, 40.0), layers[0usize..used]))), ok)
+}
+// ---- end the Android look, slider ---------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------ progress (D822, P1-09)
 
