@@ -27,7 +27,7 @@ case "$(uname -s)" in
   *) compiler="$repo/build/windows/neper-try.exe"; exe="${WEB_RUN_EXE:-$repo/build/windows/web-run.exe}"; os=windows ;;
 esac
 if [ "$build" = 1 ] || [ ! -x "$exe" ]; then
-  (cd "$repo" && "$compiler" emit-executable tests/browser/web/run.e "$repo" x64 "$os" "$exe" --arena 3g)
+  (cd "$repo" && "$compiler" emit-executable tests/browser/web/run.e "$repo" x64 "$os" "$exe" --arena 6g)
 fi
 rm -rf "$out"; mkdir -p "$out"
 split -l "$chunk" -a 4 "$list" "$out/c_"

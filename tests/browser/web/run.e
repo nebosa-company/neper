@@ -232,7 +232,7 @@ fn run_page(a: *mem.Arena, root: str, test_path: str, page_src: str, show: bool)
     }
     it.quiet = true
     it.step_limit = 400000000u64
-    it.mem_limit = mem.mark(a) + 2400000000usize
+    it.mem_limit = mem.mark(a) + 5000000000usize
     if show { let pq = io.printf["  stage context {}\n"](test_path) }
     var fc = FetchCtx { a: a, root: root }
     script.set_fetch(it, mem.cast[*void](&fc), fetch_file)

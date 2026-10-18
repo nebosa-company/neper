@@ -90,7 +90,16 @@ fn view(d: *const Dom) -> html.Document {
 }
 
 fn new_node(d: *Dom, kind: html.NodeKind, ns: html.Namespace, name: str, value: str) -> (NodeId, err) {
-    if d.used >= d.nodes.len { ret (NONE, Full) }
+    if d.used >= d.nodes.len {
+        // The table doubles when it fills; the outgrown one stays in the arena.
+        if d.nodes.len >= 4194304usize { ret (NONE, Full) }
+        var cap = d.nodes.len * 2usize
+        if cap < 1024usize { cap = 1024usize }
+        let (table, te) = mem.alloc[html.Node](d.a, cap)
+        if te != ok { ret (NONE, Full) }
+        mem.copy[html.Node](table[..d.used], d.nodes[..d.used])
+        d.nodes = table
+    }
     let id = u32(d.used)
     d.nodes[d.used] = html.Node { kind: kind, namespace: ns, name: name, value: value, attributes: zero, parent: NONE, first_child: NONE, last_child: NONE, previous_sibling: NONE, next_sibling: NONE, flags: 0u32 }
     d.used += 1usize

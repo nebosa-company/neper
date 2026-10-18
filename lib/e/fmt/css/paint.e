@@ -866,8 +866,8 @@ fn paint_spaced(p: *Painter, ts: *const style.Style, text: str, x: f64, y: f64) 
         let cl = env.text(env.ctx, ts, ch)
         if mem.address_of(cl) != 0usize {
             emit(p, scene.Command { Text: scene.DrawText { layout: cl, origin: geo.Point { x: f32(cx), y: f32(y) }, brush: solid(ts.color) } })
-            cx += f64(cl.bounds.width)
         }
+        cx += p.l.measure.width(p.l.measure.ctx, ts, ch)
         cx += ts.letter_spacing
         if text[i] == 32u8 { cx += ts.word_spacing }
         i = j

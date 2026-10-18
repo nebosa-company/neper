@@ -27,8 +27,10 @@ fn part0(b: *str.Builder) -> err {
     try str.push(b, "const slots = new WeakMap();\n")
     try str.push(b, "const slotGet = WeakMap.prototype.get;\n")
     try str.push(b, "const slotSet = WeakMap.prototype.set;\n")
-    try str.push(b, "function slotOf(o) { return apply(slotGet, slots, [o]); }\n")
-    try str.push(b, "function setSlot(o, s) { apply(slotSet, slots, [o, s]); return s; }\n")
+    try str.push(b, "defineProperty(slots, 'get', { value: slotGet });\n")
+    try str.push(b, "defineProperty(slots, 'set', { value: slotSet });\n")
+    try str.push(b, "function slotOf(o) { return slots.get(o); }\n")
+    try str.push(b, "function setSlot(o, s) { slots.set(o, s); return s; }\n")
     try str.push(b, "function isObject(v) { return (typeof v === 'object' && v !== null) || typeof v === 'function'; }\n")
     try str.push(b, "function illegal() { throw new TypeError('Illegal invocation'); }\n")
     try str.push(b, "function toDOMString(v) {\n")
@@ -252,12 +254,12 @@ fn part0(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "const asBool = v => !!v;\n")
     try str.push(b, "const asString = v => toDOMString(v);\n")
-    try str.push(b, "const asAny = v => v;\n")
-    try str.push(b, "const asUL = v => toUnsignedLong(v);\n")
     ret ok
 }
 
 fn part1(b: *str.Builder) -> err {
+    try str.push(b, "const asAny = v => v;\n")
+    try str.push(b, "const asUL = v => toUnsignedLong(v);\n")
     try str.push(b, "const asDouble = v => toDouble(v);\n")
     try str.push(b, "const CustomEvent = defineEventClass('CustomEvent', Event, [['detail', null, asAny]]);\n")
     try str.push(b, "operations(CustomEvent.prototype, {\n")
@@ -506,12 +508,12 @@ fn part1(b: *str.Builder) -> err {
     try str.push(b, "    const cb = listener.callback;\n")
     try str.push(b, "    const previousEvent = currentWindowEvent;\n")
     try str.push(b, "    if (!invocationTargetInShadowTree) currentWindowEvent = event;\n")
-    try str.push(b, "    try {\n")
-    try str.push(b, "      if (typeof cb === 'function') apply(cb, s.currentTarget, [event]);\n")
     ret ok
 }
 
 fn part2(b: *str.Builder) -> err {
+    try str.push(b, "    try {\n")
+    try str.push(b, "      if (typeof cb === 'function') apply(cb, s.currentTarget, [event]);\n")
     try str.push(b, "      else if (isObject(cb)) {\n")
     try str.push(b, "        const handle = cb.handleEvent;\n")
     try str.push(b, "        if (typeof handle !== 'function') throw new TypeError('handleEvent is not a function');\n")
@@ -760,12 +762,12 @@ fn part2(b: *str.Builder) -> err {
     try str.push(b, "const HTML_NS = 'http://www.w3.org/1999/xhtml';\n")
     try str.push(b, "const SVG_NS = 'http://www.w3.org/2000/svg';\n")
     try str.push(b, "const MATHML_NS = 'http://www.w3.org/1998/Math/MathML';\n")
-    try str.push(b, "const XML_NS = 'http://www.w3.org/XML/1998/namespace';\n")
-    try str.push(b, "const XMLNS_NS = 'http://www.w3.org/2000/xmlns/';\n")
     ret ok
 }
 
 fn part3(b: *str.Builder) -> err {
+    try str.push(b, "const XML_NS = 'http://www.w3.org/XML/1998/namespace';\n")
+    try str.push(b, "const XMLNS_NS = 'http://www.w3.org/2000/xmlns/';\n")
     try str.push(b, "const XLINK_NS = 'http://www.w3.org/1999/xlink';\n")
     try str.push(b, "const codeToNS = [HTML_NS, SVG_NS, MATHML_NS, XLINK_NS, XML_NS, XMLNS_NS];\n")
     try str.push(b, "function nsToCode(ns) {\n")
@@ -982,7 +984,10 @@ fn part3(b: *str.Builder) -> err {
     try str.push(b, "  },\n")
     try str.push(b, "  isEqualNode(other = null) {\n")
     try str.push(b, "    nodeSlot(this);\n")
-    try str.push(b, "    if (other !== null && !isNode(other)) throw new TypeError(\"Failed to execute 'isEqualNode' on 'Node': parameter 1 is not of type 'Node'.\");\n")
+    try str.push(b, "    if (other !== null && !isNode(other)) {\n")
+    try str.push(b, "      if (!isForeignNode(other)) throw new TypeError(\"Failed to execute 'isEqualNode' on 'Node': parameter 1 is not of type 'Node'.\");\n")
+    try str.push(b, "      return equalPublic(this, other);\n")
+    try str.push(b, "    }\n")
     try str.push(b, "    return other !== null && equalNodes(this, other);\n")
     try str.push(b, "  },\n")
     try str.push(b, "  isSameNode(other = null) { nodeSlot(this); return this === other; },\n")
@@ -1011,15 +1016,15 @@ fn part3(b: *str.Builder) -> err {
     try str.push(b, "    return el === null ? null : locatePrefix(el, ns);\n")
     try str.push(b, "  },\n")
     try str.push(b, "  lookupNamespaceURI(prefix) {\n")
+    ret ok
+}
+
+fn part4(b: *str.Builder) -> err {
     try str.push(b, "    nodeSlot(this);\n")
     try str.push(b, "    const p = prefix === null || prefix === undefined || prefix === '' ? null : toDOMString(prefix);\n")
     try str.push(b, "    return locateNamespace(this, p);\n")
     try str.push(b, "  },\n")
     try str.push(b, "  isDefaultNamespace(namespace) {\n")
-    ret ok
-}
-
-fn part4(b: *str.Builder) -> err {
     try str.push(b, "    nodeSlot(this);\n")
     try str.push(b, "    const ns = namespace === null || namespace === undefined || namespace === '' ? null : toDOMString(namespace);\n")
     try str.push(b, "    return locateNamespace(this, null) === ns;\n")
@@ -1168,6 +1173,36 @@ fn part4(b: *str.Builder) -> err {
     try str.push(b, "  for (let i = 0; i < ca.length; i++) if (!equalNodes(ca[i], cb[i])) return false;\n")
     try str.push(b, "  return true;\n")
     try str.push(b, "}\n")
+    try str.push(b, "function equalPublic(a, b) {\n")
+    try str.push(b, "  if (a.nodeType !== b.nodeType) return false;\n")
+    try str.push(b, "  switch (a.nodeType) {\n")
+    try str.push(b, "    case DOCUMENT_TYPE_NODE:\n")
+    try str.push(b, "      if (a.name !== b.name || a.publicId !== b.publicId || a.systemId !== b.systemId) return false;\n")
+    try str.push(b, "      break;\n")
+    try str.push(b, "    case ELEMENT_NODE: {\n")
+    try str.push(b, "      if (a.namespaceURI !== b.namespaceURI || a.prefix !== b.prefix || a.localName !== b.localName) return false;\n")
+    try str.push(b, "      const aa = a.attributes, ab = b.attributes;\n")
+    try str.push(b, "      if (aa.length !== ab.length) return false;\n")
+    try str.push(b, "      for (let i = 0; i < aa.length; i++) {\n")
+    try str.push(b, "        const x = aa.item(i);\n")
+    try str.push(b, "        let found = false;\n")
+    try str.push(b, "        for (let j = 0; j < ab.length; j++) { const y = ab.item(j); if (y.namespaceURI === x.namespaceURI && y.localName === x.localName && y.value === x.value) { found = true; break; } }\n")
+    try str.push(b, "        if (!found) return false;\n")
+    try str.push(b, "      }\n")
+    try str.push(b, "      break;\n")
+    try str.push(b, "    }\n")
+    try str.push(b, "    case PROCESSING_INSTRUCTION_NODE:\n")
+    try str.push(b, "      if (a.target !== b.target || a.data !== b.data) return false;\n")
+    try str.push(b, "      break;\n")
+    try str.push(b, "    case TEXT_NODE: case COMMENT_NODE: case CDATA_SECTION_NODE:\n")
+    try str.push(b, "      if (a.data !== b.data) return false;\n")
+    try str.push(b, "      break;\n")
+    try str.push(b, "  }\n")
+    try str.push(b, "  const ca = a.childNodes, cb = b.childNodes;\n")
+    try str.push(b, "  if (ca.length !== cb.length) return false;\n")
+    try str.push(b, "  for (let i = 0; i < ca.length; i++) if (!equalPublic(ca.item(i), cb.item(i))) return false;\n")
+    try str.push(b, "  return true;\n")
+    try str.push(b, "}\n")
     try str.push(b, "function comparePosition(a, b) {\n")
     try str.push(b, "  if (a === b) return 0;\n")
     try str.push(b, "  let node1 = b, node2 = a, attr1 = null, attr2 = null;\n")
@@ -1235,6 +1270,10 @@ fn part4(b: *str.Builder) -> err {
     try str.push(b, "        if (child !== null && nodeType(child) === DOCUMENT_TYPE_NODE) throw domError('HierarchyRequestError', 'An element cannot precede the doctype');\n")
     try str.push(b, "        if (child !== null) {\n")
     try str.push(b, "          let n = nextSibling(child);\n")
+    ret ok
+}
+
+fn part5(b: *str.Builder) -> err {
     try str.push(b, "          while (n !== null) { if (nodeType(n) === DOCUMENT_TYPE_NODE) throw domError('HierarchyRequestError', 'An element cannot precede the doctype'); n = nextSibling(n); }\n")
     try str.push(b, "        }\n")
     try str.push(b, "      }\n")
@@ -1270,10 +1309,6 @@ fn part4(b: *str.Builder) -> err {
     try str.push(b, "  if (oldDoc !== document) {\n")
     try str.push(b, "    const all = [node];\n")
     try str.push(b, "    for (const d of descendantsOf(node)) apply(arrayPush, all, [d]);\n")
-    ret ok
-}
-
-fn part5(b: *str.Builder) -> err {
     try str.push(b, "    for (const n of all) {\n")
     try str.push(b, "      slotOf(n).doc = document;\n")
     try str.push(b, "      if (nodeType(n) === ELEMENT_NODE) for (const a of attrsOf(n)) slotOf(a).doc = document;\n")
@@ -1489,6 +1524,10 @@ fn part5(b: *str.Builder) -> err {
     try str.push(b, "    replaceData(this, toUnsignedLong(offset), 0, toDOMString(data));\n")
     try str.push(b, "  },\n")
     try str.push(b, "  deleteData(offset, count) {\n")
+    ret ok
+}
+
+fn part6(b: *str.Builder) -> err {
     try str.push(b, "    cdSlot(this);\n")
     try str.push(b, "    required(arguments, 2, 'deleteData');\n")
     try str.push(b, "    replaceData(this, toUnsignedLong(offset), toUnsignedLong(count), '');\n")
@@ -1524,10 +1563,6 @@ fn part5(b: *str.Builder) -> err {
     try str.push(b, "  return frag;\n")
     try str.push(b, "}\n")
     try str.push(b, "const childNodeMixin = {\n")
-    ret ok
-}
-
-fn part6(b: *str.Builder) -> err {
     try str.push(b, "  before(...nodes) {\n")
     try str.push(b, "    nodeSlot(this);\n")
     try str.push(b, "    const parent = parentNode(this);\n")
@@ -1743,6 +1778,10 @@ fn part6(b: *str.Builder) -> err {
     try str.push(b, "  getElementById(elementId) {\n")
     try str.push(b, "    const s = slotOf(this);\n")
     try str.push(b, "    if (!s || s.nodeType !== DOCUMENT_FRAGMENT_NODE) illegal();\n")
+    ret ok
+}
+
+fn part7(b: *str.Builder) -> err {
     try str.push(b, "    required(arguments, 1, 'getElementById');\n")
     try str.push(b, "    const id = toDOMString(elementId);\n")
     try str.push(b, "    if (id === '') return null;\n")
@@ -1778,10 +1817,6 @@ fn part6(b: *str.Builder) -> err {
     try str.push(b, "      }\n")
     try str.push(b, "      return Reflect.get(t, key, receiver);\n")
     try str.push(b, "    },\n")
-    ret ok
-}
-
-fn part7(b: *str.Builder) -> err {
     try str.push(b, "    set(t, key, value, receiver) {\n")
     try str.push(b, "      const idx = canonicalIndex(key);\n")
     try str.push(b, "      if (idx >= 0) {\n")
@@ -1997,6 +2032,10 @@ fn part7(b: *str.Builder) -> err {
     try str.push(b, "    const name = N.attrName(s.id, i);\n")
     try str.push(b, "    const value = N.attrValue(s.id, i);\n")
     try str.push(b, "    const code = N.attrNs(s.id, i);\n")
+    ret ok
+}
+
+fn part8(b: *str.Builder) -> err {
     try str.push(b, "    let prefix = null, localName = name, namespaceURI = null;\n")
     try str.push(b, "    const colon = name.indexOf(':');\n")
     try str.push(b, "    if (code !== 0) {\n")
@@ -2032,10 +2071,6 @@ fn part7(b: *str.Builder) -> err {
     try str.push(b, "  const old = as.value;\n")
     try str.push(b, "  as.value = value;\n")
     try str.push(b, "  if (el !== null) {\n")
-    ret ok
-}
-
-fn part8(b: *str.Builder) -> err {
     try str.push(b, "    const idx = attrsOf(el).indexOf(attr);\n")
     try str.push(b, "    N.attrSetAt(slotOf(el).id, idx, value);\n")
     try str.push(b, "    attributeChangedSteps(el, as.localName, old, value, as.namespaceURI);\n")
@@ -2251,6 +2286,10 @@ fn part8(b: *str.Builder) -> err {
     try str.push(b, "  getElementsByTagName(qualifiedName_) {\n")
     try str.push(b, "    elSlot(this);\n")
     try str.push(b, "    required(arguments, 1, 'getElementsByTagName');\n")
+    ret ok
+}
+
+fn part9(b: *str.Builder) -> err {
     try str.push(b, "    return collectionByTagName(this, toDOMString(qualifiedName_));\n")
     try str.push(b, "  },\n")
     try str.push(b, "  getElementsByTagNameNS(namespace, localName) {\n")
@@ -2286,10 +2325,6 @@ fn part8(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "}\n")
     try str.push(b, "function setAttributeNodeImpl(el, attr, ns) {\n")
-    ret ok
-}
-
-fn part9(b: *str.Builder) -> err {
     try str.push(b, "  if (!isObject(attr) || !slotOf(attr) || slotOf(attr).nodeType !== ATTRIBUTE_NODE) throw new TypeError(\"Failed to execute 'setAttributeNode' on 'Element': parameter 1 is not of type 'Attr'.\");\n")
     try str.push(b, "  const as = slotOf(attr);\n")
     try str.push(b, "  if (as.element !== null && as.element !== el) throw domError('InUseAttributeError', 'The attribute is already in use');\n")
@@ -2505,6 +2540,10 @@ fn part9(b: *str.Builder) -> err {
     try str.push(b, "    const list = tokensOf(s);\n")
     try str.push(b, "    for (let i = 0; i < list.length; i++) apply(callback, thisArg, [list[i], i, this]);\n")
     try str.push(b, "  },\n")
+    ret ok
+}
+
+fn part10(b: *str.Builder) -> err {
     try str.push(b, "  keys() { tlSlot(this); return Array.prototype.keys.call(this); },\n")
     try str.push(b, "  values() { tlSlot(this); return Array.prototype.values.call(this); },\n")
     try str.push(b, "  entries() { tlSlot(this); return Array.prototype.entries.call(this); }\n")
@@ -2540,10 +2579,6 @@ fn part9(b: *str.Builder) -> err {
     try str.push(b, "  s.browsingContext = false;\n")
     try str.push(b, "  s.focused = null;\n")
     try str.push(b, "}\n")
-    ret ok
-}
-
-fn part10(b: *str.Builder) -> err {
     try str.push(b, "function docSlot(o) { const s = slotOf(o); if (!s || s.nodeType !== DOCUMENT_NODE) illegal(); return s; }\n")
     try str.push(b, "function XMLDocument() { throw new TypeError('Illegal constructor'); }\n")
     try str.push(b, "iface('XMLDocument', XMLDocument, Document);\n")
@@ -2759,6 +2794,10 @@ fn part10(b: *str.Builder) -> err {
     try str.push(b, "  const o = create(DOMImplementation.prototype);\n")
     try str.push(b, "  setSlot(o, { isImplementation: true, doc });\n")
     try str.push(b, "  return o;\n")
+    ret ok
+}
+
+fn part11(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "function implSlot(o) { const s = slotOf(o); if (!s || !s.isImplementation) illegal(); return s; }\n")
     try str.push(b, "operations(DOMImplementation.prototype, {\n")
@@ -2794,10 +2833,6 @@ fn part10(b: *str.Builder) -> err {
     try str.push(b, "    preInsert(html, doc, null);\n")
     try str.push(b, "    const head = createElementInternal(doc, 'head', HTML_NS, null, null, false);\n")
     try str.push(b, "    preInsert(head, html, null);\n")
-    ret ok
-}
-
-fn part11(b: *str.Builder) -> err {
     try str.push(b, "    if (title !== undefined) {\n")
     try str.push(b, "      const t = createElementInternal(doc, 'title', HTML_NS, null, null, false);\n")
     try str.push(b, "      preInsert(t, head, null);\n")
@@ -2928,6 +2963,7 @@ fn part11(b: *str.Builder) -> err {
     try str.push(b, "    register(w, id);\n")
     try str.push(b, "    setPrototypeOf(w, localPrototypeFor(s));\n")
     try str.push(b, "    if (t === ELEMENT_NODE) {\n")
+    try str.push(b, "      s.attrObjs = null;\n")
     try str.push(b, "      for (const a of d.attrs) N.attrPut(id, a[0], a[1], a[2]);\n")
     try str.push(b, "      for (const a of attrsOf(w)) slotOf(a).doc = doc;\n")
     try str.push(b, "    }\n")
@@ -3012,6 +3048,10 @@ fn part11(b: *str.Builder) -> err {
     try str.push(b, "  attributes(proto, { [idl]: {\n")
     try str.push(b, "    get() { elSlot(this); const v = getAttributeValue(this, c); const n = v === null ? NaN : parseFloat(v); return n === n ? n : (def === undefined ? 0 : def); },\n")
     try str.push(b, "    set(v) { elSlot(this); setAttributeValue(this, c, String(toDouble(v))); }\n")
+    ret ok
+}
+
+fn part12(b: *str.Builder) -> err {
     try str.push(b, "  } });\n")
     try str.push(b, "}\n")
     try str.push(b, "function reflectEnum(proto, idl, content, values, missing, invalid, nullable) {\n")
@@ -3048,10 +3088,6 @@ fn part11(b: *str.Builder) -> err {
     try str.push(b, "  return constructCustomElement(new.target, HTMLElement);\n")
     try str.push(b, "}\n")
     try str.push(b, "iface('HTMLElement', HTMLElement, Element);\n")
-    ret ok
-}
-
-fn part12(b: *str.Builder) -> err {
     try str.push(b, "let constructCustomElement = (newTarget, base) => { throw new TypeError('Illegal constructor'); };\n")
     try str.push(b, "reflectString(HTMLElement.prototype, 'title');\n")
     try str.push(b, "reflectString(HTMLElement.prototype, 'lang');\n")
@@ -3266,6 +3302,10 @@ fn part12(b: *str.Builder) -> err {
     try str.push(b, "reflectEnum(P('HTMLFormElement'), 'method', 'method', ['get', 'post', 'dialog'], 'get', 'get');\n")
     try str.push(b, "reflectEnum(P('HTMLFormElement'), 'enctype', 'enctype', ['application/x-www-form-urlencoded', 'multipart/form-data', 'text/plain'], 'application/x-www-form-urlencoded', 'application/x-www-form-urlencoded');\n")
     try str.push(b, "reflectString(P('HTMLLabelElement'), 'htmlFor', 'for');\n")
+    ret ok
+}
+
+fn part13(b: *str.Builder) -> err {
     try str.push(b, "reflectBool(P('HTMLInputElement'), 'disabled'); reflectString(P('HTMLInputElement'), 'name'); reflectString(P('HTMLInputElement'), 'accept'); reflectString(P('HTMLInputElement'), 'alt');\n")
     try str.push(b, "reflectString(P('HTMLInputElement'), 'autocomplete'); reflectBool(P('HTMLInputElement'), 'defaultChecked', 'checked'); reflectBool(P('HTMLInputElement'), 'multiple'); reflectBool(P('HTMLInputElement'), 'readOnly', 'readonly');\n")
     try str.push(b, "reflectBool(P('HTMLInputElement'), 'required'); reflectString(P('HTMLInputElement'), 'placeholder'); reflectString(P('HTMLInputElement'), 'pattern'); reflectString(P('HTMLInputElement'), 'min');\n")
@@ -3302,10 +3342,6 @@ fn part12(b: *str.Builder) -> err {
     try str.push(b, "reflectString(P('HTMLTrackElement'), 'kind'); reflectURL(P('HTMLTrackElement'), 'src'); reflectString(P('HTMLTrackElement'), 'srclang'); reflectString(P('HTMLTrackElement'), 'label'); reflectBool(P('HTMLTrackElement'), 'default');\n")
     try str.push(b, "reflectDouble(P('HTMLMeterElement'), 'value'); reflectDouble(P('HTMLMeterElement'), 'min', 'min', 0); reflectDouble(P('HTMLMeterElement'), 'max', 'max', 1);\n")
     try str.push(b, "reflectDouble(P('HTMLProgressElement'), 'value'); reflectDouble(P('HTMLProgressElement'), 'max', 'max', 1);\n")
-    ret ok
-}
-
-fn part13(b: *str.Builder) -> err {
     try str.push(b, "reflectString(P('HTMLOutputElement'), 'name');\n")
     try str.push(b, "attributes(P('HTMLTitleElement'), {\n")
     try str.push(b, "  text: { get() { return descendantTextContent(this); }, set(v) { replaceAllWith(this, v === '' ? null : createTextNode(slotOf(this).doc, toDOMString(v))); } }\n")
@@ -3520,6 +3556,10 @@ fn part13(b: *str.Builder) -> err {
     try str.push(b, "  length: { get() { return styleNames(csSlot(this)).length; } },\n")
     try str.push(b, "  parentRule: { get() { csSlot(this); return null; } },\n")
     try str.push(b, "  cssFloat: { get() { return getDeclValue(csSlot(this), 'float'); }, set(v) { setDeclValue(csSlot(this), 'float', toDOMString(v), ''); } }\n")
+    ret ok
+}
+
+fn part14(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "defineProperty(CSSStyleDeclaration.prototype, symIterator, { value: Array.prototype.values, writable: true, enumerable: false, configurable: true });\n")
     try str.push(b, "styleOf = function (el) {\n")
@@ -3556,10 +3596,6 @@ fn part13(b: *str.Builder) -> err {
     try str.push(b, "  toJSON() { const s = rectSlot(this); return { x: s.x, y: s.y, width: s.width, height: s.height, top: this.top, right: this.right, bottom: this.bottom, left: this.left }; }\n")
     try str.push(b, "});\n")
     try str.push(b, "operations(DOMRectReadOnly, { fromRect(other = {}) { return new DOMRectReadOnly(other.x, other.y, other.width, other.height); } });\n")
-    ret ok
-}
-
-fn part14(b: *str.Builder) -> err {
     try str.push(b, "function DOMRect(x = 0, y = 0, width = 0, height = 0) {\n")
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'DOMRect': Please use the 'new' operator\");\n")
     try str.push(b, "  setSlot(this, { isRect: true, x: +x, y: +y, width: +width, height: +height });\n")
@@ -3774,6 +3810,10 @@ fn part14(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "isShadowHostWithSlots = o => nodeType(o) === ELEMENT_NODE && !!slotOf(o).shadowRoot;\n")
     try str.push(b, "assignSlotablesForTree = host => assignSlotsOfShadow(slotOf(host).shadowRoot);\n")
+    ret ok
+}
+
+fn part15(b: *str.Builder) -> err {
     try str.push(b, "childrenChanged = function (parent) {\n")
     try str.push(b, "  const root = rootNode(parent);\n")
     try str.push(b, "  if (isShadowRoot(root)) {\n")
@@ -3810,10 +3850,6 @@ fn part14(b: *str.Builder) -> err {
     try str.push(b, "function slotElementSlot(o) { const s = slotOf(o); if (!s || s.localName !== 'slot' || s.nodeType !== ELEMENT_NODE) illegal(); return s; }\n")
     try str.push(b, "operations(P('HTMLSlotElement'), {\n")
     try str.push(b, "  assignedNodes(options = undefined) {\n")
-    ret ok
-}
-
-fn part15(b: *str.Builder) -> err {
     try str.push(b, "    const s = slotElementSlot(this);\n")
     try str.push(b, "    if (options && options.flatten) { const out = []; flattenSlottables(this, out); return out; }\n")
     try str.push(b, "    return assignedOf(this);\n")
@@ -3988,7 +4024,8 @@ fn part15(b: *str.Builder) -> err {
     try str.push(b, "    apply(arrayPush, ceBackup, [el]);\n")
     try str.push(b, "    if (!ceBackupQueued) { ceBackupQueued = true; Promise.resolve().then(ceProcessBackup); }\n")
     try str.push(b, "  } else {\n")
-    try str.push(b, "    const top = ceStack[ceStack.length - 1];\n")
+    try str.push(b, "    let top = ceStack[ceStack.length - 1];\n")
+    try str.push(b, "    if (top === null) { top = []; ceStack[ceStack.length - 1] = top; }\n")
     try str.push(b, "    if (top.indexOf(el) < 0) apply(arrayPush, top, [el]);\n")
     try str.push(b, "  }\n")
     try str.push(b, "}\n")
@@ -4012,8 +4049,8 @@ fn part15(b: *str.Builder) -> err {
     try str.push(b, "function ceWrap(f) {\n")
     try str.push(b, "  const name = f.name;\n")
     try str.push(b, "  const w = { [name](...args) {\n")
-    try str.push(b, "    ceStack.push([]);\n")
-    try str.push(b, "    try { return apply(f, this, args); } finally { ceProcessQueue(ceStack.pop()); }\n")
+    try str.push(b, "    ceStack.push(null);\n")
+    try str.push(b, "    try { return apply(f, this, args); } finally { const q = ceStack.pop(); if (q !== null) ceProcessQueue(q); }\n")
     try str.push(b, "  } }[name];\n")
     try str.push(b, "  defineProperty(w, 'length', { value: f.length, configurable: true });\n")
     try str.push(b, "  return w;\n")
@@ -4027,6 +4064,10 @@ fn part15(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "}\n")
     try str.push(b, "function lookupDefinition(doc, ns, localName, is) {\n")
+    ret ok
+}
+
+fn part16(b: *str.Builder) -> err {
     try str.push(b, "  if (ns !== HTML_NS || !slotOf(doc).browsingContext) return null;\n")
     try str.push(b, "  if (is !== null && is !== undefined) {\n")
     try str.push(b, "    const d = ceDefinitions.get(is);\n")
@@ -4064,10 +4105,6 @@ fn part15(b: *str.Builder) -> err {
     try str.push(b, "};\n")
     try str.push(b, "function upgradeElement(el, def) {\n")
     try str.push(b, "  const s = slotOf(el);\n")
-    ret ok
-}
-
-fn part16(b: *str.Builder) -> err {
     try str.push(b, "  if (s.customState !== 'undefined' && s.customState !== 'uncustomized') return;\n")
     try str.push(b, "  s.customDefinition = def;\n")
     try str.push(b, "  s.customState = 'failed';\n")
@@ -4281,6 +4318,10 @@ fn part16(b: *str.Builder) -> err {
     try str.push(b, "  labels: { get() { eiSlot(this); return staticNodeList([]); } },\n")
     try str.push(b, "  willValidate: { get() { eiSlot(this); return false; } },\n")
     try str.push(b, "  validity: { get() { eiSlot(this); return undefined; } },\n")
+    ret ok
+}
+
+fn part17(b: *str.Builder) -> err {
     try str.push(b, "  validationMessage: { get() { return eiSlot(this).message; } }\n")
     try str.push(b, "});\n")
     try str.push(b, "operations(ElementInternals.prototype, {\n")
@@ -4318,10 +4359,6 @@ fn part16(b: *str.Builder) -> err {
     try str.push(b, "  const attr = getAttributeValue(el, 'form');\n")
     try str.push(b, "  if (attr !== null) {\n")
     try str.push(b, "    if (!isConnected(el) && false) return null;\n")
-    ret ok
-}
-
-fn part17(b: *str.Builder) -> err {
     try str.push(b, "    const found = findByIdInTree(rootNode(el), attr);\n")
     try str.push(b, "    return found !== null && isFormElement(found) ? found : null;\n")
     try str.push(b, "  }\n")
@@ -4535,6 +4572,10 @@ fn part17(b: *str.Builder) -> err {
     try str.push(b, "    set(v) { const s = outputSlot(this); const str = toDOMString(v); if (s.outputDefault === null) s.outputDefault = textContentOf(this); s.outputValue = str; replaceAllWith(this, str === '' ? null : createTextNode(s.doc, str)); }\n")
     try str.push(b, "  },\n")
     try str.push(b, "  htmlFor: { get() { const s = outputSlot(this); if (!s.htmlForList) s.htmlForList = makeTokenList(this, 'for'); return s.htmlForList; }, set(v) { this.htmlFor.value = v; } }\n")
+    ret ok
+}
+
+fn part18(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "resetAlgorithms.output = function (el) { const s = outputSlot(el); const dv = s.outputDefault !== null ? s.outputDefault : textContentOf(el); s.outputValue = null; replaceAllWith(el, dv === '' ? null : createTextNode(s.doc, dv)); s.outputDefault = null; };\n")
     try str.push(b, "attributes(P('HTMLDataListElement'), {\n")
@@ -4572,10 +4613,6 @@ fn part17(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "attributes(P('HTMLMeterElement'), {\n")
     try str.push(b, "  value: meterAttr('value'), min: meterAttr('min'), max: meterAttr('max'), low: meterAttr('low'), high: meterAttr('high'), optimum: meterAttr('optimum')\n")
-    ret ok
-}
-
-fn part18(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "const buttonTypes = ['submit', 'reset', 'button'];\n")
     try str.push(b, "function buttonTypeOf(el) { const v = getAttributeValue(el, 'type'); if (v === null) return 'submit'; const l = asciiLowercase(v); return buttonTypes.indexOf(l) >= 0 ? l : 'submit'; }\n")
@@ -4789,6 +4826,10 @@ fn part18(b: *str.Builder) -> err {
     try str.push(b, "attributes(RadioNodeList.prototype, {\n")
     try str.push(b, "  value: {\n")
     try str.push(b, "    get() {\n")
+    ret ok
+}
+
+fn part19(b: *str.Builder) -> err {
     try str.push(b, "      const s = slotOf(this);\n")
     try str.push(b, "      if (!s || !s.isRadioList) illegal();\n")
     try str.push(b, "      for (const el of s.collect()) if (htmlLocal(el) === 'input' && inputTypeOf(el) === 'radio' && inputState(el).checked) return getAttributeValue(el, 'value') === null ? 'on' : getAttributeValue(el, 'value');\n")
@@ -4826,10 +4867,6 @@ fn part18(b: *str.Builder) -> err {
     try str.push(b, "    let checked = false, indeterminate = false;\n")
     try str.push(b, "    defineProperty(st, 'checked', { get() { return checked; }, set(v) { checked = !!v; setNodeFlags(el, F_CHECKED_AUTH | F_CHECKED, false); setNodeFlags(el, F_CHECKED_AUTH, true); setNodeFlags(el, F_CHECKED, checked); }, enumerable: true, configurable: true });\n")
     try str.push(b, "    defineProperty(st, 'indeterminate', { get() { return indeterminate; }, set(v) { indeterminate = !!v; setNodeFlags(el, F_INDETERMINATE, indeterminate); }, enumerable: true, configurable: true });\n")
-    ret ok
-}
-
-fn part19(b: *str.Builder) -> err {
     try str.push(b, "    s.input = st;\n")
     try str.push(b, "  }\n")
     try str.push(b, "  return s.input;\n")
@@ -5043,6 +5080,10 @@ fn part19(b: *str.Builder) -> err {
     try str.push(b, "    set(v) { elSlot(this); setInputValue(this, v === null ? '' : toDOMString(v)); }\n")
     try str.push(b, "  },\n")
     try str.push(b, "  checked: {\n")
+    ret ok
+}
+
+fn part20(b: *str.Builder) -> err {
     try str.push(b, "    get() { elSlot(this); return isCheckedInput(this); },\n")
     try str.push(b, "    set(v) { elSlot(this); setCheckedInput(this, !!v); }\n")
     try str.push(b, "  },\n")
@@ -5080,10 +5121,6 @@ fn part19(b: *str.Builder) -> err {
     try str.push(b, "      else if (t === 'time') n = ((ms % 86400000) + 86400000) % 86400000;\n")
     try str.push(b, "      setInputValue(this, numberToString(t, n));\n")
     try str.push(b, "    }\n")
-    ret ok
-}
-
-fn part20(b: *str.Builder) -> err {
     try str.push(b, "  },\n")
     try str.push(b, "  list: { get() { elSlot(this); const id = getAttributeValue(this, 'list'); if (id === null || ['hidden', 'password', 'checkbox', 'radio', 'file', 'submit', 'image', 'reset', 'button'].indexOf(inputTypeOf(this)) >= 0) return null; const f = findByIdInTree(rootNode(this), id); return f !== null && htmlLocal(f) === 'datalist' ? f : null; } },\n")
     try str.push(b, "  files: {\n")
@@ -5297,6 +5334,10 @@ fn part20(b: *str.Builder) -> err {
     try str.push(b, "  slotOf(i).isTrusted = true;\n")
     try str.push(b, "  dispatch(i, el);\n")
     try str.push(b, "  const c = new Event('change', { bubbles: true });\n")
+    ret ok
+}
+
+fn part21(b: *str.Builder) -> err {
     try str.push(b, "  slotOf(c).isTrusted = true;\n")
     try str.push(b, "  dispatch(c, el);\n")
     try str.push(b, "}\n")
@@ -5334,10 +5375,6 @@ fn part20(b: *str.Builder) -> err {
     try str.push(b, "function selectionValue(el) { return htmlLocal(el) === 'textarea' ? textareaAPIValue(el) : inputValue(el); }\n")
     try str.push(b, "function selectionAvailable(el) { return htmlLocal(el) === 'textarea' || selectionApplies(inputTypeOf(el)); }\n")
     try str.push(b, "function clampSel(el) {\n")
-    ret ok
-}
-
-fn part21(b: *str.Builder) -> err {
     try str.push(b, "  const st = selectionTarget(el), len = selectionValue(el).length;\n")
     try str.push(b, "  if (st.selStart > len) st.selStart = len;\n")
     try str.push(b, "  if (st.selEnd > len) st.selEnd = len;\n")
@@ -5551,6 +5588,10 @@ fn part21(b: *str.Builder) -> err {
     try str.push(b, "    const options = selectOptions(sel);\n")
     try str.push(b, "    if (!selectIsMultiple(sel)) {\n")
     try str.push(b, "      const sel2 = options.filter(optionSelectedness);\n")
+    ret ok
+}
+
+fn part22(b: *str.Builder) -> err {
     try str.push(b, "      for (const o of options) {\n")
     try str.push(b, "        const st = optionState(o);\n")
     try str.push(b, "        if (st.fresh === undefined) { st.fresh = false; if (st.selected && sel2.length > 1) { for (const other of options) if (other !== o) optionState(other).selected = false; } }\n")
@@ -5588,10 +5629,6 @@ fn part21(b: *str.Builder) -> err {
     try str.push(b, "  if (value === null) { if (index < options.length) removeNode(options[index], false); return; }\n")
     try str.push(b, "  if (!isNode(value) || htmlLocal(value) !== 'option') throw new TypeError('The provided value is not an HTMLOptionElement.');\n")
     try str.push(b, "  if (index > 4294967294) return;\n")
-    ret ok
-}
-
-fn part22(b: *str.Builder) -> err {
     try str.push(b, "  if (index >= options.length) {\n")
     try str.push(b, "    const n = index - options.length;\n")
     try str.push(b, "    for (let i = 0; i < n; i++) appendNodeSimple(sel, createElementInternal(slotOf(sel).doc, 'option', HTML_NS, null, null, false));\n")
@@ -5805,6 +5842,10 @@ fn part22(b: *str.Builder) -> err {
     try str.push(b, "  const de = documentElementOf(doc);\n")
     try str.push(b, "  if (de === null) return null;\n")
     try str.push(b, "  for (const c of childrenOf(de)) if (nodeType(c) === ELEMENT_NODE && slotOf(c).localName === 'head' && slotOf(c).namespaceURI === HTML_NS) return c;\n")
+    ret ok
+}
+
+fn part23(b: *str.Builder) -> err {
     try str.push(b, "  return null;\n")
     try str.push(b, "}\n")
     try str.push(b, "function bodyOf(doc) {\n")
@@ -5842,10 +5883,6 @@ fn part22(b: *str.Builder) -> err {
     try str.push(b, "  exitFullscreen() { return Promise.resolve(); },\n")
     try str.push(b, "  requestStorageAccess() { return Promise.resolve(); },\n")
     try str.push(b, "  hasStorageAccess() { return Promise.resolve(true); }\n")
-    ret ok
-}
-
-fn part23(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "function documentWrite(doc, markup) {\n")
     try str.push(b, "  const body = bodyOf(doc);\n")
@@ -6059,6 +6096,10 @@ fn part23(b: *str.Builder) -> err {
     try str.push(b, "    out.push([percentDecode(name.replace(/\\+/g, ' ')), percentDecode(value.replace(/\\+/g, ' '))]);\n")
     try str.push(b, "  }\n")
     try str.push(b, "  return out;\n")
+    ret ok
+}
+
+fn part24(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "function serializeUrlEncoded(list) {\n")
     try str.push(b, "  let out = '';\n")
@@ -6096,10 +6137,6 @@ fn part23(b: *str.Builder) -> err {
     try str.push(b, "  for (let i = 0; i < bytes.length;) {\n")
     try str.push(b, "    const b = bytes[i];\n")
     try str.push(b, "    let cp = 0xFFFD, n = 1;\n")
-    ret ok
-}
-
-fn part24(b: *str.Builder) -> err {
     try str.push(b, "    if (b < 0x80) { cp = b; }\n")
     try str.push(b, "    else if (b >= 0xC2 && b <= 0xDF && i + 1 < bytes.length && (bytes[i + 1] & 0xC0) === 0x80) { cp = ((b & 31) << 6) | (bytes[i + 1] & 63); n = 2; }\n")
     try str.push(b, "    else if (b >= 0xE0 && b <= 0xEF && i + 2 < bytes.length && (bytes[i + 1] & 0xC0) === 0x80 && (bytes[i + 2] & 0xC0) === 0x80) {\n")
@@ -6313,6 +6350,10 @@ fn part24(b: *str.Builder) -> err {
     try str.push(b, "      if (written + b.length > destination.length) break;\n")
     try str.push(b, "      for (const x of b) destination[written++] = x;\n")
     try str.push(b, "      read += ch.length;\n")
+    ret ok
+}
+
+fn part25(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "    return { read, written };\n")
     try str.push(b, "  }\n")
@@ -6350,10 +6391,6 @@ fn part24(b: *str.Builder) -> err {
     try str.push(b, "const promiseReject = Promise.reject.bind(Promise);\n")
     try str.push(b, "function noop() {}\n")
     try str.push(b, "function isNonNegativeNumber(v) { return typeof v === 'number' && v === v && v >= 0; }\n")
-    ret ok
-}
-
-fn part25(b: *str.Builder) -> err {
     try str.push(b, "function promiseResolvedWith(v) { return promiseResolve(v); }\n")
     try str.push(b, "function promiseRejectedWith(e) { return promiseReject(e); }\n")
     try str.push(b, "function newPromiseCapability() {\n")
@@ -6567,6 +6604,10 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "  if (state === 'closed') return 0;\n")
     try str.push(b, "  return c.strategyHWM - c.queueTotalSize;\n")
     try str.push(b, "}\n")
+    ret ok
+}
+
+fn part26(b: *str.Builder) -> err {
     try str.push(b, "function readableStreamDefaultControllerCanCloseOrEnqueue(controller) {\n")
     try str.push(b, "  const c = slotOf(controller);\n")
     try str.push(b, "  return slotOf(c.stream).state === 'readable' && !c.closeRequested;\n")
@@ -6604,10 +6645,6 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "    const result = c.cancelAlgorithm(reason);\n")
     try str.push(b, "    readableStreamDefaultControllerClearAlgorithms(controller);\n")
     try str.push(b, "    return result;\n")
-    ret ok
-}
-
-fn part26(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "  return readableByteStreamControllerCancelSteps(controller, reason);\n")
     try str.push(b, "}\n")
@@ -6821,6 +6858,10 @@ fn part26(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "defineProperty(ReadableStream.prototype, Symbol.asyncIterator, { value: ReadableStream.prototype.values, writable: true, enumerable: false, configurable: true });\n")
     try str.push(b, "function convertPipeOptions(options) {\n")
+    ret ok
+}
+
+fn part27(b: *str.Builder) -> err {
     try str.push(b, "  const out = { preventAbort: false, preventCancel: false, preventClose: false, signal: undefined };\n")
     try str.push(b, "  if (options === undefined || options === null) return out;\n")
     try str.push(b, "  if (!isObject(options)) throw new TypeError('The options argument is not an object');\n")
@@ -6858,10 +6899,6 @@ fn part26(b: *str.Builder) -> err {
     try str.push(b, "  const result = ongoing !== null ? transformPromiseWith(ongoing, nextSteps, nextSteps) : nextSteps();\n")
     try str.push(b, "  s.ongoingPromise = result;\n")
     try str.push(b, "  return result;\n")
-    ret ok
-}
-
-fn part27(b: *str.Builder) -> err {
     try str.push(b, "} }.next);\n")
     try str.push(b, "defineMethod(readableStreamAsyncIteratorPrototype, 'return', { return(value = undefined) {\n")
     try str.push(b, "  let s;\n")
@@ -7075,6 +7112,10 @@ fn part27(b: *str.Builder) -> err {
     try str.push(b, "  return cap.promise;\n")
     try str.push(b, "}\n")
     try str.push(b, "const closeSentinel = {};\n")
+    ret ok
+}
+
+fn part28(b: *str.Builder) -> err {
     try str.push(b, "function isWritableStreamLike(o) { return isObject(o) && slotOf(o) && slotOf(o).isWritableStream === true; }\n")
     try str.push(b, "function wsSlot(o) { const s = slotOf(o); if (!s || s.isWritableStream !== true) throw new TypeError('Illegal invocation'); return s; }\n")
     try str.push(b, "function WritableStream(underlyingSink = undefined, strategy = undefined) {\n")
@@ -7112,10 +7153,6 @@ fn part27(b: *str.Builder) -> err {
     try str.push(b, "function initializeWritableStream(stream) {\n")
     try str.push(b, "  setSlot(stream, { isWritableStream: true, state: 'writable', storedError: undefined, writer: undefined, controller: undefined, inFlightWriteRequest: undefined, closeRequest: undefined, inFlightCloseRequest: undefined, pendingAbortRequest: undefined, writeRequests: [], backpressure: false });\n")
     try str.push(b, "}\n")
-    ret ok
-}
-
-fn part28(b: *str.Builder) -> err {
     try str.push(b, "function isWritableStreamLocked(stream) { return slotOf(stream).writer !== undefined; }\n")
     try str.push(b, "attributes(WritableStream.prototype, {\n")
     try str.push(b, "  locked: { get() { wsSlot(this); return isWritableStreamLocked(this); } }\n")
@@ -7329,6 +7366,10 @@ fn part28(b: *str.Builder) -> err {
     try str.push(b, "  else w.closedCapability = settledCapability(promiseRejectedWith(error));\n")
     try str.push(b, "  setPromiseIsHandled(w.closedCapability.promise);\n")
     try str.push(b, "}\n")
+    ret ok
+}
+
+fn part29(b: *str.Builder) -> err {
     try str.push(b, "function writableStreamDefaultWriterEnsureReadyPromiseRejected(writer, error) {\n")
     try str.push(b, "  const w = slotOf(writer);\n")
     try str.push(b, "  if (!w.readyCapability.settled) w.readyCapability.reject(error);\n")
@@ -7366,10 +7407,6 @@ fn part28(b: *str.Builder) -> err {
     try str.push(b, "function wdcSlot(o) { const s = slotOf(o); if (!s || s.isWritableController !== true) throw new TypeError('Illegal invocation'); return s; }\n")
     try str.push(b, "attributes(WritableStreamDefaultController.prototype, {\n")
     try str.push(b, "  signal: { get() { return wdcSlot(this).abortController.signal; } }\n")
-    ret ok
-}
-
-fn part29(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "operations(WritableStreamDefaultController.prototype, {\n")
     try str.push(b, "  error(e = undefined) {\n")
@@ -7583,6 +7620,10 @@ fn part29(b: *str.Builder) -> err {
     try str.push(b, "function readableByteStreamControllerGetDesiredSize(controller) {\n")
     try str.push(b, "  const c = slotOf(controller), state = slotOf(c.stream).state;\n")
     try str.push(b, "  if (state === 'errored') return null;\n")
+    ret ok
+}
+
+fn part30(b: *str.Builder) -> err {
     try str.push(b, "  if (state === 'closed') return 0;\n")
     try str.push(b, "  return c.strategyHWM - c.queueTotalSize;\n")
     try str.push(b, "}\n")
@@ -7620,10 +7661,6 @@ fn part29(b: *str.Builder) -> err {
     try str.push(b, "    if (readableStreamGetNumReadRequests(stream) === 0) {\n")
     try str.push(b, "      readableByteStreamControllerEnqueueChunkToQueue(controller, transferredBuffer, byteOffset, byteLength);\n")
     try str.push(b, "    } else {\n")
-    ret ok
-}
-
-fn part30(b: *str.Builder) -> err {
     try str.push(b, "      if (c.pendingPullIntos.length > 0) readableByteStreamControllerShiftPendingPullInto(controller);\n")
     try str.push(b, "      readableStreamFulfillReadRequest(stream, new Uint8Array(transferredBuffer, byteOffset, byteLength), false);\n")
     try str.push(b, "    }\n")
@@ -7837,6 +7874,10 @@ fn part30(b: *str.Builder) -> err {
     try str.push(b, "  return result;\n")
     try str.push(b, "}\n")
     try str.push(b, "function readableByteStreamControllerPullSteps(controller, readRequest) {\n")
+    ret ok
+}
+
+fn part31(b: *str.Builder) -> err {
     try str.push(b, "  const c = slotOf(controller), stream = c.stream;\n")
     try str.push(b, "  if (c.queueTotalSize > 0) { readableByteStreamControllerFillReadRequestFromQueue(controller, readRequest); return; }\n")
     try str.push(b, "  const autoAllocateChunkSize = c.autoAllocateChunkSize;\n")
@@ -7874,10 +7915,6 @@ fn part30(b: *str.Builder) -> err {
     try str.push(b, "  if (autoAllocateChunkSize === 0) throw new TypeError('autoAllocateChunkSize must be greater than 0');\n")
     try str.push(b, "  setUpReadableByteStreamController(stream, startAlgorithm, pullAlgorithm, cancelAlgorithm, hwm, autoAllocateChunkSize);\n")
     try str.push(b, "}\n")
-    ret ok
-}
-
-fn part31(b: *str.Builder) -> err {
     try str.push(b, "function createReadableByteStream(startAlgorithm, pullAlgorithm, cancelAlgorithm) {\n")
     try str.push(b, "  const stream = create(ReadableStream.prototype);\n")
     try str.push(b, "  initializeReadableStream(stream);\n")
@@ -8091,6 +8128,10 @@ fn part31(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "  branch1 = createReadableByteStream(noop, pull1Algorithm, cancel1Algorithm);\n")
     try str.push(b, "  branch2 = createReadableByteStream(noop, pull2Algorithm, cancel2Algorithm);\n")
+    ret ok
+}
+
+fn part32(b: *str.Builder) -> err {
     try str.push(b, "  forwardReaderError(reader);\n")
     try str.push(b, "  return [branch1, branch2];\n")
     try str.push(b, "}\n")
@@ -8128,10 +8169,6 @@ fn part31(b: *str.Builder) -> err {
     try str.push(b, "  if (t.readableType !== undefined) dict.hasReadableType = true;\n")
     try str.push(b, "  const st = t.start;\n")
     try str.push(b, "  if (st !== undefined) {\n")
-    ret ok
-}
-
-fn part32(b: *str.Builder) -> err {
     try str.push(b, "    if (typeof st !== 'function') throw new TypeError('The transformer start is not a function.');\n")
     try str.push(b, "    dict.start = st;\n")
     try str.push(b, "  }\n")
@@ -8345,6 +8382,10 @@ fn part32(b: *str.Builder) -> err {
     try str.push(b, "    transform(chunk, controller) {\n")
     try str.push(b, "      let s = String(chunk);\n")
     try str.push(b, "      if (pendingHighSurrogate !== null) { s = pendingHighSurrogate + s; pendingHighSurrogate = null; }\n")
+    ret ok
+}
+
+fn part33(b: *str.Builder) -> err {
     try str.push(b, "      if (s.length > 0) {\n")
     try str.push(b, "        const last = s.charCodeAt(s.length - 1);\n")
     try str.push(b, "        if (last >= 0xD800 && last <= 0xDBFF) { pendingHighSurrogate = s[s.length - 1]; s = s.slice(0, -1); }\n")
@@ -8382,10 +8423,6 @@ fn part32(b: *str.Builder) -> err {
     try str.push(b, "  setSlot(this, { isDecoderStream: true, transform: ts, decoder });\n")
     try str.push(b, "}\n")
     try str.push(b, "iface('TextDecoderStream', TextDecoderStream, null);\n")
-    ret ok
-}
-
-fn part33(b: *str.Builder) -> err {
     try str.push(b, "attributes(TextDecoderStream.prototype, {\n")
     try str.push(b, "  encoding: { get() { const s = slotOf(this); if (!s || !s.isDecoderStream) throw new TypeError('Illegal invocation'); return s.decoder.encoding; } },\n")
     try str.push(b, "  fatal: { get() { const s = slotOf(this); if (!s || !s.isDecoderStream) throw new TypeError('Illegal invocation'); return s.decoder.fatal; } },\n")
@@ -8599,6 +8636,10 @@ fn part33(b: *str.Builder) -> err {
     try str.push(b, "const prevAttrChanged = elementAttributeChanged;\n")
     try str.push(b, "elementAttributeChanged = function (el, name, oldValue, value) {\n")
     try str.push(b, "  prevAttrChanged(el, name, oldValue, value);\n")
+    ret ok
+}
+
+fn part34(b: *str.Builder) -> err {
     try str.push(b, "  if ((name === 'id' || name === 'name') && shadowIncludingRoot(el) === mainDocument) { refreshNamed(oldValue); refreshNamed(value); }\n")
     try str.push(b, "};\n")
     try str.push(b, "for (const d of descendantsOf(mainDocument)) refreshNamedFor(d);\n")
@@ -8636,10 +8677,6 @@ fn part33(b: *str.Builder) -> err {
     try str.push(b, "  if (/\\.xml$/i.test(path)) return 'application/xml';\n")
     try str.push(b, "  if (/\\.svg$/i.test(path)) return 'image/svg+xml';\n")
     try str.push(b, "  return 'text/html';\n")
-    ret ok
-}
-
-fn part34(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "function fireFrameLoad(el) { fireSimple(el, 'load', false); }\n")
     try str.push(b, "const pendingFrameLoads = [];\n")
@@ -8853,6 +8890,10 @@ fn part34(b: *str.Builder) -> err {
     try str.push(b, "  if (s.range !== null) slotOf(s.range).selection = null;\n")
     try str.push(b, "  s.range = range;\n")
     try str.push(b, "  if (range !== null) slotOf(range).selection = sel;\n")
+    ret ok
+}
+
+fn part35(b: *str.Builder) -> err {
     try str.push(b, "  s.forwards = forwards;\n")
     try str.push(b, "  s.directionless = range === null ? true : false;\n")
     try str.push(b, "}\n")
@@ -8890,10 +8931,6 @@ fn part34(b: *str.Builder) -> err {
     try str.push(b, "    if (s.range !== range) throw domError('NotFoundError', 'The range is not in the selection');\n")
     try str.push(b, "    setSelectionRange(this, null, true);\n")
     try str.push(b, "  },\n")
-    ret ok
-}
-
-fn part35(b: *str.Builder) -> err {
     try str.push(b, "  removeAllRanges() { selectionSlot(this); setSelectionRange(this, null, true); },\n")
     try str.push(b, "  empty() { selectionSlot(this); setSelectionRange(this, null, true); },\n")
     try str.push(b, "  collapse(node, offset = 0) {\n")
@@ -9107,6 +9144,10 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "    if (!checkPopoverValidity(el, false, false, invoker) ) return;\n")
     try str.push(b, "  } else if (state === 'hint') {\n")
     try str.push(b, "    hideAllPopoversUntil(ancestor && hintStack.indexOf(ancestor) >= 0 ? ancestor : null, false, true, hintStack);\n")
+    ret ok
+}
+
+fn part36(b: *str.Builder) -> err {
     try str.push(b, "    if (!checkPopoverValidity(el, false, false, invoker)) return;\n")
     try str.push(b, "  }\n")
     try str.push(b, "  data.previousFocus = slotOf(slotOf(el).doc).focused || null;\n")
@@ -9144,10 +9185,6 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "      const top = popoverStack[popoverStack.length - 1];\n")
     try str.push(b, "      hidePopoverInternal(top, false, fireEvents);\n")
     try str.push(b, "      if (popoverStack[popoverStack.length - 1] === top) popoverStack.pop();\n")
-    ret ok
-}
-
-fn part36(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "  }\n")
     try str.push(b, "  if (fireEvents) fireToggleEvent('beforetoggle', el, 'open', 'closed', false, undefined);\n")
@@ -9361,6 +9398,10 @@ fn part36(b: *str.Builder) -> err {
     try str.push(b, "      if (dispatch(ev, d)) closeDialog(d, undefined);\n")
     try str.push(b, "      return;\n")
     try str.push(b, "    }\n")
+    ret ok
+}
+
+fn part37(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "});\n")
     try str.push(b, "function detailsToggled(el, oldValue, value) {\n")
@@ -9398,10 +9439,6 @@ fn part36(b: *str.Builder) -> err {
     try str.push(b, "iface('Range', Range, AbstractRange);\n")
     try str.push(b, "constants(Range, { START_TO_START: 0, START_TO_END: 1, END_TO_END: 2, END_TO_START: 3 });\n")
     try str.push(b, "function rangeSlot(o) { const s = slotOf(o); if (!s || !s.isRange) illegal(); return s; }\n")
-    ret ok
-}
-
-fn part37(b: *str.Builder) -> err {
     try str.push(b, "function nodeLength(node) {\n")
     try str.push(b, "  const t = nodeType(node);\n")
     try str.push(b, "  if (t === DOCUMENT_TYPE_NODE) return 0;\n")
@@ -9615,6 +9652,10 @@ fn part37(b: *str.Builder) -> err {
     try str.push(b, "  endOffset: { get() { const s = slotOf(this); if (!s || (!s.isRange && !s.isStaticRange)) illegal(); return s.endOffset; } },\n")
     try str.push(b, "  collapsed: { get() { const s = slotOf(this); if (!s || (!s.isRange && !s.isStaticRange)) illegal(); return s.startNode === s.endNode && s.startOffset === s.endOffset; } }\n")
     try str.push(b, "});\n")
+    ret ok
+}
+
+fn part38(b: *str.Builder) -> err {
     try str.push(b, "function deleteRangeContents(range) {\n")
     try str.push(b, "  const s = slotOf(range);\n")
     try str.push(b, "  if (s.startNode === s.endNode && s.startOffset === s.endOffset) return;\n")
@@ -9652,10 +9693,6 @@ fn part37(b: *str.Builder) -> err {
     try str.push(b, "    return fragment;\n")
     try str.push(b, "  }\n")
     try str.push(b, "  const ca = commonAncestor(originalStartNode, originalEndNode);\n")
-    ret ok
-}
-
-fn part38(b: *str.Builder) -> err {
     try str.push(b, "  let firstPartiallyContainedChild = null, lastPartiallyContainedChild = null;\n")
     try str.push(b, "  if (!isInclusiveAncestor(originalStartNode, originalEndNode)) for (const c of childrenOf(ca)) if (partiallyContained(c, range)) { firstPartiallyContainedChild = c; break; }\n")
     try str.push(b, "  if (!isInclusiveAncestor(originalEndNode, originalStartNode)) { const kids = childrenOf(ca); for (let i = kids.length - 1; i >= 0; i--) if (partiallyContained(kids[i], range)) { lastPartiallyContainedChild = kids[i]; break; } }\n")
@@ -9869,6 +9906,10 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "    if (next) {\n")
     try str.push(b, "      if (!before) { node = followingInRoot(node, s.root); if (node === null) return null; } else before = false;\n")
     try str.push(b, "    } else {\n")
+    ret ok
+}
+
+fn part39(b: *str.Builder) -> err {
     try str.push(b, "      if (before) { node = precedingInRoot(node, s.root); if (node === null) return null; } else before = true;\n")
     try str.push(b, "    }\n")
     try str.push(b, "    const result = filterNode(iterator, node);\n")
@@ -9906,10 +9947,6 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "  pointerBeforeReferenceNode: { get() { return niSlot(this).pointerBefore; } },\n")
     try str.push(b, "  whatToShow: { get() { return niSlot(this).whatToShow; } },\n")
     try str.push(b, "  filter: { get() { return niSlot(this).filter; } }\n")
-    ret ok
-}
-
-fn part39(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "function TreeWalker() { throw new TypeError('Illegal constructor'); }\n")
     try str.push(b, "iface('TreeWalker', TreeWalker, null);\n")
@@ -10123,6 +10160,10 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "    s.records = [];\n")
     try str.push(b, "    for (const node of s.nodes) {\n")
     try str.push(b, "      const regs = registrationsOf(node, false);\n")
+    ret ok
+}
+
+fn part40(b: *str.Builder) -> err {
     try str.push(b, "      if (regs) for (let i = regs.length - 1; i >= 0; i--) if (regs[i].observer === mo && regs[i].source !== null) regs.splice(i, 1);\n")
     try str.push(b, "    }\n")
     try str.push(b, "    if (records.length > 0) {\n")
@@ -10160,10 +10201,6 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "      previousSibling: previousSibling_ === undefined ? null : previousSibling_, nextSibling: nextSibling_ === undefined ? null : nextSibling_,\n")
     try str.push(b, "      attributeName: type === 'attributes' ? name : null, attributeNamespace: type === 'attributes' ? namespace : null,\n")
     try str.push(b, "      oldValue: e.oldValue\n")
-    ret ok
-}
-
-fn part40(b: *str.Builder) -> err {
     try str.push(b, "    });\n")
     try str.push(b, "    const mo = slotOf(e.observer);\n")
     try str.push(b, "    apply(arrayPush, mo.records, [record]);\n")
@@ -10377,6 +10414,10 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "function makeListIterator(target, kind, getList) {\n")
     try str.push(b, "  const name = 'List Iterator';\n")
     try str.push(b, "  let proto = ListIteratorProtos[target.constructor.name];\n")
+    ret ok
+}
+
+fn part41(b: *str.Builder) -> err {
     try str.push(b, "  if (!proto) {\n")
     try str.push(b, "    proto = create(IteratorProto);\n")
     try str.push(b, "    defineProperty(proto, symToStringTag, { value: target.constructor.name + ' Iterator', configurable: true });\n")
@@ -10414,10 +10455,6 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "        const items = Array.from(pair);\n")
     try str.push(b, "        if (items.length !== 2) throw new TypeError(\"Failed to construct 'Headers': Invalid value\");\n")
     try str.push(b, "        appendHeader(h, toDOMString(items[0]), toDOMString(items[1]));\n")
-    ret ok
-}
-
-fn part41(b: *str.Builder) -> err {
     try str.push(b, "      }\n")
     try str.push(b, "    } else {\n")
     try str.push(b, "      for (const key of Reflect.ownKeys(init)) {\n")
@@ -10631,6 +10668,10 @@ fn part41(b: *str.Builder) -> err {
     try str.push(b, "  s.headers = new Headers(); slotOf(s.headers).guard = 'response';\n")
     try str.push(b, "  if (init !== undefined && init !== null) {\n")
     try str.push(b, "    if (!isObject(init)) throw new TypeError(\"Failed to construct 'Response': The provided value is not of type 'ResponseInit'.\");\n")
+    ret ok
+}
+
+fn part42(b: *str.Builder) -> err {
     try str.push(b, "    if (init.status !== undefined) { const st = toUnsignedShort(init.status); if (st < 200 || st > 599) throw new RangeError(\"Failed to construct 'Response': The status provided (\" + st + ') is outside the range [200, 599].'); s.status = st; }\n")
     try str.push(b, "    if (init.statusText !== undefined) { const t = toDOMString(init.statusText); if (/[^\\t\\x20-\\x7E\\x80-\\xFF]/.test(t)) throw new TypeError('Invalid statusText'); s.statusText = t; }\n")
     try str.push(b, "    if (init.headers !== undefined) fillHeaders(s.headers, init.headers);\n")
@@ -10668,10 +10709,6 @@ fn part41(b: *str.Builder) -> err {
     try str.push(b, "operations(Response, {\n")
     try str.push(b, "  error() { const r = new Response(null, { status: 200 }); const s = slotOf(r); s.status = 0; s.type = 'error'; slotOf(s.headers).guard = 'immutable'; return r; },\n")
     try str.push(b, "  redirect(url, status = 302) {\n")
-    ret ok
-}
-
-fn part42(b: *str.Builder) -> err {
     try str.push(b, "    const parsed = N.urlParse(toUSVString(url), documentBaseURL(mainDocument));\n")
     try str.push(b, "    if (parsed === null) throw new TypeError(\"Failed to execute 'redirect' on 'Response': Invalid URL\");\n")
     try str.push(b, "    if ([301, 302, 303, 307, 308].indexOf(status) < 0) throw new RangeError(\"Failed to execute 'redirect' on 'Response': Invalid status code\");\n")
@@ -10885,6 +10922,10 @@ fn part42(b: *str.Builder) -> err {
     try str.push(b, "    s.state = 0; s.status = 0; s.statusText = ''; s.responseBytes = ''; s.responseHeaders = [];\n")
     try str.push(b, "  },\n")
     try str.push(b, "  getResponseHeader(name) {\n")
+    ret ok
+}
+
+fn part43(b: *str.Builder) -> err {
     try str.push(b, "    const s = xhrSlot(this);\n")
     try str.push(b, "    required(arguments, 1, 'getResponseHeader');\n")
     try str.push(b, "    if (s.state < 2 || s.errorFlag) return null;\n")
@@ -10922,10 +10963,6 @@ fn part42(b: *str.Builder) -> err {
     try str.push(b, "    get() {\n")
     try str.push(b, "      const s = xhrSlot(this);\n")
     try str.push(b, "      if (s.responseType !== '' && s.responseType !== 'text') throw domError('InvalidStateError', \"Failed to read the 'responseText' property from 'XMLHttpRequest': The value is only accessible if the object's 'responseType' is '' or 'text' (was '\" + s.responseType + \"').\");\n")
-    ret ok
-}
-
-fn part43(b: *str.Builder) -> err {
     try str.push(b, "      if (s.state !== 3 && s.state !== 4) return '';\n")
     try str.push(b, "      return xhrResponseText(s);\n")
     try str.push(b, "    }\n")
@@ -11139,6 +11176,10 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "        const nsDecl = {};\n")
     try str.push(b, "        let defNS = defaultNS[defaultNS.length - 1];\n")
     try str.push(b, "        for (const [an, av] of attrs) {\n")
+    ret ok
+}
+
+fn part44(b: *str.Builder) -> err {
     try str.push(b, "          if (an === 'xmlns') defNS = av === '' ? null : av;\n")
     try str.push(b, "          else if (an.startsWith('xmlns:')) nsDecl[an.slice(6)] = av === '' ? null : av;\n")
     try str.push(b, "        }\n")
@@ -11176,10 +11217,6 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "      } else {\n")
     try str.push(b, "        if (raw.indexOf(']]>') >= 0) fail(']]> in character data');\n")
     try str.push(b, "        appendNodeSimple(parent, createTextNode(doc, decodeRefs(raw.replace(/\\r\\n?/g, '\\n'), false)));\n")
-    ret ok
-}
-
-fn part44(b: *str.Builder) -> err {
     try str.push(b, "      }\n")
     try str.push(b, "      for (const ch of raw) if (ch === '\\n') line++;\n")
     try str.push(b, "      pos = end < 0 ? n : end;\n")
@@ -11393,6 +11430,10 @@ fn part44(b: *str.Builder) -> err {
     try str.push(b, "      return out;\n")
     try str.push(b, "    }\n")
     try str.push(b, "    memory.set(v, out);\n")
+    ret ok
+}
+
+fn part45(b: *str.Builder) -> err {
     try str.push(b, "    return out;\n")
     try str.push(b, "  }\n")
     try str.push(b, "  return clone(value);\n")
@@ -11430,10 +11471,6 @@ fn part44(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "iface('MessageChannel', MessageChannel, null);\n")
     try str.push(b, "attributes(MessageChannel.prototype, {\n")
-    ret ok
-}
-
-fn part45(b: *str.Builder) -> err {
     try str.push(b, "  port1: { get() { const s = slotOf(this); if (!s || !s.isChannel) illegal(); return s.port1; } },\n")
     try str.push(b, "  port2: { get() { const s = slotOf(this); if (!s || !s.isChannel) illegal(); return s.port2; } }\n")
     try str.push(b, "});\n")
@@ -11616,7 +11653,7 @@ fn part45(b: *str.Builder) -> err {
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 632315)
+    var b = try str.builder(a, 633869)
     try part0(&b)
     try part1(&b)
     try part2(&b)

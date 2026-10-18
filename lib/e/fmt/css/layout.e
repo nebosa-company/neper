@@ -1628,13 +1628,31 @@ fn valign_shift(l: *const Layout, s: *const style.Style, ps: *const style.Style,
     ret -(l2.px + l2.pct * lh)
 }
 
-fn line_align_x(s: *const style.Style, last_line: bool, avail: f64, width: f64, left: f64) -> f64 {
+// The alignment in force on a line: `text-align`, or on the last line (and lines ended by a break) `text-align-last`.
+fn line_align_of(l: *Layout, s: *const style.Style, last_line: bool) -> style.TextAlign {
     var align = s.text_align
     if align == .MatchParent { align = .Start }
+    if !last_line { ret align }
+    if align == .Justify { align = .Start }
+    let (tv, has_tv) = extra_text(s, "text-align-last")
+    if !has_tv { ret align }
+    let v = cv.lower(l.a, cv.trim_ws(tv))
+    if str.eq(v, "start") { ret .Start }
+    if str.eq(v, "end") { ret .End }
+    if str.eq(v, "left") { ret .Left }
+    if str.eq(v, "right") { ret .Right }
+    if str.eq(v, "center") { ret .Center }
+    if str.eq(v, "justify") { ret .Justify }
+    ret align
+}
+
+fn line_align_x(s: *const style.Style, base: style.TextAlign, last_line: bool, explicit_justify: bool, avail: f64, width: f64, left: f64) -> f64 {
+    var align = base
     let rtl = s.direction == .Rtl
     if align == .Start { if rtl { align = .Right } else { align = .Left } }
     if align == .End { if rtl { align = .Left } else { align = .Right } }
-    if align == .Justify && last_line { if rtl { align = .Right } else { align = .Left } }
+    if align == .Justify && last_line && !explicit_justify { if rtl { align = .Right } else { align = .Left } }
+    if align == .Justify && explicit_justify { if rtl { align = .Right } else { align = .Left } }
     if align == .Right { ret left + maxf(0.0f64, avail - width) }
     if align == .Center { ret left + maxf(0.0f64, (avail - width) / 2.0f64) }
     ret left
@@ -2067,9 +2085,12 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
     }
     let last_line = end >= x.bd.pieces.len
     let hard = scan.forced
-    let ax = line_align_x(cs, last_line || hard, scan.avail, used_w, scan.line_x)
+    let end_line = last_line || hard
+    let line_align = line_align_of(l, cs, end_line)
+    let justify_last = end_line && line_align == .Justify
+    let ax = line_align_x(cs, line_align, end_line, justify_last, scan.avail, used_w, scan.line_x)
     var spread = 0.0f64
-    if cs.text_align == .Justify && !last_line && !hard && scan.avail > used_w {
+    if line_align == .Justify && scan.avail > used_w {
         var gaps = 0usize
         k = lead
         while k + 1usize < trim_end {
@@ -2113,7 +2134,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             } else {
                 this_to = p.start + p.clen
             }
-            if tf_box == p.box && tf_to == p.start && cur_shift == tf_shift {
+            if tf_box == p.box && tf_to == p.start && cur_shift == tf_shift && spread == 0.0f64 {
                 tf_to = this_to
                 tf_w += this_w
             } else {

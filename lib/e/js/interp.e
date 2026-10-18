@@ -127,7 +127,7 @@ type Interp = struct {
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, suppressed_ctor: *Obj, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
 }
@@ -989,7 +989,7 @@ fn append_prop(it: *Interp, o: *Obj, p: Prop) -> err {
         if !is_symbol_key(p.key) {
             let (r, pe) = map.put[str, usize](&o.index, p.key.name, o.props.len - 1usize)
         }
-    } else if o.props.len > 12usize {
+    } else if o.props.len > 32usize {
         rebuild_index(it, o)
     }
     ret ok
@@ -2337,6 +2337,21 @@ fn loose_equals(it: *Interp, x: Value, y: Value) -> (bool, err) {
 // --- environments
 
 fn new_env(it: *Interp, parent: *Env) -> *Env {
+    let nonenv = null_env()
+    if it.env_free != nonenv {
+        // Reuse a scope that no closure captured; its binding buffer keeps its capacity.
+        let r = it.env_free
+        it.env_free = r.parent
+        r.vars.len = 0usize
+        r.parent = parent
+        r.with_obj = null_obj()
+        r.has_with = false
+        r.is_var = false
+        r.captured = false
+        r.in_params = false
+        r.owns_arguments = false
+        ret r
+    }
     let (cell, ce) = mem.alloc[Env](it.a, 1usize)
     if ce != ok {
         var none: *Env = zero
@@ -2351,6 +2366,13 @@ fn new_env(it: *Interp, parent: *Env) -> *Env {
     e.has_with = false
     e.with_obj = null_obj()
     ret e
+}
+
+// Hands a finished call's scope back for reuse when nothing captured it.
+fn release_env(it: *Interp, e: *Env) {
+    if e.captured || e.has_with { ret }
+    e.parent = it.env_free
+    it.env_free = e
 }
 
 // A function created in `e` keeps it, and every scope outside it, alive: loops then give each iteration a scope of its own.
@@ -2907,6 +2929,7 @@ fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_targe
     if it.mem_limit != 0usize && mem.mark(it.a) > it.mem_limit { ret (undefv(), throw_range(it, "out of memory")) }
     f.env = new_env(it, fo.env)
     if f.env == null_env() { ret (undefv(), throw_range(it, "out of memory")) }
+    let env0 = f.env
     var env_cap = usize(n.b) + usize(n.hoist_count)
     if (n.flags & ast.F_USES_ARGS) != 0u16 && !is_arrow { env_cap += 1usize }
     if (n.flags & ast.F_EXPR_BODY) == 0u16 {
@@ -2964,6 +2987,8 @@ fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_targe
         if ce != ok { ret (undefv(), ce) }
         if c.kind == CK_RETURN { result = c.value }
     }
+    if f.env != env0 { release_env(it, f.env) }
+    release_env(it, env0)
     if constructing {
         if is_object(result) { ret (result, ok) }
         if fo.ctor_kind == K_DERIVED {
@@ -4489,7 +4514,7 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
 
 fn eval_object(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
     let o = new_plain(it)
-    if n.b <= 12u32 { reserve_props(it, o, usize(n.b)) }
+    if n.b <= 64u32 { reserve_props(it, o, usize(n.b)) }
     var i = 0usize
     while i < usize(n.b) {
         let pid = f.prog.kids[usize(n.a) + i]
@@ -5014,7 +5039,7 @@ fn lexical_count(f: *const Frame, first: u32, count: u32) -> usize {
 
 // A scope's binding list is sized up front: growing it by doubling leaves every outgrown buffer behind in the arena.
 fn presize_env(it: *Interp, e: *Env, cap: usize) {
-    if cap == 0usize { ret }
+    if cap == 0usize || e.vars.items.len >= cap { ret }
     let (v, ve) = list.init[Binding](it.a, cap)
     if ve == ok { e.vars = v }
 }
