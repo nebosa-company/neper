@@ -162,3 +162,4 @@ line-clamp-block-children-001.html | line-clamp-block-children-001-ref.html | ma
 line-break-anywhere-simple-001.html | line-break-anywhere-simple-001-ref.html | match
 overflow-wrap-anywhere-min-content-001.html | overflow-wrap-anywhere-min-content-001-ref.html | match
 text-transform-unicode-001.html | text-transform-unicode-001-ref.html | match
+body-writing-mode-propagation-001.html | body-writing-mode-propagation-001-ref.html | match
