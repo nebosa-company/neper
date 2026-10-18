@@ -20957,7 +20957,11 @@ fn linux_editor(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buf
     var value_options = text_options()
     value_options.role = .Body
     value_options.mono = options.mono
-    let (text_look, style_error) = text_style_faced(a, t, value_options)
+    // an entry's text takes Pango's whole pixel advances; the text view's does not (its lines match as they are)
+    var hinted = Theme { tokens: t.tokens, fonts: t.fonts, language: t.language, runtime: t.runtime }
+    if !multiline { hinted.language = "kern" }
+    if !multiline && t.language.len == 4usize && t.language[0usize] == 116u8 && t.language[2usize] == 107u8 { hinted.language = "tnkn" }
+    let (text_look, style_error) = text_style_faced(a, &hinted, value_options)
     if style_error != ok { ret (zero, style_error) }
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
@@ -21011,9 +21015,6 @@ fn linux_frame_over(a: *mem.Arena, t: *const Theme, width: f32, height: f32, fac
     let boxed = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, frame, parts)
     // The focus ring is its own layer over the face (its own layer keeps the face unshifted); the layer
     // is always there, clear at rest, so the tree keeps its shape when the focus arrives.
-    var outline = sized_style(width, height)
-    if ringed { outline.border = style.Border { width: 2.0, color: ring } }
-    outline.radius = 5.7
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize + over.len)
     if layers_error != ok { ret boxed }
     layers[0usize] = boxed
@@ -21024,7 +21025,7 @@ fn linux_frame_over(a: *mem.Arena, t: *const Theme, width: f32, height: f32, fac
         at += 1usize
         k += 1usize
     }
-    layers[at] = widget.box(0u64, outline, zero)
+    layers[at] = linux_focus_layer(a, width, height, ring, ringed, 5.85, 5.85)
     at += 1usize
     var whole = sized_style(width, height)
     if !enabled { whole.opacity = 0.5 }
@@ -21064,6 +21065,15 @@ fn linux_icon_hit(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, ink
     ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, region)), ok)
 }
 
+// round 22, la: the flex solver shrinks every child when the row overflows, and an editor wants the whole row, so the icons beside a
+// value shrank to 14 px. The value is given the room that is left instead.
+fn linux_room(a: *mem.Arena, node: widget.Node, width: f32) -> widget.Node {
+    var held = style.defaults()
+    held.width = style.Length { Px: width }
+    held.overflow = .Clip
+    ret widget.box(0u64, held, widget_one_of(a, node))
+}
+
 // A password entry: the entry with the peek eye 9 px from its end (`view-reveal`, `view-conceal` while the text shows).
 fn linux_password(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, revealed: bool, reveal: *const widget.Submit) -> (widget.Node, err) {
     let state = control_state(t, key, options.enabled, false)
@@ -21078,7 +21088,7 @@ fn linux_password(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if eye_error != ok { ret (zero, eye_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = value
+    parts[0usize] = linux_room(a, value, options.width - 18.0 - 6.0 - 16.0)
     parts[1usize] = eye
     var h = options.height
     if !(h > 0.0) { h = 34.0 }
@@ -21102,7 +21112,9 @@ fn linux_search(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = lens
-    parts[1usize] = value
+    var room = options.width - 18.0 - 6.0 - 16.0
+    if len != 0usize { room -= 6.0 + 16.0 }
+    parts[1usize] = linux_room(a, value, room)
     var count = 2usize
     if len != 0usize {
         let (cross, cross_error) = linux_icon_hit(a, key + 1u64, t, adwicon.edit_clear(), ink, clear, "Clear", options.enabled)
@@ -21148,7 +21160,7 @@ fn linux_textview(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
 // 12.4 % pressed; white 6.8 / 15.1 % Dark), a 1 px divider on its left (black 7.8 %, white 9.6 % Dark, which the tint darkens too) and
 // the 16 px symbolic icon in the text colour. An arrow that cannot step has the icon at 15 % and the divider at 27 %. `last` rounds
 // the right corners with the spin button's. Not a Tab stop (GTK's arrows are not).
-fn linux_spin_arrow(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, label: str, action: *const widget.Submit, usable: bool, last: bool) -> (widget.Node, err) {
+fn linux_spin_arrow(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, label: str, action: *const widget.Submit, usable: bool, last: bool, tall: bool) -> (widget.Node, err) {
     let state = control_state(t, key, usable, false)
     let dark = t.tokens.palette == .Dark
     var tint = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -21181,7 +21193,21 @@ fn linux_spin_arrow(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, l
     var face = sized_style(33.0, 34.0)
     face.background = paint.Brush { Solid: tint }
     if last { face.corners = style.Corners { top_left: 0.0, top_right: 6.0, bottom_right: 6.0, bottom_left: 0.0 } }
-    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, face, parts[0usize..2usize])
+    var row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, face, parts[0usize..2usize])
+    if tall {
+        // The `vertical` style class on a horizontal button (the capture "spin-vertical"): 34 x 35, no divider on the left, the up button
+        // keeps a 1 px border on its top.
+        var tall_face = sized_style(34.0, 35.0)
+        tall_face.background = paint.Brush { Solid: tint }
+        if last { tall_face.corners = style.Corners { top_left: 0.0, top_right: 6.0, bottom_right: 6.0, bottom_left: 0.0 } }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = widget.aligned(0u64, .Center, .Center, sized_style(34.0, 35.0), widget_one_of(a, mark))
+        layers[1usize] = linux_top_rule(a, 34.0, 35.0, rule)
+        var count = 1usize
+        if last { count = 2usize }
+        row = widget.stack(0u64, tall_face, layers[0usize..count])
+    }
     let region = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: usable, focusable: false }, style.defaults(), widget_one_of(a, row))
     var sem: widget.Semantics = zero
     sem.role = 3u8
@@ -21193,6 +21219,25 @@ fn linux_spin_arrow(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, l
 
 // A spin button (GtkSpinButton): the entry's flat face holding the value and, 54 px in, the two arrows (`key + 2` up, `key + 1` down).
 fn linux_spin(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, enabled: bool, invalid: bool) -> (widget.Node, err) {
+    let (made, made_error) = linux_spin_core(a, key, t, label, buffer, value, low, high, step, change, typed, width, enabled, invalid, false)
+    ret (made, made_error)
+}
+
+// The spin button of the capture "spin-vertical": libadwaita's `vertical` class on a horizontal spin button (98 x 35, the value flush left).
+fn spin_box_linux_tall(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
+    let (made, made_error) = linux_spin_core(a, key, t, label, buffer, value, low, high, step, change, typed, width, true, false, true)
+    ret (made, made_error)
+}
+
+fn linux_spin_core(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, enabled: bool, invalid: bool, tall: bool) -> (widget.Node, err) {
+    var arrows_w: f32 = 66.0
+    var tall_h: f32 = 34.0
+    var pad: f32 = 6.0
+    if tall {
+        arrows_w = 68.0
+        tall_h = 35.0
+        pad = 0.0
+    }
     let (buttons, shortcuts, pair_error) = step_pair_enabled(a, t, key + 1u64, key + 2u64, value, low, high, step, change, enabled)
     if pair_error != ok { ret (zero, pair_error) }
     let len = write_i64(buffer, value)
@@ -21203,11 +21248,13 @@ fn linux_spin(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffe
     let state = control_state(t, key, enabled, false)
     let focused = state.focused && enabled
     let tone = linux_tone(options)
-    let (editor, editor_error) = linux_value(a, key, t, label, buffer, len, typed, zero, options, false, linux_tone_color(t, tone), false, 1u32)
+    // a GtkSpinButton sets its figures tabular
+    let tabular = Theme { tokens: t.tokens, fonts: t.fonts, language: "tnkn", runtime: t.runtime }
+    let (editor, editor_error) = linux_value(a, key, &tabular, label, buffer, len, typed, zero, options, false, linux_tone_color(t, tone), false, 1u32)
     if editor_error != ok { ret (zero, editor_error) }
-    let (down, down_error) = linux_spin_arrow(a, key + 1u64, t, adwicon.value_decrease(), "Decrease", &shortcuts[0usize].action, enabled && value > low, false)
+    let (down, down_error) = linux_spin_arrow(a, key + 1u64, t, adwicon.value_decrease(), "Decrease", &shortcuts[0usize].action, enabled && value > low, false, tall)
     if down_error != ok { ret (zero, down_error) }
-    let (up, up_error) = linux_spin_arrow(a, key + 2u64, t, adwicon.value_increase(), "Increase", &shortcuts[1usize].action, enabled && value < high, true)
+    let (up, up_error) = linux_spin_arrow(a, key + 2u64, t, adwicon.value_increase(), "Increase", &shortcuts[1usize].action, enabled && value < high, true, tall)
     if up_error != ok { ret (zero, up_error) }
     let (pair, pair_nodes_error) = mem.alloc[widget.Node](a, 2usize)
     if pair_nodes_error != ok { ret (zero, TooLarge) }
@@ -21219,8 +21266,8 @@ fn linux_spin(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffe
     parts[0usize] = editor
     let (over, over_error) = mem.alloc[widget.Node](a, 1usize)
     if over_error != ok { ret (zero, TooLarge) }
-    over[0usize] = widget.positioned(0u64, width - 66.0, 0.0, style.defaults(), widget_one_of(a, arrows))
-    let boxed = linux_frame_over(a, t, width, 34.0, linux_entry_face(t, tone), linux_ring_color(t, tone), focused, enabled, 9.0, 66.0, parts[0usize..1usize], over[0usize..1usize])
+    over[0usize] = widget.positioned(0u64, width - arrows_w, 0.0, style.defaults(), widget_one_of(a, arrows))
+    let boxed = linux_frame_over(a, t, width, tall_h, linux_entry_face(t, tone), linux_ring_color(t, tone), focused, enabled, pad, arrows_w, parts[0usize..1usize], over[0usize..1usize])
     var none: []widget.Node = zero
     let (made, made_error) = stepped(a, key + 3u64, t, label, value, boxed, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
     ret (made, made_error)
@@ -21230,11 +21277,8 @@ fn linux_spin(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffe
 // A read-only combo box is libadwaita's drop down: the default button (black 8 % / 11.6 % / 23.6 %; the open list leaves it at rest) holding the bold value at 10 px and the `pan-down` arrow; with room to spare the arrow sits 17 px from the end (a natural-width
 // drop down puts it 10 px in). An editable one is the entry with a 36 px arrow button on the end (a 1 px divider, the flat tints, right
 // corners 6); a focused editor wears the ring round the entry part only.
-fn linux_ring_layer(width: f32, height: f32, ring: paint.Color, ringed: bool, left_radius: f32, right_radius: f32) -> widget.Node {
-    var outline = sized_style(width, height)
-    if ringed { outline.border = style.Border { width: 2.0, color: ring } }
-    outline.corners = style.Corners { top_left: left_radius, top_right: right_radius, bottom_right: right_radius, bottom_left: left_radius }
-    ret widget.box(0u64, outline, zero)
+fn linux_ring_layer(a: *mem.Arena, width: f32, height: f32, ring: paint.Color, ringed: bool, left_radius: f32, right_radius: f32) -> widget.Node {
+    ret linux_focus_layer(a, width, height, ring, ringed, left_radius, right_radius)
 }
 
 fn linux_dropdown(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
@@ -21305,7 +21349,6 @@ fn linux_menu_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var w = width
     if !(w > 0.0) { w = natural }
     var end_pad: f32 = rim
-    if w >= natural + 7.0 { end_pad = 17.0 }
     let label_w = max_zero(w - 10.0 - end_pad - picture_w - gap - 16.0)
     let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
     let (arrow, arrow_error) = adwicon.icon(a, adwicon.pan_down(), look.foreground, 16.0)
@@ -21339,7 +21382,7 @@ fn linux_menu_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, 0.0, TooLarge) }
     layers[0usize] = face_button
-    layers[1usize] = linux_ring_layer(w, height, linux_ring_color(t, 0u32), state.focus_visible && enabled, 5.7, 5.7)
+    layers[1usize] = linux_ring_layer(a, w, height, linux_ring_color(t, 0u32), state.focus_visible && enabled, 5.85, 5.85)
     ret (widget.stack(0u64, sized_style(w, height), layers[0usize..2usize]), w, ok)
 }
 
@@ -21390,8 +21433,9 @@ fn linux_combo_entry(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let opener = widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, region))
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
-    layers[0usize] = widget.positioned(0u64, options.width - 36.0, 0.0, style.defaults(), widget_one_of(a, opener))
-    layers[1usize] = linux_ring_layer(options.width - 35.0, 34.0, linux_ring_color(t, 0u32), focused, 5.7, 0.0)
+    // the button (its divider) lies over the ring's end, as in GTK
+    layers[1usize] = widget.positioned(0u64, options.width - 36.0, 0.0, style.defaults(), widget_one_of(a, opener))
+    layers[0usize] = linux_ring_layer(a, options.width - 35.0, 34.0, linux_ring_color(t, 0u32), focused, 5.85, 0.0)
     let (parts_in, parts_in_error) = mem.alloc[widget.Node](a, 1usize)
     if parts_in_error != ok { ret (zero, TooLarge) }
     parts_in[0usize] = value
@@ -21458,6 +21502,95 @@ fn linux_popover_style(t: *const Theme, menu_w: f32, rows: usize) -> style.Style
     sheet.height = style.Length { Px: 12.3 + 35.5 * f32(rows) }
     ret sheet
 }
+
+// ---- round 22, la: the Linux focus ring ----------------------------------------------------------------------------------------
+// GTK's ring is a 2 px band inside the widget whose outer corners measure 5.85 px and whose inner corners 4 px (the generic border draws 5.7 / 3.7),
+// so the band is filled here as an outer path with an inner path of opposite winding. `left` and `right` are the outer radii of
+// the two ends (the inner ones are 1.85 less, a straight end stays straight).
+type LinuxFocus = struct { arena: *mem.Arena, color: paint.Color, on: bool, left: f32, right: f32 }
+
+fn linux_trace4(builder: *geometry.PathBuilder, r: geometry.Rect, tl: f32, tr: f32, br: f32, bl: f32, reversed: bool) -> err {
+    let x0 = r.x
+    let y0 = r.y
+    let x1 = r.x + r.width
+    let y1 = r.y + r.height
+    if reversed {
+        try geometry.move_to(builder, geometry.Point { x: x0 + tl, y: y0 })
+        if tl > 0.0 { try widget.corner_curve(builder, geometry.Point { x: x0 + tl, y: y0 }, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0, y: y0 + tl }) }
+        try geometry.line_to(builder, geometry.Point { x: x0, y: y1 - bl })
+        if bl > 0.0 { try widget.corner_curve(builder, geometry.Point { x: x0, y: y1 - bl }, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0 + bl, y: y1 }) }
+        try geometry.line_to(builder, geometry.Point { x: x1 - br, y: y1 })
+        if br > 0.0 { try widget.corner_curve(builder, geometry.Point { x: x1 - br, y: y1 }, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1, y: y1 - br }) }
+        try geometry.line_to(builder, geometry.Point { x: x1, y: y0 + tr })
+        if tr > 0.0 { try widget.corner_curve(builder, geometry.Point { x: x1, y: y0 + tr }, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1 - tr, y: y0 }) }
+        ret geometry.close_path(builder)
+    }
+    try geometry.move_to(builder, geometry.Point { x: x0 + tl, y: y0 })
+    try geometry.line_to(builder, geometry.Point { x: x1 - tr, y: y0 })
+    if tr > 0.0 { try widget.corner_curve(builder, geometry.Point { x: x1 - tr, y: y0 }, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1, y: y0 + tr }) }
+    try geometry.line_to(builder, geometry.Point { x: x1, y: y1 - br })
+    if br > 0.0 { try widget.corner_curve(builder, geometry.Point { x: x1, y: y1 - br }, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1 - br, y: y1 }) }
+    try geometry.line_to(builder, geometry.Point { x: x0 + bl, y: y1 })
+    if bl > 0.0 { try widget.corner_curve(builder, geometry.Point { x: x0 + bl, y: y1 }, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0, y: y1 - bl }) }
+    try geometry.line_to(builder, geometry.Point { x: x0, y: y0 + tl })
+    if tl > 0.0 { try widget.corner_curve(builder, geometry.Point { x: x0, y: y0 + tl }, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0 + tl, y: y0 }) }
+    ret geometry.close_path(builder)
+}
+
+fn linux_focus_trace(builder: *geometry.PathBuilder, r: geometry.Rect, left: f32, right: f32, reversed: bool) -> err {
+    ret linux_trace4(builder, r, left, right, right, left, reversed)
+}
+
+// A button's 1 px top border with a rounded top right corner (libadwaita's `spinbutton.vertical > button.up`): the button's shape less
+// the same shape one pixel lower, so the band tapers to nothing down the corner.
+type LinuxTopRule = struct { arena: *mem.Arena, color: paint.Color }
+
+fn linux_top_rule_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let f = mem.cast[*LinuxTopRule](ctx)
+    let (pb, pb_error) = geometry.path_builder(f.arena, 24usize, 80usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try linux_trace4(&builder, area, 0.0, 6.0, 0.0, 0.0, false)
+    try linux_trace4(&builder, geometry.Rect { x: area.x, y: area.y + 1.0, width: area.width, height: area.height - 1.0 }, 0.0, 6.0, 0.0, 0.0, true)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: f.color } } })
+}
+
+fn linux_top_rule(a: *mem.Arena, width: f32, height: f32, color: paint.Color) -> widget.Node {
+    var none: []const widget.Node = zero
+    let (held, held_error) = mem.alloc[LinuxTopRule](a, 1usize)
+    if held_error != ok { ret widget.box(0u64, sized_style(width, height), none) }
+    held[0usize] = LinuxTopRule { arena: a, color: color }
+    ret widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&held[0usize]), measure: linux_focus_measure, paint: linux_top_rule_paint, state: widget.bytes_of[LinuxTopRule](&held[0usize]) } }, style: sized_style(width, height), children: none }
+}
+
+fn linux_focus_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn linux_focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let f = mem.cast[*LinuxFocus](ctx)
+    if !f.on { ret ok }
+    let (pb, pb_error) = geometry.path_builder(f.arena, 24usize, 80usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try linux_focus_trace(&builder, area, f.left, f.right, false)
+    var inner_left = f.left - 1.85
+    var inner_right = f.right - 1.85
+    if inner_left < 0.0 { inner_left = 0.0 }
+    if inner_right < 0.0 { inner_right = 0.0 }
+    try linux_focus_trace(&builder, geometry.Rect { x: area.x + 2.0, y: area.y + 2.0, width: area.width - 4.0, height: area.height - 4.0 }, inner_left, inner_right, true)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: f.color } } })
+}
+
+// The ring layer: always in the tree (the shape keeps when the focus arrives), painting nothing unless `on`.
+fn linux_focus_layer(a: *mem.Arena, width: f32, height: f32, ring: paint.Color, on: bool, left: f32, right: f32) -> widget.Node {
+    var none: []const widget.Node = zero
+    let (held, held_error) = mem.alloc[LinuxFocus](a, 1usize)
+    if held_error != ok { ret widget.box(0u64, sized_style(width, height), none) }
+    held[0usize] = LinuxFocus { arena: a, color: ring, on: on, left: left, right: right }
+    ret widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&held[0usize]), measure: linux_focus_measure, paint: linux_focus_paint, state: widget.bytes_of[LinuxFocus](&held[0usize]) } }, style: sized_style(width, height), children: none }
+}
+// ---- end the Linux focus ring ------------------------------------------------------------------------------------------------
 
 // ---- end combo boxes ----------------------------------------------------------------------------------------------------
 
