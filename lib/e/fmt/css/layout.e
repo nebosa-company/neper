@@ -4506,6 +4506,22 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if items[i].ame { items[i].me = 0.0f64 }
         if items[i].acs { items[i].cs = 0.0f64 }
         if items[i].ace { items[i].ce = 0.0f64 }
+        // `margin-trim`: the margins that adjoin the container's edges (single-line containers; wrapping ones keep theirs).
+        let trim = trim_flags(l, b)
+        if trim != 0u8 {
+            let single = cs.flex_wrap == .Nowrap
+            if row {
+                if single && (trim & 1u8) != 0u8 { items[i].cs = 0.0f64 }
+                if single && (trim & 2u8) != 0u8 { items[i].ce = 0.0f64 }
+                if (trim & 4u8) != 0u8 && i == 0usize { items[i].ms = 0.0f64 }
+                if (trim & 8u8) != 0u8 && i + 1usize == n { items[i].me = 0.0f64 }
+            } else {
+                if (trim & 1u8) != 0u8 && i == 0usize { items[i].ms = 0.0f64 }
+                if (trim & 2u8) != 0u8 && i + 1usize == n { items[i].me = 0.0f64 }
+                if single && (trim & 4u8) != 0u8 { items[i].cs = 0.0f64 }
+                if single && (trim & 8u8) != 0u8 { items[i].ce = 0.0f64 }
+            }
+        }
         items[i].align = flex_item_align(cs, ks)
         // Content-box main size: the flex basis, else the main size property, else the content.
         var basis = -1.0f64
@@ -5654,6 +5670,19 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     if nr > 5000usize { nr = 5000usize }
     g.nc = nc
     g.nr = nr
+    // `margin-trim`: the margins of the items that touch the container's edges.
+    let gtrim = trim_flags(l, b)
+    if gtrim != 0u8 {
+        var ti = 0usize
+        while ti < n {
+            let tb = bx(l, items[ti].box)
+            if (gtrim & 1u8) != 0u8 && items[ti].rs == 0i32 { tb.margin[0usize] = 0.0f64 }
+            if (gtrim & 2u8) != 0u8 && usize(items[ti].rs + items[ti].rn) >= nr { tb.margin[2usize] = 0.0f64 }
+            if (gtrim & 4u8) != 0u8 && items[ti].cs == 0i32 { tb.margin[3usize] = 0.0f64 }
+            if (gtrim & 8u8) != 0u8 && usize(items[ti].cs + items[ti].cn) >= nc { tb.margin[1usize] = 0.0f64 }
+            ti += 1usize
+        }
+    }
     let (ct, ce) = mem.alloc[GTrack](l.a, nc + 1usize)
     let (rt, re) = mem.alloc[GTrack](l.a, nr + 1usize)
     if ce != ok || re != ok { ret (g, false) }
