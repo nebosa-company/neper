@@ -863,10 +863,10 @@ fn apply_misc(ap: *Ap, prop: str, v: str) -> bool {
         if good {
             s.display = dv
             s.lanes = false
-        } else if str.eq(low, "grid-lanes") || str.eq(low, "masonry") {
+        } else if str.eq(low, "grid-lanes") || str.eq(low, "masonry") || str.eq(low, "block grid-lanes") || str.eq(low, "grid-lanes block") {
             s.display = .Grid
             s.lanes = true
-        } else if str.eq(low, "inline-grid-lanes") || str.eq(low, "inline-masonry") {
+        } else if str.eq(low, "inline-grid-lanes") || str.eq(low, "inline-masonry") || str.eq(low, "inline grid-lanes") || str.eq(low, "grid-lanes inline") {
             s.display = .InlineGrid
             s.lanes = true
         }
@@ -1379,6 +1379,30 @@ fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -
     ret list.slice_const[cascade.Declared](&best)
 }
 
+// The writing mode (0 horizontal, 1 vertical-rl, 2 vertical-lr) this element's logical properties resolve against.
+fn declared_writing_mode(declared: []const cascade.Declared, parent: *const Style) -> u8 {
+    var wm = 0u8
+    if parent.writing_mode == .VerticalRl || parent.writing_mode == .SidewaysRl { wm = 1u8 }
+    if parent.writing_mode == .VerticalLr || parent.writing_mode == .SidewaysLr { wm = 2u8 }
+    var winner: cascade.Declared = zero
+    var have = false
+    var i = 0usize
+    while i < declared.len {
+        if str.eq(declared[i].declaration.property, "writing-mode") {
+            if !have || cascade.beats(declared[i], winner) {
+                winner = declared[i]
+                have = true
+            }
+        }
+        i += 1usize
+    }
+    if have {
+        let v = cv.lower(cv.trim_ws(winner.declaration.value))
+        if str.eq(v, "vertical-rl") || str.eq(v, "sideways-rl") { wm = 1u8 } else if str.eq(v, "vertical-lr") || str.eq(v, "sideways-lr") { wm = 2u8 } else if str.eq(v, "horizontal-tb") { wm = 0u8 }
+    }
+    ret wm
+}
+
 fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> bool {
     var winner: cascade.Declared = zero
     var have = false
@@ -1461,6 +1485,7 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     let all = list.slice_const[cascade.Declared](&declared)
     if want >= 0i64 && all.len == 0usize { ret (initial_style(), false, ok) }
     let rtl = declared_direction(all, parent.direction == .Rtl)
+    expand.set_logical_wm(declared_writing_mode(all, parent))
     let winners = rank_expanded(a, all, rtl)
 
     // Custom properties: the parent's, overridden by this element's, each with its own var() resolved. An element that sets
