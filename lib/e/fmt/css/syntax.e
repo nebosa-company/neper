@@ -253,7 +253,7 @@ fn consume_name(s: *Scan) -> str {
     // A name of plain bytes is a slice of the source.
     var j = s.i
     while j < s.n && s.src[j] != 0u8 && is_name(i32(s.src[j])) { j += 1usize }
-    if !(j < s.n && is_valid_escape(s, j)) {
+    if !(j < s.n && (is_valid_escape(s, j) || s.src[j] == 0u8)) {
         let plain_name = s.src[s.i..j]
         s.i = j
         ret plain_name
