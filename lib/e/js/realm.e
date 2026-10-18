@@ -34,6 +34,7 @@ use e.sync
 use e.thread
 use e.time
 use e.tz
+use e.text.unicode as unicode
 
 fn arg(args: []const js.Value, i: usize) -> js.Value {
     if i < args.len { ret args[i] }
@@ -1593,6 +1594,14 @@ fn tz_database(it: *js.Interp) -> (tz.Database, bool) {
     ret (db, true)
 }
 
+// __ccc(cp): the canonical combining class of a code point.
+fn ccc_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    if args.len == 0usize { ret (js.num_value(0.0f64), ok) }
+    let (n, ne) = js.to_number(it, args[0usize])
+    if ne != ok { ret (js.undefv(), ne) }
+    ret (js.num_value(f64(unicode.combining_class(u32(n)))), ok)
+}
+
 // __fnRealmGlobal(f): the global object of the realm a function belongs to (bound functions answer their target's).
 fn fn_realm_global_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     if args.len == 0usize || !js.is_object(args[0usize]) { ret (js.obj_value(it.global), ok) }
@@ -1661,6 +1670,7 @@ fn install_host(it: *js.Interp) {
     js.add_method(it, it.global, "__tzOffset", 2u32, tz_offset_native)
     js.add_method(it, it.global, "__tzLinks", 0u32, tz_links_native)
     js.add_method(it, it.global, "__fnRealmGlobal", 1u32, fn_realm_global_native)
+    js.add_method(it, it.global, "__ccc", 1u32, ccc_native)
 }
 
 // --- bootstrap
