@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
-base=Path("D:/Temp/l2/icons")
+import sys
+base=Path(sys.argv[1])  # a folder holding the Adwaita symbolic SVGs copied flat (WSL: /usr/share/icons/Adwaita/symbolic/*/NAME.svg)
 icons=[("edit_clear","actions/edit-clear-symbolic"),("edit_find","actions/edit-find-symbolic"),("view_reveal","actions/view-reveal-symbolic"),
 ("view_conceal","actions/view-conceal-symbolic"),("pan_down","ui/pan-down-symbolic"),("pan_start","ui/pan-start-symbolic"),("pan_end","ui/pan-end-symbolic"),
 ("list_add","actions/list-add-symbolic"),("list_remove","actions/list-remove-symbolic"),("object_select","actions/object-select-symbolic"),("value_increase","actions/value-increase-symbolic"),("value_decrease","actions/value-decrease-symbolic")]
@@ -16,5 +17,5 @@ out.append('// The icon `name` (a function above, as text) as a `size` px square
 out.append('fn icon(a: *mem.Arena, svg: str, color: paint.Color, size: f32) -> (widget.Node, err) {')
 out.append('    let (node, node_error) = gl.svg_mark(a, svg, color, size, size)'); out.append('    ret (node, node_error)')
 out.append('}')
-Path('lib/e/ui/adwicon_l2.e').write_text('\n'.join(out)+'\n',encoding='utf-8')
+(Path(__file__).resolve().parents[2] / 'lib/e/ui/adwicon_l2.e').write_text('\n'.join(out)+'\n',encoding='utf-8')
 print(len('\n'.join(out)))

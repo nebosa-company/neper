@@ -8594,7 +8594,7 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             column += 1usize
         }
         var row_style = control.sized_style(267.0, 28.0)
-        row_style.padding.left = style.Length { Px: 3.4 }
+        row_style.padding.left = style.Length { Px: 4.6 }
         rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[0usize..7usize])
         week += 1usize
     }
@@ -8604,7 +8604,7 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     body[1usize] = widget.box(0u64, rule, zero)
     var weekday_row = control.sized_style(267.0, 28.0)
     weekday_row.margin.top = style.Length { Px: 1.5 }
-    weekday_row.padding.left = style.Length { Px: 3.4 }
+    weekday_row.padding.left = style.Length { Px: 4.6 }
     body[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, weekday_row, names[0usize..7usize])
     body[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..6usize])
     var frame = control.sized_style(269.0, 236.0)

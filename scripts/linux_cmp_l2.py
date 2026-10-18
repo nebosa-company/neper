@@ -38,6 +38,9 @@ SHEETS = {
     "image_combo_box": dict(columns=2, box_w=270, cell_w=280, cell_h=44, cells=["dropdown-ellipsis", None, None, None, None]),
     "date_edit": dict(columns=3, cell_w=140, cell_h=44, cells=["date-button", None, None]),
     "date_edit_calendar": dict(columns=1, cell_w=281, cell_h=246, cells=["calendar"]),
+    "mask_edit": dict(columns=3, cell_w=210, cell_h=44, cells=["entry-mask", "entry-mask", "entry-mask-focus", "entry-mask-disabled", None, None]),
+    "memo": dict(columns=2, cell_w=230, cell_h=110, cells=["textview", "textview-focus", "textview-disabled", None]),
+    "token_edit": dict(columns=1, box_w=500, box_h=100, cell_w=510, cell_h=100, cells=["tokens", None, None, None, None]),
 }
 
 
@@ -86,7 +89,7 @@ def ink_mask(im):
         xs = [q[0] for q in comp]
         ys = [q[1] for q in comp]
         bw, bh = max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
-        if bw > 40 or bh > 24 or (len(comp) > 12 and (bw >= 8 * bh or bh >= 8 * bw)):
+        if bw > 120 or bh > 24 or (bw > 30 and len(comp) > 0.8 * bw * bh) or (len(comp) > 12 and (bw >= 8 * bh or bh >= 8 * bw)):
             continue  # a border, divider or edge, not a glyph
         if min(xs) < 3 or min(ys) < 3 or max(xs) >= w - 3 or max(ys) >= h - 3:
             continue  # a corner or an edge feature of the frame: never excluded
@@ -120,7 +123,7 @@ def run(name, scheme, png):
         ox, oy = origin(sh, i)
         # a sheet whose controls differ in width puts them at the left of a `box_w` wide box that the harness centres
         x0 = ox + (sh["cell_w"] - sh["box_w"]) // 2 if "box_w" in sh else ox + (sh["cell_w"] - w) // 2
-        y0 = oy + (sh["cell_h"] - h) // 2
+        y0 = oy + ((sh["cell_h"] - sh["box_h"]) // 2 if "box_h" in sh else (sh["cell_h"] - h) // 2)
         cut = ours.crop((x0, y0, x0 + w, y0 + h))
         rp, op = ref.load(), cut.load()
         mask = grow(ink_mask(ref) | ink_mask(cut), 2, (w, h))

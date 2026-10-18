@@ -11811,6 +11811,10 @@ fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, toke
         let (cup, cup_error) = cupertino_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width)
+        ret (gtk, gtk_error)
+    }
     if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
     if items_error != ok { ret (zero, TooLarge) }
@@ -20308,7 +20312,7 @@ fn linux_frame_over(a: *mem.Arena, t: *const Theme, width: f32, height: f32, fac
     // is always there, clear at rest, so the tree keeps its shape when the focus arrives.
     var outline = sized_style(width, height)
     if ringed { outline.border = style.Border { width: 2.0, color: ring } }
-    outline.radius = 5.85
+    outline.radius = 5.7
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize + over.len)
     if layers_error != ok { ret boxed }
     layers[0usize] = boxed
@@ -20416,7 +20420,13 @@ fn linux_search(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
 // A text view (GtkTextView in a framed scrolled window): square, the view colour in a 1 px frame, 8 px of margin round the
 // text, no focus ring. The frame colours are the measured #ddd (Light) and #454545 (Dark).
 fn linux_textview(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], options: FieldOptions) -> (widget.Node, err) {
-    let ink = style.color(t.tokens, .Text)
+    var ink = style.color(t.tokens, .Text)
+    var view = style.color(t.tokens, .Surface)
+    // Disabled, the view and its text are at half strength and the frame keeps its colour.
+    if !options.enabled {
+        ink = with_alpha(ink, ink.alpha * 0.5)
+        view = with_alpha(view, 0.5)
+    }
     let (editor, editor_error) = linux_editor(a, key, t, label, buffer, len, change, zero, options, false, ink, true, options.rows)
     if editor_error != ok { ret (zero, editor_error) }
     var frame = style.defaults()
@@ -20424,12 +20434,11 @@ fn linux_textview(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     var h = options.height
     if !(h > 0.0) { h = f32(options.rows) * 19.0 + 18.0 }
     frame.min_height = style.Length { Px: h }
-    frame.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    frame.background = paint.Brush { Solid: view }
     var edge = style.hex(0xDDDDDDu32)
     if t.tokens.palette == .Dark { edge = style.hex(0x454545u32) }
     frame.border = style.Border { width: 1.0, color: edge }
     frame.overflow = .Clip
-    if !options.enabled { frame.opacity = 0.5 }
     frame.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
     ret (widget.box(0u64, frame, widget_one_of(a, editor)), ok)
 }
@@ -20629,7 +20638,7 @@ fn linux_menu_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, 0.0, TooLarge) }
     layers[0usize] = face_button
-    layers[1usize] = linux_ring_layer(w, height, linux_ring_color(t, 0u32), state.focus_visible && enabled, 5.85, 5.85)
+    layers[1usize] = linux_ring_layer(w, height, linux_ring_color(t, 0u32), state.focus_visible && enabled, 5.7, 5.7)
     ret (widget.stack(0u64, sized_style(w, height), layers[0usize..2usize]), w, ok)
 }
 
@@ -20681,7 +20690,7 @@ fn linux_combo_entry(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = widget.positioned(0u64, options.width - 36.0, 0.0, style.defaults(), widget_one_of(a, opener))
-    layers[1usize] = linux_ring_layer(options.width - 35.0, 34.0, linux_ring_color(t, 0u32), focused, 5.85, 0.0)
+    layers[1usize] = linux_ring_layer(options.width - 35.0, 34.0, linux_ring_color(t, 0u32), focused, 5.7, 0.0)
     let (parts_in, parts_in_error) = mem.alloc[widget.Node](a, 1usize)
     if parts_in_error != ok { ret (zero, TooLarge) }
     parts_in[0usize] = value
@@ -20750,6 +20759,65 @@ fn linux_popover_style(t: *const Theme, menu_w: f32, rows: usize) -> style.Style
 }
 
 // ---- end combo boxes ----------------------------------------------------------------------------------------------------
+
+// ---- round 20, l2: the Linux look's token edit ----------------------------------------------------------------------------
+// GTK has no token entry; the capture is libadwaita's `pill` buttons in a row. Here each token is such a pill (the default button's face
+// and tints, bold text, 32 px sides, 44 high, full corners; a press removes it) and the typing field follows them as an entry, all
+// wrapping at `width` with 6 px between.
+fn linux_pill(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    var look = style.adwaita_resolve(t.tokens, .Tonal, state)
+    look.border_width = 0.0
+    look.border = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    look.radius = 22.0
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if word_error != ok { ret (zero, word_error) }
+    let (wide, wide_error) = linux_label_width(a, t, caption, label)
+    if wide_error != ok { ret (zero, wide_error) }
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+    let row = widget.aligned(0u64, .Start, .Center, sized_style(wide, 21.0), mem_one_node(a, held))
+    look.custom_padding = true
+    look.padding_start = 32.0
+    look.padding = 32.0
+    look.padding_y = 11.5
+    look.min_width = 0.0
+    look.min_height = 44.0
+    let (pill, pill_error) = pressable(a, key, t, 3u8, label, look, true, false, action, row)
+    ret (pill, pill_error)
+}
+
+fn linux_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < tokens.len {
+        let (pill, pill_error) = linux_pill(a, key + 1u64 + 2u64 * u64(i), t, tokens[i], &removes[i])
+        if pill_error != ok { ret (zero, pill_error) }
+        items[i] = pill
+        i += 1usize
+    }
+    var options = field_options()
+    options.width = 120.0
+    options.placeholder = label
+    let state = control_state(t, key, true, false)
+    let (value, value_error) = linux_value(a, key, t, label, buffer, len, typed, add, options, false, style.color(t.tokens, .Text), false, 1u32)
+    if value_error != ok { ret (zero, value_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = value
+    items[tokens.len] = linux_frame(a, t, 120.0, 34.0, linux_entry_face(t, 0u32), linux_ring_color(t, 0u32), state.focused, true, 9.0, 9.0, parts[0usize..1usize])
+    var flow_style = style.defaults()
+    flow_style.width = style.Length { Px: width }
+    let flow = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 6.0, cross_gap: 6.0 }, flow_style, items[0usize..tokens.len + 1usize])
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting(a, key, t, label, flow, none, key + 62u64, key + 63u64, suggestions, active, open, picks, activate, dismiss)
+    ret (made, made_error)
+}
+// ---- end token edit ---------------------------------------------------------------------------------------------------------
 
 // ---- end round 20, l2 -----------------------------------------------------------------------------------------
 
