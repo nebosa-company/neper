@@ -960,11 +960,16 @@ fn paint_inline_decor(p: *Painter, ob: u32, fr: layout.Frag, cx: f64, cy: f64) {
 
 // A text fragment of a line that ends with an ellipsis (text-overflow or a clamped line): the text is cut at a character where
 // the ellipsis still fits in the box's content width, the ellipsis follows it, later fragments are dropped.
-fn paint_ellipsized(p: *Painter, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64) {
-    let ts = layout.st(p.l, p.l.boxes.items[usize(fr.box)].style)
+fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64) {
+    // The ellipsis is set in the font of the block container, not of the text it replaces.
+    let ts = layout.st(p.l, bb.style)
     let env = p.env
     let content_w = bb.w - bb.border[1usize] - bb.border[3usize] - bb.padding[1usize] - bb.padding[3usize]
-    let dots = "\xe2\x80\xa6"
+    var dots: str = "\xe2\x80\xa6"
+    let (custom_dots, has_custom) = geom.extra_of(ts, "x-text-overflow-string")
+    if has_custom { dots = custom_dots }
+    // Its baseline is the line's, whatever the font of the text it replaces.
+    let dots_y = cy + ln.baseline - font_metrics_of(p, ts).ascent
     let dl = env.text(env.ctx, ts, dots)
     var ew = 0.0f64
     if mem.address_of(dl) != 0usize { ew = p.l.measure.width(p.l.measure.ctx, ts, dots) }
@@ -978,7 +983,7 @@ fn paint_ellipsized(p: *Painter, bb: *const layout.Box, ln: layout.Line, fr: lay
     if !is_last { ret }
     if fr.x + fr.w + ew <= content_w + 0.01f64 {
         paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
-        paint_text_run(p, fr.box, dots, cx + fr.x + fr.w, cy + fr.y, ew)
+        paint_text_run(p, owner, dots, cx + fr.x + fr.w, dots_y, ew)
         ret
     }
     // Cut at the longest prefix that leaves room.
@@ -989,14 +994,14 @@ fn paint_ellipsized(p: *Painter, bb: *const layout.Box, ln: layout.Line, fr: lay
         cut -= 1usize
         while cut > 0usize && (fr.text[cut] & 192u8) == 128u8 { cut -= 1usize }
         let pre = fr.text[0usize..cut]
-        let pl = env.text(env.ctx, ts, pre)
+        let pl = env.text(env.ctx, layout.st(p.l, p.l.boxes.items[usize(fr.box)].style), pre)
         if mem.address_of(pl) != 0usize && f64(pl.bounds.width) <= width_left + 0.01f64 {
             paint_text_run(p, fr.box, pre, cx + fr.x, cy + fr.y, f64(pl.bounds.width))
-            paint_text_run(p, fr.box, dots, cx + fr.x + f64(pl.bounds.width), cy + fr.y, ew)
+            paint_text_run(p, owner, dots, cx + fr.x + f64(pl.bounds.width), dots_y, ew)
             ret
         }
     }
-    paint_text_run(p, fr.box, dots, cx + fr.x, cy + fr.y, ew)
+    paint_text_run(p, owner, dots, cx + fr.x, dots_y, ew)
 }
 
 // The lines of block container `b`, whose border box is at (ax, ay).
@@ -1023,7 +1028,7 @@ fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64) {
             fi += 1usize
             if fr.kind == .Text {
                 if ln.overflow_ellipsis {
-                    paint_ellipsized(p, bb, ln, fr, cx, cy)
+                    paint_ellipsized(p, b, bb, ln, fr, cx, cy)
                 } else {
                     paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
                 }
@@ -1170,6 +1175,48 @@ fn push_overflow_clip(p: *Painter, b: u32, ax: f64, ay: f64) -> bool {
         var cw = bb.w - bb.border[1usize] - bb.border[3usize]
         var cy = ay + bb.border[0usize]
         var ch = bb.h - bb.border[0usize] - bb.border[2usize]
+        // `overflow: clip` boxes may extend the clip by `overflow-clip-margin` from a chosen visual box.
+        if s.overflow_x == .Clip || s.overflow_y == .Clip {
+            let (ocm, has_ocm) = geom.extra_of(s, "overflow-clip-margin")
+            if has_ocm {
+                var m = 0.0f64
+                var inset_kind = 1u8
+                let toks = cv.split_top_level_spaces(p.a, cv.lower(p.a, cv.trim_ws(ocm)))
+                let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
+                var ti = 0usize
+                while ti < toks.len {
+                    if str.eq(toks[ti], "content-box") { inset_kind = 2u8 } else if str.eq(toks[ti], "border-box") { inset_kind = 0u8 } else if str.eq(toks[ti], "padding-box") { inset_kind = 1u8 } else {
+                        let (len, good) = style.parse_len(&ctx, toks[ti], s.font_size, 0u32)
+                        if good && len.kind == .Px { m = len.px }
+                    }
+                    ti += 1usize
+                }
+                var il = 0.0f64
+                var it = 0.0f64
+                var ir = 0.0f64
+                var ib = 0.0f64
+                if inset_kind >= 1u8 {
+                    il = bb.border[3usize]
+                    it = bb.border[0usize]
+                    ir = bb.border[1usize]
+                    ib = bb.border[2usize]
+                }
+                if inset_kind == 2u8 {
+                    il += bb.padding[3usize]
+                    it += bb.padding[0usize]
+                    ir += bb.padding[1usize]
+                    ib += bb.padding[2usize]
+                }
+                if s.overflow_x == .Clip {
+                    cx = ax + il - m
+                    cw = bb.w - il - ir + 2.0f64 * m
+                }
+                if s.overflow_y == .Clip {
+                    cy = ay + it - m
+                    ch = bb.h - it - ib + 2.0f64 * m
+                }
+            }
+        }
         if s.overflow_x == .Visible {
             cx = -1000000.0f64
             cw = 2000000.0f64

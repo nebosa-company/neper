@@ -705,7 +705,16 @@ fn apply_text(ap: *Ap, prop: str, v: str) -> bool {
     }
     if str.eq(prop, "text-overflow") {
         let parts = cv.split_top_level_spaces(ap.a, low)
-        if parts.len > 0usize { s.text_overflow = kw[TextOverflow](parts[0usize], ",clip,ellipsis,", s.text_overflow) }
+        let raw_parts = cv.split_top_level_spaces(ap.a, cv.trim_ws(v))
+        drop_extra(ap, "x-text-overflow-string")
+        if raw_parts.len > 0usize && raw_parts[0usize].len >= 2usize && (raw_parts[0usize][0usize] == 34u8 || raw_parts[0usize][0usize] == 39u8) {
+            // A string replaces the ellipsis character.
+            let q = raw_parts[0usize]
+            s.text_overflow = .Ellipsis
+            put_extra(ap, "x-text-overflow-string", q[1usize..q.len - 1usize])
+        } else if parts.len > 0usize {
+            s.text_overflow = kw[TextOverflow](parts[0usize], ",clip,ellipsis,", s.text_overflow)
+        }
         ret true
     }
     if str.eq(prop, "direction") {

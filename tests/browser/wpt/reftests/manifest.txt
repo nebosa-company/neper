@@ -170,3 +170,5 @@ named-colors-extended-001.html | named-colors-extended-001-ref.html | match
 clip-rect-001.html | clip-rect-001-ref.html | match
 line-clamp-exact-lines-001.html | line-clamp-exact-lines-001-ref.html | match
 margin-trim-block-001.html | margin-trim-block-001-ref.html | match
+margin-trim-flex-grid-001.html | margin-trim-flex-grid-001-ref.html | match
+clipmargin-001.html | clipmargin-001-ref.html | match
