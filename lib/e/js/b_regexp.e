@@ -77,6 +77,28 @@ fn from_units(it: *js.Interp, units: []const u16, from: usize, to: usize) -> str
     ret str.done(&out)
 }
 
+// Groups that share a name (in different alternatives) make one property: the value of whichever took part.
+fn first_of_name(names: []const str, k: usize) -> bool {
+    var i = 0usize
+    while i < k {
+        if str.eq(names[i], names[k]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn pick_named(names: []const str, k: usize, items: []js.Value, off: usize) -> js.Value {
+    var i = 0usize
+    while i < names.len {
+        if str.eq(names[i], names[k]) {
+            let v = items[i + off]
+            if !js.is_undefined(v) { ret v }
+        }
+        i += 1usize
+    }
+    ret js.undefv()
+}
+
 fn escape_source(it: *js.Interp, src: str) -> str {
     if src.len == 0usize { ret "(?:)" }
     let (b, be) = str.builder(it.a, src.len * 2usize + 4usize)
@@ -290,8 +312,8 @@ fn builtin_exec(it: *js.Interp, r: *js.Obj, s: str) -> (js.Value, err) {
         let go = js.new_obj(it, js.C_OBJECT, js.null_obj())
         var k = 0usize
         while k < c.re.names.len {
-            if c.re.names[k].len > 0usize {
-                let gv = arr.elems.items[k + 1usize]
+            if c.re.names[k].len > 0usize && first_of_name(c.re.names, k) {
+                let gv = pick_named(c.re.names, k, arr.elems.items, 1usize)
                 let (done, de) = js.define_own(it, go, js.key_of(c.re.names[k]), js.data_desc(gv, js.P_DEFAULT))
                 if de != ok { ret (js.undefv(), de) }
             }
@@ -319,8 +341,8 @@ fn builtin_exec(it: *js.Interp, r: *js.Obj, s: str) -> (js.Value, err) {
             let igo = js.new_obj(it, js.C_OBJECT, js.null_obj())
             var k2 = 0usize
             while k2 < c.re.names.len {
-                if c.re.names[k2].len > 0usize {
-                    let iv = ind.elems.items[k2 + 1usize]
+                if c.re.names[k2].len > 0usize && first_of_name(c.re.names, k2) {
+                    let iv = pick_named(c.re.names, k2, ind.elems.items, 1usize)
                     let (done2, de2) = js.define_own(it, igo, js.key_of(c.re.names[k2]), js.data_desc(iv, js.P_DEFAULT))
                     if de2 != ok { ret (js.undefv(), de2) }
                 }

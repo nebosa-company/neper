@@ -30,6 +30,7 @@ const R_NWORDB: u8 = 11u8
 const R_BACKREF: u8 = 12u8
 const R_LOOK: u8 = 13u8
 const R_NAMEDREF: u8 = 14u8
+const R_BACKREF_MULTI: u8 = 15u8
 
 // `mods`: bit 0 set when a modifier group `(?ims-ims:...)` governs the node, then bit 1 ignore-case, bit 2 multiline, bit 3 dot-all.
 type Node = struct { kind: u8, a: u32, b: u32, c: u32, d: u32, greedy: bool, neg: bool, back: bool, mods: u8 }
@@ -48,7 +49,7 @@ type Regex = struct {
 type Parse = struct {
     a: *mem.Arena, src: []const u16, i: usize, nodes: list.List[Node], kids: list.List[u32], ranges: list.List[Range],
     classes: list.List[Class], names: list.List[str], refs: list.List[str], groups: u32, unicode: bool, named: bool, message: str, ignore_case: bool,
-    total_groups: u32, multiline: bool, dot_all: bool, mods: u8, sets: bool
+    total_groups: u32, multiline: bool, dot_all: bool, mods: u8, sets: bool, path: list.List[u32], gpaths: list.List[str], dj: u32
 }
 
 error SyntaxErr
@@ -1190,13 +1191,62 @@ fn commit(p: *Parse, ids: *const list.List[u32]) -> (u32, err) {
     ret (first, ok)
 }
 
+// The current alternative path as bytes (four per number), recorded for each capture group.
+fn path_str(p: *Parse) -> str {
+    let (b, be) = str.builder(p.a, p.path.len * 4usize + 4usize)
+    if be != ok { ret "" }
+    var out = b
+    var i = 0usize
+    while i < p.path.len {
+        let x = p.path.items[i]
+        let b1 = str.push_byte(&out, u8(x >> 24u32))
+        let b2 = str.push_byte(&out, u8((x >> 16u32) & 255u32))
+        let b3 = str.push_byte(&out, u8((x >> 8u32) & 255u32))
+        let b4 = str.push_byte(&out, u8(x & 255u32))
+        i += 1usize
+    }
+    ret str.done(&out)
+}
+
+// Two groups may share a name only when they sit in different alternatives of one disjunction.
+fn paths_exclusive(a: str, b: str) -> bool {
+    var i = 0usize
+    while i + 8usize <= a.len && i + 8usize <= b.len {
+        var same = true
+        var k = 0usize
+        while k < 8usize {
+            if a[i + k] != b[i + k] { same = false }
+            k += 1usize
+        }
+        if same {
+            i += 8usize
+            continue
+        }
+        var same_dj = true
+        var k2 = 0usize
+        while k2 < 4usize {
+            if a[i + k2] != b[i + k2] { same_dj = false }
+            k2 += 1usize
+        }
+        ret same_dj
+    }
+    ret false
+}
+
 fn parse_disjunction(p: *Parse) -> (u32, err) {
     let (l0, le) = list.init[u32](p.a, 4usize)
     var alts = l0
     if le != ok { ret (NONE, le) }
+    p.dj += 1u32
+    let dj_id = p.dj
+    var alt_no = 0u32
     while true {
+        try list.push[u32](&p.path, dj_id)
+        try list.push[u32](&p.path, alt_no)
         let alt = try parse_alternative(p)
+        p.path.len -= 2usize
         try list.push[u32](&alts, alt)
+        alt_no += 1u32
         if !eat(p, 124u8) { break }
     }
     if alts.len == 1usize { ret (alts.items[0usize], ok) }
@@ -1366,12 +1416,14 @@ fn parse_term(p: *Parse) -> (u32, err) {
                 p.groups += 1u32
                 let gi = p.groups
                 // Duplicate names are a syntax error.
+                let here = path_str(p)
                 var d = 0usize
                 while d < p.names.len {
-                    if str.eq(p.names.items[d], name) { ret (NONE, fail(p, "Duplicate capture group name")) }
+                    if str.eq(p.names.items[d], name) && !paths_exclusive(p.gpaths.items[d], here) { ret (NONE, fail(p, "Duplicate capture group name")) }
                     d += 1usize
                 }
                 try list.push[str](&p.names, name)
+                try list.push[str](&p.gpaths, here)
                 let body4 = try parse_disjunction(p)
                 if !eat(p, 41u8) { ret (NONE, fail(p, "Unterminated group")) }
                 let (gid2, gme2) = mk(p, R_GROUP)
@@ -1386,6 +1438,7 @@ fn parse_term(p: *Parse) -> (u32, err) {
             p.groups += 1u32
             let gi2 = p.groups
             try list.push[str](&p.names, "")
+            try list.push[str](&p.gpaths, "")
             let body5 = try parse_disjunction(p)
             if !eat(p, 41u8) { ret (NONE, fail(p, "Unterminated group")) }
             let (gid3, gme3) = mk(p, R_GROUP)
@@ -1677,6 +1730,11 @@ fn compile(a: *mem.Arena, pattern: []const u16, flags: str) -> (Regex, str, err)
     p.names = nml
     let (rfl, rfle) = list.init[str](a, 2usize)
     p.refs = rfl
+    let (pal, pale) = list.init[u32](a, 8usize)
+    p.path = pal
+    let (gpl, gple) = list.init[str](a, 4usize)
+    p.gpaths = gpl
+    p.dj = 0u32
     prescan(&p)
     let (r0, e0) = parse_top(&p)
     if e0 != ok { ret (re, p.message, e0) }
@@ -1686,20 +1744,36 @@ fn compile(a: *mem.Arena, pattern: []const u16, flags: str) -> (Regex, str, err)
     while k < p.nodes.len {
         if p.nodes.items[k].kind == R_NAMEDREF {
             let name = p.refs.items[usize(p.nodes.items[k].a)]
-            var found = false
+            var found = 0u32
             var g = 0usize
             var gi = 0u32
             // Named groups keep their names at their group index - 1 in the first `groups` entries.
             while g < usize(p.groups) {
                 if str.eq(p.names.items[g], name) {
-                    found = true
+                    found += 1u32
                     gi = u32(g) + 1u32
                 }
                 g += 1usize
             }
-            if !found { ret (re, "Invalid named capture referenced", SyntaxErr) }
-            p.nodes.items[k].kind = R_BACKREF
-            p.nodes.items[k].a = gi
+            if found == 0u32 { ret (re, "Invalid named capture referenced", SyntaxErr) }
+            if found == 1u32 {
+                p.nodes.items[k].kind = R_BACKREF
+                p.nodes.items[k].a = gi
+            } else {
+                // Several groups share the name (different alternatives): the one that took part is the reference.
+                let first_kid = u32(p.kids.len)
+                var g2 = 0usize
+                while g2 < usize(p.groups) {
+                    if str.eq(p.names.items[g2], name) {
+                        let pe = list.push[u32](&p.kids, u32(g2) + 1u32)
+                        if pe != ok { ret (re, "out of memory", SyntaxErr) }
+                    }
+                    g2 += 1usize
+                }
+                p.nodes.items[k].kind = R_BACKREF_MULTI
+                p.nodes.items[k].a = first_kid
+                p.nodes.items[k].b = found
+            }
         }
         k += 1usize
     }
@@ -1721,6 +1795,9 @@ fn parse_top(p: *Parse) -> (u32, err) {
     p.classes.len = 0usize
     p.names.len = 0usize
     p.refs.len = 0usize
+    p.path.len = 0usize
+    p.gpaths.len = 0usize
+    p.dj = 0u32
     p.groups = 0u32
     let r = try parse_disjunction(p)
     if p.i < p.src.len {
@@ -2137,8 +2214,21 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
         if at_boundary { ret call_cont(m, k, pos) }
         ret false
     }
-    if kind == R_BACKREF {
-        let gi = usize(n.a)
+    if kind == R_BACKREF || kind == R_BACKREF_MULTI {
+        var gi = usize(n.a)
+        if kind == R_BACKREF_MULTI {
+            gi = 0usize
+            var j = 0u32
+            while j < n.b {
+                let cand = usize(m.re.kids[usize(n.a + j)])
+                if m.caps[cand * 2usize] >= 0i64 && m.caps[cand * 2usize + 1usize] >= 0i64 {
+                    gi = cand
+                    break
+                }
+                j += 1u32
+            }
+            if gi == 0usize { ret call_cont(m, k, pos) }
+        }
         let s = m.caps[gi * 2usize]
         let e = m.caps[gi * 2usize + 1usize]
         if s < 0i64 || e < 0i64 { ret call_cont(m, k, pos) }
