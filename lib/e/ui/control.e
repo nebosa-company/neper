@@ -20164,7 +20164,9 @@ fn cupertino_search(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u
     grow.width = style.Length { Flex: 1.0 }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let (glass, glass_error) = cup_mark(a, 8u32, muted, muted, 1.8, 0.0, 15.0, 15.0)
+    // The glass is two strokes that overlap, so it is flattened on the field: a translucent ink would double up where they meet.
+    let glass_ink = style.mix(fill, style.cup_alpha(muted, 1.0), muted.alpha)
+    let (glass, glass_error) = cup_mark(a, 8u32, glass_ink, glass_ink, 1.8, 0.0, 15.0, 15.0)
     if glass_error != ok { ret (zero, glass_error) }
     parts[0usize] = glass
     parts[1usize] = widget.stack(0u64, grow, layers[0usize..at])
