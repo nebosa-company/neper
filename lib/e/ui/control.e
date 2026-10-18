@@ -19842,11 +19842,11 @@ fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     let hidden = widget.Slider { value: value, second: value, range: false, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: zero, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
-    layers[0usize] = widget.positioned(0u64, 8.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
-    layers[1usize] = widget.positioned(0u64, 8.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
-    layers[2usize] = widget.positioned(0u64, centre - 14.0, 0.0, style.defaults(), widget_one_of(a, thumb))
-    layers[3usize] = widget.slider(key, hidden, sized_style(width, 28.0))
-    var frame_style = sized_style(width, 28.0)
+    layers[0usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
+    layers[1usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
+    layers[2usize] = widget.positioned(0u64, 6.0 + centre - 14.0, 0.0, style.defaults(), widget_one_of(a, thumb))
+    layers[3usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), widget_one_of(a, widget.slider(key, hidden, sized_style(width, 28.0))))
+    var frame_style = sized_style(width + 12.0, 28.0)
     if !enabled { frame_style.opacity = 0.4 }
     let frame = widget.stack(0u64, frame_style, layers[0usize..4usize])
     var sem: widget.Semantics = zero
@@ -19860,10 +19860,8 @@ fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     sem.value = said[0usize..said_len]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
     if !enabled { sem.states = accessibility.STATE_DISABLED }
-    // The thumb overhangs the element by 6 at either end.
-    var margin = style.defaults()
-    margin.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
-    ret (widget.semantics(0u64, sem, margin, widget_one_of(a, frame)), ok)
+    // The frame is 6 wider each side than the slider element, so the thumb at either end is not clipped.
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, frame)), ok)
 }
 // ---- end the Cupertino look (block 2) ---------------------------------------------------------------
 
