@@ -2848,6 +2848,16 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
         kid = nxt
     }
     position_markers(l, b)
+    // `line-clamp` over the lines of the block children (the container's own inline content is clamped with its lines).
+    let clamp_n = line_clamp_count(bstyle(l, b))
+    if clamp_n > 0usize {
+        var ctr = Counter { n: clamp_n }
+        let cut = clamp_children(l, b, &ctr)
+        if cut >= 0.0f64 {
+            y = cut - oy0
+            acc = no_margin()
+        }
+    }
     // The last child's bottom margin collapses through when nothing separates it from the parent's.
     let s = bstyle(l, b)
     var base = cw
@@ -2857,6 +2867,67 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
         ret (y, no_margin())
     }
     ret (y, acc)
+}
+
+type Counter = struct { n: usize }
+
+// Empties a box and everything in it: it takes no room and paints nothing.
+fn clamp_hide(l: *Layout, b: u32) {
+    let bb = bx(l, b)
+    bb.h = 0.0f64
+    bb.line_count = 0u32
+    var kid = bb.first
+    while kid != NONE {
+        clamp_hide(l, kid)
+        kid = l.boxes.items[usize(kid)].next
+    }
+}
+
+// Keeps the first `ctr.n` more lines under box `b`, in document order, and hides the rest. Returns where the kept content
+// ends, relative to the top of `b`'s border box, or -1 when everything fit.
+fn clamp_walk(l: *Layout, b: u32, ctr: *Counter) -> f64 {
+    let bb = bx(l, b)
+    if bb.line_count > 0u32 {
+        let cnt = usize(bb.line_count)
+        if cnt < ctr.n {
+            ctr.n -= cnt
+            ret -1.0f64
+        }
+        let keep = ctr.n
+        let last = &l.lines.items[usize(bb.line_first) + keep - 1usize]
+        last.overflow_ellipsis = true
+        let end_y = bb.border[0usize] + bb.padding[0usize] + last.y + last.h
+        bb.line_count = u32(keep)
+        bb.h = end_y + bb.padding[2usize] + bb.border[2usize]
+        ctr.n = 0usize
+        ret end_y
+    }
+    ret clamp_children(l, b, ctr)
+}
+
+fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64 {
+    var cut = -1.0f64
+    var kid = bx(l, b).first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        let nxt = kb.next
+        if kb.inner == .Marker || kb.inner == .Text || kb.inline_level || is_out_of_flow(st(l, kb.style)) {
+            kid = nxt
+            continue
+        }
+        if cut >= 0.0f64 {
+            clamp_hide(l, kid)
+        } else {
+            let r = clamp_walk(l, kid, ctr)
+            if r >= 0.0f64 { cut = l.boxes.items[usize(kid)].y + r }
+        }
+        kid = nxt
+    }
+    if cut >= 0.0f64 {
+        let bb = bx(l, b)
+        bb.h = cut + bb.padding[2usize] + bb.border[2usize]
+    }
+    ret cut
 }
 
 // The outside marker of a list item sits left of its first line.

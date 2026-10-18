@@ -158,3 +158,4 @@ column-background-001.html | column-background-001-ref.html | match
 collapsed-table-no-padding-001.html | collapsed-table-no-padding-001-ref.html | match
 ch-unit-default-font-001.html | ch-unit-default-font-001-ref.html | match
 text-align-last-justify-001.html | text-align-last-justify-001-ref.html | match
+line-clamp-block-children-001.html | line-clamp-block-children-001-ref.html | match

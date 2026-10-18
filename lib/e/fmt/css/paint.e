@@ -962,7 +962,7 @@ fn paint_ellipsized(p: *Painter, bb: *const layout.Box, ln: layout.Line, fr: lay
     let dots = "\xe2\x80\xa6"
     let dl = env.text(env.ctx, ts, dots)
     var ew = 0.0f64
-    if mem.address_of(dl) != 0usize { ew = f64(dl.bounds.width) }
+    if mem.address_of(dl) != 0usize { ew = p.l.measure.width(p.l.measure.ctx, ts, dots) }
     // Fragments after the one that reaches the end are not drawn.
     let is_last = fr.x + fr.w >= ln.x + ln.w - 0.01f64
     if fr.x >= content_w - ew && !is_last { ret }
