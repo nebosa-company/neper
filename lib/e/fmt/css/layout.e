@@ -2595,6 +2595,8 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
     if has_ratio { ret false }
     if s.height.kind == .Px {
         let (hv, good) = resolve_len(s.height, -1.0f64)
+        // A percentage height may resolve to a real height against a definite container.
+        if s.height.pct != 0.0f64 { ret false }
         if !good || hv != 0.0f64 { if s.height.pct == 0.0f64 { ret false } }
         if s.height.pct == 0.0f64 && hv != 0.0f64 { ret false }
     }

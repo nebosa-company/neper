@@ -164,3 +164,4 @@ overflow-wrap-anywhere-min-content-001.html | overflow-wrap-anywhere-min-content
 text-transform-unicode-001.html | text-transform-unicode-001-ref.html | match
 body-writing-mode-propagation-001.html | body-writing-mode-propagation-001-ref.html | match
 text-align-last-block-in-inline-001.html | text-align-last-block-in-inline-001-ref.html | match
+percent-height-empty-block-001.html | percent-height-empty-block-001-ref.html | match
