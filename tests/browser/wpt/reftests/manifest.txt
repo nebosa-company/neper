@@ -154,3 +154,4 @@ abspos-inline-static-001.html | abspos-inline-static-001-ref.html | match
 caption-outside-table-box-001.html | caption-outside-table-box-001-ref.html | match
 fixed-table-min-width-001.html | fixed-table-min-width-001-ref.html | match
 row-background-spacing-001.html | row-background-spacing-001-ref.html | match
+column-background-001.html | column-background-001-ref.html | match

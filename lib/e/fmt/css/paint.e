@@ -676,9 +676,13 @@ fn paint_collapsed(p: *Painter, t: u32, x: f64, y: f64) {
 // Background, border and shadow of a box with its border box at (x, y).
 fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
     let bb = &p.l.boxes.items[usize(b)]
-    if bb.inner == .Text || bb.inner == .Marker || bb.inner == .Column || bb.inner == .ColumnGroup { ret }
+    if bb.inner == .Text || bb.inner == .Marker { ret }
     let s = layout.st(p.l, bb.style)
     if s.visibility != .Visible { ret }
+    if bb.inner == .Column || bb.inner == .ColumnGroup {
+        paint_column_background(p, b, s, x, y)
+        ret
+    }
     var dy = y
     var dh = bb.h
     // The captions sit outside the table box proper: its background and border stop short of them.
@@ -694,6 +698,81 @@ fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
         paint_background(p, b, s, x, dy, bb.w, dh)
     }
     if !bb.coll { paint_borders(p, s, x, dy, bb.w, dh) }
+}
+
+// The columns a column box covers, as (first, end) over the table's column indices; (0, 0) when it is not found.
+fn column_range(p: *Painter, t: u32, want: u32) -> (usize, usize) {
+    var idx = 0usize
+    var g = p.l.boxes.items[usize(t)].first
+    while g != layout.NONE {
+        let gb = &p.l.boxes.items[usize(g)]
+        if gb.inner == .Column {
+            let n = layout.span_attr(p.l, gb.node, "span")
+            if g == want { ret (idx, idx + n) }
+            idx += n
+        } else if gb.inner == .ColumnGroup {
+            let start = idx
+            var any = false
+            var c = gb.first
+            while c != layout.NONE {
+                let cb = &p.l.boxes.items[usize(c)]
+                if cb.inner == .Column {
+                    any = true
+                    let n = layout.span_attr(p.l, cb.node, "span")
+                    if c == want { ret (idx, idx + n) }
+                    idx += n
+                }
+                c = cb.next
+            }
+            if !any { idx += layout.span_attr(p.l, gb.node, "span") }
+            if g == want { ret (start, idx) }
+        }
+        g = gb.next
+    }
+    ret (0usize, 0usize)
+}
+
+// A column or column group paints its background under the cells of its columns, over the full height of the grid.
+fn paint_column_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64) {
+    var t = p.l.boxes.items[usize(b)].parent
+    while t != layout.NONE && p.l.boxes.items[usize(t)].inner != .Table { t = p.l.boxes.items[usize(t)].parent }
+    if t == layout.NONE || p.l.boxes.items[usize(t)].aux2 == 0u32 { ret }
+    let td = p.l.tables.items[usize(p.l.boxes.items[usize(t)].aux2 - 1u32)]
+    if td.collapsed { ret }
+    let (c0, c1) = column_range(p, t, b)
+    if c1 <= c0 { ret }
+    let (bx0, by0) = layout.abs_origin(p.l, b)
+    let shx = x - bx0
+    let shy = y - by0
+    var minx = 1000000000.0f64
+    var miny = 1000000000.0f64
+    var maxx = -1000000000.0f64
+    var maxy = -1000000000.0f64
+    var pass = 0usize
+    while pass < 2usize {
+        var ci = 0usize
+        while ci < td.cells.len {
+            let info = td.cells.items[ci]
+            ci += 1usize
+            let (cx, cy) = layout.abs_origin(p.l, info.box)
+            let cb = &p.l.boxes.items[usize(info.box)]
+            if pass == 0usize {
+                if info.col >= c0 && info.col + info.cs <= c1 {
+                    minx = minf(minx, cx)
+                    maxx = maxf(maxx, cx + cb.w)
+                }
+                miny = minf(miny, cy)
+                maxy = maxf(maxy, cy + cb.h)
+            } else if info.col < c1 && info.col + info.cs > c0 {
+                save(p)
+                emit(p, scene.Command { Clip: scene.Clip { Rect: grect(cx + shx, cy + shy, cb.w, cb.h) } })
+                paint_background(p, b, s, minx + shx, miny + shy, maxx - minx, maxy - miny)
+                restore(p)
+            }
+        }
+        if pass == 0usize && minx > maxx { ret }
+        pass += 1usize
+    }
 }
 
 // A row or row group in the separate borders model paints its background only under its cells, not under the spacing.
