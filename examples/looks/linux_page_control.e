@@ -41,7 +41,7 @@ fn notebook(a: *mem.Arena, t: *const control.Theme, vertical: bool, w: f32, h: f
     page.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
     let (said, said_error) = control.text(a, 0u64, "Advanced page", t, control.text_options())
     if said_error != ok { ret (zero, said_error) }
-    let page_node = widget.aligned(0u64, .Center, .Center, page, control.widget_one_of(a, said))
+    let page_node = widget.aligned(0u64, .Center, .Center, page, control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, control.if_else(vertical, 0.0, 2.0), 2.0, style.defaults(), control.widget_one_of(a, said))))
     layers[1usize] = widget.positioned(0u64, page_x, page_y, style.defaults(), control.widget_one_of(a, page_node))
     layers[2usize] = widget.positioned(0u64, 1.0, 1.0, style.defaults(), control.widget_one_of(a, header))
     ret (widget.stack(0u64, control.sized_style(w, h), layers[0usize..3usize]), ok)
@@ -52,11 +52,12 @@ fn tab_bar(a: *mem.Arena, t: *const control.Theme, picks: []const widget.Submit)
     let labels = [3]str{ "Tab one", "Tab two", "Tab three" }
     let lefts = [3]f32{ 6.0, 112.0, 245.0 }
     let widths = [3]f32{ 106.0, 133.0, 133.0 }
-    let (bar, bar_error) = control.linux_tab_bar(a, 2000u64, t, labels[0usize..3usize], 0usize, picks, lefts[0usize..3usize], widths[0usize..3usize], 36.0, 380.0)
+    let titles = [3]f32{ 17.0, 42.0, 35.0 }
+    let (bar, bar_error) = control.linux_tab_bar(a, 2000u64, t, labels[0usize..3usize], 0usize, picks, lefts[0usize..3usize], widths[0usize..3usize], titles[0usize..3usize], 37.2, 380.0)
     if bar_error != ok { ret (zero, bar_error) }
     let (said, said_error) = control.text(a, 0u64, "Tab one", t, control.text_options())
     if said_error != ok { ret (zero, said_error) }
-    let page = widget.aligned(0u64, .Center, .Center, control.sized_style(380.0, 60.0), control.widget_one_of(a, said))
+    let page = widget.aligned(0u64, .Center, .Center, control.sized_style(380.0, 60.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, 2.0, 2.0, style.defaults(), control.widget_one_of(a, said))))
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, layers_error) }
     layers[0usize] = bar
@@ -74,7 +75,7 @@ fn view_switcher(a: *mem.Arena, t: *const control.Theme, picks: []const widget.S
     if switcher_error != ok { ret (zero, switcher_error) }
     let (said, said_error) = control.text(a, 0u64, "A", t, control.text_options())
     if said_error != ok { ret (zero, said_error) }
-    let page = widget.aligned(0u64, .Center, .Center, control.sized_style(243.0, 25.0), control.widget_one_of(a, said))
+    let page = widget.aligned(0u64, .Center, .Center, control.sized_style(243.0, 25.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 4.0, 0.0, 0.0, style.defaults(), control.widget_one_of(a, said))))
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, layers_error) }
     layers[0usize] = switcher

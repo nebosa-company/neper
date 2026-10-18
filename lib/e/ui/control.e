@@ -9595,7 +9595,10 @@ fn linux_tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const s
         let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
         if wide_error != ok { ret (zero, wide_error) }
         let held = widget.padded(0u64, 0.0, 0.0, 0.0, 4.0, style.defaults(), mem_one_node(a, word))
-        let content = widget.aligned(0u64, .Center, .Center, sized_style(tab_w, tab_h), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        let inner_word = widget.aligned(0u64, .Center, .Center, sized_style(wide, 21.0), mem_one_node(a, held))
+        var content = widget.aligned(0u64, .Center, .Center, sized_style(tab_w, tab_h), mem_one_node(a, inner_word))
+        // a left tab's label sits one pixel left of the middle (GTK floors the centre)
+        if vertical && !chosen { content = widget.aligned(0u64, .Start, .Center, sized_style(tab_w, tab_h), mem_one_node(a, widget.padded(0u64, math.floor[f32]((tab_w - wide) * 0.5 + 0.5) - 1.0, 0.0, 0.0, 0.0, style.defaults(), mem_one_node(a, inner_word)))) }
         let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, enabled, chosen, 0u32, 0u32, 0u64, &picks[i], content)
         if tab_error != ok { ret (zero, tab_error) }
         layers[n] = widget.positioned(0u64, x, y, style.defaults(), mem_one_node(a, tab))
@@ -9665,9 +9668,10 @@ fn linux_tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const s
 // high 6 down, 6 px corners, the chosen one washed with the text colour at 10 % and holding a 24 px close button at its end,
 // the others plain with a 1 px separator (3 px off the ends) between each pair that neither chosen tab touches. AdwTabBox lays
 // the tabs out by its own expand rules, so `lefts` and `widths` say where each stands; `fade` (above 0) is the width of the fade
-// the bar's start edge puts over the first tab (the clipped edge of a scrolled strip).
-fn linux_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, lefts: []const f32, widths: []const f32, fade: f32, width: f32) -> (widget.Node, err) {
-    if picks.len != labels.len || lefts.len != labels.len || widths.len != labels.len { ret (zero, TooLarge) }
+// the bar's start edge puts over the first tab (the clipped edge of a scrolled strip). `titles` is each title's x from its tab's left (GTK's
+// AdwTab centres the title in fractional widths the caller's whole numbers do not carry).
+fn linux_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, lefts: []const f32, widths: []const f32, titles: []const f32, fade: f32, width: f32) -> (widget.Node, err) {
+    if picks.len != labels.len || lefts.len != labels.len || widths.len != labels.len || titles.len != labels.len { ret (zero, TooLarge) }
     let dark = t.tokens.palette == .Dark
     let ground = style.color(t.tokens, .SurfaceContainerHigh)
     var face = sized_style(width, 47.0)
@@ -9715,7 +9719,7 @@ fn linux_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []cons
         var room = widths[i] - 8.0
         if chosen { room -= 24.0 }
         let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
-        let title = widget.positioned(0u64, 2.0 + math.floor[f32]((room - wide) * 0.5 + 0.5), 6.5, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        let title = widget.positioned(0u64, titles[i], 6.5, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
         let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
         if parts_error != ok { ret (zero, TooLarge) }
         parts[0usize] = title
@@ -9801,7 +9805,7 @@ fn linux_view_switcher(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: 
         if parts_error != ok { ret (zero, TooLarge) }
         parts[0usize] = widget.positioned(0u64, first, 4.0, style.defaults(), mem_one_node(a, picture))
         let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
-        parts[1usize] = widget.positioned(0u64, first + 21.0, 1.5, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        parts[1usize] = widget.positioned(0u64, first + 22.0, 1.5, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
         let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, true, chosen, 0u32, 0u32, 0u64, &picks[i], widget.stack(0u64, sized_style(widths[i], 24.0), parts[0usize..2usize]))
         if tab_error != ok { ret (zero, tab_error) }
         layers[i] = widget.positioned(0u64, lefts[i], 0.0, style.defaults(), mem_one_node(a, tab))
@@ -21151,7 +21155,7 @@ fn linux_editor(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buf
     value_options.mono = options.mono
     // an entry's text takes Pango's whole pixel advances; the text view's does not (its lines match as they are)
     var hinted = Theme { tokens: t.tokens, fonts: t.fonts, language: t.language, runtime: t.runtime }
-    if !multiline { hinted.language = "kern" }
+    if !multiline { hinted.language = "pngo" }
     if !multiline && t.language.len == 4usize && t.language[0usize] == 116u8 && t.language[2usize] == 107u8 { hinted.language = "tnkn" }
     let (text_look, style_error) = text_style_faced(a, &hinted, value_options)
     if style_error != ok { ret (zero, style_error) }
@@ -21217,7 +21221,7 @@ fn linux_frame_over(a: *mem.Arena, t: *const Theme, width: f32, height: f32, fac
         at += 1usize
         k += 1usize
     }
-    layers[at] = linux_focus_layer(a, width, height, ring, ringed, 5.85, 5.85)
+    layers[at] = linux_focus_layer(a, width, height, ring, ringed, 6.0, 6.0)
     at += 1usize
     var whole = sized_style(width, height)
     if !enabled { whole.opacity = 0.5 }
@@ -21344,7 +21348,7 @@ fn linux_textview(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
     if t.tokens.palette == .Dark { edge = style.hex(0x454545u32) }
     frame.border = style.Border { width: 1.0, color: edge }
     frame.overflow = .Clip
-    frame.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 9.0 }, top: style.Length { Px: 9.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
     ret (widget.box(0u64, frame, widget_one_of(a, editor)), ok)
 }
 
@@ -21533,15 +21537,18 @@ fn linux_menu_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     // A GtkMenuButton (a date edit's) keeps its arrow 3 px from the label and 9 from the end.
     var gap: f32 = 6.0
     var rim: f32 = 10.0
+    var start: f32 = 10.0
     if tight {
-        gap = 3.0
+        // the label a pixel further left than a plain button's, the arrow where it was
+        start = 9.0
+        gap = 4.0
         rim = 9.0
     }
-    let natural = 10.0 + picture_w + wide + gap + 16.0 + rim
+    let natural = start + picture_w + wide + gap + 16.0 + rim
     var w = width
     if !(w > 0.0) { w = natural }
     var end_pad: f32 = rim
-    let label_w = max_zero(w - 10.0 - end_pad - picture_w - gap - 16.0)
+    let label_w = max_zero(w - start - end_pad - picture_w - gap - 16.0)
     let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
     let (arrow, arrow_error) = adwicon.icon(a, adwicon.pan_down(), look.foreground, 16.0)
     if arrow_error != ok { ret (zero, 0.0, arrow_error) }
@@ -21562,7 +21569,7 @@ fn linux_menu_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     used += 1usize
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), parts[0usize..used])
     look.custom_padding = true
-    look.padding_start = 10.0
+    look.padding_start = start
     look.padding = end_pad
     look.padding_y = max_zero((height - 21.0) * 0.5)
     look.min_width = w
@@ -21574,7 +21581,7 @@ fn linux_menu_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, 0.0, TooLarge) }
     layers[0usize] = face_button
-    layers[1usize] = linux_ring_layer(a, w, height, linux_ring_color(t, 0u32), state.focus_visible && enabled, 5.85, 5.85)
+    layers[1usize] = linux_ring_layer(a, w, height, linux_ring_color(t, 0u32), state.focus_visible && enabled, 6.0, 6.0)
     ret (widget.stack(0u64, sized_style(w, height), layers[0usize..2usize]), w, ok)
 }
 
@@ -21627,7 +21634,7 @@ fn linux_combo_entry(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     if layers_error != ok { ret (zero, TooLarge) }
     // the button (its divider) lies over the ring's end, as in GTK
     layers[1usize] = widget.positioned(0u64, options.width - 36.0, 0.0, style.defaults(), widget_one_of(a, opener))
-    layers[0usize] = linux_ring_layer(a, options.width - 35.0, 34.0, linux_ring_color(t, 0u32), focused, 5.85, 0.0)
+    layers[0usize] = linux_ring_layer(a, options.width - 35.0, 34.0, linux_ring_color(t, 0u32), focused, 6.0, 0.0)
     let (parts_in, parts_in_error) = mem.alloc[widget.Node](a, 1usize)
     if parts_in_error != ok { ret (zero, TooLarge) }
     parts_in[0usize] = value
@@ -21696,7 +21703,7 @@ fn linux_popover_style(t: *const Theme, menu_w: f32, rows: usize) -> style.Style
 }
 
 // ---- round 22, la: the Linux focus ring ----------------------------------------------------------------------------------------
-// GTK's ring is a 2 px band inside the widget whose outer corners measure 5.85 px and whose inner corners 4 px (the generic border draws 5.7 / 3.7),
+// GTK's ring is a 2 px band inside the widget whose outer corners measure 6 px and whose inner corners 4.1 px (round 24, fitted on the settled captures: the corner pixels now agree within 4 levels) (the generic border draws 5.7 / 3.7),
 // so the band is filled here as an outer path with an inner path of opposite winding. `left` and `right` are the outer radii of
 // the two ends (the inner ones are 1.85 less, a straight end stays straight).
 type LinuxFocus = struct { arena: *mem.Arena, color: paint.Color, on: bool, left: f32, right: f32 }
@@ -21766,8 +21773,8 @@ fn linux_focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
     if pb_error != ok { ret TooLarge }
     var builder = pb
     try linux_focus_trace(&builder, area, f.left, f.right, false)
-    var inner_left = f.left - 1.85
-    var inner_right = f.right - 1.85
+    var inner_left = f.left - 1.9
+    var inner_right = f.right - 1.9
     if inner_left < 0.0 { inner_left = 0.0 }
     if inner_right < 0.0 { inner_right = 0.0 }
     try linux_focus_trace(&builder, geometry.Rect { x: area.x + 2.0, y: area.y + 2.0, width: area.width - 4.0, height: area.height - 4.0 }, inner_left, inner_right, true)
@@ -22567,12 +22574,12 @@ fn linux_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         var edge = paint.rgba(0.0, 0.0, 0.0, 0.116)
         if dark { edge = paint.rgba(1.0, 1.0, 1.0, 0.15) }
         inner.border = style.Border { width: 1.0, color: edge }
-        inner.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 1.0 } }
+        inner.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
         var caption = text_options()
         caption.wrap = .None
         let (word, word_error) = colored_text(a, 0u64, label, t, caption, style.color(t.tokens, .Text))
         if word_error != ok { ret (zero, word_error) }
-        parts[0usize] = widget.padded(0u64, 3.0, 4.0, 0.0, 4.0, style.defaults(), mem_one_node(a, word))
+        parts[0usize] = widget.padded(0u64, 4.0, 4.0, 0.0, 4.0, style.defaults(), mem_one_node(a, word))
         count = 1usize
     }
     var i = 0usize
@@ -22640,7 +22647,7 @@ fn linux_button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = widget.box(0u64, face, zero)
-    layers[1usize] = widget.positioned(0u64, 7.0, 6.0, style.defaults(), mem_one_node(a, editor))
+    layers[1usize] = widget.positioned(0u64, 7.0, 7.0, style.defaults(), mem_one_node(a, editor))
     layers[2usize] = widget.positioned(0u64, w - 34.0, 0.0, style.defaults(), mem_one_node(a, widget.box(0u64, rule, zero)))
     layers[3usize] = widget.positioned(0u64, w - 33.0, 0.0, style.defaults(), mem_one_node(a, pick))
     var outer = sized_style(w, h)

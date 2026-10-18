@@ -2150,7 +2150,8 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
                     let right = floor_f(origin.x + sel.x + sel.width + 0.5) + 1.0
                     sel = geometry.Rect { x: left - origin.x, y: sel.y, width: right - left, height: sel.height }
                 }
-                try push_rect(b, sel, origin, ed.selection)
+                // the Linux look (GTK) lays the selection over the text, not under it (round 24)
+                if !scene.cff_text_on() { try push_rect(b, sel, origin, ed.selection) }
                 i += 1usize
             }
         }
@@ -2159,6 +2160,18 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
     var glyph_origin = origin
     if native_caret_face(ed.caret) { glyph_origin = geometry.Point { x: origin.x, y: origin.y - 1.0 } }
     try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+    if focused_here && scene.cff_text_on() {
+        let (lo, hi) = selection_of(e)
+        if lo < hi {
+            let (over, over_error) = layout.selection(a, &copies[0usize], lo, hi)
+            if over_error != ok { ret InvalidTree }
+            var o = 0usize
+            while o < over.len {
+                try push_rect(b, over[o], origin, ed.selection)
+                o += 1usize
+            }
+        }
+    }
     if focused_here && ed.marked.alpha > 0.0 {
         // The selected glyphs again in their own colour, clipped to the selection.
         let (lo, hi) = selection_of(e)

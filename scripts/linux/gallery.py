@@ -536,7 +536,7 @@ def main():
                     settle()
                     if flags != F.NORMAL:
                         apply_flags(wd, flags)
-                        settle(3)
+                        settle(20 if flags & F.FOCUSED else 3)  # the 200 ms outline transition must finish (a 3 tick capture is a thinner, blended ring)
                     if getattr(wd, "_open", False):
                         texs = {s: popover_texture(wd, s) for s in (1, 2)}
                     else:

@@ -136,6 +136,20 @@ fn shape_options(rtl: bool, language: str, size: f32) -> shape.Options {
         tabular_feature[0usize] = shape.Feature { tag: 1953396077u32, value: 1u32, start: 0usize, end: 16777216usize }
         o.features = tabular_feature[0usize..1usize]
     }
+    // "pnfr" (round 24): Pango's whole pixel advances like "pngo", and the scene keeps the run's origin as it is instead of snapping it to a whole
+    // pixel (GTK draws a few labels, such as a column header, a fraction of a pixel off the grid)
+    if language.len == 4usize && language[0usize] == 112u8 && language[1usize] == 110u8 && language[2usize] == 102u8 && language[3usize] == 114u8 {
+        o.script = 1818326126u32
+        o.ppem = 2147483648u32 | u32(size * 64.0 + 0.5)
+    }
+    // "tnpg" (round 24): the tabular figures on Pango's hinted whole pixel advances (a GtkCalendar's day numbers)
+    if language.len == 4usize && language[0usize] == 116u8 && language[1usize] == 110u8 && language[2usize] == 112u8 && language[3usize] == 103u8 {
+        o.script = 1818326126u32
+        o.language = ""
+        o.ppem = 2147483648u32 | u32(size * 64.0 + 0.5)
+        tabular_feature[0usize] = shape.Feature { tag: 1953396077u32, value: 1u32, start: 0usize, end: 16777216usize }
+        o.features = tabular_feature[0usize..1usize]
+    }
     // "tnkn": the tabular figures with whole pixel advances (a GtkSpinButton's text)
     if language.len == 4usize && language[0usize] == 116u8 && language[1usize] == 110u8 && language[2usize] == 107u8 && language[3usize] == 110u8 {
         o.script = 1818326126u32

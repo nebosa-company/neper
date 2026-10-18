@@ -701,7 +701,7 @@ fn copy_layout(a: *mem.Arena, source: *const layout.Layout) -> (*const layout.La
             let (glyphs, glyphs_error) = mem.alloc[shape.Glyph](a, run.run.glyphs.len)
             if glyphs_error != ok { ret (none, TooLarge) }
             mem.copy[shape.Glyph](glyphs, run.run.glyphs)
-            runs[ri] = layout.GlyphRun { run: shape.Run { font: run.run.font, direction: run.run.direction, script: run.run.script, language: "", glyphs: glyphs }, origin: run.origin, size: run.size }
+            runs[ri] = layout.GlyphRun { run: shape.Run { font: run.run.font, direction: run.run.direction, script: run.run.script, language: run.run.language, glyphs: glyphs }, origin: run.origin, size: run.size }
             ri += 1usize
         }
         lines[l] = layout.Line { runs: runs, bounds: line.bounds, baseline: line.baseline, start: line.start, end: line.end }
@@ -1895,9 +1895,16 @@ fn cff_run(s: *RendererState, f: *Flattener, font: *const FontEntry, text: DrawT
     if cff_text && plain {
         let size = run.size * t.m00
         let size26 = i64(math.floor[f32](size * 64.0 + 0.5))
-        // a half pixel goes down (GTK lays out on whole pixels, a centred box can land on .5)
+        // a half pixel goes down (GTK lays out on whole pixels, a centred box can land on .5); a run set in the pseudo-language "pnfr"
+        // (round 24) keeps its origin as laid out, the fraction of a pixel GTK leaves a few labels at
+        let lang = run.run.language
+        let off_grid = lang.len == 4usize && lang[0usize] == 112u8 && lang[1usize] == 110u8 && lang[2usize] == 102u8 && lang[3usize] == 114u8
         var pen = math.ceil[f32](at.x - 0.5)
-        let base = math.ceil[f32](at.y - 0.5)
+        var base = math.ceil[f32](at.y - 0.5)
+        if off_grid {
+            pen = at.x
+            base = at.y
+        }
         while g < run.run.glyphs.len {
             let glyph = run.run.glyphs[g]
             if cffhint.outline(s.cff_engine, font.cff, usize(glyph.id), size26, true, s.cff_out) {

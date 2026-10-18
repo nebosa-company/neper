@@ -130,21 +130,22 @@ fn linux_header_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     if subtitle.len > 0usize {
         var small = control.text_options()
         small.role = .BodySmall
+        small.size = 12.223
         small.wrap = .None
-        let (said, said_error) = control.colored_text(a, 0u64, subtitle, t, small, style.hexa(0x000000u32, 0.55))
+        let (said, said_error) = control.colored_text(a, 0u64, subtitle, t, small, style.hexa(0x000000u32, 0.44))
         if said_error != ok { ret (zero, said_error) }
         if dark {
-            let (pale, pale_error) = control.colored_text(a, 0u64, subtitle, t, small, style.hexa(0xFFFFFFu32, 0.55))
+            let (pale, pale_error) = control.colored_text(a, 0u64, subtitle, t, small, style.hexa(0xFFFFFFu32, 0.553))
             if pale_error != ok { ret (zero, pale_error) }
-            block[1usize] = pale
+            block[1usize] = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), control.mem_one_node(a, pale))
         } else {
-            block[1usize] = said
+            block[1usize] = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), control.mem_one_node(a, said))
         }
         block_n = 2usize
         block_h = 35.0
     }
-    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width, block_h), block[0usize..block_n])
-    layers[count] = widget.positioned(0u64, 0.0, (46.0 - block_h) * 0.5, style.defaults(), control.mem_one_node(a, column))
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 1.0 }, control.sized_style(width, block_h), block[0usize..block_n])
+    layers[count] = widget.positioned(0u64, 0.0, (46.0 - block_h) * 0.5 - 1.0, style.defaults(), control.mem_one_node(a, column))
     count += 1usize
     var left = style.defaults()
     left.height = style.Length { Px: 34.0 }
