@@ -1,3 +1,5 @@
 scheme,neper_control,name,png_1x,png_2x,w_1x,h_1x,note
 light,hint,tooltip-real,light/tooltip-real@1x.png,light/tooltip-real@2x.png,95,33,tooltip.background > box > label as GtkTooltipWindow builds it
 dark,hint,tooltip-real,dark/tooltip-real@1x.png,dark/tooltip-real@2x.png,95,33,tooltip.background > box > label as GtkTooltipWindow builds it
+light,menu_bar,menubar-selected,light/menubar-selected@1x.png,light/menubar-selected@2x.png,129,28,the second title (Edit) in the :selected state a hover or open menu gives
+dark,menu_bar,menubar-selected,dark/menubar-selected@1x.png,dark/menubar-selected@2x.png,129,28,the second title (Edit) in the :selected state a hover or open menu gives

@@ -55,6 +55,9 @@ sheet("scroll_bar", 2, 210, 170, [
 
 sheet("hint", 1, 210, 90, [("tooltip-real", [(10, 8, 84, 26)])])
 
+MENUBAR_INK = [(8, 5, 31, 23), (48, 5, 74, 23), (90, 5, 121, 23)]
+sheet("menu_bar", 2, 210, 60, [("menubar", MENUBAR_INK), ("menubar-selected", MENUBAR_INK)])
+
 
 def origin(sh, i):
     col, row = i % sh["columns"], i // sh["columns"]

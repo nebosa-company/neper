@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gi
 for n, v in (("Gtk", "4.0"), ("Adw", "1"), ("Gio", "2.0")):
     gi.require_version(n, v)
-from gi.repository import Gtk, Adw, GLib
+from gi.repository import Gtk, Adw, GLib, Gio
 import gallery as G
 
 ONLY = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -37,7 +37,28 @@ def tooltip_real():
     return t
 
 
-ROWS = [("hint", "tooltip-real", tooltip_real, F.NORMAL, "tooltip.background > box > label as GtkTooltipWindow builds it")]
+def kids(w):
+    c = w.get_first_child()
+    while c:
+        yield c
+        c = c.get_next_sibling()
+
+
+def menubar(selected=-1):
+    def b():
+        m = Gio.Menu()
+        for top in ("File", "Edit", "Help"):
+            sub = Gio.Menu()
+            sub.append("Item", "app.x")
+            m.append_submenu(top, sub)
+        bar = Gtk.PopoverMenuBar.new_from_model(m)
+        bar._select = selected
+        return bar
+    return b
+
+
+ROWS = [("hint", "tooltip-real", tooltip_real, F.NORMAL, "tooltip.background > box > label as GtkTooltipWindow builds it"),
+        ("menu_bar", "menubar-selected", menubar(1), F.NORMAL, "the second title (Edit) in the :selected state a hover or open menu gives")]
 
 
 def main():
@@ -61,6 +82,10 @@ def main():
             pad.append(wd)
             win.set_content(pad)
             G.settle()
+            if getattr(wd, "_select", -1) >= 0:
+                items = list(kids(wd))
+                items[wd._select].set_state_flags(F.SELECTED, False)
+                G.settle(3)
             texs = {s: G.to_texture(pad, s, None) for s in (1, 2)}
             for s, tex in texs.items():
                 tex.save_to_png(f"{OUT}/{scheme}/{name}@{s}x.png")

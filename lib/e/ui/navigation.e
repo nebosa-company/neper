@@ -1787,6 +1787,7 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         ret (flat, flat_error)
     }
     let cupertino = t.tokens.profile == .CupertinoLike
+    let linux = t.tokens.profile == .Linux
     var lead_count = 0usize
     if cupertino { lead_count = 1usize }
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len + 1usize)
@@ -1840,11 +1841,35 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
             caption.size = 13.0
             if i == 0usize { caption.weight = 700u32 }
         }
+        if linux {
+            // (worker l3) GtkPopoverMenuBar: `menubar > item` has 4 8 padding, 6 px corners and, selected (hovered or open), the
+            // text colour at 10 %; the title is 19 high Cantarell Regular, as wide as GTK's whole-pixel layout makes it.
+            tint = style.color(t.tokens, .Text)
+            look.background = style.hexa(0x000000u32, 0.0)
+            if t.tokens.palette == .Dark { look.background = style.hexa(0xFFFFFFu32, 0.0) }
+            if opened || state.hovered || state.pressed {
+                look.background = style.hexa(0x000000u32, 0.08)
+                if t.tokens.palette == .Dark { look.background = style.hexa(0xFFFFFFu32, 0.1) }
+            }
+            look.foreground = tint
+            look.radius = 6.0
+            look.padding = 8.0
+            look.padding_y = 4.0
+            look.min_height = 27.0
+            look.min_width = 0.0
+            caption.role = .Body
+        }
         let (label_node, label_error) = menu_title_label(a, t, menus[i].label, caption, tint, widget.menu_access_keys_visible(t.runtime))
         if label_error != ok { ret (zero, label_error) }
+        var shown = label_node
+        if linux {
+            let (wide, wide_error) = control.linux_label_width(a, t, caption, menus[i].label)
+            if wide_error != ok { ret (zero, wide_error) }
+            shown = widget.aligned(0u64, .Center, .Center, control.sized_style(wide, 19.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), control.mem_one_node(a, label_node))))
+        }
         var states = 0u32
         if opened { states = accessibility.STATE_EXPANDED }
-        let (head, head_error) = control.pressable_states(a, title_key, t, 3u8, menus[i].label, look, true, false, states, accessibility.ACTION_SHOW_MENU, title_key + 1u64, &toggles[i], label_node)
+        let (head, head_error) = control.pressable_states(a, title_key, t, 3u8, menus[i].label, look, true, false, states, accessibility.ACTION_SHOW_MENU, title_key + 1u64, &toggles[i], shown)
         if head_error != ok { ret (zero, head_error) }
         heads[2usize * i + lead_count] = head
         let (hung, hung_error) = bar_menu(a, title_key + 1u64, t, title_key, menus[i].label, menus[i].commands, opened, &toggles[i])
@@ -1862,6 +1887,29 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         bar.background = paint.Brush { Solid: style.hex(0xF6F6F6u32) }
         if t.tokens.palette == .Dark { bar.background = paint.Brush { Solid: style.hex(0x2A2A2Cu32) } }
         bar.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+    }
+    if linux {
+        // 28 high: the titles 27, then the `menubar` box-shadow line (the text colour at 12 % over the window, as one opaque row).
+        let (line_parts, line_error) = mem.alloc[widget.Node](a, 2usize)
+        if line_error != ok { ret (zero, TooLarge) }
+        var items = style.defaults()
+        items.width = style.Length { Percent: 100.0 }
+        items.height = style.Length { Px: 27.0 }
+        line_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, items, heads[0usize..2usize * menus.len])
+        var rule = style.defaults()
+        rule.width = style.Length { Percent: 100.0 }
+        rule.height = style.Length { Px: 1.0 }
+        rule.background = paint.Brush { Solid: control.linux_rule(t) }
+        line_parts[1usize] = widget.box(0u64, rule, zero)
+        bar.height = style.Length { Px: 28.0 }
+        bar.width = style.Length { Percent: 100.0 }
+        let (both, both_error) = mem.alloc[widget.Node](a, 1usize)
+        if both_error != ok { ret (zero, TooLarge) }
+        both[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, bar, line_parts[0usize..2usize])
+        var linux_sem: widget.Semantics = zero
+        linux_sem.role = accessibility.ROLE_MENU_BAR
+        linux_sem.label = label
+        ret (widget.semantics(key, linux_sem, style.defaults(), both[0usize..1usize]), ok)
     }
     let ends = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
