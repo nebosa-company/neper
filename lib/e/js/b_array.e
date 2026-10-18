@@ -11,8 +11,16 @@ fn arg(args: []const js.Value, i: usize) -> js.Value {
 }
 
 fn len_of(it: *js.Interp, o: *js.Obj) -> (f64, err) {
+    // A typed array has an internal length that its `length` property can not change.
+    if o.class == js.C_TYPEDARRAY { ret (f64(js.ta_length(o)), ok) }
     let (n, e) = js.length_of(it, o)
     ret (n, e)
+}
+
+// Whether index `key` of `o` is visited by the callback methods: a typed array has no holes (a missing element reads undefined).
+fn has_elem(it: *js.Interp, o: *js.Obj, key: js.Key) -> bool {
+    if o.class == js.C_TYPEDARRAY { ret true }
+    ret js.has_property(it, o, key)
 }
 
 // CreateDataPropertyOrThrow.
@@ -695,7 +703,7 @@ fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind
     while (!reverse && k < len) || (reverse && k >= 0.0f64) {
         try js.tick(it)
         let key = js.key_of(js.number_to_string(it.a, k))
-        let present = js.has_property(it, o, key)
+        let present = has_elem(it, o, key)
         if present || kind >= 5u8 {
             let (v, ve) = js.get_index(it, o, k)
             if ve != ok { ret (js.undefv(), ve) }
@@ -784,7 +792,7 @@ fn reduce_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, right
         have = true
     } else {
         while !have && ((!right && k < len) || (right && k >= 0.0f64)) {
-            if js.has_property(it, o, js.key_of(js.number_to_string(it.a, k))) {
+            if has_elem(it, o, js.key_of(js.number_to_string(it.a, k))) {
                 let (v, ve) = js.get_index(it, o, k)
                 if ve != ok { ret (js.undefv(), ve) }
                 acc = v
@@ -795,7 +803,7 @@ fn reduce_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, right
         if !have { ret (js.undefv(), js.throw_type(it, "Reduce of empty array with no initial value")) }
     }
     while (!right && k < len) || (right && k >= 0.0f64) {
-        if js.has_property(it, o, js.key_of(js.number_to_string(it.a, k))) {
+        if has_elem(it, o, js.key_of(js.number_to_string(it.a, k))) {
             let (v2, ve2) = js.get_index(it, o, k)
             if ve2 != ok { ret (js.undefv(), ve2) }
             let (r, re) = js.call_function(it, cb, js.undefv(), four_args(it, acc, v2, js.num_value(k), js.obj_value(o)))

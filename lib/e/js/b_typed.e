@@ -1072,8 +1072,26 @@ fn g_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.
 fn ta_to_locale_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let ge = guarded(it, this_val)
     if ge != ok { ret (js.undefv(), ge) }
-    let (r, e) = barr.array_join(it, this_val, js.zero_args())
-    ret (r, e)
+    let o = js.as_object(this_val)
+    let len = js.ta_length(o)
+    var out = ""
+    var k = 0usize
+    while k < len {
+        if k > 0usize { out = js.str_concat(it, out, ",") }
+        let (el, ee) = js.get_prop(it, o, js.key_of(js.number_to_string(it.a, f64(k))), this_val)
+        if ee != ok { ret (js.undefv(), ee) }
+        if !js.is_nullish(el) {
+            let (f, fe) = js.get_value(it, el, js.key_of("toLocaleString"))
+            if fe != ok { ret (js.undefv(), fe) }
+            let (rv, re) = js.call_function(it, f, el, js.zero_args())
+            if re != ok { ret (js.undefv(), re) }
+            let (rs, rse) = js.to_string(it, rv)
+            if rse != ok { ret (js.undefv(), rse) }
+            out = js.str_concat(it, out, rs)
+        }
+        k += 1usize
+    }
+    ret (js.str_value(out), ok)
 }
 
 fn ta_from(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
