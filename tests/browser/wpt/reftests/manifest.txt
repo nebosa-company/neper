@@ -174,3 +174,4 @@ margin-trim-flex-grid-001.html | margin-trim-flex-grid-001-ref.html | match
 clipmargin-001.html | clipmargin-001-ref.html | match
 margin-trim-collapsed-first-001.html | margin-trim-collapsed-first-001-ref.html | match
 run-in-basic-010.html | run-in-basic-010-ref.html | match
+run-in-whitespace-float-001.html | run-in-whitespace-float-001-ref.html | match

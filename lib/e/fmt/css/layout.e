@@ -601,11 +601,43 @@ fn gen_children(l: *Layout, node: u32, parent_box: u32) {
 
 // The block a run-in element runs into: its next sibling, when that is a plain block and not floated or positioned.
 fn run_in_target(l: *Layout, node: u32) -> u32 {
-    let nx = l.d.nodes[usize(node)].next_sibling
-    if nx == html.NONE { ret NONE }
-    if l.d.nodes[usize(nx)].kind != .Element { ret NONE }
-    let ns = &l.styles[usize(nx)]
-    if (ns.display == .Block || ns.display == .FlowRoot) && ns.floating == .None && ns.position != .Absolute && ns.position != .Fixed { ret nx }
+    var nx = l.d.nodes[usize(node)].next_sibling
+    while nx != html.NONE {
+        let nn = &l.d.nodes[usize(nx)]
+        if nn.kind == .Text {
+            if !is_ws_only(nn.value) { ret NONE }
+        } else if nn.kind == .Element {
+            let ns = &l.styles[usize(nx)]
+            if ns.display == .None || ns.floating != .None || ns.position == .Absolute || ns.position == .Fixed {
+                // skipped over: it does not stop the run-in
+            } else if (ns.display == .Block || ns.display == .FlowRoot) && ns.clear == .None {
+                ret nx
+            } else {
+                ret NONE
+            }
+        }
+        nx = nn.next_sibling
+    }
+    ret NONE
+}
+
+// The run-in element that runs into `node`, or NONE.
+fn run_in_before(l: *Layout, node: u32) -> u32 {
+    var pv = l.d.nodes[usize(node)].previous_sibling
+    while pv != html.NONE {
+        let pn = &l.d.nodes[usize(pv)]
+        if pn.kind == .Text {
+            if !is_ws_only(pn.value) { ret NONE }
+        } else if pn.kind == .Element {
+            let ps = &l.styles[usize(pv)]
+            if ps.display == .RunIn {
+                if run_in_target(l, pv) == node { ret pv }
+                ret NONE
+            }
+            if !(ps.display == .None || ps.floating != .None || ps.position == .Absolute || ps.position == .Fixed) { ret NONE }
+        }
+        pv = pn.previous_sibling
+    }
     ret NONE
 }
 
@@ -687,8 +719,8 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
         }
         append(l, b, m)
     }
-    let pv = n.previous_sibling
-    if pv != html.NONE && l.d.nodes[usize(pv)].kind == .Element && l.styles[usize(pv)].display == .RunIn && run_in_target(l, pv) == node { gen_run_in(l, pv, b) }
+    let rin = run_in_before(l, node)
+    if rin != NONE { gen_run_in(l, rin, b) }
     gen_pseudo(l, node, b, 0usize)
     gen_children(l, node, b)
     gen_pseudo(l, node, b, 1usize)
