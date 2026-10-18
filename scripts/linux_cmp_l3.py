@@ -42,6 +42,12 @@ sheet("progress_bar", 3, 210, 44, [
     ("spinner", [(0, 0, 31, 31)]),
 ])
 
+sheet("splitter", 2, 210, 90, [
+    "separator-h", "separator-v",
+    ("paned", [(36, 30, 64, 54), (133, 30, 170, 54)]),
+    ("paned-wide", [(36, 30, 64, 54), (133, 30, 170, 54)]),
+])
+
 
 def origin(sh, i):
     col, row = i % sh["columns"], i // sh["columns"]

@@ -1834,7 +1834,13 @@ fn divider(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis
 // end insets (56 or 72 for an inset divider, 16 each for a middle inset), the
 // label splitting it (and whether the label leads after a 16 line), and whether it
 // must be seen (`outline` in high contrast).
-type DividerOptions = struct { axis: ui_layout.Axis, length: f32, start: f32, end: f32, label: str, label_start: bool, strong: bool }
+type DividerOptions = struct { axis: ui_layout.Axis, length: f32, start: f32, end: f32, label: str, label_start: bool, strong: bool, thick: f32 }
+
+// libadwaita's `@borders` over the window, as the opaque colour the library paints (separators, the paned handle, scroll troughs).
+fn linux_rule(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hex_raw(0x454545u32) }
+    ret style.hex_raw(0xDDDDDDu32)
+}
 
 fn divider_options() -> DividerOptions {
     var out: DividerOptions = zero
@@ -1853,7 +1859,12 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
     var ink = style.color(t.tokens, .OutlineVariant)
     if options.strong { ink = style.color(t.tokens, .Outline) }
     let horizontal = options.axis == .Horizontal
-    let thick = style.Length { Px: t.tokens.sizes.divider }
+    var thick = style.Length { Px: t.tokens.sizes.divider }
+    // The Linux look (worker l3): libadwaita's GtkSeparator is a #dddddd (#454545 Dark) fill of its whole allocation; `thick` sets it.
+    if t.tokens.profile == .Linux {
+        ink = linux_rule(t)
+        if options.thick > 0.0 { thick = style.Length { Px: options.thick } }
+    }
     var span: style.Length = style.Length { Percent: 100.0 }
     if options.length > 0.0 { span = style.Length { Px: options.length } }
     var outer = style.defaults()
@@ -9919,6 +9930,9 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     let cupertino = t.tokens.profile == .CupertinoLike
     // macOS: the thick divider is 9 across with a 1 px separator line in it.
     if cupertino { hit = 9.0 }
+    // libadwaita's GtkPaned: a 1 px #dddddd handle between the panes (worker l3).
+    let linux = t.tokens.profile == .Linux
+    if linux { hit = 1.0 }
     let (handles, handles_error) = mem.alloc[Handle](a, 1usize)
     if handles_error != ok { ret (zero, TooLarge) }
     let (kept, has_kept) = sash_cell(t.runtime, key + 2u64, size)
@@ -9956,6 +9970,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     if !touch { reach = 8.0 }
     if cupertino { reach = 6.0 }
     if t.tokens.profile == .Windows { reach = 0.0 }
+    if linux { reach = 8.0 }
     let over = style.Length { Px: 0.0 - reach }
     let flat = style.Length { Px: 0.0 }
     if vertical {
@@ -10008,6 +10023,11 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
             sashes_line = style.color(t.tokens, .Primary)
             line_width = 2.0
         }
+    }
+    if linux {
+        sashes_line = linux_rule(t)
+        line_width = 1.0
+        grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
     }
     if bar {
         grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
