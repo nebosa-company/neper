@@ -1182,6 +1182,8 @@ fn lift_ink(t: *const ThemeTokens, ink: paint.Color) -> paint.Color {
     var ground = color(t, .SurfaceVariant)
     let selection = color(t, .Selection)
     if rel_luminance(selection) > rel_luminance(ground) { ground = selection }
+    // an ink darker than the ground is for a light fill (on-primary on the accent): lifting it would erase it
+    if rel_luminance(ink) < rel_luminance(ground) { ret ink }
     var share: f32 = 0.0
     var out = ink
     while contrast_ratio(out, ground) < 4.6 && share < 1.0 {
