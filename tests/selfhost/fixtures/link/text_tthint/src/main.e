@@ -106,6 +106,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if l.cur[0usize] != 134i64 || l.cur[2usize] != 64i64 || l.cur[5usize] != 576i64 { ret tthint.Trap }
     if glyph_sum(h, a, bytes, sub, "labelmoRS", true) != 15467703i64 { ret tthint.Trap }
     if glyph_sum(h, a, bytes, sub, "labelmoRS", false) != 15505486i64 { ret tthint.Trap }
-    if image_sum(h, a, bytes, sub, "Sample label") != 271667201i64 { ret tthint.Trap }
+    if image_sum(h, a, bytes, sub, "Sample label") != 271547074i64 { ret tthint.Trap }
     ret ok
 }

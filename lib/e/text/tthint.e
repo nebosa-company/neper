@@ -65,8 +65,10 @@ type Hinter = struct {
     ctA: i64, ctX: i64, ran: bool
 }
 // What `hint_glyph` answers: the points of the outline (x, y interleaved, 26.6, x relative to the glyph's left phantom point),
-// whether each is on the curve (bit 0 of `tags`), the last point of each contour and the glyph's advance in this mode.
-type Outline = struct { n: usize, cur: []i64, hinted: bool, tags: []i64, ends: []usize, nends: usize, pp1x: i64, adv: i64 }
+// whether each is on the curve (bit 0 of `tags`), the last point of each contour, the glyph's advance in this mode and the
+// scan conversion the size's `prep` asked for (`scan`: bit 0 exclude stubs, bit 1 no drop-out control, bit 2 smart rounding; 8 added
+// when the font never set a scan type).
+type Outline = struct { n: usize, cur: []i64, hinted: bool, tags: []i64, ends: []usize, nends: usize, pp1x: i64, adv: i64, scan: i64 }
 
 fn sgn1(x: i64) -> i64 {
     if x < 0i64 { ret -1i64 }

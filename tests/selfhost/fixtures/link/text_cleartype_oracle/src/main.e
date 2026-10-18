@@ -509,9 +509,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if str.eq(args[i], "--trace") && i + 1usize < args.len {
             trace_code = args[i + 1usize]
             i += 1usize
-        } else if str.eq(args[i], "--raster") && i + 1usize < args.len {
-            cleartype.set_raster(i64(trace_code_number(args[i + 1usize])))
-            i += 1usize
         } else if str.eq(args[i], "--iup") {
             ttglyph.set_cut_iup(true)
         } else if str.eq(args[i], "--cutiup") {

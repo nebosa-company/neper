@@ -510,6 +510,27 @@ fn composite_program(h: *tthint.Hinter, g0: usize, g1: usize, at: usize, last_fl
     ret (at + 2usize, at + 2usize + count)
 }
 
+// The scan conversion mode a size's SCANCTRL and SCANTYPE ask for, as the bits `Outline.scan` documents. Drop-out control is on when
+// SCANCTRL says so for this ppem (threshold in the low byte, 0x100 on up to the threshold, 0x800 off above it); a font that never
+// set either gets 4 + 8, the smart rounding the unhinted fonts show.
+fn scan_mode(ctrl: i64, kind: i64, ppem: i64) -> i64 {
+    if ctrl == 0i64 && kind == 0i64 { ret 12i64 }
+    let thr = ctrl & 255i64
+    var on = false
+    if thr == 255i64 {
+        on = true
+    } else if thr != 0i64 {
+        if (ctrl & 256i64) != 0i64 && ppem <= thr { on = true }
+        if (ctrl & 2048i64) != 0i64 && ppem > thr { on = false }
+    }
+    if !on { ret 2i64 }
+    if kind == 0i64 { ret 0i64 }
+    if kind == 1i64 { ret 1i64 }
+    if kind == 4i64 { ret 4i64 }
+    if kind == 5i64 { ret 5i64 }
+    ret 2i64
+}
+
 // The hinted outline of glyph `gid` at `ppem` pixels, in the mode. Its slices stay valid until the next call.
 fn hint_glyph(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, gid: u32, cleartype: bool) -> (tthint.Outline, err) {
     var out: tthint.Outline = zero
@@ -528,5 +549,6 @@ fn hint_glyph(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, gid: u32, cleartype: 
     out.nends = z.nends
     out.pp1x = loaded.pp1x
     out.adv = device_advance(h, false, ppem, usize(gid), loaded.adv)
+    out.scan = scan_mode(h.sizes[si].gs.scan_control, h.sizes[si].gs.scan_type, ppem)
     ret (out, ok)
 }
