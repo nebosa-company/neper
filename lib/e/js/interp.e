@@ -22,6 +22,7 @@ use e.mem
 use e.str
 use e.sync
 use e.thread
+use e.time
 
 error Throw
 error OutOfMemory
@@ -122,6 +123,14 @@ type Protos = struct {
     bigint: *Obj, arguments: *Obj, gen_function: *Obj, async_function: *Obj, async_generator: *Obj, async_gen_function: *Obj, map_iterator: *Obj, set_iterator: *Obj, weakmap: *Obj, weakset: *Obj, regexp_string_iterator: *Obj, array_buffer: *Obj, typed_array: *Obj, data_view: *Obj, aggregate_error: *Obj
 }
 
+// Shared by a main realm and the agent realms ($262.agent) it starts, each on its own thread.
+type Waiter = struct { used: bool, notified: bool, buf: *Obj, byte: usize, seq: u64 }
+type AgentHub = struct {
+    lock: sync.Mutex, cond: sync.Condition, waiters: [64]Waiter, wseq: u64,
+    live: u32, starting: u32, receivers: u32, pending: u32, shutdown: bool,
+    gen: u64, msg: Value, msg_num: f64, reports: [64]str, rhead: usize, rtail: usize
+}
+
 type Interp = struct {
     a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32,
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
@@ -129,7 +138,50 @@ type Interp = struct {
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
     sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
-    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp
+    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool
+}
+
+fn root_realm(it: *Interp) -> *Interp {
+    var r = it
+    while r.donor != null_interp() { r = r.donor }
+    ret r
+}
+
+fn hub_peek(it: *Interp) -> (*AgentHub, bool) {
+    let r = root_realm(it)
+    ret (r.hub, r.has_hub)
+}
+
+fn hub_of(it: *Interp) -> *AgentHub {
+    let r = root_realm(it)
+    if !r.has_hub {
+        let (cell, ce) = mem.alloc[AgentHub](r.a, 1usize)
+        if ce == ok {
+            var blank: AgentHub = zero
+            blank.lock = sync.mutex()
+            blank.cond = sync.condition()
+            blank.msg = undefv()
+            cell[0usize] = blank
+            r.hub = &cell[0usize]
+            r.has_hub = true
+        }
+    }
+    ret r.hub
+}
+
+// Ends every agent thread of this realm and waits for them: their arenas are carved from the realm's, which is about to be reused.
+fn agents_shutdown(it: *Interp) {
+    let (h, has) = hub_peek(it)
+    if !has { ret }
+    sync.mutex_lock(&h.lock)
+    h.shutdown = true
+    sync.condition_broadcast(&h.cond)
+    var tries = 0u32
+    while h.live > 0u32 && tries < 2000u32 {
+        let w = sync.condition_wait_for(&h.cond, &h.lock, time.millis(20i64))
+        tries += 1u32
+    }
+    sync.mutex_unlock(&h.lock)
 }
 
 fn null_interp() -> *Interp {

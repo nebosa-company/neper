@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 69230)
+    var b = try str.builder(a, 69257)
     try str.push(&b, "// Built-ins written in JavaScript, evaluated into every new realm (generated into prelude.e by scripts/gen_js_prelude.py).\n")
     try str.push(&b, "// They only use intrinsics captured up front, so page scripts cannot change how they behave.\n")
     try str.push(&b, "(function (global) {\n")
@@ -1432,7 +1432,8 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "  var lengthGetter = Object.getOwnPropertyDescriptor(TypedArrayProto, 'length').get;\n")
     try str.push(&b, "  var SAB = global.SharedArrayBuffer, atomicsLoad = Atomics.load, ToNumber = Number, isIntegerNumber = Number.isInteger;\n")
     try str.push(&b, "  var atomicsMethods = {\n")
-    try str.push(&b, "    pause(iterationNumber) {\n")
+    try str.push(&b, "    pause() {\n")
+    try str.push(&b, "      var iterationNumber = arguments[0];\n")
     try str.push(&b, "      if (iterationNumber !== undefined && !(typeof iterationNumber === 'number' && isIntegerNumber(iterationNumber))) throw new TypeErr('Atomics.pause: argument must be an integral number');\n")
     try str.push(&b, "    },\n")
     try str.push(&b, "    waitAsync(typedArray, index, value, timeout) {\n")

@@ -31,6 +31,8 @@ fn features_of(meta: str) -> str {
 }
 
 fn skipped_feature(full_meta: str) -> bool {
+    let (cb0, cant_block) = str.find(full_meta, "CanBlockIsFalse")
+    if cant_block { ret true }
     let meta = features_of(full_meta)
     let feats = "Intl|IsHTMLDDA|ShadowRealm|source-phase-imports|decorators|tail-call-optimization|regexp-duplicate-named-groups|canonical-tz|import-defer|"
     var start = 0usize
@@ -394,6 +396,7 @@ fn run_all(ctx: *Ctx) {
                         why = "expected an exception"
                     }
                 }
+                js.agents_shutdown(it)
             }
         }
         if pass {

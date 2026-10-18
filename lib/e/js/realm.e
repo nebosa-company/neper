@@ -27,6 +27,9 @@ use e.js.temporal as temporal
 use e.math
 use e.mem
 use e.str
+use e.sync
+use e.thread
+use e.time
 
 fn arg(args: []const js.Value, i: usize) -> js.Value {
     if i < args.len { ret args[i] }
@@ -1143,6 +1146,213 @@ fn host_create_realm(it: *js.Interp, this_val: js.Value, args: []const js.Value)
     ret (h, ok)
 }
 
+// --- $262.agent: script agents on their own threads, each a realm with its own arena (carved from the starting realm's)
+
+type AgentCtx = struct { arena: *mem.Arena, src: str, hub: *js.AgentHub, seen: u64 }
+
+fn agent_object(it: *js.Interp) -> *js.Obj {
+    let (h, he) = js.get_prop(it, it.global, js.key_of("$262"), js.obj_value(it.global))
+    if he == ok && js.is_object(h) {
+        let (ag, ae) = js.get_prop(it, js.as_object(h), js.key_of("agent"), h)
+        if ae == ok && js.is_object(ag) { ret js.as_object(ag) }
+    }
+    ret it.global
+}
+
+fn agent_main(c: *AgentCtx) {
+    let h = c.hub
+    let (it, re) = new_realm(c.arena)
+    if re != ok {
+        sync.mutex_lock(&h.lock)
+        h.starting -= 1u32
+        h.live -= 1u32
+        sync.condition_broadcast(&h.cond)
+        sync.mutex_unlock(&h.lock)
+        ret
+    }
+    it.hub = h
+    it.has_hub = true
+    it.quiet = true
+    it.step_limit = 400000000u64
+    let (v, e) = run(it, c.src)
+    if e == ok { let je = js.run_jobs(it) }
+    let ag = agent_object(it)
+    var seen = c.seen
+    sync.mutex_lock(&h.lock)
+    h.starting -= 1u32
+    sync.condition_broadcast(&h.cond)
+    while !h.shutdown {
+        let (cb, ce) = js.get_prop(it, ag, js.key_of("__cb"), js.obj_value(ag))
+        let (lf, le) = js.get_prop(it, ag, js.key_of("__left"), js.obj_value(ag))
+        if ce == ok && le == ok && js.to_boolean(lf) { break }
+        if ce == ok && js.is_callable(cb) && h.gen != seen {
+            seen = h.gen
+            let msg = h.msg
+            let num = h.msg_num
+            if h.pending > 0u32 { h.pending -= 1u32 }
+            sync.condition_broadcast(&h.cond)
+            sync.mutex_unlock(&h.lock)
+            let (r, cre) = js.call_function(it, cb, js.undefv(), js.two_args(it, msg, js.num_value(num)))
+            if cre == ok { let je2 = js.run_jobs(it) }
+            sync.mutex_lock(&h.lock)
+        } else {
+            let w = sync.condition_wait_for(&h.cond, &h.lock, time.millis(50i64))
+        }
+    }
+    h.live -= 1u32
+    sync.condition_broadcast(&h.cond)
+    sync.mutex_unlock(&h.lock)
+}
+
+fn agent_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (src, se) = js.to_string(it, arg(args, 0usize))
+    if se != ok { ret (js.undefv(), se) }
+    let h = js.hub_of(it)
+    let (buf, be) = mem.alloc[u8](it.a, 100663296usize)
+    let (ar, are) = mem.alloc[mem.Arena](it.a, 1usize)
+    let (cx, ce) = mem.alloc[AgentCtx](it.a, 1usize)
+    if be != ok || are != ok || ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory starting an agent")) }
+    ar[0usize] = mem.arena_from(buf)
+    sync.mutex_lock(&h.lock)
+    h.live += 1u32
+    h.starting += 1u32
+    cx[0usize] = AgentCtx { arena: &ar[0usize], src: src, hub: h, seen: h.gen }
+    sync.mutex_unlock(&h.lock)
+    let (th, te) = thread.spawn[AgentCtx](agent_main, &cx[0usize], 134217728usize)
+    if te != ok {
+        sync.mutex_lock(&h.lock)
+        h.live -= 1u32
+        h.starting -= 1u32
+        sync.mutex_unlock(&h.lock)
+        ret (js.undefv(), js.throw_range(it, "cannot start an agent thread"))
+    }
+    let de = thread.detach(th)
+    ret (js.undefv(), ok)
+}
+
+fn agent_broadcast(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = js.hub_of(it)
+    var num = 0.0f64
+    if args.len > 1usize {
+        let (n, ne) = js.to_number(it, args[1usize])
+        if ne != ok { ret (js.undefv(), ne) }
+        num = n
+    }
+    sync.mutex_lock(&h.lock)
+    var tries = 0u32
+    while h.starting > 0u32 && tries < 400u32 {
+        let w = sync.condition_wait_for(&h.cond, &h.lock, time.millis(50i64))
+        tries += 1u32
+    }
+    h.msg = arg(args, 0usize)
+    h.msg_num = num
+    h.gen += 1u64
+    h.pending = h.receivers
+    sync.condition_broadcast(&h.cond)
+    tries = 0u32
+    while h.pending > 0u32 && tries < 400u32 {
+        let w2 = sync.condition_wait_for(&h.cond, &h.lock, time.millis(50i64))
+        tries += 1u32
+    }
+    sync.mutex_unlock(&h.lock)
+    ret (js.undefv(), ok)
+}
+
+fn agent_get_report(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (h, has) = js.hub_peek(it)
+    if !has { ret (js.null_value(), ok) }
+    sync.mutex_lock(&h.lock)
+    if h.rhead == h.rtail {
+        sync.mutex_unlock(&h.lock)
+        ret (js.null_value(), ok)
+    }
+    let r = h.reports[h.rhead % 64usize]
+    h.rhead += 1usize
+    sync.mutex_unlock(&h.lock)
+    ret (js.str_value(r), ok)
+}
+
+fn agent_report(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (s, se) = js.to_string(it, arg(args, 0usize))
+    if se != ok { ret (js.undefv(), se) }
+    let (h, has) = js.hub_peek(it)
+    if !has { ret (js.undefv(), ok) }
+    sync.mutex_lock(&h.lock)
+    if h.rtail - h.rhead < 64usize {
+        h.reports[h.rtail % 64usize] = s
+        h.rtail += 1usize
+    }
+    sync.mutex_unlock(&h.lock)
+    ret (js.undefv(), ok)
+}
+
+fn agent_receive_broadcast(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (h, has) = js.hub_peek(it)
+    if !has || !js.is_object(this_val) { ret (js.undefv(), ok) }
+    let ag = js.as_object(this_val)
+    let (old, oe) = js.get_prop(it, ag, js.key_of("__cb"), this_val)
+    let e1 = js.define_data(it, ag, js.key_of("__cb"), arg(args, 0usize), js.P_HIDDEN)
+    if !(oe == ok && js.is_callable(old)) {
+        sync.mutex_lock(&h.lock)
+        h.receivers += 1u32
+        sync.mutex_unlock(&h.lock)
+    }
+    ret (js.undefv(), ok)
+}
+
+fn agent_leaving(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (h, has) = js.hub_peek(it)
+    if !has || !js.is_object(this_val) { ret (js.undefv(), ok) }
+    let ag = js.as_object(this_val)
+    let (lf, le) = js.get_prop(it, ag, js.key_of("__left"), this_val)
+    if le == ok && js.to_boolean(lf) { ret (js.undefv(), ok) }
+    let e1 = js.define_data(it, ag, js.key_of("__left"), js.bool_value(true), js.P_HIDDEN)
+    let (cb, ce) = js.get_prop(it, ag, js.key_of("__cb"), this_val)
+    if ce == ok && js.is_callable(cb) {
+        sync.mutex_lock(&h.lock)
+        if h.receivers > 0u32 { h.receivers -= 1u32 }
+        sync.mutex_unlock(&h.lock)
+    }
+    ret (js.undefv(), ok)
+}
+
+fn agent_sleep(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (n, ne) = js.to_number(it, arg(args, 0usize))
+    if ne != ok { ret (js.undefv(), ne) }
+    let (t0, t0e) = time.monotonic()
+    var m = sync.mutex()
+    var c = sync.condition()
+    sync.mutex_lock(&m)
+    while true {
+        let (t1, t1e) = time.monotonic()
+        let elapsed = f64(t1.nanos - t0.nanos) / 1000000.0f64
+        if elapsed >= n { break }
+        var chunk = 20.0f64
+        if n - elapsed < chunk { chunk = n - elapsed }
+        let w = sync.condition_wait_for(&c, &m, time.nanos(i64(chunk * 1000000.0f64) + 1i64))
+    }
+    sync.mutex_unlock(&m)
+    ret (js.undefv(), ok)
+}
+
+fn agent_monotonic_now(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (t, te) = time.monotonic()
+    ret (js.num_value(f64(t.nanos) / 1000000.0f64), ok)
+}
+
+fn install_agent(it: *js.Interp, host: *js.Obj) {
+    let ag = js.new_plain(it)
+    let e0 = js.define_data(it, host, js.key_of("agent"), js.obj_value(ag), js.P_HIDDEN)
+    js.add_method(it, ag, "start", 1u32, agent_start)
+    js.add_method(it, ag, "broadcast", 1u32, agent_broadcast)
+    js.add_method(it, ag, "getReport", 0u32, agent_get_report)
+    js.add_method(it, ag, "report", 1u32, agent_report)
+    js.add_method(it, ag, "receiveBroadcast", 1u32, agent_receive_broadcast)
+    js.add_method(it, ag, "leaving", 0u32, agent_leaving)
+    js.add_method(it, ag, "sleep", 1u32, agent_sleep)
+    js.add_method(it, ag, "monotonicNow", 0u32, agent_monotonic_now)
+}
+
 fn install_host(it: *js.Interp) {
     let h = js.new_plain(it)
     let e0 = js.define_data(it, it.global, js.key_of("$262"), js.obj_value(h), js.P_HIDDEN)
@@ -1151,6 +1361,7 @@ fn install_host(it: *js.Interp) {
     js.add_method(it, it.last, "gc", 0u32, host_gc)
     js.add_method(it, it.last, "createRealm", 0u32, host_create_realm)
     let e1 = js.define_data(it, it.last, js.key_of("global"), js.obj_value(it.global), js.P_HIDDEN)
+    install_agent(it, it.last)
 }
 
 // --- bootstrap

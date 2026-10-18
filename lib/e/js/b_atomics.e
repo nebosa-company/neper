@@ -5,6 +5,8 @@ use e.js.bigint as bigint
 use e.js.interp as js
 use e.mem
 use e.str
+use e.sync
+use e.time
 
 fn arg(args: []const js.Value, i: usize) -> js.Value {
     if i < args.len { ret args[i] }
@@ -44,13 +46,14 @@ fn validate_integer(it: *js.Interp, v: js.Value, waitable: bool) -> (*js.Obj, er
 // ValidateAtomicAccess: ToIndex(requestIndex) within the array.
 fn validate_access(it: *js.Interp, o: *js.Obj, req: js.Value) -> (usize, err) {
     var idx = 0.0f64
+    let len = js.ta_length(o)
     if !js.is_undefined(req) {
         let (n, ne) = js.to_number(it, req)
         if ne != ok { ret (0usize, ne) }
         idx = js.to_integer(n)
         if idx < 0.0f64 || idx > 9007199254740991.0f64 { ret (0usize, js.throw_range(it, "Invalid atomic access index")) }
     }
-    if idx >= f64(js.ta_length(o)) { ret (0usize, js.throw_range(it, "Invalid atomic access index")) }
+    if idx >= f64(len) { ret (0usize, js.throw_range(it, "Invalid atomic access index")) }
     ret (usize(idx), ok)
 }
 
@@ -67,6 +70,17 @@ fn coerce_value(it: *js.Interp, kind: u8, v: js.Value) -> (js.Value, err) {
     if i != i { i = 0.0f64 }
     if i == 0.0f64 { i = 0.0f64 }
     ret (js.num_value(i), ok)
+}
+
+// Read-modify-write operations take the hub lock once agents exist, so concurrent agents never lose an update.
+fn rmw_lock(it: *js.Interp) {
+    let (h, has) = js.hub_peek(it)
+    if has { sync.mutex_lock(&h.lock) }
+}
+
+fn rmw_unlock(it: *js.Interp) {
+    let (h, has) = js.hub_peek(it)
+    if has { sync.mutex_unlock(&h.lock) }
 }
 
 fn read_raw(it: *js.Interp, o: *js.Obj, idx: usize) -> u64 {
@@ -88,6 +102,7 @@ fn rmw(it: *js.Interp, args: []const js.Value, op: u8) -> (js.Value, err) {
     if idx >= js.ta_length(o) { ret (js.undefv(), js.throw_range(it, "Invalid atomic access index")) }
     let (raw, re) = js.ta_raw_of(it, kind, cv)
     if re != ok { ret (js.undefv(), re) }
+    rmw_lock(it)
     let old = js.ta_get_index(it, o, idx)
     let oldraw = js.ta_raw_of_typed(kind, old)
     var next = raw
@@ -103,6 +118,7 @@ fn rmw(it: *js.Interp, args: []const js.Value, op: u8) -> (js.Value, err) {
         next = oldraw ^ raw
     }
     js.ta_set_raw(it, o, idx, next)
+    rmw_unlock(it)
     ret (old, ok)
 }
 
@@ -163,6 +179,7 @@ fn at_compare_exchange(it: *js.Interp, this_val: js.Value, args: []const js.Valu
     if ere != ok { ret (js.undefv(), ere) }
     let (rraw, rre) = js.ta_raw_of(it, kind, replacement)
     if rre != ok { ret (js.undefv(), rre) }
+    rmw_lock(it)
     let old = js.ta_get_index(it, o, idx)
     let oldraw = js.ta_raw_of_typed(kind, old)
     // Compare as stored elements (wrapped to the element size).
@@ -170,6 +187,7 @@ fn at_compare_exchange(it: *js.Interp, this_val: js.Value, args: []const js.Valu
     var mask = ALL_ONES
     if size < 8usize { mask = (1u64 << u64(size * 8usize)) - 1u64 }
     if (oldraw & mask) == (eraw & mask) { js.ta_set_raw(it, o, idx, rraw) }
+    rmw_unlock(it)
     ret (old, ok)
 }
 
@@ -185,11 +203,36 @@ fn at_notify(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.
     if oe != ok { ret (js.undefv(), oe) }
     let (idx, ie) = validate_access(it, o, arg(args, 1usize))
     if ie != ok { ret (js.undefv(), ie) }
+    let t = js.ta_of(o)
+    var count = js.infinity()
     if !js.is_undefined(arg(args, 2usize)) {
         let (n, ne) = js.to_number(it, arg(args, 2usize))
         if ne != ok { ret (js.undefv(), ne) }
+        count = js.to_integer(n)
+        if js.is_nan(count) { count = 0.0f64 }
+        if count < 0.0f64 { count = 0.0f64 }
     }
-    ret (js.num_value(0.0f64), ok)
+    if !js.buf_of(t.buffer).is_shared { ret (js.num_value(0.0f64), ok) }
+    let (h, has) = js.hub_peek(it)
+    if !has { ret (js.num_value(0.0f64), ok) }
+    let byte = t.offset + idx * js.ta_elem_size(js.ta_of(o).kind)
+    var woken = 0.0f64
+    sync.mutex_lock(&h.lock)
+    while woken < count {
+        var best = 64usize
+        var s = 0usize
+        while s < 64usize {
+            let w = h.waiters[s]
+            if w.used && !w.notified && w.buf == t.buffer && w.byte == byte && (best == 64usize || w.seq < h.waiters[best].seq) { best = s }
+            s += 1usize
+        }
+        if best == 64usize { break }
+        h.waiters[best].notified = true
+        woken += 1.0f64
+    }
+    sync.condition_broadcast(&h.cond)
+    sync.mutex_unlock(&h.lock)
+    ret (js.num_value(woken), ok)
 }
 
 fn at_wait(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -205,10 +248,44 @@ fn at_wait(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     if te != ok { ret (js.undefv(), te) }
     let (raw, re) = js.ta_raw_of(it, kind, cv)
     if re != ok { ret (js.undefv(), re) }
-    let cur = js.ta_raw_of_typed(kind, js.ta_get_index(it, o, idx))
     var mask = ALL_ONES
     if js.ta_elem_size(kind) < 8usize { mask = (1u64 << u64(js.ta_elem_size(kind) * 8usize)) - 1u64 }
-    if (cur & mask) != (raw & mask) { ret (js.str_value("not-equal"), ok) }
+    var limit = js.infinity()
+    if !js.is_nan(tn) { limit = tn }
+    if limit < 0.0f64 { limit = 0.0f64 }
+    let h = js.hub_of(it)
+    let t = js.ta_of(o)
+    sync.mutex_lock(&h.lock)
+    let cur = js.ta_raw_of_typed(kind, js.ta_get_index(it, o, idx))
+    if (cur & mask) != (raw & mask) {
+        sync.mutex_unlock(&h.lock)
+        ret (js.str_value("not-equal"), ok)
+    }
+    var slot = 64usize
+    var s = 0usize
+    while s < 64usize && slot == 64usize {
+        if !h.waiters[s].used { slot = s }
+        s += 1usize
+    }
+    if slot == 64usize {
+        sync.mutex_unlock(&h.lock)
+        ret (js.undefv(), js.throw_range(it, "too many Atomics.wait waiters"))
+    }
+    h.wseq += 1u64
+    h.waiters[slot] = js.Waiter { used: true, notified: false, buf: t.buffer, byte: t.offset + idx * js.ta_elem_size(kind), seq: h.wseq }
+    let (t0, t0e) = time.monotonic()
+    while !h.waiters[slot].notified && !h.shutdown {
+        let (t1, t1e) = time.monotonic()
+        let elapsed = f64(t1.nanos - t0.nanos) / 1000000.0f64
+        if elapsed >= limit { break }
+        var chunk = 50.0f64
+        if limit - elapsed < chunk { chunk = limit - elapsed }
+        let w = sync.condition_wait_for(&h.cond, &h.lock, time.nanos(i64(chunk * 1000000.0f64) + 1i64))
+    }
+    let woke = h.waiters[slot].notified
+    h.waiters[slot].used = false
+    sync.mutex_unlock(&h.lock)
+    if woke { ret (js.str_value("ok"), ok) }
     ret (js.str_value("timed-out"), ok)
 }
 
