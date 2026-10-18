@@ -19,28 +19,6 @@
    }
   }
  },
- "checkbox_switch": {
-  "looks": {
-   "linux": {
-    "status": "matched",
-    "screenshot": "linux/checkbox_switch.png",
-    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 51 px off counting every pixel outside text ink, 51 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
-    "gaps": [
-     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
-     "Tick and bullet are 14 x 14 baked alpha masks"
-    ]
-   },
-   "linux_dark": {
-    "status": "matched",
-    "screenshot": "linux-dark/checkbox_switch.png",
-    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 34 px off counting every pixel outside text ink, 37 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
-    "gaps": [
-     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced",
-     "Tick and bullet are 14 x 14 baked alpha masks"
-    ]
-   }
-  }
- },
  "radio": {
   "looks": {
    "linux": {
@@ -111,26 +89,6 @@
     "status": "matched",
     "screenshot": "linux-dark/button.png",
     "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 47 px off counting every pixel outside text ink, 123 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
-    "gaps": [
-     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced"
-    ]
-   }
-  }
- },
- "button_more": {
-  "looks": {
-   "linux": {
-    "status": "matched",
-    "screenshot": "linux/button_more.png",
-    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Light, 0 flat reference px off, 1 px off counting every pixel outside text ink, 14 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
-    "gaps": [
-     "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced"
-    ]
-   },
-   "linux_dark": {
-    "status": "matched",
-    "screenshot": "linux-dark/button_more.png",
-    "notes": "ROUND 22 (lb): shapes, fills, rings and shadows are drawn from fitted Cairo-style curve flattening and layered fills; text is Cantarell hinted by a port of FreeType's CFF engine (e.text.cffhint, verified point for point). Strict compare scripts/linux_cmp_lb.py against GTK 4.14 / libadwaita 1.5 captures re-taken after an 840 ms settle: Dark, 0 flat reference px off, 1 px off counting every pixel outside text ink, 14 counting glyphs. The remainder is Cairo's corner anti-aliasing (at most 8 levels at a few corner pixels).",
     "gaps": [
      "Cairo corner anti-aliasing floor: a few corner pixels differ by up to 8 levels, exact scan converter not reproduced"
     ]
