@@ -1,0 +1,80 @@
+{
+ "hint": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/hint.png",
+    "notes": "Round 26: the five hint_toolbar_* sheets and hint_grid_header_name drew the v3 hint (pale yellow bevel, light grey grid box) under the dark look's text, 1.27:1 and 1.73:1. Under Neper dark the v3 hint window is now the palette's inverse surface (#E1E2E9) with its ink (InverseOnSurface), the same bubble as the plain hint: text above 12:1, the face 12:1 against the page. scripts/neper_dark_contrast.py finds no violation in hint and the six sheets. The Windows, Windows dark and Neper light sheets are byte for byte those of a render of the commit before.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/tree_list.png",
+    "notes": "Round 26: tree_list_rules now draws its frame in the Neper dark frame ink (#707380) instead of the Windows greys #828790 and #A7AAB0, and its white fills take dark tints through the grid chrome map (gl.rgb under Neper dark). scripts/neper_dark_contrast.py finds no violation in tree_list and tree_list_rules; scripts/neper_dark_focus.py none in the set.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/data_grid.png",
+    "notes": "Round 26: the v3 grid chrome that stayed light in the Neper dark pictures (white column and row rules, pale footer cells, ring lines, navigator buttons, filter funnel, indicator column) now takes dark tints: under Neper dark a light literal of gridlook.rgb (mean 200 or more) is a dark tint of itself, and a dark pixel of the 96 DPI bitmaps (row arrow, star) is drawn in light ink. The selection edge keeps #B3C5FF. data_grid_top, bottom, main, hover, states and sort sheets re-rendered; no violation in scripts/neper_dark_contrast.py or neper_dark_focus.py. Not changed: the v3 dialogs of datagrid.e (page setup, format rules, statistics) that no sheet shows, and the disabled navigator glyphs (exempt, disabled). The Windows, Windows dark and Neper light sheets are byte for byte those of a render of the commit before.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders",
+     "The disabled navigator glyphs of the baked bitmaps are mapped by value and read as noise at 100 % (disabled content, exempt)"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/button.png",
+    "notes": "Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): sizes 44 / 34 / 28 and macOS 22 (64 least width), systemBlue and systemRed fills, tertiary fill, tint 12 to 30 %, disabled fill band, hover lighter and pressed darker, focus ring, every state differs from rest. Audit 3: not verified: 6 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.6:1). Round 26: the large button is 50 pt (a large UIButton.Configuration), not 44 (the minimum tap target); scripts/cupertino_spec_check.py asserts 50.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/button.png",
+    "notes": "Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): sizes 44 / 34 / 28 and macOS 22 (64 least width), systemBlue and systemRed fills, tertiary fill, tint 12 to 30 %, disabled fill band, hover lighter and pressed darker, focus ring, every state differs from rest. Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.6:1); 1 words fall under 4.5:1 that pass in the light twin (lowest 4.4:1). Round 26: the large button is 50 pt (a large UIButton.Configuration), not 44 (the minimum tap target); scripts/cupertino_spec_check.py asserts 50.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}
