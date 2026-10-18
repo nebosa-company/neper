@@ -4792,7 +4792,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         var made: widget.Node = zero
         var made_error: err = ok
         if lin {
-            let (linux_made, linux_made_error) = linux_tree_row(a, t, columns, cells, row_key, row_tall, chosen, row_pick, selection.double, selection.has_double, pad, pad, 1.0)
+            let (linux_made, linux_made_error) = linux_tree_row(a, t, columns, cells, row_key, row_tall, chosen, row_pick, selection.double, selection.has_double, pad, pad - 1.0, 0.0)
             made = linux_made
             made_error = linux_made_error
         } else {
@@ -5704,12 +5704,12 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         // The twisty, or its blank for a leaf.
         var twisty = widget.box(0u64, control.sized_style(24.0, 24.0), zero)
         if win { twisty = widget.box(0u64, control.sized_style(14.0, tall), zero) }
-        if lin { twisty = widget.box(0u64, control.sized_style(23.0, tall), zero) }
+        if lin { twisty = widget.box(0u64, control.sized_style(22.0, tall), zero) }
         if lin && entry.branch {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
             let (arrow, arrow_error) = linux_expander(a, t, open, tall)
             if arrow_error != ok { ret (none, arrow_error) }
-            twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(23.0, tall), one_node(a, arrow))
+            twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(22.0, tall), one_node(a, arrow))
         }
         if win && entry.branch {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
@@ -5843,7 +5843,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             var tabled_row: widget.Node = zero
             var tabled_error: err = ok
             if lin {
-                let (linux_row, linux_error) = linux_tree_row(a, t, columns, cells, entry.key, tall, chosen, pick, toggle, entry.branch, 0.0, 5.0, 0.0)
+                let (linux_row, linux_error) = linux_tree_row(a, t, columns, cells, entry.key, tall, chosen, pick, toggle, entry.branch, 0.0, 4.0, 0.0)
                 tabled_row = linux_row
                 tabled_error = linux_error
             } else {
@@ -11750,8 +11750,8 @@ fn linux_expander(a: *mem.Arena, t: *const control.Theme, open: bool, tall: f32)
     if !open { svg = adwicon.pan_end() }
     let (tri, tri_error) = adwicon.icon(a, svg, tint, 17.0)
     if tri_error != ok { ret (zero, tri_error) }
-    var holder = control.sized_style(23.0, tall)
-    holder.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: (tall - 17.0) * 0.5 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    var holder = control.sized_style(22.0, tall)
+    holder.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: (tall - 17.0) * 0.5 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     ret (widget.box(0u64, holder, one_node(a, tri)), ok)
 }
 
@@ -11773,13 +11773,15 @@ fn linux_tree_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
         caption.size = 12.0
         caption.wrap = .None
         caption.max_lines = 1u32
-        let (title, title_error) = control.colored_text(a, 0u64, columns[i].title, t, caption, linux_dim(t))
+        // GTK sets a column header a fraction of a pixel off the grid (round 24)
+        var off_grid = control.Theme { tokens: t.tokens, fonts: t.fonts, language: "pnfr", runtime: t.runtime }
+        let (title, title_error) = control.colored_text(a, 0u64, columns[i].title, &off_grid, caption, linux_dim(t))
         if title_error != ok { ret (zero, title_error) }
         var head_style = control.sized_style(columns[i].width, 30.0)
-        head_style.padding = style.EdgeLengths { left: style.Length { Px: pad }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: control.if_else(ruled, 0.0, 2.0) } }
+        head_style.padding = style.EdgeLengths { left: style.Length { Px: pad + control.if_else(ruled, -1.0, 0.0) + control.if_else(i > 0usize, control.if_else(ruled, 1.0, -1.0), 0.0) }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: control.if_else(ruled, 1.7, 1.4) } }
         head_style.overflow = .Clip
         control.focus_look(t)
-        let inside = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, control.sized_style(control.max_zero(columns[i].width - pad - 4.0), control.if_else(ruled, 30.0, 28.0)), one_node(a, title))
+        let inside = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, control.sized_style(control.max_zero(columns[i].width - pad - 4.0), control.if_else(ruled, 30.0, 28.3)), one_node(a, title))
         let tapped = widget.region(header_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: header_gesture }, gestures: 1u8 | 2u8 | 4u8 | 8u8, enabled: true, focusable: true }, head_style, one_node(a, inside))
         var sem: widget.Semantics = zero
         sem.role = 32u8
@@ -11867,6 +11869,13 @@ fn linux_row_text(a: *mem.Arena, t: *const control.Theme, words: str, size: f32,
     ret (node, node_error)
 }
 
+// The same set a fraction of a pixel off the grid (an entry row's floating title, round 24).
+fn linux_row_text_off_grid(a: *mem.Arena, t: *const control.Theme, words: str, size: f32, ink: paint.Color) -> (widget.Node, err) {
+    let off_grid = control.Theme { tokens: t.tokens, fonts: t.fonts, language: "pnfr", runtime: t.runtime }
+    let (node, node_error) = linux_row_text(a, &off_grid, words, size, ink)
+    ret (node, node_error)
+}
+
 fn linux_rows_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, spec: LinuxRow, width: f32, action: *const widget.Submit) -> (widget.Node, err) {
     let dark = t.tokens.palette == .Dark
     let state = control.control_state(t, key, true, false)
@@ -11874,7 +11883,17 @@ fn linux_rows_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, spec:
     let ink = style.color(t.tokens, .OnSurface)
     var title_ink = ink
     if spec.kind == 3u8 { title_ink = linux_dim_for(t, 0.55) }
-    let (title, title_error) = linux_row_text(a, t, spec.title, 14.667, title_ink)
+    var title: widget.Node = zero
+    var title_error: err = ok
+    if spec.kind == 3u8 {
+        let (floating, floating_error) = linux_row_text_off_grid(a, t, spec.title, 14.667, title_ink)
+        title = floating
+        title_error = floating_error
+    } else {
+        let (plain, plain_error) = linux_row_text(a, t, spec.title, 14.667, title_ink)
+        title = plain
+        title_error = plain_error
+    }
     if title_error != ok { ret (zero, title_error) }
     let flat = style.Length { Px: 0.0 }
     var left = style.defaults()
@@ -11883,18 +11902,18 @@ fn linux_rows_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, spec:
     left.height = style.Length { Px: 54.0 }
     var texts = title
     if spec.subtitle.len > 0usize {
-        let (sub, sub_error) = linux_row_text(a, t, spec.subtitle, 12.0, linux_dim_for(t, 0.55))
+        let (sub, sub_error) = linux_row_text(a, t, spec.subtitle, 12.223, linux_dim_for(t, 0.55))
         if sub_error != ok { ret (zero, sub_error) }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
-        pair[0usize] = widget.padded(0u64, 0.0, 7.0, 0.0, 0.0, style.defaults(), one_node(a, title))
-        pair[1usize] = widget.padded(0u64, 0.0, 4.0, 0.0, 0.0, style.defaults(), one_node(a, sub))
+        pair[0usize] = widget.padded(0u64, 0.0, 8.0, 0.0, 0.0, style.defaults(), one_node(a, title))
+        pair[1usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one_node(a, sub))
         texts = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
     }
     var lead_main: ui_layout.MainAlign = .Start
     var lead_cross: ui_layout.CrossAlign = .Start
     if spec.subtitle.len == 0usize { lead_cross = .Center }
-    if spec.kind >= 3u8 { left.padding.bottom = style.Length { Px: 2.0 } }
+    if spec.kind >= 1u8 { left.padding.bottom = style.Length { Px: control.if_else(spec.kind == 3u8, 0.2, 2.0) } }
     let lead = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: lead_main, cross: lead_cross, gap: 0.0 }, left, one_node(a, texts))
     // the trailing part
     var trail: widget.Node = widget.box(0u64, control.sized_style(0.0, 0.0), zero)
@@ -11917,7 +11936,7 @@ fn linux_rows_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, spec:
         if both_error != ok { ret (zero, TooLarge) }
         both[0usize] = value
         both[1usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one_node(a, arrow))
-        trail = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 7.0 }, style.defaults(), both[0usize..2usize])
+        trail = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), both[0usize..2usize])
     }
     var trail_style = style.defaults()
     trail_style.height = style.Length { Px: 54.0 }

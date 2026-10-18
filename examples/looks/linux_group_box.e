@@ -41,7 +41,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     cells[0usize] = looks.Cell { caption: "card", node: held, drive: .None }
     var framed = control.group_options()
     framed.width = 202.0
-    let (frame_child, frame_child_error) = content(a, t, 200.0, 60.0, 20.5)
+    let (frame_child, frame_child_error) = content(a, t, 200.0, 60.0, 19.5)
     if frame_child_error != ok { ret (0usize, frame_child_error) }
     let (frame, frame_error) = control.group_box_of(a, 2u64, t, "Group", framed, mem_one(a, frame_child))
     if frame_error != ok { ret (0usize, frame_error) }

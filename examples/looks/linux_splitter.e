@@ -13,7 +13,9 @@ fn noop_change(ctx: *void, value: f32) -> err { ret ok }
 fn pane_of(a: *mem.Arena, t: *const control.Theme, word: str) -> (widget.Node, err) {
     let (said, said_error) = control.text(a, 0u64, word, t, control.text_options())
     if said_error != ok { ret (zero, said_error) }
-    ret (widget.aligned(0u64, .Center, .Center, control.sized_style(100.0, 80.0), control.widget_one_of(a, said)), ok)
+    // GTK puts the label on whole pixels a half pixel up and left of the middle
+    let held = widget.padded(0u64, 0.0, 0.0, 1.0, 2.0, style.defaults(), control.widget_one_of(a, said))
+    ret (widget.aligned(0u64, .Center, .Center, control.sized_style(100.0, 80.0), control.widget_one_of(a, held)), ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {

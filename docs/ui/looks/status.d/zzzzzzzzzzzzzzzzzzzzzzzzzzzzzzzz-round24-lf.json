@@ -1,0 +1,306 @@
+{
+ "text_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/text_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light, 14 crops: flat 0 (was 28), strict 49 (was 2920), glyph-region diff 29 of 4640 ink px (was 2789; entry-normal exact). Dark: flat 0 (was 28), strict 58 (was 2924), 22 of 4638 (was 2793). Cause of the drift: the entry's text was shaped with the pseudo-language 'kern' (GDI style advances at 15 px, so 'Warning' came out 3 px wider than GTK's) instead of 'pngo' like every other Linux text. GTK also paints a selection over the text, not under it, so selected glyphs are lighter: entry-selected 367 px off to 22.",
+    "gaps": [
+     "Remaining strict px: the search magnifier, clear icon and password eye (17 to 21 px, up to 8 levels, symbolic SVGs) and the focus ring corners (entry-focus-ring 6 px, entry-error-focus 4 px Light; 8 and 20 Dark; up to 8 levels): the ring band along the edges is exact."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/text_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark, 14 crops: flat 0 (was 28), strict 58 (was 2924), 22 of 4638 ink px differ (was 2793); cause as in the Light note.",
+    "gaps": [
+     "Remaining strict px: the search magnifier, clear icon and password eye (17 to 21 px, up to 8 levels, symbolic SVGs) and the focus ring corners (entry-focus-ring 6 px, entry-error-focus 4 px Light; 8 and 20 Dark; up to 8 levels): the ring band along the edges is exact."
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/mask_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light, 3 crops: flat 0 (was 127), strict 6 (was 2090), glyph-region diff 0 of 1758 ink px (was 1983). Same cause as the text edit ('kern' advances).",
+    "gaps": [
+     "Remaining strict px: the focus ring corners of entry-mask-focus (6 Light, 8 Dark, up to 4 levels)."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/mask_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark, 3 crops: flat 0 (was 127), strict 8 (was 2092), 0 of 1753 ink px differ (was 1987).",
+    "gaps": [
+     "Remaining strict px: the focus ring corners of entry-mask-focus (6 Light, 8 Dark, up to 4 levels)."
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/combo_box.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light, 9 crops: flat 0, strict 34 (976 against the old reference), dropdown-focus 8 px (6 ring corner px up to 6 levels, 2 arrow px). The blended inner ring pixel of audit 12 (153,186,225 against the outer 132,173,223) is a frame of GTK's 200 ms outline transition: the first gallery captured dropdown-focus 180 ms after setting the flag; the same widget captured after 20 ticks (scripts/linux/gallery.py now waits that long for a focus capture) is two full pixels, (129,171,223) both in Light and (88,115,146) in Dark, equal to dropdown-focus-ring. The four dropdown-focus reference files were replaced by the settled capture. The ring model (a 2 px band) was right; the shared ring layer now has the measured corner radii (outer 6, inner 4.1): ring corner pixels, up to 7 levels off on 35 px per ring before, are up to 4 levels off on 6 now. Ring band pixels off against the settled captures: 0 in every focus crop.",
+    "gaps": [
+     "The drop-down arrow differs by 2 px per crop (up to 7 levels); the ring corners differ by up to 7 levels on 4 to 8 px per ring."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/combo_box.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark, 9 crops: flat 0, strict 39, dropdown-focus 10 px (8 ring corner px up to 7 levels, 2 arrow px); the ring band is exact. See the Light note for the capture.",
+    "gaps": [
+     "The drop-down arrow differs by 2 px per crop (up to 7 levels); the ring corners differ by up to 7 levels on 4 to 8 px per ring."
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/page_control.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light, 4 crops: flat 0 (was 104), strict 0 (was 5673), glyph-region diff 0 of 5479 ink px (was 5578). Dark: strict 1 (was 5715). Fixes: the notebook tab captions and its page label were a pixel off (tab label box, left tabs one pixel left, page label up and left); the tab bar titles are placed per tab (GTK centres them in fractional widths: 17, 42 and 35 px from each tab's left); the scrolled strip's edge fade is 37.2 px wide (was 36: the caption under it was 5 levels too dark); the view switcher labels sit 2 px nearer the picture.",
+    "gaps": []
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/page_control.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark, 4 crops: flat 0 (was 103), strict 1 (was 5715), 1 of 5541 ink px differs.",
+    "gaps": []
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/group_box.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light, 2 crops: flat 0 (was 16), strict 1 (was 714), 0 of 815 glyph-region px differ (was 702): the frame's border takes a layout pixel (children and title sit 1 px in) and the title and child were a pixel off. Dark: strict 0 (was 714).",
+    "gaps": [
+     "Status left at review (not part of the round's brief): every captured crop is within 3 levels."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/group_box.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark, 2 crops: flat 0 (was 15), strict 0 (was 714).",
+    "gaps": [
+     "Status left at review (not part of the round's brief): every captured crop is within 3 levels."
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/memo.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light: textview strict 0 (was 2584: the sheet's cell was a pixel off the capture and the text a pixel up and left of it). Dark: 0 (was 2595). The selected cell (no GTK twin) paints the selection over the text as GTK does.",
+    "gaps": []
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/memo.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark: strict 0 (was 2595).",
+    "gaps": []
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/date_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light, date-button and calendar: flat 0 (was 15), strict 12 (was 6120), glyph-region diff 12 of 5576 ink px (was 6083). Day numbers use the tabular figures on Pango's whole pixel advances (new pseudo-language 'tnpg'; they had fractional advances), the cells are whole pixels with GTK's unequal column offsets for a one digit day, the year in the header takes the tabular figures, the weekday names are placed per column, and the date button's label sits a pixel left (arrow unchanged). Dark: strict 12 (was 7321).",
+    "gaps": [
+     "Remaining strict px: the header chevrons (10 px, up to 8 levels)."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/date_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark: flat 0 (was 12), strict 12 (was 7321).",
+    "gaps": [
+     "Remaining strict px: the header chevrons (10 px, up to 8 levels)."
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/status_bar.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light: headerbar-subtitle strict 0 (was 302): the title block was a pixel low, the subtitle is 12.223 px ('smaller', was 12) at 44 % of the text colour (55.3 % Dark, was 55 % in both). Dark: 0 (was 254).",
+    "gaps": []
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/status_bar.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark: strict 0 (was 254).",
+    "gaps": []
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/toolbar_button.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). The header bar crop of the sheet is exact now (150 px to 0, both schemes: the header bar's title block); the rest of the sheet is as in audit 12 (icon crops, up to 40 levels). Strict over all 14 crops: 81 Light, 79 Dark (was 231 and 229).",
+    "gaps": [
+     "Icon crops and the toolbar crop differ by up to 40 levels on 4 to 33 px per crop."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/toolbar_button.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Strict over all 14 crops: 79 (was 229).",
+    "gaps": [
+     "Icon crops and the toolbar crop differ by up to 40 levels on 4 to 33 px per crop."
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/splitter.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light, 4 crops: strict 0 (was 740): the pane labels sat a pixel right and low of the capture's.",
+    "gaps": []
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/splitter.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark, 4 crops: strict 0 (was 746).",
+    "gaps": []
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/tree_list.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light: treeview and treeview-selected flat 0, strict 282 (was 6745). Rows exact; the column headers (Bold 12 px) are exact too: GTK sets them a fraction of a pixel off the grid (about 0.3 px up), reproduced by the new pseudo-language 'pnfr' (Pango's advances, origin not snapped). Remaining: the three disclosure triangles (47 px each, up to 94 levels, symbolic SVG).",
+    "gaps": [
+     "Disclosure triangle edges (symbolic SVG) differ by up to 94 levels on 47 px per triangle."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/tree_list.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark: strict 288 (was 6775), same remainder.",
+    "gaps": [
+     "Disclosure triangle edges (symbolic SVG) differ by up to 94 levels on 47 px per triangle."
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/data_grid.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light: columnview strict 32 (was 2792), 0 of 2699 glyph-region px differ (was 2760): the body text was a pixel high and the second column a pixel right of GTK's, the headers are set off the grid ('pnfr', as in the tree list). Dark: 34 (was 2809).",
+    "gaps": [
+     "The overlay scroll indicator's anti-aliasing differs by up to 8 levels on 32 px."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/data_grid.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark: strict 34 (was 2809).",
+    "gaps": [
+     "The overlay scroll indicator's anti-aliasing differs by up to 8 levels on 32 px."
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/vertical_grid.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light: strict 13 (was 2458), flat 0. Rows with a subtitle were a pixel high with the subtitle at 12 px (GTK 12.223 px), the switch row a pixel low, the combo row's value a pixel right, and the entry row's floating title is set half a pixel off the grid as GTK does ('pnfr'). Remaining: the entry row's pencil icon (9 px, up to 13 levels) and the combo row arrow (2 px). Dark: 14 (was 2459).",
+    "gaps": [
+     "Symbolic icon edges: the entry row pencil (9 px) and the combo row arrow (2 px), up to 15 levels."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/vertical_grid.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark: strict 14 (was 2459).",
+    "gaps": [
+     "Symbolic icon edges: the entry row pencil (9 px) and the combo row arrow (2 px), up to 15 levels."
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/dialog.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light: alert-dialog strict 2266 (was 2375), flat 25 (was 32). The heading is 20 px as GTK's (was 20.7) but GTK's is Ultra-Bold (fontconfig picks Bold and GTK emboldens it: stems 4 to 5 px against our 3), so about 720 px stay off; the body text is a row tall in ours (cap height 11 rows against GTK's 10 in the capture) and the buttons' labels are set off the grid in the capture: not reproduced.",
+    "gaps": [
+     "Synthetic emboldening of the heading and the card's text placement (heading, body and button labels) are not reproduced."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/dialog.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark: strict 2241 (was 2350), flat 24 (was 31).",
+    "gaps": [
+     "Synthetic emboldening of the heading and the card's text placement (heading, body and button labels) are not reproduced."
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/spin_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light, 11 crops: flat 0, strict 60 (was 89): the focus ring corners now agree within 4 levels (6 px of spin50-focus-ring). spin-vertical's arrow icons (40 px, up to 92 levels) are unchanged.",
+    "gaps": [
+     "spin-vertical: the arrow icons differ on 40 px (up to 92 levels)."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/spin_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark, 11 crops: flat 0, strict 61 (was 87).",
+    "gaps": [
+     "spin-vertical: the arrow icons differ on 40 px (up to 92 levels)."
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/button_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Light: entry-with-button strict 9 (was 203; the text was a pixel high): the text is exact, 9 px of the folder icon remain (up to 37 levels). Dark: 5 (was 200).",
+    "gaps": [
+     "The folder-open icon edges differ by up to 37 levels on 9 px."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/button_edit.png",
+    "notes": "Round 24 (worker lf), scripts/linux_cmp_lf.py: every crop of the three manifests searched in the committed 1x sheet (best placement within 3 px, borders first); a pixel is off when ours differs by more than 2 levels in any channel; strict counts every pixel (text, thin rings and icons included), flat counts only reference flat pixels (8 neighbours within 2 levels, the audit metric). Dark: strict 5 (was 200).",
+    "gaps": [
+     "The folder-open icon edges differ by up to 37 levels on 9 px."
+    ]
+   }
+  }
+ }
+}

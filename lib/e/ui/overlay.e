@@ -8663,7 +8663,7 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     let ink = style.color(t.tokens, .OnSurface)
     var heading = control.text_options()
     heading.role = .Label
-    heading.size = 20.7
+    heading.size = 20.0
     heading.align = .Center
     let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, ink)
     if title_error != ok { ret (zero, title_error) }
@@ -8846,11 +8846,14 @@ fn widget_pair(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
 }
 
 // One group of the header: a turn button, the centred name, a turn button, `width` wide.
-fn linux_head_group(a: *mem.Arena, t: *const control.Theme, back: widget.Node, name: str, forward: widget.Node, width: f32) -> (widget.Node, err) {
+fn linux_head_group(a: *mem.Arena, t: *const control.Theme, back: widget.Node, name: str, forward: widget.Node, width: f32, tabular: bool) -> (widget.Node, err) {
     var caption = control.text_options()
     caption.role = .Body
     caption.wrap = .None
-    let (word, word_error) = control.colored_text(a, 0u64, name, t, caption, style.color(t.tokens, .Text))
+    // the year's digits are the font's tabular figures (GTK's calendar header)
+    var words_theme = control.Theme { tokens: t.tokens, fonts: t.fonts, language: t.language, runtime: t.runtime }
+    if tabular { words_theme.language = "tnpg" }
+    let (word, word_error) = control.colored_text(a, 0u64, name, &words_theme, caption, style.color(t.tokens, .Text))
     if word_error != ok { ret (zero, word_error) }
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
@@ -8901,9 +8904,9 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     let (year_bytes, year_bytes_error) = mem.alloc[u8](a, 12usize)
     if year_bytes_error != ok { ret (zero, TooLarge) }
     let year_len = control.write_i64(year_bytes, year)
-    let (month_group, month_group_error) = linux_head_group(a, t, month_back, month_name_in(month, t.language), month_forward, 138.0)
+    let (month_group, month_group_error) = linux_head_group(a, t, month_back, month_name_in(month, t.language), month_forward, 138.0, false)
     if month_group_error != ok { ret (zero, month_group_error) }
-    let (year_group, year_group_error) = linux_head_group(a, t, year_back, year_bytes[0usize..year_len], year_forward, 112.0)
+    let (year_group, year_group_error) = linux_head_group(a, t, year_back, year_bytes[0usize..year_len], year_forward, 112.0, true)
     if year_group_error != ok { ret (zero, year_group_error) }
     let (head_parts, head_parts_error) = mem.alloc[widget.Node](a, 3usize)
     if head_parts_error != ok { ret (zero, TooLarge) }
@@ -8929,7 +8932,7 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
         caption.wrap = .None
         let (name_node, name_error) = control.colored_text(a, 0u64, weekday_full((week_start + weekday) % 7usize)[0usize..3usize], t, caption, ink)
         if name_error != ok { ret (zero, name_error) }
-        names[weekday] = widget.aligned(0u64, .Center, .Start, column_share, widget_pair(a, widget.padded(0u64, 0.0, 4.5, 0.0, 0.0, style.defaults(), widget_pair(a, name_node))))
+        names[weekday] = widget.aligned(0u64, .Center, .Start, column_share, widget_pair(a, widget.padded(0u64, control.if_else(weekday == 4usize, 1.0, 0.0), 5.5, control.if_else(weekday == 6usize, 2.0, control.if_else(weekday == 4usize, 0.0, 1.0)), 0.0, style.defaults(), widget_pair(a, name_node))))
         weekday += 1usize
     }
     // The days: six rows of seven, the neighbouring months' days dim.
@@ -8995,13 +8998,19 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             var caption = control.text_options()
             caption.role = .Body
             caption.wrap = .None
-            let tabular = control.Theme { tokens: t.tokens, fonts: t.fonts, language: "tnum", runtime: t.runtime }
+            let tabular = control.Theme { tokens: t.tokens, fonts: t.fonts, language: "tnpg", runtime: t.runtime }
             let (label_node, label_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], &tabular, caption, digit_color)
             if label_error != ok { ret (zero, label_error) }
             var box_style = control.sized_style(34.0, 25.0)
             box_style.background = paint.Brush { Solid: fill }
             box_style.radius = 6.0
-            let digits_held = widget.aligned(0u64, .Center, .Center, box_style, widget_pair(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), widget_pair(a, label_node))))
+            // GTK's seven cells are whole numbers of unequal widths (38, 38, 39, 38, 37, 37, 38), so a day number lands off an even grid: left of it
+            // by a pixel in the last two columns (one digit) and in the seventh (two digits) and by two in a one digit seventh column
+            var nudge: f32 = 0.0
+            if column == 6usize { nudge = -2.0 }
+            if digit_count == 1usize && column == 5usize { nudge = -2.0 }
+            if digit_count == 1usize && column == 6usize { nudge = -4.0 }
+            let digits_held = widget.aligned(0u64, .Center, .Center, box_style, widget_pair(a, widget.padded(0u64, control.if_else(nudge > 0.0, nudge, 0.0), 0.0, control.if_else(nudge < 0.0, 0.0 - nudge, 0.0), 0.0, style.defaults(), widget_pair(a, label_node))))
             let (spoken, spoken_error) = mem.alloc[u8](a, 40usize)
             if spoken_error != ok { ret (zero, TooLarge) }
             var said = control.copy_text(spoken, weekday_full(usize(weekday_of(i64(date.year), i64(date.month), i64(date.day)))))
@@ -9052,15 +9061,15 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
                 cell_node = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: day_keys[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), widget_pair(a, tabbed))
             }
             var share = style.defaults()
-            share.width = style.Length { Px: 37.83 }
+            share.width = style.Length { Px: 38.0 }
             share.height = style.Length { Px: 28.0 }
-            share.min_width = style.Length { Px: 37.83 }
+            share.min_width = style.Length { Px: 38.0 }
             // GTK's days sit 1.85 px right of the cell's middle
-            cells[column] = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, widget.padded(0u64, 1.7, 0.0, 0.0, 0.0, style.defaults(), widget_pair(a, cell_node))))
+            cells[column] = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), widget_pair(a, cell_node))))
             column += 1usize
         }
         var row_style = control.sized_style(267.0, 28.0)
-        row_style.padding.left = style.Length { Px: 2.2 }
+        row_style.padding.left = style.Length { Px: 1.0 }
         rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[0usize..7usize])
         week += 1usize
     }
