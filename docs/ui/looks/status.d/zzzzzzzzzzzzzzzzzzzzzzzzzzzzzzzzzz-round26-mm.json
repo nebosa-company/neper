@@ -1,0 +1,556 @@
+{
+ "button": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/button.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 50 states compared, 4 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 120 px, worst glyph-only count 53 px.",
+    "gaps": [
+     "Outlined button focus: ours draws the primary outline, the capture the resting grey (Material Web 2.2 has no focus outline token and the capture turns its focus ring off; the M3 token set has primary): a reference and specification ambiguity, left as the M3 tokens have it",
+     "The elevated button's hover shade is within 3 levels of the capture (a fitted level-2 layer)",
+     "Over the line: button-elevated-hover (58), button-outlined-focus (84), button-elevated-icon-hover (58), button-outlined-icon-focus (120)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/button.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 50 states compared, 2 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 116 px, worst glyph-only count 63 px.",
+    "gaps": [
+     "Outlined button focus: ours draws the primary outline, the capture the resting grey (Material Web 2.2 has no focus outline token and the capture turns its focus ring off; the M3 token set has primary): a reference and specification ambiguity, left as the M3 tokens have it",
+     "The elevated button's hover shade is within 3 levels of the capture (a fitted level-2 layer)",
+     "Over the line: button-outlined-focus (80), button-outlined-icon-focus (116)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/fab.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 24 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 0 px, worst glyph-only count 147 px.",
+    "gaps": [
+     "The icon is Neper's glyph, not the Material icon (glyph ink is excluded from the metric)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/fab.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 24 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 2 px, worst glyph-only count 147 px.",
+    "gaps": [
+     "The icon is Neper's glyph, not the Material icon (glyph ink is excluded from the metric)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "fab": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/fab.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 16 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 48 px, worst glyph-only count 121 px.",
+    "gaps": [
+     "Extended FAB: a 1 to 2 px difference of the shadow at its ends (fitted shade, level 3 and 4)",
+     "Over the line: fab-large-hover (48)",
+     "Reference states with no sheet cell: fab-primary-rest, fab-secondary-rest, fab-surface-rest, fab-tertiary-rest",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/fab.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 16 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 4 px, worst glyph-only count 84 px.",
+    "gaps": [
+     "Extended FAB: a 1 to 2 px difference of the shadow at its ends (fitted shade, level 3 and 4)",
+     "Reference states with no sheet cell: fab-primary-rest, fab-secondary-rest, fab-surface-rest, fab-tertiary-rest",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/checkbox.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 18 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 0 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/checkbox.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 18 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 0 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/radio.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 10 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 0 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "M3 defines no error state for a radio button: the sheet's Error column has no reference",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/radio.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 10 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 0 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "M3 defines no error state for a radio button: the sheet's Error column has no reference",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "switch": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/switch.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 3 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/switch.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 3 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/text_field.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 64 px, worst glyph-only count 24 px.",
+    "gaps": [
+     "Focused cells: the 20 to 25 px off are the caret's column and the label's notch edge (the reference caret is hidden: it blinks)",
+     "Hover is reached through a region round the field (the runtime hovers regions, not editors)",
+     "Reference states with no sheet cell: text-field-filled-icons-rest, text-field-outlined-icons-rest",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/text_field.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 76 px, worst glyph-only count 23 px.",
+    "gaps": [
+     "Focused cells: the 20 to 25 px off are the caret's column and the label's notch edge (the reference caret is hidden: it blinks)",
+     "Hover is reached through a region round the field (the runtime hovers regions, not editors)",
+     "Over the line: text-field-outlined-empty-focus (76)",
+     "Reference states with no sheet cell: text-field-filled-icons-rest, text-field-outlined-icons-rest",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/combo_box.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 8 states compared, 4 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 76 px, worst glyph-only count 22 px.",
+    "gaps": [
+     "The drop-down arrow is Neper's chevron, Material's is a filled triangle (icon ink)",
+     "The open list is not compared",
+     "Over the line: select-outlined-value-rest (68), select-outlined-value-hover (65), select-outlined-value-focus (76), select-outlined-value-error (73)",
+     "Reference states with no sheet cell: select-filled-empty-disabled, select-filled-empty-error, select-filled-empty-focus, select-filled-empty-hover, select-filled-empty-rest, select-filled-value-disabled, select-filled-value-error, select-outlined-empty-disabled, select-outlined-empty-error, select-outlined-empty-focus and 2 more",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/combo_box.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 8 states compared, 5 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 88 px, worst glyph-only count 19 px.",
+    "gaps": [
+     "The drop-down arrow is Neper's chevron, Material's is a filled triangle (icon ink)",
+     "The open list is not compared",
+     "Over the line: select-outlined-value-rest (77), select-outlined-value-hover (82), select-outlined-value-focus (88), select-outlined-value-disabled (67), select-outlined-value-error (78)",
+     "Reference states with no sheet cell: select-filled-empty-disabled, select-filled-empty-error, select-filled-empty-focus, select-filled-empty-hover, select-filled-empty-rest, select-filled-value-disabled, select-filled-value-error, select-outlined-empty-disabled, select-outlined-empty-error, select-outlined-empty-focus and 2 more",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "chip": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/chips.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 324 px, worst glyph-only count 22 px.",
+    "gaps": [
+     "Input chip: the remove icon is Neper's cross, drawn larger and bolder than Material Symbols' close, and the focused capture shows a state-layer disc under it that Neper does not draw (the 217 px of chip-input-focus)",
+     "Chip rims: the sheet centres a chip on a whole pixel but a chip's width is fractional (71.15 for Assist), so the right edge differs by a pixel on some rims (ring column)",
+     "Over the line: chip-input-focus (324)",
+     "Reference states with no sheet cell: chip-assist-disabled, chip-assist-elevated-disabled, chip-assist-elevated-focus, chip-assist-elevated-hover, chip-assist-elevated-pressed, chip-assist-elevated-rest, chip-assist-icon-disabled, chip-assist-icon-focus, chip-assist-icon-hover, chip-assist-icon-pressed and 15 more",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/chips.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 20 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 324 px, worst glyph-only count 22 px.",
+    "gaps": [
+     "Input chip: the remove icon is Neper's cross, drawn larger and bolder than Material Symbols' close, and the focused capture shows a state-layer disc under it that Neper does not draw (the 217 px of chip-input-focus)",
+     "Chip rims: the sheet centres a chip on a whole pixel but a chip's width is fractional (71.15 for Assist), so the right edge differs by a pixel on some rims (ring column)",
+     "Over the line: chip-input-focus (324)",
+     "Reference states with no sheet cell: chip-assist-disabled, chip-assist-elevated-disabled, chip-assist-elevated-focus, chip-assist-elevated-hover, chip-assist-elevated-pressed, chip-assist-elevated-rest, chip-assist-icon-disabled, chip-assist-icon-focus, chip-assist-icon-hover, chip-assist-icon-pressed and 15 more",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/progress.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 8 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 14 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "Indeterminate progress and the buffer, four-colour and disabled linear forms are not compared",
+     "Reference states with no sheet cell: progress-linear-buffer, progress-linear-disabled, progress-linear-four-color",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/progress.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 8 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 14 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "Indeterminate progress and the buffer, four-colour and disabled linear forms are not compared",
+     "Reference states with no sheet cell: progress-linear-buffer, progress-linear-disabled, progress-linear-four-color",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/tabs.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 7 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 2 px, worst glyph-only count 129 px.",
+    "gaps": [
+     "Tabs with icons use Neper's glyphs (search, picture, person) where the capture has search, star, person: the 131 glyph-only px",
+     "Primary tabs share the bar equally and the indicator is as wide as its label (round 26)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/tabs.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 7 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 2 px, worst glyph-only count 128 px.",
+    "gaps": [
+     "Tabs with icons use Neper's glyphs (search, picture, person) where the capture has search, star, person: the 131 glyph-only px",
+     "Primary tabs share the bar equally and the indicator is as wide as its label (round 26)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/menu.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 18 px, worst glyph-only count 206 px.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Shortcut text sits where Material Web puts its trailing supporting text (label-small)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/menu.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 19 px, worst glyph-only count 170 px.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Shortcut text sits where Material Web puts its trailing supporting text (label-small)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/list.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 6 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 467 px, worst glyph-only count 68 px.",
+    "gaps": [
+     "Material Web has no selected list item and no three-line item: those sheet cells are not compared",
+     "Pressed: Material Web's capture holds a ripple frame (a radial wash that has not reached the ends of the row, up to 4 levels, 467 px light and 1453 px dark): Neper draws the flat 10 % layer",
+     "Over the line: list-item-two-pressed (467)",
+     "Reference states with no sheet cell: list-item-one-disabled, list-item-one-focus, list-item-one-hover, list-item-one-pressed",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/list.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 6 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 1453 px, worst glyph-only count 68 px.",
+    "gaps": [
+     "Material Web has no selected list item and no three-line item: those sheet cells are not compared",
+     "Pressed: Material Web's capture holds a ripple frame (a radial wash that has not reached the ends of the row, up to 4 levels, 467 px light and 1453 px dark): Neper draws the flat 10 % layer",
+     "Over the line: list-item-two-pressed (1453)",
+     "Reference states with no sheet cell: list-item-one-disabled, list-item-one-focus, list-item-one-hover, list-item-one-pressed",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/dialog.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 0 px, worst glyph-only count 7 px.",
+    "gaps": [
+     "No shade: md-dialog draws none (the capture shows none; the earlier level-3 shade was a guess)",
+     "Words wrap as the capture does only because the sheet's paragraph box is a pixel narrower: Neper's text layout breaks a line on its ink extent, a browser on its advance width (a line of 300.9 px fits a 300 px box here)",
+     "The icon dialog's icon is Neper's search glyph (7 glyph-only px)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/dialog.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 0 px, worst glyph-only count 7 px.",
+    "gaps": [
+     "No shade: md-dialog draws none (the capture shows none; the earlier level-3 shade was a guess)",
+     "Words wrap as the capture does only because the sheet's paragraph box is a pixel narrower: Neper's text layout breaks a line on its ink extent, a browser on its advance width (a line of 300.9 px fits a 300 px box here)",
+     "The icon dialog's icon is Neper's search glyph (7 glyph-only px)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "snackbar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/snackbar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 39 px, worst glyph-only count 31 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "The dismiss icon is Neper's cross (8 px) where the capture has Material Symbols' close (14 px): glyph ink",
+     "Hovered and pressed action are not compared (the pointer of the capture is not over the action)",
+     "Material Web has no snackbar: the reference is plain CSS from the specification with md-elevation",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/snackbar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 31 px, worst glyph-only count 30 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "The dismiss icon is Neper's cross (8 px) where the capture has Material Symbols' close (14 px): glyph ink",
+     "Hovered and pressed action are not compared (the pointer of the capture is not over the action)",
+     "Material Web has no snackbar: the reference is plain CSS from the specification with md-elevation",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "navigation_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 5 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 29 px, worst glyph-only count 198 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no navigation bar: the reference is plain CSS from the specification (8 dp gap between destinations, which Neper keeps as 4 dp slack each side of an 88 dp destination: the same centres)",
+     "Icons are Neper's (menu, search, alert, person) where the capture has Material Symbols (home-like menu, search, filled bell, filled person): the 943 glyph-only px",
+     "Badge placement on the icon is the spec CSS's guess",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 5 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 27 px, worst glyph-only count 199 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no navigation bar: the reference is plain CSS from the specification (8 dp gap between destinations, which Neper keeps as 4 dp slack each side of an 88 dp destination: the same centres)",
+     "Icons are Neper's (menu, search, alert, person) where the capture has Material Symbols (home-like menu, search, filled bell, filled person): the 943 glyph-only px",
+     "Badge placement on the icon is the spec CSS's guess",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "top_app_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/app_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 33 px, worst glyph-only count 155 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no app bar: the reference is plain CSS from the specification",
+     "Medium and large app bars are not compared",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/app_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 33 px, worst glyph-only count 142 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no app bar: the reference is plain CSS from the specification",
+     "Medium and large app bars are not compared",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "search_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/search_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 34 px, worst glyph-only count 118 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no search bar: the reference is plain CSS from the specification",
+     "Focused states are not compared (caret)",
+     "With text: Neper's clear button is 40 dp and drawn with its own glyph",
+     "Reference states with no sheet cell: search-bar-pressed",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/search_bar.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 4 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 35 px, worst glyph-only count 112 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no search bar: the reference is plain CSS from the specification",
+     "Focused states are not compared (caret)",
+     "With text: Neper's clear button is 40 dp and drawn with its own glyph",
+     "Reference states with no sheet cell: search-bar-pressed",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "badge": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/badge.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 6 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 41 px, worst glyph-only count 122 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no badge: the reference is plain CSS from the specification; the badge's offset on its icon follows that CSS",
+     "Over the line: badge-icon-3 (41)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/badge.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 6 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 41 px, worst glyph-only count 122 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no badge: the reference is plain CSS from the specification; the badge's offset on its icon follows that CSS",
+     "Over the line: badge-icon-3 (41)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/tooltip.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 2 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 9224 px, worst glyph-only count 274 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "The sheet's anchor button lies under the plain tooltip's crop",
+     "The rich tooltip is 20 dp shorter than the specification's (title 1 px low, no 4 dp under it, button row 20 dp short: layout not yet reconciled with the CSS); its level-2 shade is drawn now",
+     "Over the line: tooltip-plain (1928), tooltip-rich (9224)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/tooltip.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 2 states compared, 2 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 8274 px, worst glyph-only count 284 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "The sheet's anchor button lies under the plain tooltip's crop",
+     "The rich tooltip is 20 dp shorter than the specification's (title 1 px low, no 4 dp under it, button row 20 dp short: layout not yet reconciled with the CSS); its level-2 shade is drawn now",
+     "Over the line: tooltip-plain (1944), tooltip-rich (8274)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "slider": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/slider.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 10 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 0 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "The Material profile draws the classic M3 circle handle (20 dp, level-1 shade, 40 dp state layer); the Expressive vertical bar stays for every other look",
+     "Not compared: the labeled value pill and the ticks (the sheet draws neither; the runtime slider's value pill is off in the Material profile)",
+     "Range hover and press put the state layer on the second handle (the runtime does not say which handle the pointer is on)",
+     "Reference states with no sheet cell: slider-labeled-disabled, slider-labeled-focus, slider-labeled-hover, slider-labeled-pressed, slider-labeled-rest, slider-ticks-disabled, slider-ticks-focus, slider-ticks-hover, slider-ticks-pressed, slider-ticks-rest",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/slider.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 10 states compared, 0 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 27 px, worst glyph-only count 0 px.",
+    "gaps": [
+     "The Material profile draws the classic M3 circle handle (20 dp, level-1 shade, 40 dp state layer); the Expressive vertical bar stays for every other look",
+     "Not compared: the labeled value pill and the ticks (the sheet draws neither; the runtime slider's value pill is off in the Material profile)",
+     "Range hover and press put the state layer on the second handle (the runtime does not say which handle the pointer is on)",
+     "Reference states with no sheet cell: slider-labeled-disabled, slider-labeled-focus, slider-labeled-hover, slider-labeled-pressed, slider-labeled-rest, slider-ticks-disabled, slider-ticks-focus, slider-ticks-hover, slider-ticks-pressed, slider-ticks-rest",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "date_picker": {
+  "looks": {
+   "material": {
+    "status": "started",
+    "screenshot": "material/date_picker.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 1 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 39317 px, worst glyph-only count 2127 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no date picker: the reference is spec-written CSS (360 wide, Sunday first, a 28 day month starting on a Sunday, `Mon, Jun 14` over `June 2021`), compared here against February 2026 (also a Sunday-first 28 day month)",
+     "Neper's modal date picker is 328 wide with 40 dp day cells and Monday first and has the edit pencil; the CSS has 360 wide, 48 dp slots, Sunday first: a structural gap of about 20 000 flat px, not a rendering one",
+     "Over the line: date-picker-rest (39317)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "Compared with Material Web (docs/ui/looks/ref/material) at 100 % on the strict metric (a reference structural pixel is off when ours differs by more than 2 levels; text and icon ink within 2 px excluded, glyph-counted separately; every pixel outside the control's box compared, so shadows and state layers count): 1 states compared, 1 over the line (off + outside + ring above 0.3 % of the structural pixels, 40 at least); worst state 43812 px, worst glyph-only count 1553 px. The reference is spec-written CSS, not a Material Web capture, so the status caps at review.",
+    "gaps": [
+     "Material Web has no date picker: the reference is spec-written CSS (360 wide, Sunday first, a 28 day month starting on a Sunday, `Mon, Jun 14` over `June 2021`), compared here against February 2026 (also a Sunday-first 28 day month)",
+     "Neper's modal date picker is 328 wide with 40 dp day cells and Monday first and has the edit pencil; the CSS has 360 wide, 48 dp slots, Sunday first: a structural gap of about 20 000 flat px, not a rendering one",
+     "Over the line: date-picker-rest (43812)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ }
+}

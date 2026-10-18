@@ -5348,6 +5348,10 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
         let (linux, linux_error) = linux_scale(a, key, t, label, first, low, high, step, change, enabled)
         ret (linux, linux_error)
     }
+    if t.tokens.profile == .MaterialLike {
+        let (droid, droid_error) = material_slider(a, key, t, label, first, second, range, low, high, step, change, change_second, enabled)
+        ret (droid, droid_error)
+    }
     // v2 (D956, docs/ux/components/Slider): 44 deep for its handle, the active part
     // and the handles `primary`, the rest `secondary-container`; disabled, those are
     // `on-surface` at 38% and 12%.
@@ -5595,6 +5599,150 @@ fn linux_scale_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(across, high_px), layers[0usize..used]))), ok)
 }
 // ---- end the Linux look, scale -----------------------------------------------------------------------------------------------
+
+fn with_width(base: style.Style, width: f32) -> style.Style {
+    var out = base
+    out.width = style.Length { Px: width }
+    ret out
+}
+
+// ---- the Android look, slider (round 26) ------------------------------------------------------------------------------------
+// md-slider (Material Web 2.2, the classic M3 slider): 200 wide, 40 deep, a 4 dp track with round caps running from 18 in to 18 in, the
+// active part `primary` (a range: between its handles), the rest `surface-container-highest`, and a 20 dp circular handle in `primary` with the
+// level-1 shade. Hovered, focused or pressed, a 40 dp state layer in `primary` lies round the handle; disabled, the handle and the active
+// track are `on-surface` at 38 %, the rest at 12 %. No value pill and no ticks (those are md-slider's `labeled` and `ticks`, which the
+// widget does not ask for). The runtime's own slider, drawn transparent, 180 wide from 10 in (its ends stay 8 in), takes the pointer and
+// keys, so the pointer lands on the drawn track.
+fn material_bar(x: f32, width: f32, ink: paint.Color) -> widget.Node {
+    var bar = sized_style(width, 4.0)
+    bar.background = paint.Brush { Solid: ink }
+    bar.radius = 2.0
+    ret widget.positioned(0u64, x, 18.0, bar, zero)
+}
+
+fn material_disc(x: f32, size: f32, ink: paint.Color, shade: u8) -> widget.Node {
+    var disc = sized_style(size, size)
+    disc.background = paint.Brush { Solid: ink }
+    disc.radius = size * 0.5
+    disc.shade = shade
+    ret widget.positioned(0u64, x, 20.0 - size * 0.5, disc, zero)
+}
+
+fn material_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let ink = style.color(t.tokens, .OnSurface)
+    var fill = style.color(t.tokens, .Primary)
+    var rest = style.color(t.tokens, .SurfaceContainerHighest)
+    var knob = fill
+    if !enabled {
+        fill = with_alpha(ink, t.tokens.states.disabled_content)
+        rest = with_alpha(ink, t.tokens.states.disabled_container)
+        knob = style.mix(style.color(t.tokens, .Surface), ink, t.tokens.states.disabled_content)
+    }
+    var layer: f32 = 0.0
+    if enabled { layer = state_opacity(t, state) }
+    let span = high - low
+    var a_share: f32 = 0.0
+    var b_share: f32 = 0.0
+    if span > 0.0 {
+        a_share = (first - low) / span
+        b_share = (second - low) / span
+    }
+    if a_share < 0.0 { a_share = 0.0 }
+    if a_share > 1.0 { a_share = 1.0 }
+    if b_share < 0.0 { b_share = 0.0 }
+    if b_share > 1.0 { b_share = 1.0 }
+    if t.tokens.direction == .RightToLeft {
+        a_share = 1.0 - a_share
+        b_share = 1.0 - b_share
+    }
+    var near = a_share
+    var far = a_share
+    if range {
+        near = math.min[f32](a_share, b_share)
+        far = math.max[f32](a_share, b_share)
+    }
+    // md-slider keeps a range's handles 2 dp further in from each end (its two handles may not overlap the track's caps).
+    var reach: f32 = 164.0
+    var from: f32 = 18.0
+    if range {
+        reach = 160.0
+        from = 20.0
+    }
+    let x_near = from + near * reach
+    let x_far = from + far * reach
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 10usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    let rtl = t.tokens.direction == .RightToLeft
+    if range {
+        layers[used] = material_bar(18.0, x_near - 18.0, rest)
+        used += 1usize
+        layers[used] = material_bar(x_near, x_far - x_near, fill)
+        used += 1usize
+        layers[used] = material_bar(x_far, 182.0 - x_far, rest)
+        used += 1usize
+    } else if rtl {
+        layers[used] = material_bar(18.0, x_near - 18.0, rest)
+        used += 1usize
+        layers[used] = material_bar(x_near, 182.0 - x_near, fill)
+        used += 1usize
+    } else {
+        layers[used] = material_bar(18.0, x_near - 18.0, fill)
+        used += 1usize
+        layers[used] = material_bar(x_near, 182.0 - x_near, rest)
+        used += 1usize
+    }
+    var stops = [2]f32{ x_near, x_far }
+    var count: usize = 1
+    if range { count = 2 }
+    var k: usize = 0
+    while k < count {
+        // A range: the pointer and the press take the nearer end (md-slider: the end handle at the pointer's middle position), a key
+        // focus both; the runtime does not say which handle the pointer is over, so it is the second.
+        var haloed = k + 1usize == count
+        if state.focus_visible && !state.hovered && !state.pressed { haloed = true }
+        if layer > 0.0 && haloed {
+            layers[used] = material_disc(stops[k] - 20.0, 40.0, with_alpha(style.color(t.tokens, .Primary), layer), 0u8)
+            used += 1usize
+        }
+        k += 1usize
+    }
+    k = 0
+    while k < count {
+        var shade: u8 = 1u8
+        if !enabled { shade = 0u8 }
+        layers[used] = material_disc(stops[k] - 10.0, 20.0, knob, shade)
+        used += 1usize
+        k += 1usize
+    }
+    var track_style = sized_style(180.0, 40.0)
+    var track_at: f32 = 10.0
+    if range {
+        track_style = sized_style(176.0, 40.0)
+        track_at = 12.0
+    }
+    track_style.position = .Absolute
+    track_style.margin = style.EdgeLengths { left: style.Length { Px: track_at }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    layers[used] = widget.slider(key, widget.Slider { value: first, second: second, range: range, low: low, high: high, step: step, vertical: false, rtl: rtl, track: clear, fill: clear, thumb: clear, change: change, change_second: change_second, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }, track_style)
+    used += 1usize
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    if !range {
+        let (said, said_error) = mem.alloc[u8](a, 21usize)
+        if said_error != ok { ret (zero, TooLarge) }
+        var rounded = first + 0.5
+        if first < 0.0 { rounded = first - 0.5 }
+        let said_len = write_i64(said, i64(rounded))
+        sem.value = said[0usize..said_len]
+    }
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(200.0, 40.0), layers[0usize..used]))), ok)
+}
+// ---- end the Android look, slider ---------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------ progress (D822, P1-09)
 
@@ -7669,7 +7817,9 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     if android && !options.enabled { fill = style.layer(fill, style.color(t.tokens, .OnSurface), 0.0) }
     bar.background = paint.Brush { Solid: fill }
     bar.radius = h * 0.5
-    let pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
+    var pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
+    // Android: the bar is centred on its 56 dp, a taller clear button must not grow it.
+    if android { pad_y = style.Length { Px: 0.0 } }
     bar.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: pad_y, right: style.Length { Px: trail }, bottom: pad_y }
     if android && !options.enabled {
         // Disabled: the bar at the 38 % content level.
@@ -9341,8 +9491,17 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             parts[3usize] = widget.box(0u64, mark, zero)
             var column_style = style.defaults()
             column_style.height = style.Length { Px: h }
+            if t.tokens.profile == .MaterialLike { column_style.min_width = style.Length { Px: least } }
             column_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
-            content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..4usize])
+            var across: ui_layout.CrossAlign = .Stretch
+            if t.tokens.profile == .MaterialLike {
+                // md-primary-tab: the indicator is as wide as the label (the tab itself shares the bar).
+                let (said, _fit, _base, said_error) = run_metrics_faced(a, t, caption, labels[i])
+                if said_error != ok { ret (zero, said_error) }
+                parts[3usize] = widget.box(0u64, with_width(mark, max_of(24.0, said)), zero)
+                across = .Center
+            }
+            content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: across, gap: 0.0 }, column_style, parts[0usize..4usize])
         }
         if !enabled { look.background = with_alpha(ink, 0.0) }
         let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, named, look, enabled, chosen, 0u32, 0u32, 0u64, &picks[i], content)
@@ -13321,8 +13480,15 @@ type Notice = struct { text: str, action_label: str, action: widget.Submit, dism
 // A text button in a colour of its own (D971): the label and its state layer in
 // `color`, for a ground the theme's text buttons do not stand on.
 fn tinted_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, color: paint.Color) -> (widget.Node, err) {
+    let (made, made_error) = tinted_button_min(a, key, t, label, action, color, -1.0)
+    ret (made, made_error)
+}
+
+// `least` below zero keeps the look's own minimum width (the Android look's 64); otherwise it is the minimum (a snackbar's action has none).
+fn tinted_button_min(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, color: paint.Color, least: f32) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
     var look = button_look(t, style.resolve(t.tokens, .Plain, state), true)
+    if least >= 0.0 { look.min_width = least }
     look.foreground = color
     look.background = with_alpha(color, state_opacity(t, state))
     look.border_width = 0.0
@@ -13779,7 +13945,7 @@ fn stacked_toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notice: *Notic
     sheet.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: down, right: style.Length { Px: 8.0 }, bottom: down }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, sheet, parts[0usize..at])
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, sheet, parts[0usize..at])
     var sem: widget.Semantics = zero
     sem.role = 26u8
     sem.label = notice.text
@@ -18895,6 +19061,8 @@ fn material_choice_mark(a: *mem.Arena, t: *const Theme, state: style.ControlStat
     let filled = chosen || mixed
     let quiet = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content)
     var idle = style.color(t.tokens, .OnSurfaceVariant)
+    // Material Web (checkbox-styles.css hover/focus/pressed-outline-color, radio icon-color) and the M3 spec: on-surface once touched.
+    if state.hovered || state.focus_visible || state.pressed { idle = style.color(t.tokens, .OnSurface) }
     if invalid { idle = style.color(t.tokens, .Error) }
     var edge = style.mix(idle, accent, share)
     if !enabled {
@@ -19129,13 +19297,13 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     parts[0usize] = grown
     var at = 1usize
     if action_label.len != 0usize {
-        let (act, act_error) = tinted_button(a, key + 1u64, t, action_label, action, style.color(t.tokens, .InversePrimary))
+        let (act, act_error) = tinted_button_min(a, key + 1u64, t, action_label, action, style.color(t.tokens, .InversePrimary), 0.0)
         if act_error != ok { ret (zero, act_error) }
         parts[at] = act
         at += 1usize
     }
     if widget.submit_set(dismiss.invoke) {
-        let (close, close_error) = tinted_glyph_button(a, key + 2u64, t, .Cross, "Dismiss", dismiss, 48.0, 24.0, ink)
+        let (close, close_error) = tinted_glyph_button(a, key + 2u64, t, .Cross, "Dismiss", dismiss, 40.0, 24.0, ink)
         if close_error != ok { ret (zero, close_error) }
         parts[at] = close
         at += 1usize

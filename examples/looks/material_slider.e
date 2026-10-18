@@ -17,7 +17,6 @@ fn drive_of(column: usize) -> looks.Drive {
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let states = [5]str{ "Enabled", "Hovered", "Focused", "Pressed", "Disabled" }
-    let values = [1]f32{ 50.0 }
     var i = 0usize
     while i < 10usize {
         let row = i / 5usize
@@ -26,11 +25,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var node: widget.Node = zero
         var made: err = ok
         if row < 1usize {
-            let (n, e) = control.slider(a, u64(i + 1usize), t, "", values[row], 0.0, 100.0, 1.0, change, column != 4usize)
+            // md-slider's pressed capture is taken with the pointer at the middle: the handle sits at 50.
+            var value: f32 = 40.0
+            if column == 3usize { value = 50.0 }
+            let (n, e) = control.slider(a, u64(i + 1usize), t, "", value, 0.0, 100.0, 1.0, change, column != 4usize)
             node = n
             made = e
         } else {
-            let (n, e) = control.range_slider(a, u64((i + 1usize) * 4usize), t, "", 25.0, 75.0, 0.0, 100.0, 1.0, change, change, column != 4usize)
+            var second: f32 = 70.0
+            if column == 3usize { second = 50.0 }
+            let (n, e) = control.range_slider(a, u64((i + 1usize) * 4usize), t, "", 20.0, second, 0.0, 100.0, 1.0, change, change, column != 4usize)
             node = n
             made = e
         }
@@ -42,6 +46,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "slider", cells: 10usize, columns: 5usize, cell_w: 134.0, cell_h: 150.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "slider", cells: 10usize, columns: 5usize, cell_w: 220.0, cell_h: 40.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

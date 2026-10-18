@@ -281,7 +281,7 @@ fn set_look(rig: *Rig, look: Look) {
     style.set_windark(look == .WindowsDark)
     style.set_neperdark(look == .NeperDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
-    scene.set_pixel_exact(rig.tokens.profile == .Windows)
+    scene.set_pixel_exact(rig.tokens.profile == .Windows || rig.tokens.profile == .MaterialLike)
     scene.set_fine_curves(rig.tokens.profile == .Linux)
     scene.set_cff_text(rig.tokens.profile == .Linux)
     // The Windows profile draws text as ClearType (hinted, per-subpixel coverage); every other look keeps the greyscale fill.
@@ -293,7 +293,7 @@ fn set_look(rig: *Rig, look: Look) {
     if aa_error == ok && strs.eq(aa_text, "cleartype") { text_aa = scene.TextAa.ClearType }
     scene.set_text_aa(text_aa)
     let (exact_text, exact_error) = os.env(rig.a, "NEPER_LOOKS_EXACT")
-    scene.set_pixel_exact_at_one(exact_error == ok && exact_text.len > 0usize)
+    scene.set_pixel_exact_at_one((exact_error == ok && exact_text.len > 0usize) || rig.tokens.profile == .MaterialLike)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
     if (look == .Linux || look == .LinuxDark) && rig.linux_fonts.len > 0usize { rig.fonts = rig.linux_fonts }
 }
@@ -382,7 +382,9 @@ fn sheet(a: *mem.Arena, t: *const control.Theme, cells: []const Cell, columns: u
             parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, size_style(cell_w, caption_h()), holder)
             parts[2usize] = cells[i].node
             let inner = parts[2usize..3usize]
-            let centred = widget.aligned(0u64, .Center, .Center, size_style(cell_w, cell_h), inner)
+            var centred = widget.aligned(0u64, .Center, .Center, size_style(cell_w, cell_h), inner)
+            // Material Web's captures are laid out on whole pixels: the Android sheets put the control on one too.
+            if t.tokens.profile == .MaterialLike { centred = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .CenterWhole, cross: .CenterWhole, gap: 0.0 }, size_style(cell_w, cell_h), inner) }
             let (column, column_error) = mem.alloc[widget.Node](a, 2usize)
             if column_error != ok { ret (zero, column_error) }
             column[0usize] = parts[0usize]
@@ -709,10 +711,18 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
 // The Android look (docs/ui/looks/material, material-dark): `s` under style.material at 100 % and 150 %. Only these two
 // looks are written, so a sheet can be run without touching the Neper and Windows pictures.
 fn run_material(a: *mem.Arena, s: *const Sheet) -> err {
+    // As run_all: NEPER_LOOKS_SCALE renders that one scale and NEPER_LOOKS_NOTEXT leaves the text out (the scale check, scripts/looks_scale_check.py).
+    let only_scale = env_scale(a)
+    let (no_text, no_text_error) = os.env(a, "NEPER_LOOKS_NOTEXT")
+    scene.set_text_hidden(no_text_error == ok && no_text.len > 0usize)
     var scale_index = 0usize
     while scale_index < 2usize {
         var scale: f32 = 1.0
         if scale_index == 1usize { scale = 1.5 }
+        if only_scale > 0.0 {
+            if scale_index == 1usize { break }
+            scale = only_scale
+        }
         var look_index = 0usize
         while look_index < 2usize {
             var look: Look = .Material

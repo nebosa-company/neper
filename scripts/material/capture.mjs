@@ -30,7 +30,7 @@ const CONTROL = [
 ];
 const STATES = ["rest", "hover", "pressed", "focus", "disabled", "error"];
 const rows = [];
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || "D:/tools/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-win64/chrome-headless-shell.exe" });
+const browser = await chromium.launch({ args: ["--disable-lcd-text", "--font-render-hinting=none"], executablePath: process.env.CHROMIUM || "D:/tools/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-win64/chrome-headless-shell.exe" });
 const pages = {};
 for (const scale of [1, 2]) {
   const ctx = await browser.newContext({ deviceScaleFactor: scale, viewport: { width: 900, height: 900 } });

@@ -16,7 +16,8 @@ SHEETS = {
 IB = ["standard", "filled", "tonal", "outlined"]
 SHEETS["fab"] = {"columns": 6, "cell_w": 150, "cell_h": 108, "cells": [
     "fab-small-rest", "fab-rest", "fab-large-rest", "fab-extended-rest", "fab-extended-hover", "fab-extended-pressed"] + [
-    "icon-button-%s-%s" % (v, s) for v in IB for s in ["rest", "toggled", "hover", "focus", "pressed", "disabled"]]}
+    "icon-button-%s-%s" % (v, s) for v in IB for s in ["rest", "toggled", "hover", "focus", "pressed", "disabled"]] + [
+    "fab%s-%s" % (k, s) for k in ["-small", "", "-large"] for s in ["hover", "focus", "pressed"]] + ["fab-extended-focus"]}
 
 S6 = ["rest", "hover", "focus", "pressed", "disabled", "error"]
 SHEETS["checkbox"] = {"columns": 6, "cell_w": 72, "cell_h": 64, "cells": ["checkbox-%s-%s" % (k, s) for k in ["unchecked", "checked", "indeterminate"] for s in S6]}
@@ -26,6 +27,8 @@ SHEETS["switch"] = {"columns": 5, "cell_w": 90, "cell_h": 56, "cells": ["switch-
 SHEETS["text_field"] = {"columns": 6, "cell_w": 270, "cell_h": 96, "cells": [
     "text-field-%s-%s" % (v, k) for v in ["filled", "outlined"] for k in
     ["empty-rest", "empty-hover", "empty-focus", "value-focus", "value-disabled", "value-error"]]}
+# cells 12 to 19: filled then outlined with a value, with a value hovered, empty disabled, empty error
+SHEETS["text_field"]["cells"] += ["text-field-%s-%s" % (v, k) for v in ["filled", "outlined"] for k in ["value-rest", "value-hover", "empty-disabled", "empty-error"]]
 
 SHEETS["combo_box"] = {"columns": 3, "cell_w": 270, "cell_h": 96, "cells": [
     "select-outlined-value-rest", "select-outlined-value-hover", "select-outlined-value-focus", "select-outlined-value-disabled",
@@ -65,3 +68,11 @@ SHEETS["badge"] = {"columns": 6, "cell_w": 100, "cell_h": 56, "cells": [
 
 SHEETS["tooltip"] = {"columns": 3, "cell_w": 320, "cell_h": 280, "full": True, "at": [(110, 92), (0, 0), (-105, 164)], "cells": [
     "tooltip-plain", None, "tooltip-rich"]}
+
+SHEETS["slider"] = {"columns": 5, "cell_w": 220, "cell_h": 40, "cells": [
+    "slider-rest", "slider-rest-hover", "slider-rest-focus", "slider-rest-pressed", "slider-rest-disabled"] + [
+    "slider-range-%s" % s for s in S5]}
+
+# The reference is spec-derived CSS (360 wide, Sunday first, a 28 day month from a Sunday), not a Material Web capture: the numbers measure how far the
+# modal date picker is from that reading of the spec (it is 328 wide, Monday first), they are not a pass mark.
+SHEETS["date_picker"] = {"columns": 1, "cell_w": 360, "cell_h": 560, "at": (16, 10), "cells": ["date-picker-rest"]}
