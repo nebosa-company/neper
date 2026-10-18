@@ -47,3 +47,6 @@ SHEETS["menu_hover"] = {"columns": 1, "cell_w": 220, "cell_h": 345, "at": (18, 8
 
 SHEETS["list"] = {"columns": 4, "cell_w": 350, "cell_h": 96, "cells": [
     "list-item-one-rest", "list-item-two-rest", None, "list-item-two-hover", "list-item-two-focus", "list-item-two-pressed", None, "list-item-two-disabled"]}
+
+SHEETS["dialog"] = {"columns": 1, "cell_w": 330, "cell_h": 300, "at": (-9, 16), "cells": ["dialog-rest"]}
+SHEETS["dialog_icon"] = {"columns": 1, "cell_w": 330, "cell_h": 340, "at": (-9, 26), "cells": ["dialog-icon"]}

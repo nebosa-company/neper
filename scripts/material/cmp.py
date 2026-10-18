@@ -54,6 +54,8 @@ def run(name, dark, png_dir, only):
     sheet = SHEETS[name]
     scheme = "dark" if dark else "light"
     ours = load(os.path.join(LOOKS, "material-dark" if dark else "material", name + ".png"))
+    PAD = 32  # a control that overhangs its cell (a dialog) is compared over the sheet's edge pixels
+    ours = np.pad(ours, ((PAD, PAD), (PAD, PAD), (0, 0)), mode="edge")
     totals = [0, 0, 0, 0, 0]
     results = []
     for i, ref_name in enumerate(sheet["cells"]):
@@ -66,8 +68,8 @@ def run(name, dark, png_dir, only):
         if os.path.exists(raw):
             glyph = ndimage.binary_dilation((np.abs(ref - load(raw)).max(axis=2) > 2), structure=np.ones((3, 3), bool), iterations=2)
         col, row = i % sheet["columns"], i // sheet["columns"]
-        x0 = MARGIN + col * (sheet["cell_w"] + SPACING)
-        y0 = MARGIN + row * (CAPTION + sheet["cell_h"] + SPACING) + CAPTION
+        x0 = MARGIN + col * (sheet["cell_w"] + SPACING) + PAD
+        y0 = MARGIN + row * (CAPTION + sheet["cell_h"] + SPACING) + CAPTION + PAD
         # the crop's origin in the sheet if the control is centred in the cell
         cx = x0 + (sheet["cell_w"] - w) / 2.0 - CROP
         cy = y0 + (sheet["cell_h"] - h) / 2.0 - CROP

@@ -1508,7 +1508,9 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
             well_fill = .ErrorContainer
             well_ink = .OnErrorContainer
         }
-        let (mark, mark_error) = control.icon_square(a, style.color(t.tokens, well_ink), icon, 24.0)
+        var icon_color = style.color(t.tokens, well_ink)
+        if t.tokens.profile == .MaterialLike && !destructive_icon { icon_color = style.color(t.tokens, .Secondary) }
+        let (mark, mark_error) = control.icon_square(a, icon_color, icon, 24.0)
         if mark_error != ok { ret (zero, mark_error) }
         let (mark_body, mark_body_error) = mem.alloc[widget.Node](a, 1usize)
         if mark_body_error != ok { ret (zero, TooLarge) }
@@ -1516,6 +1518,11 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
         var well = control.sized_style(40.0, 40.0)
         well.radius = 20.0
         well.background = paint.Brush { Solid: style.color(t.tokens, well_fill) }
+        // md-dialog: the icon stands alone, 24 dp in `secondary`, with no well.
+        if t.tokens.profile == .MaterialLike {
+            well = control.sized_style(24.0, 24.0)
+            well.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+        }
         let icon_well = widget.aligned(0u64, .Center, .Center, well, mark_body[0usize..1usize])
         let (header, header_error) = mem.alloc[widget.Node](a, 2usize)
         if header_error != ok { ret (zero, TooLarge) }
@@ -1531,13 +1538,18 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     parts[1usize] = widget.padded(0u64, 0.0, 16.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
     var actions_style = style.defaults()
     actions_style.padding.top = style.Length { Px: 8.0 }
+    // md-dialog: 24 dp between the content and the actions (8 more than the Neper default's padding adds up to).
+    if t.tokens.profile == .MaterialLike { actions_style.padding.top = style.Length { Px: 32.0 } }
     parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, actions_style, row[0usize..buttons.len])
     var raised = control.surface_options(t)
     raised.background = .SurfaceContainerHigh
     raised.elevation = 3u8
     raised.radius = t.tokens.radii.xl
     raised.padding = 24.0
+    // Android: the level-3 shade is drawn (e.ui.matshade), not the offset copy.
+    if t.tokens.profile == .MaterialLike { raised.elevation = 0u8 }
     var card_style = control.surface_style(t, raised)
+    if t.tokens.profile == .MaterialLike { card_style.shade = 3u8 }
     card_style.min_width = style.Length { Px: 280.0 }
     card_style.max_width = style.Length { Px: 560.0 }
     let (card, card_error) = mem.alloc[widget.Node](a, 1usize)
