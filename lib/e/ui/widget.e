@@ -2135,7 +2135,16 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
     if shown_error != ok { ret shown_error }
     if shown.len == 0usize {
         // Nothing to lay out: the caret alone, one line tall.
-        if focused_here { try push_rect(b, geometry.Rect { x: 0.0, y: 0.0, width: 1.0, height: ed.style.line_height }, origin, ed.color) }
+        if focused_here {
+            var empty_color = ed.color
+            var empty_width: f32 = 1.0
+            // A caret colour (not the native Windows sentinel) draws the 2 px caret of its colour, as with text.
+            if ed.caret.alpha > 0.0 && !native_caret_face(ed.caret) {
+                empty_color = ed.caret
+                empty_width = 2.0
+            }
+            try push_rect(b, geometry.Rect { x: 0.0, y: 0.0, width: empty_width, height: ed.style.line_height }, origin, empty_color)
+        }
         ret ok
     }
     let (laid, layout_error) = lay_edit(a, shown, ed.style, edit_options(inner.width, ed.multiline))

@@ -116,6 +116,7 @@ html.notext svg.i { opacity: 0; }
 .appbar .ic { width: 48px; height: 48px; display: grid; place-items: center; color: var(--md-sys-color-on-surface-variant); }
 .appbar .ttl { flex: 1; font: 400 22px/28px Roboto; padding: 0 4px; }
 .appbar.center .ttl { text-align: center; }
+.appbar .ttl:first-child { padding-left: 12px; } /* no leading icon: the title starts 16 dp in (4 bar + 12) */
 .searchbar { box-sizing: border-box; display: flex; align-items: center; width: 320px; height: 56px; border-radius: 28px; padding: 0 16px; gap: 16px;
   background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant); position: relative; overflow: hidden; }
 .searchbar .ph { flex: 1; font: 400 16px/24px Roboto; letter-spacing: 0; }

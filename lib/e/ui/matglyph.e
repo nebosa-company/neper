@@ -188,6 +188,14 @@ fn mat_down(b: *geometry.PathBuilder, x: f32, y: f32, w: f32, h: f32) -> err {
     ret ok
 }
 
+fn mat_up(b: *geometry.PathBuilder, x: f32, y: f32, w: f32, h: f32) -> err {
+    try geometry.move_to(b, geometry.Point { x: x + w * 0.29167, y: y + h * 0.58333 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.5, y: y + h * 0.375 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.70833, y: y + h * 0.58333 })
+    try geometry.close_path(b)
+    ret ok
+}
+
 fn mat_prev(b: *geometry.PathBuilder, x: f32, y: f32, w: f32, h: f32) -> err {
     try geometry.move_to(b, geometry.Point { x: x + w * 0.64208, y: y + h * 0.30875 })
     try geometry.line_to(b, geometry.Point { x: x + w * 0.58333, y: y + h * 0.25 })

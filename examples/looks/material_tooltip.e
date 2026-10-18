@@ -17,6 +17,9 @@ fn anchored(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit
     options.variant = .Tonal
     let (button, button_error) = control.button(a, anchor_key, t, "Anchor", action, options)
     if button_error != ok { ret (zero, button_error) }
+    // The anchor only places the tooltip; it is left unpainted so the sheet compares the tooltip alone (its crop would hold the anchor).
+    var unseen = button
+    unseen.style.opacity = 0.0
     var tip: widget.Node = zero
     if rich {
         let (items, items_error) = mem.alloc[overlay.MenuItem](a, 1usize)
@@ -32,7 +35,7 @@ fn anchored(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, parts_error) }
-    parts[0usize] = button
+    parts[0usize] = unseen
     parts[1usize] = tip
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
 }

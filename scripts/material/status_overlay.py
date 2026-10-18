@@ -1,4 +1,4 @@
-"""Writes docs/ui/looks/status.d/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-round26-mm.json from the strict comparison (scripts/material/cmp.py).
+"""Writes docs/ui/looks/status.d/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-round28-mm.json from the strict comparison (scripts/material/cmp.py).
 
   python -I scripts/material/status_overlay.py          (from the repository root, after the material sheets are rendered)
 
@@ -107,7 +107,7 @@ def main():
             g.append("Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture")
             looks[key] = {"status": status, "screenshot": shot_here, "notes": notes, "gaps": g}
         overlay[cid] = {"looks": looks}
-    path = os.path.join(ROOT, "docs/ui/looks/status.d/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-round26-mm.json")
+    path = os.path.join(ROOT, "docs/ui/looks/status.d/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-round28-mm.json")
     with open(path, "w") as f:
         json.dump(overlay, f, indent=1)
         f.write("\n")
