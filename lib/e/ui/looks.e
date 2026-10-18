@@ -273,6 +273,7 @@ fn set_look(rig: *Rig, look: Look) {
     style.set_windark(look == .WindowsDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
     scene.set_pixel_exact(rig.tokens.profile == .Windows)
+    scene.set_fine_curves(rig.tokens.profile == .Linux)
     // The Windows profile draws text as ClearType (hinted, per-subpixel coverage); every other look keeps the greyscale fill.
     // NEPER_TEXT_AA=grayscale draws the Windows looks that way too, NEPER_TEXT_AA=cleartype draws every look in ClearType.
     var text_aa = scene.TextAa.Grayscale

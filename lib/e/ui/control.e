@@ -28,6 +28,7 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 use e.ui.linux_card
+use e.ui.linuxsoft_lb as linuxsoft
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -2391,6 +2392,7 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 // whichever element the keyboard focuses, so a control need only hand it the look.
 fn focus_look(t: *const Theme) {
     widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux)
+    scene.set_fine_curves(t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
     widget.set_focus_ring(t.runtime, style.color(t.tokens, .FocusRing), t.tokens.metrics.focus_ring, t.tokens.metrics.focus_offset)
     // v2 (D983, widget plan P5-02): a touch theme's press ripple is `on-surface`
@@ -5390,7 +5392,7 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
 // Dark until hovered) that travels from 10 to 190 with a soft shadow below it. A keyboard-focused knob wears a 2 px ring of the
 // accent at 50 % outside it; an insensitive scale is paler throughout. The runtime's own slider, drawn transparent, takes the
 // pointer and keys.
-type LinuxScale = struct { arena: *mem.Arena, share: f32, trough: paint.Color, fill: paint.Color, knob: paint.Color, ring: bool, accent: paint.Color, across: f32, shade: f32 }
+type LinuxScale = struct { arena: *mem.Arena, share: f32, dark: bool, hot: bool, enabled: bool, ring: bool, accent: paint.Color, across: f32 }
 
 fn linux_scale_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -5402,6 +5404,15 @@ fn linux_scale_circle(a: *mem.Arena, b: *scene.Builder, cx: f32, cy: f32, radius
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: color } } })
 }
 
+// A ring of `width` between the circles of radius `outer - width` and `outer` about (cx, cy).
+fn linux_scale_ring(a: *mem.Arena, b: *scene.Builder, cx: f32, cy: f32, outer: f32, width: f32, color: paint.Color) -> err {
+    let corner = style.Corners { top_left: outer, top_right: outer, bottom_right: outer, bottom_left: outer }
+    ret widget.fill_ring(a, b, geometry.Rect { x: cx - outer, y: cy - outer, width: outer * 2.0, height: outer * 2.0 }, corner, width, color)
+}
+
+// GTK paints the trough (the text colour at 12 %, 16 % under the pointer), over it the highlight (the accent, and the pointer's wash
+// as a second layer), the knob's shadows (a 1 px ring of black 10 %, `0 2px 4px` of black 20 %) and the knob, the keyboard focus ring
+// last; a disabled scale is the whole at 50 % (its node carries the opacity) with the soft shadow clear.
 fn linux_scale_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let s = mem.cast[*LinuxScale](ctx)
     let top = area.y + 15.0
@@ -5409,29 +5420,28 @@ fn linux_scale_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
     let right = area.x + s.across - 12.0
     let cx = area.x + 10.0 + s.share * (s.across - 20.0)
     let cy = area.y + 17.0
+    var ink = paint.rgba(0.0, 0.0, 0.0, 0.116)
+    if s.hot { ink = paint.rgba(0.0, 0.0, 0.0, 0.156) }
+    if s.dark {
+        ink = paint.rgba(1.0, 1.0, 1.0, 0.15)
+        if s.hot { ink = paint.rgba(1.0, 1.0, 1.0, 0.2) }
+    }
     let (trough, trough_error) = widget.rounded_path(s.arena, geometry.Rect { x: left, y: top, width: right - left, height: 4.0 }, 2.0)
     if trough_error != ok { ret trough_error }
-    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: trough, brush: paint.Brush { Solid: s.trough } } })
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: trough, brush: paint.Brush { Solid: ink } } })
     if cx > left {
         let (filled, filled_error) = widget.rounded_path(s.arena, geometry.Rect { x: left, y: top, width: cx - left, height: 4.0 }, 2.0)
         if filled_error != ok { ret filled_error }
-        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: filled, brush: paint.Brush { Solid: s.fill } } })
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: filled, brush: paint.Brush { Solid: style.hex_raw(0x3584E4u32) } } })
+        if s.hot { try scene.push(b, scene.Command { FillPath: scene.FillPath { path: filled, brush: paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.1) } } }) }
     }
-    // the shadow: the knob's circle one pixel lower, grown by 4 down to 0, each ring adding what the next leaves of the measured total
-    let totals = [6]f32{ 0.244 * s.shade, 0.116 * s.shade, 0.068 * s.shade, 0.02 * s.shade, 0.0, 0.0 }
-    var e: usize = 5usize
-    while e > 0usize {
-        e -= 1usize
-        let own = 1.0 - (1.0 - totals[e]) / (1.0 - totals[e + 1usize])
-        try linux_scale_circle(s.arena, b, cx, cy + 1.0, 10.0 + f32(e), paint.rgba(0.0, 0.0, 0.0, own))
-    }
-    try linux_scale_circle(s.arena, b, cx, cy, 10.0, s.knob)
-    if s.ring {
-        let (ring_path, ring_error) = widget.rounded_path(s.arena, geometry.Rect { x: cx - 11.0, y: cy - 11.0, width: 22.0, height: 22.0 }, 11.0)
-        if ring_error != ok { ret ring_error }
-        let stroke = paint.Stroke { width: 2.0, cap: .Butt, join: .Round, miter_limit: 4.0 }
-        ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: ring_path, brush: paint.Brush { Solid: with_alpha(s.accent, 0.5) }, stroke: stroke } })
-    }
+    let box = geometry.Rect { x: cx - 10.0, y: cy - 10.0, width: 20.0, height: 20.0 }
+    try linux_scale_ring(s.arena, b, cx, cy, 11.0, 1.0, paint.rgba(0.0, 0.0, 0.0, 0.1))
+    if s.enabled { try linuxsoft.soft_disc(s.arena, b, box, 10.0, 2.0, 0.2, 3.0) }
+    var knob = style.hex_raw(0xFFFFFFu32)
+    if s.dark && !s.hot { knob = style.hex_raw(0xD2D2D2u32) }
+    try linux_scale_circle(s.arena, b, cx, cy, 10.0, knob)
+    if s.ring { try linux_scale_ring(s.arena, b, cx, cy, 12.0, 2.0, with_alpha(s.accent, 0.5)) }
     ret ok
 }
 
@@ -5439,40 +5449,17 @@ fn linux_scale(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, valu
     let dark = t.tokens.palette == .Dark
     let state = control_state(t, key, enabled, false)
     let hot = enabled && (state.hovered || state.pressed)
-    var trough = style.hex_raw(0xDDDDDDu32)
-    var fill = style.hex_raw(0x3584E4u32)
-    var knob = style.hex_raw(0xFFFFFFu32)
-    if dark {
-        trough = style.hex_raw(0x454545u32)
-        knob = style.hex_raw(0xD2D2D2u32)
-    }
-    if hot {
-        trough = style.hex_raw(0xD3D3D3u32)
-        fill = style.hex_raw(0x4990E7u32)
-        if dark {
-            trough = style.hex_raw(0x505050u32)
-            knob = style.hex_raw(0xFFFFFFu32)
-        }
-    }
-    if !enabled {
-        trough = style.hex_raw(0xEBEBEBu32)
-        fill = style.hex_raw(0x98BFEFu32)
-        knob = style.hex_raw(0xFDFDFDu32)
-        if dark {
-            trough = style.hex_raw(0x343434u32)
-            fill = style.hex_raw(0x2D5484u32)
-            knob = style.hex_raw(0x7B7B7Bu32)
-        }
-    }
     var share: f32 = 0.0
     if high > low { share = (value - low) / (high - low) }
     if share < 0.0 { share = 0.0 }
     if share > 1.0 { share = 1.0 }
     let (scales, scales_error) = mem.alloc[LinuxScale](a, 1usize)
     if scales_error != ok { ret (zero, TooLarge) }
-    scales[0usize] = LinuxScale { arena: a, share: share, trough: trough, fill: fill, knob: knob, ring: enabled && state.focus_visible, accent: style.color(t.tokens, .Focus), across: 200.0, shade: if_else(enabled, 1.0, 0.12) }
+    scales[0usize] = LinuxScale { arena: a, share: share, dark: dark, hot: hot, enabled: enabled, ring: enabled && state.focus_visible, accent: style.color(t.tokens, .Focus), across: 200.0 }
     var none: []const widget.Node = zero
-    let seen = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&scales[0usize]), measure: linux_scale_measure, paint: linux_scale_paint, state: widget.bytes_of[LinuxScale](&scales[0usize]) } }, style: sized_style(200.0, 34.0), children: none }
+    var seen_style = sized_style(200.0, 34.0)
+    if !enabled { seen_style.opacity = 0.5 }
+    let seen = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&scales[0usize]), measure: linux_scale_measure, paint: linux_scale_paint, state: widget.bytes_of[LinuxScale](&scales[0usize]) } }, style: seen_style, children: none }
     var track_style = sized_style(200.0, 34.0)
     track_style.position = .Absolute
     let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -20854,6 +20841,7 @@ fn linux_button_shaped(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var count = 0usize
+    var label_w: f32 = 0.0
     if has_icon {
         parts[count] = picture
         count += 1usize
@@ -20868,6 +20856,7 @@ fn linux_button_shaped(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
         // 1 px above the middle (measured on the library's own buttons): a 21 high holder, the line 2 px off its foot.
         let (wide, wide_error) = linux_label_width(a, t, caption, label)
         if wide_error != ok { ret (zero, wide_error) }
+        label_w = wide
         let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
         parts[count] = widget.aligned(0u64, .Center, .Center, sized_style(wide, 21.0), mem_one_node(a, held))
         count += 1usize
@@ -20875,9 +20864,101 @@ fn linux_button_shaped(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 6.0 }, style.defaults(), parts[0usize..count])
     var name = label
     if alone { name = "Button" }
+    // A coloured button is its colour under a wash, and wears its focus ring outside (round 22, lb): see linux_coloured_button.
+    let (coloured, base, wash) = style.adwaita_layers(t.tokens, options.variant, state)
+    if coloured {
+        let (made, made_error) = linux_coloured_button(a, key, t, name, look, base, wash, state, alone, has_icon, label_w, action, options, row)
+        ret (made, made_error)
+    }
     let (node, node_error) = pressable(a, key, t, 3u8, name, look, options.enabled, false, action, row)
     ret (node, node_error)
 }
+// The ring a coloured Linux button wears: 2 px wide, 1 px off the box (`outline-offset: 1px`), painted outside the node's area.
+type LinuxOutset = struct { arena: *mem.Arena, color: paint.Color, radius: f32 }
+
+fn linux_outset_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+// The ring node: absolute over a `width` x `height` box whose corners are `radius`, painted just outside it.
+fn linux_outset_node(a: *mem.Arena, width: f32, height: f32, radius: f32, color: paint.Color) -> (widget.Node, err) {
+    let (rings, rings_error) = mem.alloc[LinuxOutset](a, 1usize)
+    if rings_error != ok { ret (zero, TooLarge) }
+    rings[0usize] = LinuxOutset { arena: a, color: color, radius: radius }
+    var fill = sized_style(width, height)
+    fill.position = .Absolute
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&rings[0usize]), measure: linux_outset_measure, paint: linux_outset_paint, state: widget.bytes_of[LinuxOutset](&rings[0usize]) } }, style: fill, children: none }, ok)
+}
+
+fn linux_outset_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let ring = mem.cast[*LinuxOutset](ctx)
+    let grown = geometry.Rect { x: area.x - 3.0, y: area.y - 3.0, width: area.width + 6.0, height: area.height + 6.0 }
+    let corner = ring.radius + 3.0
+    ret widget.fill_ring(ring.arena, b, grown, style.Corners { top_left: corner, top_right: corner, bottom_right: corner, bottom_left: corner }, 2.0, ring.color)
+}
+
+// The bullet of a selected radio: libadwaita's own asset (assets/bullet-symbolic, a circle of radius 4) is a smooth raster, not Cairo's
+// 8-part corners, so it is a 48-sided polygon here.
+fn linux_dot_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let dot = mem.cast[*LinuxOutset](ctx)
+    let (pb, pb_error) = geometry.path_builder(dot.arena, 49usize, 49usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    var i = 0usize
+    while i < 48usize {
+        let angle = f32(i) * 6.2831853 / 48.0
+        let at = geometry.Point { x: cx + dot.radius * math.cos[f32](angle), y: cy + dot.radius * math.sin[f32](angle) }
+        if i == 0usize { try geometry.move_to(&builder, at) } else { try geometry.line_to(&builder, at) }
+        i += 1usize
+    }
+    try geometry.close_path(&builder)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: dot.color } } })
+}
+
+// A suggested or destructive button as GTK composes it (round 22, lb): the accent or destructive colour as its own layer, the hover or
+// pressed wash as the pressable's face over it (each layer antialiased alone at the corners), the label above, and the keyboard
+// focus ring OUTSIDE the box (2 px wide, 1 px off: `outline-offset: 1px`), where a plain button's is inside. The whole is one layer
+// group so a disabled button fades as one. The box size is worked out here (label, 6 px gap, picture, padding): the layers are
+// absolute and need it.
+fn linux_coloured_button(a: *mem.Arena, key: widget.Key, t: *const Theme, name: str, resolved: style.ResolvedControl, base: paint.Color, wash: paint.Color, state: style.ControlState, alone: bool, has_icon: bool, label_w: f32, action: *const widget.Submit, options: ButtonOptions, row: widget.Node) -> (widget.Node, err) {
+    var look = resolved
+    let fade = look.opacity
+    look.opacity = 1.0
+    look.background = wash
+    var inner: f32 = label_w
+    if has_icon { inner = inner + 16.0 }
+    if has_icon && !alone { inner = inner + 6.0 }
+    var width = inner + 2.0 * look.padding
+    let floor_w = max_of(t.tokens.metrics.hit_target, look.min_width)
+    if floor_w > width { width = floor_w }
+    let height = max_of(t.tokens.metrics.control_height, look.min_height)
+    let (pressed, pressed_error) = pressable(a, key, t, 3u8, name, look, options.enabled, false, action, row)
+    if pressed_error != ok { ret (zero, pressed_error) }
+    var base_style = sized_style(width, height)
+    base_style.position = .Absolute
+    base_style.background = paint.Brush { Solid: base }
+    base_style.radius = look.radius
+    base_style.corners = look.corners
+    let ringed = state.focus_visible && options.enabled
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.box(0u64, base_style, zero)
+    layers[1usize] = pressed
+    var count = 2usize
+    if ringed {
+        let (ring, ring_error) = linux_outset_node(a, width, height, look.radius, style.color(t.tokens, .FocusRing))
+        if ring_error != ok { ret (zero, ring_error) }
+        layers[2usize] = ring
+        count = 3usize
+    }
+    var whole = sized_style(width, height)
+    whole.opacity = fade
+    ret (widget.stack(0u64, whole, layers[0usize..count]), ok)
+}
+
 // ---- the Linux look, toggle buttons (worker l3, round 20) ----------------------------------------------------------
 // GtkToggleButton: a button whose checked state is the pressed wash (black 23.6 %, white 29.2 % Dark; the default Tonal face
 // unchecked). The icon form is the flat 34 px button (9 px padding round a 16 px glyph).
@@ -22041,32 +22122,6 @@ fn win_dark_bullets(a: *mem.Arena, count: usize) -> (widget.Node, err) {
 // and filled solid) while off, the accent fill (#3584e4, hover #4990e7, pressed #2a6ab6) with a white tick, dash or 8 px dot
 // while on, the label 4 px after it, the whole row at 50 % when disabled, and a 2 px accent ring round the row when the
 // keyboard focuses it.
-fn linux_tick_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let g = mem.cast[*Glyph](ctx)
-    let (pb, pb_error) = geometry.path_builder(g.arena, 4usize, 6usize)
-    if pb_error != ok { ret TooLarge }
-    var builder = pb
-    try geometry.move_to(&builder, geometry.Point { x: area.x + 4.8, y: area.y + 10.3 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 8.0, y: area.y + 13.6 })
-    try geometry.line_to(&builder, geometry.Point { x: area.x + 15.0, y: area.y + 6.4 })
-    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: g.color }, stroke: paint.Stroke { width: g.stroke, cap: .Round, join: .Round, miter_limit: 4.0 } } })
-}
-
-fn linux_tick(a: *mem.Arena, color: paint.Color) -> (widget.Node, err) {
-    let (made, made_error) = stroked_glyph(a, color, .Check, 20.0, 2.3)
-    if made_error != ok { ret (zero, made_error) }
-    var out = made
-    switch out.kind {
-    case .Custom as c:
-        var painted = c
-        painted.paint = linux_tick_paint
-        out.kind = widget.Kind { Custom: painted }
-    default:
-        out = out
-    }
-    ret (out, ok)
-}
-
 // The indicator's colours: (fill, ring, ring width).
 fn linux_choice_colors(t: *const Theme, state: style.ControlState, filled: bool) -> (paint.Color, paint.Color, f32) {
     let dark = t.tokens.palette == .Dark
@@ -22081,10 +22136,8 @@ fn linux_choice_colors(t: *const Theme, state: style.ControlState, filled: bool)
         press = 0.25
     }
     if filled {
-        var face = style.hex_raw(0x3584E4u32)
-        if state.hovered && !state.pressed { face = style.hex_raw(0x4990E7u32) }
-        if state.pressed { face = style.hex_raw(0x2A6AB6u32) }
-        ret (face, paint.rgba(0.0, 0.0, 0.0, 0.0), 0.0)
+        // the accent alone: the hover and pressed washes are their own layer over it (see linux_choice)
+        ret (style.hex_raw(0x3584E4u32), paint.rgba(0.0, 0.0, 0.0, 0.0), 0.0)
     }
     var alpha = rest
     if state.hovered { alpha = hover }
@@ -22100,41 +22153,63 @@ fn linux_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label
     let state = control_state(t, key, enabled, false)
     let filled = chosen || mixed
     let (face, ring, ring_w) = linux_choice_colors(t, state, filled)
+    var side: f32 = 20.0
+    if round { side = 20.0 }
     var box = sized_style(20.0, 20.0)
     box.background = paint.Brush { Solid: face }
     box.border = style.Border { width: ring_w, color: ring }
     box.radius = 6.0
     if round {
-        box = sized_style(20.1, 20.1)
+        box = sized_style(20.0, 20.0)
         box.background = paint.Brush { Solid: face }
         box.border = style.Border { width: ring_w, color: ring }
-        box.radius = 10.05
+        box.radius = 10.0
     }
     let white = style.hex_raw(0xFFFFFFu32)
     let (inside, inside_error) = mem.alloc[widget.Node](a, 1usize)
     if inside_error != ok { ret (zero, TooLarge) }
     var drawn = 0usize
     if filled && round {
+        let (dots, dots_error) = mem.alloc[LinuxOutset](a, 1usize)
+        if dots_error != ok { ret (zero, TooLarge) }
+        dots[0usize] = LinuxOutset { arena: a, color: white, radius: 4.0 }
         var dot = sized_style(8.0, 8.0)
-        dot.background = paint.Brush { Solid: white }
-        dot.radius = 4.0
-        inside[0usize] = widget.box(0u64, dot, zero)
-        drawn = 1usize
+        var none: []const widget.Node = zero
+        inside[drawn] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: linux_outset_measure, paint: linux_dot_paint, state: widget.bytes_of[LinuxOutset](&dots[0usize]) } }, style: dot, children: none }
+        drawn += 1usize
     }
     if filled && !round && mixed {
         var dash = sized_style(12.0, 4.0)
         dash.background = paint.Brush { Solid: white }
         dash.radius = 2.0
-        inside[0usize] = widget.box(0u64, dash, zero)
-        drawn = 1usize
+        inside[drawn] = widget.box(0u64, dash, zero)
+        drawn += 1usize
     }
     if filled && !round && !mixed {
-        let (tick, tick_error) = linux_tick(a, white)
+        let (tick, tick_error) = adwicon.icon(a, adwicon.check_symbolic(), white, 14.0)
         if tick_error != ok { ret (zero, tick_error) }
-        inside[0usize] = tick
-        drawn = 1usize
+        inside[drawn] = tick
+        drawn += 1usize
     }
     var mark = widget.aligned(0u64, .Center, .Center, box, inside[0usize..drawn])
+    // `background-image: image(alpha(currentColor, 0.1))` hovered, black 20 % pressed: a layer over the accent, antialiased on its own
+    // at the corners, under the tick.
+    if filled && (state.hovered || state.pressed) {
+        var wash = sized_style(side, side)
+        wash.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.1) }
+        if state.pressed { wash.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.2) } }
+        wash.radius = box.radius
+        var base = wash
+        base.background = paint.Brush { Solid: face }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 6usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = widget.box(0u64, base, zero)
+        layers[1usize] = widget.box(0u64, wash, zero)
+        layers[2usize] = widget.aligned(0u64, .Center, .Center, sized_style(20.0, 20.0), mem_one_node(a, layers[0usize]))
+        layers[3usize] = widget.aligned(0u64, .Center, .Center, sized_style(20.0, 20.0), mem_one_node(a, layers[1usize]))
+        layers[4usize] = widget.aligned(0u64, .Center, .Center, sized_style(20.0, 20.0), inside[0usize..drawn])
+        mark = widget.stack(0u64, sized_style(20.0, 20.0), layers[2usize..5usize])
+    }
     // The disc is 20.1 across (measured), centred on the 20 x 20 slot.
     var caption = text_options()
     caption.wrap = .None
@@ -22150,7 +22225,7 @@ fn linux_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), parts[0usize..2usize])
     var s = sized_style(32.0 + wide, 28.0)
     s.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
-    if state.focus_visible && enabled { s.border = style.Border { width: 1.78, color: with_alpha(style.color(t.tokens, .FocusRing), 0.49) } }
+    if state.focus_visible && enabled { s.border = style.Border { width: 2.0, color: style.color(t.tokens, .FocusRing) } }
     s.radius = 9.0
     s.opacity = 1.0
     if !enabled { s.opacity = 0.5 }
@@ -22377,15 +22452,12 @@ fn linux_switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     if on { goal = 1.0 }
     let share = eased_on(t, key, key + 1048592u64, goal, false, t.tokens.durations.short3)
     let (fill, ring, ring_w) = linux_choice_colors(t, state, false)
-    var track_fill = fill
-    if ring_w == 0.0 { track_fill = fill }
-    // Off: the ring ink is the fill (the pressed form of linux_choice_colors, which is a fill); at rest and hover it is a ring colour.
+    // Off: the ring ink is the fill (the pressed form of linux_choice_colors is a fill; rest and hover give a ring colour).
     var off_fill = ring
     if ring_w == 0.0 { off_fill = fill }
-    let (on_fill, on_ring, on_ring_w) = linux_choice_colors(t, state, true)
-    track_fill = style.mix(off_fill, on_fill, share)
-    if share < 0.001 { track_fill = off_fill }
-    if share > 0.999 { track_fill = on_fill }
+    // On: the accent, and over it (a layer of its own, antialiased on its own) the hover wash white 10 % or the pressed one black 20 %.
+    let accent = style.hex_raw(0x3584E4u32)
+    let track_fill = style.mix(off_fill, accent, share)
     var track = sized_style(46.0, 26.0)
     track.radius = 13.0
     track.background = paint.Brush { Solid: track_fill }
@@ -22394,34 +22466,35 @@ fn linux_switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     let (layers, layers_error) = mem.alloc[widget.Node](a, 8usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var n = 0usize
-    if state.focus_visible && enabled {
-        var halo = sized_style(53.0, 33.0)
-        halo.radius = 16.5
-        halo.border = style.Border { width: 1.8, color: with_alpha(style.color(t.tokens, .FocusRing), 0.49) }
-        layers[n] = widget.positioned(0u64, -3.5, -3.5, halo, zero)
-        n += 1usize
-    }
     layers[n] = widget.positioned(0u64, 0.0, 0.0, track, zero)
     n += 1usize
-    let kx = 3.0 + 20.0 * share
-    // The knob's shadow: three washes under it, a little lower than the knob.
-    let reach = [3]f32{ 0.3, 1.0, 2.0 }
-    let wash = [3]f32{ 0.04, 0.05, 0.05 }
-    var k = 0usize
-    while k < 3usize {
-        let d = 20.0 + 2.0 * reach[k]
-        var s = sized_style(d, d)
-        s.radius = d * 0.5
-        s.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, wash[k]) }
-        layers[n] = widget.positioned(0u64, kx - reach[k], 3.0 - reach[k] + 2.8, s, zero)
+    if share > 0.0 && (state.hovered || state.pressed) {
+        var wash = sized_style(46.0, 26.0)
+        wash.radius = 13.0
+        var strength = paint.rgba(1.0, 1.0, 1.0, 0.1 * share)
+        if state.pressed { strength = paint.rgba(0.0, 0.0, 0.0, 0.2 * share) }
+        wash.background = paint.Brush { Solid: strength }
+        layers[n] = widget.positioned(0u64, 0.0, 0.0, wash, zero)
         n += 1usize
-        k += 1usize
+    }
+    let kx = 3.0 + 20.0 * share
+    if enabled {
+        let (shadow, shadow_error) = linuxsoft.soft_node(a, kx, 3.0, 20.0, 2.0, 0.2)
+        if shadow_error != ok { ret (zero, shadow_error) }
+        layers[n] = shadow
+        n += 1usize
     }
     var disc = sized_style(20.0, 20.0)
     disc.radius = 10.0
     disc.background = paint.Brush { Solid: knob_ink }
     layers[n] = widget.positioned(0u64, kx, 3.0, disc, zero)
     n += 1usize
+    if state.focus_visible && enabled {
+        let (halo, halo_error) = linux_outset_node(a, 46.0, 26.0, 13.0, style.color(t.tokens, .FocusRing))
+        if halo_error != ok { ret (zero, halo_error) }
+        layers[n] = halo
+        n += 1usize
+    }
     var holder = sized_style(46.0, 26.0)
     if !enabled { holder.opacity = 0.5 }
     let mark = widget.stack(0u64, holder, layers[0usize..n])

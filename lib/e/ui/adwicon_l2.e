@@ -35,3 +35,6 @@ fn icon(a: *mem.Arena, svg: str, color: paint.Color, size: f32) -> (widget.Node,
     let (node, node_error) = gl.svg_mark(a, svg, color, size, size)
     ret (node, node_error)
 }
+
+// libadwaita's check mark (assets/check-symbolic.svg, 14 x 14, the arcs as cubics): a check button's tick, in the colour of its text.
+fn check_symbolic() -> str { ret "<svg viewBox=\"0 0 14 14\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M 13.1450 2.9000 C 12.8987 2.6779 12.5742 2.5628 12.2429 2.5801 C 11.9117 2.5973 11.6009 2.7455 11.3790 2.9920 L 5.6990 9.2970 L 2.8180 6.3880 C 2.3292 5.9003 1.5377 5.9012 1.0500 6.3900 C 0.5623 6.8788 0.5632 7.6703 1.0520 8.1580 L 5.7950 12.9260 L 13.2370 4.6640 C 13.6982 4.1513 13.6570 3.3620 13.1450 2.9000 Z\" fill=\"currentColor\"/></svg>" }

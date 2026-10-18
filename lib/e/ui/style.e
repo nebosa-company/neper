@@ -1766,12 +1766,28 @@ fn adwaita_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
         // On a coloured button the ring is the face's own colour, so nothing shows: none is drawn.
         if !suggested && !destructive {
             ring = color(t, .FocusRing)
-            stroke = 1.86
+            stroke = 2.0
         }
     }
     var opacity: f32 = 1.0
     if state.disabled { opacity = 0.5 }
     ret ResolvedControl { background: face, foreground: ink, border: ring, border_width: stroke, focus_ring: 0.0, opacity: opacity, radius: t.radii.sm, elevation: 0u8, padding: 10.0, padding_start: 0.0, padding_y: 7.5, custom_padding: true, min_width: 0.0, min_height: 34.0, corners: zero }
+}
+// A coloured Linux button (suggested-action, destructive-action) is two layers in GTK: its background colour, then a
+// `background-image` wash (white 10 % hovered, black 20 % pressed), each antialiased on its own at the corners, so a corner pixel is
+// not the pre-mixed face's. Answers whether the variant is coloured, the base colour and the wash (clear at rest).
+fn adwaita_layers(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) -> (bool, paint.Color, paint.Color) {
+    let suggested = variant == .Filled || variant == .Default
+    let destructive = variant == .Danger
+    var base = hex_raw(0x3584E4u32)
+    if destructive {
+        base = hex_raw(0xE01B24u32)
+        if t.palette == .Dark { base = hex_raw(0xC01C28u32) }
+    }
+    var wash = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if state.hovered && !state.pressed { wash = paint.rgba(1.0, 1.0, 1.0, 0.1) }
+    if state.pressed || state.selected { wash = paint.rgba(0.0, 0.0, 0.0, 0.2) }
+    ret (suggested || destructive, base, wash)
 }
 // ---- end Linux look -----------------------------------------------------------------------------
 // looks5: the hovered minimise or maximise button's wash over the dark caption (states/hover-caption-minimize-main, -maximize-main).

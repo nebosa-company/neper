@@ -127,6 +127,18 @@ fn pixel_exact_at_one_on() -> bool {
     ret pixel_exact_at_one
 }
 
+// The Linux look flattens a cubic into about twice the segments (a 6 px corner: 10 instead of 5), the chord error Cairo leaves
+// under GTK's rounded boxes; the coarse count under-covers a corner pixel by 4 %. Set by `ui.looks.set_look` and `control.focus_look`.
+var fine_curves: bool = false
+
+fn set_fine_curves(on: bool) {
+    fine_curves = on
+}
+
+fn fine_curves_on() -> bool {
+    ret fine_curves
+}
+
 fn set_text_hidden(hidden: bool) {
     text_hidden = hidden
 }
@@ -919,8 +931,29 @@ fn flat_quad(f: *Flattener, control: geometry.Point, end: geometry.Point) -> err
     ret ok
 }
 
+// How many equal parts Cairo cuts a cubic into (its tolerance 0.1): it halves until the control points lie within 0.1 of the chord,
+// a halving taking a quarter of the distance (fitted on GTK's own corners and discs: radius 6, 10 and 15 all come out at 8).
+fn cairo_segments(p0: geometry.Point, c1: geometry.Point, c2: geometry.Point, p3: geometry.Point) -> usize {
+    let dx = p3.x - p0.x
+    let dy = p3.y - p0.y
+    let len = math.sqrt[f32](dx * dx + dy * dy)
+    var d1 = distance(p0, c1)
+    var d2 = distance(p0, c2)
+    if len > 0.0001 {
+        d1 = math.abs[f32]((c1.x - p0.x) * dy - (c1.y - p0.y) * dx) / len
+        d2 = math.abs[f32]((c2.x - p0.x) * dy - (c2.y - p0.y) * dx) / len
+    }
+    var worst = d1
+    if d2 > worst { worst = d2 }
+    var n = 1usize
+    while n < 64usize && worst > 0.095 * f32(n * n) { n *= 2usize }
+    ret n
+}
+
 fn flat_cubic(f: *Flattener, c1: geometry.Point, c2: geometry.Point, end: geometry.Point) -> err {
-    let n = segments_for(distance(f.current, c1) + distance(c1, c2) + distance(c2, end))
+    let polygon = distance(f.current, c1) + distance(c1, c2) + distance(c2, end)
+    var n = segments_for(polygon)
+    if fine_curves { n = cairo_segments(f.current, c1, c2, end) }
     let p0 = f.current
     var i = 1usize
     while i <= n {
