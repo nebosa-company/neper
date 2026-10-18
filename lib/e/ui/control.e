@@ -16881,7 +16881,20 @@ fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     }
     if t.tokens.profile != .Windows {
         let (plain, plain_error) = select_icons(a, key, t, label, options, icons, selected, open, enabled, toggle, picks)
-        ret (plain, plain_error)
+        if plain_error != ok { ret (zero, plain_error) }
+        // Neper dark: the disabled select is the whole field at the disabled content level (the light Neper picture is unchanged).
+        if !enabled && t.tokens.profile == .Neper && t.tokens.palette == .Dark {
+            var dimmed = style.defaults()
+            dimmed.opacity = t.tokens.states.disabled_content
+            // the label stands on the frame's top edge, above the head's box: the dimmed box takes it in and gives the room back
+            dimmed.padding.top = style.Length { Px: 10.0 }
+            dimmed.margin.top = style.Length { Px: -10.0 }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = plain
+            ret (widget.box(0u64, dimmed, held[0usize..1usize]), ok)
+        }
+        ret (plain, ok)
     }
     let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks, 0.0, 0.0, 0.0)
     ret (made, made_error)
