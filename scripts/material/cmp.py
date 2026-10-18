@@ -12,7 +12,8 @@ shadow gradients; the anti-aliased rim of a shape does not qualify) and it is OF
 channel. Glyph pixels (text and icon artwork: where the reference differs from its `-notext` render, grown by 2 px) are not counted
 in `off`; `off+glyph` counts them. `rim` counts the rim pixels (not structural) that differ by more than 40 levels: a shape that
 is too big, too small or in the wrong place shows there. Outside the control's box (+1 px) every pixel is compared (shadows, state layers; nothing else may be drawn there): `shadow` counts the structural ones off by more than 2 levels and the rim pixels (the rim of a shadow or of a state layer's circle) off by more than 24.
-A cell passes with off == 0 and shadow == 0.
+`ring` counts the pixels that are not structural but lie on a straight 1 or 2 px line (a 3 px run along x or along y that varies by at most 6 levels: the 2 px outline of a checkbox, a radio ring, a divider, the flat part of a rim) and differ by more than 12 levels (the rasteriser differs from Skia by a few levels on anti-aliased edges): a thin line is never flat in all directions, so the flat count cannot see its colour.
+A cell passes with off == 0, shadow == 0 and ring == 0.
 """
 import csv
 import os
@@ -50,13 +51,20 @@ def spread(a):
     return (mx - mn).max(axis=2)
 
 
+def line_flat(a):
+    """3 px runs along x or along y that vary by at most 6 levels in every channel"""
+    h = (ndimage.maximum_filter(a, size=(1, 3, 1), mode="nearest") - ndimage.minimum_filter(a, size=(1, 3, 1), mode="nearest")).max(axis=2)
+    v = (ndimage.maximum_filter(a, size=(3, 1, 1), mode="nearest") - ndimage.minimum_filter(a, size=(3, 1, 1), mode="nearest")).max(axis=2)
+    return (h <= 6) | (v <= 6)
+
+
 def run(name, dark, png_dir, only):
     sheet = SHEETS[name]
     scheme = "dark" if dark else "light"
     ours = load(os.path.join(LOOKS, "material-dark" if dark else "material", name + ".png"))
     PAD = 32  # a control that overhangs its cell (a dialog) is compared over the sheet's edge pixels
     ours = np.pad(ours, ((PAD, PAD), (PAD, PAD), (0, 0)), mode="edge")
-    totals = [0, 0, 0, 0, 0]
+    totals = [0, 0, 0, 0, 0, 0]
     results = []
     for i, ref_name in enumerate(sheet["cells"]):
         if ref_name is None or (only and only not in ref_name):
@@ -119,14 +127,16 @@ def run(name, dark, png_dir, only):
         rim = int(((d > 40) & win & ~st & ~glyph & zone).sum())
         outside_off = win & ~zone & (((d > 2) & st) | ((d > 24) & ~st))
         shadow = int(outside_off.sum())
+        ring = int(((d > 12) & win & ~st & line_flat(ref) & ~glyph).sum())
         n = int((m & ~glyph).sum())
         totals[0] += n
         totals[1] += off
         totals[2] += offg
         totals[3] += rim
         totals[4] += shadow
-        results.append((ref_name, dx, dy, n, off, offg, rim, shadow, int(d[m & ~glyph].max()) if (m & ~glyph).any() else 0))
-        print("  %-34s shift %2d %2d  structural px %5d  off %5d  off+glyph %5d  rim>40 %4d  shadow %5d  max %3d" % results[-1])
+        totals[5] += ring
+        results.append((ref_name, dx, dy, n, off, offg, rim, shadow, int(d[m & ~glyph].max()) if (m & ~glyph).any() else 0, ring))
+        print("  %-34s shift %2d %2d  structural px %5d  off %5d  off+glyph %5d  rim>40 %4d  shadow %5d  max %3d  ring %5d" % results[-1])
         if png_dir:
             os.makedirs(png_dir, exist_ok=True)
             X0, Y0 = bx + dx, by + dy
@@ -136,11 +146,12 @@ def run(name, dark, png_dir, only):
             mark[(d > 2) & m & glyph] = (255, 160, 0)
             mark[(d > 40) & win & ~st & ~glyph & zone] = (255, 0, 255)
             mark[outside_off] = (0, 120, 255)
+            mark[(d > 2) & win & ~st & line_flat(ref) & ~glyph] = (0, 200, 0)
             tile = np.concatenate([ref, o, 255 - np.minimum(255, np.abs(o - ref) * 4), mark], axis=1)
             im = Image.fromarray(tile.astype(np.uint8))
             im = im.resize((im.width * 2, im.height * 2), Image.NEAREST)
             im.save(os.path.join(png_dir, "%s-%s-%s.png" % (scheme, name, ref_name)))
-    print("%s %s: structural %d, off %d, off+glyph %d, rim>40 %d, shadow/outside %d" % (name, scheme, *totals))
+    print("%s %s: structural %d, off %d, off+glyph %d, rim>40 %d, shadow/outside %d, ring %d" % (name, scheme, *totals))
     return results
 
 

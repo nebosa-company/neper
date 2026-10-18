@@ -18888,6 +18888,8 @@ fn material_choice_mark(a: *mem.Arena, t: *const Theme, state: style.ControlStat
     let filled = chosen || mixed
     let quiet = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content)
     var idle = style.color(t.tokens, .OnSurfaceVariant)
+    // Material Web (checkbox-styles.css hover/focus/pressed-outline-color, radio icon-color) and the M3 spec: on-surface once touched.
+    if state.hovered || state.focus_visible || state.pressed { idle = style.color(t.tokens, .OnSurface) }
     if invalid { idle = style.color(t.tokens, .Error) }
     var edge = style.mix(idle, accent, share)
     if !enabled {
