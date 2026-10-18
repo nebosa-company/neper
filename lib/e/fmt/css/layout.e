@@ -6411,7 +6411,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         ends[q] = 0.0f64 - g.gap_c
         q += 1usize
     }
-    var tol = cs.font_size
+    var tol = 0.0f64
     let (tv, has_tv) = extra_text(cs, "flow-tolerance")
     if has_tv {
         let tl = cv.lower(l.a, cv.trim_ws(tv))
@@ -6497,12 +6497,15 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -
     let oy0 = bb0.border[0usize] + bb0.padding[0usize]
     let (ends, ee) = mem.alloc[f64](l.a, g.nc + 1usize)
     if ee != ok { ret 0.0f64 }
+    let (lastin, le) = mem.alloc[usize](l.a, g.nc + 1usize)
+    if le != ok { ret 0.0f64 }
     var q = 0usize
     while q < g.nc {
         ends[q] = 0.0f64 - g.gap_r
+        lastin[q] = 1000000usize
         q += 1usize
     }
-    var tol = cs.font_size
+    var tol = 0.0f64
     let (tv, has_tv) = extra_text(cs, "flow-tolerance")
     if has_tv {
         let tl = cv.lower(l.a, cv.trim_ws(tv))
@@ -6562,9 +6565,54 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -
         var t3 = start
         while t3 < start + span && t3 < g.nc {
             ends[t3] = bottom
+            lastin[t3] = i
             t3 += 1usize
         }
         if bottom > total { total = bottom }
+        i += 1usize
+    }
+    // The last item of a lane is aligned within what is left of the lane: stretched, centred or moved to the end.
+    i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let is = bstyle(l, id)
+        let pb = bx(l, id)
+        var first_lane = 0usize
+        var found = false
+        var all_last = true
+        var tt = 0usize
+        while tt < g.nc {
+            if lastin[tt] == i {
+                if !found {
+                    first_lane = tt
+                    found = true
+                }
+            }
+            tt += 1usize
+        }
+        if found {
+            let area_span = usize(maxf(1.0f64, f64(g.items[i].cn)))
+            var u = first_lane
+            while u < first_lane + area_span && u < g.nc {
+                if lastin[u] != i { all_last = false }
+                u += 1usize
+            }
+            let bottom = (pb.y - oy0) + pb.h + pb.margin[2usize]
+            let free = total - bottom
+            if all_last && free > 0.0f64 {
+                var al = is.align_self
+                if al == .Auto { al = cs.align_items }
+                let (hv0, has0) = resolve_len(is.height, -1.0f64)
+                if al == .Center {
+                    pb.y += free / 2.0f64
+                } else if al == .End || al == .FlexEnd || al == .SelfEnd {
+                    pb.y += free
+                } else if (al == .Normal || al == .Stretch) && !(is.height.kind == .Px && has0) {
+                    let wcontent = pb.w - horizontal_extras(pb)
+                    flex_place_item(l, id, wcontent, pb.h - vertical_extras(pb) + free)
+                }
+            }
+        }
         i += 1usize
     }
     ret total
