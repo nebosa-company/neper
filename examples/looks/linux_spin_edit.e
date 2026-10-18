@@ -10,17 +10,35 @@ use e.ui.widget
 fn noop_change(ctx: *void, value: i64) -> err { ret ok }
 fn noop_typed(ctx: *void, value: str) -> err { ret ok }
 
+fn one_node(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret zero }
+    held[0usize] = node
+    ret held[0usize..1usize]
+}
+
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     control.set_native_caret_off(true)
-    let names = [10]str{ "rest", "hover +", "hover -", "press +", "press -", "focus", "disabled", "at minimum", "disabled at minimum", "at maximum" }
-    let values = [10]i64{ 50i64, 50i64, 50i64, 50i64, 50i64, 50i64, 50i64, 0i64, 0i64, 100i64 }
+    let names = [11]str{ "rest", "hover +", "hover -", "press +", "press -", "focus", "disabled", "at minimum", "disabled at minimum", "at maximum", "vertical class" }
+    let values = [11]i64{ 50i64, 50i64, 50i64, 50i64, 50i64, 50i64, 50i64, 0i64, 0i64, 100i64, 42i64 }
     var i = 0usize
-    while i < 10usize {
+    while i < 11usize {
         let (buffer, buffer_error) = mem.alloc[u8](a, 24usize)
         if buffer_error != ok { ret (0usize, buffer_error) }
         let enabled = i != 6usize && i != 8usize
         let key = u64(10usize * (i + 1usize))
-        let (spin, spin_error) = control.spin_box_full(a, key, t, "Value", buffer, values[i], 0i64, 100i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_change }, widget.Change[str] { ctx: zero, invoke: noop_typed }, 120.0, enabled, false)
+        var spin: widget.Node = zero
+        var spin_error: err = ok
+        if i == 10usize {
+            let (tall, tall_error) = control.spin_box_linux_tall(a, key, t, "Value", buffer, values[i], 0i64, 100i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_change }, widget.Change[str] { ctx: zero, invoke: noop_typed }, 98.0)
+            // 35 high: the sheet centres on whole pixels in a 36 high box, as the capture's crop sits in its cell
+            spin = widget.aligned(0u64, .Start, .Start, control.sized_style(98.0, 36.0), one_node(a, tall))
+            spin_error = tall_error
+        } else {
+            let (plain, plain_error) = control.spin_box_full(a, key, t, "Value", buffer, values[i], 0i64, 100i64, 1i64, widget.Change[i64] { ctx: zero, invoke: noop_change }, widget.Change[str] { ctx: zero, invoke: noop_typed }, 120.0, enabled, false)
+            spin = plain
+            spin_error = plain_error
+        }
         if spin_error != ok { ret (0usize, spin_error) }
         var drive: looks.Drive = .None
         if i == 1usize || i == 2usize { drive = .Hover }
@@ -34,10 +52,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: names[i], node: spin, drive: drive }
         i += 1usize
     }
-    ret (10usize, ok)
+    ret (11usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "spin_edit", cells: 10usize, columns: 4usize, cell_w: 130.0, cell_h: 44.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "spin_edit", cells: 11usize, columns: 4usize, cell_w: 130.0, cell_h: 44.0, ctx: zero, build: build }
     ret looks.run_linux(a, &sheet)
 }
