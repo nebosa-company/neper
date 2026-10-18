@@ -367,6 +367,7 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
         raised.padding = 4.0
     }
     var plate = control.surface_style(t, raised)
+    if t.tokens.palette == .Dark && t.tokens.profile == .Neper { plate.border = style.Border { width: 1.0, color: style.frame_ink(t.tokens) } }
     plate.padding.top = style.Length { Px: 12.0 }
     plate.padding.bottom = style.Length { Px: 8.0 }
     plate.min_height = style.Length { Px: 48.0 }

@@ -61,6 +61,8 @@ fn picture(a: *mem.Arena, t: *const control.Theme, i: usize) -> (widget.Node, er
         ink = style.hex(7171437u32)
         kind = .Picture
     }
+    // the stand-ins are v3's light-theme colours: on the Neper dark surfaces they are lifted toward white (3:1 on a selected row)
+    if t.tokens.palette == .Dark && t.tokens.profile == .Neper { ink = style.mix(ink, style.hex(0xFFFFFFu32), 0.6) }
     let (made, made_error) = control.mark_glyph(a, ink, kind, 16.0)
     ret (made, made_error)
 }
