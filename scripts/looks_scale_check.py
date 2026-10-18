@@ -1,7 +1,7 @@
 """Scale check for the Windows look: is the render at 1.25, 1.5 and 2.0 a clean scaling of the 1.0 render?
 
-For every Windows sheet of every sheet app in examples/looks (the cup_*, material_* and scale_tiles apps are not
-Windows sheets) it renders docs/ui/looks/windows/<name>.png at 1.0 and at each scale into a scratch folder (through
+For every Windows sheet of every sheet app in examples/looks (the cup_* and scale_tiles apps are not Windows sheets;
+the material_* apps write the Android look, named `material:<name>` and `material-dark:<name>`) it renders docs/ui/looks/windows/<name>.png at 1.0 and at each scale into a scratch folder (through
 NEPER_LOOKS_SCALE / NEPER_LOOKS_OUT / NEPER_LOOKS_ONLY of lib/e/ui/looks.e, so no committed PNG is touched), with the
 text left out (NEPER_LOOKS_NOTEXT: text is re-rasterised at every scale and is not what is checked), and compares the
 geometry: every run of MIN_RUN or more near-equal pixels in a row or column of the 1.0 image (the sheet background
@@ -20,6 +20,10 @@ Usage (repository root, Git Bash or PowerShell):
 The linux_* apps run Linux (docs/ui/looks/linux) and Linux dark (linux-dark): their sheets are named `linux:<name>` and
 `linux-dark:<name>` (the Windows names stay as they were), e.g. `python scripts/looks_scale_check.py linux:data_grid`; run_linux of
 lib/e/ui/looks.e reads NEPER_LOOKS_SCALE and NEPER_LOOKS_NOTEXT as run_all does. `--discover linux_data_grid ...` finds their arguments.
+The material_* apps run Android (docs/ui/looks/material) and Android dark (material-dark): `python scripts/looks_scale_check.py material:checkbox`
+checks both (one sheet at a time keeps the machine quiet), `--discover material_checkbox` finds their arguments (none: every Material sheet app
+renders all its sheets from main). Their vector icons and the soft level shades are not whole-pixel art, so only runs of 12 or more equal
+pixels are compared (MIN_RUN_OF), and the text is left out as everywhere.
 Needs the compiler (NEPER_SELF, build/windows/neper-self.exe or the main checkout's) and numpy + Pillow.
 """
 import math
@@ -39,12 +43,14 @@ ROOT = Path(__file__).resolve().parent.parent
 SCALES = [1.25, 1.5, 2.0]
 # Apps that are not Windows sheets (the other flavors, and the scale_* sheets, which put controls on fractional
 # positions on purpose, so they are for the eye).
-SKIP_APP = re.compile(r"^(cup_|material_|scale_tiles$)")
+SKIP_APP = re.compile(r"^(cup_|scale_tiles$)")
 # The apps that draw the Linux look write docs/ui/looks/linux and linux-dark (a sheet name there is prefixed with its folder).
-LOOK_DIRS = ("windows", "linux", "linux-dark")
+LOOK_DIRS = ("windows", "linux", "linux-dark", "material", "material-dark")
 
 
 def only_look(app):
+    if app.startswith("material_"):
+        return "material"
     return "linux" if app.startswith("linux_") else "windows"
 
 
@@ -56,8 +62,9 @@ def split_name(name):
     return "windows", name
 # The popup menu draws strokes as vector art (the placeholder icons), which do not scale by whole pixels, so only its
 # long runs (frame, separators) are compared.
-MIN_RUN_OF = {"popup_menu": 16, "toolbar_button": 16, "page_control": 16, "image_combo_box": 12}  # (the toolbar, tab and list-item glyphs are vector stand-ins too)
+MIN_RUN_OF = {"popup_menu": 16, "toolbar_button": 16, "page_control": 16, "image_combo_box": 12, "material_image_combo_box": 40}  # (material_image_combo_box: its sample pictures are raster art with flat bands of 16, which the picture filter scales, so only the frame and the field are runs)  # (the toolbar, tab and list-item glyphs are vector stand-ins too)
 MIN_RUN = 8
+MATERIAL_MIN_RUN = 12
 COLOUR_TOL = 8
 RUN_TOL = 1
 # The pixel next to a run's end may be anti-aliased (a vector shape is), but must stay nearer the 1.0 neighbour than the run.
@@ -102,6 +109,8 @@ BEFORE_JSON = ROOT / "scripts/looks_scale_before.json"
 def candidates_of(app):
     """The argument lists to try for an app: the sheet apps pick a sheet by their first argument (a letter and a digit,
     or a name), some by the argument count. Read from the app's source, so a new variant is found by --discover."""
+    if app.startswith("material_"):  # a Material app renders every sheet it has from main, whatever the arguments
+        return [[]]
     text = (ROOT / f"examples/looks/{app}.e").read_text(encoding="utf-8")
     out = [[]]
     names = set(re.findall(r'strs\.eq\(args\[1usize\], "([^"]+)"\)', text))
@@ -425,16 +434,22 @@ def main():
     if report:
         args.remove("--report")
     wanted = set(args)
-    for w in list(wanted):  # `linux:<name>` stands for the Light and the Dark sheet
+    for w in list(wanted):  # `linux:<name>` stands for the Light and the Dark sheet, `material:<name>` too
         if w.startswith("linux:"):
             wanted.add("linux-dark:" + w[6:])
+        if w.startswith("material:"):
+            wanted.add("material-dark:" + w[9:])
     result = {s: {} for s in scales}  # result[scale][sheet] = (checked, matched) or an error text
     misses_of = {}
     with tempfile.TemporaryDirectory(prefix="looks-scale-") as tmp:
         work = Path(tmp)
         chosen = apps()
         if wanted:
-            chosen = [a for a in chosen if any(w == a or w.startswith(a + "_") or a.startswith(w + "_") or w.replace("linux-dark:", "linux_").replace("linux:", "linux_") .startswith(a) for w in wanted)]
+            # a sheet named in scripts/looks_scale_sheets.json brings its app (a Material app writes several sheets: date_picker and date_input)
+            import json
+            table = json.loads(SHEETS_JSON.read_text(encoding="utf-8"))
+            from_table = {table[w][0] for w in wanted if w in table}
+            chosen = [a for a in chosen if a in from_table or any(w == a or w.startswith(a + "_") or a.startswith(w + "_") or w.replace("linux-dark:", "linux_").replace("linux:", "linux_").replace("material-dark:", "material_").replace("material:", "material_").startswith(a) for w in wanted)]
         for a in chosen:
             (work / a).mkdir()
         errors = [build(a, work / a) for a in chosen]  # the compiler does not run twice at once (arena exhausted)
@@ -457,7 +472,7 @@ def main():
             if wanted:
                 names = [n for n in names if n in wanted]
             for n in names:
-                min_run = MIN_RUN_OF.get(a, MIN_RUN)
+                min_run = MIN_RUN_OF.get(a, MATERIAL_MIN_RUN if a.startswith("material_") else MIN_RUN)
                 for s in scales:
                     if (a, 1.0) in failed_run:
                         result[s][n] = "ERROR " + failed_run[(a, 1.0)]

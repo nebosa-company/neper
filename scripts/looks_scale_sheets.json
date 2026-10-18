@@ -862,6 +862,334 @@
   "mask_edit",
   []
  ],
+ "material-dark:app_bar": [
+  "material_app_bar",
+  []
+ ],
+ "material-dark:badge": [
+  "material_badge",
+  []
+ ],
+ "material-dark:button": [
+  "material_button",
+  []
+ ],
+ "material-dark:button_edit": [
+  "material_button_edit",
+  []
+ ],
+ "material-dark:button_icon": [
+  "material_button",
+  []
+ ],
+ "material-dark:check_list_box": [
+  "material_check_list_box",
+  []
+ ],
+ "material-dark:checkbox": [
+  "material_checkbox",
+  []
+ ],
+ "material-dark:chips": [
+  "material_chips",
+  []
+ ],
+ "material-dark:combo_box": [
+  "material_combo_box",
+  []
+ ],
+ "material-dark:data_grid": [
+  "material_data_grid",
+  []
+ ],
+ "material-dark:date_input": [
+  "material_date_picker",
+  []
+ ],
+ "material-dark:date_picker": [
+  "material_date_picker",
+  []
+ ],
+ "material-dark:dialog": [
+  "material_dialog",
+  []
+ ],
+ "material-dark:dialog_icon": [
+  "material_dialog",
+  []
+ ],
+ "material-dark:fab": [
+  "material_fab",
+  []
+ ],
+ "material-dark:group_box": [
+  "material_group_box",
+  []
+ ],
+ "material-dark:image_combo_box": [
+  "material_image_combo_box",
+  []
+ ],
+ "material-dark:label": [
+  "material_label",
+  []
+ ],
+ "material-dark:list": [
+  "material_list",
+  []
+ ],
+ "material-dark:mask_edit": [
+  "material_mask_edit",
+  []
+ ],
+ "material-dark:memo": [
+  "material_memo",
+  []
+ ],
+ "material-dark:menu": [
+  "material_menu",
+  []
+ ],
+ "material-dark:menu_hover": [
+  "material_menu",
+  []
+ ],
+ "material-dark:navigation_bar": [
+  "material_navigation_bar",
+  []
+ ],
+ "material-dark:progress": [
+  "material_progress",
+  []
+ ],
+ "material-dark:radio": [
+  "material_radio",
+  []
+ ],
+ "material-dark:radio_group": [
+  "material_radio_group",
+  []
+ ],
+ "material-dark:scroll_bar": [
+  "material_scroll_bar",
+  []
+ ],
+ "material-dark:search_bar": [
+  "material_search_bar",
+  []
+ ],
+ "material-dark:slider": [
+  "material_slider",
+  []
+ ],
+ "material-dark:snackbar": [
+  "material_snackbar",
+  []
+ ],
+ "material-dark:spin_edit": [
+  "material_spin_edit",
+  []
+ ],
+ "material-dark:splitter": [
+  "material_splitter",
+  []
+ ],
+ "material-dark:status_bar": [
+  "material_status_bar",
+  []
+ ],
+ "material-dark:switch": [
+  "material_switch",
+  []
+ ],
+ "material-dark:tabs": [
+  "material_tabs",
+  []
+ ],
+ "material-dark:text_field": [
+  "material_text_field",
+  []
+ ],
+ "material-dark:token_edit": [
+  "material_token_edit",
+  []
+ ],
+ "material-dark:tooltip": [
+  "material_tooltip",
+  []
+ ],
+ "material-dark:tree_list": [
+  "material_tree_list",
+  []
+ ],
+ "material-dark:vertical_grid": [
+  "material_vertical_grid",
+  []
+ ],
+ "material:app_bar": [
+  "material_app_bar",
+  []
+ ],
+ "material:badge": [
+  "material_badge",
+  []
+ ],
+ "material:button": [
+  "material_button",
+  []
+ ],
+ "material:button_edit": [
+  "material_button_edit",
+  []
+ ],
+ "material:button_icon": [
+  "material_button",
+  []
+ ],
+ "material:check_list_box": [
+  "material_check_list_box",
+  []
+ ],
+ "material:checkbox": [
+  "material_checkbox",
+  []
+ ],
+ "material:chips": [
+  "material_chips",
+  []
+ ],
+ "material:combo_box": [
+  "material_combo_box",
+  []
+ ],
+ "material:data_grid": [
+  "material_data_grid",
+  []
+ ],
+ "material:date_input": [
+  "material_date_picker",
+  []
+ ],
+ "material:date_picker": [
+  "material_date_picker",
+  []
+ ],
+ "material:dialog": [
+  "material_dialog",
+  []
+ ],
+ "material:dialog_icon": [
+  "material_dialog",
+  []
+ ],
+ "material:fab": [
+  "material_fab",
+  []
+ ],
+ "material:group_box": [
+  "material_group_box",
+  []
+ ],
+ "material:image_combo_box": [
+  "material_image_combo_box",
+  []
+ ],
+ "material:label": [
+  "material_label",
+  []
+ ],
+ "material:list": [
+  "material_list",
+  []
+ ],
+ "material:mask_edit": [
+  "material_mask_edit",
+  []
+ ],
+ "material:memo": [
+  "material_memo",
+  []
+ ],
+ "material:menu": [
+  "material_menu",
+  []
+ ],
+ "material:menu_hover": [
+  "material_menu",
+  []
+ ],
+ "material:navigation_bar": [
+  "material_navigation_bar",
+  []
+ ],
+ "material:progress": [
+  "material_progress",
+  []
+ ],
+ "material:radio": [
+  "material_radio",
+  []
+ ],
+ "material:radio_group": [
+  "material_radio_group",
+  []
+ ],
+ "material:scroll_bar": [
+  "material_scroll_bar",
+  []
+ ],
+ "material:search_bar": [
+  "material_search_bar",
+  []
+ ],
+ "material:slider": [
+  "material_slider",
+  []
+ ],
+ "material:snackbar": [
+  "material_snackbar",
+  []
+ ],
+ "material:spin_edit": [
+  "material_spin_edit",
+  []
+ ],
+ "material:splitter": [
+  "material_splitter",
+  []
+ ],
+ "material:status_bar": [
+  "material_status_bar",
+  []
+ ],
+ "material:switch": [
+  "material_switch",
+  []
+ ],
+ "material:tabs": [
+  "material_tabs",
+  []
+ ],
+ "material:text_field": [
+  "material_text_field",
+  []
+ ],
+ "material:token_edit": [
+  "material_token_edit",
+  []
+ ],
+ "material:tooltip": [
+  "material_tooltip",
+  []
+ ],
+ "material:tree_list": [
+  "material_tree_list",
+  []
+ ],
+ "material:vertical_grid": [
+  "material_vertical_grid",
+  []
+ ],
  "memo": [
   "memo",
   []
