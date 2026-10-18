@@ -253,7 +253,7 @@ for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
   add(`slider-ticks-${st}`, `<md-slider ticks min="0" max="10" value="4"${dis(st === "disabled")} aria-label="Level"></md-slider>`);
 }
 // progress
-for (const v of [0, 40, 100]) {
+for (const v of [0, 30, 60, 100]) {
   add(`progress-linear-${v}`, `<md-linear-progress value="${v / 100}" style="width:240px"></md-linear-progress>`);
   add(`progress-circular-${v}`, `<md-circular-progress value="${v / 100}"></md-circular-progress>`);
 }

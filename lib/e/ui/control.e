@@ -5667,6 +5667,8 @@ fn progress_ink(t: *const Theme, tone: ProgressTone) -> paint.Color {
 fn progress_ground(t: *const Theme, tone: ProgressTone) -> paint.Color {
     if tone == .Error { ret style.color(t.tokens, .ErrorContainer) }
     if tone == .Paused { ret style.color(t.tokens, .SurfaceContainerHighest) }
+    // md-linear-progress: the track is surface-container-highest.
+    if t.tokens.profile == .MaterialLike { ret style.color(t.tokens, .SurfaceContainerHighest) }
     ret style.color(t.tokens, .SecondaryContainer)
 }
 
@@ -6045,8 +6047,10 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     var share = aimed
     if !indeterminate { share = eased_share(t, key, aimed, true) }
     let h: f32 = if_else(options.thick, 8.0, 4.0)
-    let gap: f32 = if_else(options.full_bleed, 0.0, 4.0)
-    let r: f32 = if_else(options.full_bleed, 0.0, h * 0.5)
+    // Android: Material Web's linear indicator is one square-ended bar over a full-width track (no gap, no stop dot).
+    let bleed = options.full_bleed || t.tokens.profile == .MaterialLike
+    let gap: f32 = if_else(bleed, 0.0, 4.0)
+    let r: f32 = if_else(bleed, 0.0, h * 0.5)
     let ink = progress_ink(t, options.tone)
     let ground = progress_ground(t, options.tone)
     let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
@@ -6400,6 +6404,11 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
         ring.fill = options.content
         ring.track = paint.rgba(0.0, 0.0, 0.0, 0.0)
     }
+    // Android: md-circular-progress draws the arc alone (no track ring, no gap).
+    if t.tokens.profile == .MaterialLike {
+        ring.track = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        ring.gap = 0.0
+    }
     if indeterminate {
         ring.track = paint.rgba(0.0, 0.0, 0.0, 0.0)
         ring.gap = 0.0
@@ -6414,8 +6423,18 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
             ring.start = turn * 6.2831855
         }
     }
-    let (painted, painted_error) = ring_node(a, key + 1u64, ring, size)
+    var painted_size = size
+    if t.tokens.profile == .MaterialLike && size >= 40.0 { painted_size = size - 8.0 }
+    let (drawn, painted_error) = ring_node(a, key + 1u64, ring, painted_size)
     if painted_error != ok { ret (zero, painted_error) }
+    var painted = drawn
+    if painted_size != size {
+        // md-circular-progress: a 48 dp box round a 40 dp arc (4 dp stroke).
+        let (held_ring, held_ring_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_ring_error != ok { ret (zero, TooLarge) }
+        held_ring[0usize] = drawn
+        painted = widget.aligned(0u64, .Center, .Center, sized_style(size, size), held_ring[0usize..1usize])
+    }
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = painted

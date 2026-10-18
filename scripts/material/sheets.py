@@ -33,3 +33,7 @@ SHEETS["combo_box"] = {"columns": 3, "cell_w": 270, "cell_h": 96, "cells": [
 
 SHEETS["chips"] = {"columns": 4, "cell_w": 130, "cell_h": 48, "cells": [
     "chip-%s-%s" % (k, s) for k in ["assist", "filter", "filter-selected", "input", "suggestion"] for s in ["rest", "hover", "focus", "pressed"]]}
+
+SHEETS["progress"] = {"columns": 5, "cell_w": 270, "cell_h": 64, "cells": [
+    "progress-linear-0", "progress-linear-30", "progress-linear-60", "progress-linear-100", None,
+    "progress-circular-0", "progress-circular-30", "progress-circular-60", "progress-circular-100", None]}
