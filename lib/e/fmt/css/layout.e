@@ -2883,7 +2883,9 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     position_markers(l, b)
     // `line-clamp` over the lines of the block children (the container's own inline content is clamped with its lines).
     let clamp_n = line_clamp_count(bstyle(l, b))
-    if clamp_n > 0usize {
+    var scan_c = ClampScan { seen: 0usize, n: clamp_n, tail: false }
+    if clamp_n > 0usize { clamp_scan(l, b, &scan_c) }
+    if clamp_n > 0usize && (scan_c.seen > clamp_n || scan_c.tail) {
         var ctr = Counter { n: clamp_n }
         let cut = clamp_children(l, b, &ctr)
         if cut >= 0.0f64 {
@@ -2938,6 +2940,28 @@ fn clamp_walk(l: *Layout, b: u32, ctr: *Counter) -> f64 {
     ret clamp_children(l, b, ctr)
 }
 
+type ClampScan = struct { seen: usize, n: usize, tail: bool }
+
+// Counts the lines `line-clamp` sees under `b` (in-flow descendants sharing its formatting context) and notes any content
+// that follows the last line it keeps.
+fn clamp_scan(l: *Layout, b: u32, sc: *ClampScan) {
+    var kid = bx(l, b).first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        let nxt = kb.next
+        if kb.inner == .Marker || kb.inner == .Text || kb.inline_level || is_out_of_flow(st(l, kb.style)) {
+            kid = nxt
+            continue
+        }
+        if sc.seen >= sc.n {
+            if kb.h > 0.0f64 || kb.line_count > 0u32 { sc.tail = true }
+        } else if !is_bfc_root(l, kid) {
+            if kb.line_count > 0u32 { sc.seen += usize(kb.line_count) } else { clamp_scan(l, kid, sc) }
+        }
+        kid = nxt
+    }
+}
+
 fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64 {
     var cut = -1.0f64
     var kid = bx(l, b).first
@@ -2950,6 +2974,8 @@ fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64 {
         }
         if cut >= 0.0f64 {
             clamp_hide(l, kid)
+        } else if is_bfc_root(l, kid) {
+            // Its lines belong to a formatting context of its own and are not counted.
         } else {
             let r = clamp_walk(l, kid, ctr)
             if r >= 0.0f64 { cut = l.boxes.items[usize(kid)].y + r }
