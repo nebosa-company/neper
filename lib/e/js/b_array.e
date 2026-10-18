@@ -10,16 +10,19 @@ fn arg(args: []const js.Value, i: usize) -> js.Value {
     ret js.undefv()
 }
 
+// The running native is a TypedArray.prototype method (marked when the prototype is built).
+fn in_ta_method(it: *js.Interp) -> bool { ret it.callee != js.null_obj() && it.callee.num == 7777.0f64 }
+
 fn len_of(it: *js.Interp, o: *js.Obj) -> (f64, err) {
-    // A typed array has an internal length that its `length` property can not change.
-    if o.class == js.C_TYPEDARRAY { ret (f64(js.ta_length(o)), ok) }
+    // A typed array has an internal length that its `length` property can not change (TypedArray.prototype methods only).
+    if o.class == js.C_TYPEDARRAY && in_ta_method(it) { ret (f64(js.ta_length(o)), ok) }
     let (n, e) = js.length_of(it, o)
     ret (n, e)
 }
 
 // Whether index `key` of `o` is visited by the callback methods: a typed array has no holes (a missing element reads undefined).
 fn has_elem(it: *js.Interp, o: *js.Obj, key: js.Key) -> bool {
-    if o.class == js.C_TYPEDARRAY { ret true }
+    if o.class == js.C_TYPEDARRAY && in_ta_method(it) { ret true }
     ret js.has_property(it, o, key)
 }
 

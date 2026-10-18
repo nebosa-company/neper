@@ -1466,6 +1466,12 @@ fn create_data(it: *Interp, o: *Obj, key: Key, val: Value) -> (bool, err) {
         if key.idx >= 0i64 {
             let idx = usize(key.idx)
             if o.class == C_ARRAY && o.text.len == 1usize && f64(key.idx) >= array_length(o) { ret (false, ok) }
+            if idx < o.elems.len && is_hole(it, o.elems.items[idx]) {
+                // Filling a hole of a dense array.
+                if !o.extensible { ret (false, ok) }
+                o.elems.items[idx] = val
+                ret (true, ok)
+            }
             if idx == o.elems.len {
                 try list.push[Value](&o.elems, val)
                 if o.class == C_ARRAY && o.num < f64(o.elems.len) { o.num = f64(o.elems.len) }

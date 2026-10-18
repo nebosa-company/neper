@@ -1208,6 +1208,13 @@ fn install_typed_arrays(it: *js.Interp) {
     // toString is the same function object as Array.prototype.toString.
     let (ats, atse) = js.get_prop(it, it.protos.array, js.key_of("toString"), js.obj_value(it.protos.array))
     if atse == ok { let e7 = js.define_data(it, it.protos.typed_array, js.key_of("toString"), ats, js.P_HIDDEN) }
+    // Mark the prototype's methods so the shared array algorithms use a typed array's internal length and visit every index.
+    var mk_i = 0usize
+    while mk_i < it.protos.typed_array.props.len {
+        let mp = it.protos.typed_array.props.items[mk_i]
+        mk_i += 1usize
+        if js.is_object(mp.value) && js.as_object(mp.value).has_native { js.as_object(mp.value).num = 7777.0f64 }
+    }
     // The concrete constructors.
     var kind = 1u8
     while kind <= 12u8 {
