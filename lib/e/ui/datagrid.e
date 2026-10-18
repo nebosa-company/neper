@@ -245,6 +245,8 @@ cust_rgb: u32,
     selected_row: usize,
     offset: f32,
     row_height: f32,
+    // the Linux look: the scrolled window's width (0: the columns' own)
+    fill_width: f32,
     footer_visible: bool,
     filter_visible: bool,
     bands: []const Band,
@@ -10346,6 +10348,8 @@ fn chip_pressed_column(grid: *const Grid) -> usize {
 
 fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err) {
     grid.theme = theme
+    // the Linux look (libadwaita column view): rows of 35
+    if theme.tokens.profile == .Linux && grid.row_height == 28.0 { grid.row_height = 35.0 }
     try follow_focus(grid, theme)
     if grp.visible_len(grid.g) == 0usize && !grid.look.on {
         var inner: widget.Node = zero
@@ -10496,6 +10500,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         if grid.filter_visible { viewport_h = viewport_h - 26.0 }
         grid.bar_on = entry_top(grid, grp.visible_len(grid.g)) > viewport_h
     }
+    if theme.tokens.profile == .Linux { table_options.fill_width = grid.fill_width }
     let (body, body_error) = collection.table_with(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: on_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: on_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height, table_options)
     if body_error != ok { ret (zero, body_error) }
     measure_hscroll(grid, theme)

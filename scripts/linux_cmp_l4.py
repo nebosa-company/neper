@@ -37,7 +37,8 @@ SHEETS = {
                   "text": {c: [(4, 5, 60, 27), (112, 5, 152, 27)] + [(r, 32 + 23 * i + 3, w, 32 + 23 * i + 21) for i in range(7) for (r, w) in ((22, 108), (112, 170))] for c in ("treeview", "treeview-selected")},
                   "art": {c: [(3, 32 + 23 * i + 6, 19, 32 + 23 * i + 17) for i in (0, 3, 6)] for c in ("treeview", "treeview-selected")}},
     "vertical_grid": {"columns": 2, "cell_w": 340, "cell_h": 349, "cells": ["action-rows", "preferences-group"], "text": {}, "art": {}},
-    "data_grid": {"columns": 1, "cell_w": 300, "cell_h": 220, "cells": ["columnview"], "text": {}, "art": {}},
+    "data_grid": {"columns": 1, "cell_w": 300, "cell_h": 220, "cells": ["columnview"],
+                  "text": {"columnview": [(4, 6, 56, 26), (58, 6, 108, 26)] + [(r, 31 + 35 * i + 3, w, 31 + 35 * i + 32) for i in range(6) for (r, w) in ((4, 56), (58, 108))]}, "art": {}},
     "dialog": {"columns": 1, "cell_w": 570, "cell_h": 430, "cells": ["alert-dialog"], "text": {}, "art": {}},
 }
 
@@ -95,6 +96,9 @@ def flat_colour(a):
 def ink_mask(ref, rects, grow, coloured=False):
     mask = np.zeros(ref.shape[:2], bool)
     for (x0, y0, x1, y1) in rects:
+        x1, y1 = min(x1, ref.shape[1]), min(y1, ref.shape[0])
+        if x1 <= x0 or y1 <= y0:
+            continue
         part = ref[y0:y1, x0:x1].astype(int)
         base = flat_colour(part).astype(int)
         diff = np.abs(part - base).max(axis=2) > 2
@@ -116,12 +120,15 @@ def cmp_cell(sheet, scheme, folder, ours_im, i, crop, png):
         for (rx0, ry0, rx1, ry1) in sheet["text"].get(crop, []):
             box = []
             for img in (ref, ours):
-                part = img[ry0:ry1, rx0:rx1]
+                part = img[ry0:min(ry1, img.shape[0]), rx0:min(rx1, img.shape[1])]
+                if part.size == 0:
+                    continue
                 bgc = flat_colour(part).astype(int)
                 m = np.abs(part - bgc).max(axis=2) > 40
                 ys, xs = np.nonzero(m)
                 box.append((int(xs.min()) + rx0, int(ys.min()) + ry0, int(xs.max()) + rx0, int(ys.max()) + ry0) if len(xs) else None)
-            print("    text %s ref %s ours %s" % ((rx0, ry0), box[0], box[1]))
+            if len(box) == 2:
+                print("    text %s ref %s ours %s" % ((rx0, ry0), box[0], box[1]))
     if png:
         OUT.mkdir(parents=True, exist_ok=True)
         strip = np.zeros((h, w * 3 + 8, 3), np.uint8)

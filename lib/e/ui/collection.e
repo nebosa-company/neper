@@ -15,6 +15,7 @@ use e.ui.control
 use e.ui.gridlook as gl
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.linux_card
 use e.ui.overlay
 use e.ui.style
 use e.ui.vgridlook as vg
@@ -3054,7 +3055,7 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // their selection cell inert, still focusable and Disabled in the tree.
 // (D1501) `pending` marks rows (by key) whose data has not come: each cell is a
 // skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook, double: widget.Change[widget.Key], has_double: bool, empty_width: f32 }
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook, double: widget.Change[widget.Key], has_double: bool, empty_width: f32 , fill_width: f32}
 
 // Neper dark: the v3 table's light pixel-lines (white and light greys, the pressed header's blue) as dark ones;
 // under every other look and palette the colour is the plain one.
@@ -4586,6 +4587,13 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         head_height = selection.look.header_height
         pad = selection.look.pad
     }
+    // the Linux look (libadwaita 1.5 column view): a 30 high header with no rule, rows of 35, a 1 px frame
+    let lin = t.tokens.profile == .Linux && !selection.look.on
+    if lin {
+        head_height = 30.0
+        pad = 6.0
+        if !(extent > 0.0) { row_extent = 35.0 }
+    }
     let lead = control.if_else(grid, 40.0, 0.0)
     var width: f32 = lead
     var c = 0usize
@@ -4596,8 +4604,16 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let total = source.count(source.ctx)
     var below: widget.Key = 0u64
     if total > 0usize { below = source.key(source.ctx, 0usize) }
-    let (header, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric, selection.filtered, selection.look)
-    if head_error != ok { ret (zero, head_error) }
+    var header: widget.Node = zero
+    if lin {
+        let (linux_header, linux_header_error) = linux_tree_header(a, key, t, columns, sort_column, sort, reorder, false, pad)
+        if linux_header_error != ok { ret (zero, linux_header_error) }
+        header = linux_header
+    } else {
+        let (generic_header, generic_header_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric, selection.filtered, selection.look)
+        if generic_header_error != ok { ret (zero, generic_header_error) }
+        header = generic_header
+    }
     var head = header
     if selection.look.on && selection.look.header_hidden {
         // v3's Show Header off: no header row, the body takes its height
@@ -4729,7 +4745,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if acted_error != ok { ret (zero, acted_error) }
             if has_acted { cells[columns.len - 1usize] = acted }
         }
-        let lined = index + 1usize < total && !selection.look.on
+        let lined = index + 1usize < total && !selection.look.on && !lin
         let row_tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         let chosen = is_selected(selected, row_key)
         let row_disabled = is_selected(selection.disabled, row_key)
@@ -4772,7 +4788,17 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 if hold_error != ok { ret (zero, hold_error) }
             }
         }
-        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, selection.double, selection.has_double, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions, selection.look)
+        var made: widget.Node = zero
+        var made_error: err = ok
+        if lin {
+            let (linux_made, linux_made_error) = linux_tree_row(a, t, columns, cells, row_key, row_tall, chosen, row_pick, selection.double, selection.has_double, pad, pad, 1.0)
+            made = linux_made
+            made_error = linux_made_error
+        } else {
+            let (full_made, full_made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, selection.double, selection.has_double, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions, selection.look)
+            made = full_made
+            made_error = full_made_error
+        }
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
@@ -4820,7 +4846,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             inner[1usize] = widget.box(row_keys[i] ^ hash.fnv1a64("row-detail"), detail_style, inner[2usize..3usize])
             rows[i] = widget.flex(row_derived(row_keys[i], "row-with-detail"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), inner[0usize..2usize])
         }
-        if first + i + 1usize < total && !selection.look.on {
+        if first + i + 1usize < total && !selection.look.on && !lin {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, TooLarge) }
             pair[0usize] = rows[i]
@@ -4840,6 +4866,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     view_style.height = style.Length { Px: body_height }
     view_style.overflow = .Clip
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    if lin { view_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) } }
     // looks9-w1: below the last row the live grids show the grid's own white (the collection grid's backdrop picture lies over it)
     if selection.look.on && selection.look.soft_lines && t.tokens.profile == .Windows { view_style.background = paint.Brush { Solid: selection.look.odd } }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
@@ -4867,6 +4894,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     // with a look the drawn bar below replaces the overlay thumb, which stays to be dragged
     var scroll_thumb = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
     if selection.look.on && selection.look.scroll_width > 0.0 { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
+    // libadwaita draws its overlay indicator as a picture (below), not as the runtime's thumb
+    if lin { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
     parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: scroll_thumb, change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent, virtual_extras: selection.extras, fades: false }, view_style, rows[0usize..count])
     // (D1248) With no rows the body is the loading or empty state; the header stays.
     // (D1413) A failed load (`failed`) stands in the body whatever the rows.
@@ -5046,6 +5075,28 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         } else {
             column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bar_parts[0usize..2usize])
         }
+    }
+    if lin {
+        // the scrolled window: a 1 px frame round the header and rows, `fill_width` wide when the caller says so, and, while the rows
+        // overflow, the overlay scroll bar's indicator with the soft shade round it
+        var inner_width = width
+        if selection.fill_width > width + 2.0 { inner_width = selection.fill_width - 2.0 }
+        var frame = control.sized_style(inner_width + 2.0, head_height + body_height + 2.0)
+        frame.border = style.Border { width: 1.0, color: control.linux_frame_for(t) }
+        frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+        frame.overflow = .Clip
+        frame.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+        var layers_count = 1usize
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = column_node[0usize]
+        if f32(total) * row_extent > body_height && inner_width > 60.0 {
+            let (glow, glow_error) = linux_card.scroll_glow_node(a, t.tokens.palette == .Dark)
+            if glow_error != ok { ret (zero, glow_error) }
+            layers[1usize] = widget.positioned(0u64, inner_width - 53.0, 0.0, style.defaults(), one_node(a, glow))
+            layers_count = 2usize
+        }
+        column_node[0usize] = widget.box(0u64, frame, one_node(a, widget.stack(0u64, control.sized_style(inner_width, head_height + body_height), layers[0usize..layers_count])))
     }
     // (D1283) Wider than its view, the table scrolls sideways (keyed
     // `key + 2097152`), its overlay thumb under the body.
@@ -5791,7 +5842,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             var tabled_row: widget.Node = zero
             var tabled_error: err = ok
             if lin {
-                let (linux_row, linux_error) = linux_tree_row(a, t, columns, cells, entry.key, tall, chosen, pick, toggle, entry.branch)
+                let (linux_row, linux_error) = linux_tree_row(a, t, columns, cells, entry.key, tall, chosen, pick, toggle, entry.branch, 0.0, 5.0, 0.0)
                 tabled_row = linux_row
                 tabled_error = linux_error
             } else {
@@ -6304,7 +6355,7 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     }
     var head: widget.Node = zero
     if lin {
-        let (linux_head, linux_head_error) = linux_tree_header(a, key, t, columns, sort_column, sort, reorder)
+        let (linux_head, linux_head_error) = linux_tree_header(a, key, t, columns, sort_column, sort, reorder, true, 5.0)
         if linux_head_error != ok { ret (zero, linux_head_error) }
         head = linux_head
     } else {
@@ -11705,7 +11756,7 @@ fn linux_expander(a: *mem.Arena, t: *const control.Theme, open: bool, tall: f32)
 }
 
 // The header: a cell per column (a tap sorts, a drag reorders, as the generic header does) and the rule under them.
-fn linux_tree_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, sort: widget.Change[usize], reorder: widget.Change[Reorder]) -> (widget.Node, err) {
+fn linux_tree_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, sort: widget.Change[usize], reorder: widget.Change[Reorder], ruled: bool, pad: f32) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, columns.len)
     if cells_error != ok { ret (zero, TooLarge) }
     let (drags, drags_error) = mem.alloc[HeaderDrag](a, columns.len)
@@ -11725,10 +11776,10 @@ fn linux_tree_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
         let (title, title_error) = control.colored_text(a, 0u64, columns[i].title, t, caption, linux_dim(t))
         if title_error != ok { ret (zero, title_error) }
         var head_style = control.sized_style(columns[i].width, 30.0)
-        head_style.padding = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+        head_style.padding = style.EdgeLengths { left: style.Length { Px: pad }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: control.if_else(ruled, 0.0, 2.0) } }
         head_style.overflow = .Clip
         control.focus_look(t)
-        let inside = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, control.sized_style(control.max_zero(columns[i].width - 9.0), 30.0), one_node(a, title))
+        let inside = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, control.sized_style(control.max_zero(columns[i].width - pad - 4.0), control.if_else(ruled, 30.0, 28.0)), one_node(a, title))
         let tapped = widget.region(header_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: header_gesture }, gestures: 1u8 | 2u8 | 4u8 | 8u8, enabled: true, focusable: true }, head_style, one_node(a, inside))
         var sem: widget.Semantics = zero
         sem.role = 32u8
@@ -11753,6 +11804,7 @@ fn linux_tree_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
         i += 1usize
     }
     let head_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..columns.len])
+    if !ruled { ret (head_row, ok) }
     let under = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rules[0usize..rule_n])
     let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
     if both_error != ok { ret (zero, TooLarge) }
@@ -11763,7 +11815,7 @@ fn linux_tree_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, co
 
 // A row of the Linux tree: the cells at their columns' widths (the first runs its own indent, the others start 4 px in), the fill of
 // a chosen or hovered boxed-list row over all of it.
-fn linux_tree_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool) -> (widget.Node, err) {
+fn linux_tree_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, first_pad: f32, other_pad: f32, lift: f32) -> (widget.Node, err) {
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, columns.len)
     if boxed_error != ok { ret (zero, TooLarge) }
     var total: f32 = 0.0
@@ -11771,7 +11823,9 @@ fn linux_tree_row(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     while c < columns.len {
         var cell_style = control.sized_style(columns[c].width, extent)
         cell_style.overflow = .Clip
-        if c > 0usize { cell_style.padding = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } } }
+        var side = first_pad
+        if c > 0usize { side = other_pad }
+        if side > 0.0 || lift > 0.0 { cell_style.padding = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 2.0 * lift } } }
         var sem: widget.Semantics = zero
         sem.role = 14u8
         sem.label = columns[c].title
