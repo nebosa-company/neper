@@ -156,3 +156,4 @@ fixed-table-min-width-001.html | fixed-table-min-width-001-ref.html | match
 row-background-spacing-001.html | row-background-spacing-001-ref.html | match
 column-background-001.html | column-background-001-ref.html | match
 collapsed-table-no-padding-001.html | collapsed-table-no-padding-001-ref.html | match
+ch-unit-default-font-001.html | ch-unit-default-font-001-ref.html | match

@@ -62,6 +62,14 @@ fn parse_options() -> html.Options {
 fn do_layout(v: *View, width: f32, height: f32) -> err {
     mem.reset(v.arena, v.layout_mark)
     var ctx = style.new_context(v.arena, f64(width), f64(height))
+    // `ch` and `ex` follow the default font: the advance of its `0` and its x-height.
+    let m0 = measure.measure_of(&v.host)
+    var probe = style.initial_style()
+    probe.font_size = 16.0f64
+    let zero_w = m0.width(m0.ctx, &probe, "0")
+    if zero_w > 0.0f64 { ctx.ch = zero_w / 16.0f64 }
+    let probe_fm = m0.metrics(m0.ctx, &probe)
+    if probe_fm.x_height > 0.0f64 { ctx.ex = probe_fm.x_height / 16.0f64 }
     let (styles, se) = mem.alloc[style.Style](v.arena, v.tree.used)
     if se != ok { ret se }
     v.styles = styles
