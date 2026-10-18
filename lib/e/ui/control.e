@@ -6492,6 +6492,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     let state = control_state(t, key, options.enabled, false)
     let focused = state.focused && options.enabled
     var over = state.hovered
+    // Android: the runtime hovers regions, not editors, so the field answers through a hover region round its box (as the Windows field does).
+    if t.tokens.profile == .MaterialLike { over = over || control_state(t, key + 1048650u64, options.enabled, false).hovered }
     // Android: in a multi-line field the pointer is over the scrolling viewport, not the editor.
     if t.tokens.profile == .MaterialLike && options.rows > 1u32 { over = over || control_state(t, key + 1048612u64, options.enabled, false).hovered }
     let hovered = over && options.enabled
@@ -6510,11 +6512,16 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     if focused {
         edge = style.color(t.tokens, .Primary)
         edge_width = t.tokens.sizes.outline_focused
+        // M3: the focused indicator and outline are 3 dp.
+        if t.tokens.profile == .MaterialLike { edge_width = 3.0 }
         label_color = edge
     }
     if options.invalid {
         edge = style.color(t.tokens, .Error)
         edge_width = t.tokens.sizes.outline_focused
+        if t.tokens.profile == .MaterialLike && focused { edge_width = 3.0 }
+        // M3: the error outline or indicator is 1 dp and grows to 2 dp only under focus.
+        if t.tokens.profile == .MaterialLike && !focused { edge_width = t.tokens.sizes.divider }
         label_color = edge
     }
     if options.read_only && !options.invalid {
@@ -6527,6 +6534,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         edge_width = t.tokens.sizes.divider
         label_color = edge
         value_color = edge
+        // M3: a disabled outline is on-surface at 12 % (the filled indicator stays at 38 %).
+        if t.tokens.profile == .MaterialLike && !options.filled { edge = with_alpha(ink, t.tokens.states.disabled_container) }
     }
     var value_role: style.TextRole = .BodyLarge
     if dense || h <= t.tokens.sizes.control_md { value_role = .BodyMedium }
@@ -6710,6 +6719,13 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         let (notched_node, notched_error) = notched(a, t, frame, label, label_color, pad_x, floated)
         if notched_error != ok { ret (zero, notched_error) }
         boxed = notched_node
+    }
+    if t.tokens.profile == .MaterialLike {
+        var no_gesture: widget.GestureAction = zero
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = boxed
+        boxed = widget.region(key + 1048650u64, widget.Region { gesture: no_gesture, gestures: 4u8, enabled: options.enabled, focusable: false }, style.defaults(), held[0usize..1usize])
     }
     // Dense: the label above the box, as a field label.
     var column_count = 1usize

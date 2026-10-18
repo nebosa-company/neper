@@ -22,3 +22,7 @@ S6 = ["rest", "hover", "focus", "pressed", "disabled", "error"]
 SHEETS["checkbox"] = {"columns": 6, "cell_w": 72, "cell_h": 64, "cells": ["checkbox-%s-%s" % (k, s) for k in ["unchecked", "checked", "indeterminate"] for s in S6]}
 SHEETS["radio"] = {"columns": 6, "cell_w": 72, "cell_h": 64, "cells": ["radio-%s-%s" % (k, s) if s != "error" else None for k in ["unchecked", "checked"] for s in S6]}
 SHEETS["switch"] = {"columns": 5, "cell_w": 90, "cell_h": 56, "cells": ["switch-%s-%s" % (k, s) for k in ["off", "on", "off-icons", "on-icons"] for s in S5]}
+
+SHEETS["text_field"] = {"columns": 6, "cell_w": 270, "cell_h": 96, "cells": [
+    "text-field-%s-%s" % (v, k) for v in ["filled", "outlined"] for k in
+    ["empty-rest", "empty-hover", "empty-focus", "value-focus", "value-disabled", "value-error"]]}

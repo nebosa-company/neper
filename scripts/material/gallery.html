@@ -67,6 +67,7 @@ svg.i { width: 24px; height: 24px; fill: currentColor; display: block; }
 md-filled-button svg.i, md-outlined-button svg.i, md-text-button svg.i, md-filled-tonal-button svg.i, md-elevated-button svg.i, md-assist-chip svg.i { width: 18px; height: 18px; }
 md-filled-text-field, md-outlined-text-field, md-filled-select, md-outlined-select { width: 240px; }
 md-list { width: 280px; }
+md-filled-text-field, md-outlined-text-field { --md-filled-text-field-caret-color: transparent; --md-outlined-text-field-caret-color: transparent; }
 md-slider { width: 200px; }
 /* M3 error checkbox (md.comp.checkbox error tokens; Material Web defines the tokens but does not wire them) */
 md-checkbox.err { --md-checkbox-outline-color: var(--md-sys-color-error); --md-checkbox-hover-outline-color: var(--md-sys-color-error);
@@ -212,16 +213,16 @@ for (const k of ["off", "on"]) {
     add(`switch-${k}-icons-${st}`, `<md-switch icons${a} aria-label="Option"></md-switch>`);
   }
 }
-// text fields
+// text fields (the sheet's cells carry a supporting text line under the field, so the references do too)
 for (const v of ["filled", "outlined"]) {
   const tag = `md-${v}-text-field`;
   for (const st of ["rest", "hover", "focus", "disabled", "error"]) {
     const d = st === "disabled", e = st === "error";
-    add(`text-field-${v}-empty-${st}`, `<${tag} label="Label"${dis(d)}${e ? ' error error-text="Error"' : ""}></${tag}>`);
-    add(`text-field-${v}-value-${st}`, `<${tag} label="Label" value="Text"${dis(d)}${e ? ' error error-text="Error"' : ""}></${tag}>`);
+    const sup = e ? ' error error-text="Error text"' : ' supporting-text="Supporting text"';
+    add(`text-field-${v}-empty-${st}`, `<${tag} label="Label"${dis(d)}${sup}></${tag}>`);
+    add(`text-field-${v}-value-${st}`, `<${tag} label="Label" value="Terminate"${dis(d)}${sup}></${tag}>`);
   }
-  add(`text-field-${v}-support-rest`, `<${tag} label="Label" value="Text" supporting-text="Supporting text"></${tag}>`);
-  add(`text-field-${v}-icons-rest`, `<${tag} label="Label" value="Text">${sl("search", "leading-icon")}${sl("close", "trailing-icon")}</${tag}>`);
+  add(`text-field-${v}-icons-rest`, `<${tag} label="Label" value="Terminate" supporting-text="Supporting text">${sl("search", "leading-icon")}${sl("close", "trailing-icon")}</${tag}>`);
 }
 // select
 for (const v of ["filled", "outlined"]) {
@@ -309,6 +310,7 @@ window.focusLayer = () => {
     if (el.tagName === "MD-RIPPLE") { el.style.setProperty("--md-ripple-hover-opacity", "0.1"); el.hovered = true; }
     if (el.shadowRoot) walk(el.shadowRoot); } };
   walk(document.getElementById("stage"));
+  for (const f of document.querySelectorAll("md-filled-text-field, md-outlined-text-field")) f.setSelectionRange(f.value.length, f.value.length);
 };
 // Pressed on Android is the 10 % layer alone: drop the hover layer the resting pointer would add under it
 window.pressedOnly = () => {

@@ -29,7 +29,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             }
         }
         var options = control.field_options()
-        options.width = 200.0
+        options.width = 240.0
         options.filled = i < 6usize
         options.enabled = column != 4usize
         options.invalid = column == 5usize
@@ -40,6 +40,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         support.role = .BodySmall
         support.wrap = .None
         support.color = .OnSurfaceVariant
+        if column == 4usize { support.color = .OnSurface }
         var line = "Supporting text"
         if column == 5usize {
             support.color = .Error
@@ -48,6 +49,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let (note, note_error) = control.text(a, 0u64, line, t, support)
         if note_error != ok { ret (0usize, note_error) }
         var inset = style.defaults()
+        if column == 4usize { inset.opacity = 0.38 }
         inset.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let (under, under_error) = mem.alloc[widget.Node](a, 1usize)
         if under_error != ok { ret (0usize, under_error) }
@@ -58,7 +60,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         pair[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, inset, under[0usize..1usize])
         let column_node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
         var drive: looks.Drive = .None
-        if column == 1usize { drive = .Hover }
+        if column == 1usize {
+            drive = .Hover
+        }
         if column == 2usize || column == 3usize { drive = .Focus }
         cells[i] = looks.Cell { caption: captions[column], node: column_node, drive: drive }
         i += 1usize
@@ -67,6 +71,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "text_field", cells: 12usize, columns: 6usize, cell_w: 210.0, cell_h: 84.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "text_field", cells: 12usize, columns: 6usize, cell_w: 270.0, cell_h: 96.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }
