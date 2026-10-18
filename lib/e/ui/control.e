@@ -13473,8 +13473,15 @@ type Notice = struct { text: str, action_label: str, action: widget.Submit, dism
 // A text button in a colour of its own (D971): the label and its state layer in
 // `color`, for a ground the theme's text buttons do not stand on.
 fn tinted_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, color: paint.Color) -> (widget.Node, err) {
+    let (made, made_error) = tinted_button_min(a, key, t, label, action, color, -1.0)
+    ret (made, made_error)
+}
+
+// `least` below zero keeps the look's own minimum width (the Android look's 64); otherwise it is the minimum (a snackbar's action has none).
+fn tinted_button_min(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, color: paint.Color, least: f32) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
     var look = button_look(t, style.resolve(t.tokens, .Plain, state), true)
+    if least >= 0.0 { look.min_width = least }
     look.foreground = color
     look.background = with_alpha(color, state_opacity(t, state))
     look.border_width = 0.0
@@ -13931,7 +13938,7 @@ fn stacked_toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notice: *Notic
     sheet.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: down, right: style.Length { Px: 8.0 }, bottom: down }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, sheet, parts[0usize..at])
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, sheet, parts[0usize..at])
     var sem: widget.Semantics = zero
     sem.role = 26u8
     sem.label = notice.text
@@ -19283,13 +19290,13 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     parts[0usize] = grown
     var at = 1usize
     if action_label.len != 0usize {
-        let (act, act_error) = tinted_button(a, key + 1u64, t, action_label, action, style.color(t.tokens, .InversePrimary))
+        let (act, act_error) = tinted_button_min(a, key + 1u64, t, action_label, action, style.color(t.tokens, .InversePrimary), 0.0)
         if act_error != ok { ret (zero, act_error) }
         parts[at] = act
         at += 1usize
     }
     if widget.submit_set(dismiss.invoke) {
-        let (close, close_error) = tinted_glyph_button(a, key + 2u64, t, .Cross, "Dismiss", dismiss, 48.0, 24.0, ink)
+        let (close, close_error) = tinted_glyph_button(a, key + 2u64, t, .Cross, "Dismiss", dismiss, 40.0, 24.0, ink)
         if close_error != ok { ret (zero, close_error) }
         parts[at] = close
         at += 1usize
