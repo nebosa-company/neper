@@ -1,0 +1,328 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Material 3 reference gallery</title>
+<!-- Reference renders for the Neper Android look (docs/ui/looks/ref/material). Google's Material Web
+     components (@material/web, the M3 reference implementation) built into bundle.js by capture.mjs;
+     the ones the library does not have (snackbar, tooltip, navigation bar, top app bar, search bar,
+     badge, date picker) are plain HTML and CSS written from the M3 specification with the same tokens.
+     The page shows ONE cell at a time: capture.mjs calls window.mount(name) then drives the state. -->
+<style>
+@font-face { font-family: Roboto; font-weight: 400; src: url("file:///C:/Windows/Fonts/Roboto-Regular.ttf"); }
+@font-face { font-family: Roboto; font-weight: 500; src: url("file:///C:/Windows/Fonts/Roboto-Medium.ttf"); }
+@font-face { font-family: Roboto; font-weight: 700; src: url("file:///C:/Windows/Fonts/Roboto-Bold.ttf"); }
+:root {
+  --md-ref-typeface-brand: Roboto; --md-ref-typeface-plain: Roboto;
+  --md-sys-color-shadow: #000; --md-sys-color-scrim: #000;
+  /* the focus ring is off: Android shows focus as the 10 % state layer (profile MaterialLike, focus_ring 0) */
+  --md-focus-ring-width: 0px; --md-focus-ring-duration: 0s;
+  /* M3 spec state layers: hover 8 %, focus 10 %, pressed 10 % (Material Web ships pressed at 12 %) */
+  --md-ripple-pressed-opacity: 0.1;
+}
+:root, :root[data-scheme="light"] {
+  --md-sys-color-background: #FEF7FF; --md-sys-color-on-background: #1D1B20;
+  --md-sys-color-surface: #FEF7FF; --md-sys-color-on-surface: #1D1B20;
+  --md-sys-color-surface-variant: #E7E0EC; --md-sys-color-on-surface-variant: #49454F;
+  --md-sys-color-primary: #6750A4; --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #EADDFF; --md-sys-color-on-primary-container: #21005D;
+  --md-sys-color-secondary: #625B71; --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #E8DEF8; --md-sys-color-on-secondary-container: #1D192B;
+  --md-sys-color-tertiary: #7D5260; --md-sys-color-on-tertiary: #FFFFFF;
+  --md-sys-color-tertiary-container: #FFD8E4; --md-sys-color-on-tertiary-container: #31111D;
+  --md-sys-color-error: #B3261E; --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: #F9DEDC; --md-sys-color-on-error-container: #410E0B;
+  --md-sys-color-outline: #79747E; --md-sys-color-outline-variant: #CAC4D0;
+  --md-sys-color-surface-tint: #6750A4;
+  --md-sys-color-surface-dim: #DED8E1; --md-sys-color-surface-bright: #FEF7FF;
+  --md-sys-color-surface-container-lowest: #FFFFFF; --md-sys-color-surface-container-low: #F7F2FA;
+  --md-sys-color-surface-container: #F3EDF7; --md-sys-color-surface-container-high: #ECE6F0;
+  --md-sys-color-surface-container-highest: #E6E0E9;
+  --md-sys-color-inverse-surface: #322F35; --md-sys-color-inverse-on-surface: #F5EFF7;
+  --md-sys-color-inverse-primary: #D0BCFF;
+}
+:root[data-scheme="dark"] {
+  --md-sys-color-background: #141218; --md-sys-color-on-background: #E6E0E9;
+  --md-sys-color-surface: #141218; --md-sys-color-on-surface: #E6E0E9;
+  --md-sys-color-surface-variant: #49454F; --md-sys-color-on-surface-variant: #CAC4D0;
+  --md-sys-color-primary: #D0BCFF; --md-sys-color-on-primary: #381E72;
+  --md-sys-color-primary-container: #4F378B; --md-sys-color-on-primary-container: #EADDFF;
+  --md-sys-color-secondary: #CCC2DC; --md-sys-color-on-secondary: #332D41;
+  --md-sys-color-secondary-container: #4A4458; --md-sys-color-on-secondary-container: #E8DEF8;
+  --md-sys-color-tertiary: #EFB8C8; --md-sys-color-on-tertiary: #492532;
+  --md-sys-color-tertiary-container: #633B48; --md-sys-color-on-tertiary-container: #FFD8E4;
+  --md-sys-color-error: #F2B8B5; --md-sys-color-on-error: #601410;
+  --md-sys-color-error-container: #8C1D18; --md-sys-color-on-error-container: #F9DEDC;
+  --md-sys-color-outline: #938F99; --md-sys-color-outline-variant: #49454F;
+  --md-sys-color-surface-tint: #D0BCFF;
+  --md-sys-color-surface-dim: #141218; --md-sys-color-surface-bright: #3B383E;
+  --md-sys-color-surface-container-lowest: #0F0D13; --md-sys-color-surface-container-low: #1D1B20;
+  --md-sys-color-surface-container: #211F26; --md-sys-color-surface-container-high: #2B2930;
+  --md-sys-color-surface-container-highest: #36343B;
+  --md-sys-color-inverse-surface: #E6E0E9; --md-sys-color-inverse-on-surface: #322F35;
+  --md-sys-color-inverse-primary: #6750A4;
+}
+html, body { margin: 0; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); font-family: Roboto; }
+/* the stage: the cell sits at (24, 24); the capture clips the cell's box plus a margin */
+#stage { position: absolute; left: 64px; top: 64px; }
+svg.i { width: 24px; height: 24px; fill: currentColor; display: block; }
+md-filled-button svg.i, md-outlined-button svg.i, md-text-button svg.i, md-filled-tonal-button svg.i, md-elevated-button svg.i, md-assist-chip svg.i { width: 18px; height: 18px; }
+md-filled-text-field, md-outlined-text-field, md-filled-select, md-outlined-select { width: 240px; }
+md-list { width: 280px; }
+md-slider { width: 200px; }
+md-tabs { width: 360px; }
+
+html.notext { -webkit-text-fill-color: transparent; }
+html.notext svg.i { opacity: 0; }
+/* ---- CSS-spec parts (no Material Web component) ---- */
+.snackbar { box-sizing: border-box; display: flex; align-items: center; width: 344px; min-height: 48px; padding: 0 8px 0 16px; border-radius: 4px;
+  background: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface);
+  box-shadow: 0 3px 3px -2px rgba(0,0,0,.2), 0 3px 4px 0 rgba(0,0,0,.14), 0 1px 8px 0 rgba(0,0,0,.12);
+  font: 400 14px/20px Roboto; letter-spacing: .25px; }
+.snackbar .txt { flex: 1; padding: 14px 0; }
+.snackbar .act { font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-inverse-primary); padding: 10px 12px; border-radius: 20px; }
+.snackbar .x { width: 40px; height: 40px; display: grid; place-items: center; color: var(--md-sys-color-inverse-on-surface); }
+.tooltip { box-sizing: border-box; display: inline-block; padding: 4px 8px; min-height: 24px; border-radius: 4px; background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface); font: 400 12px/16px Roboto; letter-spacing: .4px; }
+.rich-tooltip { box-sizing: border-box; width: 312px; padding: 12px 16px 8px; border-radius: 12px; background: var(--md-sys-color-surface-container);
+  box-shadow: 0 1px 3px 1px rgba(0,0,0,.15), 0 1px 2px 0 rgba(0,0,0,.3); }
+.rich-tooltip .t { font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-on-surface-variant); }
+.rich-tooltip .b { font: 400 14px/20px Roboto; letter-spacing: .25px; color: var(--md-sys-color-on-surface-variant); padding: 4px 0 8px; }
+.rich-tooltip .a { font: 500 14px/20px Roboto; color: var(--md-sys-color-primary); padding: 10px 12px; margin: 0 -12px; }
+.navbar { box-sizing: border-box; display: flex; width: 360px; height: 80px; background: var(--md-sys-color-surface-container); padding: 12px 8px 16px; gap: 8px; }
+.navbar .it { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.navbar .pill { width: 64px; height: 32px; border-radius: 16px; display: grid; place-items: center; color: var(--md-sys-color-on-surface-variant); position: relative; overflow: hidden; }
+.navbar .it.on .pill { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.navbar .it.hover .pill::after, .navbar .it.pressed .pill::after { content: ""; position: absolute; inset: 0; background: var(--md-sys-color-on-surface); opacity: .08; }
+.navbar .it.pressed .pill::after { opacity: .1; }
+.navbar .it.on.hover .pill::after, .navbar .it.on.pressed .pill::after { background: var(--md-sys-color-on-secondary-container); }
+.navbar .lbl { font: 500 12px/16px Roboto; letter-spacing: .5px; color: var(--md-sys-color-on-surface-variant); }
+.navbar .it.on .lbl { color: var(--md-sys-color-on-surface); }
+.navbar .it.dis { opacity: .38; }
+.appbar { box-sizing: border-box; display: flex; align-items: center; width: 360px; height: 64px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); padding: 0 4px; }
+.appbar.scrolled { background: var(--md-sys-color-surface-container); }
+.appbar .ic { width: 48px; height: 48px; display: grid; place-items: center; color: var(--md-sys-color-on-surface-variant); }
+.appbar .ttl { flex: 1; font: 400 22px/28px Roboto; padding: 0 4px; }
+.appbar.center .ttl { text-align: center; }
+.searchbar { box-sizing: border-box; display: flex; align-items: center; width: 360px; height: 56px; border-radius: 28px; padding: 0 16px; gap: 16px;
+  background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant); position: relative; overflow: hidden; }
+.searchbar .ph { flex: 1; font: 400 16px/24px Roboto; letter-spacing: .5px; }
+.searchbar.hover::after, .searchbar.pressed::after { content: ""; position: absolute; inset: 0; background: var(--md-sys-color-on-surface); opacity: .08; }
+.searchbar.pressed::after { opacity: .1; }
+.searchbar.dis { opacity: .38; }
+.badgebox { position: relative; display: inline-block; width: 24px; height: 24px; color: var(--md-sys-color-on-surface-variant); }
+.badge { position: absolute; box-sizing: border-box; background: var(--md-sys-color-error); color: var(--md-sys-color-on-error); }
+.badge.s { width: 6px; height: 6px; border-radius: 3px; left: 15px; top: 0; }
+.badge.l { min-width: 16px; height: 16px; border-radius: 8px; left: 12px; top: -4px; padding: 0 4px; font: 500 11px/16px Roboto; letter-spacing: .5px; text-align: center; }
+.datepicker { box-sizing: border-box; width: 360px; background: var(--md-sys-color-surface-container-high); border-radius: 28px; padding-bottom: 12px;
+  box-shadow: 0 2px 6px 2px rgba(0,0,0,.15), 0 1px 2px 0 rgba(0,0,0,.3); }
+.datepicker .hd { padding: 16px 24px 0 24px; height: 120px; box-sizing: border-box; }
+.datepicker .hd .s { font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-on-surface-variant); }
+.datepicker .hd .d { font: 400 32px/40px Roboto; color: var(--md-sys-color-on-surface); margin-top: 36px; }
+.datepicker hr { border: 0; border-top: 1px solid var(--md-sys-color-outline-variant); margin: 0; }
+.datepicker .mn { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 0 24px; height: 48px; font: 500 14px/20px Roboto; letter-spacing: .1px; color: var(--md-sys-color-on-surface-variant); }
+.datepicker .g { display: grid; grid-template-columns: repeat(7, 48px); padding: 0 12px; font: 400 14px/20px Roboto; letter-spacing: .25px; text-align: center; }
+.datepicker .g span { height: 48px; display: grid; place-items: center; }
+.datepicker .g .w { height: 40px; font: 400 12px/16px Roboto; color: var(--md-sys-color-on-surface); }
+.datepicker .g .c { width: 40px; height: 40px; margin: 4px; border-radius: 20px; box-sizing: border-box; }
+.datepicker .g .today { border: 1px solid var(--md-sys-color-outline); color: var(--md-sys-color-primary); }
+.datepicker .g .sel { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.datepicker .ft { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 12px 0; }
+</style>
+<div id="stage"></div>
+<script src="bundle.js"></script>
+<script>
+const ICON = {
+  add: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z", close: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+  check: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+  search: "M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
+  menu: "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z",
+  heart: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z",
+  more: "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
+  edit: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
+  down: "M7 10l5 5 5-5z", prev: "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z", next: "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+  home: "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z", star: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
+  person: "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z",
+};
+const ic = (n, s) => `<svg class="i" viewBox="0 0 24 24" ${s || ""}><path d="${ICON[n]}"/></svg>`;
+const sl = (n, slot) => `<svg class="i" slot="${slot}" viewBox="0 0 24 24"><path d="${ICON[n]}"/></svg>`;
+
+// CELLS[name] = { html, target? (selector inside the stage; default first child), shadow? (selector inside the target's shadow root) }
+const CELLS = {};
+function add(name, html, opts) { CELLS[name] = Object.assign({ html }, opts || {}); }
+const dis = (d) => d ? " disabled" : "";
+
+// the elevation levels 0 to 5 on a 120 x 64 surface with 12 px corners (md-elevation, the library's own shadows); fitted by scripts/material/fit_shadow.py
+for (let n = 0; n <= 5; n++) {
+  add(`elevation-level${n}-rest`, `<div style="position:relative;width:120px;height:64px;border-radius:12px;background:var(--md-sys-color-surface-container-low)"><md-elevation style="--md-elevation-level:${n}"></md-elevation></div>`, { margin: 56 });
+}
+// buttons: variant x {label, icon} x states
+for (const v of ["filled", "outlined", "text", "filled-tonal", "elevated"]) {
+  const tag = "md-" + v + "-button";
+  const key = v === "filled-tonal" ? "tonal" : v;
+  for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
+    add(`button-${key}-${st}`, `<${tag}${dis(st === "disabled")}>Label</${tag}>`);
+    add(`button-${key}-icon-${st}`, `<${tag}${dis(st === "disabled")}>${sl("add", "icon")}Label</${tag}>`);
+  }
+}
+// icon buttons
+for (const v of ["standard:md-icon-button", "filled:md-filled-icon-button", "tonal:md-filled-tonal-icon-button", "outlined:md-outlined-icon-button"]) {
+  const [key, tag] = v.split(":");
+  for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
+    add(`icon-button-${key}-${st}`, `<${tag}${dis(st === "disabled")} aria-label="Favorite">${ic("heart")}</${tag}>`);
+  }
+  if (key !== "standard") add(`icon-button-${key}-toggled`, `<${tag} toggle selected aria-label="Favorite">${ic("heart")}<span slot="selected">${ic("heart")}</span></${tag}>`);
+}
+add("icon-button-standard-toggled", `<md-icon-button toggle selected aria-label="Favorite">${ic("heart")}<span slot="selected">${ic("heart")}</span></md-icon-button>`);
+// fab
+for (const v of ["fab", "fab-small", "fab-large", "fab-extended"]) {
+  const a = { "fab": "", "fab-small": 'size="small"', "fab-large": 'size="large"', "fab-extended": 'label="Label"' }[v];
+  for (const st of ["rest", "hover", "pressed", "focus"]) {
+    add(`${v}-${st}`, `<md-fab ${a} aria-label="Add">${sl("add", "icon")}</md-fab>`);
+  }
+}
+for (const c of ["primary", "secondary", "tertiary", "surface"]) {
+  add(`fab-${c}-rest`, `<md-fab variant="${c}" aria-label="Add">${sl("add", "icon")}</md-fab>`);
+}
+// checkbox
+for (const k of ["unchecked", "checked", "indeterminate"]) {
+  for (const st of ["rest", "hover", "pressed", "focus", "disabled", "error"]) {
+    const a = (k === "checked" ? " checked" : "") + (k === "indeterminate" ? " indeterminate" : "") + dis(st === "disabled") + (st === "error" ? " required" : "");
+    add(`checkbox-${k}-${st}`, `<md-checkbox${a} aria-label="Option"></md-checkbox>`);
+  }
+}
+// radio
+for (const k of ["unchecked", "checked"]) {
+  for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
+    add(`radio-${k}-${st}`, `<md-radio name="g"${k === "checked" ? " checked" : ""}${dis(st === "disabled")} aria-label="Option"></md-radio>`);
+  }
+}
+// switch
+for (const k of ["off", "on"]) {
+  for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
+    const a = (k === "on" ? " selected" : "") + dis(st === "disabled");
+    add(`switch-${k}-${st}`, `<md-switch${a} aria-label="Option"></md-switch>`);
+    add(`switch-${k}-icons-${st}`, `<md-switch icons${a} aria-label="Option"></md-switch>`);
+  }
+}
+// text fields
+for (const v of ["filled", "outlined"]) {
+  const tag = `md-${v}-text-field`;
+  for (const st of ["rest", "hover", "focus", "disabled", "error"]) {
+    const d = st === "disabled", e = st === "error";
+    add(`text-field-${v}-empty-${st}`, `<${tag} label="Label"${dis(d)}${e ? ' error error-text="Error"' : ""}></${tag}>`);
+    add(`text-field-${v}-value-${st}`, `<${tag} label="Label" value="Text"${dis(d)}${e ? ' error error-text="Error"' : ""}></${tag}>`);
+  }
+  add(`text-field-${v}-support-rest`, `<${tag} label="Label" value="Text" supporting-text="Supporting text"></${tag}>`);
+  add(`text-field-${v}-icons-rest`, `<${tag} label="Label" value="Text">${sl("search", "leading-icon")}${sl("close", "trailing-icon")}</${tag}>`);
+}
+// select
+for (const v of ["filled", "outlined"]) {
+  const tag = `md-${v}-select`;
+  for (const st of ["rest", "hover", "focus", "disabled", "error"]) {
+    const o = `<md-select-option value="a"><div slot="headline">Apple</div></md-select-option><md-select-option value="b"><div slot="headline">Banana</div></md-select-option>`;
+    add(`select-${v}-empty-${st}`, `<${tag} label="Label"${dis(st === "disabled")}${st === "error" ? ' error error-text="Error"' : ""}>${o}</${tag}>`);
+    add(`select-${v}-value-${st}`, `<${tag} label="Label"${dis(st === "disabled")}${st === "error" ? ' error error-text="Error"' : ""}>${o.replace('value="a"', 'value="a" selected')}</${tag}>`);
+  }
+}
+// chips
+for (const k of ["assist", "filter", "input", "suggestion"]) {
+  const tag = `md-${k}-chip`;
+  for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
+    const a = dis(st === "disabled");
+    add(`chip-${k}-${st}`, `<md-chip-set><${tag} label="Label"${a}></${tag}></md-chip-set>`);
+    if (k === "filter") add(`chip-${k}-selected-${st}`, `<md-chip-set><${tag} label="Label" selected${a}></${tag}></md-chip-set>`);
+    if (k === "assist" || k === "suggestion") add(`chip-${k}-elevated-${st}`, `<md-chip-set><${tag} label="Label" elevated${a}></${tag}></md-chip-set>`);
+    if (k === "assist") add(`chip-${k}-icon-${st}`, `<md-chip-set><${tag} label="Label"${a}>${sl("add", "icon")}</${tag}></md-chip-set>`);
+    if (k === "input") add(`chip-${k}-selected-${st}`, `<md-chip-set><${tag} label="Label" selected${a}></${tag}></md-chip-set>`);
+  }
+}
+// slider
+for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
+  add(`slider-rest-${st}`.replace("rest-rest", "rest"), `<md-slider value="40"${dis(st === "disabled")} aria-label="Level"></md-slider>`);
+  add(`slider-labeled-${st}`, `<md-slider value="40" labeled${dis(st === "disabled")} aria-label="Level"></md-slider>`);
+  add(`slider-range-${st}`, `<md-slider range value-start="20" value-end="70"${dis(st === "disabled")} aria-label="Level"></md-slider>`);
+  add(`slider-ticks-${st}`, `<md-slider ticks min="0" max="10" value="4"${dis(st === "disabled")} aria-label="Level"></md-slider>`);
+}
+// progress
+for (const v of [0, 40, 100]) {
+  add(`progress-linear-${v}`, `<md-linear-progress value="${v / 100}" style="width:240px"></md-linear-progress>`);
+  add(`progress-circular-${v}`, `<md-circular-progress value="${v / 100}"></md-circular-progress>`);
+}
+add("progress-linear-four-color", `<md-linear-progress value="0.4" four-color style="width:240px"></md-linear-progress>`);
+add("progress-linear-buffer", `<md-linear-progress value="0.4" buffer="0.7" style="width:240px"></md-linear-progress>`);
+add("progress-linear-disabled", `<md-linear-progress value="0.4" style="width:240px;opacity:.38"></md-linear-progress>`);
+// tabs
+const tabs = (tag, sel) => `<md-tabs>` + ["Flights", "Trips", "Explore"].map((l, i) => `<${tag}${i === sel ? " active" : ""}>${l}</${tag}>`).join("") + `</md-tabs>`;
+add("tabs-primary-rest", tabs("md-primary-tab", 0));
+add("tabs-secondary-rest", tabs("md-secondary-tab", 0));
+add("tabs-primary-icons-rest", `<md-tabs>` + ["home", "star", "person"].map((n, i) => `<md-primary-tab${i === 0 ? " active" : ""}>${sl(n, "icon")}${["Home", "Starred", "Me"][i]}</md-primary-tab>`).join("") + `</md-tabs>`);
+// menu: an open menu anchored to nothing; the capture clips the surface
+const menu = (extra) => `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute" ${extra || ""}><md-menu-item><div slot="headline">Item one</div></md-menu-item><md-menu-item><div slot="headline">Item two</div></md-menu-item><md-menu-item disabled><div slot="headline">Disabled</div></md-menu-item><md-menu-item><div slot="headline">Item four</div></md-menu-item></md-menu>`;
+add("menu-rest", menu(), { target: "md-menu", shadow: ".menu" });
+add("menu-icons", `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute"><md-menu-item><div slot="headline">Edit</div>${sl("edit", "start")}</md-menu-item><md-menu-item><div slot="headline">Add</div>${sl("add", "start")}</md-menu-item></md-menu>`, { target: "md-menu", shadow: ".menu" });
+// list
+const li = (a) => `<md-list-item ${a || ""}><div slot="headline">List item</div><div slot="supporting-text">Supporting text</div></md-list-item>`;
+for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {
+  add(`list-item-${st}`, `<md-list><md-list-item type="button"${dis(st === "disabled")}><div slot="headline">List item</div></md-list-item></md-list>`, { target: "md-list-item" });
+  add(`list-item-two-line-${st}`, `<md-list><md-list-item type="button"${dis(st === "disabled")}><div slot="headline">List item</div><div slot="supporting-text">Supporting text</div></md-list-item></md-list>`, { target: "md-list-item" });
+  add(`list-item-leading-${st}`, `<md-list><md-list-item type="button"${dis(st === "disabled")}><div slot="headline">List item</div>${sl("person", "start")}${sl("more", "end")}</md-list-item></md-list>`, { target: "md-list-item" });
+}
+// dialog (open, modal=false so no scrim; the surface is clipped)
+add("dialog-rest", `<md-dialog open style="--md-dialog-container-color:var(--md-sys-color-surface-container-high)"><div slot="headline">Dialog title</div><form slot="content" method="dialog">A dialog is a type of modal window that appears in front of app content to provide critical information or ask for a decision.</form><div slot="actions"><md-text-button>Cancel</md-text-button><md-text-button>OK</md-text-button></div></md-dialog>`, { target: "md-dialog", shadow: ".container" });
+add("dialog-icon", `<md-dialog open><div slot="icon">${ic("star")}</div><div slot="headline">Dialog title</div><form slot="content" method="dialog">A dialog with an icon.</form><div slot="actions"><md-text-button>Cancel</md-text-button><md-text-button>OK</md-text-button></div></md-dialog>`, { target: "md-dialog", shadow: ".container" });
+// snackbar / tooltip / navigation bar / app bar / search bar / badge / date picker: CSS from the spec
+add("snackbar-rest", `<div class="snackbar"><span class="txt">Single-line snackbar</span></div>`);
+add("snackbar-action", `<div class="snackbar"><span class="txt">Single-line snackbar</span><span class="act">Action</span></div>`);
+add("snackbar-action-close", `<div class="snackbar"><span class="txt">Single-line snackbar</span><span class="act">Action</span><span class="x">${ic("close")}</span></div>`);
+add("tooltip-plain", `<div class="tooltip">Tooltip text</div>`);
+add("tooltip-rich", `<div class="rich-tooltip"><div class="t">Rich tooltip</div><div class="b">Rich tooltips bring attention to a particular element or feature.</div><div class="a">Action</div></div>`);
+const nav = (on, state, label) => `<div class="navbar">` + ["home:Home", "search:Search", "star:Starred", "person:Profile"].map((s, i) => {
+  const [n, l] = s.split(":");
+  return `<div class="it${i === on ? " on" : ""}${i === 1 && state ? " " + state : ""}"><div class="pill">${ic(n)}</div><div class="lbl">${l}</div></div>`;
+}).join("") + `</div>`;
+add("navigation-bar-rest", nav(0));
+add("navigation-bar-hover", nav(0, "hover"));
+add("navigation-bar-pressed", nav(0, "pressed"));
+add("app-bar-small", `<div class="appbar"><div class="ic">${ic("menu")}</div><div class="ttl">Title</div><div class="ic">${ic("search")}</div><div class="ic">${ic("more")}</div></div>`);
+add("app-bar-small-scrolled", `<div class="appbar scrolled"><div class="ic">${ic("menu")}</div><div class="ttl">Title</div><div class="ic">${ic("search")}</div><div class="ic">${ic("more")}</div></div>`);
+add("app-bar-center", `<div class="appbar center"><div class="ic">${ic("menu")}</div><div class="ttl">Title</div><div class="ic">${ic("more")}</div></div>`);
+for (const st of ["rest", "hover", "pressed", "dis"]) {
+  add(`search-bar-${st === "dis" ? "disabled" : st}`, `<div class="searchbar ${st}">${ic("menu")}<span class="ph">Hinted search text</span>${ic("search")}</div>`);
+}
+add("badge-small", `<span class="badgebox">${ic("heart")}<span class="badge s"></span></span>`);
+add("badge-large-1", `<span class="badgebox">${ic("heart")}<span class="badge l">3</span></span>`);
+add("badge-large-99", `<span class="badgebox">${ic("heart")}<span class="badge l">999+</span></span>`);
+const days = (sel) => ["S", "M", "T", "W", "T", "F", "S"].map(d => `<span class="w">${d}</span>`).join("") + Array.from({ length: 28 }, (_, i) => `<span><span class="c${i + 1 === 14 ? " today" : ""}${i + 1 === sel ? " sel" : ""}" style="display:grid;place-items:center">${i + 1}</span></span>`).join("");
+add("date-picker-rest", `<div class="datepicker"><div class="hd"><div class="s">Select date</div><div class="d">Mon, Jun 14</div></div><hr><div class="mn"><span>June 2021</span><span style="display:flex">${ic("prev")}${ic("next")}</span></div><div class="g">${days(21)}</div><div class="ft"><md-text-button>Cancel</md-text-button><md-text-button>OK</md-text-button></div></div>`);
+
+// Focus is the 10 % state layer on Android: the ripple's hover layer at 10 % (Material Web itself only draws its focus ring)
+window.focusLayer = () => {
+  const walk = (root) => { for (const el of root.querySelectorAll("*")) {
+    if (el.tagName === "MD-RIPPLE") { el.style.setProperty("--md-ripple-hover-opacity", "0.1"); el.hovered = true; }
+    if (el.shadowRoot) walk(el.shadowRoot); } };
+  walk(document.getElementById("stage"));
+};
+// Pressed on Android is the 10 % layer alone: drop the hover layer the resting pointer would add under it
+window.pressedOnly = () => {
+  const walk = (root) => { for (const el of root.querySelectorAll("*")) {
+    if (el.tagName === "MD-RIPPLE") { el.style.setProperty("--md-ripple-hover-opacity", "0"); el.style.setProperty("--md-ripple-pressed-opacity", "0.1"); }
+    if (el.shadowRoot) walk(el.shadowRoot); } };
+  walk(document.getElementById("stage"));
+};
+window.cellNames = () => Object.keys(CELLS);
+window.mount = async (name, scheme) => {
+  document.documentElement.dataset.scheme = scheme;
+  const c = CELLS[name];
+  if (!c) throw new Error("no cell " + name);
+  const s = document.getElementById("stage");
+  s.innerHTML = c.html;
+  await document.fonts.ready;
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await Promise.all([...s.querySelectorAll("*")].filter(e => e.updateComplete).map(e => e.updateComplete));
+  // the box to clip: the target's rect (or its shadow part)
+  let el = c.target ? s.querySelector(c.target) : s.firstElementChild;
+  if (c.shadow) el = el.shadowRoot.querySelector(c.shadow) || el;
+  await new Promise(r => setTimeout(r, c.target === "md-dialog" || c.target === "md-menu" ? 600 : 120));
+  const r = el.getBoundingClientRect();
+  return { x: r.left, y: r.top, w: r.width, h: r.height, margin: c.margin || 16 };
+};
+</script>
