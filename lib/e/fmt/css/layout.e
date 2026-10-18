@@ -912,7 +912,8 @@ fn flush_run(l: *Layout, parent: u32, first: u32, last: u32) {
     var k = first
     while true {
         let kb = &l.boxes.items[usize(k)]
-        if !(kb.inner == .Text && is_ws_only(kb.text) && collapses(l, k)) { all_ws = false }
+        let out_of_flow = !kb.inline_level && is_out_of_flow(st(l, kb.style))
+        if !out_of_flow && !(kb.inner == .Text && is_ws_only(kb.text) && collapses(l, k)) { all_ws = false }
         if k == last { break }
         k = kb.next
     }
@@ -920,7 +921,8 @@ fn flush_run(l: *Layout, parent: u32, first: u32, last: u32) {
         k = first
         while true {
             let nxt = l.boxes.items[usize(k)].next
-            detach(l, k)
+            let kb = &l.boxes.items[usize(k)]
+            if kb.inline_level || !is_out_of_flow(st(l, kb.style)) { detach(l, k) }
             if k == last { break }
             k = nxt
         }

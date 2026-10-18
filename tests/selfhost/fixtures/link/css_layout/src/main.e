@@ -384,5 +384,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 63. An absolutely positioned child does not stop an empty block collapsing its margins through.
     let (p63, ok63) = build(a, "<div id=w><div><div style=\"position:absolute\"></div></div><p id=p style=\"margin:24px 0;height:10px\"></p></div>", "")
     if !ok63 || !is_rect(rect_of(p63, "w"), 0.0f64, 24.0f64, 800.0f64, 10.0f64) { os.exit(100) }
+    // 64. A float between blocks is not wrapped in an anonymous block that would stop margins collapsing across it.
+    let (p64, ok64) = build(a, "<div id=w><div style=\"height:10px;margin-bottom:20px\"></div> <div style=\"float:left;height:10px\"></div> <div id=c style=\"clear:left;margin-top:80px;height:10px\"></div></div>", "")
+    if !ok64 || !is_rect(rect_of(p64, "c"), 0.0f64, 90.0f64, 800.0f64, 10.0f64) { os.exit(101) }
     ret ok
 }
