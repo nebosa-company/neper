@@ -40,6 +40,7 @@ def sheet(name, columns, cell_w, cell_h, cells):
 sheet("progress_bar", 3, 210, 44, [
     "progress-0", "progress-40", "progress-100", "progress-osd", "levelbar",
     ("spinner", [(0, 0, 31, 31)]),
+    "scale-normal", "scale-hover", "scale-active", "scale-focus", "scale-disabled",
 ])
 
 sheet("splitter", 2, 210, 90, [

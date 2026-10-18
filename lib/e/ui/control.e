@@ -5285,6 +5285,10 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
         let (cup, cup_error) = cupertino_slider(a, key, t, label, first, low, high, step, change, enabled)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux && !range {
+        let (linux, linux_error) = linux_scale(a, key, t, label, first, low, high, step, change, enabled)
+        ret (linux, linux_error)
+    }
     // v2 (D956, docs/ux/components/Slider): 44 deep for its handle, the active part
     // and the handles `primary`, the rest `secondary-container`; disabled, those are
     // `on-surface` at 38% and 12%.
@@ -5359,6 +5363,117 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     if !enabled { sem.states = accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
 }
+
+// ---- the Linux look, scale (worker l3, round 20) ------------------------------------------------------------------------------
+// GtkScale in libadwaita 1.5: 34 high and 200 wide; a 4 high trough 12 in from each end (#dddddd, #454545 Dark; one step darker
+// under the pointer), the part before the knob in the accent (#3584e4, lighter under the pointer), and a 20 knob (white; #d2d2d2
+// Dark until hovered) that travels from 10 to 190 with a soft shadow below it. A keyboard-focused knob wears a 2 px ring of the
+// accent at 50 % outside it; an insensitive scale is paler throughout. The runtime's own slider, drawn transparent, takes the
+// pointer and keys.
+type LinuxScale = struct { arena: *mem.Arena, share: f32, trough: paint.Color, fill: paint.Color, knob: paint.Color, ring: bool, accent: paint.Color, across: f32, shade: f32 }
+
+fn linux_scale_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn linux_scale_circle(a: *mem.Arena, b: *scene.Builder, cx: f32, cy: f32, radius: f32, color: paint.Color) -> err {
+    let (path, path_error) = widget.rounded_path(a, geometry.Rect { x: cx - radius, y: cy - radius, width: radius * 2.0, height: radius * 2.0 }, radius)
+    if path_error != ok { ret path_error }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: color } } })
+}
+
+fn linux_scale_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*LinuxScale](ctx)
+    let top = area.y + 15.0
+    let left = area.x + 12.0
+    let right = area.x + s.across - 12.0
+    let cx = area.x + 10.0 + s.share * (s.across - 20.0)
+    let cy = area.y + 17.0
+    let (trough, trough_error) = widget.rounded_path(s.arena, geometry.Rect { x: left, y: top, width: right - left, height: 4.0 }, 2.0)
+    if trough_error != ok { ret trough_error }
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: trough, brush: paint.Brush { Solid: s.trough } } })
+    if cx > left {
+        let (filled, filled_error) = widget.rounded_path(s.arena, geometry.Rect { x: left, y: top, width: cx - left, height: 4.0 }, 2.0)
+        if filled_error != ok { ret filled_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: filled, brush: paint.Brush { Solid: s.fill } } })
+    }
+    // the shadow: the knob's circle one pixel lower, grown by 4 down to 0, each ring adding what the next leaves of the measured total
+    let totals = [6]f32{ 0.244 * s.shade, 0.116 * s.shade, 0.068 * s.shade, 0.02 * s.shade, 0.0, 0.0 }
+    var e: usize = 5usize
+    while e > 0usize {
+        e -= 1usize
+        let own = 1.0 - (1.0 - totals[e]) / (1.0 - totals[e + 1usize])
+        try linux_scale_circle(s.arena, b, cx, cy + 1.0, 10.0 + f32(e), paint.rgba(0.0, 0.0, 0.0, own))
+    }
+    try linux_scale_circle(s.arena, b, cx, cy, 10.0, s.knob)
+    if s.ring {
+        let (ring_path, ring_error) = widget.rounded_path(s.arena, geometry.Rect { x: cx - 11.0, y: cy - 11.0, width: 22.0, height: 22.0 }, 11.0)
+        if ring_error != ok { ret ring_error }
+        let stroke = paint.Stroke { width: 2.0, cap: .Butt, join: .Round, miter_limit: 4.0 }
+        ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: ring_path, brush: paint.Brush { Solid: with_alpha(s.accent, 0.5) }, stroke: stroke } })
+    }
+    ret ok
+}
+
+fn linux_scale(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let state = control_state(t, key, enabled, false)
+    let hot = enabled && (state.hovered || state.pressed)
+    var trough = style.hex_raw(0xDDDDDDu32)
+    var fill = style.hex_raw(0x3584E4u32)
+    var knob = style.hex_raw(0xFFFFFFu32)
+    if dark {
+        trough = style.hex_raw(0x454545u32)
+        knob = style.hex_raw(0xD2D2D2u32)
+    }
+    if hot {
+        trough = style.hex_raw(0xD3D3D3u32)
+        fill = style.hex_raw(0x4990E7u32)
+        if dark {
+            trough = style.hex_raw(0x505050u32)
+            knob = style.hex_raw(0xFFFFFFu32)
+        }
+    }
+    if !enabled {
+        trough = style.hex_raw(0xEBEBEBu32)
+        fill = style.hex_raw(0x98BFEFu32)
+        knob = style.hex_raw(0xFDFDFDu32)
+        if dark {
+            trough = style.hex_raw(0x343434u32)
+            fill = style.hex_raw(0x2D5484u32)
+            knob = style.hex_raw(0x7B7B7Bu32)
+        }
+    }
+    var share: f32 = 0.0
+    if high > low { share = (value - low) / (high - low) }
+    if share < 0.0 { share = 0.0 }
+    if share > 1.0 { share = 1.0 }
+    let (scales, scales_error) = mem.alloc[LinuxScale](a, 1usize)
+    if scales_error != ok { ret (zero, TooLarge) }
+    scales[0usize] = LinuxScale { arena: a, share: share, trough: trough, fill: fill, knob: knob, ring: enabled && state.focus_visible, accent: style.color(t.tokens, .Focus), across: 200.0, shade: if_else(enabled, 1.0, 0.12) }
+    var none: []const widget.Node = zero
+    let seen = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&scales[0usize]), measure: linux_scale_measure, paint: linux_scale_paint, state: widget.bytes_of[LinuxScale](&scales[0usize]) } }, style: sized_style(200.0, 34.0), children: none }
+    var track_style = sized_style(200.0, 34.0)
+    track_style.position = .Absolute
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = seen
+    layers[1usize] = widget.slider(key, widget.Slider { value: value, second: value, range: false, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: zero, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }, track_style)
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    let (said, said_error) = mem.alloc[u8](a, 21usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let said_len = write_i64(said, i64(rounded))
+    sem.value = said[0usize..said_len]
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(200.0, 34.0), layers[0usize..2usize]))), ok)
+}
+// ---- end the Linux look, scale -----------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------ progress (D822, P1-09)
 
