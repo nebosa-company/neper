@@ -39,7 +39,8 @@ SHEETS = {
     "vertical_grid": {"columns": 2, "cell_w": 340, "cell_h": 349, "cells": ["action-rows", "preferences-group"], "text": {}, "art": {}},
     "data_grid": {"columns": 1, "cell_w": 300, "cell_h": 220, "cells": ["columnview"],
                   "text": {"columnview": [(4, 6, 56, 26), (58, 6, 108, 26)] + [(r, 31 + 35 * i + 3, w, 31 + 35 * i + 32) for i in range(6) for (r, w) in ((4, 56), (58, 108))]}, "art": {}},
-    "dialog": {"columns": 1, "cell_w": 570, "cell_h": 430, "cells": ["alert-dialog"], "text": {}, "art": {}},
+    "dialog": {"columns": 1, "cell_w": 570, "cell_h": 430, "cells": ["alert-dialog"],
+                  "text": {"alert-dialog": [(215, 158, 336, 182), (196, 190, 352, 210), (172, 245, 232, 264), (318, 245, 378, 264)]}, "art": {}},
 }
 
 

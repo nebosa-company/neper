@@ -16,6 +16,7 @@ use e.ui.animation
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.linux_card
 use e.ui.style
 use e.ui.widget
 use e.ui.winchrome
@@ -1103,6 +1104,10 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = dialog_cupertino(a, key, t, title, content, buttons, open, described, semantic_role, busy, fallback)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = dialog_linux(a, key, t, title, content, buttons, open, described, semantic_role, busy, fallback)
+        ret (linux, linux_error)
     }
     let entering = opening_share_over(t, key, open, t.tokens.durations.medium4)
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
@@ -8315,3 +8320,168 @@ fn dialog_cupertino(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     dialog_held[0usize] = made
     ret (widget.box(key + 8192u64, style.defaults(), dialog_held[0usize..1usize]), ok)
 }
+
+// ---- the Linux look, alert dialog (worker l4, round 20) -------------------------------------------------------------------------
+// libadwaita 1.5 AdwAlertDialog: a 294 wide card (dialog_bg_color) of 18 px corners, the heading (title-2, 19.9 px bold) and the body
+// centred over a hairline, then the responses side by side, each 41 high with bold labels (destructive in destructive_color,
+// suggested in the accent), a 1 px rule between them. The card's rim and its shadow are baked from the library's picture
+// (e.ui.linux_card); the window's dimming is the scrim.
+fn linux_dialog_face(t: *const control.Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.color(t.tokens, .SurfaceBright) }
+    ret style.color(t.tokens, .Background)
+}
+
+// The scrim of an alert over a Light window is black at 13.6 %, over a Dark one 50 % (measured: 250 to 216, 36 to 18).
+fn linux_scrim_share(t: *const control.Theme) -> f32 {
+    var wanted: f32 = 0.136
+    if t.tokens.palette == .Dark { wanted = 0.5 }
+    ret wanted / t.tokens.states.scrim
+}
+
+fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton) -> (widget.Node, err) {
+    let width: f32 = 294.0
+    let ink = style.color(t.tokens, .OnSurface)
+    var heading = control.text_options()
+    heading.role = .Label
+    heading.size = 20.7
+    heading.align = .Center
+    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, ink)
+    if title_error != ok { ret (zero, title_error) }
+    var title_sem: widget.Semantics = zero
+    title_sem.role = 25u8
+    title_sem.label = title
+    title_sem.level = 2u8
+    let flat = style.Length { Px: 0.0 }
+    var head_style = style.defaults()
+    head_style.width = style.Length { Px: width }
+    head_style.padding = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 22.0 }, right: style.Length { Px: 24.0 }, bottom: flat }
+    let titled = widget.semantics(0u64, title_sem, style.defaults(), one_of_node(a, title_node))
+    var body_style = style.defaults()
+    body_style.width = style.Length { Px: width }
+    body_style.padding = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 9.0 }, right: style.Length { Px: 24.0 }, bottom: style.Length { Px: 24.0 } }
+    let (block_parts, block_error) = mem.alloc[widget.Node](a, 2usize)
+    if block_error != ok { ret (zero, TooLarge) }
+    block_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Start, gap: 0.0 }, head_style, one_of_node(a, titled))
+    block_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Start, gap: 0.0 }, body_style, one_of_node(a, message))
+    var block_style = style.defaults()
+    block_style.height = style.Length { Px: 99.0 }
+    let text_block = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, block_style, block_parts[0usize..2usize])
+    // The hairline, one rule straddling two rows (black 8 % and 3.2 %, white 10 % and 4 % Dark).
+    var upper = control.sized_style(width, 1.0)
+    var lower = control.sized_style(width, 1.0)
+    if t.tokens.palette == .Dark {
+        upper.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.1) }
+        lower.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.04) }
+    } else {
+        upper.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.08) }
+        lower.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.032) }
+    }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * buttons.len)
+    if cells_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    var i = 0usize
+    while i < buttons.len {
+        let button_key = key + 3u64 + u64(i)
+        let state = control.control_state(t, button_key, true, false)
+        var look = style.adwaita_resolve(t.tokens, .Plain, state)
+        look.radius = 0.0
+        look.min_height = 41.0
+        look.min_width = 0.0
+        look.padding = 0.0
+        look.padding_y = 0.0
+        var ink_of = ink
+        if buttons[i].kind == .Destructive { ink_of = style.color(t.tokens, .Error) }
+        if buttons[i].kind == .Default { ink_of = style.adwaita_accent(t.tokens) }
+        look.foreground = ink_of
+        var each = (width - f32(buttons.len - 1usize)) / f32(buttons.len)
+        if i == 0usize { each = f32(i32(each + 0.99)) }
+        if i + 1usize == buttons.len && i > 0usize { each = width - f32(buttons.len - 1usize) - f32(buttons.len - 1usize) * f32(i32(each + 0.99)) }
+        var label = control.text_options()
+        label.role = .Label
+        label.wrap = .None
+        let (word, word_error) = control.colored_text(a, 0u64, buttons[i].label, t, label, ink_of)
+        if word_error != ok { ret (zero, word_error) }
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), one_of_node(a, word))
+        let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 41.0), one_of_node(a, held))
+        let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, buttons[i].label, look, true, false, &buttons[i].action, content)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        cells[used] = pressed
+        used += 1usize
+        if i + 1usize < buttons.len {
+            var divider = control.sized_style(1.0, 41.0)
+            divider.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            if t.tokens.palette == .Dark { divider.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.145) } } else { divider.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.112) } }
+            cells[used] = widget.box(0u64, divider, zero)
+            used += 1usize
+        }
+        i += 1usize
+    }
+    let responses = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 41.0), cells[0usize..used])
+    let (column, column_error) = mem.alloc[widget.Node](a, 4usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = text_block
+    column[1usize] = widget.box(0u64, upper, zero)
+    column[2usize] = widget.box(0u64, lower, zero)
+    column[3usize] = responses
+    var face = style.defaults()
+    face.width = style.Length { Px: width }
+    face.background = paint.Brush { Solid: linux_dialog_face(t) }
+    face.radius = 18.0
+    face.overflow = .Clip
+    let card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, column[0usize..4usize])
+    // the rim and shadow round it, then the card
+    let (shadow, shadow_error) = linux_card.alert_shadow_node(a, t.tokens.palette == .Dark)
+    if shadow_error != ok { ret (zero, shadow_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = shadow
+    layers[1usize] = card
+    var outer = style.defaults()
+    outer.width = style.Length { Px: width }
+    let held = widget.stack(0u64, outer, layers[0usize..2usize])
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, outer, one_of_node(a, held)), ok)
+}
+
+fn one_of_node(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret zero }
+    one[0usize] = node
+    ret one[0usize..1usize]
+}
+// ---- end the Linux look, alert dialog (worker l4) -----------------------------------------------------------------------------
+
+// The open dialog of the Linux look: the alert card over the window's dimming, as `dialog_cupertino` does for its card.
+fn dialog_linux(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit) -> (widget.Node, err) {
+    let entering = opening_share_over(t, key, open, t.tokens.durations.medium4)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
+    var submit: widget.Submit = zero
+    var cancel: widget.Submit = zero
+    var i = 0usize
+    while i < buttons.len {
+        if buttons[i].kind == .Default && !busy { submit = buttons[i].action }
+        if buttons[i].kind == .Cancel && !busy { cancel = buttons[i].action }
+        i += 1usize
+    }
+    if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
+    let (card, card_error) = linux_alert_card(a, key, t, title, content, buttons)
+    if card_error != ok { ret (zero, card_error) }
+    var none: []const widget.Shortcut = zero
+    let scoped = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), one_of_node(a, card))
+    var sem: widget.Semantics = zero
+    sem.role = semantic_role
+    sem.label = title
+    sem.states = accessibility.STATE_MODAL
+    if busy { sem.states = sem.states | accessibility.STATE_BUSY }
+    sem.labelled_by = key + 1u64
+    if described { sem.described_by = key + 2u64 }
+    var framed = widget.semantics(0u64, sem, style.defaults(), one_of_node(a, scoped))
+    var outside = cancel
+    if semantic_role == accessibility.ROLE_ALERT_DIALOG { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (scaled, scaled_error) = scaled_in(a, t, framed, entering, 0.9)
+    if scaled_error != ok { ret (zero, scaled_error) }
+    framed = scaled
+    let (made, made_error) = with_scrim_share(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), one_of_node(a, framed)), entering * linux_scrim_share(t))
+    if made_error != ok { ret (zero, made_error) }
+    ret (widget.box(key + 8192u64, style.defaults(), one_of_node(a, made)), ok)
+}
+// ---- end the Linux look, open alert dialog (worker l4) -------------------------------------------------------------------------
