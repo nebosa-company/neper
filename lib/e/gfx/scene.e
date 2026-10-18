@@ -1805,7 +1805,7 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
             let px0 = pen_px(t.m00 * (text.origin.x + run.origin.x) + t.m02)
             let base = baseline_px(t.m11 * (text.origin.y + run.origin.y) + t.m12)
             let x0 = px0 - 4i64 - ppem / 2i64
-            let x1 = px0 + pen_px(span) + ppem + 4i64
+            let x1 = px0 + pen_px(span) + ppem + 4i64 + i64(run.run.glyphs.len)
             let y0 = base - ppem * 3i64 / 2i64 - 2i64
             let y1 = base + ppem / 2i64 + 3i64
             if x0 < wx0 { wx0 = x0 }
@@ -1837,7 +1837,7 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
                 if hint_error != ok { ret false }
                 let at = pen_px(pen + glyph.offset_x * run.size * t.m00)
                 if !cleartype.add_glyph(sc, &outline, at, base) { ret false }
-                pen = pen + glyph.advance_x * run.size * t.m00
+                pen = pen + f32(tthint.fdiv(outline.adv + 32i64, 64i64))
                 g += 1usize
             }
             ri += 1usize
@@ -1847,12 +1847,14 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
     // Compose: the buffer's pixels inside the scissor (which holds the frame's damage box) and the clip mask.
     let canvas = s.canvases[state.layer].data
     let (sx0, sy0, sx1, sy1) = scissor_bounds(s, state.scissor)
+    // The window can lie wholly outside the surface (scrolled-off text): nothing to compose.
+    if wx1 <= 0i64 || wy1 <= 0i64 { ret true }
     var x0 = sx0
     var y0 = sy0
     var x1 = sx1
     var y1 = sy1
-    if i64(x0) < wx0 { x0 = usize(wx0) }
-    if i64(y0) < wy0 { y0 = usize(wy0) }
+    if wx0 > 0i64 && i64(x0) < wx0 { x0 = usize(wx0) }
+    if wy0 > 0i64 && i64(y0) < wy0 { y0 = usize(wy0) }
     if i64(x1) > wx1 { x1 = usize(wx1) }
     if i64(y1) > wy1 { y1 = usize(wy1) }
     let premult = paint.premultiply(color)

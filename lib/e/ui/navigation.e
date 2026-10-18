@@ -10987,7 +10987,7 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             parts[p] = widget.positioned(0u64, 4.0, 3.0, style.defaults(), mem_one(a, dot))
             p += 1usize
         }
-        parts[p] = widget.positioned(0u64, 31.0, 2.0, style.defaults(), mem_one(a, said))
+        parts[p] = widget.positioned(0u64, 32.0, 2.0, style.defaults(), mem_one(a, said))
         p += 1usize
         if mark_at < plain.len {
             let (before, _, _, before_error) = control.run_metrics_faced(a, t, caption, plain[0usize..mark_at])
