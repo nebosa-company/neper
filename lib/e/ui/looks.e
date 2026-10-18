@@ -73,8 +73,8 @@ fn segoe_bold_path() -> str { ret "C:/Windows/Fonts/segoeuib.ttf" }
 fn tahoma_bold_path() -> str { ret "C:/Windows/Fonts/tahomabd.ttf" }
 // The Linux look's Cantarell (SIL OFL, converted from the distro's OTF to TrueType by scripts/linux/otf2ttf.py: this text
 // engine reads glyf outlines only), font ids 13 and 14, read by `run_linux` alone (so the other looks need nothing).
-fn cantarell_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Regular.ttf" }
-fn cantarell_bold_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Bold.ttf" }
+fn cantarell_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Regular.otf" }
+fn cantarell_bold_path() -> str { ret "docs/ui/looks/ref/linux/fonts/Cantarell-Bold.otf" }
 
 // The tokens of a look, Light palette. Cupertino and Material are planned: the Neper tokens
 // with the matching profile, so a control that branches on it can start to.
@@ -274,6 +274,7 @@ fn set_look(rig: *Rig, look: Look) {
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
     scene.set_pixel_exact(rig.tokens.profile == .Windows)
     scene.set_fine_curves(rig.tokens.profile == .Linux)
+    scene.set_cff_text(rig.tokens.profile == .Linux)
     // The Windows profile draws text as ClearType (hinted, per-subpixel coverage); every other look keeps the greyscale fill.
     // NEPER_TEXT_AA=grayscale draws the Windows looks that way too, NEPER_TEXT_AA=cleartype draws every look in ClearType.
     var text_aa = scene.TextAa.Grayscale

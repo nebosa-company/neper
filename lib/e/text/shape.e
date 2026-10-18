@@ -33,7 +33,8 @@ type Font = struct { id: FontId, data: []const u8, face_index: u32 }
 type Feature = struct { tag: u32, value: u32, start: usize, end: usize }
 type Glyph = struct { id: u32, cluster: usize, advance_x: f32, advance_y: f32, offset_x: f32, offset_y: f32 }
 type Run = struct { font: FontId, direction: Direction, script: u32, language: str, glyphs: []const Glyph }
-// `ppem` above 0 sets the run on whole pixel (GDI) advances for that pixel size: the font's `hdmx` widths plus the kerning rounded to whole pixels.
+// `ppem` above 0 sets the run on whole pixel (GDI) advances for that pixel size: the font's `hdmx` widths plus the kerning rounded to whole pixels;
+// with its top bit set it is the size in 26.6 pixels and the run is set on Pango's hinted advances instead (see `pango_advances`).
 type Options = struct { direction: Direction, script: u32, language: str, features: []const Feature, ppem: u32 }
 error InvalidFont
 error InvalidText
@@ -634,6 +635,31 @@ fn gdi_advances(font: Font, ppem: u32, b: *Buffer) {
     }
 }
 
+// Pango's hinted metrics (GTK, round 22): each glyph advances by its `hmtx` advance at the font size, rounded to a whole pixel, and kerning
+// is not applied: measured over every pair of letters and digits of Cantarell, a pair is exactly the sum of its rounded singles.
+// `size26` is the size in 26.6 pixels (`ppem` carries it with its top bit set).
+fn pango_advances(font: Font, size26: i64, b: *Buffer) {
+    let d = font.data
+    let (head, has_head) = find_table(font, TAG_HEAD)
+    let (hhea, has_hhea) = find_table(font, TAG_HHEA)
+    let (hmtx, has_hmtx) = find_table(font, TAG_HMTX)
+    if !has_head || !has_hhea || !has_hmtx || size26 <= 0i64 { ret }
+    let em = i64(u16_at(d, head.at + 18usize))
+    let metrics = usize(u16_at(d, hhea.at + 34usize))
+    if em <= 0i64 || metrics == 0usize { ret }
+    var i = 0usize
+    while i < b.count {
+        var row = usize(b.gid[i])
+        if row >= metrics { row = metrics - 1usize }
+        let base = i64(u16_at(d, hmtx.at + 4usize * row))
+        if base > 0i64 {
+            let step = (base * size26 + 32i64 * em) / (64i64 * em)
+            b.adv_x[i] = i32((step * 64i64 * em + size26 / 2i64) / size26)
+        }
+        i += 1usize
+    }
+}
+
 fn ignorable_scalar(c: u32) -> bool {
     if c == 173u32 || c == 847u32 || c == 6158u32 || c == 65279u32 { ret true }
     if c >= 8203u32 && c <= 8207u32 { ret true }
@@ -693,7 +719,11 @@ fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err)
         let (kern, has_kern) = find_table(font, TAG_KERN)
         if has_kern { legacy_kern(d, kern, &b) }
     }
-    if options.ppem != 0u32 { gdi_advances(font, options.ppem, &b) }
+    if options.ppem & 2147483648u32 != 0u32 {
+        pango_advances(font, i64(options.ppem & 2147483647u32), &b)
+    } else if options.ppem != 0u32 {
+        gdi_advances(font, options.ppem, &b)
+    }
     let (glyphs, glyphs_error) = mem.alloc[Glyph](a, b.count)
     if glyphs_error != ok { ret (zero, glyphs_error) }
     let em = f32(i32(u16_at(d, head.at + 18usize)))
