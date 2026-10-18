@@ -10,8 +10,8 @@
 // GDI's coverage of a bowl or a diagonal has the crisp 2-4-6 ramps and the half-column 1-3-5 ones it has, which a flattened
 // outline sampled scanline by scanline blurs into 1-2-3-4-5-6.
 //
-// `blend` composes the 0..6 coverage onto a colour as GDI does, a gamma of 1.2 on each channel:
-// out = ((1 - a) * bg^1.2 + a * fg^1.2)^(1/1.2) with a = k / 6, per channel.
+// `blend` composes the 0..6 coverage onto a colour as GDI does, byte for byte: a gamma of 1.2 on each channel through 8-bit tables
+// (see `blend_byte`).
 //
 // `begin` opens a buffer over a window of device pixels and `add_glyph` rasterises hinted outlines into it, taking the larger
 // of two glyphs' coverage where they meet, so a run drawn glyph by glyph is the same as the run at once.
@@ -372,12 +372,49 @@ fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) ->
     ret true
 }
 
-// GDI's gamma-1.2 blend of one channel: `bg` and `fg` in 0..1, `k` the coverage in sixths, and the result in 0..1.
-fn blend(bg: f32, fg: f32, k: i64) -> f32 {
-    ret blend_a(bg, fg, f64(k) / 6.0f64)
+// GDI's blend of one channel, byte for byte (fitted to 7168 measured pixels of real GDI text, grey on grey, and checked on every
+// oracle atlas): the background and the text colour go through an 8-bit gamma table (255 * (i / 255) ^ 1.2, rounded), are mixed
+// with the coverage k / 6 as a 16.16 fraction (round(65536 * k / 6), which is why a tie rounds the way it does), rounded to a byte,
+// and come back through the inverse table. A channel of coverage 0 in a pixel some other channel covers goes through the tables
+// too, so it can come out a level off its background (64 becomes 65); only a pixel no channel covers is left alone.
+var gamma_ready: bool = false
+var gamma_dec: [256]i64 = zero
+var gamma_enc: [256]i64 = zero
+
+fn gamma_init() {
+    if gamma_ready { ret }
+    var i = 0usize
+    while i < 256usize {
+        let x = f64(i) / 255.0f64
+        gamma_dec[i] = i64(math.floor[f64](255.0f64 * math.pow[f64](x, 1.2f64) + 0.5f64))
+        gamma_enc[i] = i64(math.floor[f64](255.0f64 * math.pow[f64](x, 1.0f64 / 1.2f64) + 0.5f64))
+        i += 1usize
+    }
+    gamma_ready = true
 }
 
-// The same blend for a coverage `a` in 0..1 (a clip mask or the brush's alpha scales the sixths).
+// The byte a channel gets: `bg` and `fg` bytes, `k` the coverage 0..6 in sixths.
+fn blend_byte(bg: i64, fg: i64, k: i64) -> i64 {
+    gamma_init()
+    let al = (k * 65536i64 + 3i64) / 6i64
+    let mixed = (gamma_dec[usize(bg)] * (65536i64 - al) + gamma_dec[usize(fg)] * al + 32768i64) >> 16u32
+    ret gamma_enc[usize(mixed)]
+}
+
+fn to_byte(v: f32) -> i64 {
+    var b = i64(math.floor[f64](f64(v) * 255.0f64 + 0.5f64))
+    if b < 0i64 { b = 0i64 }
+    if b > 255i64 { b = 255i64 }
+    ret b
+}
+
+// `blend_byte` on 0..1 channel values, the result again a whole byte over 255.
+fn blend(bg: f32, fg: f32, k: i64) -> f32 {
+    ret f32(f64(blend_byte(to_byte(bg), to_byte(fg), k)) / 255.0f64)
+}
+
+// The same blend for a coverage `a` in 0..1 that is not a whole number of sixths (a clip mask or the brush's alpha scales them): the
+// float form of the formula, one level off here and there.
 fn blend_a(bg: f32, fg: f32, a: f64) -> f32 {
     if !(a > 0.0f64) { ret bg }
     let b = math.pow[f64](f64(bg), 1.2f64)

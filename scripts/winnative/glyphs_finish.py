@@ -3,8 +3,8 @@
 python glyphs_finish.py <rawdir> <outdir>
 
 Outline line (all integers, 26.6 pixels, y up, x from the pen): code adv a b c bbx bby orgx orgy ncont { npts { x y on } }
-where the contour is H (on), then every L point on, and every QSPLINE run's points off but its last on (GGO_NATIVE's B-spline
-convention); the closing point equal to the start is dropped. adv is gmCellIncX (the hinted whole-pixel advance); a, b, c the ABC widths.
+where the contour is H (on), then every L point on, every spline control point off and the last point of each spline record
+on (GGO_NATIVE's B-spline convention); the closing point equal to the start is dropped. adv is gmCellIncX (the hinted whole-pixel advance); a, b, c the ABC widths.
 GGO_NATIVE is the black-and-white hinted outline (ClearType quality changes nothing in it), so it checks the black-and-white machine and
 the advance, not the ClearType outline; the pixels are the ClearType truth.
 """
@@ -47,9 +47,7 @@ def outline(path, out):
             for c in g["contours"]:
                 pts = []
                 for i, (k, x, y) in enumerate(c):
-                    on = 1
-                    if k == "Q" and i + 1 < len(c) and c[i + 1][0] == "Q":
-                        on = 0
+                    on = 0 if k == "Q" else 1
                     pts.append((x, y, on))
                 if len(pts) > 1 and pts[-1][:2] == pts[0][:2]:
                     pts.pop()
@@ -71,7 +69,7 @@ def main():
     raw, dst = sys.argv[1:3]
     os.makedirs(dst, exist_ok=True)
     for f in glob.glob(dst + "/*"):
-        if not f.endswith("README.md"):
+        if not f.endswith(("README.md", "exact.txt")):
             os.remove(f)
     meta = []
     for p in sorted(glob.glob(raw + "/*.outline.txt")):

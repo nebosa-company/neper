@@ -32,7 +32,8 @@ static void dump_outline(HDC dc, FILE *o, int code) {
     unsigned char *q = p + sizeof(TTPOLYGONHEADER), *qe = p + h->cb;
     while (q < qe) {
       TTPOLYCURVE *c = (TTPOLYCURVE *)q;
-      for (int i = 0; i < c->cpfx; i++) fprintf(o, "%c %d %d\n", c->wType == TT_PRIM_LINE ? 'L' : 'Q', fix_raw(c->apfx[i].x), fix_raw(c->apfx[i].y));
+      // 'L' line end, 'Q' spline control point (off the curve), 'q' the last point of a spline record (on the curve)
+      for (int i = 0; i < c->cpfx; i++) fprintf(o, "%c %d %d\n", c->wType == TT_PRIM_LINE ? 'L' : (i == c->cpfx - 1 ? 'q' : 'Q'), fix_raw(c->apfx[i].x), fix_raw(c->apfx[i].y));
       q += sizeof(WORD) * 2 + sizeof(POINTFX) * c->cpfx;
     }
     p += h->cb;
@@ -60,6 +61,29 @@ int main(int argc, char **argv) {
     l = &ncm.lfCaptionFont;
     printf("lfCaptionFont %ls height %ld weight %ld quality %d\n", l->lfFaceName, l->lfHeight, l->lfWeight, l->lfQuality);
     printf("LOGPIXELSX %d\n", GetDeviceCaps(dc, LOGPIXELSX));
+    return 0;
+  }
+  if (!strcmp(argv[2], "--blend2")) {
+    // 256 rows (the varied grey 0..255) x 4 columns: text varies on bg 0, text varies on bg 255, bg varies under text 0, bg varies under text 255
+    int quality = argc > 3 ? atoi(argv[3]) : 5;
+    HFONT f = make_font(L"Segoe UI", 400, 24, quality);
+    SelectObject(dc, f);
+    int cw = 24, ch = 32, cols = 4, rows = 256;
+    int w = cw * cols, h = ch * rows;
+    BITMAPINFO bi = {0};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h; bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
+    unsigned *bits; HBITMAP bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, (void **)&bits, NULL, 0);
+    SelectObject(dc, bmp);
+    SetBkMode(dc, TRANSPARENT);
+    for (int v = 0; v < rows; v++) for (int c = 0; c < cols; c++) {
+      int fg = c == 0 ? v : c == 1 ? v : c == 2 ? 0 : 255, bg = c == 0 ? 0 : c == 1 ? 255 : v;
+      RECT r = {c * cw, v * ch, (c + 1) * cw, (v + 1) * ch};
+      HBRUSH br = CreateSolidBrush(RGB(bg, bg, bg)); FillRect(dc, &r, br); DeleteObject(br);
+      SetTextColor(dc, RGB(fg, fg, fg));
+      TextOutW(dc, c * cw + 2, v * ch + 2, L"W", 1);
+    }
+    char path[1024]; snprintf(path, sizeof path, "%s/blend2.q%d.bgra", outdir, quality);
+    FILE *o = fopen(path, "wb"); int hdr[6] = {w, h, cw, ch, cols, rows}; fwrite(hdr, 4, 6, o); fwrite(bits, 4, (size_t)w * h, o); fclose(o);
     return 0;
   }
   if (!strcmp(argv[2], "--blend")) {

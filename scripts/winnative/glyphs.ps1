@@ -27,5 +27,6 @@ foreach ($spec in @(@('Segoe UI', $segoe), @('Tahoma', $tahoma))) {
 }
 & "$bin\glyphs.exe" $raw --blend 5
 & "$bin\glyphs.exe" $raw --blend 6
+& "$bin\glyphs.exe" $raw --blend2 5
 & "$bin\glyphs.exe" $raw --settings | Out-File "$raw\settings.txt" -Encoding ascii
 python "$PSScriptRoot\glyphs_finish.py" $raw "$root\docs\ui\looks\ref\windows-native\glyphs"

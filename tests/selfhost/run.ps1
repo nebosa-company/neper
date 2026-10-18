@@ -4761,6 +4761,12 @@ $textTthintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $textTthintWritten -ne 'executable written') { throw 'text_tthint emission failed' }
 & $textTthintPath
 if ($LASTEXITCODE -ne 0) { throw "a text_tthint check failed: exit $LASTEXITCODE" }
+# The GDI glyph oracle (docs/ui/looks/ref/windows-native/glyphs): every glyph exact in exact.txt must still match real GDI ClearType, pixel for pixel (passes when the fonts are absent).
+$textOraclePath = Join-Path $testBuild 'text-cleartype-oracle-selfhost.exe'
+$textOracleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_cleartype_oracle\src\main.e') $repo 'x64' 'windows' $textOraclePath -j 2
+if ($LASTEXITCODE -ne 0 -or $textOracleWritten -ne 'executable written') { throw 'text_cleartype_oracle emission failed' }
+& $textOraclePath --dir (Join-Path $repo 'docs\ui\looks\ref\windows-native\glyphs')
+if ($LASTEXITCODE -ne 0) { throw "a text_cleartype_oracle check failed: exit $LASTEXITCODE" }
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 $textMathPath = Join-Path $testBuild 'text-math-selfhost.exe'
 $textMathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_math\src\main.e') $repo 'x64' 'windows' $textMathPath -j 2
