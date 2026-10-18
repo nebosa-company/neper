@@ -557,10 +557,13 @@ fn string_to_number(a: *mem.Arena, input: str) -> f64 {
     if pe != ok {
         let (epos, has_e) = str.find(text, "e")
         let (epos2, has_E) = str.find(text, "E")
-        if !has_e && !has_E { ret nan() }
-        var at_e = epos
-        if !has_e { at_e = epos2 }
-        if at_e + 1usize < text.len && text[at_e + 1usize] == 45u8 { v2 = 0.0f64 } else { v2 = infinity() }
+        if !has_e && !has_E {
+            v2 = infinity()
+        } else {
+            var at_e = epos
+            if !has_e { at_e = epos2 }
+            if at_e + 1usize < text.len && text[at_e + 1usize] == 45u8 { v2 = 0.0f64 } else { v2 = infinity() }
+        }
     }
     if neg { ret -v2 }
     ret v2
