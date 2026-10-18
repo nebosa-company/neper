@@ -35,13 +35,13 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let key = u64(i + 1usize) * 100u64
         if i < 6usize {
             if i % 2usize == 0usize {
-                let (made, made_error) = control.linux_scroll_bar(a, key, t, false, 200.0, 727.3, 160.2, i < 4usize)
+                let (made, made_error) = control.linux_scroll_bar(a, key, t, false, 200.0, 727.3, 160.0, i < 4usize)
                 if made_error != ok { ret (0usize, made_error) }
                 node = made
             } else {
                 w = 20.0
                 h = 160.0
-                let (made, made_error) = control.linux_scroll_bar(a, key, t, true, 160.0, 595.3, 134.3, i < 4usize)
+                let (made, made_error) = control.linux_scroll_bar(a, key, t, true, 160.0, 595.3, 134.0, i < 4usize)
                 if made_error != ok { ret (0usize, made_error) }
                 node = made
             }
