@@ -24,6 +24,7 @@ use e.js.interp as js
 use e.js.parser as jsparse
 use e.js.prelude as prelude
 use e.js.temporal as temporal
+use e.js.tzpack as tzpack
 use e.js.intl as intl
 use e.math
 use e.mem
@@ -31,6 +32,7 @@ use e.str
 use e.sync
 use e.thread
 use e.time
+use e.tz
 
 fn arg(args: []const js.Value, i: usize) -> js.Value {
     if i < args.len { ret args[i] }
@@ -1358,6 +1360,50 @@ fn install_agent(it: *js.Interp, host: *js.Obj) {
     js.add_method(it, ag, "monotonicNow", 0u32, agent_monotonic_now)
 }
 
+// --- time zones (the embedded tz database) for Intl and Temporal; captured by their scripts at startup
+
+fn tz_database(it: *js.Interp) -> (tz.Database, bool) {
+    let root = js.root_realm(it)
+    var db: tz.Database = zero
+    if !root.has_tzdb {
+        let (packed, pe) = tzpack.pack(root.a)
+        if pe != ok { ret (db, false) }
+        let (d, e) = tz.load(root.a, packed)
+        if e != ok { ret (db, false) }
+        root.tzdb = d.state
+        root.has_tzdb = true
+    }
+    db.state = root.tzdb
+    ret (db, true)
+}
+
+fn tz_names_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let arr = js.new_array(it)
+    let (db, ok_db) = tz_database(it)
+    if !ok_db { ret (js.obj_value(arr), ok) }
+    let names = tz.names(&db)
+    var i = 0usize
+    while i < names.len {
+        let pe = js.array_push(it, arr, js.str_value(names[i]))
+        i += 1usize
+    }
+    ret (js.obj_value(arr), ok)
+}
+
+// __tzOffset(name, epochMilliseconds): the UTC offset in seconds, or NaN when the zone is unknown.
+fn tz_offset_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (name, ne) = js.to_string(it, arg(args, 0usize))
+    if ne != ok { ret (js.undefv(), ne) }
+    let (ms, me) = js.to_number(it, arg(args, 1usize))
+    if me != ok { ret (js.undefv(), me) }
+    let (db, ok_db) = tz_database(it)
+    if !ok_db { ret (js.num_value(js.nan()), ok) }
+    let (z, ze) = tz.zone(&db, name)
+    if ze != ok { ret (js.num_value(js.nan()), ok) }
+    let off = tz.offset_at(z, time.Timestamp { nanos: i64(ms) * 1000000i64 })
+    ret (js.num_value(f64(off.seconds)), ok)
+}
+
 fn install_host(it: *js.Interp) {
     let h = js.new_plain(it)
     let e0 = js.define_data(it, it.global, js.key_of("$262"), js.obj_value(h), js.P_HIDDEN)
@@ -1367,6 +1413,8 @@ fn install_host(it: *js.Interp) {
     js.add_method(it, it.last, "createRealm", 0u32, host_create_realm)
     let e1 = js.define_data(it, it.last, js.key_of("global"), js.obj_value(it.global), js.P_HIDDEN)
     install_agent(it, it.last)
+    js.add_method(it, it.global, "__tzNames", 0u32, tz_names_native)
+    js.add_method(it, it.global, "__tzOffset", 2u32, tz_offset_native)
 }
 
 // --- bootstrap
