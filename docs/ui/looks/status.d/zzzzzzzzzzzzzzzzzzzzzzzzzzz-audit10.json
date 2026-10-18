@@ -1,0 +1,178 @@
+{
+ "data_grid": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/data_grid.png",
+    "notes": "AUDIT 10 (matched to review): independent recompute 0 flat px off glyphs excluded, but the scroll indicator glow (53 x 198 px baked from the library in lib/e/ui/linux_card.e) supplies 3356 (Light) and 3824 (Dark) of the matched flat pixels; with the baked painters disabled in a scratch worktree those are off. A region that large is the reference pasted, not drawn. | Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). The one captured state: 0 off pixels in both schemes (text 7006 px set apart). Header 30 px, rows 35 px with no lines, 1 px frame; the overlay scroll bar indicator and its shade are the library's pixels, baked and drawn at every scale while the rows overflow.",
+    "gaps": [
+     "Only the engine's plain columns are styled: filter row, footers, group rows, indicators and cell editors keep the generic look",
+     "Hover and pressed rows have no capture",
+     "The scroll indicator is a fixed picture (53 x 198), not driven by the scroll position",
+     "Sort arrow in the header is not drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/data_grid.png",
+    "notes": "AUDIT 10 (matched to review): independent recompute 0 flat px off glyphs excluded, but the scroll indicator glow (53 x 198 px baked from the library in lib/e/ui/linux_card.e) supplies 3356 (Light) and 3824 (Dark) of the matched flat pixels; with the baked painters disabled in a scratch worktree those are off. A region that large is the reference pasted, not drawn. | Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). The one captured state: 0 off pixels in both schemes (text 7006 px set apart). Header 30 px, rows 35 px with no lines, 1 px frame; the overlay scroll bar indicator and its shade are the library's pixels, baked and drawn at every scale while the rows overflow.",
+    "gaps": [
+     "Only the engine's plain columns are styled: filter row, footers, group rows, indicators and cell editors keep the generic look",
+     "Hover and pressed rows have no capture",
+     "The scroll indicator is a fixed picture (53 x 198), not driven by the scroll position",
+     "Sort arrow in the header is not drawn"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/image_combo_box.png",
+    "notes": "AUDIT 10 (matched to review): 6 flat px off in the crop (glyphs excluded, Light and Dark): the drop-down arrow and fragments beside it, up to 116 levels; above the 5 px tolerance. | Round 20 l2 (scripts/linux_cmp_l2.py: a pixel is off when any channel differs by more than 2 levels; only glyph ink, grown by 2 px, is set apart; borders, fills, rings, shadows and corners all count). Light: the captured state (a drop down with a long text, 248 x 34 natural width) 0 px. The drop down is the combo_box one with a 16 px picture before the value (natural width).",
+    "gaps": [
+     "No GTK capture of a picture in the drop down: the picture's position (16 px, 6 px before the text) is a guess",
+     "Its hover, focus, disabled and open list are the combo_box ones (compared there)",
+     "Text glyph pixels are set apart; not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/image_combo_box.png",
+    "notes": "AUDIT 10 (matched to review): 6 flat px off in the crop (glyphs excluded, Light and Dark): the drop-down arrow and fragments beside it, up to 116 levels; above the 5 px tolerance. | Round 20 l2 (scripts/linux_cmp_l2.py: a pixel is off when any channel differs by more than 2 levels; only glyph ink, grown by 2 px, is set apart; borders, fills, rings, shadows and corners all count). Dark: 0 px.",
+    "gaps": [
+     "No GTK capture of a picture in the drop down: the picture's position (16 px, 6 px before the text) is a guess",
+     "Its hover, focus, disabled and open list are the combo_box ones (compared there)",
+     "Text glyph pixels are set apart; not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/status_bar.png",
+    "notes": "AUDIT 10 (matched to review): headerbar-subtitle 41 and actionbar 14 flat px off (Light and Dark), up to 207 levels: the header bar icons (menu, minimise, maximise, add) are smaller and shaped differently from GTK's (seen in the side-by-side). | Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). Both captured states have a cell: the header bar with a subtitle (the library's capture includes its three window controls, which the sheet draws as 24 px circles) and the action bar. 25228 flat reference pixels, 0 off; no pixel outside the masked text and icons differs by more than 2 levels. The status bar is GtkActionBar (headerbar colour, 1 px line, 32 high, 6 px padding); the header bar is AdwHeaderBar (47 high, 34 px buttons, a bold centred title with a 55 % subtitle).",
+    "gaps": [
+     "Glyphs (add, menu, window controls) are Neper's own strokes, thinner than the icon theme's; they are masked",
+     "Progress items, glyph items, tones and pressable panels of the status bar are not captured; they keep the Material layout with these colours",
+     "The window controls are drawn by the sheet, not by window.e (which has its own 36 high Linux caption)",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/status_bar.png",
+    "notes": "AUDIT 10 (matched to review): headerbar-subtitle 41 and actionbar 14 flat px off (Light and Dark), up to 207 levels: the header bar icons (menu, minimise, maximise, add) are smaller and shaped differently from GTK's (seen in the side-by-side). | Same sheet in the Adwaita dark palette beside the library's dark crops. 25231 flat reference pixels, 0 off; 0 non-masked pixels differ.",
+    "gaps": [
+     "Glyphs (add, menu, window controls) are Neper's own strokes, thinner than the icon theme's; they are masked",
+     "Progress items, glyph items, tones and pressable panels of the status bar are not captured; they keep the Material layout with these colours",
+     "The window controls are drawn by the sheet, not by window.e (which has its own 36 high Linux caption)",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/page_control.png",
+    "notes": "AUDIT 10 (matched to review): adw-tabbar 64, adw-viewswitcher 105 (Light; 3 Dark), notebook top 11 and left 4 flat px off glyphs excluded, up to 200 levels: tab icons and close marks. | Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). All four captured states have a cell: the notebook with its tabs on top and on the left (a 1 px frame, the tab header the control builds and the page), an AdwTabBar over its page (chosen tab with its close button and the scrolled strip's edge fade, a separator between the others) and an AdwViewSwitcher. 109914 flat reference pixels, 0 off; 30 non-flat pixels differ (the switcher's 6 px corners).",
+    "gaps": [
+     "The tab bar's and view switcher's tab positions are passed in (lefts and widths measured on the capture); libadwaita's expand-tabs rules are not reproduced",
+     "The tab bar's fade is a clipped-strip artefact of the capture (the first tab is partly scrolled out) drawn as a 36 px gradient; a tab bar at rest has none",
+     "Hover and pressed tabs follow the stylesheet (washes 7 % and 16 %, the 15 % bar on a notebook tab) but the library's crops have no such state; close-button hover, overflow arrows, drag indicator and the switcher's narrow policy are not built",
+     "View switcher pictures are Neper's Picture glyph standing for the library's missing-image icon; masked",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not.",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/page_control.png",
+    "notes": "AUDIT 10 (matched to review): adw-tabbar 64, adw-viewswitcher 105 (Light; 3 Dark), notebook top 11 and left 4 flat px off glyphs excluded, up to 200 levels: tab icons and close marks. | Same sheet in the Adwaita dark palette beside the library's dark crops. 109915 flat reference pixels, 0 off; 31 non-flat pixels differ.",
+    "gaps": [
+     "The tab bar's and view switcher's tab positions are passed in (lefts and widths measured on the capture); libadwaita's expand-tabs rules are not reproduced",
+     "The tab bar's fade is a clipped-strip artefact of the capture (the first tab is partly scrolled out) drawn as a 36 px gradient; a tab bar at rest has none",
+     "Hover and pressed tabs follow the stylesheet (washes 7 % and 16 %, the 15 % bar on a notebook tab) but the library's crops have no such state; close-button hover, overflow arrows, drag indicator and the switcher's narrow policy are not built",
+     "View switcher pictures are Neper's Picture glyph standing for the library's missing-image icon; masked",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not.",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/tree_list.png",
+    "notes": "AUDIT 10 (matched to review): treeview 21 and treeview-selected 20 flat px off (Light and Dark), all in the disclosure triangles (up to 91 levels), which are not text and not coloured; everything else is at 0. | Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). Rest and selected: 0 off pixels in both schemes (text 7990 px and the disclosure triangles set apart). Header 30 px of 12 px bold titles at 40 % over a rule with the library's one-pixel gap, rows 23 px, 18 px per level, 1 px frame.",
+    "gaps": [
+     "Resize grip and header keyboard shortcuts are not drawn in this look; sort by tap and reorder by drag are kept",
+     "The shut-branch triangle (pointing right) has no capture",
+     "Hover and pressed rows have no capture",
+     "Sort arrow in the header is not drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/tree_list.png",
+    "notes": "AUDIT 10 (matched to review): treeview 21 and treeview-selected 20 flat px off (Light and Dark), all in the disclosure triangles (up to 91 levels), which are not text and not coloured; everything else is at 0. | Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). Rest and selected: 0 off pixels in both schemes (text 7990 px and the disclosure triangles set apart). Header 30 px of 12 px bold titles at 40 % over a rule with the library's one-pixel gap, rows 23 px, 18 px per level, 1 px frame.",
+    "gaps": [
+     "Resize grip and header keyboard shortcuts are not drawn in this look; sort by tap and reorder by drag are kept",
+     "The shut-branch triangle (pointing right) has no capture",
+     "Hover and pressed rows have no capture",
+     "Sort arrow in the header is not drawn"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/radio.png",
+    "notes": "AUDIT 10 (review to matched): 10 reliable crops each scheme at 0 flat px off glyphs excluded; the residue is anti-aliased disc and dot edges (non-flat). | Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Radio off and on in five states: 69 x 28 row, 20.1 px disc (measured), 2 px ring, accent fills, 8 px white dot, 50 % disabled, focus ring round the row. 0 flat pixels off; 479 off in all, worst cell 132 (focus ring corners 21 levels; the filled disc edge and the dot differ by up to 17 levels in about 65 pixels).",
+    "gaps": [
+     "Not within tolerance: anti-aliased edge of the disc and of the dot (up to 17 levels), focus ring corners (21)",
+     "Label hinting and kerning as in the check button",
+     "Not captured: 150 % and 200 % references"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/radio.png",
+    "notes": "AUDIT 10 (review to matched): 10 reliable crops each scheme at 0 flat px off glyphs excluded; the residue is anti-aliased disc and dot edges (non-flat). | Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Dark palette: 0 flat pixels off; 487 off in all (disc edge, dot and ring corners, worst 21 levels).",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/radio_group.png",
+    "notes": "AUDIT 10 (review to matched): 0 flat px off in Light and Dark (12 non-flat Dark px). | Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). First, Second, Third with the first selected: radios 6 px apart, no frame or caption (GTK's linked check buttons), 79 x 96. 0 flat pixels off; 69 off in all (the selected disc edge, worst 16 levels).",
+    "gaps": [
+     "Not within tolerance: anti-aliased edge of the selected disc and dot",
+     "The framed group with a caption of the Windows look is not drawn here; the caption is only the group's accessible name",
+     "Hover, pressed and focus of a radio inside the group are the radio's (radio.png), not separately captured"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/radio_group.png",
+    "notes": "AUDIT 10 (review to matched): 0 flat px off in Light and Dark (12 non-flat Dark px). | Compared with scripts/linux_cmp_l1.py against the real GTK 4.14 / libadwaita 1.5 crops (strict metric: every pixel of the crop grown by 3 px is off when ours differs by more than 2 levels; only pixels within 2 px of label ink and within 1 px of the tick are left out). Dark palette: 0 flat pixels off; 76 off in all (worst 16 levels).",
+    "gaps": [
+     "Same gaps as Light"
+    ]
+   }
+  }
+ }
+}
