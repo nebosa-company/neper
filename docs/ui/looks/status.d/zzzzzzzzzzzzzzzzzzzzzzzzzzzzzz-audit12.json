@@ -1,0 +1,122 @@
+{
+ "combo_box": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/combo_box.png",
+    "notes": "AUDIT 12 (matched to review): own comparer (best placement within 3 px, reference flat pixel off when ours differs by more than 2 levels): every closed state 0 flat px off, glyphs counted 0, but the focus ring is not the reference's: GTK's ring is two pixels with the inner pixel blended (153,186,225 against the outer 132,173,223), ours draws both at the full colour (129,172,223), 24 levels off along the whole ring, 766 px per focus crop (dropdown-focus) and 823 over the 10 crops; the flat metric cannot see a thin band, the ring is always compared. Text glyph shapes differ in 79 of 1568 ink px (arrow and first-row). | Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: every closed state (normal, hover, active, focus ring, disabled, combo entry rest, focus, disabled) 0 flat px off, glyphs counted 0 to 3. The drop-down arrow now sits 10 px from the end as in GTK (it was 7 px left). The ring is a drawn band of 5.85 / 4 px corner radii (GTK: about 6 / 4; the generic border drew 5.7 / 3.7), and in the combo entry the button's divider lies over the ring's end as in GTK. The open list is as audit 11 left it.",
+    "gaps": [
+     "Focus ring inner pixel drawn at the full colour, the reference blends it (24 levels, 766 px per focus crop)",
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/combo_box.png",
+    "notes": "AUDIT 12 (matched to review): own comparer (best placement within 3 px, reference flat pixel off when ours differs by more than 2 levels): every closed state 0 flat px off, glyphs counted 0, but the focus ring is not the reference's: GTK's ring is two pixels with the inner pixel blended (153,186,225 against the outer 132,173,223), ours draws both at the full colour (129,172,223), 24 levels off along the whole ring, 766 px per focus crop (dropdown-focus) and 823 over the 10 crops; the flat metric cannot see a thin band, the ring is always compared. Text glyph shapes differ in 79 of 1568 ink px (arrow and first-row). | Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "Focus ring inner pixel drawn at the full colour, the reference blends it (24 levels, 766 px per focus crop)",
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/text_edit.png",
+    "notes": "AUDIT 12 (matched to review): own comparer: 13 of 14 crops 0 flat px off, but entry-warning leaves 23 flat px off glyphs excluded (28 counted): the brown Warning text is low contrast on cream so it is not detected as ink, and it is the same glyph drift as everywhere in the entry: 1330 of 2674 ink px differ by more than 2 levels (entry-normal 158 of 223: the text is right to 'So' and then drifts up to one pixel; whole pixel advances are not Pango's). | Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: all 12 states 0 flat px off, glyphs counted 0 to 4 (the entry's text now takes whole pixel advances as Pango does). The search entry's magnifier and clear icon and the password eye were drawn 14 px wide because the row shrank them when the editor asked for the whole width; the value now gets the room that is left, so the icons are 16 px and 0 flat px off.",
+    "gaps": [
+     "Entry text advance rounding: glyphs after the first one or two drift up to a pixel (1330 of 2674 ink px differ)",
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/text_edit.png",
+    "notes": "AUDIT 12 (matched to review): own comparer: 13 of 14 crops 0 flat px off, but entry-warning leaves 23 flat px off glyphs excluded (28 counted): the brown Warning text is low contrast on cream so it is not detected as ink, and it is the same glyph drift as everywhere in the entry: 1330 of 2674 ink px differ by more than 2 levels (entry-normal 158 of 223: the text is right to 'So' and then drifts up to one pixel; whole pixel advances are not Pango's). | Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "Entry text advance rounding: glyphs after the first one or two drift up to a pixel (1330 of 2674 ink px differ)",
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/mask_edit.png",
+    "notes": "AUDIT 12 (matched to review): own comparer: entry-mask 22, entry-mask-focus 20, entry-mask-disabled 24 flat px off glyphs excluded (counted 108 in all three crops, light; 84 dark), the placeholder and mask text sits a pixel off against the capture ('(555) 010-1234': the parenthesis and the digits after the first group); 559 of 908 ink px differ. Same drift as text edit; audit 10 had it at 21. | Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Light: rest, hover, focus, disabled 0 flat px off, glyphs counted 0 to 1 (whole pixel advances: the digits drifted up to 2 px along the string before).",
+    "gaps": [
+     "Mask and placeholder text drift: 559 of 908 ink px differ, 22/20/24 flat px per crop",
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/mask_edit.png",
+    "notes": "AUDIT 12 (matched to review): own comparer: entry-mask 11, entry-mask-focus about 16, entry-mask-disabled 24 flat px off glyphs excluded (84 counted over the three crops), placeholder and mask text a pixel off against the capture; 714 of 950 ink px differ. Same drift as text edit. | Round 22 la (scripts/linux_flat_la.py: the audit metric, a reference flat pixel off when ours differs by more than 2 levels, only glyph pixels within 2 px of text ink set apart, symbolic icons never set apart; best placement within 3 px). Dark: the same, within the same counts.",
+    "gaps": [
+     "Mask and placeholder text drift: 559 of 908 ink px differ, 22/20/24 flat px per crop",
+     "Antialiasing of curved edges is not exact (the 'steep' pixels, which the flat-pixel metric does not count): the focus ring corners differ by up to 9 levels on about 20 to 26 pixels per ring, the symbolic icons' edges (search, peek eye) by a few levels",
+     "Text glyph pixels are set apart as the audit does (Cantarell is hinted by GTK); with them counted every crop is at 5 px or fewer except where stated",
+     "References not used as evidence: entry hover and active (identical to rest in GTK), spin-hover and spin-active of the first manifest (forced flags), dropdown-focus (a capture taken while the ring was still fading in; the settled dropdown-focus-ring is the reference)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/page_control.png",
+    "notes": "AUDIT 12 (matched to review): own comparer: adw-tabbar 47 flat px off glyphs excluded (101 counted; the tab captions 'Tab one/two/three' are a pixel left or right of the capture's, grey text not detected as ink), adw-viewswitcher 3; 2069 of 3572 ink px differ. Tab shapes, fills, separators and the close icon match. | ROUND 22 (worker lc): Tab close mark and header icons are the adwaita symbolic icons, 4 px nearer the title as in the capture; the view switcher picture is the capture's small full colour missing-image drawing (50 coloured runs, 14 x 12 px, solved from the Light and Dark captures: the only small baked picture here), the chosen button 120 wide. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). notebook top and left 0, tab bar 0 (was 64), view switcher 0 (was 105) flat px off, Light and Dark; 2 antialiased px off.",
+    "gaps": [
+     "Tab caption glyph drift: 47 flat px in adw-tabbar glyphs excluded, 2069 of 3572 ink px differ",
+     "The tab bar's and view switcher's tab positions are passed in (lefts and widths measured on the capture); libadwaita's expand-tabs rules are not reproduced",
+     "The tab bar's fade is a clipped-strip artefact of the capture drawn as a 36 px gradient; a tab bar at rest has none",
+     "Hover and pressed tabs follow the stylesheet but the library's crops have no such state; close-button hover, overflow arrows, drag indicator and the switcher's narrow policy are not built",
+     "The view switcher's picture is the library's missing-image drawing, not an icon a real app would show"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/page_control.png",
+    "notes": "AUDIT 12 (matched to review): own comparer: adw-tabbar 47 flat px off glyphs excluded (101 counted; the tab captions 'Tab one/two/three' are a pixel left or right of the capture's, grey text not detected as ink), adw-viewswitcher 3; 2069 of 3572 ink px differ. Tab shapes, fills, separators and the close icon match. | ROUND 22 (worker lc): Tab close mark and header icons are the adwaita symbolic icons, 4 px nearer the title as in the capture; the view switcher picture is the capture's small full colour missing-image drawing (50 coloured runs, 14 x 12 px, solved from the Light and Dark captures: the only small baked picture here), the chosen button 120 wide. Strict compare scripts/linux_cmp_lc.py (flat reference pixel = 8 neighbours within 2 levels; off = ours differs by more than 2 levels; only TEXT glyph pixels within 2 px of ink are set apart, icons, ticks, chevrons and triangles count). notebook top and left 0, tab bar 0 (was 64), view switcher 0 (was 105) flat px off, Light and Dark; 2 antialiased px off.",
+    "gaps": [
+     "Tab caption glyph drift: 47 flat px in adw-tabbar glyphs excluded, 2069 of 3572 ink px differ",
+     "The tab bar's and view switcher's tab positions are passed in (lefts and widths measured on the capture); libadwaita's expand-tabs rules are not reproduced",
+     "The tab bar's fade is a clipped-strip artefact of the capture drawn as a 36 px gradient; a tab bar at rest has none",
+     "Hover and pressed tabs follow the stylesheet but the library's crops have no such state; close-button hover, overflow arrows, drag indicator and the switcher's narrow policy are not built",
+     "The view switcher's picture is the library's missing-image drawing, not an icon a real app would show"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/group_box.png",
+    "notes": "AUDIT 12 (ready to review): independent contrast computation from the style tokens and the sheet pixels. The group frame is (63,65,78) on the page (18,19,24): 1.8:1, below 3:1 (the row hairline is OutlineVariant #434653 on the page, 1.98:1); the frame is the only thing that identifies the group. Text passes (every non-disabled text component of the sheet at 4.5:1 or more). | Round 22: scripts/neper_dark_contrast.py finds no violation in group_box, group_box_dialog. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Group frame and row hairline under 3:1 against the page (1.8:1 and 1.98:1)",
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ }
+}
