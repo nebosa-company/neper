@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClearType text in Neper | Neper blog</title>
+  <meta name="description" content="How Neper draws hinted ClearType text on its Windows look: a TrueType bytecode interpreter and a GDI-style rasteriser. Off pixels against 77 native Windows captures fell from 30,800 to 11,321; about 55 percent of Segoe UI 12 hinted points are exact, so it is not pixel-exact yet.">
+  <link rel="canonical" href="https://neper.dev/blog/cleartype-text.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="ClearType text in Neper">
+  <meta property="og:description" content="Hinted ClearType text on the Windows look: what it is, how Neper does it, and how far from Windows it still is.">
+  <meta property="og:url" content="https://neper.dev/blog/cleartype-text.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/cleartype-text.svg">
+  <meta property="article:published_time" content="2026-10-18">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 9 7, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // engineering</div>
+      <h1>Text the way Windows draws it: ClearType in Neper</h1>
+      <p class="meta">October 18, 2026 · <code>lib/e/text/tthint.e</code>, <code>lib/e/gfx/cleartype.e</code></p>
+      <img class="banner" src="img/cleartype-text.svg" width="1200" height="630" alt="Text the way Windows draws it. Hinted ClearType, 77 captures checked, off pixels from 30,800 to 11,321.">
+
+      <p class="lede">Neper's Windows look now draws its text as hinted ClearType, the way Windows itself does, instead of grey anti-aliasing. Against 77 native Windows dark captures the number of pixels that differ from Windows fell from 30,800 to 11,321. It is closer, not identical, and this post says how it works and where it still differs.</p>
+
+      <h2>What ClearType is</h2>
+      <p>A colour LCD pixel is three stripes side by side: red, green and blue, in that order. Ordinary anti-aliasing treats the pixel as one dot and shades it grey. ClearType treats the three stripes as three separate dots, so the screen has three times the horizontal resolution for text. A vertical stem can start a third of a pixel to the right and the neighbouring stripes show it.</p>
+      <p>Lighting stripes independently would put a coloured edge on every glyph, so ClearType filters: each stripe's brightness averages a window a few stripes wide. That keeps the extra resolution while spreading the colour enough that the eye reads a sharper edge instead of a rainbow. The coloured fringes you see when you zoom in are the stripes; at normal size the eye blends them.</p>
+      <p>The second half is hinting. A TrueType font carries small programs, in bytecode, that move the points of each outline at a given size so that stems and crossbars land on whole pixels. Without them an <code>e</code> at 12 pixels is a smear; with them the crossbar is one crisp row. Windows runs those programs, and the shapes it draws depend on running them the way Windows does.</p>
+
+      <h2>How Neper does it</h2>
+      <p>Neper's Windows look is compared against real Windows controls, and text is most of the pixels in a control, so the text has to match too. Three pieces do it, all written in Neper:</p>
+      <ul>
+        <li><strong>A bytecode interpreter</strong> (<code>lib/e/text/tthint.e</code>, with <code>lib/e/text/ttglyph.e</code> reading the glyphs) runs the font's own programs. It has the two machines Windows uses: a black-and-white one that gives each glyph's advance width, and a ClearType one that gives the outline. The Windows ClearType rules, such as the 1/16 pixel cut-in along x and ignoring the x part of the delta instructions, were found by comparing the interpreter's outlines with the ones Windows returns, instruction by instruction.</li>
+        <li><strong>A rasteriser</strong> (<code>lib/e/gfx/cleartype.e</code>) fitted to what GDI draws. Each pixel row is sampled by five scanlines, each scanline by six samples across the pixel. A stripe's coverage is the number of set samples in a window one pixel wide centred on it, so neighbouring stripes share four of their six samples; that sharing is the filter. Curves are kept as curves rather than flattened, because flattening blurred the bowls of letters in a way GDI does not.</li>
+        <li><strong>A blend</strong> that applies the coverage to the background with a gamma of 1.2 on each channel, as GDI does, so light text on dark has the same weight as Windows draws it.</li>
+      </ul>
+      <p>Pen positions follow Windows too: each glyph advances by its hinted whole-pixel advance, and the baseline sits on a whole pixel row.</p>
+      <p>It is a switch on the scene, not a global change:</p>
+      <pre><code><span class="fn">scene.set_text_aa</span>(.Grayscale)   <span class="com">// the default, and the only mode of every other look</span>
+<span class="fn">scene.set_text_aa</span>(.ClearType)   <span class="com">// what the Windows look asks for</span>
+
+<span class="prompt">$</span> NEPER_TEXT_AA=grayscale ./app   <span class="com"># draw the Windows look in grey; =cleartype forces it for any look</span></code></pre>
+      <p>Setting the Windows look turns ClearType on. Every other look (Neper, Linux, Cupertino, Material) stays greyscale and unchanged. The fonts, Segoe UI and Tahoma, are read from <code>C:\Windows\Fonts</code> at run time and never shipped. Text that cannot take the path, such as a font without instructions, a rotated or scaled transform, a non-solid brush or a translucent canvas, falls back to greyscale for that text only, so nothing disappears.</p>
+
+      <h2>What it looks like</h2>
+      <p>Both figures are a crop of the same control, magnified with nearest-neighbour scaling so each square is one screen pixel. The top row is a capture of the real Windows 11 control in dark mode, the middle row is Neper with ClearType switched off, and the bottom row is Neper's default Windows rendering.</p>
+      <figure>
+        <img src="img/cleartype-menu.png" width="490" height="998" alt="Magnified pixels of the words New and Open from a popup menu, in three rows. Windows native and Neper ClearType both show white letters with orange and blue edges; Neper greyscale shows the same words in smooth grey shades.">
+        <figcaption>Popup menu items, 7 times. Top: Windows. Middle: Neper greyscale. Bottom: Neper ClearType. The stripes decide which pixels are orange and which are blue.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/cleartype-edit.png" width="480" height="884" alt="Magnified pixels of the words Line one and Line two from a multiline edit box, in three rows: Windows native, Neper greyscale, Neper ClearType. The first and third rows show coloured edges; the middle row is grey.">
+        <figcaption>Multiline edit text with focus, 8 times. The greyscale row spreads each stem over two pixels; the ClearType row places it in stripes, as Windows does.</figcaption>
+      </figure>
+      <p>The bottom rows are not copies of the top rows. In the edit crop the stem of the L has a different colour mix on its first column than in Windows, and a few letters differ by a stripe. That difference is what the numbers below count.</p>
+
+      <h2>What we measured</h2>
+      <p>The check is <code>scripts/looks_dark_native.py</code>. It cuts each native Windows 11 dark capture to its control, finds the best whole-pixel placement in our rendered sheets, and counts the flat-area pixels where any channel differs by more than 2 levels. With <code>LOOKS_GLYPHS=1</code> the glyph pixels count too, which is the strict form used here.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Dark native capture</th><th>Greyscale text</th><th>ClearType text</th></tr></thead>
+          <tbody>
+            <tr><td>All 77 captures, pixels off</td><td>30,800</td><td class="win">11,321</td></tr>
+            <tr><td>Radio button, rest</td><td>238</td><td class="win">28</td></tr>
+            <tr><td>Popup menu, rest</td><td>906</td><td class="win">87</td></tr>
+            <tr><td>Multiline edit, focused</td><td>543</td><td class="win">64</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The ClearType total and the three single-capture rows were rerun for this post: ClearType from the committed sheets, greyscale from a render made with <code>NEPER_TEXT_AA=grayscale</code>. The greyscale total is the figure recorded when the feature landed.</p>
+
+      <div class="callout">
+        <strong>Not pixel-exact yet.</strong>
+        <p>Of the hinted points of Segoe UI at 12 pixels, about 55 percent land exactly where GDI puts them; the rest are off by one to three 64ths of a pixel. Tahoma at 11 pixels is weaker. 11,321 pixels still differ across the captures, so the result is closer to Windows, not equal to it.</p>
+      </div>
+
+      <h2>Limits</h2>
+      <ul>
+        <li><strong>Windows fonts, read from Windows.</strong> The interpreter needs the font's instructions, and the fonts come from the system at run time. Where they are missing the text is greyscale.</li>
+        <li><strong>The interpreter knows what could be measured.</strong> Its rules were found by comparing outlines with Windows' own, and the module says it hints and does not claim to reproduce GDI. There are rules we have not found.</li>
+        <li><strong>Older captures show no gain.</strong> The v3 grabs were taken with <code>PrintWindow</code> and are softer than GDI ClearType, so against those, ClearType text is about even with greyscale. The native captures are the yardstick.</li>
+        <li><strong>Layout can move by a pixel.</strong> Constants tuned for greyscale rounding may be one pixel off under ClearType; the dark popup menu's label moved from x 31 to 32.</li>
+        <li><strong>The numbers are for the dark theme.</strong> The light captures are checked with <code>LOOKS_THEME=light</code>, but the figures here do not cover them.</li>
+      </ul>
+
+      <h2>Try it</h2>
+      <p>The design record is D5163 in <code>docs/decisions.md</code>, and <code>docs/ui/looks-howto.md</code> has the section on rendering the sheets. To reproduce the table, render the Windows dark sheets and run the check from the repository root:</p>
+      <pre><code><span class="prompt">$</span> LOOKS_GLYPHS=1 python -I scripts/looks_dark_native.py
+<span class="prompt">$</span> LOOKS_GLYPHS=1 python -I scripts/looks_dark_native.py radio menu-popup edit-multiline-focus</code></pre>
+      <p>If your numbers disagree with ours, we want to know.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
