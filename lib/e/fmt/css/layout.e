@@ -1466,6 +1466,15 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
             k += 1usize
         }
     }
+    // `hyphens: none` takes the soft hyphens out of the break opportunities.
+    let (hyv, has_hyv) = extra_text(s, "hyphens")
+    if has_hyv && str.eq(cv.lower(l.a, cv.trim_ws(hyv)), "none") {
+        var hk = 1usize
+        while hk <= n {
+            if scal[hk - 1usize] == 173u32 { opp[hk] = 0u8 }
+            hk += 1usize
+        }
+    }
     var seg = 0usize
     var k = 1usize
     // `line-break: anywhere`: a wrap opportunity after every character.
@@ -1497,7 +1506,9 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
             }
             let content = seg_text[..content_end]
             let trail_text = seg_text[content_end..]
-            let w = text_advance(l, s, content)
+            var w = text_advance(l, s, content)
+            // A piece that ends at a soft hyphen reserves the room of the hyphen it shows when the line ends there.
+            if content.len >= 2usize && content[content.len - 2usize] == 194u8 && content[content.len - 1usize] == 173u8 { w += text_advance(l, s, "-") }
             let tr = text_advance(l, s, trail_text)
             if seg_text.len > 0usize {
                 // The break after this piece is a soft wrap opportunity when the style wraps.
@@ -1949,10 +1960,29 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
     ret out
 }
 
+// The room of the hyphen a text piece reserves for a soft hyphen at its end (0 when it does not end in one).
+fn shy_hyphen_w(l: *Layout, p: Piece) -> f64 {
+    if p.kind != .Text || p.clen < 2usize { ret 0.0f64 }
+    let proc = l.boxes.items[usize(p.box)].proc
+    if p.start + p.clen > proc.len { ret 0.0f64 }
+    if proc[p.start + p.clen - 2usize] == 194u8 && proc[p.start + p.clen - 1usize] == 173u8 { ret text_advance(l, bstyle(l, p.box), "-") }
+    ret 0.0f64
+}
+
 fn flush_text_frag(l: *Layout, bxid: u32, x: f64, text: str, w: f64, shift: f64, baseline: f64) {
     if bxid == NONE || text.len == 0usize { ret }
     let fm = l.measure.metrics(l.measure.ctx, bstyle(l, bxid))
-    let pushed = list.push[Frag](&l.frags, Frag { kind: .Text, box: bxid, x: x, y: baseline + shift - fm.ascent, w: w, h: fm.ascent + fm.descent, text: text, first: true, last: true })
+    var shown = text
+    var shown_w = w
+    // A line that ends at a soft hyphen shows a hyphen there.
+    if text.len >= 2usize && text[text.len - 2usize] == 194u8 && text[text.len - 1usize] == 173u8 {
+        let (cat_text, ce) = str.concat(l.a, text[..text.len - 2usize], "-")
+        if ce == ok {
+            shown = cat_text
+            shown_w = w
+        }
+    }
+    let pushed = list.push[Frag](&l.frags, Frag { kind: .Text, box: bxid, x: x, y: baseline + shift - fm.ascent, w: shown_w, h: fm.ascent + fm.descent, text: shown, first: true, last: true })
 }
 
 fn emit_segment(l: *Layout, ob: u32, x0: f64, x1: f64, baseline: f64, shift: f64, first: bool, last: bool) {
@@ -2176,6 +2206,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             used_w += text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
         } else {
             used_w += p.w
+            if k + 1usize < trim_end { used_w -= shy_hyphen_w(l, p) }
         }
         if k + 1usize < trim_end { used_w += p.trail }
         k += 1usize
@@ -2226,6 +2257,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             var this_to = p.start + p.text.len
             var this_w = p.w
             if k + 1usize < trim_end {
+                this_w -= shy_hyphen_w(l, p)
                 this_w += p.trail
                 if p.trail > 0.0f64 { this_w += spread }
             } else {

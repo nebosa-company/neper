@@ -634,6 +634,16 @@ fn gdi_advances(font: Font, ppem: u32, b: *Buffer) {
     }
 }
 
+fn ignorable_scalar(c: u32) -> bool {
+    if c == 173u32 || c == 847u32 || c == 6158u32 || c == 65279u32 { ret true }
+    if c >= 8203u32 && c <= 8207u32 { ret true }
+    if c >= 8234u32 && c <= 8238u32 { ret true }
+    if c >= 8288u32 && c <= 8292u32 { ret true }
+    if c >= 8294u32 && c <= 8297u32 { ret true }
+    if c >= 65024u32 && c <= 65039u32 { ret true }
+    ret false
+}
+
 fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err) {
     let font_error = validate_font(font)
     if font_error != ok { ret (zero, font_error) }
@@ -691,10 +701,18 @@ fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err)
     while i < b.count {
         var from = i
         if options.direction == .RightToLeft { from = b.count - 1usize - i }
+        var gid_out = b.gid[from]
+        var adv_out = f32(b.adv_x[from]) / em
+        // Default-ignorable characters (soft hyphen, zero-width and bidi controls) take no room and draw nothing.
+        let (cp_here, cp_w) = unicode.read_utf8(source, b.cluster[from])
+        if ignorable_scalar(cp_here) {
+            gid_out = glyph_of(d, sub, 32u32)
+            adv_out = 0.0f32
+        }
         glyphs[i] = Glyph {
-            id: b.gid[from],
+            id: gid_out,
             cluster: b.cluster[from],
-            advance_x: f32(b.adv_x[from]) / em,
+            advance_x: adv_out,
             advance_y: f32(b.adv_y[from]) / em,
             offset_x: f32(b.off_x[from]) / em,
             offset_y: f32(b.off_y[from]) / em,
