@@ -16,6 +16,7 @@ use e.ui.gridlook as gl
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.linux_card
+use e.ui.adwicon_l2 as adwicon
 use e.ui.overlay
 use e.ui.style
 use e.ui.vgridlook as vg
@@ -11740,19 +11741,18 @@ fn linux_dim(t: *const control.Theme) -> paint.Color {
     ret paint.Color { red: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha * 0.4 }
 }
 
-// The disclosure arrow in a 22 x tall holder: a filled triangle 12 wide and 6.5 high (the foreground at 56 %), down when open, right when shut.
+// The disclosure arrow in a 23 wide holder: the icon theme's pan-down (pan-end when shut) at 17 px, 2 px from the holder's start and
+// centred on the row, as GTK sizes its expander (fitted: the capture's triangle spans 12.7 x 6.3 px), the foreground at 70 %.
 fn linux_expander(a: *mem.Arena, t: *const control.Theme, open: bool, tall: f32) -> (widget.Node, err) {
     let ink = style.color(t.tokens, .OnSurface)
     let tint = paint.Color { red: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha * 0.7 }
-    let (tri, tri_error) = control.cup_mark(a, 17u32, tint, tint, 0.0, 0.0, 12.0, 6.5)
+    var svg = adwicon.pan_down()
+    if !open { svg = adwicon.pan_end() }
+    let (tri, tri_error) = adwicon.icon(a, svg, tint, 17.0)
     if tri_error != ok { ret (zero, tri_error) }
-    var box = control.sized_style(12.0, 12.0)
-    box.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 2.75 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    var drawn = widget.box(0u64, box, one_node(a, tri))
-    if !open { drawn = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0 - 1.5707963, offset: zero }, control.sized_style(12.0, 12.0), one_node(a, drawn)) }
     var holder = control.sized_style(23.0, tall)
-    holder.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: (tall - 12.0) * 0.5 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    ret (widget.box(0u64, holder, one_node(a, drawn)), ok)
+    holder.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: (tall - 17.0) * 0.5 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.box(0u64, holder, one_node(a, tri)), ok)
 }
 
 // The header: a cell per column (a tap sorts, a drag reorders, as the generic header does) and the rule under them.
