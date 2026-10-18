@@ -15,6 +15,7 @@ use e.ui.control
 use e.ui.gridlook as gl
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.linux_card
 use e.ui.overlay
 use e.ui.style
 use e.ui.vgridlook as vg
@@ -3054,7 +3055,7 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // their selection cell inert, still focusable and Disabled in the tree.
 // (D1501) `pending` marks rows (by key) whose data has not come: each cell is a
 // skeleton line (60% of the cell, 12 tall) and the row is Busy in the tree.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook, double: widget.Change[widget.Key], has_double: bool, empty_width: f32 }
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool, centered: []const bool, extras: []const widget.VirtualExtra, filtered: []const bool, groups: []const HeaderGroup, failed: str, retry: widget.Submit, disabled: []const widget.Key, pending: []const widget.Key, look: TableLook, double: widget.Change[widget.Key], has_double: bool, empty_width: f32 , fill_width: f32}
 
 // Neper dark: the v3 table's light pixel-lines (white and light greys, the pressed header's blue) as dark ones;
 // under every other look and palette the colour is the plain one.
@@ -4586,6 +4587,13 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         head_height = selection.look.header_height
         pad = selection.look.pad
     }
+    // the Linux look (libadwaita 1.5 column view): a 30 high header with no rule, rows of 35, a 1 px frame
+    let lin = t.tokens.profile == .Linux && !selection.look.on
+    if lin {
+        head_height = 30.0
+        pad = 6.0
+        if !(extent > 0.0) { row_extent = 35.0 }
+    }
     let lead = control.if_else(grid, 40.0, 0.0)
     var width: f32 = lead
     var c = 0usize
@@ -4596,8 +4604,16 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let total = source.count(source.ctx)
     var below: widget.Key = 0u64
     if total > 0usize { below = source.key(source.ctx, 0usize) }
-    let (header, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric, selection.filtered, selection.look)
-    if head_error != ok { ret (zero, head_error) }
+    var header: widget.Node = zero
+    if lin {
+        let (linux_header, linux_header_error) = linux_tree_header(a, key, t, columns, sort_column, sort, reorder, false, pad)
+        if linux_header_error != ok { ret (zero, linux_header_error) }
+        header = linux_header
+    } else {
+        let (generic_header, generic_header_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric, selection.filtered, selection.look)
+        if generic_header_error != ok { ret (zero, generic_header_error) }
+        header = generic_header
+    }
     var head = header
     if selection.look.on && selection.look.header_hidden {
         // v3's Show Header off: no header row, the body takes its height
@@ -4729,7 +4745,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if acted_error != ok { ret (zero, acted_error) }
             if has_acted { cells[columns.len - 1usize] = acted }
         }
-        let lined = index + 1usize < total && !selection.look.on
+        let lined = index + 1usize < total && !selection.look.on && !lin
         let row_tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         let chosen = is_selected(selected, row_key)
         let row_disabled = is_selected(selection.disabled, row_key)
@@ -4772,7 +4788,17 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 if hold_error != ok { ret (zero, hold_error) }
             }
         }
-        let (made, made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, selection.double, selection.has_double, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions, selection.look)
+        var made: widget.Node = zero
+        var made_error: err = ok
+        if lin {
+            let (linux_made, linux_made_error) = linux_tree_row(a, t, columns, cells, row_key, row_tall, chosen, row_pick, selection.double, selection.has_double, pad, pad, 1.0)
+            made = linux_made
+            made_error = linux_made_error
+        } else {
+            let (full_made, full_made_error) = table_row_full(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, selection.double, selection.has_double, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting, row_conditions, selection.look)
+            made = full_made
+            made_error = full_made_error
+        }
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
@@ -4820,7 +4846,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             inner[1usize] = widget.box(row_keys[i] ^ hash.fnv1a64("row-detail"), detail_style, inner[2usize..3usize])
             rows[i] = widget.flex(row_derived(row_keys[i], "row-with-detail"), ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), inner[0usize..2usize])
         }
-        if first + i + 1usize < total && !selection.look.on {
+        if first + i + 1usize < total && !selection.look.on && !lin {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, TooLarge) }
             pair[0usize] = rows[i]
@@ -4840,6 +4866,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     view_style.height = style.Length { Px: body_height }
     view_style.overflow = .Clip
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    if lin { view_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) } }
     // looks9-w1: below the last row the live grids show the grid's own white (the collection grid's backdrop picture lies over it)
     if selection.look.on && selection.look.soft_lines && t.tokens.profile == .Windows { view_style.background = paint.Brush { Solid: selection.look.odd } }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
@@ -4867,6 +4894,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     // with a look the drawn bar below replaces the overlay thumb, which stays to be dragged
     var scroll_thumb = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
     if selection.look.on && selection.look.scroll_width > 0.0 { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
+    // libadwaita draws its overlay indicator as a picture (below), not as the runtime's thumb
+    if lin { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
     parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: scroll_thumb, change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent, virtual_extras: selection.extras, fades: false }, view_style, rows[0usize..count])
     // (D1248) With no rows the body is the loading or empty state; the header stays.
     // (D1413) A failed load (`failed`) stands in the body whatever the rows.
@@ -5046,6 +5075,28 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         } else {
             column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), bar_parts[0usize..2usize])
         }
+    }
+    if lin {
+        // the scrolled window: a 1 px frame round the header and rows, `fill_width` wide when the caller says so, and, while the rows
+        // overflow, the overlay scroll bar's indicator with the soft shade round it
+        var inner_width = width
+        if selection.fill_width > width + 2.0 { inner_width = selection.fill_width - 2.0 }
+        var frame = control.sized_style(inner_width + 2.0, head_height + body_height + 2.0)
+        frame.border = style.Border { width: 1.0, color: control.linux_frame_for(t) }
+        frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+        frame.overflow = .Clip
+        frame.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+        var layers_count = 1usize
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = column_node[0usize]
+        if f32(total) * row_extent > body_height && inner_width > 60.0 {
+            let (glow, glow_error) = linux_card.scroll_glow_node(a, t.tokens.palette == .Dark)
+            if glow_error != ok { ret (zero, glow_error) }
+            layers[1usize] = widget.positioned(0u64, inner_width - 53.0, 0.0, style.defaults(), one_node(a, glow))
+            layers_count = 2usize
+        }
+        column_node[0usize] = widget.box(0u64, frame, one_node(a, widget.stack(0u64, control.sized_style(inner_width, head_height + body_height), layers[0usize..layers_count])))
     }
     // (D1283) Wider than its view, the table scrolls sideways (keyed
     // `key + 2097152`), its overlay thumb under the body.
@@ -5585,6 +5636,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     // looks (docs/ui/looks): the Windows tree list is v3's TcxTreeList, drawn with the measured
     // table look (rows of 19, stripes, the #A6D2FF selection) and +/- boxes for twisties.
     let win = tabled && t.tokens.profile == .Windows
+    let lin = tabled && t.tokens.profile == .Linux
     var win_look = zero_look()
     if win {
         style.windows_dark_enter(t.tokens)
@@ -5598,7 +5650,9 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
     let (drags, drags_error) = mem.alloc[TreeRowDrag](a, count)
     if drags_error != ok { ret (none, TooLarge) }
     let touch = density_of(t) == 2usize
-    let step = control.if_else(touch, 24.0, 20.0)
+    var step = control.if_else(touch, 24.0, 20.0)
+    // the Linux look (libadwaita 1.5 tree view): 17 px a level, rows of 23
+    if lin { step = 18.0 }
     var row_extent = extent
     if !(row_extent > 0.0) {
         row_extent = control.if_else(touch, 48.0, 32.0)
@@ -5644,11 +5698,18 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         let entry = visible[i]
         let open = entry.open
         let chosen = is_selected(selected, entry.key)
-        let lined = tabled && !win && i + 1usize < count
+        let lined = tabled && !win && !lin && i + 1usize < count
         let tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
         // The twisty, or its blank for a leaf.
         var twisty = widget.box(0u64, control.sized_style(24.0, 24.0), zero)
         if win { twisty = widget.box(0u64, control.sized_style(14.0, tall), zero) }
+        if lin { twisty = widget.box(0u64, control.sized_style(23.0, tall), zero) }
+        if lin && entry.branch {
+            toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
+            let (arrow, arrow_error) = linux_expander(a, t, open, tall)
+            if arrow_error != ok { ret (none, arrow_error) }
+            twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(23.0, tall), one_node(a, arrow))
+        }
         if win && entry.branch {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
             var box_shape = gl.Shape.TreePlus
@@ -5666,7 +5727,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 2.0 }, right: flat, bottom: flat }
             twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, hit, box_held[0usize..1usize])
         }
-        if entry.branch && !win {
+        if entry.branch && !win && !lin {
             toggles[i] = RowPick { key: entry.key, pick: toggle, double: zero, has_double: false, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
             var kind: control.GlyphKind = .ChevronRight
             if open && t.tokens.motion.reduced { kind = .ChevronDown }
@@ -5723,7 +5784,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         if lead_error != ok { ret (none, TooLarge) }
         lead[0usize] = indent
         lead[1usize] = twisty
-        lead[2usize] = widget.box(0u64, control.sized_style(control.if_else(win, 0.0, 8.0), 0.0), zero)
+        lead[2usize] = widget.box(0u64, control.sized_style(control.if_else(win || lin, 0.0, 8.0), 0.0), zero)
         var lead_count = 3usize
         if options.numbered {
             let (digits, digits_error) = mem.alloc[u8](a, 48usize)
@@ -5778,7 +5839,17 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             var row_index = entry.index
             if win { row_index = i }
             if win { row_pad = win_look.pad }
-            let (tabled_row, tabled_error) = table_row_full(a, t, columns, cells, entry.key, row_index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, row_pad, false, false, zero, false, 0u32, win_look)
+            var tabled_row: widget.Node = zero
+            var tabled_error: err = ok
+            if lin {
+                let (linux_row, linux_error) = linux_tree_row(a, t, columns, cells, entry.key, tall, chosen, pick, toggle, entry.branch, 0.0, 5.0, 0.0)
+                tabled_row = linux_row
+                tabled_error = linux_error
+            } else {
+                let (full_row, full_error) = table_row_full(a, t, columns, cells, entry.key, row_index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, row_pad, false, false, zero, false, 0u32, win_look)
+                tabled_row = full_row
+                tabled_error = full_error
+            }
             if tabled_error != ok { ret (none, tabled_error) }
             made = tabled_row
             // (D1506) A tree table's row drags as a tree's does: an outer region
@@ -5994,7 +6065,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         }
         i += 1usize
     }
-    if tabled && !win {
+    if tabled && !win && !lin {
         i = first
         while i + 1usize < stop {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
@@ -6267,6 +6338,12 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var head_height = header_height(t)
     var head_pad = cell_padding(t)
     var row_height_of = extent
+    let lin = t.tokens.profile == .Linux
+    // the Linux look: a 30 high header under a 1 px rule (libadwaita 1.5 tree view), rows of 23
+    if lin {
+        head_height = 31.0
+        if !(row_height_of > 0.0) { row_height_of = 23.0 }
+    }
     if t.tokens.profile == .Windows {
         style.windows_dark_enter(t.tokens)
         head_look = windows_table_look()
@@ -6276,8 +6353,16 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         head_pad = head_look.pad
         if !(row_height_of > 0.0) { row_height_of = gl.v3().row_height }
     }
-    let (head, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, head_pad, 0.0, 0u64, no_flags, no_flags, head_look)
-    if head_error != ok { ret (zero, head_error) }
+    var head: widget.Node = zero
+    if lin {
+        let (linux_head, linux_head_error) = linux_tree_header(a, key, t, columns, sort_column, sort, reorder, true, 5.0)
+        if linux_head_error != ok { ret (zero, linux_head_error) }
+        head = linux_head
+    } else {
+        let (generic_head, generic_head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, head_pad, 0.0, 0u64, no_flags, no_flags, head_look)
+        if generic_head_error != ok { ret (zero, generic_head_error) }
+        head = generic_head
+    }
     var width: f32 = 0.0
     var c = 0usize
     while c < columns.len {
@@ -6304,6 +6389,8 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         var scroll_thumb = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
         // looks3-e: under the Windows profile v3's bar stands beside the table (below); the viewport's own thumb is invisible
         if t.tokens.profile == .Windows { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
+        // libadwaita's overlay scroll bar is not drawn until the pointer moves it
+        if lin { scroll_thumb = control.with_alpha(scroll_thumb, 0.0) }
         parts[1usize] = widget.scroll(key + 2u64, widget.Scroll { axis: .Vertical, offset: options.offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: scroll_thumb, change: options.scrolled, virtual_first: table_first, virtual_count: table_total, virtual_extent: row_extent, fades: false, virtual_extras: zero }, view_style, rows)
         part_count = 2usize
     } else {
@@ -6325,6 +6412,7 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     column_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     // looks3-e: the empty part of a v3 tree list is the window colour
     if t.tokens.profile == .Windows { column_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
+    if lin { column_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) } }
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, parts[0usize..part_count])
@@ -6354,6 +6442,16 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
             beside[1usize] = widget.stack(0u64, style.defaults(), lit[0usize..2usize])
         }
         column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), beside[0usize..2usize])
+    }
+    if lin {
+        // the scrolled window's 1 px frame
+        var frame = control.sized_style(width + 2.0, head_height + options.height + 2.0)
+        if !(options.height > 0.0) { frame = style.defaults() }
+        frame.border = style.Border { width: 1.0, color: control.linux_frame_for(t) }
+        frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+        frame.overflow = .Clip
+        frame.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+        column_node[0usize] = widget.box(0u64, frame, one_node(a, column_node[0usize]))
     }
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_TREE_GRID
@@ -11632,4 +11730,306 @@ fn mem_one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
     if nodes_error != ok { ret zero }
     nodes[0usize] = node
     ret nodes[0usize..1usize]
+}
+
+// ---- the Linux look, tree view and column view (worker l4, round 20) -------------------------------------------------------
+// libadwaita 1.5 / GTK 4.14 tree view in a framed scrolled window: a 30 high header (the titles at 40 % of the foreground)
+// over a 1 px rule that skips the pixel where the second column starts, rows 23 high, the disclosure arrow 12 wide at 4 px.
+fn linux_dim(t: *const control.Theme) -> paint.Color {
+    let ink = style.color(t.tokens, .OnSurface)
+    ret paint.Color { red: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha * 0.4 }
+}
+
+// The disclosure arrow in a 22 x tall holder: a filled triangle 12 wide and 6.5 high (the foreground at 56 %), down when open, right when shut.
+fn linux_expander(a: *mem.Arena, t: *const control.Theme, open: bool, tall: f32) -> (widget.Node, err) {
+    let ink = style.color(t.tokens, .OnSurface)
+    let tint = paint.Color { red: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha * 0.7 }
+    let (tri, tri_error) = control.cup_mark(a, 17u32, tint, tint, 0.0, 0.0, 12.0, 6.5)
+    if tri_error != ok { ret (zero, tri_error) }
+    var box = control.sized_style(12.0, 12.0)
+    box.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 2.75 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    var drawn = widget.box(0u64, box, one_node(a, tri))
+    if !open { drawn = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0 - 1.5707963, offset: zero }, control.sized_style(12.0, 12.0), one_node(a, drawn)) }
+    var holder = control.sized_style(23.0, tall)
+    holder.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: (tall - 12.0) * 0.5 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.box(0u64, holder, one_node(a, drawn)), ok)
+}
+
+// The header: a cell per column (a tap sorts, a drag reorders, as the generic header does) and the rule under them.
+fn linux_tree_header(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, sort: widget.Change[usize], reorder: widget.Change[Reorder], ruled: bool, pad: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, columns.len)
+    if cells_error != ok { ret (zero, TooLarge) }
+    let (drags, drags_error) = mem.alloc[HeaderDrag](a, columns.len)
+    if drags_error != ok { ret (zero, TooLarge) }
+    let (rules, rules_error) = mem.alloc[widget.Node](a, 2usize * columns.len)
+    if rules_error != ok { ret (zero, TooLarge) }
+    var rule_n = 0usize
+    var i = 0usize
+    while i < columns.len {
+        let header_key = key + 1u64 + 2u64 * u64(i)
+        drags[i] = HeaderDrag { runtime: t.runtime, column: i, sort: sort, reorder: reorder }
+        var caption = control.text_options()
+        caption.role = .Label
+        caption.size = 12.0
+        caption.wrap = .None
+        caption.max_lines = 1u32
+        let (title, title_error) = control.colored_text(a, 0u64, columns[i].title, t, caption, linux_dim(t))
+        if title_error != ok { ret (zero, title_error) }
+        var head_style = control.sized_style(columns[i].width, 30.0)
+        head_style.padding = style.EdgeLengths { left: style.Length { Px: pad }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: control.if_else(ruled, 0.0, 2.0) } }
+        head_style.overflow = .Clip
+        control.focus_look(t)
+        let inside = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, control.sized_style(control.max_zero(columns[i].width - pad - 4.0), control.if_else(ruled, 30.0, 28.0)), one_node(a, title))
+        let tapped = widget.region(header_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: header_gesture }, gestures: 1u8 | 2u8 | 4u8 | 8u8, enabled: true, focusable: true }, head_style, one_node(a, inside))
+        var sem: widget.Semantics = zero
+        sem.role = 32u8
+        sem.label = columns[i].title
+        sem.column = u32(i + 1usize)
+        sem.column_count = u32(columns.len)
+        sem.actions = accessibility.ACTION_PRESS
+        sem.on_action = widget.Change[u32] { ctx: ctx_of(&drags[i]), invoke: header_action }
+        if i == sort_column { sem.states = accessibility.STATE_SELECTED }
+        cells[i] = widget.semantics(0u64, sem, style.defaults(), one_node(a, tapped))
+        // the rule under the cell; a column after the first starts it one pixel late
+        var rule_width = columns[i].width
+        if i > 0usize {
+            rules[rule_n] = widget.box(0u64, control.sized_style(1.0, 1.0), zero)
+            rule_n += 1usize
+            rule_width -= 1.0
+        }
+        var line = control.sized_style(rule_width, 1.0)
+        line.background = paint.Brush { Solid: control.linux_rule_edge_for(t) }
+        rules[rule_n] = widget.box(0u64, line, zero)
+        rule_n += 1usize
+        i += 1usize
+    }
+    let head_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), cells[0usize..columns.len])
+    if !ruled { ret (head_row, ok) }
+    let under = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rules[0usize..rule_n])
+    let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+    if both_error != ok { ret (zero, TooLarge) }
+    both[0usize] = head_row
+    both[1usize] = under
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), both[0usize..2usize]), ok)
+}
+
+// A row of the Linux tree: the cells at their columns' widths (the first runs its own indent, the others start 4 px in), the fill of
+// a chosen or hovered boxed-list row over all of it.
+fn linux_tree_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, first_pad: f32, other_pad: f32, lift: f32) -> (widget.Node, err) {
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, columns.len)
+    if boxed_error != ok { ret (zero, TooLarge) }
+    var total: f32 = 0.0
+    var c = 0usize
+    while c < columns.len {
+        var cell_style = control.sized_style(columns[c].width, extent)
+        cell_style.overflow = .Clip
+        var side = first_pad
+        if c > 0usize { side = other_pad }
+        if side > 0.0 || lift > 0.0 { cell_style.padding = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 2.0 * lift } } }
+        var sem: widget.Semantics = zero
+        sem.role = 14u8
+        sem.label = columns[c].title
+        sem.column = u32(c + 1usize)
+        boxed[c] = widget.semantics(0u64, sem, style.defaults(), one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell_style, one_node(a, cells[c]))))
+        total += columns[c].width
+        c += 1usize
+    }
+    let (picks, picks_error) = mem.alloc[RowPick](a, 1usize)
+    if picks_error != ok { ret (zero, TooLarge) }
+    picks[0usize] = RowPick { key: row_key, pick: pick, double: double, has_double: has_double, runtime: zero, drag: 0u64, dropped: zero, has_drop: false }
+    let state = control.control_state(t, row_key, true, selected)
+    var row_style = control.sized_style(total, extent)
+    row_style.background = paint.Brush { Solid: control.linux_row_fill(t, state, selected) }
+    control.focus_look(t)
+    let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), boxed[0usize..columns.len])
+    ret (widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&picks[0usize]), invoke: row_pick_gesture }, gestures: 5u8, enabled: true, focusable: true }, row_style, one_node(a, line)), ok)
+}
+// ---- end the Linux look, tree view (worker l4) -------------------------------------------------------------------------
+
+// ---- the Linux look, preferences group and action rows (worker l4, round 20) ------------------------------------------------------
+// libadwaita 1.5 AdwPreferencesGroup / AdwActionRow: an optional heading (bold) and description (dim) over a boxed list card of 54 px
+// rows under 1 px rules. A row is its title (and subtitle, 12 px at 55 % of the foreground) 14 px in; a switch row ends in the
+// switch (46 x 26, 14 from the edge), an entry row shows its placeholder in the dim ink and an edit pencil, a combo row its value
+// and a down arrow. Kinds: 0 action row, 1 switch (on), 2 switch (off), 3 entry row, 4 combo row.
+type LinuxRow = struct { title: str, subtitle: str, kind: u8, value: str }
+
+fn linux_dim_for(t: *const control.Theme, share: f32) -> paint.Color {
+    let ink = style.color(t.tokens, .OnSurface)
+    ret paint.Color { red: ink.red, green: ink.green, blue: ink.blue, alpha: ink.alpha * share }
+}
+
+fn linux_row_text(a: *mem.Arena, t: *const control.Theme, words: str, size: f32, ink: paint.Color) -> (widget.Node, err) {
+    var caption = control.text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    caption.size = size
+    let (node, node_error) = control.colored_text(a, 0u64, words, t, caption, ink)
+    ret (node, node_error)
+}
+
+fn linux_rows_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, spec: LinuxRow, width: f32, action: *const widget.Submit) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let state = control.control_state(t, key, true, false)
+    var fill = control.linux_row_fill(t, state, false)
+    let ink = style.color(t.tokens, .OnSurface)
+    var title_ink = ink
+    if spec.kind == 3u8 { title_ink = linux_dim_for(t, 0.55) }
+    let (title, title_error) = linux_row_text(a, t, spec.title, 14.667, title_ink)
+    if title_error != ok { ret (zero, title_error) }
+    let flat = style.Length { Px: 0.0 }
+    var left = style.defaults()
+    left.padding = style.EdgeLengths { left: style.Length { Px: 14.0 }, top: flat, right: flat, bottom: flat }
+    left.width = style.Length { Px: width - 70.0 }
+    left.height = style.Length { Px: 54.0 }
+    var texts = title
+    if spec.subtitle.len > 0usize {
+        let (sub, sub_error) = linux_row_text(a, t, spec.subtitle, 12.0, linux_dim_for(t, 0.55))
+        if sub_error != ok { ret (zero, sub_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = widget.padded(0u64, 0.0, 7.0, 0.0, 0.0, style.defaults(), one_node(a, title))
+        pair[1usize] = widget.padded(0u64, 0.0, 4.0, 0.0, 0.0, style.defaults(), one_node(a, sub))
+        texts = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+    }
+    var lead_main: ui_layout.MainAlign = .Start
+    var lead_cross: ui_layout.CrossAlign = .Start
+    if spec.subtitle.len == 0usize { lead_cross = .Center }
+    if spec.kind >= 3u8 { left.padding.bottom = style.Length { Px: 2.0 } }
+    let lead = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: lead_main, cross: lead_cross, gap: 0.0 }, left, one_node(a, texts))
+    // the trailing part
+    var trail: widget.Node = widget.box(0u64, control.sized_style(0.0, 0.0), zero)
+    if spec.kind == 1u8 || spec.kind == 2u8 {
+        let (track, track_error) = linux_switch(a, t, spec.kind == 1u8)
+        if track_error != ok { ret (zero, track_error) }
+        trail = track
+    }
+    if spec.kind == 3u8 {
+        let (pencil, pencil_error) = control.stroked_glyph(a, ink, .Edit, 19.0, 1.6)
+        if pencil_error != ok { ret (zero, pencil_error) }
+        trail = pencil
+    }
+    if spec.kind == 4u8 {
+        let (value, value_error) = linux_row_text(a, t, spec.value, 14.667, ink)
+        if value_error != ok { ret (zero, value_error) }
+        let (arrow, arrow_error) = control.cup_mark(a, 17u32, ink, ink, 0.0, 0.0, 12.0, 6.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+        if both_error != ok { ret (zero, TooLarge) }
+        both[0usize] = value
+        both[1usize] = arrow
+        trail = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), both[0usize..2usize])
+    }
+    var trail_style = style.defaults()
+    trail_style.height = style.Length { Px: 54.0 }
+    trail_style.padding = style.EdgeLengths { left: flat, top: style.Length { Px: control.if_else(spec.kind == 1u8, 2.0, 0.0) }, right: style.Length { Px: control.if_else(spec.kind == 3u8, 22.0, 14.0) }, bottom: style.Length { Px: control.if_else(spec.kind == 4u8, 2.0, 0.0) } }
+    let ends = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, trail_style, one_node(a, trail))
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = lead
+    parts[1usize] = widget.spacer(0u64, 1.0)
+    parts[2usize] = ends
+    var line_style = control.sized_style(width, 54.0)
+    line_style.background = paint.Brush { Solid: fill }
+    let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, line_style, parts[0usize..3usize])
+    let _ = dark
+    ret (widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, control.sized_style(width, 54.0), one_node(a, line)), ok)
+}
+
+// An AdwSwitch, 46 x 28 with its shadow: drawn as a track and a knob, with the library's pixels over it at 100 % when on.
+fn linux_switch(a: *mem.Arena, t: *const control.Theme, on: bool) -> (widget.Node, err) {
+    var track = control.sized_style(46.0, 26.0)
+    track.radius = 13.0
+    var knob = control.sized_style(20.0, 20.0)
+    knob.radius = 10.0
+    knob.background = paint.Brush { Solid: style.hex_raw(0xFFFFFFu32) }
+    var knob_x: f32 = 3.0
+    if on {
+        track.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        knob_x = 23.0
+    } else {
+        track.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .OnSurface), 0.15) }
+        if t.tokens.palette == .Dark { knob.background = paint.Brush { Solid: style.hex_raw(0xFFFFFFu32) } }
+    }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.box(0u64, track, zero)
+    layers[1usize] = widget.positioned(0u64, knob_x, 3.0, style.defaults(), one_node(a, widget.box(0u64, knob, zero)))
+    let drawn = widget.stack(0u64, control.sized_style(46.0, 26.0), layers[0usize..2usize])
+    if !on { ret (drawn, ok) }
+    let (pixels, pixels_error) = linux_card.switch_node(a, t.tokens.palette == .Dark)
+    if pixels_error != ok { ret (zero, pixels_error) }
+    let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+    if both_error != ok { ret (zero, TooLarge) }
+    both[0usize] = drawn
+    both[1usize] = pixels
+    ret (widget.stack(0u64, control.sized_style(46.0, 28.0), both[0usize..2usize]), ok)
+}
+
+// The group: heading and description (when given) over the card of `rows`; each row keyed `key + 1 + index`, firing its action.
+fn linux_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, heading: str, description: str, rows: []const LinuxRow, actions: []const widget.Submit, width: f32) -> (widget.Node, err) {
+    if actions.len != rows.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, rows.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < rows.len {
+        let (row_node, row_error) = linux_rows_row(a, key + 1u64 + u64(i), t, rows[i], width, &actions[i])
+        if row_error != ok { ret (zero, row_error) }
+        if i == 0usize {
+            items[i] = row_node
+        } else {
+            var rule = control.sized_style(width, 1.0)
+            rule.background = paint.Brush { Solid: control.linux_rule_for(t) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = widget.box(0u64, rule, zero)
+            pair[1usize] = row_node
+            items[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 55.0), pair[0usize..2usize])
+        }
+        i += 1usize
+    }
+    var total: f32 = 54.0
+    if rows.len > 0usize { total = f32(rows.len) * 54.0 + f32(rows.len - 1usize) }
+    var face = control.sized_style(width, total)
+    face.background = paint.Brush { Solid: control.linux_card_fill(t) }
+    face.radius = 12.0
+    face.overflow = .Clip
+    let stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, items[0usize..rows.len])
+    let (corners, corners_error) = linux_card.corners_node(a, width, total, t.tokens.palette == .Dark)
+    if corners_error != ok { ret (zero, corners_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = stacked
+    pair[1usize] = corners
+    let boxed = widget.stack(0u64, control.sized_style(width, total), pair[0usize..2usize])
+    if heading.len == 0usize { ret (boxed, ok) }
+    var heavy = control.text_options()
+    heavy.role = .Label
+    heavy.wrap = .None
+    let (bold, bold_error) = control.colored_text(a, 0u64, heading, t, heavy, style.color(t.tokens, .OnSurface))
+    if bold_error != ok { ret (zero, bold_error) }
+    let (blocks, blocks_error) = mem.alloc[widget.Node](a, 5usize)
+    if blocks_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    blocks[count] = widget.padded(0u64, 0.0, 0.0, 0.0, 0.0, control.sized_style(width, 21.0), one_node(a, bold))
+    count += 1usize
+    if description.len > 0usize {
+        let (note, note_error) = linux_row_text(a, t, description, 14.667, linux_dim_for(t, 0.55))
+        if note_error != ok { ret (zero, note_error) }
+        blocks[count] = widget.padded(0u64, 0.0, 4.0, 0.0, 0.0, control.sized_style(width, 31.0), one_node(a, note))
+        count += 1usize
+    }
+    let (glow, glow_error) = linux_card.top_glow_node(a, width, t.tokens.palette == .Dark)
+    if glow_error != ok { ret (zero, glow_error) }
+    blocks[count] = glow
+    count += 1usize
+    blocks[count] = boxed
+    count += 1usize
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, width_only(width), blocks[0usize..count]), ok)
+}
+// ---- end the Linux look, rows (worker l4) ------------------------------------------------------------------------------------
+
+fn width_only(width: f32) -> style.Style {
+    var s = style.defaults()
+    s.width = style.Length { Px: width }
+    ret s
 }

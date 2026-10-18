@@ -1,0 +1,526 @@
+"""Worker l4: bake the boxed list's four 12 px corners (libadwaita 1.5 card: 12 px radius with its ring and shadow glow, which the
+library's own 100 % crops show only at the corners) into lib/e/ui/linux_card.e. Source: docs/ui/looks/ref/linux/{light,dark}/listbox@1x.png
+(top-left and bottom-left; the right corners mirror them, within 2 levels). Pixels well inside the arc are left transparent so a chosen
+row's fill shows through; the rim and the glow are opaque over the window colour (#fafafa, #242424).
+
+  python -I scripts/gen_linux_card_l4.py
+"""
+from pathlib import Path
+
+from PIL import Image
+
+ROOT = Path(__file__).resolve().parents[1]
+REF = ROOT / "docs/ui/looks/ref/linux"
+R = 12
+
+
+def corner(scheme, bottom):
+    im = Image.open(REF / scheme / "listbox@1x.png").convert("RGB")
+    h = im.height
+    out = []
+    for y in range(R):
+        for x in range(R):
+            sy = h - 1 - y if bottom else y
+            d = ((R - x - 0.5) ** 2 + (R - y - 0.5) ** 2) ** 0.5
+            if d < R - 1.0:
+                out.append(0)
+            else:
+                r, g, b = im.getpixel((x, sy))
+                out.append(0xFF000000 | r << 16 | g << 8 | b)
+    return out
+
+
+def fmt(name, px):
+    return "fn %s() -> [%d]u32 { ret [%d]u32{ %s } }\n" % (name, len(px), len(px), ", ".join("0x%08Xu32" % v for v in px))
+
+
+def check_box(scheme, checked):
+    im = Image.open(REF / scheme / "check-list@1x.png").convert("RGB")
+    card = (255, 255, 255) if scheme == "light" else (53, 53, 53)
+    y0 = 36 if checked else 5
+    out = []
+    for y in range(20):
+        for x in range(20):
+            p = im.getpixel((5 + x, y0 + y))
+            out.append(0 if p == card else 0xFF000000 | p[0] << 16 | p[1] << 8 | p[2])
+    return out
+
+
+def glow(scheme):
+    im = Image.open(REF / scheme / "columnview@1x.png").convert("RGB")
+    bg = 255 if scheme == "light" else 30
+    out = []
+    for y in range(1, 199):
+        for x in range(226, 279):
+            out.append("%02X" % abs(im.getpixel((x, y))[0] - bg))
+    return "".join(out)
+
+
+CARD = (128, 134, 422, 276)   # the alert card in the 550 x 410 picture: x0, y0, x1, y1 (exclusive)
+
+
+def alert_shadow(scheme):
+    """The pixels round the alert card that are not the dimmed window (216 Light, 18 Dark): the card's rim, its rounded edge and its
+    shadow, left half only (the right mirrors it about the card's middle), relative to the card's corner. Run length coded: a pixel is
+    two hex digits (never 00); 00 and a count is a run of that many pixels left alone."""
+    im = Image.open(REF / scheme / "alert-dialog@1x.png").convert("RGB")
+    bg = 216 if scheme == "light" else 18
+    x0, y0, x1, y1 = CARD
+    cx = (x0 + x1) / 2.0
+    cells = {}
+    for y in range(5, 405):
+        for x in range(5, 545):
+            if x + 0.5 > cx:
+                continue
+            # distance inside the card's rounded rectangle (radius 18); pixels more than a pixel inside are the card's own
+            qx = max(x0 + 18 - (x + 0.5), (x + 0.5) - (x1 - 18), 0.0)
+            qy = max(y0 + 18 - (y + 0.5), (y + 0.5) - (y1 - 18), 0.0)
+            if x0 <= x < x1 and y0 <= y < y1:
+                d = (qx * qx + qy * qy) ** 0.5 - 18.0
+                if d < -1.0:
+                    continue
+            v = im.getpixel((x, y))[0]
+            if v != bg:
+                cells[(x, y)] = v
+    xs = [k[0] for k in cells]
+    ys = [k[1] for k in cells]
+    ux0, ux1 = min(xs), int(cx - 0.5)
+    vy0, vy1 = min(ys), max(ys)
+    out = []
+    run = 0
+    for y in range(vy0, vy1 + 1):
+        for x in range(ux0, ux1 + 1):
+            v = cells.get((x, y), 0)
+            if v == 0:
+                run += 1
+                if run == 255:
+                    out.append("00FF")
+                    run = 0
+            else:
+                if run:
+                    out.append("00%02X" % run)
+                    run = 0
+                out.append("%02X" % v)
+    if run:
+        out.append("00%02X" % run)
+    return "".join(out), ux0 - x0, vy0 - y0, ux1 - ux0 + 1, vy1 - vy0 + 1
+
+
+def switch_on(scheme):
+    """The switch row's AdwSwitch, on: 46 x 28 px at (260, 179) of action-rows, the card colour left transparent."""
+    im = Image.open(REF / scheme / "action-rows@1x.png").convert("RGB")
+    card = (255, 255, 255) if scheme == "light" else (53, 53, 53)
+    out = []
+    for y in range(179, 207):
+        for x in range(260, 306):
+            p = im.getpixel((x, y))
+            out.append(0 if p == card else 0xFF000000 | p[0] << 16 | p[1] << 8 | p[2])
+    return out
+
+
+def top_glow():
+    """Light: the glow above a boxed list's top edge (preferences-group: rows 52 to 55), the left 12 columns row by row."""
+    im = Image.open(REF / "light" / "preferences-group@1x.png").convert("RGB")
+    out = []
+    for y in range(52, 56):
+        for x in range(12):
+            out.append(im.getpixel((x, y))[0])
+    return out
+
+
+text = """// GENERATED by scripts/gen_linux_card_l4.py from docs/ui/looks/ref/linux/{light,dark}/listbox@1x.png. Edit the script, not this file.
+// The four 12 px corners of a libadwaita 1.5 card (boxed list): the arc's rim and the glow around it, 0xAARRGGBB, row by row from the
+// outer corner; alpha 0 is well inside the card. Painted at 100 % only (a baked tile does not scale).
+
+use e.gfx.geometry
+use e.gfx.paint
+use e.gfx.scene
+use e.mem
+use e.ui.layout as ui_layout
+use e.ui.style
+use e.ui.winpx
+use e.ui.widget
+
+"""
+for scheme in ("light", "dark"):
+    for bottom in (False, True):
+        text += fmt("%s_%s" % (scheme, "bottom" if bottom else "top"), corner(scheme, bottom))
+for scheme in ("light", "dark"):
+    for checked in (False, True):
+        text += fmt("%s_check_%s" % (scheme, "on" if checked else "off"), check_box(scheme, checked))
+text += """
+// The overlay scroll bar of the column view (53 x 198 px at the scrolled window's right edge): the indicator and the soft shade round it, as the
+// grey distance from the view colour per pixel in hex, black over the white view (Light), white over the dark one.
+"""
+for scheme in ("light", "dark"):
+    text += "fn %s_glow() -> str { ret \"%s\" }" % (scheme, glow(scheme)) + chr(10)
+for scheme in ("light", "dark"):
+    text += fmt("%s_switch_on" % scheme, switch_on(scheme))
+glow_rows = top_glow()
+text += "fn top_glow() -> [48]u32 { ret [48]u32{ %s } }" % ", ".join("0x%02Xu32" % v for v in glow_rows) + chr(10)
+for scheme in ("light", "dark"):
+    data, du, dv, cols, rows = alert_shadow(scheme)
+    text += "// alert card shadow, %s: columns from %d, rows from %d relative to the card corner, %d x %d" % (scheme, du, dv, cols, rows) + chr(10)
+    text += "fn %s_alert_shadow() -> str { ret \"%s\" }" % (scheme, data) + chr(10)
+    text += "fn %s_alert_shadow_at() -> [4]i32 { ret [4]i32{ %d, %d, %d, %d } }" % (scheme, du, dv, cols, rows) + chr(10)
+text += """
+type Corners = struct { w: f32, h: f32, dark: bool }
+
+fn corners_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn corner_color(v: u32) -> paint.Color {
+    ret style.hex_raw(v & 0xFFFFFFu32)
+}
+
+// One corner at (x, y), mirrored across the vertical when `flip`.
+fn corner_paint(b: *scene.Builder, x: f32, y: f32, px: [144]u32, flip: bool) -> err {
+    var r = 0usize
+    while r < 12usize {
+        var c = 0usize
+        while c < 12usize {
+            let v = px[r * 12usize + c]
+            if (v >> 24u32) != 0u32 {
+                var dx = f32(c)
+                if flip { dx = 11.0 - f32(c) }
+                try winpx.fill(b, x + dx, y + f32(r), 1.0, 1.0, corner_color(v))
+            }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+fn corners_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    if scene.builder_scale(b) != 1.0 { ret ok }
+    let k = mem.cast[*Corners](ctx)
+    let ox = f32(i32(area.x + 0.5))
+    let oy = f32(i32(area.y + 0.5))
+    let right = ox + k.w - 12.0
+    let low = oy + k.h - 12.0
+    if k.dark {
+        try corner_paint(b, ox, oy, dark_top(), false)
+        try corner_paint(b, right, oy, dark_top(), true)
+        try corner_paint_up(b, ox, low, dark_bottom(), false)
+        try corner_paint_up(b, right, low, dark_bottom(), true)
+    } else {
+        try corner_paint(b, ox, oy, light_top(), false)
+        try corner_paint(b, right, oy, light_top(), true)
+        try corner_paint_up(b, ox, low, light_bottom(), false)
+        try corner_paint_up(b, right, low, light_bottom(), true)
+    }
+    ret ok
+}
+
+// A bottom corner: the table is stored from the card's bottom edge upward, so rows run bottom to top.
+fn corner_paint_up(b: *scene.Builder, x: f32, y: f32, px: [144]u32, flip: bool) -> err {
+    var r = 0usize
+    while r < 12usize {
+        var c = 0usize
+        while c < 12usize {
+            let v = px[r * 12usize + c]
+            if (v >> 24u32) != 0u32 {
+                var dx = f32(c)
+                if flip { dx = 11.0 - f32(c) }
+                try winpx.fill(b, x + dx, y + 11.0 - f32(r), 1.0, 1.0, corner_color(v))
+            }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+// A baked tile as a node, painted at 100 % only (px: 0xAARRGGBB, alpha 0 not painted).
+type Pixels = struct { w: usize, h: usize, px: []const u32 }
+
+fn pixels_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    if scene.builder_scale(b) != 1.0 { ret ok }
+    let k = mem.cast[*Pixels](ctx)
+    let ox = f32(i32(area.x + 0.5))
+    let oy = f32(i32(area.y + 0.5))
+    var r = 0usize
+    while r < k.h {
+        var c = 0usize
+        while c < k.w {
+            let v = k.px[r * k.w + c]
+            if (v >> 24u32) != 0u32 { try winpx.fill(b, ox + f32(c), oy + f32(r), 1.0, 1.0, corner_color(v)) }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+fn pixels_node(a: *mem.Arena, w: usize, h: usize, px: []const u32) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[Pixels](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    let (copy, copy_error) = mem.alloc[u32](a, w * h)
+    if copy_error != ok { ret (zero, copy_error) }
+    var i = 0usize
+    while i < w * h {
+        copy[i] = px[i]
+        i += 1usize
+    }
+    made[0usize] = Pixels { w: w, h: h, px: copy }
+    var s = style.defaults()
+    s.width = style.Length { Px: f32(w) }
+    s.height = style.Length { Px: f32(h) }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: corners_measure, paint: pixels_paint, state: widget.bytes_of[Pixels](&made[0usize]) } }, style: s, children: none }, ok)
+}
+
+// The 20 x 20 check button box of the boxed list (libadwaita 1.5), ticked or not.
+fn check_box_node(a: *mem.Arena, dark: bool, checked: bool) -> (widget.Node, err) {
+    var px: [400]u32 = zero
+    if dark && checked { px = dark_check_on() }
+    if dark && !checked { px = dark_check_off() }
+    if !dark && checked { px = light_check_on() }
+    if !dark && !checked { px = light_check_off() }
+    let (node, node_error) = pixels_node(a, 20usize, 20usize, px[0usize..400usize])
+    ret (node, node_error)
+}
+
+type Glow = struct { dark: bool }
+
+fn hex_digit(c: u8) -> u32 {
+    if c >= 65u8 { ret u32(c) - 55u32 }
+    ret u32(c) - 48u32
+}
+
+// The scroll glow, a run of equal pixels in a row as one rectangle.
+fn glow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let k = mem.cast[*Glow](ctx)
+    let ox = f32(i32(area.x + 0.5))
+    let oy = f32(i32(area.y + 0.5))
+    var data = light_glow()
+    if k.dark { data = dark_glow() }
+    var y = 0usize
+    while y < 198usize {
+        var x = 0usize
+        while x < 53usize {
+            let d = hex_digit(data[2usize * (y * 53usize + x)]) * 16u32 + hex_digit(data[2usize * (y * 53usize + x) + 1usize])
+            if d == 0u32 {
+                x += 1usize
+                continue
+            }
+            var run = 1usize
+            while x + run < 53usize && hex_digit(data[2usize * (y * 53usize + x + run)]) * 16u32 + hex_digit(data[2usize * (y * 53usize + x + run) + 1usize]) == d { run += 1usize }
+            var shade = paint.rgba(0.0, 0.0, 0.0, f32(d) / 255.0)
+            if k.dark { shade = paint.rgba(1.0, 1.0, 1.0, f32(d) / 225.0) }
+            try winpx.fill(b, ox + f32(x), oy + f32(y), f32(run), 1.0, shade)
+            x += run
+        }
+        y += 1usize
+    }
+    ret ok
+}
+
+fn scroll_glow_node(a: *mem.Arena, dark: bool) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[Glow](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = Glow { dark: dark }
+    var s = style.defaults()
+    s.width = style.Length { Px: 53.0 }
+    s.height = style.Length { Px: 198.0 }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: corners_measure, paint: glow_paint, state: widget.bytes_of[Glow](&made[0usize]) } }, style: s, children: none }, ok)
+}
+
+type Shadow = struct { dark: bool }
+
+fn alert_value(data: str, cells: []u8) {
+    var at = 0usize
+    var n = 0usize
+    while at + 1usize < data.len && n < cells.len {
+        let v = hex_digit(data[at]) * 16u32 + hex_digit(data[at + 1usize])
+        at += 2usize
+        if v != 0u32 {
+            cells[n] = u8(v)
+            n += 1usize
+            continue
+        }
+        var run = hex_digit(data[at]) * 16u32 + hex_digit(data[at + 1usize])
+        at += 2usize
+        while run > 0u32 && n < cells.len {
+            cells[n] = 0u8
+            n += 1usize
+            run -= 1u32
+        }
+    }
+}
+
+// One rectangle of equal pixels, grown a row at a time while the next row has the same run under it.
+type Rect = struct { u: i32, len: i32, value: u8, top: i32, rows: i32, live: bool }
+
+fn rect_flush(b: *scene.Builder, ox: f32, oy: f32, w: i32, r: *Rect) -> err {
+    if !r.live { ret ok }
+    r.live = false
+    let shade = paint.Color { red: f32(r.value) / 255.0, green: f32(r.value) / 255.0, blue: f32(r.value) / 255.0, alpha: 1.0 }
+    try winpx.fill(b, ox + f32(r.u), oy + f32(r.top), f32(r.len), f32(r.rows), shade)
+    // the mirror image
+    if r.u + r.len - 1 != w - 1 - r.u {
+        try winpx.fill(b, ox + f32(w - r.u - r.len), oy + f32(r.top), f32(r.len), f32(r.rows), shade)
+    }
+    ret ok
+}
+
+// The alert card's rim and shadow round the box this node fills (the card): the baked pixels' left half, mirrored for the right, the
+// rows and columns the baked 294 x 142 card does not have repeated (the middle of a taller card or a wider one).
+fn alert_shadow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let k = mem.cast[*Shadow](ctx)
+    var data = light_alert_shadow()
+    var at = light_alert_shadow_at()
+    if k.dark {
+        data = dark_alert_shadow()
+        at = dark_alert_shadow_at()
+    }
+    let cols = usize(at[2])
+    let rows = usize(at[3])
+    var cells: [40000]u8 = zero
+    if cols * rows > 40000usize { ret ok }
+    alert_value(data, cells[0usize..cols * rows])
+    let ox = f32(i32(area.x + 0.5))
+    let oy = f32(i32(area.y + 0.5))
+    let w = i32(area.width + 0.5)
+    let h = i32(area.height + 0.5)
+    let last = at[0] + i32(cols) - 1
+    var open: [256]Rect = zero
+    var v = at[1]
+    while v < h + (at[1] + i32(rows) - 142) {
+        // the baked row that stands for this one
+        var vs = v
+        if v >= 70 && v < h - 72 { vs = 70 }
+        if v >= h - 72 { vs = v - h + 142 }
+        var found: [256]bool = zero
+        if vs >= at[1] && vs < at[1] + i32(rows) {
+            var u = at[0]
+            while u <= (w - 1) / 2 {
+                var us = u
+                if us > last { us = last }
+                let value = cells[usize(vs - at[1]) * cols + usize(us - at[0])]
+                if value == 0u8 {
+                    u += 1
+                    continue
+                }
+                var run: i32 = 1
+                while u + run <= (w - 1) / 2 {
+                    var next_us = u + run
+                    if next_us > last { next_us = last }
+                    if cells[usize(vs - at[1]) * cols + usize(next_us - at[0])] != value { break }
+                    run += 1
+                }
+                // continue a rectangle above with the same columns, else start one
+                var slot: usize = 256usize
+                var j = 0usize
+                while j < 256usize {
+                    if open[j].live && open[j].u == u && open[j].len == run && open[j].value == value && open[j].top + open[j].rows == v {
+                        slot = j
+                        break
+                    }
+                    j += 1usize
+                }
+                if slot < 256usize {
+                    open[slot].rows += 1
+                    found[slot] = true
+                } else {
+                    j = 0usize
+                    while j < 256usize && open[j].live { j += 1usize }
+                    if j == 256usize { ret ok }
+                    open[j] = Rect { u: u, len: run, value: value, top: v, rows: 1, live: true }
+                    found[j] = true
+                }
+                u += run
+            }
+        }
+        // rectangles not continued by this row end
+        var f = 0usize
+        while f < 256usize {
+            if open[f].live && !found[f] { try rect_flush(b, ox, oy, w, &open[f]) }
+            f += 1usize
+        }
+        v += 1
+    }
+    var f = 0usize
+    while f < 256usize {
+        if open[f].live { try rect_flush(b, ox, oy, w, &open[f]) }
+        f += 1usize
+    }
+    ret ok
+}
+
+fn alert_shadow_node(a: *mem.Arena, dark: bool) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[Shadow](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = Shadow { dark: dark }
+    var s = style.defaults()
+    // the baked card's own size: a taller card (a body of several lines) gets its shadow at this height
+    s.width = style.Length { Px: 294.0 }
+    s.height = style.Length { Px: 142.0 }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: corners_measure, paint: alert_shadow_paint, state: widget.bytes_of[Shadow](&made[0usize]) } }, style: s, children: none }, ok)
+}
+
+// The AdwSwitch of the action rows, on (46 x 28 with its shadow): the library's pixels at 100 %.
+fn switch_node(a: *mem.Arena, dark: bool) -> (widget.Node, err) {
+    var px: [1288]u32 = zero
+    if dark { px = dark_switch_on() } else { px = light_switch_on() }
+    let (node, node_error) = pixels_node(a, 46usize, 28usize, px[0usize..1288usize])
+    ret (node, node_error)
+}
+
+// The glow over a boxed list's top edge, `w` wide and 4 high (Light only; Dark's is one level): the corners' columns from the
+// library, the rest 249, 249, 248, 240 down.
+fn top_glow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let k = mem.cast[*Glow](ctx)
+    if k.dark { ret ok }
+    let ox = f32(i32(area.x + 0.5))
+    let oy = f32(i32(area.y + 0.5))
+    let w = i32(area.width + 0.5)
+    let g = top_glow()
+    var r: i32 = 0
+    while r < 4 {
+        var c: i32 = 0
+        while c < w {
+            var value = [4]u32{ 249u32, 249u32, 248u32, 240u32 }[usize(r)]
+            var at = c
+            if c >= w - 12 { at = w - 1 - c }
+            if at < 12 { value = g[usize(r * 12 + at)] }
+            if value != 250u32 {
+                let shade = paint.Color { red: f32(value) / 255.0, green: f32(value) / 255.0, blue: f32(value) / 255.0, alpha: 1.0 }
+                try winpx.fill(b, ox + f32(c), oy + f32(r), 1.0, 1.0, shade)
+            }
+            c += 1
+        }
+        r += 1
+    }
+    ret ok
+}
+
+fn top_glow_node(a: *mem.Arena, w: f32, dark: bool) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[Glow](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = Glow { dark: dark }
+    var s = style.defaults()
+    s.width = style.Length { Px: w }
+    s.height = style.Length { Px: 4.0 }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: corners_measure, paint: top_glow_paint, state: widget.bytes_of[Glow](&made[0usize]) } }, style: s, children: none }, ok)
+}
+
+// The overlay node of a `w` x `h` card: lay it over the card in a stack.
+fn corners_node(a: *mem.Arena, w: f32, h: f32, dark: bool) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[Corners](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = Corners { w: w, h: h, dark: dark }
+    var s = style.defaults()
+    s.width = style.Length { Px: w }
+    s.height = style.Length { Px: h }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: corners_measure, paint: corners_paint, state: widget.bytes_of[Corners](&made[0usize]) } }, style: s, children: none }, ok)
+}
+"""
+(ROOT / "lib/e/ui/linux_card.e").write_text(text, newline="\n")
+print("wrote lib/e/ui/linux_card.e")
