@@ -21,6 +21,7 @@ use e.js.b_string as b_string
 use e.js.b_atomics as b_atomics
 use e.js.b_typed as b_typed
 use e.js.interp as js
+use e.js.module as module
 use e.js.parser as jsparse
 use e.js.prelude as prelude
 use e.js.temporal as temporal
@@ -1021,14 +1022,16 @@ fn symbol_description(it: *js.Interp, this_val: js.Value, args: []const js.Value
 fn symbol_for(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (k, ke) = js.to_string(it, arg(args, 0usize))
     if ke != ok { ret (js.undefv(), ke) }
+    // The symbol registry is shared by every realm of the agent.
+    let root = js.root_realm(it)
     var i = 0usize
-    while i < it.registry.len {
-        if str.eq(it.registry.items[i].description, k) { ret (js.Value { Sym: it.registry.items[i] }, ok) }
+    while i < root.registry.len {
+        if str.eq(root.registry.items[i].description, k) { ret (js.Value { Sym: root.registry.items[i] }, ok) }
         i += 1usize
     }
     let s = js.new_symbol(it, k, true)
     s.registered = true
-    let pe = list.push[*js.Sym](&it.registry, s)
+    let pe = list.push[*js.Sym](&root.registry, s)
     ret (js.Value { Sym: s }, ok)
 }
 
@@ -1127,6 +1130,211 @@ fn global_print(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
         let nl = io.printf["\n"]()
     }
     ret (js.undefv(), ok)
+}
+
+// --- ShadowRealm: a separate realm sharing this thread; values cross its boundary only as primitives or wrapped functions
+
+type WrapData = struct { wrapped: *js.Obj, target_realm: *js.Interp, home: *js.Interp }
+type ImportCtx = struct { caller: *js.Interp, export_name: str }
+
+fn shadow_of(it: *js.Interp, v: js.Value, what: str) -> (*js.Interp, err) {
+    if js.is_object(v) && js.as_object(v).class == js.C_SHADOWREALM { ret (mem.cast[*js.Interp](js.as_object(v).data), ok) }
+    ret (js.null_interp(), js.throw_type(it, js.str_concat(it, what, " called on an object that is not a ShadowRealm")))
+}
+
+// GetWrappedValue: a primitive crosses as is, a callable object as a wrapped function, any other object is refused.
+fn wrap_value(home: *js.Interp, from: *js.Interp, v: js.Value) -> (js.Value, err) {
+    if !js.is_object(v) { ret (v, ok) }
+    if !js.is_callable(v) { ret (js.undefv(), js.throw_type(home, "ShadowRealm values must be primitives or callable")) }
+    let (w, we) = wrap_function(home, from, js.as_object(v))
+    ret (w, we)
+}
+
+fn wrapped_call(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let d = mem.cast[*WrapData](it.callee.data)
+    let tr = d.target_realm
+    let (wthis, wte) = wrap_value(tr, d.home, this_val)
+    if wte != ok { ret (js.undefv(), js.throw_type(d.home, "ShadowRealm values must be primitives or callable")) }
+    let (cell, ce) = mem.alloc[js.Value](tr.a, args.len + 1usize)
+    if ce != ok { ret (js.undefv(), js.throw_range(d.home, "out of memory")) }
+    var i = 0usize
+    while i < args.len {
+        let (wa, wae) = wrap_value(tr, d.home, args[i])
+        if wae != ok { ret (js.undefv(), js.throw_type(d.home, "ShadowRealm values must be primitives or callable")) }
+        cell[i] = wa
+        i += 1usize
+    }
+    let (r, re) = js.call_function(tr, js.obj_value(d.wrapped), wthis, cell[0usize..args.len])
+    if re != ok {
+        if re == js.Throw { ret (js.undefv(), js.throw_type(d.home, "the wrapped function threw")) }
+        ret (js.undefv(), re)
+    }
+    let (wr, wre) = wrap_value(d.home, tr, r)
+    ret (wr, wre)
+}
+
+fn wrap_function(home: *js.Interp, from: *js.Interp, target_fn: *js.Obj) -> (js.Value, err) {
+    let wf = js.make_native(home, "", 0u32, wrapped_call)
+    let (cell, ce) = mem.alloc[WrapData](home.a, 1usize)
+    if ce != ok { ret (js.undefv(), js.throw_range(home, "out of memory")) }
+    cell[0usize] = WrapData { wrapped: target_fn, target_realm: from, home: home }
+    wf.data = mem.cast[*void](&cell[0usize])
+    // CopyNameAndLength: errors while reading them (a revoked proxy, a throwing getter) become TypeErrors of the wrapper's realm.
+    var len = 0.0f64
+    from.px_err = ok
+    let (lp, lfound) = js.get_own(from, target_fn, js.key_of("length"))
+    if from.px_err != ok {
+        from.px_err = ok
+        ret (js.undefv(), js.throw_type(home, "cannot read the length of the wrapped function"))
+    }
+    if lfound {
+        let (lv, le) = js.get_prop(from, target_fn, js.key_of("length"), js.obj_value(target_fn))
+        if le != ok { ret (js.undefv(), js.throw_type(home, "cannot read the length of the wrapped function")) }
+        if js.is_number(lv) {
+            let n = js.num_of(lv)
+            if n == js.infinity() { len = n } else if n == -js.infinity() { len = 0.0f64 } else {
+                len = js.to_integer(n)
+                if len < 0.0f64 { len = 0.0f64 }
+            }
+        }
+    }
+    var name = ""
+    let (np, nfound) = js.get_own(from, target_fn, js.key_of("name"))
+    if from.px_err != ok {
+        from.px_err = ok
+        ret (js.undefv(), js.throw_type(home, "cannot read the name of the wrapped function"))
+    }
+    if nfound {
+        let (nv, ne) = js.get_prop(from, target_fn, js.key_of("name"), js.obj_value(target_fn))
+        if ne != ok { ret (js.undefv(), js.throw_type(home, "cannot read the name of the wrapped function")) }
+        if js.is_string(nv) { name = js.value_str(nv) }
+    }
+    let e1 = js.define_data(home, wf, js.key_of("length"), js.num_value(len), js.P_CONFIGURABLE)
+    let e2 = js.define_data(home, wf, js.key_of("name"), js.str_value(name), js.P_CONFIGURABLE)
+    ret (js.obj_value(wf), ok)
+}
+
+fn shadow_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    if !it.has_new_target { ret (js.undefv(), js.throw_type(it, "Constructor ShadowRealm requires 'new'")) }
+    let nto = js.as_object(it.new_target)
+    let (proto, pe) = js.proto_value_of(it, nto, it.shadow_proto)
+    if pe != ok { ret (js.undefv(), pe) }
+    let o = js.new_obj(it, js.C_SHADOWREALM, proto)
+    let (sit, re) = new_realm_with(it.a, it)
+    if re != ok { ret (js.undefv(), js.throw_range(it, "could not create a realm")) }
+    sit.quiet = it.quiet
+    sit.step_limit = it.step_limit
+    sit.script_url = it.script_url
+    if it.has_modules {
+        let me = module.install(sit, it.module_loader)
+    }
+    o.data = mem.cast[*void](sit)
+    ret (js.obj_value(o), ok)
+}
+
+fn shadow_evaluate(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (sit, se) = shadow_of(it, this_val, "ShadowRealm.prototype.evaluate")
+    if se != ok { ret (js.undefv(), se) }
+    let src = arg(args, 0usize)
+    if !js.is_string(src) { ret (js.undefv(), js.throw_type(it, "ShadowRealm.prototype.evaluate requires a string")) }
+    sit.eval_early = false
+    sit.eval_probe = true
+    let (v, e) = js.indirect_eval(sit, src)
+    if e != ok {
+        if e == js.Throw {
+            if sit.eval_early { ret (js.undefv(), js.throw_syntax(it, "invalid ShadowRealm source text")) }
+            ret (js.undefv(), js.throw_type(it, "the ShadowRealm evaluation threw"))
+        }
+        ret (js.undefv(), e)
+    }
+    let (w, we) = wrap_value(it, sit, v)
+    ret (w, we)
+}
+
+fn import_value_ok(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let me = it.callee
+    let ctx = mem.cast[*ImportCtx](me.data)
+    let caller = ctx.caller
+    let ns = arg(args, 0usize)
+    let (pr, found) = js.get_own(it, js.as_object(ns), js.key_of(ctx.export_name))
+    if it.px_err != ok { it.px_err = ok }
+    if !found {
+        let r1 = js.promise_reject(caller, me.aux, js.make_error(caller, caller.protos.type_error, "the module has no such export"))
+        ret (js.undefv(), ok)
+    }
+    let (ev, ee) = js.get_prop(it, js.as_object(ns), js.key_of(ctx.export_name), ns)
+    if ee != ok {
+        let r2 = js.promise_reject(caller, me.aux, js.make_error(caller, caller.protos.type_error, "the export could not be read"))
+        ret (js.undefv(), ok)
+    }
+    let (w, we) = wrap_value(caller, it, ev)
+    if we != ok {
+        let r3 = js.promise_reject(caller, me.aux, caller.thrown)
+        ret (js.undefv(), ok)
+    }
+    let r4 = js.promise_resolve_with(caller, me.aux, w)
+    ret (js.undefv(), ok)
+}
+
+fn import_value_err(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let me = it.callee
+    let ctx = mem.cast[*ImportCtx](me.data)
+    let r = js.promise_reject(ctx.caller, me.aux, js.make_error(ctx.caller, ctx.caller.protos.type_error, "importing into the ShadowRealm failed"))
+    ret (js.undefv(), ok)
+}
+
+fn shadow_import_value(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (sit, se) = shadow_of(it, this_val, "ShadowRealm.prototype.importValue")
+    if se != ok { ret (js.undefv(), se) }
+    let (spec, spe) = js.to_string(it, arg(args, 0usize))
+    if spe != ok { ret (js.undefv(), spe) }
+    let en = arg(args, 1usize)
+    if !js.is_string(en) { ret (js.undefv(), js.throw_type(it, "the export name must be a string")) }
+    let (p, pe) = js.new_promise(it)
+    if pe != ok { ret (js.undefv(), pe) }
+    if !sit.has_modules {
+        let r0 = js.promise_reject(it, p, js.make_error(it, it.protos.type_error, "modules are not available"))
+        ret (js.obj_value(p), ok)
+    }
+    // The referrer is the current script, as for a dynamic import from it.
+    let (parsed, ppe) = jsparse.parse_program(it.a, "")
+    if ppe != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    let (pcell, pce) = mem.alloc[ast.Program](it.a, 1usize)
+    if pce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    pcell[0usize] = parsed.program
+    pcell[0usize].url = it.script_url
+    let (ip, ie) = sit.module_hook(sit, 1u8, js.str_value(spec), &pcell[0usize])
+    if ie != ok {
+        if ie == js.Throw {
+            let r5 = js.promise_reject(it, p, js.make_error(it, it.protos.type_error, "importing into the ShadowRealm failed"))
+            ret (js.obj_value(p), ok)
+        }
+        ret (js.undefv(), ie)
+    }
+    let (cell, ce) = mem.alloc[ImportCtx](it.a, 1usize)
+    if ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    cell[0usize] = ImportCtx { caller: it, export_name: js.value_str(en) }
+    let on_ful = js.make_native(sit, "", 1u32, import_value_ok)
+    on_ful.data = mem.cast[*void](&cell[0usize])
+    on_ful.aux = p
+    let on_rej = js.make_native(sit, "", 1u32, import_value_err)
+    on_rej.data = mem.cast[*void](&cell[0usize])
+    on_rej.aux = p
+    let te = js.promise_then_raw(sit, js.as_object(ip), js.obj_value(on_ful), js.obj_value(on_rej))
+    ret (js.obj_value(p), ok)
+}
+
+fn install_shadow_realm(it: *js.Interp) {
+    let ctor = js.make_native(it, "ShadowRealm", 0u32, shadow_ctor)
+    ctor.ctor_kind = js.K_BASE
+    let proto = js.new_plain(it)
+    it.shadow_proto = proto
+    let e1 = js.define_data(it, ctor, js.key_of("prototype"), js.obj_value(proto), 0u8)
+    let e2 = js.define_data(it, proto, js.key_of("constructor"), js.obj_value(ctor), js.P_HIDDEN)
+    js.add_method(it, proto, "evaluate", 1u32, shadow_evaluate)
+    js.add_method(it, proto, "importValue", 2u32, shadow_import_value)
+    let e3 = js.define_data(it, proto, js.key_of_symbol(it.sym_to_string_tag), js.str_value("ShadowRealm"), js.P_CONFIGURABLE)
+    let e4 = js.define_data(it, it.global, js.key_of("ShadowRealm"), js.obj_value(ctor), js.P_HIDDEN)
 }
 
 // --- $262 (the test262 host object)
@@ -1560,6 +1768,7 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     if ise != ok { ret (it, ise) }
     let (iv, ie) = js.eval_source(it, isrc)
     if ie != ok { ret (it, ie) }
+    install_shadow_realm(it)
     let (sev, see) = js.get_prop(it, it.global, js.key_of("SuppressedError"), js.obj_value(it.global))
     if see == ok && js.is_object(sev) { it.suppressed_ctor = js.as_object(sev) }
     ret (it, ok)

@@ -35,7 +35,7 @@ fn skipped_feature(full_meta: str) -> bool {
     let (cb0, cant_block) = str.find(full_meta, "CanBlockIsFalse")
     if cant_block { ret true }
     let meta = features_of(full_meta)
-    let feats = "Intl.Locale-info|ShadowRealm|decorators|tail-call-optimization|canonical-tz|"
+    let feats = "Intl.Locale-info|decorators|tail-call-optimization|canonical-tz|"
     var start = 0usize
     var i = 0usize
     while i < feats.len {
