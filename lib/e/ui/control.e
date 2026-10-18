@@ -5069,7 +5069,7 @@ fn switch_mark_keyed(a: *mem.Arena, key: widget.Key, t: *const Theme, state: sty
 fn switch_mark_at(a: *mem.Arena, t: *const Theme, state: style.ControlState, share: f32, enabled: bool) -> (widget.Node, err) {
     let ink = style.color(t.tokens, .OnSurface)
     let highest = style.color(t.tokens, .SurfaceContainerHighest)
-    let active = state.hovered || state.pressed
+    let active = state.hovered || state.pressed || state.focus_visible
     var off_thumb = style.color(t.tokens, .Outline)
     if active { off_thumb = style.color(t.tokens, .OnSurfaceVariant) }
     var on_thumb = style.color(t.tokens, .OnPrimary)
@@ -18807,7 +18807,12 @@ fn material_choice_mark(a: *mem.Arena, t: *const Theme, state: style.ControlStat
         dot.background = paint.Brush { Solid: edge }
         inside[0usize] = widget.box(0u64, dot, zero)
     } else {
-        mark_style.background = paint.Brush { Solid: with_alpha(edge, edge.alpha * share) }
+        var fill_ink = edge
+        // Pressed, a chosen box is darkened by the state layer lying over it (md-checkbox draws the layer above the container).
+        if state.pressed && filled && enabled { fill_ink = style.layer(fill_ink, style.color(t.tokens, .OnSurface), state_opacity(t, state)) }
+        mark_style.background = paint.Brush { Solid: with_alpha(fill_ink, fill_ink.alpha * share) }
+        // A translucent edge over a translucent fill would double on the 2 dp rim: a settled chosen box is the fill alone.
+        if filled && share > 0.99 { mark_style.border = style.Border { width: 0.0, color: edge } }
         var kind: GlyphKind = .Check
         if mixed { kind = .Dash }
         let (drawn, drawn_error) = stroked_glyph(a, with_alpha(tick, tick.alpha * share), kind, mark - 4.0, 2.0)
@@ -18819,6 +18824,9 @@ fn material_choice_mark(a: *mem.Arena, t: *const Theme, state: style.ControlStat
     parts[0usize] = widget.aligned(0u64, .Center, .Center, mark_style, inside[0usize..1usize])
     var layer_ink = style.color(t.tokens, .OnSurface)
     if filled { layer_ink = style.color(t.tokens, .Primary) }
+    // M3: unselected hovers and focuses on-surface and presses primary; selected is the other way round.
+    if state.pressed { layer_ink = style.color(t.tokens, .Primary) }
+    if state.pressed && filled { layer_ink = style.color(t.tokens, .OnSurface) }
     if invalid { layer_ink = style.color(t.tokens, .Error) }
     var circle_style = sized_style(40.0, 40.0)
     circle_style.radius = 20.0
@@ -18831,6 +18839,8 @@ fn material_target(a: *mem.Arena, key: widget.Key, role: u8, label: str, states:
     var target_style = style.defaults()
     target_style.min_height = style.Length { Px: 48.0 }
     target_style.min_width = style.Length { Px: 48.0 }
+    // The switch's mark (52 track in a 60 box) is wider than the target: the target grows to it rather than overhang.
+    if role == 18u8 { target_style.min_width = style.Length { Px: 60.0 } }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = content
@@ -18877,8 +18887,17 @@ fn material_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, la
     let chosen_share = eased_on(t, key, key + 1048593u64, goal, false, millis)
     let (mark_node, mark_error) = material_choice_mark(a, t, state, chosen, mixed, round, enabled, invalid, chosen_share)
     if mark_error != ok { ret (zero, mark_error) }
-    let (row, row_error) = material_labelled(a, t, mark_node, label, enabled, 4.0)
-    if row_error != ok { ret (zero, row_error) }
+    // The 40 dp layer sits centred in the 48 dp target (4 dp in), the label right after it.
+    let (slot, slot_error) = mem.alloc[widget.Node](a, 1usize)
+    if slot_error != ok { ret (zero, TooLarge) }
+    slot[0usize] = mark_node
+    let seated = widget.aligned(0u64, .End, .Center, sized_style(44.0, 40.0), slot[0usize..1usize])
+    var row = seated
+    if label.len > 0usize {
+        let (with_text, row_error) = material_labelled(a, t, seated, label, enabled, 0.0)
+        if row_error != ok { ret (zero, row_error) }
+        row = with_text
+    }
     var states = 0u32
     if chosen { states = accessibility.STATE_CHECKED }
     if mixed { states = states | accessibility.STATE_MIXED }
@@ -18902,7 +18921,7 @@ fn material_radio(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, s
 fn material_switch_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, share: f32, enabled: bool, with_icon: bool) -> (widget.Node, err) {
     let ink = style.color(t.tokens, .OnSurface)
     let highest = style.color(t.tokens, .SurfaceContainerHighest)
-    let active = state.hovered || state.pressed
+    let active = state.hovered || state.pressed || state.focus_visible
     var off_thumb = style.color(t.tokens, .Outline)
     if active { off_thumb = style.color(t.tokens, .OnSurfaceVariant) }
     var on_thumb = style.color(t.tokens, .OnPrimary)
@@ -18972,8 +18991,12 @@ fn material_switch(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     let share = eased_on(t, key, key + 1048592u64, goal, false, t.tokens.durations.short3)
     let (mark, mark_error) = material_switch_mark(a, t, state, share, enabled, with_icon)
     if mark_error != ok { ret (zero, mark_error) }
-    let (row, row_error) = material_labelled(a, t, mark, label, enabled, 8.0)
-    if row_error != ok { ret (zero, row_error) }
+    var row = mark
+    if label.len > 0usize {
+        let (with_text, row_error) = material_labelled(a, t, mark, label, enabled, 8.0)
+        if row_error != ok { ret (zero, row_error) }
+        row = with_text
+    }
     var states = 0u32
     if on { states = accessibility.STATE_CHECKED }
     let (node, node_error) = material_target(a, key, 18u8, label, states, action, enabled, row)

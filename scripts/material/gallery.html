@@ -68,6 +68,15 @@ md-filled-button svg.i, md-outlined-button svg.i, md-text-button svg.i, md-fille
 md-filled-text-field, md-outlined-text-field, md-filled-select, md-outlined-select { width: 240px; }
 md-list { width: 280px; }
 md-slider { width: 200px; }
+/* M3 error checkbox (md.comp.checkbox error tokens; Material Web defines the tokens but does not wire them) */
+md-checkbox.err { --md-checkbox-outline-color: var(--md-sys-color-error); --md-checkbox-hover-outline-color: var(--md-sys-color-error);
+  --md-checkbox-focus-outline-color: var(--md-sys-color-error); --md-checkbox-pressed-outline-color: var(--md-sys-color-error);
+  --md-checkbox-selected-container-color: var(--md-sys-color-error); --md-checkbox-selected-hover-container-color: var(--md-sys-color-error);
+  --md-checkbox-selected-focus-container-color: var(--md-sys-color-error); --md-checkbox-selected-pressed-container-color: var(--md-sys-color-error);
+  --md-checkbox-selected-icon-color: var(--md-sys-color-on-error); --md-checkbox-selected-hover-icon-color: var(--md-sys-color-on-error);
+  --md-checkbox-selected-focus-icon-color: var(--md-sys-color-on-error); --md-checkbox-selected-pressed-icon-color: var(--md-sys-color-on-error);
+  --md-checkbox-hover-state-layer-color: var(--md-sys-color-error); --md-checkbox-pressed-state-layer-color: var(--md-sys-color-error);
+  --md-checkbox-selected-hover-state-layer-color: var(--md-sys-color-error); --md-checkbox-selected-pressed-state-layer-color: var(--md-sys-color-error); }
 md-tabs { width: 360px; }
 
 html.notext { -webkit-text-fill-color: transparent; }
@@ -185,7 +194,7 @@ for (const c of ["primary", "secondary", "tertiary", "surface"]) {
 // checkbox
 for (const k of ["unchecked", "checked", "indeterminate"]) {
   for (const st of ["rest", "hover", "pressed", "focus", "disabled", "error"]) {
-    const a = (k === "checked" ? " checked" : "") + (k === "indeterminate" ? " indeterminate" : "") + dis(st === "disabled") + (st === "error" ? " required" : "");
+    const a = (k === "checked" ? " checked" : "") + (k === "indeterminate" ? " indeterminate" : "") + dis(st === "disabled") + (st === "error" ? ' class="err"' : "");
     add(`checkbox-${k}-${st}`, `<md-checkbox${a} aria-label="Option"></md-checkbox>`);
   }
 }

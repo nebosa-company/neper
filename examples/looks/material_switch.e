@@ -25,7 +25,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let row = i / 5usize
         let column = i % 5usize
         // rows: off, on, off with icon, on with icon
-        let (node, node_error) = control.material_switch(a, u64(i + 1usize), t, "Label", row == 1usize || row == 3usize, row >= 2usize, &actions[0usize], column != 4usize)
+        let (node, node_error) = control.material_switch(a, u64(i + 1usize), t, "", row == 1usize || row == 3usize, row >= 2usize, &actions[0usize], column != 4usize)
         if node_error != ok { ret (0usize, node_error) }
         cells[i] = looks.Cell { caption: states[column], node: node, drive: drive_of(column) }
         i += 1usize
@@ -34,6 +34,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "switch", cells: 20usize, columns: 5usize, cell_w: 130.0, cell_h: 56.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "switch", cells: 20usize, columns: 5usize, cell_w: 90.0, cell_h: 56.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

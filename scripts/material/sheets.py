@@ -17,3 +17,8 @@ IB = ["standard", "filled", "tonal", "outlined"]
 SHEETS["fab"] = {"columns": 6, "cell_w": 150, "cell_h": 108, "cells": [
     "fab-small-rest", "fab-rest", "fab-large-rest", "fab-extended-rest", "fab-extended-hover", "fab-extended-pressed"] + [
     "icon-button-%s-%s" % (v, s) for v in IB for s in ["rest", "toggled", "hover", "focus", "pressed", "disabled"]]}
+
+S6 = ["rest", "hover", "focus", "pressed", "disabled", "error"]
+SHEETS["checkbox"] = {"columns": 6, "cell_w": 72, "cell_h": 64, "cells": ["checkbox-%s-%s" % (k, s) for k in ["unchecked", "checked", "indeterminate"] for s in S6]}
+SHEETS["radio"] = {"columns": 6, "cell_w": 72, "cell_h": 64, "cells": ["radio-%s-%s" % (k, s) if s != "error" else None for k in ["unchecked", "checked"] for s in S6]}
+SHEETS["switch"] = {"columns": 5, "cell_w": 90, "cell_h": 56, "cells": ["switch-%s-%s" % (k, s) for k in ["off", "on", "off-icons", "on-icons"] for s in S5]}

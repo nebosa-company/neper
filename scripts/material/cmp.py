@@ -11,7 +11,7 @@ compared), a reference pixel is STRUCTURAL when its 3 x 3 neighbourhood varies b
 shadow gradients; the anti-aliased rim of a shape does not qualify) and it is OFF when ours differs by more than 2 levels in any
 channel. Glyph pixels (text and icon artwork: where the reference differs from its `-notext` render, grown by 2 px) are not counted
 in `off`; `off+glyph` counts them. `rim` counts the rim pixels (not structural) that differ by more than 40 levels: a shape that
-is too big, too small or in the wrong place shows there. Outside the control's box (+1 px) every pixel is compared (shadows, nothing else may be drawn there): `shadow` counts those off by more than 2 levels.
+is too big, too small or in the wrong place shows there. Outside the control's box (+1 px) every pixel is compared (shadows, state layers; nothing else may be drawn there): `shadow` counts the structural ones off by more than 2 levels and the rim pixels (the rim of a shadow or of a state layer's circle) off by more than 24.
 A cell passes with off == 0 and shadow == 0.
 """
 import csv
@@ -109,7 +109,8 @@ def run(name, dark, png_dir, only):
         zone = np.zeros(st.shape, bool)
         zone[CROP - 1:CROP + h + 1, CROP - 1:CROP + w + 1] = True
         rim = int(((d > 40) & win & ~st & ~glyph & zone).sum())
-        shadow = int(((d > 2) & win & ~zone).sum())
+        outside_off = win & ~zone & (((d > 2) & st) | ((d > 24) & ~st))
+        shadow = int(outside_off.sum())
         n = int((m & ~glyph).sum())
         totals[0] += n
         totals[1] += off
@@ -126,7 +127,7 @@ def run(name, dark, png_dir, only):
             mark[(d > 2) & m & ~glyph] = (255, 0, 0)
             mark[(d > 2) & m & glyph] = (255, 160, 0)
             mark[(d > 40) & win & ~st & ~glyph & zone] = (255, 0, 255)
-            mark[(d > 2) & win & ~zone] = (0, 120, 255)
+            mark[outside_off] = (0, 120, 255)
             tile = np.concatenate([ref, o, 255 - np.minimum(255, np.abs(o - ref) * 4), mark], axis=1)
             im = Image.fromarray(tile.astype(np.uint8))
             im = im.resize((im.width * 2, im.height * 2), Image.NEAREST)
