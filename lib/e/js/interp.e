@@ -109,7 +109,7 @@ type Obj = struct {
     prog: *const ast.Program, node: u32, env: *Env, native: NativeFn, has_native: bool, ctor_kind: u8, home: *Obj, has_home: bool,
     fields: *Obj, has_fields: bool, this_val: Value, this_cell: *Obj, bound_target: *Obj, bound_this: Value, bound_args: []const Value,
     // primitive wrappers, dates, internal slots
-    prim: Value, data: *void, num: f64, text: str, aux: *Obj, id: u64, realm: *Interp, pmeths: *Obj, has_pmeths: bool
+    prim: Value, data: *void, num: f64, text: str, aux: *Obj, id: u64, realm: *Interp, pmeths: *Obj, has_pmeths: bool, pinits: *Obj, has_pinits: bool
 }
 
 // Constructor kinds of a function object.
@@ -3173,6 +3173,10 @@ fn init_fields(it: *Interp, ctor: *Obj, inst: *Obj) -> err {
             if pie != ok { ret pie }
         }
     }
+    if ctor.has_pinits {
+        let ie = run_initializers(it, ctor.pinits, obj_value(inst))
+        if ie != ok { ret ie }
+    }
     if !ctor.has_fields { ret ok }
     let list_obj = ctor.fields
     var i = 0usize
@@ -5525,6 +5529,13 @@ fn eval_class(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
 fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: str) -> (Value, err) {
     // The class's own name binding is in its temporal dead zone while `extends` is evaluated.
     if n.text.len > 0usize && !str.eq(n.text, "*default*") { try declare(it, class_env, n.text, undefv(), B_CONST | B_TDZ) }
+    let (class_decos, cde) = eval_decorator_list(it, f, n)
+    if cde != ok { ret (undefv(), cde) }
+    let meta = new_obj(it, C_OBJECT, null_obj())
+    meta.has_proto = false
+    let inst_inits = new_array(it)
+    let static_inits = new_array(it)
+    let class_inits = new_array(it)
     var proto_parent = it.protos.object
     var ctor_parent = it.protos.function
     var has_proto_parent = true
@@ -5617,6 +5628,8 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
             let sbe2 = array_push(it, static_fields, obj_value(sbf))
             continue
         }
+        let (edecos, ede) = eval_decorator_list(it, f, mn2)
+        if ede != ok { ret (undefv(), ede) }
         var key = key_of("")
         let kn2 = f.prog.nodes[usize(mn2.a)]
         if (mn2.flags & ast.F_COMPUTED) != 0u16 {
@@ -5641,6 +5654,11 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
         }
         var holder = proto
         if is_static { holder = ctor }
+        let priv_el = (mn2.flags & ast.F_COMPUTED) == 0u16 && kn2.kind == ast.N_PRIVATE
+        var name_v = key_to_value(key)
+        if priv_el { name_v = str_value(str_concat(it, "#", kn2.text)) }
+        var el_inits = inst_inits
+        if is_static { el_inits = static_inits }
         if mn2.op == ast.M_FIELD {
             // Instance fields are initialised per instance; static ones now.
             var init_fn = undefv()
@@ -5653,6 +5671,11 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
                 init_fn = obj_value(ff)
             }
             var entry_key = key
+            if edecos.elems.len > 0usize && mn2.c != 1u32 {
+                let (nif, nife) = apply_field_decorators(it, edecos, init_fn, name_v, is_static, priv_el, key, el_inits, meta)
+                if nife != ok { ret (undefv(), nife) }
+                init_fn = nif
+            }
             if mn2.c == 1u32 {
                 // `accessor` field: storage lives under a fresh private name, reached through a getter/setter pair on `key`.
                 let backing = new_symbol(it, key_name_for_function(it, key), true)
@@ -5662,15 +5685,24 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
                 ag.prim = key_to_value(entry_key)
                 let asf = make_native(it, str_concat(it, "set ", key_name_for_function(it, key)), 1u32, auto_set)
                 asf.prim = key_to_value(entry_key)
+                var cur_get = obj_value(ag)
+                var cur_set = obj_value(asf)
+                if edecos.elems.len > 0usize {
+                    let (dg, ds, di, dae) = apply_accessor_decorators(it, edecos, cur_get, cur_set, init_fn, name_v, is_static, priv_el, key, el_inits, meta)
+                    if dae != ok { ret (undefv(), dae) }
+                    cur_get = dg
+                    cur_set = ds
+                    init_fn = di
+                }
                 if kn2.kind == ast.N_PRIVATE && (mn2.flags & ast.F_COMPUTED) == 0u16 {
                     if is_static {
-                        let a1 = private_install(it, ctor, key, 2u8, obj_value(ag))
+                        let a1 = private_install(it, ctor, key, 2u8, cur_get)
                         if a1 != ok { ret (undefv(), a1) }
-                        let a2 = private_install(it, ctor, key, 3u8, obj_value(asf))
+                        let a2 = private_install(it, ctor, key, 3u8, cur_set)
                         if a2 != ok { ret (undefv(), a2) }
                     } else {
-                        try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), obj_value(ag), num_value(2.0f64)))))
-                        try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), obj_value(asf), num_value(3.0f64)))))
+                        try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), cur_get, num_value(2.0f64)))))
+                        try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), cur_set, num_value(3.0f64)))))
                     }
                 } else {
                     var ad = empty_desc()
@@ -5679,9 +5711,9 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
                     ad.has_configurable = true
                     ad.configurable = true
                     ad.has_get = true
-                    ad.getter = obj_value(ag)
+                    ad.getter = cur_get
                     ad.has_set = true
-                    ad.setter = obj_value(asf)
+                    ad.setter = cur_set
                     let (adone, ade) = define_own(it, holder, key, ad)
                     if ade != ok { ret (undefv(), ade) }
                     if !adone { ret (undefv(), throw_type(it, "Cannot redefine a class member")) }
@@ -5711,30 +5743,48 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
         }
         if mn2.op == ast.M_METHOD {
             set_function_name(it, obj_value(fo), key_name_for_function(it, key))
+            var fv = obj_value(fo)
+            if edecos.elems.len > 0usize {
+                let (dm, dme) = apply_replace_decorators(it, edecos, fv, "method", name_v, is_static, priv_el, key, 1u8, el_inits, meta)
+                if dme != ok { ret (undefv(), dme) }
+                fv = dm
+            }
             if is_private_member {
                 if is_static {
-                    let spe = private_install(it, ctor, key, 1u8, obj_value(fo))
+                    let spe = private_install(it, ctor, key, 1u8, fv)
                     if spe != ok { ret (undefv(), spe) }
                 } else {
-                    try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), obj_value(fo), num_value(1.0f64)))))
+                    try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), fv, num_value(1.0f64)))))
                 }
                 continue
             }
-            let (done, de) = define_own(it, holder, key, data_desc(obj_value(fo), P_HIDDEN))
+            let (done, de) = define_own(it, holder, key, data_desc(fv, P_HIDDEN))
             if de != ok { ret (undefv(), de) }
             if !done { ret (undefv(), throw_type(it, "Cannot redefine a class member")) }
         } else {
             var prefix = "get "
             if mn2.op == ast.M_SET { prefix = "set " }
             force_function_name(it, fo, str_concat(it, prefix, key_name_for_function(it, key)))
+            var fv2 = obj_value(fo)
+            if edecos.elems.len > 0usize {
+                var dkind = "getter"
+                var dmask = 1u8
+                if mn2.op == ast.M_SET {
+                    dkind = "setter"
+                    dmask = 2u8
+                }
+                let (dm2, dme2) = apply_replace_decorators(it, edecos, fv2, dkind, name_v, is_static, priv_el, key, dmask, el_inits, meta)
+                if dme2 != ok { ret (undefv(), dme2) }
+                fv2 = dm2
+            }
             if is_private_member {
                 var akind = 2u8
                 if mn2.op == ast.M_SET { akind = 3u8 }
                 if is_static {
-                    let spe2 = private_install(it, ctor, key, akind, obj_value(fo))
+                    let spe2 = private_install(it, ctor, key, akind, fv2)
                     if spe2 != ok { ret (undefv(), spe2) }
                 } else {
-                    try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), obj_value(fo), num_value(f64(akind))))))
+                    try list.push[Value](&pmeths_list, obj_value(array_from(it, three_values(it, key_to_value(key), fv2, num_value(f64(akind))))))
                 }
                 continue
             }
@@ -5745,10 +5795,10 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
             d.configurable = true
             if mn2.op == ast.M_GET {
                 d.has_get = true
-                d.getter = obj_value(fo)
+                d.getter = fv2
             } else {
                 d.has_set = true
-                d.setter = obj_value(fo)
+                d.setter = fv2
             }
             let (done2, de2) = define_own(it, holder, key, d)
             if de2 != ok { ret (undefv(), de2) }
@@ -5763,7 +5813,20 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
         ctor.pmeths = array_from(it, list.slice_const[Value](&pmeths_list))
         ctor.has_pmeths = true
     }
+    if inst_inits.elems.len > 0usize {
+        ctor.pinits = inst_inits
+        ctor.has_pinits = true
+    }
     if n.text.len > 0usize { try init_binding(it, class_env, n.text, obj_value(ctor)) }
+    var final_ctor = ctor
+    if class_decos.elems.len > 0usize {
+        var cname_v = undefv()
+        if name.len > 0usize { cname_v = str_value(name) }
+        let (cv, cve) = apply_replace_decorators(it, class_decos, obj_value(ctor), "class", cname_v, false, false, key_of(""), 0u8, class_inits, meta)
+        if cve != ok { ret (undefv(), cve) }
+        if !is_object(cv) { ret (undefv(), throw_type(it, "class decorator must return a constructor")) }
+        final_ctor = as_object(cv)
+    }
     // Static fields and blocks, in order, with `this` the class.
     var s = 0usize
     while s < static_fields.elems.len {
@@ -5794,7 +5857,227 @@ fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: s
             if fe2 != ok { ret (undefv(), fe2) }
         }
     }
-    ret (obj_value(ctor), ok)
+    let sie = run_initializers(it, static_inits, obj_value(ctor))
+    if sie != ok { ret (undefv(), sie) }
+    let cie = run_initializers(it, class_inits, obj_value(final_ctor))
+    if cie != ok { ret (undefv(), cie) }
+    ret (obj_value(final_ctor), ok)
+}
+
+// --- decorators
+
+fn eval_decorator_list(it: *Interp, f: *Frame, n: ast.Node) -> (*Obj, err) {
+    let decos = new_array(it)
+    var i = 0u32
+    while i < n.hoist_count {
+        let (dv, de) = eval(it, f, f.prog.kids[usize(n.hoist_first + i)])
+        if de != ok { ret (decos, de) }
+        let pe = array_push(it, decos, dv)
+        i += 1u32
+    }
+    ret (decos, ok)
+}
+
+fn deco_key(v: Value) -> Key {
+    switch v {
+    case .Sym as s:
+        ret key_of_symbol(s)
+    case .Str as t:
+        ret key_of(t)
+    default:
+        ret key_of("")
+    }
+}
+
+fn deco_target(it: *Interp, args: []const Value) -> (*Obj, err) {
+    if args.len == 0usize || !is_object(args[0usize]) { ret (null_obj(), throw_type(it, "decorator access needs an object")) }
+    ret (as_object(args[0usize]), ok)
+}
+
+fn deco_has(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let (o, oe) = deco_target(it, args)
+    if oe != ok { ret (undefv(), oe) }
+    let key = deco_key(it.callee.prim)
+    if is_symbol_key(key) && key.sym.private {
+        let (at, found) = index_of_prop(o, key)
+        ret (bool_value(found), ok)
+    }
+    ret (bool_value(has_property(it, o, key)), ok)
+}
+
+fn deco_get(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let (o, oe) = deco_target(it, args)
+    if oe != ok { ret (undefv(), oe) }
+    let key = deco_key(it.callee.prim)
+    if is_symbol_key(key) && key.sym.private {
+        let (pv, pe) = private_get(it, o, key, args[0usize])
+        ret (pv, pe)
+    }
+    let (v, e) = get_prop(it, o, key, args[0usize])
+    ret (v, e)
+}
+
+fn deco_set(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let (o, oe) = deco_target(it, args)
+    if oe != ok { ret (undefv(), oe) }
+    let key = deco_key(it.callee.prim)
+    var nv = undefv()
+    if args.len > 1usize { nv = args[1usize] }
+    if is_symbol_key(key) && key.sym.private {
+        let (pok, pe) = private_set(it, o, key, nv, args[0usize])
+        if pe != ok { ret (undefv(), pe) }
+        ret (undefv(), ok)
+    }
+    let (sok, se) = set_prop(it, o, key, nv, args[0usize])
+    if se != ok { ret (undefv(), se) }
+    if !sok { ret (undefv(), throw_type(it, "Cannot assign to read only property")) }
+    ret (undefv(), ok)
+}
+
+fn deco_add_init(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let pair = as_object(it.callee.prim)
+    let st = as_object(pair.elems.items[0usize])
+    let inits = as_object(pair.elems.items[1usize])
+    if st.num != 0.0f64 { ret (undefv(), throw_type(it, "addInitializer can only be called during decoration")) }
+    if args.len == 0usize || !is_callable(args[0usize]) { ret (undefv(), throw_type(it, "initializer must be a function")) }
+    let pe = array_push(it, inits, args[0usize])
+    ret (undefv(), ok)
+}
+
+// A field or accessor initialiser wrapped by a decorator: the decorator's function receives the initial value and returns the new one.
+fn deco_init_wrap(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let pair = as_object(it.callee.prim)
+    let orig = pair.elems.items[0usize]
+    let wrapper = pair.elems.items[1usize]
+    var v = undefv()
+    if is_object(orig) {
+        let (ov, oe) = call_function(it, orig, this_val, zero_args())
+        if oe != ok { ret (undefv(), oe) }
+        v = ov
+    }
+    let (r, re) = call_function(it, wrapper, this_val, one_arg(it, v))
+    ret (r, re)
+}
+
+fn compose_init(it: *Interp, orig: Value, wrapper: Value) -> Value {
+    let w = make_native(it, "", 0u32, deco_init_wrap)
+    w.prim = obj_value(array_from(it, two_args(it, orig, wrapper)))
+    ret obj_value(w)
+}
+
+// The context object handed to a decorator; `mask` 1 gives access.get and 2 access.set (0: a class, with no access member).
+fn deco_context(it: *Interp, kind: str, name: Value, is_static: bool, is_private: bool, key: Key, mask: u8, inits: *Obj, st: *Obj, meta: *Obj) -> (*Obj, err) {
+    let ctx = new_plain(it)
+    try define_data(it, ctx, key_of("kind"), str_value(kind), P_DEFAULT)
+    try define_data(it, ctx, key_of("name"), name, P_DEFAULT)
+    if mask != 0u8 {
+        let acc = new_plain(it)
+        let hf = make_native(it, "has", 1u32, deco_has)
+        hf.prim = key_to_value(key)
+        try define_data(it, acc, key_of("has"), obj_value(hf), P_DEFAULT)
+        if (mask & 1u8) != 0u8 {
+            let gf = make_native(it, "get", 1u32, deco_get)
+            gf.prim = key_to_value(key)
+            try define_data(it, acc, key_of("get"), obj_value(gf), P_DEFAULT)
+        }
+        if (mask & 2u8) != 0u8 {
+            let sf = make_native(it, "set", 2u32, deco_set)
+            sf.prim = key_to_value(key)
+            try define_data(it, acc, key_of("set"), obj_value(sf), P_DEFAULT)
+        }
+        try define_data(it, ctx, key_of("access"), obj_value(acc), P_DEFAULT)
+        try define_data(it, ctx, key_of("static"), bool_value(is_static), P_DEFAULT)
+        try define_data(it, ctx, key_of("private"), bool_value(is_private), P_DEFAULT)
+    }
+    let ai = make_native(it, "addInitializer", 1u32, deco_add_init)
+    ai.prim = obj_value(array_from(it, two_args(it, obj_value(st), obj_value(inits))))
+    try define_data(it, ctx, key_of("addInitializer"), obj_value(ai), P_DEFAULT)
+    try define_data(it, ctx, key_of("metadata"), obj_value(meta), P_DEFAULT)
+    ret (ctx, ok)
+}
+
+fn call_decorator(it: *Interp, dec: Value, arg: Value, kind: str, name: Value, is_static: bool, is_private: bool, key: Key, mask: u8, inits: *Obj, meta: *Obj) -> (Value, err) {
+    if !is_callable(dec) { ret (undefv(), throw_type(it, "decorator must be a function")) }
+    let st = new_plain(it)
+    let (ctx, ce) = deco_context(it, kind, name, is_static, is_private, key, mask, inits, st, meta)
+    if ce != ok { ret (undefv(), ce) }
+    let (r, re) = call_function(it, dec, undefv(), two_args(it, arg, obj_value(ctx)))
+    st.num = 1.0f64
+    ret (r, re)
+}
+
+// Methods, getters, setters and classes: each decorator, last first, may replace the function.
+fn apply_replace_decorators(it: *Interp, decos: *Obj, start: Value, kind: str, name: Value, is_static: bool, is_private: bool, key: Key, mask: u8, inits: *Obj, meta: *Obj) -> (Value, err) {
+    var cur = start
+    var i = decos.elems.len
+    while i > 0usize {
+        i -= 1usize
+        let (r, re) = call_decorator(it, decos.elems.items[i], cur, kind, name, is_static, is_private, key, mask, inits, meta)
+        if re != ok { ret (undefv(), re) }
+        if is_undefined(r) { continue }
+        if !is_callable(r) { ret (undefv(), throw_type(it, "decorator must return a function or undefined")) }
+        cur = r
+    }
+    ret (cur, ok)
+}
+
+fn apply_field_decorators(it: *Interp, decos: *Obj, init_fn: Value, name: Value, is_static: bool, is_private: bool, key: Key, inits: *Obj, meta: *Obj) -> (Value, err) {
+    var cur = init_fn
+    var i = decos.elems.len
+    while i > 0usize {
+        i -= 1usize
+        let (r, re) = call_decorator(it, decos.elems.items[i], undefv(), "field", name, is_static, is_private, key, 3u8, inits, meta)
+        if re != ok { ret (undefv(), re) }
+        if is_undefined(r) { continue }
+        if !is_callable(r) { ret (undefv(), throw_type(it, "field decorator must return a function or undefined")) }
+        cur = compose_init(it, cur, r)
+    }
+    ret (cur, ok)
+}
+
+fn deco_member(it: *Interp, v: Value, name: str) -> (Value, err) {
+    let (mv, me) = get_prop(it, as_object(v), key_of(name), v)
+    if me != ok { ret (undefv(), me) }
+    if !is_undefined(mv) && !is_callable(mv) { ret (undefv(), throw_type(it, "accessor decorator result members must be functions")) }
+    ret (mv, ok)
+}
+
+// An auto-accessor: the decorator gets {get, set} and may return {get, set, init}; returns the final getter, setter and initialiser.
+fn apply_accessor_decorators(it: *Interp, decos: *Obj, getter: Value, setter: Value, init_fn: Value, name: Value, is_static: bool, is_private: bool, key: Key, inits: *Obj, meta: *Obj) -> (Value, Value, Value, err) {
+    var cg = getter
+    var cs = setter
+    var ci = init_fn
+    var i = decos.elems.len
+    while i > 0usize {
+        i -= 1usize
+        let value = new_plain(it)
+        let e1 = define_data(it, value, key_of("get"), cg, P_DEFAULT)
+        let e2 = define_data(it, value, key_of("set"), cs, P_DEFAULT)
+        let (r, re) = call_decorator(it, decos.elems.items[i], obj_value(value), "accessor", name, is_static, is_private, key, 3u8, inits, meta)
+        if re != ok { ret (undefv(), undefv(), undefv(), re) }
+        if is_undefined(r) { continue }
+        if !is_object(r) { ret (undefv(), undefv(), undefv(), throw_type(it, "accessor decorator must return an object or undefined")) }
+        let (g, ge) = deco_member(it, r, "get")
+        if ge != ok { ret (undefv(), undefv(), undefv(), ge) }
+        let (s, se) = deco_member(it, r, "set")
+        if se != ok { ret (undefv(), undefv(), undefv(), se) }
+        let (iv, ie) = deco_member(it, r, "init")
+        if ie != ok { ret (undefv(), undefv(), undefv(), ie) }
+        if !is_undefined(g) { cg = g }
+        if !is_undefined(s) { cs = s }
+        if !is_undefined(iv) { ci = compose_init(it, ci, iv) }
+    }
+    ret (cg, cs, ci, ok)
+}
+
+fn run_initializers(it: *Interp, inits: *Obj, this_val: Value) -> err {
+    var i = 0usize
+    while i < inits.elems.len {
+        let (r, re) = call_function(it, inits.elems.items[i], this_val, zero_args())
+        if re != ok { ret re }
+        i += 1usize
+    }
+    ret ok
 }
 
 fn auto_get(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {

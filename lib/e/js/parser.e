@@ -915,9 +915,9 @@ fn parse_array(p: *Parser) -> (u32, err) {
 
 fn parse_primary(p: *Parser) -> (u32, err) {
     if is_p(p, "@") {
-        try skip_decorators(p)
+        let (pdf, pdc) = try parse_decorators(p)
         if !is_k(p, "class") { ret (ast.NONE, fail(p, "decorators must precede a class")) }
-        let dc = try parse_class(p, false)
+        let dc = try parse_class(p, false, pdf, pdc)
         ret (dc, ok)
     }
     let t = p.tok
@@ -993,7 +993,7 @@ fn parse_primary(p: *Parser) -> (u32, err) {
                 ret (f, ok)
             }
             if str.eq(w, "class") {
-                let c = try parse_class(p, false)
+                let c = try parse_class(p, false, 0u32, 0u32)
                 ret (c, ok)
             }
             if str.eq(w, "this") {
@@ -1450,18 +1450,27 @@ fn parse_function(p: *Parser, decl: bool, is_async: bool) -> (u32, err) {
     ret (fid, ok)
 }
 
-// Decorators are parsed but not applied (the proposal is stage 3); only the grammar is accepted.
-fn skip_decorators(p: *Parser) -> err {
+// `@expr` decorators: the expressions as a run of the shared child list (first index, count).
+fn parse_decorators(p: *Parser) -> (u32, u32, err) {
+    let (ids_0, ie) = new_ids(p)
+    var ids = ids_0
+    if ie != ok { ret (0u32, 0u32, ie) }
     while is_p(p, "@") {
         try adv(p)
         let dec = try parse_lhs(p)
+        try list.push[u32](&ids, dec)
     }
-    ret ok
+    if ids.len == 0usize { ret (0u32, 0u32, ok) }
+    let (first, ke) = commit(p, &ids)
+    if ke != ok { ret (0u32, 0u32, ke) }
+    ret (first, u32(ids.len), ok)
 }
 
-fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
+fn parse_class(p: *Parser, decl: bool, dfirst: u32, dcount: u32) -> (u32, err) {
     let (cid, ce) = mk(p, ast.N_CLASS)
     if ce != ok { ret (ast.NONE, ce) }
+    node(p, cid).hoist_first = dfirst
+    node(p, cid).hoist_count = dcount
     let class_start = p.tok.start
     try expect_k(p, "class")
     if decl { node(p, cid).flags = ast.F_DECL }
@@ -1491,9 +1500,11 @@ fn parse_class(p: *Parser, decl: bool) -> (u32, err) {
             try adv(p)
             continue
         }
-        try skip_decorators(p)
+        let (mdf, mdc) = try parse_decorators(p)
         let (mid, me) = mk(p, ast.N_PROP)
         if me != ok { ret (ast.NONE, me) }
+        node(p, mid).hoist_first = mdf
+        node(p, mid).hoist_count = mdc
         var is_static = false
         if is_k(p, "static") {
             let nx = try peek(p)
@@ -1876,9 +1887,9 @@ fn parse_statement(p: *Parser) -> (u32, err) {
     let sub = p.sub_flag
     p.sub_flag = false
     if is_p(p, "@") {
-        try skip_decorators(p)
+        let (sdf, sdc) = try parse_decorators(p)
         if !is_k(p, "class") { ret (ast.NONE, fail(p, "decorators must precede a class")) }
-        let dc2 = try parse_class(p, true)
+        let dc2 = try parse_class(p, true, sdf, sdc)
         ret (dc2, ok)
     }
     if p.tok.kind == lex.T_PUNCT {
@@ -1933,7 +1944,7 @@ fn parse_statement(p: *Parser) -> (u32, err) {
             }
         }
         if str.eq(w, "class") {
-            let c = try parse_class(p, true)
+            let c = try parse_class(p, true, 0u32, 0u32)
             ret (c, ok)
         }
         if str.eq(w, "if") {
