@@ -1,0 +1,130 @@
+{
+ "group_box": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/group_box.png",
+    "notes": "Audit 13 upgrade. Own comparer (every crop of the three Linux manifests template-searched in the committed 1x sheet, reference composited on the window colour; off = more than 2 levels in any channel; flat = 8 neighbours within 2 levels; ink = reference pixels more than 60 levels from the crop's two dominant colours, grown 2 px): Light, 2 crops (card, frame): flat 0 off, strict 0 to 1 px, 0 of about 470 ink px differ (audit 12: 283 of 531). Every captured state is within tolerance; the uncaptured parts (descriptions, collapsible toggle) stay in the gaps.",
+    "gaps": [
+     "Status left at review (not part of the round's brief): every captured crop is within 3 levels."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/group_box.png",
+    "notes": "Audit 13 upgrade. Own comparer (every crop of the three Linux manifests template-searched in the committed 1x sheet, reference composited on the window colour; off = more than 2 levels in any channel; flat = 8 neighbours within 2 levels; ink = reference pixels more than 60 levels from the crop's two dominant colours, grown 2 px): Dark, 2 crops (card, frame): flat 0 off, strict 0 to 1 px, 0 of about 470 ink px differ (audit 12: 283 of 531). Every captured state is within tolerance; the uncaptured parts (descriptions, collapsible toggle) stay in the gaps.",
+    "gaps": [
+     "Status left at review (not part of the round's brief): every captured crop is within 3 levels."
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/vertical_grid.png",
+    "notes": "Audit 13 upgrade. Own comparer as group box: Light, 2 crops (action rows, preferences group): flat 0 off, strict 13 to 14 px (pencil and combo arrow edges), 8 to 13 of about 3000 ink px differ (audit 12: 1083 of 2432). Matched on the captured states; the property grid mapping and the uncaptured row states remain gaps.",
+    "gaps": [
+     "Symbolic icon edges: the entry row pencil (9 px) and the combo row arrow (2 px), up to 15 levels."
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/vertical_grid.png",
+    "notes": "Audit 13 upgrade. Own comparer as group box: Dark, 2 crops (action rows, preferences group): flat 0 off, strict 13 to 14 px (pencil and combo arrow edges), 8 to 13 of about 3000 ink px differ (audit 12: 1083 of 2432). Matched on the captured states; the property grid mapping and the uncaptured row states remain gaps.",
+    "gaps": [
+     "Symbolic icon edges: the entry row pencil (9 px) and the combo row arrow (2 px), up to 15 levels."
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/checkbox.png",
+    "notes": "Audit 13 downgrade. Own comparer (sheet cells from the cell order, best placement within 3 px, every pixel of the cell compared, text and icon ink set apart by the -notext twin): the flat-pixel metric of round 23 sees 0 off because a 2 px outline is never flat, but the unchecked box in hover, focus and pressed draws its outline in on-surface-variant (#49454F) where Material Web draws on-surface (#1D1B20; its checkbox-styles.css sets hover-outline-color to on-surface, and the M3 spec agrees): 116 to 124 px per state off by up to 47 levels (light and dark), 3 states. Everything else in the sheet is within the rim noise of two anti-aliasers.",
+    "gaps": [
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture",
+     "Unchecked checkbox outline in hover, focus and pressed must be on-surface, not on-surface-variant"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/checkbox.png",
+    "notes": "Audit 13 downgrade. Own comparer (sheet cells from the cell order, best placement within 3 px, every pixel of the cell compared, text and icon ink set apart by the -notext twin): the flat-pixel metric of round 23 sees 0 off because a 2 px outline is never flat, but the unchecked box in hover, focus and pressed draws its outline in on-surface-variant (#49454F) where Material Web draws on-surface (#1D1B20; its checkbox-styles.css sets hover-outline-color to on-surface, and the M3 spec agrees): 116 to 124 px per state off by up to 47 levels (light and dark), 3 states. Everything else in the sheet is within the rim noise of two anti-aliasers.",
+    "gaps": [
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture",
+     "Unchecked checkbox outline in hover, focus and pressed must be on-surface, not on-surface-variant"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/radio.png",
+    "notes": "Audit 13 downgrade. Same cause as the checkbox: the unselected radio ring in hover, focus and pressed is on-surface-variant where Material Web (and the M3 spec) draw on-surface: 62 to 81 px per state off by up to 47 levels in 3 states. The flat metric cannot see a 2 px ring.",
+    "gaps": [
+     "M3 defines no error state for a radio button: the sheet's Error column has no reference",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture",
+     "Unselected radio ring in hover, focus and pressed must be on-surface"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/radio.png",
+    "notes": "Audit 13 downgrade. Same cause as the checkbox: the unselected radio ring in hover, focus and pressed is on-surface-variant where Material Web (and the M3 spec) draw on-surface: 62 to 81 px per state off by up to 47 levels in 3 states. The flat metric cannot see a 2 px ring.",
+    "gaps": [
+     "M3 defines no error state for a radio button: the sheet's Error column has no reference",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture",
+     "Unselected radio ring in hover, focus and pressed must be on-surface"
+    ]
+   }
+  }
+ },
+ "top_app_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/app_bar.png",
+    "notes": "Audit 13 downgrade. The app bar reference is not a Material Web capture: Material Web has no top app bar, so scripts/material/gallery.html draws it as plain HTML and CSS written from the M3 specification by the same hand that wrote Neper's. A pixel match against it proves two readings of the spec agree, not that Neper matches a real control; matched needs a capture. My comparer agrees with the claim as far as it goes (title 1 px shift in the no-leading cell, 47 px).",
+    "gaps": [
+     "Material Web has no app bar: the reference is plain CSS from the specification",
+     "Medium and large app bars are not compared",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture",
+     "Reference is spec-derived CSS, not a capture (as the snackbar, tooltip, navigation bar, search bar, badge and date picker references)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/app_bar.png",
+    "notes": "Audit 13 downgrade. The app bar reference is not a Material Web capture: Material Web has no top app bar, so scripts/material/gallery.html draws it as plain HTML and CSS written from the M3 specification by the same hand that wrote Neper's. A pixel match against it proves two readings of the spec agree, not that Neper matches a real control; matched needs a capture. My comparer agrees with the claim as far as it goes (title 1 px shift in the no-leading cell, 47 px).",
+    "gaps": [
+     "Material Web has no app bar: the reference is plain CSS from the specification",
+     "Medium and large app bars are not compared",
+     "Evidence: Material Web 1.x rendered in Chromium (focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing); no Android device capture",
+     "Reference is spec-derived CSS, not a capture (as the snackbar, tooltip, navigation bar, search bar, badge and date picker references)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/hint.png",
+    "notes": "Audit 13 downgrade. Independent text contrast over the sheets of neper-dark: the five hint_toolbar_* sheets draw the v3 toolbar hint, a pale yellow box (#FFFFE1) with Text (#E1E2E9) ink, 1.27:1; hint_grid_header_name draws a #F9F9F9 box with #BBC1C5 ink, 1.73:1. Both are enabled text and fail 4.5:1. hint.png itself is dark and passes (10.9:1). The Windows-only hint variants leak into the dark directory unmapped, the same cause that keeps tree list and data grid at review.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders",
+     "hint_toolbar_* and hint_grid_header_name: light Windows hint chrome with dark-look text (1.27 and 1.73 to 1)"
+    ]
+   }
+  }
+ }
+}
