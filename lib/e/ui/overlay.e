@@ -1521,6 +1521,7 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
         // md-dialog: the icon stands alone, 24 dp in `secondary`, with no well.
         if t.tokens.profile == .MaterialLike {
             well = control.sized_style(24.0, 24.0)
+            well.margin.top = style.Length { Px: 1.0 }
             well.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) }
         }
         let icon_well = widget.aligned(0u64, .Center, .Center, well, mark_body[0usize..1usize])
@@ -1528,18 +1529,31 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
         if header_error != ok { ret (zero, TooLarge) }
         header[0usize] = icon_well
         header[1usize] = parts[0usize]
+        var header_gap: f32 = 16.0
+        // (Android: the card stretches the header; a 100 % width would make the card as wide as its window.)
         var header_style = style.defaults()
-        header_style.width = style.Length { Percent: 100.0 }
-        parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 16.0 }, header_style, header[0usize..2usize])
+        if t.tokens.profile == .MaterialLike {
+            header_gap = 15.0
+        } else {
+            header_style.width = style.Length { Percent: 100.0 }
+        }
+        parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: header_gap }, header_style, header[0usize..2usize])
     }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = content
-    parts[1usize] = widget.padded(0u64, 0.0, 16.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+    var content_top: f32 = 16.0
+    // md-dialog (measured on its capture): the supporting text starts 23 below the headline, not the 16 of the Neper default.
+    if t.tokens.profile == .MaterialLike { content_top = 23.0 }
+    parts[1usize] = widget.padded(0u64, 0.0, content_top, 0.0, 0.0, style.defaults(), held[0usize..1usize])
     var actions_style = style.defaults()
     actions_style.padding.top = style.Length { Px: 8.0 }
-    // md-dialog: 24 dp between the content and the actions (8 more than the Neper default's padding adds up to).
-    if t.tokens.profile == .MaterialLike { actions_style.padding.top = style.Length { Px: 32.0 } }
+    // md-dialog: 24 dp between the content and the actions.
+    // The capture's panel ends 1 further under the buttons than the 24 of the card's padding.
+    if t.tokens.profile == .MaterialLike {
+        actions_style.padding.top = style.Length { Px: 24.0 }
+        actions_style.padding.bottom = style.Length { Px: 1.0 }
+    }
     parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, actions_style, row[0usize..buttons.len])
     var raised = control.surface_options(t)
     raised.background = .SurfaceContainerHigh
@@ -1549,7 +1563,7 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     // Android: the level-3 shade is drawn (e.ui.matshade), not the offset copy.
     if t.tokens.profile == .MaterialLike { raised.elevation = 0u8 }
     var card_style = control.surface_style(t, raised)
-    if t.tokens.profile == .MaterialLike { card_style.shade = 3u8 }
+    // md-dialog draws no shadow of its own (the surface is tonal over the scrim; its capture shows none): the shade stays off.
     card_style.min_width = style.Length { Px: 280.0 }
     card_style.max_width = style.Length { Px: 560.0 }
     // Neper dark: the panel (#292A2F) is 1.4:1 on the scrim and its shadow does not read on dark, so it takes the frame ink as an edge.
