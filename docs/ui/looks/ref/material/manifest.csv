@@ -186,8 +186,8 @@ light,list_box,list-item-two-line-focus,light/list-item-two-line-focus@1x.png,li
 light,list_box,list-item-two-line-hover,light/list-item-two-line-hover@1x.png,light/list-item-two-line-hover@2x.png,280,72,margin=16
 light,list_box,list-item-two-line-pressed,light/list-item-two-line-pressed@1x.png,light/list-item-two-line-pressed@2x.png,280,72,margin=16
 light,list_box,list-item-two-line-rest,light/list-item-two-line-rest@1x.png,light/list-item-two-line-rest@2x.png,280,72,margin=16
-light,popup_menu,menu-icons,light/menu-icons@1x.png,light/menu-icons@2x.png,112,128,margin=16
-light,popup_menu,menu-rest,light/menu-rest@1x.png,light/menu-rest@2x.png,112,240,margin=16
+light,popup_menu,menu-hover,light/menu-hover@1x.png,light/menu-hover@2x.png,168,313,margin=16
+light,popup_menu,menu-rest,light/menu-rest@1x.png,light/menu-rest@2x.png,168,313,margin=16
 light,navigation_bar,navigation-bar-hover,light/navigation-bar-hover@1x.png,light/navigation-bar-hover@2x.png,360,80,margin=16
 light,navigation_bar,navigation-bar-pressed,light/navigation-bar-pressed@1x.png,light/navigation-bar-pressed@2x.png,360,80,margin=16
 light,navigation_bar,navigation-bar-rest,light/navigation-bar-rest@1x.png,light/navigation-bar-rest@2x.png,360,80,margin=16
@@ -499,8 +499,8 @@ dark,list_box,list-item-two-line-focus,dark/list-item-two-line-focus@1x.png,dark
 dark,list_box,list-item-two-line-hover,dark/list-item-two-line-hover@1x.png,dark/list-item-two-line-hover@2x.png,280,72,margin=16
 dark,list_box,list-item-two-line-pressed,dark/list-item-two-line-pressed@1x.png,dark/list-item-two-line-pressed@2x.png,280,72,margin=16
 dark,list_box,list-item-two-line-rest,dark/list-item-two-line-rest@1x.png,dark/list-item-two-line-rest@2x.png,280,72,margin=16
-dark,popup_menu,menu-icons,dark/menu-icons@1x.png,dark/menu-icons@2x.png,112,128,margin=16
-dark,popup_menu,menu-rest,dark/menu-rest@1x.png,dark/menu-rest@2x.png,112,240,margin=16
+dark,popup_menu,menu-hover,dark/menu-hover@1x.png,dark/menu-hover@2x.png,168,313,margin=16
+dark,popup_menu,menu-rest,dark/menu-rest@1x.png,dark/menu-rest@2x.png,168,313,margin=16
 dark,navigation_bar,navigation-bar-hover,dark/navigation-bar-hover@1x.png,dark/navigation-bar-hover@2x.png,360,80,margin=16
 dark,navigation_bar,navigation-bar-pressed,dark/navigation-bar-pressed@1x.png,dark/navigation-bar-pressed@2x.png,360,80,margin=16
 dark,navigation_bar,navigation-bar-rest,dark/navigation-bar-rest@1x.png,dark/navigation-bar-rest@2x.png,360,80,margin=16

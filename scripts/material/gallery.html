@@ -270,10 +270,11 @@ add("tabs-primary-disabled", tabs("md-primary-tab", 0, (i) => i === 2 ? " disabl
 add("tabs-secondary-rest", tabs("md-secondary-tab", 0));
 add("tabs-secondary-second-rest", tabs("md-secondary-tab", 1));
 add("tabs-primary-icons-rest", `<md-tabs style="width:300px">` + ["search", "star", "person"].map((n, i) => `<md-primary-tab${i === 0 ? " active" : ""}>${sl(n, "icon")}${TL[i]}</md-primary-tab>`).join("") + `</md-tabs>`);
-// menu: an open menu anchored to nothing; the capture clips the surface
-const menu = (extra) => `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute" ${extra || ""}><md-menu-item><div slot="headline">Item one</div></md-menu-item><md-menu-item><div slot="headline">Item two</div></md-menu-item><md-menu-item disabled><div slot="headline">Disabled</div></md-menu-item><md-menu-item><div slot="headline">Item four</div></md-menu-item></md-menu>`;
-add("menu-rest", menu(), { target: "md-menu", shadow: ".menu" });
-add("menu-icons", `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute"><md-menu-item><div slot="headline">Edit</div>${sl("edit", "start")}</md-menu-item><md-menu-item><div slot="headline">Add</div>${sl("add", "start")}</md-menu-item></md-menu>`, { target: "md-menu", shadow: ".menu" });
+// menu: an open menu (the sheet's: icons, shortcuts, a divider and a disabled item); the capture clips the surface
+const mi = (icon, text, key, extra) => `<md-menu-item${extra || ""}>${sl(icon, "start")}<div slot="headline">${text}</div>${key ? `<div slot="trailing-supporting-text">${key}</div>` : ""}</md-menu-item>`;
+const menuHtml = `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute">${mi("edit", "Edit", "Ctrl+E")}${mi("search", "Search", "Ctrl+F")}<md-divider role="separator" tabindex="-1"></md-divider>${mi("star", "Settings")}${mi("add", "Refresh", "", " disabled")}${mi("add", "Add")}</md-menu>`;
+add("menu-rest", menuHtml, { target: "md-menu", shadow: ".menu" });
+add("menu-hover", menuHtml, { target: "md-menu", shadow: ".menu" });
 // list
 const li = (a) => `<md-list-item ${a || ""}><div slot="headline">List item</div><div slot="supporting-text">Supporting text</div></md-list-item>`;
 for (const st of ["rest", "hover", "pressed", "focus", "disabled"]) {

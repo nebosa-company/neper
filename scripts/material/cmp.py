@@ -71,6 +71,9 @@ def run(name, dark, png_dir, only):
         # the crop's origin in the sheet if the control is centred in the cell
         cx = x0 + (sheet["cell_w"] - w) / 2.0 - CROP
         cy = y0 + (sheet["cell_h"] - h) / 2.0 - CROP
+        if "at" in sheet:  # a control that is placed, not centred (a menu under its anchor): its top left in the cell
+            cx = x0 + sheet["at"][0] - CROP
+            cy = y0 + sheet["at"][1] - CROP
         # the compared window: our cell box within the crop
         rx0 = max(0, int(round(x0 - cx)))
         ry0 = max(0, int(round(y0 - cy)))

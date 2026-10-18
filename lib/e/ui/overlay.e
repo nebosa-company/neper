@@ -844,8 +844,15 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var row_height = control.if_else(touch, 48.0, 32.0)
     if c.supporting.len > 0usize { row_height = control.if_else(touch, 56.0, 48.0) }
+    // Android: md-menu-item is 56 dp high (72 with a supporting line).
+    let android = t.tokens.profile == .MaterialLike
+    if android {
+        row_height = 56.0
+        if c.supporting.len > 0usize { row_height = 72.0 }
+    }
     let slot = control.if_else(touch, 24.0, 18.0)
-    let gap = control.if_else(touch, 12.0, 8.0)
+    var gap = control.if_else(touch, 12.0, 8.0)
+    if android { gap = 16.0 }
     var role: style.TextRole = .BodyMedium
     if touch { role = .BodyLarge }
     let line = style.text_style(t.tokens, role).line_height
@@ -870,6 +877,8 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
     look.radius = 0.0
     look.custom_padding = true
     look.padding = 12.0
+    // md-menu-item: 16 dp at both sides.
+    if android { look.padding = 16.0 }
     var tallest = line
     if c.supporting.len > 0usize { tallest += style.text_style(t.tokens, .BodySmall).line_height }
     if slotted && slot > tallest { tallest = slot }
@@ -928,14 +937,17 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
     parts[p] = widget.spacer(0u64, 1.0)
     p += 1usize
     let has_submenu = c.submenu.len != 0usize
-    if c.shortcut.len > 0usize && !touch && !has_submenu {
+    if c.shortcut.len > 0usize && (!touch || android) && !has_submenu {
         caption.role = .BodyMedium
+        if android { caption.role = .LabelSmall }
         let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, muted)
         if keys_error != ok { ret (zero, keys_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = keys_node
-        parts[p] = widget.padded(0u64, 24.0 - gap, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+        var before = 24.0 - gap
+        if android { before = 0.0 }
+        parts[p] = widget.padded(0u64, before, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
         p += 1usize
     }
     if has_submenu {
@@ -945,7 +957,8 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
         p += 1usize
     }
     var line_style = style.defaults()
-    line_style.width = style.Length { Percent: 100.0 }
+    // Android: the menu is as wide as its widest row, not as wide as it may be.
+    if !android { line_style.width = style.Length { Percent: 100.0 } }
     let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, line_style, parts[0usize..p])
     var sem_states = 0u32
     if c.checked { sem_states = accessibility.STATE_CHECKED }
@@ -1124,7 +1137,39 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     raised.elevation = 2u8
     raised.radius = t.tokens.radii.sm
     raised.padding = 0.0
+    if t.tokens.profile == .MaterialLike {
+        // md-menu: 4 dp corners and the drawn level-2 shade (e.ui.matshade).
+        raised.elevation = 0u8
+        raised.radius = 4.0
+    }
     var sheet_style = control.surface_style(t, raised)
+    if t.tokens.profile == .MaterialLike {
+        sheet_style.shade = 2u8
+        // md-menu is as wide as its widest row (16 sides, the 24 dp icon and 16 after it, the label, 16 before a trailing shortcut), 112 to 280.
+        var body_caption = control.text_options()
+        body_caption.role = .BodyLarge
+        body_caption.wrap = .None
+        var keys_caption = body_caption
+        keys_caption.role = .LabelSmall
+        var across: f32 = 112.0
+        var m = 0usize
+        while m < commands.len {
+            let cm = &commands[m]
+            let (label_w, label_error) = control.linux_label_width(a, t, body_caption, cm.label)
+            if label_error != ok { ret (zero, label_error) }
+            var row_w = 32.0 + label_w
+            if slotted { row_w += 40.0 }
+            if cm.shortcut.len > 0usize {
+                let (keys_w, keys_error) = control.linux_label_width(a, t, keys_caption, cm.shortcut)
+                if keys_error != ok { ret (zero, keys_error) }
+                row_w += 16.0 + keys_w
+            }
+            if row_w > across { across = row_w }
+            m += 1usize
+        }
+        if across > 280.0 { across = 280.0 }
+        sheet_style.width = style.Length { Px: across }
+    }
     sheet_style.padding.top = style.Length { Px: rim }
     sheet_style.padding.bottom = style.Length { Px: rim }
     sheet_style.min_width = style.Length { Px: control.if_else(touch, 112.0, 200.0) }

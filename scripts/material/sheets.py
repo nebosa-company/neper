@@ -41,3 +41,6 @@ SHEETS["progress"] = {"columns": 5, "cell_w": 270, "cell_h": 64, "cells": [
 SHEETS["tabs"] = {"columns": 2, "cell_w": 310, "cell_h": 73, "cells": [
     "tabs-primary-rest", "tabs-primary-icons-rest", "tabs-secondary-rest", "tabs-secondary-second-rest", "tabs-primary-disabled",
     "tabs-primary-hover", "tabs-primary-pressed"]}
+
+SHEETS["menu"] = {"columns": 1, "cell_w": 220, "cell_h": 345, "at": (18, 8), "cells": ["menu-rest"]}
+SHEETS["menu_hover"] = {"columns": 1, "cell_w": 220, "cell_h": 345, "at": (18, 8), "cells": ["menu-hover"]}
