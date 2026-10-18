@@ -9256,7 +9256,11 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         if chosen && !options.secondary { ink = style.color(t.tokens, .Primary) }
         if !enabled { ink = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
         var look = style.resolve(t.tokens, .Plain, state)
-        look.background = with_alpha(ink, state_opacity(t, state))
+        // M3: an unchosen tab's hover layer is on-surface (the label stays on-surface-variant); a pressed tab takes primary.
+        var wash = ink
+        if t.tokens.profile == .MaterialLike && enabled && !chosen { wash = style.color(t.tokens, .OnSurface) }
+        if t.tokens.profile == .MaterialLike && enabled && state.pressed { wash = style.color(t.tokens, .Primary) }
+        look.background = with_alpha(wash, state_opacity(t, state))
         look.foreground = ink
         look.border_width = 0.0
         look.radius = 0.0

@@ -42,6 +42,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "tabs", cells: 7usize, columns: 2usize, cell_w: 310.0, cell_h: 72.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "tabs", cells: 7usize, columns: 2usize, cell_w: 310.0, cell_h: 73.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

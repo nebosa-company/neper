@@ -260,11 +260,16 @@ for (const v of [0, 30, 60, 100]) {
 add("progress-linear-four-color", `<md-linear-progress value="0.4" four-color style="width:240px"></md-linear-progress>`);
 add("progress-linear-buffer", `<md-linear-progress value="0.4" buffer="0.7" style="width:240px"></md-linear-progress>`);
 add("progress-linear-disabled", `<md-linear-progress value="0.4" style="width:240px;opacity:.38"></md-linear-progress>`);
-// tabs
-const tabs = (tag, sel) => `<md-tabs>` + ["Flights", "Trips", "Explore"].map((l, i) => `<${tag}${i === sel ? " active" : ""}>${l}</${tag}>`).join("") + `</md-tabs>`;
+// tabs (as the sheet: Videos, Photos, Audio in 300 dp)
+const TL = ["Videos", "Photos", "Audio"];
+const tabs = (tag, sel, extra) => `<md-tabs style="width:300px">` + TL.map((l, i) => `<${tag}${i === sel ? " active" : ""}${extra && extra(i) || ""}>${l}</${tag}>`).join("") + `</md-tabs>`;
 add("tabs-primary-rest", tabs("md-primary-tab", 0));
+add("tabs-primary-hover", tabs("md-primary-tab", 0));
+add("tabs-primary-pressed", tabs("md-primary-tab", 0));
+add("tabs-primary-disabled", tabs("md-primary-tab", 0, (i) => i === 2 ? " disabled" : ""));
 add("tabs-secondary-rest", tabs("md-secondary-tab", 0));
-add("tabs-primary-icons-rest", `<md-tabs>` + ["home", "star", "person"].map((n, i) => `<md-primary-tab${i === 0 ? " active" : ""}>${sl(n, "icon")}${["Home", "Starred", "Me"][i]}</md-primary-tab>`).join("") + `</md-tabs>`);
+add("tabs-secondary-second-rest", tabs("md-secondary-tab", 1));
+add("tabs-primary-icons-rest", `<md-tabs style="width:300px">` + ["search", "star", "person"].map((n, i) => `<md-primary-tab${i === 0 ? " active" : ""}>${sl(n, "icon")}${TL[i]}</md-primary-tab>`).join("") + `</md-tabs>`);
 // menu: an open menu anchored to nothing; the capture clips the surface
 const menu = (extra) => `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute" ${extra || ""}><md-menu-item><div slot="headline">Item one</div></md-menu-item><md-menu-item><div slot="headline">Item two</div></md-menu-item><md-menu-item disabled><div slot="headline">Disabled</div></md-menu-item><md-menu-item><div slot="headline">Item four</div></md-menu-item></md-menu>`;
 add("menu-rest", menu(), { target: "md-menu", shadow: ".menu" });

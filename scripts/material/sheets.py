@@ -37,3 +37,7 @@ SHEETS["chips"] = {"columns": 4, "cell_w": 130, "cell_h": 48, "cells": [
 SHEETS["progress"] = {"columns": 5, "cell_w": 270, "cell_h": 64, "cells": [
     "progress-linear-0", "progress-linear-30", "progress-linear-60", "progress-linear-100", None,
     "progress-circular-0", "progress-circular-30", "progress-circular-60", "progress-circular-100", None]}
+
+SHEETS["tabs"] = {"columns": 2, "cell_w": 310, "cell_h": 73, "cells": [
+    "tabs-primary-rest", "tabs-primary-icons-rest", "tabs-secondary-rest", "tabs-secondary-second-rest", "tabs-primary-disabled",
+    "tabs-primary-hover", "tabs-primary-pressed"]}
