@@ -716,9 +716,39 @@
   "linux_dialog",
   []
  ],
+ "linux-dark:hint": [
+  "linux_hint",
+  []
+ ],
  "linux-dark:list_box": [
   "linux_list_box",
   []
+ ],
+ "linux-dark:page_control": [
+  "linux_page_control",
+  []
+ ],
+ "linux-dark:popup_menu": [
+  "linux_popup_menu",
+  []
+ ],
+ "linux-dark:popup_menu-active": [
+  "linux_popup_menu",
+  [
+   "active"
+  ]
+ ],
+ "linux-dark:popup_menu-arrow": [
+  "linux_popup_menu",
+  [
+   "arrow"
+  ]
+ ],
+ "linux-dark:popup_menu-hover": [
+  "linux_popup_menu",
+  [
+   "0"
+  ]
  ],
  "linux-dark:progress_bar": [
   "linux_progress_bar",
@@ -727,6 +757,12 @@
  "linux-dark:scroll_bar": [
   "linux_scroll_bar",
   []
+ ],
+ "linux-dark:status_bar": [
+  "linux_status_bar",
+  [
+   "8"
+  ]
  ],
  "linux-dark:tree_list": [
   "linux_tree_list",
@@ -748,9 +784,39 @@
   "linux_dialog",
   []
  ],
+ "linux:hint": [
+  "linux_hint",
+  []
+ ],
  "linux:list_box": [
   "linux_list_box",
   []
+ ],
+ "linux:page_control": [
+  "linux_page_control",
+  []
+ ],
+ "linux:popup_menu": [
+  "linux_popup_menu",
+  []
+ ],
+ "linux:popup_menu-active": [
+  "linux_popup_menu",
+  [
+   "active"
+  ]
+ ],
+ "linux:popup_menu-arrow": [
+  "linux_popup_menu",
+  [
+   "arrow"
+  ]
+ ],
+ "linux:popup_menu-hover": [
+  "linux_popup_menu",
+  [
+   "0"
+  ]
  ],
  "linux:progress_bar": [
   "linux_progress_bar",
@@ -759,6 +825,12 @@
  "linux:scroll_bar": [
   "linux_scroll_bar",
   []
+ ],
+ "linux:status_bar": [
+  "linux_status_bar",
+  [
+   "8"
+  ]
  ],
  "linux:tree_list": [
   "linux_tree_list",
