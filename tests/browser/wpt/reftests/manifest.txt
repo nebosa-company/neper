@@ -160,3 +160,4 @@ ch-unit-default-font-001.html | ch-unit-default-font-001-ref.html | match
 text-align-last-justify-001.html | text-align-last-justify-001-ref.html | match
 line-clamp-block-children-001.html | line-clamp-block-children-001-ref.html | match
 line-break-anywhere-simple-001.html | line-break-anywhere-simple-001-ref.html | match
+overflow-wrap-anywhere-min-content-001.html | overflow-wrap-anywhere-min-content-001-ref.html | match
