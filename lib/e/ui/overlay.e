@@ -319,7 +319,11 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = head
-        parts[n] = widget.padded(0u64, 0.0, 0.0, 0.0, 4.0, style.defaults(), held[0usize..1usize])
+        var head_gap = 4.0f32
+        if t.tokens.profile == .MaterialLike { head_gap = 9.0 }
+        var head_left = 0.0f32
+        if t.tokens.profile == .MaterialLike { head_left = 12.0 }
+        parts[n] = widget.padded(0u64, head_left, 0.0, 0.0, head_gap, style.defaults(), held[0usize..1usize])
         n += 1usize
     }
     words.role = .BodyMedium
@@ -335,6 +339,13 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     let (body, body_error) = control.colored_text(a, 0u64, text, t, words, body_ink)
     if body_error != ok { ret (zero, body_error) }
     parts[n] = body
+    if t.tokens.profile == .MaterialLike {
+        // The action row sits 12 dp further out than the text (its label starts at the text's edge), so the plate's left side is 4 and the text 12 in.
+        let (held_body, held_body_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_body_error != ok { ret (zero, TooLarge) }
+        held_body[0usize] = body
+        parts[n] = widget.padded(0u64, 12.0, 0.0, 0.0, 0.0, style.defaults(), held_body[0usize..1usize])
+    }
     n += 1usize
     if actions.len > 0usize {
         let (buttons, buttons_error) = mem.alloc[widget.Node](a, actions.len)
@@ -363,7 +374,9 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
         let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
         if row_error != ok { ret (zero, TooLarge) }
         row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), buttons[0usize..actions.len])
-        parts[n] = widget.padded(0u64, 0.0, 8.0, 0.0, 0.0, style.defaults(), row[0usize..1usize])
+        var row_gap = 8.0f32
+        if t.tokens.profile == .MaterialLike { row_gap = 15.0 }
+        parts[n] = widget.padded(0u64, 0.0, row_gap, 0.0, 0.0, style.defaults(), row[0usize..1usize])
         n += 1usize
     }
     var raised = control.surface_options(t)
@@ -384,6 +397,11 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     if t.tokens.palette == .Dark && t.tokens.profile == .Neper { plate.border = style.Border { width: 1.0, color: style.frame_ink(t.tokens) } }
     plate.padding.top = style.Length { Px: 12.0 }
     plate.padding.bottom = style.Length { Px: 8.0 }
+    if t.tokens.profile == .MaterialLike {
+        plate.padding.top = style.Length { Px: 11.0 }
+        plate.padding.bottom = style.Length { Px: 17.0 }
+        plate.padding.left = style.Length { Px: 4.0 }
+    }
     plate.min_height = style.Length { Px: 48.0 }
     plate.max_width = style.Length { Px: 312.0 }
     if windows {

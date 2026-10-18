@@ -66,7 +66,7 @@ SHEETS["search_bar"] = {"columns": 3, "cell_w": 340, "cell_h": 70, "cells": [
 SHEETS["badge"] = {"columns": 6, "cell_w": 100, "cell_h": 56, "cells": [
     "badge-dot", "badge-3", "badge-99", "badge-999", "badge-icon-dot", "badge-icon-3"]}
 
-SHEETS["tooltip"] = {"columns": 3, "cell_w": 320, "cell_h": 280, "full": True, "at": [(110, 92), (0, 0), (-105, 164)], "cells": [
+SHEETS["tooltip"] = {"columns": 3, "cell_w": 320, "cell_h": 310, "full": True, "at": [(110, 107), (0, 0), (-107, 179)], "cells": [
     "tooltip-plain", None, "tooltip-rich"]}
 
 SHEETS["slider"] = {"columns": 5, "cell_w": 220, "cell_h": 40, "cells": [
