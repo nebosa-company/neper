@@ -12,10 +12,13 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.ui.accessibility
+use e.ui.adwicon_l2 as adwicon
+use e.ui.linuxshadow_l2 as linuxshadow
 use e.ui.animation
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.linux_card
 use e.ui.style
 use e.ui.widget
 use e.ui.winchrome
@@ -69,16 +72,29 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
         entering = 1.0
         leaving = 0.0
     }
+    // The Linux look (worker l3) shows its tooltip at once, as the reference crop is a settled one.
+    if t.tokens.profile == .Linux {
+        entering = 1.0
+        leaving = 0.0
+    }
     if !shown && !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     var ink = style.color(t.tokens, .InverseOnSurface)
     if windows { ink = style.color(t.tokens, .Text) }
     let cupertino = t.tokens.profile == .CupertinoLike
     if cupertino { ink = style.color(t.tokens, .Text) }
+    let linux = t.tokens.profile == .Linux
+    if linux { ink = style.hex_raw(0xFFFFFFu32) }
     var caption = control.text_options()
     caption.role = .BodySmall
     caption.wrap = .Word
     caption.max_lines = 2u32
     if cupertino { caption.size = 11.0 }
+    if linux {
+        // libadwaita's tooltip: the body text on one line (GTK wraps only past its own width limit).
+        caption.role = .Body
+        caption.wrap = .None
+        caption.max_lines = 0u32
+    }
     if windows {
         caption.role = .Body
         // v3's hint does not wrap by itself: its text carries its own line breaks.
@@ -145,6 +161,24 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
     surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, plate, parts[0usize..n])
+    if linux {
+        // (worker l3) tooltip.background: black 80 % with 9 px corners, 6 10 padding and a 1 px white 10 % line round it that
+        // the fill does not run under (background-clip: padding-box), so the line is a box of its own around the fill.
+        var fill = style.defaults()
+        fill.background = paint.Brush { Solid: style.hexa(0x000000u32, 0.8) }
+        fill.radius = 8.0
+        fill.padding = style.EdgeLengths { left: style.Length { Px: 10.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 10.0 }, bottom: style.Length { Px: 6.0 } }
+        var line = style.defaults()
+        line.border = style.Border { width: 1.0, color: style.hexa(0xFFFFFFu32, 0.1) }
+        line.radius = 9.0
+        line.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+        let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if inner_error != ok { ret (zero, TooLarge) }
+        inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, fill, parts[0usize..n])
+        surface[0usize] = widget.box(0u64, line, inner[0usize..1usize])
+        gap_y = 0.0
+        placement = .BelowCenter
+    }
     if windows {
         // looks5 group d: v3's toolbar hint window (#FFFFE1, bevelled), the shortcut in parentheses after the text.
         var hint_line = text
@@ -428,7 +462,9 @@ fn menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 }
 
 fn menu_at_moving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, in_millis: u32, from: f32) -> (widget.Node, err) {
-    let entering = opening_share_over(t, key, open, in_millis)
+    var entering = opening_share_over(t, key, open, in_millis)
+    // The Linux look (worker l3) shows its menus settled, as the reference crops are.
+    if t.tokens.profile == .Linux { entering = 1.0 }
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss)
     if panel_error != ok { ret (zero, panel_error) }
@@ -603,11 +639,173 @@ fn context_menu_touch_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     ret (made, made_error)
 }
 
+// ---- the Linux look, popup menu (worker l3, round 20) -----------------------------------------------------------------
+// GtkPopoverMenu in libadwaita 1.5: `popover.menu > contents` in the popover colour (#ffffff, #383838), 12 px corners and 6 px
+// round 32 high rows (6 px corners, 12 px sides) whose wash is the text colour at 10 % (19 % pressed); a section break is a 1 px
+// line (#e1e1e1, #565656) with 6 px above and below; the accelerator is the text colour at 55 %, 12 px after the label; a
+// disabled row is the whole row at 50 %. The soft shadow under the surface is drawn by `linux_menu_shadow`.
+fn linux_menu_rule(t: *const control.Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hex_raw(0x565656u32) }
+    ret style.hex_raw(0xE1E1E1u32)
+}
+
+// The popover's shadow as measured on the library's own render: alpha per pixel of distance outside the edge (1 to 15), the same
+// on every side but for the whole shadow standing one pixel lower.
+type LinuxShadow = struct { arena: *mem.Arena }
+
+fn linux_shadow_alpha(d: usize) -> f32 {
+    let profile = [16]f32{ 0.0, 35.0, 23.0, 15.0, 9.0, 7.0, 5.0, 4.0, 4.0, 3.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0 }
+    if d >= 16usize { ret 0.0 }
+    ret profile[d] / 255.0
+}
+
+fn linux_shadow_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn linux_shadow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let shadow = mem.cast[*LinuxShadow](ctx)
+    // from the outermost ring in: each fill adds what the next one in leaves of the measured total
+    var e: usize = 15usize
+    while e >= 1usize {
+        var own = 1.0 - (1.0 - linux_shadow_alpha(e)) / (1.0 - linux_shadow_alpha(e + 1usize))
+        if own < 0.0 { own = 0.0 }
+        let grow = f32(e)
+        let rect = geometry.Rect { x: area.x - grow, y: area.y - grow + 1.0, width: area.width + 2.0 * grow, height: area.height + 2.0 * grow }
+        let (path, path_error) = widget.rounded_path(shadow.arena, rect, 12.0 + grow)
+        if path_error != ok { ret path_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, own) } } })
+        e -= 1usize
+    }
+    ret ok
+}
+
+// A node as big as the panel it sits under (it fills its stack) that paints the shadow round it.
+fn linux_menu_shadow(a: *mem.Arena, key: widget.Key, across: f32, down: f32) -> (widget.Node, err) {
+    let (shadows, shadows_error) = mem.alloc[LinuxShadow](a, 1usize)
+    if shadows_error != ok { ret (zero, TooLarge) }
+    shadows[0usize] = LinuxShadow { arena: a }
+    var fill = control.sized_style(across, down)
+    fill.position = .Absolute
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: key, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&shadows[0usize]), measure: linux_shadow_measure, paint: linux_shadow_paint, state: widget.bytes_of[LinuxShadow](&shadows[0usize]) } }, style: fill, children: none }, ok)
+}
+
+fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    var state = control.control_state(t, item_key, c.enabled, false)
+    if c.submenu_open { state.hovered = true }
+    var ink = style.color(t.tokens, .Text)
+    var wash: f32 = 0.0
+    if state.hovered { wash = 0.1 }
+    if state.pressed { wash = 0.19 }
+    var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) } else { wash = wash * 0.8 }
+    if !c.enabled {
+        wash = 0.0
+        ink = control.with_alpha(ink, ink.alpha * 0.5)
+    }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(tint, wash)
+    look.foreground = ink
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 6.0
+    look.custom_padding = true
+    look.padding = 12.0
+    look.padding_y = 6.0
+    look.min_height = 32.0
+    look.min_width = 40.0
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var p = 0usize
+    if slotted {
+        // check and radio boxes are 18 across (14 and 2 round it), start 2 before the label column and end 6 short of the label
+        var mark: widget.Node = widget.box(0u64, control.sized_style(18.0, 18.0), zero)
+        if c.radio {
+            var circle = control.sized_style(18.0, 18.0)
+            circle.radius = 9.0
+            circle.border = style.Border { width: 1.0, color: control.with_alpha(ink, ink.alpha * 0.3 / 0.8) }
+            let (dot, dot_error) = mem.alloc[widget.Node](a, 1usize)
+            if dot_error != ok { ret (zero, TooLarge) }
+            var count = 0usize
+            if c.checked {
+                var centre = control.sized_style(8.0, 8.0)
+                centre.radius = 4.0
+                centre.background = paint.Brush { Solid: ink }
+                dot[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(16.0, 16.0), control.widget_one_of(a, widget.box(0u64, centre, zero)))
+                count = 1usize
+            }
+            mark = widget.aligned(0u64, .Center, .Center, circle, dot[0usize..count])
+        } else if c.checked {
+            let (tick, tick_error) = control.icon_square(a, ink, .Check, 14.0)
+            if tick_error != ok { ret (zero, tick_error) }
+            mark = widget.aligned(0u64, .Center, .Center, control.sized_style(18.0, 18.0), control.widget_one_of(a, tick))
+        }
+        var slot_box = style.defaults()
+        slot_box.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - 2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 0.0 } }
+        parts[p] = widget.box(0u64, slot_box, control.widget_one_of(a, mark))
+        p += 1usize
+    }
+    var caption = control.text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, c.label, t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    let (wide, wide_error) = control.linux_label_width(a, t, caption, c.label)
+    if wide_error != ok { ret (zero, wide_error) }
+    parts[p] = widget.aligned(0u64, .Center, .Center, control.sized_style(wide, 19.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), control.mem_one_node(a, said))))
+    p += 1usize
+    parts[p] = widget.spacer(0u64, 1.0)
+    p += 1usize
+    let has_submenu = c.submenu.len != 0usize
+    if c.shortcut.len > 0usize && !has_submenu {
+        let faint = control.with_alpha(ink, ink.alpha * 0.55)
+        let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, faint)
+        if keys_error != ok { ret (zero, keys_error) }
+        let (keys_wide, keys_wide_error) = control.linux_label_width(a, t, caption, c.shortcut)
+        if keys_wide_error != ok { ret (zero, keys_wide_error) }
+        let held = widget.aligned(0u64, .Center, .Center, control.sized_style(keys_wide, 19.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), control.mem_one_node(a, keys_node))))
+        parts[p] = widget.padded(0u64, 12.0, 0.0, 0.0, 0.0, style.defaults(), control.widget_one_of(a, held))
+        p += 1usize
+    }
+    if has_submenu {
+        let (arrow, arrow_error) = control.icon_square(a, control.with_alpha(ink, ink.alpha * 0.3 / 0.8), .ChevronRight, 16.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        parts[p] = widget.padded(0u64, 6.0, 0.0, 0.0, 0.0, style.defaults(), control.widget_one_of(a, arrow))
+        p += 1usize
+    }
+    var line_style = style.defaults()
+    line_style.width = style.Length { Percent: 100.0 }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, parts[0usize..p])
+    var sem_states = 0u32
+    if c.checked { sem_states = accessibility.STATE_CHECKED }
+    var semantic_role = 22u8
+    if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+    if c.radio { semantic_role = accessibility.ROLE_MENU_ITEM_RADIO }
+    var sem_actions = 0u32
+    var controls = 0u64
+    var chosen = &c.action
+    if has_submenu {
+        sem_actions = accessibility.ACTION_SHOW_MENU
+        controls = submenu_key
+        chosen = &c.submenu_toggle
+        if c.submenu_open { sem_states = sem_states | accessibility.STATE_EXPANDED }
+    }
+    let (made, made_error) = control.pressable_states(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, sem_actions, controls, chosen, content)
+    ret (made, made_error)
+}
+// ---- end the Linux look, popup menu -----------------------------------------------------------------------------------
+
 // One command of a v2 menu (D975), keyed `item_key`, as `menu_panel` draws it.
 fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_menu_row(a, item_key, submenu_key, t, c, slotted)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_menu_row(a, item_key, submenu_key, t, c, slotted)
+        ret (linux, linux_error)
     }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var row_height = control.if_else(touch, 48.0, 32.0)
@@ -788,7 +986,9 @@ fn menu_back_row(a: *mem.Arena, key: widget.Key, return_key: widget.Key, t: *con
 // led by a Back row and separator.
 fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool, back_label: str, back_target: widget.Key, back: *const widget.Submit) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
-    let around = control.if_else(touch, 8.0, 4.0)
+    var around = control.if_else(touch, 8.0, 4.0)
+    let linux = t.tokens.profile == .Linux
+    if linux { around = 6.0 }
     if touch && allow_submenus {
         var opened = commands.len
         var o = 0usize
@@ -849,6 +1049,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             rule.width = style.Length { Percent: 100.0 }
             rule.height = style.Length { Px: t.tokens.sizes.divider }
             rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            if linux { rule.background = paint.Brush { Solid: linux_menu_rule(t) } }
             lines[0usize] = widget.box(0u64, rule, zero)
             let (rule_body, rule_body_error) = mem.alloc[widget.Node](a, 1usize)
             if rule_body_error != ok { ret (zero, TooLarge) }
@@ -899,9 +1100,59 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         sheet_style.min_width = style.Length { Px: 190.0 }
         sheet_style.max_width = style.Length { Px: 320.0 }
     }
+    var linux_across: f32 = 0.0
+    var linux_down: f32 = 0.0
+    if linux {
+        // popover.menu > contents: the popover colour, 12 px corners, 6 px round the rows, 120 px at least.
+        sheet_style = style.defaults()
+        sheet_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceBright) }
+        sheet_style.radius = 12.0
+        let six = style.Length { Px: 6.0 }
+        sheet_style.padding = style.EdgeLengths { left: six, top: six, right: six, bottom: six }
+        sheet_style.min_width = style.Length { Px: 120.0 }
+        // GTK sizes the surface from its rows: 6 round them, each row its label (and accelerator, check, arrow) between 12 px sides, 32
+        // high, a section break 13. The same sum fixes the box here so the shadow node can be exactly as big.
+        var caption = control.text_options()
+        caption.role = .Body
+        caption.wrap = .None
+        var across: f32 = 108.0
+        var down: f32 = 12.0
+        var m = 0usize
+        while m < commands.len {
+            let cm = &commands[m]
+            let (label_w, label_error) = control.linux_label_width(a, t, caption, cm.label)
+            if label_error != ok { ret (zero, label_error) }
+            var row_w = 24.0 + label_w
+            if slotted { row_w += 22.0 }
+            if cm.submenu.len != 0usize {
+                row_w += 22.0
+            } else if cm.shortcut.len > 0usize {
+                let (keys_w, keys_error) = control.linux_label_width(a, t, caption, cm.shortcut)
+                if keys_error != ok { ret (zero, keys_error) }
+                row_w += 12.0 + keys_w
+            }
+            if row_w > across { across = row_w }
+            down += 32.0
+            if cm.separated && m > 0usize { down += 13.0 }
+            m += 1usize
+        }
+        sheet_style.width = style.Length { Px: across + 12.0 }
+        sheet_style.height = style.Length { Px: down }
+        linux_across = across + 12.0
+        linux_down = down
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..n])
+    if linux {
+        let (shadow, shadow_error) = linux_menu_shadow(a, 0u64, linux_across, linux_down)
+        if shadow_error != ok { ret (zero, shadow_error) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = shadow
+        layers[1usize] = column[0usize]
+        column[0usize] = widget.stack(0u64, control.sized_style(linux_across, linux_down), layers[0usize..2usize])
+    }
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
@@ -1103,6 +1354,10 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = dialog_cupertino(a, key, t, title, content, buttons, open, described, semantic_role, busy, fallback)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = dialog_linux(a, key, t, title, content, buttons, open, described, semantic_role, busy, fallback)
+        ret (linux, linux_error)
     }
     let entering = opening_share_over(t, key, open, t.tokens.durations.medium4)
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
@@ -3666,6 +3921,10 @@ fn iso_week_of(count: i64) -> i64 {
 // (D1277) Up and Down skip a week whose every day is unavailable.
 // (D1388) Its names follow the theme language (de, fr, es; English otherwise).
 fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], marks: CalendarMarks) -> (widget.Node, err) {
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_calendar(a, key, t, label, shown, selected, has_selected, today, has_today, show, pick)
+        ret (gtk, gtk_error)
+    }
     let year = i64(shown.year)
     let month = i64(shown.month)
     if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
@@ -4725,7 +4984,13 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         anchor = key + 2u64
     }
     var head: widget.Node = zero
-    if footer.typing && t.tokens.profile == .Windows {
+    if t.tokens.profile == .Linux {
+        // GNOME: a menu button showing the date, its calendar in a popover (no typed field).
+        let (face, face_width, face_error) = control.linux_menu_button(a, key, t, label, caption, zero, false, 0.0, 34.0, true, open, trigger, true)
+        if face_error != ok { ret (zero, face_error) }
+        head = face
+        anchor = key
+    } else if footer.typing && t.tokens.profile == .Windows {
         // The Windows look (docs/ui/looks, pickers): v3's TcxDateEdit, an edit with a drop button.
         var typed_look = control.field_options()
         typed_look.width = 120.0
@@ -4806,7 +5071,23 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
             raised_style.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 6.0 } }
             gap_below = 0.0
         }
-        let (lifted, lifted_error) = dismissable(a, base + 1u64, anchor, .Below, label, widget.box(0u64, raised_style, inside[0usize..1usize]), toggle, gap_below)
+        var body_node = widget.box(0u64, raised_style, inside[0usize..1usize])
+        if t.tokens.profile == .Linux {
+            // A GNOME popover: the popover colour, 12 px corners, 6 px of padding, its soft shadow painted under it.
+            raised_style = control.linux_popover_style(t, 0.0, 0usize)
+            raised_style.width = style.Length { Px: 281.0 }
+            raised_style.height = style.Length { Px: 248.0 }
+            raised_style.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 6.0 } }
+            let (shade, shade_error) = linuxshadow.node(a, 281.0, 248.0, 6.0, 6.0, style.color(t.tokens, .SurfaceBright))
+            if shade_error != ok { ret (zero, shade_error) }
+            let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
+            if stacked_error != ok { ret (zero, TooLarge) }
+            stacked[0usize] = shade
+            stacked[1usize] = inside[0usize]
+            body_node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, raised_style, stacked[0usize..2usize])
+            gap_below = 7.074
+        }
+        let (lifted, lifted_error) = dismissable(a, base + 1u64, anchor, .Below, label, body_node, toggle, gap_below)
         if lifted_error != ok { ret (zero, lifted_error) }
         popup_node = lifted
     }
@@ -8315,3 +8596,441 @@ fn dialog_cupertino(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     dialog_held[0usize] = made
     ret (widget.box(key + 8192u64, style.defaults(), dialog_held[0usize..1usize]), ok)
 }
+
+// ---- the Linux look, alert dialog (worker l4, round 20) -------------------------------------------------------------------------
+// libadwaita 1.5 AdwAlertDialog: a 294 wide card (dialog_bg_color) of 18 px corners, the heading (title-2, 19.9 px bold) and the body
+// centred over a hairline, then the responses side by side, each 41 high with bold labels (destructive in destructive_color,
+// suggested in the accent), a 1 px rule between them. The card's rim and its shadow are baked from the library's picture
+// (e.ui.linux_card); the window's dimming is the scrim.
+fn linux_dialog_face(t: *const control.Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.color(t.tokens, .SurfaceBright) }
+    ret style.color(t.tokens, .Background)
+}
+
+// The scrim of an alert over a Light window is black at 13.6 %, over a Dark one 50 % (measured: 250 to 216, 36 to 18).
+fn linux_scrim_share(t: *const control.Theme) -> f32 {
+    var wanted: f32 = 0.136
+    if t.tokens.palette == .Dark { wanted = 0.5 }
+    ret wanted / t.tokens.states.scrim
+}
+
+fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton) -> (widget.Node, err) {
+    let width: f32 = 294.0
+    let ink = style.color(t.tokens, .OnSurface)
+    var heading = control.text_options()
+    heading.role = .Label
+    heading.size = 20.7
+    heading.align = .Center
+    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, ink)
+    if title_error != ok { ret (zero, title_error) }
+    var title_sem: widget.Semantics = zero
+    title_sem.role = 25u8
+    title_sem.label = title
+    title_sem.level = 2u8
+    let flat = style.Length { Px: 0.0 }
+    var head_style = style.defaults()
+    head_style.width = style.Length { Px: width }
+    head_style.padding = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 22.0 }, right: style.Length { Px: 24.0 }, bottom: flat }
+    let titled = widget.semantics(0u64, title_sem, style.defaults(), one_of_node(a, title_node))
+    var body_style = style.defaults()
+    body_style.width = style.Length { Px: width }
+    body_style.padding = style.EdgeLengths { left: style.Length { Px: 24.0 }, top: style.Length { Px: 9.0 }, right: style.Length { Px: 24.0 }, bottom: style.Length { Px: 24.0 } }
+    let (block_parts, block_error) = mem.alloc[widget.Node](a, 2usize)
+    if block_error != ok { ret (zero, TooLarge) }
+    block_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Start, gap: 0.0 }, head_style, one_of_node(a, titled))
+    block_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Start, gap: 0.0 }, body_style, one_of_node(a, message))
+    var block_style = style.defaults()
+    block_style.height = style.Length { Px: 99.0 }
+    let text_block = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, block_style, block_parts[0usize..2usize])
+    // The hairline, one rule straddling two rows (black 8 % and 3.2 %, white 10 % and 4 % Dark).
+    var upper = control.sized_style(width, 1.0)
+    var lower = control.sized_style(width, 1.0)
+    if t.tokens.palette == .Dark {
+        upper.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.1) }
+        lower.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.04) }
+    } else {
+        upper.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.08) }
+        lower.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.032) }
+    }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * buttons.len)
+    if cells_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    var i = 0usize
+    while i < buttons.len {
+        let button_key = key + 3u64 + u64(i)
+        let state = control.control_state(t, button_key, true, false)
+        var look = style.adwaita_resolve(t.tokens, .Plain, state)
+        look.radius = 0.0
+        look.min_height = 41.0
+        look.min_width = 0.0
+        look.padding = 0.0
+        look.padding_y = 0.0
+        var ink_of = ink
+        if buttons[i].kind == .Destructive { ink_of = style.color(t.tokens, .Error) }
+        if buttons[i].kind == .Default { ink_of = style.adwaita_accent(t.tokens) }
+        look.foreground = ink_of
+        var each = (width - f32(buttons.len - 1usize)) / f32(buttons.len)
+        if i == 0usize { each = f32(i32(each + 0.99)) }
+        if i + 1usize == buttons.len && i > 0usize { each = width - f32(buttons.len - 1usize) - f32(buttons.len - 1usize) * f32(i32(each + 0.99)) }
+        var label = control.text_options()
+        label.role = .Label
+        label.wrap = .None
+        let (word, word_error) = control.colored_text(a, 0u64, buttons[i].label, t, label, ink_of)
+        if word_error != ok { ret (zero, word_error) }
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), one_of_node(a, word))
+        let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 41.0), one_of_node(a, held))
+        let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, buttons[i].label, look, true, false, &buttons[i].action, content)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        cells[used] = pressed
+        used += 1usize
+        if i + 1usize < buttons.len {
+            var divider = control.sized_style(1.0, 41.0)
+            divider.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            if t.tokens.palette == .Dark { divider.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.145) } } else { divider.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.112) } }
+            cells[used] = widget.box(0u64, divider, zero)
+            used += 1usize
+        }
+        i += 1usize
+    }
+    let responses = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 41.0), cells[0usize..used])
+    let (column, column_error) = mem.alloc[widget.Node](a, 4usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = text_block
+    column[1usize] = widget.box(0u64, upper, zero)
+    column[2usize] = widget.box(0u64, lower, zero)
+    column[3usize] = responses
+    var face = style.defaults()
+    face.width = style.Length { Px: width }
+    face.background = paint.Brush { Solid: linux_dialog_face(t) }
+    face.radius = 18.0
+    face.overflow = .Clip
+    let card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, column[0usize..4usize])
+    // the rim and shadow round it, then the card
+    let (shadow, shadow_error) = linux_card.alert_shadow_node(a, t.tokens.palette == .Dark)
+    if shadow_error != ok { ret (zero, shadow_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = shadow
+    layers[1usize] = card
+    var outer = style.defaults()
+    outer.width = style.Length { Px: width }
+    let held = widget.stack(0u64, outer, layers[0usize..2usize])
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, outer, one_of_node(a, held)), ok)
+}
+
+fn one_of_node(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret zero }
+    one[0usize] = node
+    ret one[0usize..1usize]
+}
+// ---- end the Linux look, alert dialog (worker l4) -----------------------------------------------------------------------------
+
+// The open dialog of the Linux look: the alert card over the window's dimming, as `dialog_cupertino` does for its card.
+fn dialog_linux(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit) -> (widget.Node, err) {
+    let entering = opening_share_over(t, key, open, t.tokens.durations.medium4)
+    if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
+    var submit: widget.Submit = zero
+    var cancel: widget.Submit = zero
+    var i = 0usize
+    while i < buttons.len {
+        if buttons[i].kind == .Default && !busy { submit = buttons[i].action }
+        if buttons[i].kind == .Cancel && !busy { cancel = buttons[i].action }
+        i += 1usize
+    }
+    if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
+    let (card, card_error) = linux_alert_card(a, key, t, title, content, buttons)
+    if card_error != ok { ret (zero, card_error) }
+    var none: []const widget.Shortcut = zero
+    let scoped = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), one_of_node(a, card))
+    var sem: widget.Semantics = zero
+    sem.role = semantic_role
+    sem.label = title
+    sem.states = accessibility.STATE_MODAL
+    if busy { sem.states = sem.states | accessibility.STATE_BUSY }
+    sem.labelled_by = key + 1u64
+    if described { sem.described_by = key + 2u64 }
+    var framed = widget.semantics(0u64, sem, style.defaults(), one_of_node(a, scoped))
+    var outside = cancel
+    if semantic_role == accessibility.ROLE_ALERT_DIALOG { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (scaled, scaled_error) = scaled_in(a, t, framed, entering, 0.9)
+    if scaled_error != ok { ret (zero, scaled_error) }
+    framed = scaled
+    let (made, made_error) = with_scrim_share(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), one_of_node(a, framed)), entering * linux_scrim_share(t))
+    if made_error != ok { ret (zero, made_error) }
+    ret (widget.box(key + 8192u64, style.defaults(), one_of_node(a, made)), ok)
+}
+// ---- end the Linux look, open alert dialog (worker l4) -------------------------------------------------------------------------
+
+// ---- round 20, l2: the Linux look's calendar (GtkCalendar in libadwaita 1.5) ---------------------------------------------
+// 269 x 236: a 1 px frame (the text view's colours) round the view colour; a 34 high header of two groups (month: previous, the name,
+// next; year: the same) over a 1 px rule in the border colour; the weekday names, then six rows of days 28 high in seven equal columns,
+// the days of the neighbouring months at 30 % of the text colour; the chosen day is a 34 x 25 box in the accent with a white number.
+fn linux_turn_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, svg: str, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, false)
+    var tint = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if state.hovered || state.pressed {
+        var over: f32 = 0.056
+        if state.pressed { over = 0.124 }
+        if t.tokens.palette == .Dark {
+            over = 0.068
+            if state.pressed { over = 0.151 }
+            tint = paint.rgba(1.0, 1.0, 1.0, over)
+        } else {
+            tint = paint.rgba(0.0, 0.0, 0.0, over)
+        }
+    }
+    let (mark, mark_error) = adwicon.icon(a, svg, style.color(t.tokens, .Text), 16.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    var face = control.sized_style(32.0, 34.0)
+    face.background = paint.Brush { Solid: tint }
+    face.radius = 6.0
+    let held = widget.aligned(0u64, .Center, .Center, face, widget_pair(a, mark))
+    let region = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_pair(a, held))
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_pair(a, region)), ok)
+}
+
+fn widget_pair(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret zero }
+    held[0usize] = node
+    ret held[0usize..1usize]
+}
+
+// One group of the header: a turn button, the centred name, a turn button, `width` wide.
+fn linux_head_group(a: *mem.Arena, t: *const control.Theme, back: widget.Node, name: str, forward: widget.Node, width: f32) -> (widget.Node, err) {
+    var caption = control.text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    let (word, word_error) = control.colored_text(a, 0u64, name, t, caption, style.color(t.tokens, .Text))
+    if word_error != ok { ret (zero, word_error) }
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = back
+    parts[1usize] = widget.aligned(0u64, .Center, .Center, grow, widget_pair(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), widget_pair(a, word))))
+    parts[2usize] = forward
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width, 34.0), parts[0usize..3usize]), ok)
+}
+
+fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+    let year = i64(shown.year)
+    let month = i64(shown.month)
+    if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
+    let days = time.days_in_month(year, month)
+    let week_start = week_start_of(t.language)
+    let first_weekday = (weekday_of(year, month, 1i64) + 7i64 - i64(week_start)) % 7i64
+    // Previous, next, previous year, next year; then 42 cells (the days of the grid).
+    let (turns, turns_error) = mem.alloc[DayPick](a, 46usize)
+    if turns_error != ok { ret (zero, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 46usize)
+    if actions_error != ok { ret (zero, TooLarge) }
+    var previous = time.Date { year: shown.year, month: shown.month - 1u8, day: 1u8 }
+    if shown.month == 1u8 { previous = time.Date { year: shown.year - 1i32, month: 12u8, day: 1u8 } }
+    var next = time.Date { year: shown.year, month: shown.month + 1u8, day: 1u8 }
+    if shown.month == 12u8 { next = time.Date { year: shown.year + 1i32, month: 1u8, day: 1u8 } }
+    turns[0usize] = DayPick { day: previous, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[1usize] = DayPick { day: next, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[2usize] = DayPick { day: time.Date { year: shown.year - 1i32, month: shown.month, day: 1u8 }, pick: show, runtime: t.runtime, focus: 0u64 }
+    turns[3usize] = DayPick { day: time.Date { year: shown.year + 1i32, month: shown.month, day: 1u8 }, pick: show, runtime: t.runtime, focus: 0u64 }
+    var n = 0usize
+    while n < 4usize {
+        actions[n] = widget.Submit { ctx: mem.cast[*void](&turns[n]), invoke: day_fire }
+        n += 1usize
+    }
+    let ink = style.color(t.tokens, .Text)
+    let dim = control.with_alpha(ink, ink.alpha * 0.3)
+    // The header.
+    let (month_back, mb_error) = linux_turn_button(a, key + 1u64, t, adwicon.pan_start(), "Previous month", &actions[0usize])
+    if mb_error != ok { ret (zero, mb_error) }
+    let (month_forward, mf_error) = linux_turn_button(a, key + 2u64, t, adwicon.pan_end(), "Next month", &actions[1usize])
+    if mf_error != ok { ret (zero, mf_error) }
+    let (year_back, yb_error) = linux_turn_button(a, key + 4001u64, t, adwicon.pan_start(), "Previous year", &actions[2usize])
+    if yb_error != ok { ret (zero, yb_error) }
+    let (year_forward, yf_error) = linux_turn_button(a, key + 4002u64, t, adwicon.pan_end(), "Next year", &actions[3usize])
+    if yf_error != ok { ret (zero, yf_error) }
+    let (year_bytes, year_bytes_error) = mem.alloc[u8](a, 12usize)
+    if year_bytes_error != ok { ret (zero, TooLarge) }
+    let year_len = control.write_i64(year_bytes, year)
+    let (month_group, month_group_error) = linux_head_group(a, t, month_back, month_name_in(month, t.language), month_forward, 138.0)
+    if month_group_error != ok { ret (zero, month_group_error) }
+    let (year_group, year_group_error) = linux_head_group(a, t, year_back, year_bytes[0usize..year_len], year_forward, 112.0)
+    if year_group_error != ok { ret (zero, year_group_error) }
+    let (head_parts, head_parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if head_parts_error != ok { ret (zero, TooLarge) }
+    head_parts[0usize] = month_group
+    head_parts[1usize] = widget.box(0u64, control.sized_style(15.0, 1.0), zero)
+    head_parts[2usize] = year_group
+    var head_style = control.sized_style(267.0, 34.0)
+    head_style.padding = style.EdgeLengths { left: style.Length { Px: 0.5 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let head = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head_parts[0usize..3usize])
+    var rule = control.sized_style(267.0, 1.0)
+    rule.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
+    // The weekday names.
+    let (names, names_error) = mem.alloc[widget.Node](a, 7usize)
+    if names_error != ok { ret (zero, TooLarge) }
+    var column_share = style.defaults()
+    column_share.width = style.Length { Px: 37.83 }
+    column_share.height = style.Length { Px: 28.0 }
+    var weekday = 0usize
+    while weekday < 7usize {
+        var caption = control.text_options()
+        caption.role = .Body
+        caption.wrap = .None
+        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_full((week_start + weekday) % 7usize)[0usize..3usize], t, caption, ink)
+        if name_error != ok { ret (zero, name_error) }
+        names[weekday] = widget.aligned(0u64, .Center, .Start, column_share, widget_pair(a, widget.padded(0u64, 0.0, 4.5, 0.0, 0.0, style.defaults(), widget_pair(a, name_node))))
+        weekday += 1usize
+    }
+    // The days: six rows of seven, the neighbouring months' days dim.
+    var tab_day = 1usize
+    if has_selected && selected.year == shown.year && selected.month == shown.month && selected.day >= 1u8 && i64(selected.day) <= days { tab_day = usize(selected.day) }
+    if !has_selected && has_today && today.year == shown.year && today.month == shown.month && today.day >= 1u8 && i64(today.day) <= days { tab_day = usize(today.day) }
+    var focused_day = 1usize
+    while focused_day <= usize(days) {
+        if widget.focus_within(t.runtime, key + 3u64 + u64(focused_day)) {
+            tab_day = focused_day
+            break
+        }
+        focused_day += 1usize
+    }
+    let before_days = time.days_in_month(i64(previous.year), i64(previous.month))
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 6usize)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var week = 0usize
+    while week < 6usize {
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 7usize)
+        if cells_error != ok { ret (zero, TooLarge) }
+        var column = 0usize
+        while column < 7usize {
+            let slot = i64(week * 7usize + column) - first_weekday
+            var date = time.Date { year: shown.year, month: shown.month, day: 1u8 }
+            var inside = true
+            if slot < 0i64 {
+                inside = false
+                date = time.Date { year: previous.year, month: previous.month, day: u8(before_days + slot + 1i64) }
+            } else if slot >= days {
+                inside = false
+                date = time.Date { year: next.year, month: next.month, day: u8(slot - days + 1i64) }
+            } else {
+                date = time.Date { year: shown.year, month: shown.month, day: u8(slot + 1i64) }
+            }
+            let index = 4usize + week * 7usize + column
+            var day_key = key + 3u64 + u64(date.day)
+            if !inside { day_key = key + 300u64 + u64(index) }
+            turns[index] = DayPick { day: date, pick: pick, runtime: t.runtime, focus: day_key }
+            actions[index] = widget.Submit { ctx: mem.cast[*void](&turns[index]), invoke: day_fire }
+            let chosen = has_selected && same_date(date, selected)
+            var digit_color = ink
+            if !inside { digit_color = dim }
+            if chosen { digit_color = style.color(t.tokens, .OnPrimary) }
+            let state = control.control_state(t, day_key, true, chosen)
+            var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            if chosen {
+                fill = style.color(t.tokens, .Primary)
+            } else if state.hovered || state.pressed {
+                var over: f32 = 0.056
+                if state.pressed { over = 0.124 }
+                if t.tokens.palette == .Dark {
+                    over = 0.068
+                    if state.pressed { over = 0.151 }
+                    fill = paint.rgba(1.0, 1.0, 1.0, over)
+                } else {
+                    fill = paint.rgba(0.0, 0.0, 0.0, over)
+                }
+            }
+            let (digits, digits_error) = mem.alloc[u8](a, 4usize)
+            if digits_error != ok { ret (zero, TooLarge) }
+            let digit_count = control.write_i64(digits, i64(date.day))
+            var caption = control.text_options()
+            caption.role = .Body
+            caption.wrap = .None
+            let (label_node, label_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], t, caption, digit_color)
+            if label_error != ok { ret (zero, label_error) }
+            var box_style = control.sized_style(34.0, 25.0)
+            box_style.background = paint.Brush { Solid: fill }
+            box_style.radius = 6.0
+            let digits_held = widget.aligned(0u64, .Center, .Center, box_style, widget_pair(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), widget_pair(a, label_node))))
+            let (spoken, spoken_error) = mem.alloc[u8](a, 40usize)
+            if spoken_error != ok { ret (zero, TooLarge) }
+            var said = control.copy_text(spoken, weekday_full(usize(weekday_of(i64(date.year), i64(date.month), i64(date.day)))))
+            said += control.copy_text(spoken[said..40usize], ", ")
+            said += control.write_i64(spoken[said..40usize], i64(date.day))
+            said += control.copy_text(spoken[said..40usize], " ")
+            said += control.copy_text(spoken[said..40usize], month_name_in(i64(date.month), t.language))
+            said += control.copy_text(spoken[said..40usize], " ")
+            said += control.write_i64(spoken[said..40usize], i64(date.year))
+            var press_look = style.resolve(t.tokens, .Plain, state)
+            press_look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            press_look.border_width = 0.0
+            press_look.custom_padding = true
+            press_look.padding = 0.0
+            press_look.padding_start = 0.0
+            press_look.padding_y = 0.0
+            press_look.min_width = 0.0
+            press_look.min_height = 28.0
+            let (pressed, pressed_error) = control.pressable_states_fill(a, day_key, t, 3u8, spoken[0usize..said], press_look, true, chosen, 0u32, 0u32, 0u64, &actions[index], true, widget.aligned(0u64, .Center, .Center, control.sized_style(34.0, 28.0), widget_pair(a, digits_held)))
+            if pressed_error != ok { ret (zero, pressed_error) }
+            var tabbed = pressed
+            if inside {
+                let (stop, stop_error) = calendar_tab_stop(a, pressed, usize(date.day) == tab_day)
+                if stop_error != ok { ret (zero, stop_error) }
+                tabbed = stop
+            }
+            var cell_node = tabbed
+            if inside {
+                let (moves, moves_error) = mem.alloc[DayMove](a, 4usize)
+                if moves_error != ok { ret (zero, TooLarge) }
+                let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 4usize)
+                if move_actions_error != ok { ret (zero, TooLarge) }
+                moves[0usize] = DayMove { shown: shown, target: moved_date(date, -1i64), show: show, runtime: t.runtime, calendar: key }
+                moves[1usize] = DayMove { shown: shown, target: moved_date(date, 1i64), show: show, runtime: t.runtime, calendar: key }
+                moves[2usize] = DayMove { shown: shown, target: moved_date(date, -7i64), show: show, runtime: t.runtime, calendar: key }
+                moves[3usize] = DayMove { shown: shown, target: moved_date(date, 7i64), show: show, runtime: t.runtime, calendar: key }
+                var mk = 0usize
+                while mk < 4usize {
+                    move_actions[mk] = widget.Submit { ctx: mem.cast[*void](&moves[mk]), invoke: day_move_fire }
+                    mk += 1usize
+                }
+                let (day_keys, day_keys_error) = mem.alloc[widget.Shortcut](a, 4usize)
+                if day_keys_error != ok { ret (zero, TooLarge) }
+                day_keys[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: move_actions[0usize] }
+                day_keys[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: move_actions[1usize] }
+                day_keys[2usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: move_actions[2usize] }
+                day_keys[3usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: move_actions[3usize] }
+                cell_node = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: day_keys[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), widget_pair(a, tabbed))
+            }
+            var share = style.defaults()
+            share.width = style.Length { Px: 37.83 }
+            share.height = style.Length { Px: 28.0 }
+            cells[column] = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, cell_node))
+            column += 1usize
+        }
+        var row_style = control.sized_style(267.0, 28.0)
+        row_style.padding.left = style.Length { Px: 4.6 }
+        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[0usize..7usize])
+        week += 1usize
+    }
+    let (body, body_error) = mem.alloc[widget.Node](a, 4usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = head
+    body[1usize] = widget.box(0u64, rule, zero)
+    var weekday_row = control.sized_style(267.0, 28.0)
+    weekday_row.margin.top = style.Length { Px: 1.5 }
+    weekday_row.padding.left = style.Length { Px: 4.6 }
+    body[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, weekday_row, names[0usize..7usize])
+    body[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..6usize])
+    var frame = control.sized_style(269.0, 236.0)
+    frame.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    var edge = style.hex(0xDDDDDDu32)
+    if t.tokens.palette == .Dark { edge = style.hex(0x454545u32) }
+    frame.border = style.Border { width: 1.0, color: edge }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+    ret (widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, body[0usize..4usize]), ok)
+}
+// ---- end round 20, l2 -------------------------------------------------------------------------------------------------

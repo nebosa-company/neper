@@ -1,0 +1,244 @@
+{
+ "progress_bar": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/progress_bar.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). Eleven of the twelve captured states have a cell: progress at 0, 40 and 100 %, the OSD bar, the level bar (an empty trough), the spinner, and the scale at rest, hovered, pressed, focused and insensitive (linux/progress_bar-vs-ref.png, reference left). 45688 flat reference pixels, 0 off (worst 0). Pixels outside the masked spinner artwork that are not flat: 837 differ by more than 2 levels, all antialiased bar corners (up to 15 levels), the scale knob's stepped shadow and the focus ring's antialiasing. Trough #dddddd, fill #3584e4, 8 high with 4 px corners; scale trough 4 high, knob 20, hover and insensitive colours measured per state.",
+    "gaps": [
+     "scale-marks (tick marks, their labels and the pointed knob) is a captured state with no cell",
+     "The spinner is a 270 degree stroked arc fading from its tail; its antialiased pixels are masked as artwork, the flat ones match",
+     "The level bar is only its empty trough (the library's capture shows nothing else); level offsets and their colours are not built",
+     "The indeterminate bar (GTK's pulse), the error and paused tones are guesses with no capture",
+     "The scale knob's shadow is a stepped approximation of the library's; the scale's label and range slider keep other looks' code",
+     "The scale is a transparent runtime slider under a painted one; a drag maps the pointer with the runtime's own travel, which differs from GTK's by a pixel or two",
+     "Not verified at 150 %: the library was rendered at 1x and 2x only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/progress_bar.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 46057 flat reference pixels, 0 off; 497 non-flat pixels differ by more than 2 levels (corners, knob shadow, focus ring). Trough #454545, scale knob #d2d2d2 until hovered.",
+    "gaps": [
+     "scale-marks (tick marks, their labels and the pointed knob) is a captured state with no cell",
+     "The spinner is a 270 degree stroked arc fading from its tail; its antialiased pixels are masked as artwork, the flat ones match",
+     "The level bar is only its empty trough (the library's capture shows nothing else); level offsets and their colours are not built",
+     "The indeterminate bar (GTK's pulse), the error and paused tones are guesses with no capture",
+     "The scale knob's shadow is a stepped approximation of the library's; the scale's label and range slider keep other looks' code",
+     "The scale is a transparent runtime slider under a painted one; a drag maps the pointer with the runtime's own travel, which differs from GTK's by a pixel or two",
+     "Not verified at 150 %: the library was rendered at 1x and 2x only"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/splitter.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). All four captured states have a cell: the horizontal and vertical separators (a filled 200 x 4 and 4 x 60 allocation) and the paned handle twice (paned and paned-wide look the same). 32410 flat reference pixels, 0 off; every non-text pixel matches within 2 levels (0 differ). The handle is 1 px #dddddd with an 8 px reach each side for the pointer; Divider gained a thickness option.",
+    "gaps": [
+     "Hover, drag and focus of the paned handle are not captured; the handle looks the same in every state here",
+     "Pane label glyph pixels are masked (Cantarell hinting)",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/splitter.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 32410 flat reference pixels, 0 off; 0 non-text pixels differ. Handle and separators #454545.",
+    "gaps": [
+     "Hover, drag and focus of the paned handle are not captured; the handle looks the same in every state here",
+     "Pane label glyph pixels are masked (Cantarell hinting)",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/scroll_bar.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). All eight captured states have a cell: lone horizontal and vertical bars at rest, hovered and insensitive, a scrolled window with overlay indicators (hidden at rest) and one with both classic bars. 65640 flat reference pixels, 0 off; 32 non-flat pixels differ (antialiased pill ends). The bar is a 20 across strip with an 8 across pill (#d3d3d3; #f5f5f5 insensitive) sized and placed from content and offset like the viewport's thumb.",
+    "gaps": [
+     "The library's lone and classic bars do not change on hover, so hover is the rest picture; the overlay indicator's growth on hover and its look while scrolling are not captured (scroll_area keeps the runtime's 4 px thumb that fades after 1.5 s, in the slider colour)",
+     "The scrolled-classic window is composed by the sheet from a frame and two linux_scroll_bar strips; scroll_area itself is one axis",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/scroll_bar.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 65608 flat reference pixels, 0 off; 28 non-flat pixels differ. Pill #505050, #2c2c2c insensitive.",
+    "gaps": [
+     "The library's lone and classic bars do not change on hover, so hover is the rest picture; the overlay indicator's growth on hover and its look while scrolling are not captured (scroll_area keeps the runtime's 4 px thumb that fades after 1.5 s, in the slider colour)",
+     "The scrolled-classic window is composed by the sheet from a frame and two linux_scroll_bar strips; scroll_area itself is one axis",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/hint.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). The library's own tooltip crop was a bare label (the CSS node without its surface), so scripts/linux/gallery_l3.py captures the real node tree GtkTooltipWindow builds (tooltip-real, 95 x 33 with its alpha) and the sheet is compared with that. 1574 flat reference pixels, 0 off; 106 non-flat pixels differ (the 9 px corners). Black at 80 %, 6 x 10 padding, a 1 px white 10 % line round the fill that the fill does not run under, shown at once.",
+    "gaps": [
+     "Only the one-line tooltip is captured: wrapped text, a shortcut and the placement relative to an anchor are not",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not.",
+     "The library's old tooltip crop in manifest.csv is superseded by tooltip-real (manifest-l3.csv)"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/hint.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 1337 flat reference pixels, 0 off; 169 non-flat pixels differ (corners and the 10 % line).",
+    "gaps": [
+     "Only the one-line tooltip is captured: wrapped text, a shortcut and the placement relative to an anchor are not",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not.",
+     "The library's old tooltip crop in manifest.csv is superseded by tooltip-real (manifest-l3.csv)"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/menu_bar.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). Two states: the bar at rest (the library's crop) and Edit selected, which the library's gallery lacked and scripts/linux/gallery_l3.py now captures (menubar-selected). 3803 flat reference pixels, 0 off; every pixel outside the title text matches within 2 levels. 28 high: 4 x 8 padding, 6 px corners, selected wash the text colour at 10 %, a 1 px rule under the row.",
+    "gaps": [
+     "Title text sits about one pixel low and its glyphs are masked",
+     "The bar's open menus (navigation.bar_menu_at) are not styled for this look yet; overlay.menu_of is (popup_menu)",
+     "Pressed titles and keyboard focus are not captured",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/menu_bar.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 3801 flat reference pixels, 0 off; 0 non-text pixels differ.",
+    "gaps": [
+     "Title text sits about one pixel low and its glyphs are masked",
+     "The bar's open menus (navigation.bar_menu_at) are not styled for this look yet; overlay.menu_of is (popup_menu)",
+     "Pressed titles and keyboard focus are not captured",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/status_bar.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). Both captured states have a cell: the header bar with a subtitle (the library's capture includes its three window controls, which the sheet draws as 24 px circles) and the action bar. 25228 flat reference pixels, 0 off; no pixel outside the masked text and icons differs by more than 2 levels. The status bar is GtkActionBar (headerbar colour, 1 px line, 32 high, 6 px padding); the header bar is AdwHeaderBar (47 high, 34 px buttons, a bold centred title with a 55 % subtitle).",
+    "gaps": [
+     "Glyphs (add, menu, window controls) are Neper's own strokes, thinner than the icon theme's; they are masked",
+     "Progress items, glyph items, tones and pressable panels of the status bar are not captured; they keep the Material layout with these colours",
+     "The window controls are drawn by the sheet, not by window.e (which has its own 36 high Linux caption)",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/status_bar.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 25231 flat reference pixels, 0 off; 0 non-masked pixels differ.",
+    "gaps": [
+     "Glyphs (add, menu, window controls) are Neper's own strokes, thinner than the icon theme's; they are masked",
+     "Progress items, glyph items, tones and pressable panels of the status bar are not captured; they keep the Material layout with these colours",
+     "The window controls are drawn by the sheet, not by window.e (which has its own 36 high Linux caption)",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/toolbar_button.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). All fourteen captured states have a cell: icon and flat icon buttons in five states, the toggle on and off, the header bar and a toolbar of five flat buttons round a separator. 39061 flat reference pixels, 0 off. Pixels that are not flat: 421 differ by more than 2 levels, mostly the focus ring (its outer row is 3 levels off the library's: the button pilot's ring is 1.86 px at 50 % where the library's measures about 1.8 px at 48.7 %) and corners (up to 17).",
+    "gaps": [
+     "Focus ring antialiasing: the outer row is 3 levels off (the pilot's constants in style.adwaita_resolve, not changed here)",
+     "Glyphs are Neper's own strokes (Maximize, Add, Menu, Edit, ArrowDown, Cross, Settings stand for the icon theme's); icon boxes match, pictures are masked",
+     "The toolbar and header bar are composed by the sheet from glyph_button and linux_header_bar; navigation.toolbar (texture icons) has no Linux branch",
+     "Hover and focus of the toggle button and of toolbar buttons are not captured beyond the button crops",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/toolbar_button.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 39064 flat reference pixels, 0 off; 573 non-flat pixels differ (focus ring rows, corners).",
+    "gaps": [
+     "Focus ring antialiasing: the outer row is 3 levels off (the pilot's constants in style.adwaita_resolve, not changed here)",
+     "Glyphs are Neper's own strokes (Maximize, Add, Menu, Edit, ArrowDown, Cross, Settings stand for the icon theme's); icon boxes match, pictures are masked",
+     "The toolbar and header bar are composed by the sheet from glyph_button and linux_header_bar; navigation.toolbar (texture icons) has no Linux branch",
+     "Hover and focus of the toggle button and of toolbar buttons are not captured beyond the button crops",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/popup_menu.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). The library's popup capture had every row insensitive and an arrow, so scripts/linux/gallery_l3.py now builds GtkPopoverMenu with real actions: an Edit menu (accelerators, a disabled row, sections), a View menu (check, radios, a submenu row) and the Edit menu with Paste hovered and pressed (menu-edit, menu-view, menu-edit-hover, menu-edit-active). 85166 + 41269 + 41265 flat reference pixels, 0 off. Rows are 32 high with 12 px sides and 6 px corners, 6 px round the rows, a 12 px surface, washes 10 % hovered and 19 % pressed, 1 px section lines, accelerator at 55 %, disabled 50 %; the surface is sized from its rows as GTK sizes it.",
+    "gaps": [
+     "The soft shadow is a stepped approximation: up to 12 levels off over about 310 pixels round the surface (it is not flat, so the strict metric does not count it)",
+     "Check mark and submenu chevron are Neper's glyphs (thinner than Adwaita's); the radio circle and dot are shapes and match",
+     "Hover and pressed are shown on the Paste row only (one modal menu renders per process: popup_menu-hover and popup_menu-active); a row with its submenu open, keyboard selection, inline buttons and section headings are not built",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not.",
+     "Placement is the caller's (top-left on the anchor's corner); GTK's popover arrow and flipping are not reproduced"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/popup_menu.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 90314 + 43843 + 43839 flat reference pixels, 0 off. Surface #383838, lines #565656, washes white 10 % and 19 %.",
+    "gaps": [
+     "The soft shadow is a stepped approximation: up to 12 levels off over about 310 pixels round the surface (it is not flat, so the strict metric does not count it)",
+     "Check mark and submenu chevron are Neper's glyphs (thinner than Adwaita's); the radio circle and dot are shapes and match",
+     "Hover and pressed are shown on the Paste row only (one modal menu renders per process: popup_menu-hover and popup_menu-active); a row with its submenu open, keyboard selection, inline buttons and section headings are not built",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not.",
+     "Placement is the caller's (top-left on the anchor's corner); GTK's popover arrow and flipping are not reproduced"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/page_control.png",
+    "notes": "Compared with scripts/linux_cmp_l3.py (strict: a reference pixel flat in its 3 x 3 neighbourhood is off when ours differs by more than 2 levels; only glyph pixels within 2 px of text or icon ink are left out). All four captured states have a cell: the notebook with its tabs on top and on the left (a 1 px frame, the tab header the control builds and the page), an AdwTabBar over its page (chosen tab with its close button and the scrolled strip's edge fade, a separator between the others) and an AdwViewSwitcher. 109914 flat reference pixels, 0 off; 30 non-flat pixels differ (the switcher's 6 px corners).",
+    "gaps": [
+     "The tab bar's and view switcher's tab positions are passed in (lefts and widths measured on the capture); libadwaita's expand-tabs rules are not reproduced",
+     "The tab bar's fade is a clipped-strip artefact of the capture (the first tab is partly scrolled out) drawn as a 36 px gradient; a tab bar at rest has none",
+     "Hover and pressed tabs follow the stylesheet (washes 7 % and 16 %, the 15 % bar on a notebook tab) but the library's crops have no such state; close-button hover, overflow arrows, drag indicator and the switcher's narrow policy are not built",
+     "View switcher pictures are Neper's Picture glyph standing for the library's missing-image icon; masked",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not.",
+     "Not verified at 150 %"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/page_control.png",
+    "notes": "Same sheet in the Adwaita dark palette beside the library's dark crops. 109915 flat reference pixels, 0 off; 31 non-flat pixels differ.",
+    "gaps": [
+     "The tab bar's and view switcher's tab positions are passed in (lefts and widths measured on the capture); libadwaita's expand-tabs rules are not reproduced",
+     "The tab bar's fade is a clipped-strip artefact of the capture (the first tab is partly scrolled out) drawn as a 36 px gradient; a tab bar at rest has none",
+     "Hover and pressed tabs follow the stylesheet (washes 7 % and 16 %, the 15 % bar on a notebook tab) but the library's crops have no such state; close-button hover, overflow arrows, drag indicator and the switcher's narrow policy are not built",
+     "View switcher pictures are Neper's Picture glyph standing for the library's missing-image icon; masked",
+     "Cantarell is hinted by GTK and not by Neper, so glyph pixels differ; they are masked, everything else is not.",
+     "Not verified at 150 %"
+    ]
+   }
+  }
+ }
+}

@@ -85,7 +85,7 @@ type AppBarSize = enum u8 { Small, Center, Medium, Large }
 // toggles it; Back's name (set, an `arrow-back` action firing `back` leads;
 // `closing`, a `close` one, D974); and
 // a node standing in place of the title (`headed`), the bar still named by it.
-type AppBarOptions = struct { size: AppBarSize, scrolled: bool, contextual: str, clear: widget.Submit, more_open: bool, more: widget.Submit, back_label: str, back: widget.Submit, back_disabled: bool, closing: bool, heading: widget.Node, headed: bool, offset: f32, shown: f32, hides: bool }
+type AppBarOptions = struct { size: AppBarSize, scrolled: bool, contextual: str, clear: widget.Submit, more_open: bool, more: widget.Submit, back_label: str, back: widget.Submit, back_disabled: bool, closing: bool, heading: widget.Node, headed: bool, offset: f32, shown: f32, hides: bool, subtitle: str, end_inset: f32 }
 
 fn app_bar_options() -> AppBarOptions {
     var out: AppBarOptions = zero
@@ -93,6 +93,70 @@ fn app_bar_options() -> AppBarOptions {
     out.shown = 1.0
     ret out
 }
+
+// ---- the Linux look, header bar (worker l3, round 20) -------------------------------------------------------------------
+// AdwHeaderBar in libadwaita 1.5: 47 high (46 and a 1 px line under it, #e1e1e1 Light, #1f1f1f Dark) in the headerbar colour (#ffffff,
+// #303030), 6 px round its 34 px buttons, the title (Cantarell Bold) centred on the bar with an optional subtitle under it (12 px, 55 %).
+// `start` and `end` are the buttons; `end_inset` is how far the end group stops short of the bar's right edge (the window controls).
+fn linux_header_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, subtitle: str, start: []const widget.Node, end: []const widget.Node, end_inset: f32, width: f32) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    var face = control.sized_style(width, 47.0)
+    face.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+    var line_ink = style.hex_raw(0xE1E1E1u32)
+    if dark { line_ink = style.hex_raw(0x1F1F1Fu32) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    var rule = control.sized_style(width, 1.0)
+    rule.background = paint.Brush { Solid: line_ink }
+    layers[count] = widget.positioned(0u64, 0.0, 46.0, style.defaults(), control.mem_one_node(a, widget.box(0u64, rule, zero)))
+    count += 1usize
+    // the title block, centred on the bar
+    var words = control.text_options()
+    words.role = .Label
+    words.wrap = .None
+    let ink = style.color(t.tokens, .Text)
+    let (heading, heading_error) = control.colored_text(a, 0u64, title, t, words, ink)
+    if heading_error != ok { ret (zero, heading_error) }
+    let (title_wide, title_wide_error) = control.linux_label_width(a, t, words, title)
+    if title_wide_error != ok { ret (zero, title_wide_error) }
+    let (block, block_error) = mem.alloc[widget.Node](a, 2usize)
+    if block_error != ok { ret (zero, TooLarge) }
+    block[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(title_wide, 19.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), control.mem_one_node(a, heading))))
+    var block_n = 1usize
+    var block_h: f32 = 19.0
+    if subtitle.len > 0usize {
+        var small = control.text_options()
+        small.role = .BodySmall
+        small.wrap = .None
+        let (said, said_error) = control.colored_text(a, 0u64, subtitle, t, small, style.hexa(0x000000u32, 0.55))
+        if said_error != ok { ret (zero, said_error) }
+        if dark {
+            let (pale, pale_error) = control.colored_text(a, 0u64, subtitle, t, small, style.hexa(0xFFFFFFu32, 0.55))
+            if pale_error != ok { ret (zero, pale_error) }
+            block[1usize] = pale
+        } else {
+            block[1usize] = said
+        }
+        block_n = 2usize
+        block_h = 35.0
+    }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width, block_h), block[0usize..block_n])
+    layers[count] = widget.positioned(0u64, 0.0, (46.0 - block_h) * 0.5, style.defaults(), control.mem_one_node(a, column))
+    count += 1usize
+    var left = style.defaults()
+    left.height = style.Length { Px: 34.0 }
+    layers[count] = widget.positioned(0u64, 6.0, 6.0, style.defaults(), control.mem_one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, left, start)))
+    count += 1usize
+    var right = control.sized_style(width - end_inset, 34.0)
+    layers[count] = widget.positioned(0u64, 0.0, 6.0, style.defaults(), control.mem_one_node(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 6.0 }, right, end)))
+    count += 1usize
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = title
+    ret (widget.semantics(key, sem, style.defaults(), control.mem_one_node(a, widget.stack(0u64, face, layers[0usize..count]))), ok)
+}
+// ---- end the Linux look, header bar ---------------------------------------------------------------------------------------
 
 // One bar action (D972): an icon action keyed `key` (the icon button at the
 // density's size), or a worded one as a text button in `color`.
@@ -140,6 +204,28 @@ fn bar_group(items: []const widget.Node) -> widget.Node {
 // ponytail: worded actions stay text buttons.
 fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
     if leading.len > 8usize || trailing.len > 8usize { ret (zero, TooLarge) }
+    if t.tokens.profile == .Linux {
+        let (starts, starts_error) = mem.alloc[widget.Node](a, leading.len + 1usize)
+        if starts_error != ok { ret (zero, TooLarge) }
+        let (ends, ends_error) = mem.alloc[widget.Node](a, trailing.len + 1usize)
+        if ends_error != ok { ret (zero, TooLarge) }
+        var n = 0usize
+        while n < leading.len {
+            let (one, one_error) = bar_action(a, key + 2u64 + u64(n), t, &leading[n], style.color(t.tokens, .Text))
+            if one_error != ok { ret (zero, one_error) }
+            starts[n] = one
+            n += 1usize
+        }
+        n = 0usize
+        while n < trailing.len {
+            let (one, one_error) = bar_action(a, key + 12u64 + u64(n), t, &trailing[n], style.color(t.tokens, .Text))
+            if one_error != ok { ret (zero, one_error) }
+            ends[n] = one
+            n += 1usize
+        }
+        let (bar, bar_error) = linux_header_bar(a, key, t, title, options.subtitle, starts[0usize..leading.len], ends[0usize..trailing.len], options.end_inset, width)
+        ret (bar, bar_error)
+    }
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_nav_bar(a, key, t, title, leading, trailing, options, width)
         ret (cup, cup_error)
@@ -569,6 +655,12 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
         ground = .SurfaceContainer
         ink = style.color(t.tokens, .TextMuted)
     }
+    // The Linux look (worker l3): GtkActionBar, the headerbar colour under a 1 px line, Cantarell Regular body text, 6 px padding.
+    let linux = t.tokens.profile == .Linux
+    if linux {
+        ground = .SurfaceContainerHigh
+        ink = style.color(t.tokens, .Text)
+    }
     let (starts, starts_error) = mem.alloc[widget.Node](a, items.len)
     if starts_error != ok { ret (zero, TooLarge) }
     let (ends, ends_error) = mem.alloc[widget.Node](a, items.len)
@@ -589,6 +681,7 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
         let (advance, _, _, metrics_error) = control.run_metrics(a, t, .BodySmall, items[measured].text)
         if metrics_error != ok { ret (zero, metrics_error) }
         var wide = 16.0 + advance
+        if linux { wide = 6.0 + advance }
         if items[measured].progress >= 0.0 { wide += 52.0 } else if items[measured].marked { wide += 20.0 }
         widths[measured] = wide
         dropped[measured] = false
@@ -668,6 +761,7 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
         small.role = .BodySmall
         small.wrap = .None
         if cupertino { small.size = 12.0 }
+        if linux { small.role = .Body }
         let squeezed = i == 0usize && !item.end && total > width
         if squeezed {
             small.max_lines = 1u32
@@ -689,6 +783,7 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
         n += 1usize
         var line_style = style.defaults()
         line_style.height = style.Length { Px: 16.0 }
+        if linux { line_style.height = style.Length { Px: 19.0 } }
         let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, line_style, bits[0usize..n])
         var made = content
         if widget.submit_set(item.action.invoke) {
@@ -738,6 +833,10 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
             var item_style = style.defaults()
             item_style.height = style.Length { Px: 24.0 }
             made = widget.padded(0u64, 8.0, 4.0, 8.0, 4.0, item_style, wraps[0usize..1usize])
+            if linux {
+                item_style.height = style.Length { Px: 19.0 }
+                made = widget.padded(0u64, 0.0, 0.0, 6.0, 0.0, item_style, wraps[0usize..1usize])
+            }
             if i == 0usize {
                 let (lives, lives_error) = mem.alloc[widget.Node](a, 1usize)
                 if lives_error != ok { ret (zero, TooLarge) }
@@ -785,9 +884,26 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
     let ends_pad = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
     bar.padding = style.EdgeLengths { left: ends_pad, top: flat, right: ends_pad, bottom: flat }
+    if linux {
+        bar = control.sized_style(width, 32.0)
+        bar.background = paint.Brush { Solid: style.color(t.tokens, ground) }
+        let side = style.Length { Px: 6.0 }
+        bar.padding = style.EdgeLengths { left: side, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: flat }
+    }
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     boxed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, groups[0usize..3usize])
+    if linux {
+        let (piled, piled_error) = mem.alloc[widget.Node](a, 2usize)
+        if piled_error != ok { ret (zero, TooLarge) }
+        piled[0usize] = boxed[0usize]
+        var rule = control.sized_style(width, 1.0)
+        var line_ink = style.hex_raw(0xE1E1E1u32)
+        if t.tokens.palette == .Dark { line_ink = style.hex_raw(0x1F1F1Fu32) }
+        rule.background = paint.Brush { Solid: line_ink }
+        piled[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), control.mem_one_node(a, widget.box(0u64, rule, zero)))
+        boxed[0usize] = widget.stack(0u64, control.sized_style(width, 32.0), piled[0usize..2usize])
+    }
     if cupertino {
         let (piled, piled_error) = mem.alloc[widget.Node](a, 2usize)
         if piled_error != ok { ret (zero, TooLarge) }
@@ -1787,6 +1903,7 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         ret (flat, flat_error)
     }
     let cupertino = t.tokens.profile == .CupertinoLike
+    let linux = t.tokens.profile == .Linux
     var lead_count = 0usize
     if cupertino { lead_count = 1usize }
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len + 1usize)
@@ -1840,11 +1957,35 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
             caption.size = 13.0
             if i == 0usize { caption.weight = 700u32 }
         }
+        if linux {
+            // (worker l3) GtkPopoverMenuBar: `menubar > item` has 4 8 padding, 6 px corners and, selected (hovered or open), the
+            // text colour at 10 %; the title is 19 high Cantarell Regular, as wide as GTK's whole-pixel layout makes it.
+            tint = style.color(t.tokens, .Text)
+            look.background = style.hexa(0x000000u32, 0.0)
+            if t.tokens.palette == .Dark { look.background = style.hexa(0xFFFFFFu32, 0.0) }
+            if opened || state.hovered || state.pressed {
+                look.background = style.hexa(0x000000u32, 0.08)
+                if t.tokens.palette == .Dark { look.background = style.hexa(0xFFFFFFu32, 0.1) }
+            }
+            look.foreground = tint
+            look.radius = 6.0
+            look.padding = 8.0
+            look.padding_y = 4.0
+            look.min_height = 27.0
+            look.min_width = 0.0
+            caption.role = .Body
+        }
         let (label_node, label_error) = menu_title_label(a, t, menus[i].label, caption, tint, widget.menu_access_keys_visible(t.runtime))
         if label_error != ok { ret (zero, label_error) }
+        var shown = label_node
+        if linux {
+            let (wide, wide_error) = control.linux_label_width(a, t, caption, menus[i].label)
+            if wide_error != ok { ret (zero, wide_error) }
+            shown = widget.aligned(0u64, .Center, .Center, control.sized_style(wide, 19.0), control.widget_one_of(a, widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), control.mem_one_node(a, label_node))))
+        }
         var states = 0u32
         if opened { states = accessibility.STATE_EXPANDED }
-        let (head, head_error) = control.pressable_states(a, title_key, t, 3u8, menus[i].label, look, true, false, states, accessibility.ACTION_SHOW_MENU, title_key + 1u64, &toggles[i], label_node)
+        let (head, head_error) = control.pressable_states(a, title_key, t, 3u8, menus[i].label, look, true, false, states, accessibility.ACTION_SHOW_MENU, title_key + 1u64, &toggles[i], shown)
         if head_error != ok { ret (zero, head_error) }
         heads[2usize * i + lead_count] = head
         let (hung, hung_error) = bar_menu(a, title_key + 1u64, t, title_key, menus[i].label, menus[i].commands, opened, &toggles[i])
@@ -1862,6 +2003,29 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         bar.background = paint.Brush { Solid: style.hex(0xF6F6F6u32) }
         if t.tokens.palette == .Dark { bar.background = paint.Brush { Solid: style.hex(0x2A2A2Cu32) } }
         bar.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+    }
+    if linux {
+        // 28 high: the titles 27, then the `menubar` box-shadow line (the text colour at 12 % over the window, as one opaque row).
+        let (line_parts, line_error) = mem.alloc[widget.Node](a, 2usize)
+        if line_error != ok { ret (zero, TooLarge) }
+        var items = style.defaults()
+        items.width = style.Length { Percent: 100.0 }
+        items.height = style.Length { Px: 27.0 }
+        line_parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, items, heads[0usize..2usize * menus.len])
+        var rule = style.defaults()
+        rule.width = style.Length { Percent: 100.0 }
+        rule.height = style.Length { Px: 1.0 }
+        rule.background = paint.Brush { Solid: control.linux_rule(t) }
+        line_parts[1usize] = widget.box(0u64, rule, zero)
+        bar.height = style.Length { Px: 28.0 }
+        bar.width = style.Length { Percent: 100.0 }
+        let (both, both_error) = mem.alloc[widget.Node](a, 1usize)
+        if both_error != ok { ret (zero, TooLarge) }
+        both[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, bar, line_parts[0usize..2usize])
+        var linux_sem: widget.Semantics = zero
+        linux_sem.role = accessibility.ROLE_MENU_BAR
+        linux_sem.label = label
+        ret (widget.semantics(key, linux_sem, style.defaults(), both[0usize..1usize]), ok)
     }
     let ends = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
@@ -2043,7 +2207,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
             } else if c.pictured && !c.radio && !c.checkable {
                 var icon_ink = muted
                 if c.destructive { icon_ink = ink }
-                let (tick, tick_error) = control.icon_square(a, icon_ink, c.glyph, 18.0)
+                let (tick, tick_error) = control.icon_square(a, icon_ink, menu_base_glyph(c.glyph), 18.0)
                 if tick_error != ok { ret (zero, tick_error) }
                 parts[p] = tick
             } else {
@@ -9655,6 +9819,47 @@ fn windows_menu_check(a: *mem.Arena, ink: paint.Color) -> (widget.Node, err) {
     ret (sprite, sprite_error)
 }
 
+// Table and Sigma are v3 menu bitmaps drawn only by the Windows light menu; every other menu shows the picture glyph.
+fn menu_base_glyph(g: control.GlyphKind) -> control.GlyphKind {
+    if g == .Table || g == .Sigma { ret .Picture }
+    ret g
+}
+
+// (round 20) v3's 14 x 14 menu bitmaps drawn as pixels: `rows` holds 14 strings of 14 marks, 0 ink, c the grey #C6C6C6, f white.
+fn windows_menu_pixmap(a: *mem.Arena, rows: [14]str, ink: paint.Color, shift: usize) -> (widget.Node, err) {
+    let (codes, codes_error) = mem.alloc[u8](a, 196usize)
+    if codes_error != ok { ret (zero, TooLarge) }
+    let (colors, colors_error) = mem.alloc[paint.Color](a, 196usize)
+    if colors_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var y = 0usize
+    while y < 14usize {
+        var x = 0usize
+        while x < 14usize {
+            codes[n] = u8((x + shift) * 16usize + y + shift)
+            var color = ink
+            if rows[y][x] == 99u8 { color = style.hex(13027014u32) }
+            if rows[y][x] == 102u8 { color = style.hex(16777215u32) }
+            colors[n] = color
+            n += 1usize
+            x += 1usize
+        }
+        y += 1usize
+    }
+    let (sprite, sprite_error) = winpx.sprite(a, codes[0usize..196usize], colors[0usize..196usize], 16.0, 16.0)
+    ret (sprite, sprite_error)
+}
+
+fn windows_menu_table(a: *mem.Arena, ink: paint.Color, shift: usize) -> (widget.Node, err) {
+    let (node, node_error) = windows_menu_pixmap(a, [14]str{ "00000000000000", "0cccccccccccc0", "0cccccccccccc0", "00000000000000", "0ffffffffffff0", "0cccccccccccc0", "0ffffffffffff0", "0cccccccccccc0", "0ffffffffffff0", "0cccccccccccc0", "0ffffffffffff0", "0cccccccccccc0", "0ffffffffffff0", "00000000000000" }, ink, shift)
+    ret (node, node_error)
+}
+
+fn windows_menu_sigma(a: *mem.Arena, ink: paint.Color, shift: usize) -> (widget.Node, err) {
+    let (node, node_error) = windows_menu_pixmap(a, [14]str{ "00000000000000", "0cccccccccccc0", "0ff0000000fff0", "0ccc00ccc0ccc0", "0ffff00ffffff0", "0ccccc00ccccc0", "0ffff00ffffff0", "0ccc00ccc0ccc0", "0ff0000000fff0", "0cccccccccccc0", "00000000000000", "0cccccccccccc0", "0cccccccccccc0", "00000000000000" }, ink, shift)
+    ret (node, node_error)
+}
+
 // The ground of a checked item's slot, 18 x 18: v3 dithers white pixels (every other one, where x + y
 // is odd) over the face, and the 16 px `picture` sits 1 in.
 fn windows_menu_checked_ground(a: *mem.Arena, picture: widget.Node, flip: bool, plain: bool) -> (widget.Node, err) {
@@ -9860,9 +10065,23 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             picture = tick
         }
         if c.pictured && !c.radio && !c.checkable {
-            let (glyph, glyph_error) = control.icon_square(a, picture_ink, c.glyph, 16.0)
+            var base_glyph = c.glyph
+            var shift_checked = 0usize
+            if c.checked { shift_checked = 1usize }
+            if c.glyph == .Table || c.glyph == .Sigma { base_glyph = .Picture }
+            let (glyph, glyph_error) = control.icon_square(a, picture_ink, base_glyph, 16.0)
             if glyph_error != ok { ret (zero, glyph_error) }
             picture = glyph
+            if c.glyph == .Table && !dark {
+                let (table, table_error) = windows_menu_table(a, picture_ink, 1usize + shift_checked)
+                if table_error != ok { ret (zero, table_error) }
+                picture = table
+            }
+            if c.glyph == .Sigma && !dark {
+                let (sigma, sigma_error) = windows_menu_sigma(a, picture_ink, 1usize + shift_checked)
+                if sigma_error != ok { ret (zero, sigma_error) }
+                picture = sigma
+            }
         }
         if c.radio && c.checked {
             let (dot, dot_error) = overlay.menu_radio_dot(a, picture_ink, 16.0)
@@ -10976,7 +11195,7 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         }
         // a picture or a radio dot sits in the check column (no capture: the native menu has none)
         if c.pictured && !c.radio && !c.checkable {
-            let (glyph, glyph_error) = control.icon_square(a, ink, c.glyph, 16.0)
+            let (glyph, glyph_error) = control.icon_square(a, ink, menu_base_glyph(c.glyph), 16.0)
             if glyph_error != ok { ret (zero, glyph_error) }
             parts[p] = widget.positioned(0u64, 4.0, 3.0, style.defaults(), mem_one(a, glyph))
             p += 1usize

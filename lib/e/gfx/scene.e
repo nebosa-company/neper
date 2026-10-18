@@ -1767,6 +1767,13 @@ fn lcd_ppem(size: f32, scale: f32) -> i64 {
 // Draws `text` as ClearType when it can: every run a solid brush, a uniform scale, whole pixel sizes and a hinted font. The
 // text is rasterised into one buffer first and composed onto the canvas after, so a failure part way leaves the canvas as it was
 // and the caller draws the text its usual way (false).
+// `color` marked to be drawn with greyscale anti-aliasing even when the rig's text is ClearType (a text-only mark: 1/10000 of alpha).
+fn gray_text(color: paint.Color) -> paint.Color {
+    ret paint.Color { red: color.red, green: color.green, blue: color.blue, alpha: 0.9999 }
+}
+
+fn is_gray_text(color: paint.Color) -> bool { ret color.alpha < 1.0 && color.alpha > 0.999 }
+
 fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
     var color: paint.Color = zero
     switch text.brush {
@@ -1775,6 +1782,8 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
     default:
         ret false
     }
+    // A brush alpha of 0.9999 (see `gray_text`) asks for the greyscale path: v3's Dev Express controls draw unhinted, unfringed text.
+    if color.alpha < 1.0 && color.alpha > 0.999 { ret false }
     let t = state.transform
     if t.m01 != 0.0 || t.m10 != 0.0 || !(t.m00 > 0.0) || t.m00 != t.m11 { ret false }
     if !lcd_ready(s) { ret false }

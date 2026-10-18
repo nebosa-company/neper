@@ -19,12 +19,15 @@ use e.gfx.scene
 use e.text.layout
 use e.text.shape
 use e.ui.accessibility
+use e.ui.adwicon_l2 as adwicon
+use e.ui.linuxshadow_l2 as linuxshadow
 use e.ui.animation
 use e.ui.gridlook as gl
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
+use e.ui.linux_card
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -1628,6 +1631,10 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         let (framed, framed_error) = windows_group_box(a, key, t, label, options, children)
         ret (framed, framed_error)
     }
+    if t.tokens.profile == .Linux && !collapsible {
+        let (gtk, gtk_error) = linux_group_box(a, key, t, label, options, children)
+        ret (gtk, gtk_error)
+    }
     var row_h: f32 = t.tokens.sizes.control_lg
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { row_h = t.tokens.sizes.control_xl }
     let cupertino = t.tokens.profile == .CupertinoLike
@@ -1834,7 +1841,13 @@ fn divider(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis
 // end insets (56 or 72 for an inset divider, 16 each for a middle inset), the
 // label splitting it (and whether the label leads after a 16 line), and whether it
 // must be seen (`outline` in high contrast).
-type DividerOptions = struct { axis: ui_layout.Axis, length: f32, start: f32, end: f32, label: str, label_start: bool, strong: bool }
+type DividerOptions = struct { axis: ui_layout.Axis, length: f32, start: f32, end: f32, label: str, label_start: bool, strong: bool, thick: f32 }
+
+// libadwaita's `@borders` over the window, as the opaque colour the library paints (separators, the paned handle, scroll troughs).
+fn linux_rule(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hex_raw(0x454545u32) }
+    ret style.hex_raw(0xDDDDDDu32)
+}
 
 fn divider_options() -> DividerOptions {
     var out: DividerOptions = zero
@@ -1853,7 +1866,12 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
     var ink = style.color(t.tokens, .OutlineVariant)
     if options.strong { ink = style.color(t.tokens, .Outline) }
     let horizontal = options.axis == .Horizontal
-    let thick = style.Length { Px: t.tokens.sizes.divider }
+    var thick = style.Length { Px: t.tokens.sizes.divider }
+    // The Linux look (worker l3): libadwaita's GtkSeparator is a #dddddd (#454545 Dark) fill of its whole allocation; `thick` sets it.
+    if t.tokens.profile == .Linux {
+        ink = linux_rule(t)
+        if options.thick > 0.0 { thick = style.Length { Px: options.thick } }
+    }
     var span: style.Length = style.Length { Percent: 100.0 }
     if options.length > 0.0 { span = style.Length { Px: options.length } }
     var outer = style.defaults()
@@ -3248,6 +3266,10 @@ fn toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, se
         let (win, win_error) = windows_button(a, key, t, label, widget.spacer(0u64, 0.0), false, true, selected, zero, action, options)
         ret (win, win_error)
     }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_toggle_button(a, key, t, label, selected, action, options)
+        ret (linux, linux_error)
+    }
     var shown: style.ControlVariant = options.variant
     if selected { shown = .Filled }
     var state = control_state(t, key, options.enabled, false)
@@ -3341,7 +3363,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter, Table, Sigma }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32, filled: bool, ground: paint.Color }
 
 // (D1530) Whether a glyph has a body its filled "on" form fills; one without (a
@@ -3999,6 +4021,10 @@ fn choosable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: s
         let (cup, cup_error) = cupertino_choice(a, key, t, role, label, chosen, mixed, round, action, enabled)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_choice(a, key, t, role, label, chosen, mixed, round, action, enabled)
+        ret (gtk, gtk_error)
+    }
     let state = control_state(t, key, enabled, false)
     let h = t.tokens.metrics.control_height
     let touch = h > t.tokens.sizes.control_sm
@@ -4083,8 +4109,11 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
         let (framed, framed_error) = windows_group(a, key, t, label, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len]), enabled)
         ret (framed, framed_error)
     }
+    // The Linux look: GTK's linked check buttons stand 6 px apart, with no frame or caption.
+    var rows_gap: f32 = 0.0
+    if t.tokens.profile == .Linux { rows_gap = 6.0 }
     // v2 (D955): the rows abut.
-    stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len])
+    stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: rows_gap }, style.defaults(), items[0usize..labels.len])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
@@ -4379,7 +4408,7 @@ fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: pain
         var size = options.size
         if size == 0.0 { size = 11.0 }
         // ClearType sets a whole-pixel size at GDI's hinted advances itself, so the word keeps its size.
-        if natural > 0.0 && scene.text_aa_mode() != .ClearType {
+        if natural > 0.0 && (scene.text_aa_mode() != .ClearType || scene.is_gray_text(ink)) {
             size = size * hinted / natural
             if size < 10.0 { size = 10.0 }
             if size > 12.0 { size = 12.0 }
@@ -4812,6 +4841,8 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if current { ink = style.hex_raw(16777215u32) }
+    // v3's Dev Express list draws its text without ClearType (the pages' lists, which pass their window position as mark_y).
+    if t.tokens.palette != .Dark && mark_y >= 0.0 { ink = scene.gray_text(ink) }
     let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
@@ -5078,6 +5109,10 @@ fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, o
         let (cup, cup_error) = cupertino_switch(a, key, t, label, on, action, enabled)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_switch_control(a, key, t, label, on, action, enabled)
+        ret (gtk, gtk_error)
+    }
     let state = control_state(t, key, enabled, false)
     let ink = style.color(t.tokens, .OnSurface)
     let (mark, mark_error) = switch_mark_keyed(a, key, t, state, on, enabled)
@@ -5270,6 +5305,10 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
         let (cup, cup_error) = cupertino_slider(a, key, t, label, first, low, high, step, change, enabled)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux && !range {
+        let (linux, linux_error) = linux_scale(a, key, t, label, first, low, high, step, change, enabled)
+        ret (linux, linux_error)
+    }
     // v2 (D956, docs/ux/components/Slider): 44 deep for its handle, the active part
     // and the handles `primary`, the rest `secondary-container`; disabled, those are
     // `on-surface` at 38% and 12%.
@@ -5344,6 +5383,117 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     if !enabled { sem.states = accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
 }
+
+// ---- the Linux look, scale (worker l3, round 20) ------------------------------------------------------------------------------
+// GtkScale in libadwaita 1.5: 34 high and 200 wide; a 4 high trough 12 in from each end (#dddddd, #454545 Dark; one step darker
+// under the pointer), the part before the knob in the accent (#3584e4, lighter under the pointer), and a 20 knob (white; #d2d2d2
+// Dark until hovered) that travels from 10 to 190 with a soft shadow below it. A keyboard-focused knob wears a 2 px ring of the
+// accent at 50 % outside it; an insensitive scale is paler throughout. The runtime's own slider, drawn transparent, takes the
+// pointer and keys.
+type LinuxScale = struct { arena: *mem.Arena, share: f32, trough: paint.Color, fill: paint.Color, knob: paint.Color, ring: bool, accent: paint.Color, across: f32, shade: f32 }
+
+fn linux_scale_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn linux_scale_circle(a: *mem.Arena, b: *scene.Builder, cx: f32, cy: f32, radius: f32, color: paint.Color) -> err {
+    let (path, path_error) = widget.rounded_path(a, geometry.Rect { x: cx - radius, y: cy - radius, width: radius * 2.0, height: radius * 2.0 }, radius)
+    if path_error != ok { ret path_error }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: color } } })
+}
+
+fn linux_scale_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*LinuxScale](ctx)
+    let top = area.y + 15.0
+    let left = area.x + 12.0
+    let right = area.x + s.across - 12.0
+    let cx = area.x + 10.0 + s.share * (s.across - 20.0)
+    let cy = area.y + 17.0
+    let (trough, trough_error) = widget.rounded_path(s.arena, geometry.Rect { x: left, y: top, width: right - left, height: 4.0 }, 2.0)
+    if trough_error != ok { ret trough_error }
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: trough, brush: paint.Brush { Solid: s.trough } } })
+    if cx > left {
+        let (filled, filled_error) = widget.rounded_path(s.arena, geometry.Rect { x: left, y: top, width: cx - left, height: 4.0 }, 2.0)
+        if filled_error != ok { ret filled_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: filled, brush: paint.Brush { Solid: s.fill } } })
+    }
+    // the shadow: the knob's circle one pixel lower, grown by 4 down to 0, each ring adding what the next leaves of the measured total
+    let totals = [6]f32{ 0.244 * s.shade, 0.116 * s.shade, 0.068 * s.shade, 0.02 * s.shade, 0.0, 0.0 }
+    var e: usize = 5usize
+    while e > 0usize {
+        e -= 1usize
+        let own = 1.0 - (1.0 - totals[e]) / (1.0 - totals[e + 1usize])
+        try linux_scale_circle(s.arena, b, cx, cy + 1.0, 10.0 + f32(e), paint.rgba(0.0, 0.0, 0.0, own))
+    }
+    try linux_scale_circle(s.arena, b, cx, cy, 10.0, s.knob)
+    if s.ring {
+        let (ring_path, ring_error) = widget.rounded_path(s.arena, geometry.Rect { x: cx - 11.0, y: cy - 11.0, width: 22.0, height: 22.0 }, 11.0)
+        if ring_error != ok { ret ring_error }
+        let stroke = paint.Stroke { width: 2.0, cap: .Butt, join: .Round, miter_limit: 4.0 }
+        ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: ring_path, brush: paint.Brush { Solid: with_alpha(s.accent, 0.5) }, stroke: stroke } })
+    }
+    ret ok
+}
+
+fn linux_scale(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let state = control_state(t, key, enabled, false)
+    let hot = enabled && (state.hovered || state.pressed)
+    var trough = style.hex_raw(0xDDDDDDu32)
+    var fill = style.hex_raw(0x3584E4u32)
+    var knob = style.hex_raw(0xFFFFFFu32)
+    if dark {
+        trough = style.hex_raw(0x454545u32)
+        knob = style.hex_raw(0xD2D2D2u32)
+    }
+    if hot {
+        trough = style.hex_raw(0xD3D3D3u32)
+        fill = style.hex_raw(0x4990E7u32)
+        if dark {
+            trough = style.hex_raw(0x505050u32)
+            knob = style.hex_raw(0xFFFFFFu32)
+        }
+    }
+    if !enabled {
+        trough = style.hex_raw(0xEBEBEBu32)
+        fill = style.hex_raw(0x98BFEFu32)
+        knob = style.hex_raw(0xFDFDFDu32)
+        if dark {
+            trough = style.hex_raw(0x343434u32)
+            fill = style.hex_raw(0x2D5484u32)
+            knob = style.hex_raw(0x7B7B7Bu32)
+        }
+    }
+    var share: f32 = 0.0
+    if high > low { share = (value - low) / (high - low) }
+    if share < 0.0 { share = 0.0 }
+    if share > 1.0 { share = 1.0 }
+    let (scales, scales_error) = mem.alloc[LinuxScale](a, 1usize)
+    if scales_error != ok { ret (zero, TooLarge) }
+    scales[0usize] = LinuxScale { arena: a, share: share, trough: trough, fill: fill, knob: knob, ring: enabled && state.focus_visible, accent: style.color(t.tokens, .Focus), across: 200.0, shade: if_else(enabled, 1.0, 0.12) }
+    var none: []const widget.Node = zero
+    let seen = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&scales[0usize]), measure: linux_scale_measure, paint: linux_scale_paint, state: widget.bytes_of[LinuxScale](&scales[0usize]) } }, style: sized_style(200.0, 34.0), children: none }
+    var track_style = sized_style(200.0, 34.0)
+    track_style.position = .Absolute
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = seen
+    layers[1usize] = widget.slider(key, widget.Slider { value: value, second: value, range: false, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: zero, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }, track_style)
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    let (said, said_error) = mem.alloc[u8](a, 21usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let said_len = write_i64(said, i64(rounded))
+    sem.value = said[0usize..said_len]
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(200.0, 34.0), layers[0usize..2usize]))), ok)
+}
+// ---- end the Linux look, scale -----------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------ progress (D822, P1-09)
 
@@ -5795,6 +5945,10 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         let (cup, cup_error) = cupertino_progress_bar(a, key, t, label, value, indeterminate, width, options)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_progress_bar(a, key, t, label, value, indeterminate, width, options)
+        ret (linux, linux_error)
+    }
     let aimed = clamp_share(value)
     // (D1279) A determinate bar eases to each new value, never backwards.
     var share = aimed
@@ -5903,6 +6057,105 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     }
     ret (widget.semantics(key, sem, style.defaults(), bar[0usize..1usize]), ok)
 }
+
+// ---- the Linux look, progress bar and spinner (worker l3, round 20) -------------------------------------------------
+// GtkProgressBar in libadwaita 1.5: an 8 high trough (#dddddd Light, #454545 Dark) with 4 px corners and a fill of the same height
+// in accent_bg #3584e4, at least as wide as it is high; `full_bleed` is the OSD bar, 2 high, square, with no trough. The spinner is
+// the 32 px `process-working` ring: a 5 px arc of 270 degrees with a round head, fading from nothing at its tail.
+fn linux_progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let aimed = clamp_share(value)
+    var share = aimed
+    if !indeterminate { share = eased_share(t, key, aimed, true) }
+    var h: f32 = 8.0
+    var r: f32 = 4.0
+    var ground = style.hex_raw(0xDDDDDDu32)
+    if dark { ground = style.hex_raw(0x454545u32) }
+    if options.full_bleed {
+        h = 2.0
+        r = 0.0
+        ground = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    }
+    var ink = style.hex_raw(0x3584E4u32)
+    if options.tone == .Error { ink = style.color(t.tokens, .ErrorContainer) }
+    if options.tone == .Paused { ink = style.color(t.tokens, .TextMuted) }
+    var track = sized_style(width, h)
+    track.radius = r
+    track.background = paint.Brush { Solid: ground }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    if indeterminate {
+        // GTK's pulse: a block a fifth of the trough wide bouncing from end to end.
+        let seg = width * 0.2
+        let turn = progress_turn(t, options.phase, time.seconds(2i64))
+        let left = (width - seg) * animation.triangle(turn)
+        parts[0usize] = widget.positioned(0u64, left, 0.0, style.defaults(), widget_one_of(a, bar_piece(key + 1u64, seg, h, ink, r)))
+        used = 1usize
+    }
+    if !indeterminate && share > 0.0 {
+        var done = width * share
+        if done < h { done = h }
+        parts[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, bar_piece(key + 1u64, done, h, ink, r)))
+        used = 1usize
+    }
+    let bar = widget.stack(0u64, track, parts[0usize..used])
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    if indeterminate {
+        sem.states = accessibility.STATE_BUSY
+    } else {
+        let (shown, shown_error) = percent_text(a, aimed)
+        if shown_error != ok { ret (zero, shown_error) }
+        sem.value = shown
+    }
+    ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, bar)), ok)
+}
+
+type LinuxSpin = struct { arena: *mem.Arena, ink: paint.Color, start: f32 }
+
+fn linux_spin_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let spin = mem.cast[*LinuxSpin](ctx)
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    let radius = area.width * 0.356
+    let width = area.width * 0.165
+    let steps = 27usize
+    let sweep: f32 = 4.712389
+    var i = 0usize
+    while i < steps {
+        let from = spin.start + sweep * f32(i) / f32(steps)
+        let share = (f32(i) + 1.0) / f32(steps)
+        let (arc, arc_error) = sweep_path(spin.arena, cx, cy, radius, from, sweep / f32(steps) + 0.004)
+        if arc_error != ok { ret arc_error }
+        var cap: paint.StrokeCap = .Butt
+        if i + 1usize == steps { cap = .Round }
+        if i == 0usize { cap = .Round }
+        let stroke = paint.Stroke { width: width, cap: cap, join: .Round, miter_limit: 4.0 }
+        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: arc, brush: paint.Brush { Solid: with_alpha(spin.ink, share * spin.ink.alpha) }, stroke: stroke } })
+        i += 1usize
+    }
+    ret ok
+}
+
+fn linux_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32, options: ProgressOptions) -> (widget.Node, err) {
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    sem.states = accessibility.STATE_BUSY
+    var ink = style.color(t.tokens, .Text)
+    if options.content.alpha > 0.0 { ink = options.content }
+    let turn = progress_turn(t, options.phase, time.seconds(1i64))
+    let (spins, spins_error) = mem.alloc[LinuxSpin](a, 1usize)
+    if spins_error != ok { ret (zero, TooLarge) }
+    // the head sits at 4:30 at rest (turn 0); the arc turns clockwise from there
+    spins[0usize] = LinuxSpin { arena: a, ink: ink, start: 3.9269908 + turn * 6.2831855 }
+    var none: []const widget.Node = zero
+    let node = widget.Node { key: key + 1u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&spins[0usize]), measure: ring_measure, paint: linux_spin_paint, state: widget.bytes_of[LinuxSpin](&spins[0usize]) } }, style: sized_style(size, size), children: none }
+    ret (widget.semantics(key, sem, style.defaults(), widget_one_of(a, node)), ok)
+}
+// ---- end the Linux look, progress bar and spinner ---------------------------------------------------------------------
 
 // What a ring paints (v2, D970): the track over `sweep` radians clockwise from
 // `start` (radians from the top), the value arc through `share` of it, the gap in
@@ -6061,6 +6314,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
         let (cup, cup_error) = cupertino_ring(a, key, t, label, value, indeterminate, size, options)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_ring(a, key, t, label, value, indeterminate, size, options)
+        ret (linux, linux_error)
+    }
     var share = clamp_share(value)
     if share > 0.0 && share < 0.04 { share = 0.04 }
     var stroke = size / 12.0
@@ -6162,6 +6419,10 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_field(a, key, t, label, buffer, len, change, submit, options, secret)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_field(a, key, t, label, buffer, len, change, submit, options, secret)
+        ret (gtk, gtk_error)
     }
     let state = control_state(t, key, options.enabled, false)
     let focused = state.focused && options.enabled
@@ -7146,6 +7407,10 @@ fn reveal_semantic_action(ctx: *void, action: u32) -> err {
 }
 
 fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, revealed: bool, reveal: *const widget.Submit) -> (widget.Node, err) {
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_password(a, key, t, label, buffer, len, change, submit, options, revealed, reveal)
+        ret (gtk, gtk_error)
+    }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var side = t.tokens.sizes.control_sm
     var glyph = t.tokens.sizes.icon_sm
@@ -7197,6 +7462,10 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_search(a, key, t, buffer, len, change, submit, clear, options)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_search(a, key, t, buffer, len, change, submit, clear, options)
+        ret (gtk, gtk_error)
     }
     // v2 (D952, docs/ux/components/SearchBar): a `surface-container-high` pill,
     // 40 tall with a pointer and 56 on touch, with a trailing clear button.
@@ -7471,6 +7740,19 @@ fn select_led(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, optio
 // value and a picture before each menu row). `icons` is empty or as long as `options`.
 fn select_icons(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Linux {
+        // GtkDropDown with an icon in its factory: the picture of the chosen item before its name, the natural width.
+        var shown = label
+        if selected < options.len { shown = options[selected] }
+        var lead: widget.Node = zero
+        var has_lead = false
+        if selected < options.len && icons.len == options.len {
+            lead = icons[selected]
+            has_lead = true
+        }
+        let (gtk, gtk_error) = linux_dropdown_core(a, key, t, label, shown, lead, has_lead, 0.0, 34.0, enabled, open, options, selected, picks, zero, toggle)
+        ret (gtk, gtk_error)
+    }
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = win_select(a, key, t, label, options, selected, open, toggle, picks)
         ret (flat, flat_error)
@@ -7698,6 +7980,10 @@ fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options
 // Unframed (D958), it is the rows alone on the container, for a frame around more.
 fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32, multi: bool, framed: bool) -> (widget.Node, err) {
     if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Linux && framed {
+        let (boxed, boxed_error) = linux_listed(a, key, t, label, options, chosen, picks, rows, width, multi)
+        ret (boxed, boxed_error)
+    }
     if t.tokens.profile == .Windows && multi && framed {
         let (drawn, drawn_error) = windows_check_list(a, key, t, label, options, chosen, picks, rows, width)
         ret (drawn, drawn_error)
@@ -8539,7 +8825,7 @@ fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, se
 // enabled). (D1226) `icons` puts a glyph above each label; `badges` holds a count
 // per tab ("" for none) and `badge_names` what each means in the tab's name
 // (the count itself when shorter).
-type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str, dots: []const bool, bottom: bool, native: bool }
+type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str, dots: []const bool, bottom: bool, native: bool, vertical: bool }
 
 fn tab_badge(options: *const TabsOptions, i: usize) -> str {
     if i >= options.badges.len { ret "" }
@@ -8765,6 +9051,10 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_tabs(a, key, t, labels, selected, picks, options)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_tabs(a, key, t, labels, selected, picks, options)
+        ret (linux, linux_error)
     }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var h = t.tokens.sizes.control_md
@@ -9139,6 +9429,326 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     sem.column_count = u32(labels.len)
     ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
+
+// ---- the Linux look, notebook tabs (worker l3, round 20) --------------------------------------------------------------------
+// GtkNotebook's header in libadwaita 1.5: the window colour with a 1 px line (#dddddd, #454545 Dark) along the page side, tabs of
+// the label's width plus 12 each side, 8 apart and centred along the header; across, a top tab is the whole 37 (36 and the line), a
+// left tab is 36 high and as wide as the widest tab. The chosen tab has a 4 px accent bar on the page side (over the line), a
+// hovered one the text colour at 15 % there, and a pointer wash of 7 %. `options.width` is the header's length along its tabs
+// (the whole width of a top header, the height of a left one); `options.vertical` is the left header.
+fn linux_tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    let vertical = options.vertical
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    let (widths, widths_error) = mem.alloc[f32](a, labels.len + 1usize)
+    if widths_error != ok { ret (zero, TooLarge) }
+    var widest: f32 = 0.0
+    var sum: f32 = 0.0
+    var i = 0usize
+    while i < labels.len {
+        let (adv, adv_error) = linux_label_width(a, t, caption, labels[i])
+        if adv_error != ok { ret (zero, adv_error) }
+        widths[i] = adv + 24.0
+        if widths[i] > widest { widest = widths[i] }
+        i += 1usize
+    }
+    // along: the sum of what lies along the header (widths across a top header, 36 each down a left one) and the gaps
+    var span: f32 = 0.0
+    if vertical { span = 36.0 * f32(labels.len) } else {
+        i = 0usize
+        while i < labels.len {
+            sum += widths[i]
+            i += 1usize
+        }
+        span = sum
+    }
+    if labels.len > 1usize { span += 8.0 * f32(labels.len - 1usize) }
+    var length = options.width
+    if length <= 0.0 { length = span + 16.0 }
+    var start = math.floor[f32]((length - span) * 0.5)
+    var across_w = length
+    var across_h: f32 = 37.0
+    if vertical {
+        across_w = widest
+        across_h = length
+    }
+    let ground = style.color(t.tokens, .Background)
+    var face = sized_style(across_w, across_h)
+    face.background = paint.Brush { Solid: ground }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, labels.len * 2usize + 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var rule = sized_style(across_w, 1.0)
+    var rule_at_x: f32 = 0.0
+    var rule_at_y: f32 = 36.0
+    if vertical {
+        rule = sized_style(1.0, across_h)
+        rule_at_x = widest - 1.0
+        rule_at_y = 0.0
+    }
+    rule.background = paint.Brush { Solid: linux_rule(t) }
+    layers[n] = widget.positioned(0u64, rule_at_x, rule_at_y, style.defaults(), mem_one_node(a, widget.box(0u64, rule, zero)))
+    n += 1usize
+    let accent = style.hex_raw(0x3584E4u32)
+    var at = start
+    i = 0usize
+    while i < labels.len {
+        let chosen = i == selected
+        let tab_key = key + 1u64 + u64(i)
+        let enabled = tab_enabled(&options, i)
+        let state = control_state(t, tab_key, enabled, chosen)
+        var tab_w = widths[i]
+        var tab_h: f32 = 37.0
+        var x = at
+        var y: f32 = 0.0
+        if vertical {
+            tab_w = widest
+            tab_h = 36.0
+            x = 0.0
+            y = at
+        }
+        var ink = style.color(t.tokens, .Text)
+        if !enabled { ink = with_alpha(ink, ink.alpha * 0.5) }
+        var look = style.resolve(t.tokens, .Plain, state)
+        var wash: f32 = 0.0
+        if state.hovered || state.pressed { wash = 0.07 }
+        var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+        if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) } else { wash = wash * 0.8 }
+        look.background = with_alpha(tint, wash)
+        look.foreground = ink
+        look.border_width = 0.0
+        look.radius = 0.0
+        look.opacity = 1.0
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = tab_w
+        look.min_height = tab_h
+        let (word, word_error) = colored_text(a, 0u64, labels[i], t, caption, ink)
+        if word_error != ok { ret (zero, word_error) }
+        let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
+        if wide_error != ok { ret (zero, wide_error) }
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 4.0, style.defaults(), mem_one_node(a, word))
+        let content = widget.aligned(0u64, .Center, .Center, sized_style(tab_w, tab_h), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, enabled, chosen, 0u32, 0u32, 0u64, &picks[i], content)
+        if tab_error != ok { ret (zero, tab_error) }
+        layers[n] = widget.positioned(0u64, x, y, style.defaults(), mem_one_node(a, tab))
+        n += 1usize
+        // the bar on the page side: accent when chosen, the text colour at 15 % when hovered
+        var bar_ink = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if state.hovered && enabled {
+            bar_ink = with_alpha(tint, 0.15)
+            if !dark { bar_ink = with_alpha(tint, 0.12) }
+        }
+        if chosen { bar_ink = accent }
+        if bar_ink.alpha > 0.0 {
+            var bar = sized_style(tab_w, 4.0)
+            var bar_x = x
+            var bar_y = y + tab_h - 4.0
+            if vertical {
+                bar = sized_style(4.0, tab_h)
+                bar_x = x + tab_w - 4.0
+                bar_y = y
+            }
+            bar.background = paint.Brush { Solid: bar_ink }
+            layers[n] = widget.positioned(0u64, bar_x, bar_y, style.defaults(), mem_one_node(a, widget.box(0u64, bar, zero)))
+            n += 1usize
+        }
+        if vertical { at += 44.0 } else { at += widths[i] + 8.0 }
+        i += 1usize
+    }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var before = labels.len
+    var after = labels.len
+    var k = 0usize
+    while k < labels.len {
+        if tab_enabled(&options, k) {
+            if k < selected { before = k }
+            if k > selected && after == labels.len { after = k }
+        }
+        k += 1usize
+    }
+    var back: u32 = 37u32
+    var forward: u32 = 39u32
+    if vertical {
+        back = 38u32
+        forward = 40u32
+    }
+    var bound = 0usize
+    if before < labels.len && selected < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: back, modifiers: zero, action: picks[before] }
+        bound += 1usize
+    }
+    if after < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: forward, modifiers: zero, action: picks[after] }
+        bound += 1usize
+    }
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), mem_one_node(a, widget.stack(0u64, face, layers[0usize..n])))
+    var sem: widget.Semantics = zero
+    sem.role = 20u8
+    sem.column_count = u32(labels.len)
+    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+// ---- end the Linux look, notebook tabs ----------------------------------------------------------------------------------
+
+// ---- the Linux look, tab bar and view switcher (worker l3, round 20) -----------------------------------------------------
+// AdwTabBar in libadwaita 1.5: the headerbar colour (#ffffff, #303030) 46 high over a 1 px line (#e1e1e1, #1f1f1f); its tabs are 34
+// high 6 down, 6 px corners, the chosen one washed with the text colour at 10 % and holding a 24 px close button at its end,
+// the others plain with a 1 px separator (3 px off the ends) between each pair that neither chosen tab touches. AdwTabBox lays
+// the tabs out by its own expand rules, so `lefts` and `widths` say where each stands; `fade` (above 0) is the width of the fade
+// the bar's start edge puts over the first tab (the clipped edge of a scrolled strip).
+fn linux_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, lefts: []const f32, widths: []const f32, fade: f32, width: f32) -> (widget.Node, err) {
+    if picks.len != labels.len || lefts.len != labels.len || widths.len != labels.len { ret (zero, TooLarge) }
+    let dark = t.tokens.palette == .Dark
+    let ground = style.color(t.tokens, .SurfaceContainerHigh)
+    var face = sized_style(width, 47.0)
+    face.background = paint.Brush { Solid: ground }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, labels.len * 3usize + 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var line_ink = style.hex_raw(0xE1E1E1u32)
+    if dark { line_ink = style.hex_raw(0x1F1F1Fu32) }
+    var line = sized_style(width, 1.0)
+    line.background = paint.Brush { Solid: line_ink }
+    layers[n] = widget.positioned(0u64, 0.0, 46.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+    n += 1usize
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) }
+    let scale: f32 = if_else(dark, 1.0, 0.8)
+    var i = 0usize
+    while i < labels.len {
+        let chosen = i == selected
+        let tab_key = key + 1u64 + u64(i)
+        let state = control_state(t, tab_key, true, chosen)
+        var wash: f32 = 0.0
+        if chosen { wash = 0.1 }
+        if state.hovered { wash = if_else(chosen, 0.13, 0.07) }
+        if state.pressed { wash = if_else(chosen, 0.19, 0.16) }
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = with_alpha(tint, wash * scale)
+        look.foreground = style.color(t.tokens, .Text)
+        look.border_width = 0.0
+        look.radius = 6.0
+        look.opacity = 1.0
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = widths[i]
+        look.min_height = 34.0
+        let (word, word_error) = colored_text(a, 0u64, labels[i], t, caption, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
+        if wide_error != ok { ret (zero, wide_error) }
+        // the title is centred in what the tab keeps 4 round, less the close button's 24 on the chosen one
+        var room = widths[i] - 8.0
+        if chosen { room -= 24.0 }
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+        let title = widget.positioned(0u64, 2.0 + math.floor[f32]((room - wide) * 0.5 + 0.5), 6.5, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = title
+        var count = 1usize
+        if chosen {
+            let (cross, cross_error) = icon_square(a, look.foreground, .Cross, 16.0)
+            if cross_error != ok { ret (zero, cross_error) }
+            parts[1usize] = widget.positioned(0u64, widths[i] - 20.0, 9.0, style.defaults(), mem_one_node(a, cross))
+            count = 2usize
+        }
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, true, chosen, 0u32, 0u32, 0u64, &picks[i], widget.stack(0u64, sized_style(widths[i], 34.0), parts[0usize..count]))
+        if tab_error != ok { ret (zero, tab_error) }
+        layers[n] = widget.positioned(0u64, lefts[i], 6.0, style.defaults(), mem_one_node(a, tab))
+        n += 1usize
+        if chosen && fade > 0.0 && i == 0usize {
+            let (fades, fades_error) = mem.alloc[EdgeFade](a, 1usize)
+            if fades_error != ok { ret (zero, TooLarge) }
+            fades[0usize] = edge_fade(ground, false)
+            let (shade, shade_error) = fade_node(a, &fades[0usize], fade, 34.0)
+            if shade_error != ok { ret (zero, shade_error) }
+            layers[n] = widget.positioned(0u64, lefts[i], 6.0, style.defaults(), shade)
+            n += 1usize
+        }
+        if i > 0usize && i != selected && i - 1usize != selected {
+            var sep_ink = style.hex_raw(0xE1E1E1u32)
+            if dark { sep_ink = style.hex_raw(0x4F4F4Fu32) }
+            var sep = sized_style(1.0, 28.0)
+            sep.background = paint.Brush { Solid: sep_ink }
+            layers[n] = widget.positioned(0u64, lefts[i], 9.0, style.defaults(), mem_one_node(a, widget.box(0u64, sep, zero)))
+            n += 1usize
+        }
+        i += 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 20u8
+    sem.column_count = u32(labels.len)
+    ret (widget.semantics(key, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, face, layers[0usize..n]))), ok)
+}
+
+// AdwViewSwitcher (wide): toggle buttons 24 high (6 px corners, padding 2 12) in a row, each a 16 picture, 6 px and the label in
+// Cantarell Bold, centred in its button; the chosen one washed with the text colour at 10 %. `lefts` and `widths` place the buttons
+// (the switcher makes them as wide as its widest), `kinds` are the pictures.
+fn linux_view_switcher(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, kinds: []const GlyphKind, selected: usize, picks: []const widget.Submit, lefts: []const f32, widths: []const f32, width: f32) -> (widget.Node, err) {
+    if picks.len != labels.len || lefts.len != labels.len || widths.len != labels.len || kinds.len != labels.len { ret (zero, TooLarge) }
+    let dark = t.tokens.palette == .Dark
+    var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    if dark { tint = paint.rgba(1.0, 1.0, 1.0, 1.0) }
+    let scale: f32 = if_else(dark, 1.0, 0.8)
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (layers, layers_error) = mem.alloc[widget.Node](a, labels.len)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < labels.len {
+        let chosen = i == selected
+        let tab_key = key + 1u64 + u64(i)
+        let state = control_state(t, tab_key, true, chosen)
+        var wash: f32 = 0.0
+        if chosen { wash = 0.1 }
+        if state.hovered { wash = if_else(chosen, 0.13, 0.07) }
+        if state.pressed { wash = if_else(chosen, 0.19, 0.16) }
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = with_alpha(tint, wash * scale)
+        look.foreground = style.color(t.tokens, .Text)
+        look.border_width = 0.0
+        look.radius = 6.0
+        look.opacity = 1.0
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = widths[i]
+        look.min_height = 24.0
+        let (word, word_error) = colored_text(a, 0u64, labels[i], t, caption, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
+        if wide_error != ok { ret (zero, wide_error) }
+        let (picture, picture_error) = icon_square(a, look.foreground, kinds[i], 16.0)
+        if picture_error != ok { ret (zero, picture_error) }
+        let content_w = 22.0 + wide
+        let first = math.floor[f32]((widths[i] - content_w) * 0.5 + 0.5)
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = widget.positioned(0u64, first, 4.0, style.defaults(), mem_one_node(a, picture))
+        let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+        parts[1usize] = widget.positioned(0u64, first + 21.0, 1.5, style.defaults(), mem_one_node(a, widget.aligned(0u64, .Center, .Center, sized_style(wide, 19.0), mem_one_node(a, held))))
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, true, chosen, 0u32, 0u32, 0u64, &picks[i], widget.stack(0u64, sized_style(widths[i], 24.0), parts[0usize..2usize]))
+        if tab_error != ok { ret (zero, tab_error) }
+        layers[i] = widget.positioned(0u64, lefts[i], 0.0, style.defaults(), mem_one_node(a, tab))
+        i += 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 20u8
+    sem.column_count = u32(labels.len)
+    ret (widget.semantics(key, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, sized_style(width, 24.0), layers[0usize..labels.len]))), ok)
+}
+// ---- end the Linux look, tab bar and view switcher ----------------------------------------------------------------------
 
 // A tab view: the tab list (keyed `key + 1`) above the selected page alone, a group
 // labelled by the selected tab.
@@ -9812,6 +10422,9 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     let cupertino = t.tokens.profile == .CupertinoLike
     // macOS: the thick divider is 9 across with a 1 px separator line in it.
     if cupertino { hit = 9.0 }
+    // libadwaita's GtkPaned: a 1 px #dddddd handle between the panes (worker l3).
+    let linux = t.tokens.profile == .Linux
+    if linux { hit = 1.0 }
     let (handles, handles_error) = mem.alloc[Handle](a, 1usize)
     if handles_error != ok { ret (zero, TooLarge) }
     let (kept, has_kept) = sash_cell(t.runtime, key + 2u64, size)
@@ -9849,6 +10462,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     if !touch { reach = 8.0 }
     if cupertino { reach = 6.0 }
     if t.tokens.profile == .Windows { reach = 0.0 }
+    if linux { reach = 8.0 }
     let over = style.Length { Px: 0.0 - reach }
     let flat = style.Length { Px: 0.0 }
     if vertical {
@@ -9901,6 +10515,11 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
             sashes_line = style.color(t.tokens, .Primary)
             line_width = 2.0
         }
+    }
+    if linux {
+        sashes_line = linux_rule(t)
+        line_width = 1.0
+        grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
     }
     if bar {
         grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
@@ -10170,6 +10789,11 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = windows_glyph_toggle(a, key, t, kind, label, action, true, selected)
         ret (flat, flat_error)
+    }
+    // The Linux look (worker l3): a flat icon button, 6 px corners, the pressed wash while on (GtkToggleButton:checked).
+    if t.tokens.profile == .Linux {
+        let (linux, linux_error) = linux_glyph_toggle(a, key, t, kind, label, action, side, glyph_size, selected)
+        ret (linux, linux_error)
     }
     let state = control_state(t, key, true, selected)
     var muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -10898,6 +11522,10 @@ fn spin_box_full(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         let (cup, cup_error) = cupertino_spin_box(a, key, t, label, buffer, value, low, high, step, change, typed, width)
         ret (cup, cup_error)
     }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_spin(a, key, t, label, buffer, value, low, high, step, change, typed, width, enabled, invalid)
+        ret (gtk, gtk_error)
+    }
     let (buttons, shortcuts, pair_error) = step_pair_enabled(a, t, key + 1u64, key + 2u64, value, low, high, step, change, enabled)
     if pair_error != ok { ret (zero, pair_error) }
     let len = write_i64(buffer, value)
@@ -10975,6 +11603,10 @@ fn button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buff
     if t.tokens.profile == .Windows {
         let (win, win_error) = windows_button_edit(a, key, t, label, buffer, len, change, submit, action, button_label, options)
         ret (win, win_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_button_edit(a, key, t, label, buffer, len, change, submit, action, button_label, options)
+        ret (gtk, gtk_error)
     }
     var reserved = options
     reserved.end_space = 24.0 - 8.0
@@ -11465,6 +12097,10 @@ fn move_fire(ctx: *void) -> err {
 // 12 each side, 36 tall with a pointer and 48 on touch, transparent; the active
 // row carries the `state-focus` layer of `on-surface`, a hovered one the hover layer.
 fn list_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, active: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_list_row(a, key, t, label, active, action)
+        ret (gtk, gtk_error)
+    }
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = win_drop_row(a, key, t, label, active, action)
         ret (flat, flat_error)
@@ -11578,6 +12214,7 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         var sheet_style = surface_style(t, sheet)
         sheet_style.padding.top = style.Length { Px: 8.0 }
         sheet_style.padding.bottom = style.Length { Px: 8.0 }
+        if t.tokens.profile == .Linux { sheet_style = linux_popover_style(t, menu_w, suggestions.len) }
         if t.tokens.profile == .MaterialLike {
             sheet_style.radius = 4.0
             if menu_w > 0.0 { sheet_style.width = style.Length { Px: menu_w } }
@@ -11585,6 +12222,23 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
+        if t.tokens.profile == .Linux {
+            // The popover's soft shadow lies under it: a zero-size node first in the column paints it round the popover's box
+            // (the width is the anchor's less 2, the height the rows and the padding).
+            if menu_w > 0.0 {
+                let (shade, shade_error) = linuxshadow.node(a, menu_w - 2.0, 12.3 + 35.5 * f32(suggestions.len), 6.0, 6.15, style.color(t.tokens, .SurfaceBright))
+                if shade_error != ok { ret (zero, shade_error) }
+                let (shaded, shaded_error) = mem.alloc[widget.Node](a, suggestions.len + 1usize)
+                if shaded_error != ok { ret (zero, TooLarge) }
+                shaded[0usize] = shade
+                var r = 0usize
+                while r < suggestions.len {
+                    shaded[r + 1usize] = items[r]
+                    r += 1usize
+                }
+                column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, shaded[0usize..suggestions.len + 1usize])
+            }
+        }
         if t.tokens.profile == .Windows {
             var sheet_row: f32 = 13.0
             if win_dark(t) { sheet_row = 15.0 }
@@ -11616,6 +12270,12 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         var placed_at: widget.Placement = .BelowMatch
         var shift: f32 = 0.0
         if t.tokens.profile == .Windows && t.tokens.palette == .Dark && menu_w > 0.0 { placed_at = .Below }
+        if t.tokens.profile == .Linux && menu_w > 0.0 {
+            // GTK's popover opens a little under the button and a pixel in from its edge.
+            placed_at = .Below
+            shift = 1.0
+            below = 7.074
+        }
         if t.tokens.profile == .MaterialLike {
             below = 20.0
             if menu_w > 0.0 {
@@ -11675,6 +12335,14 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = win_combo_box(a, key, t, label, buffer, len, typed, choices, active, open, picks, activate, toggle, options)
         ret (flat, flat_error)
+    }
+    if t.tokens.profile == .Linux {
+        if options.read_only {
+            let (drop, drop_error) = linux_dropdown(a, key, t, label, buffer, len, choices, active, open, picks, activate, toggle, options)
+            ret (drop, drop_error)
+        }
+        let (gtk, gtk_error) = linux_combo_entry(a, key, t, label, buffer, len, typed, choices, active, open, picks, activate, toggle, options)
+        ret (gtk, gtk_error)
     }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var side = t.tokens.sizes.control_sm
@@ -11743,6 +12411,10 @@ fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, toke
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width)
         ret (cup, cup_error)
+    }
+    if t.tokens.profile == .Linux {
+        let (gtk, gtk_error) = linux_token_field(a, key, t, label, tokens, removes, buffer, len, typed, add, suggestions, active, open, picks, activate, dismiss, width)
+        ret (gtk, gtk_error)
     }
     if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
@@ -15238,6 +15910,10 @@ fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.
     view.overflow = .Clip
     var along = height
     if !vertical { along = width }
+    // The Linux look (worker l3): GNOME's overlay indicator, shown only while the content moves, in the slider colour.
+    if t.tokens.profile == .Linux {
+        ret (widget.scroll(key, widget.Scroll { axis: axis, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: linux_slider(t, true), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: true, virtual_extras: zero }, view, children), ok)
+    }
     if t.tokens.profile != .Windows {
         ret (widget.scroll(key, widget.Scroll { axis: axis, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, children), ok)
     }
@@ -15256,6 +15932,51 @@ fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.
 }
 
 fn scroll_bar_gesture(ctx: *void, g: widget.Gesture) -> err { ret ok }
+
+// ---- the Linux look, scroll bar (worker l3, round 20) ----------------------------------------------------------------
+// GtkScrollbar in libadwaita 1.5: a strip 20 across, no trough, holding an 8 across pill (#d3d3d3 Light, #505050 Dark; #f5f5f5 /
+// #2c2c2c when insensitive) centred in it. Along the strip the pill is `length * length / content` long and sits at
+// `offset / content * length`. Dragging is the viewport's own (as under the Windows look).
+fn linux_slider(t: *const Theme, enabled: bool) -> paint.Color {
+    if t.tokens.palette == .Dark {
+        if !enabled { ret style.hex_raw(0x2C2C2Cu32) }
+        ret style.hex_raw(0x505050u32)
+    }
+    if !enabled { ret style.hex_raw(0xF5F5F5u32) }
+    ret style.hex_raw(0xD3D3D3u32)
+}
+
+fn linux_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical: bool, length: f32, content: f32, offset: f32, enabled: bool) -> (widget.Node, err) {
+    var strip = sized_style(20.0, length)
+    if !vertical { strip = sized_style(length, 20.0) }
+    var count = 0usize
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    if content > 0.0 {
+        var span = length * length / content
+        if span > length { span = length }
+        var at = offset / content * length
+        if at > length - span { at = length - span }
+        if at < 0.0 { at = 0.0 }
+        var pill = sized_style(8.0, span)
+        pill.margin = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: at }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        if !vertical {
+            pill = sized_style(span, 8.0)
+            pill.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        }
+        pill.radius = 4.0
+        pill.background = paint.Brush { Solid: linux_slider(t, enabled) }
+        pill.position = .Absolute
+        parts[0usize] = widget.box(key + 1u64, pill, zero)
+        count = 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 17u8
+    sem.label = "Scroll bar"
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(key, sem, style.defaults(), mem_one_node(a, widget.stack(0u64, strip, parts[0usize..count]))), ok)
+}
+// ---- end the Linux look, scroll bar ---------------------------------------------------------------------------------
 
 // ---- The Windows look, bars (docs/ui/looks, group `bars`): toolbar buttons, menu text and the
 // shared bar helpers. v3's DevExpress bars draw Tahoma 8 pt (11 px) on the #F0F0F0 face; the
@@ -20101,6 +20822,13 @@ fn linux_label_width(a: *mem.Arena, t: *const Theme, caption: TextOptions, label
 // A GTK button: a 34 high face (`style.adwaita_resolve`) holding an optional 16 px picture, 6 px from the caption;
 // `circular` makes a picture-only button a 34 circle (the `circular` style class), otherwise 6 px corners.
 fn linux_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let (node, node_error) = linux_button_shaped(a, key, t, label, picture, has_icon, action, options, zero)
+    ret (node, node_error)
+}
+
+// `linux_button` with its own corner radii (a button of a linked group keeps 6 px on the outer corners only); a zero `corners`
+// is the plain button. A captioned `circular` button is libadwaita's `pill`: a capsule with 32 px sides.
+fn linux_button_shaped(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, picture: widget.Node, has_icon: bool, action: *const widget.Submit, options: ButtonOptions, corners: style.Corners) -> (widget.Node, err) {
     var state = control_state(t, key, options.enabled, false)
     if options.focused && options.enabled { state.focus_visible = true }
     var look = style.adwaita_resolve(t.tokens, options.variant, state)
@@ -20113,6 +20841,13 @@ fn linux_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, pic
     }
     // libadwaita: `button.text-button` has 17 px sides; a button with a picture (an AdwButtonContent) keeps the 10.
     if !alone && !has_icon { look.padding = 17.0 }
+    if !alone && options.circular {
+        look.padding = 32.0
+        look.radius = 22.0
+        look.padding_y = look.padding_y + 5.0
+    }
+    look.corners = corners
+    if corners.top_left > 0.0 || corners.top_right > 0.0 || corners.bottom_right > 0.0 || corners.bottom_left > 0.0 { look.radius = 0.0 }
     if !alone { look.padding_y = look.padding_y - 1.0 }
     if options.width > 0.0 { look.min_width = options.width }
     if options.height > 0.0 { look.min_height = options.height }
@@ -20143,7 +20878,649 @@ fn linux_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, pic
     let (node, node_error) = pressable(a, key, t, 3u8, name, look, options.enabled, false, action, row)
     ret (node, node_error)
 }
+// ---- the Linux look, toggle buttons (worker l3, round 20) ----------------------------------------------------------
+// GtkToggleButton: a button whose checked state is the pressed wash (black 23.6 %, white 29.2 % Dark; the default Tonal face
+// unchecked). The icon form is the flat 34 px button (9 px padding round a 16 px glyph).
+fn linux_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, true, selected)
+    var look = style.adwaita_resolve(t.tokens, .Plain, state)
+    look.padding = (side - glyph_size) * 0.5
+    look.padding_y = look.padding
+    look.min_width = side
+    look.min_height = side
+    let (mark, mark_error) = icon_square(a, look.foreground, kind, glyph_size)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, selected, action, mark)
+    ret (node, node_error)
+}
+
+fn linux_toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    var state = control_state(t, key, options.enabled, selected)
+    if options.focused && options.enabled { state.focus_visible = true }
+    var look = style.adwaita_resolve(t.tokens, .Tonal, state)
+    look.padding = 17.0
+    look.padding_y = look.padding_y - 1.0
+    if options.width > 0.0 { look.min_width = options.width }
+    if options.height > 0.0 { look.min_height = options.height }
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if word_error != ok { ret (zero, word_error) }
+    let (wide, wide_error) = linux_label_width(a, t, caption, label)
+    if wide_error != ok { ret (zero, wide_error) }
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+    let row = widget.aligned(0u64, .Center, .Center, sized_style(wide, 21.0), mem_one_node(a, held))
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, selected, action, row)
+    ret (node, node_error)
+}
+// ---- end the Linux look, toggle buttons -------------------------------------------------------------------------------
 // ---- end the Linux look ---------------------------------------------------------------------------------
+
+// ---- round 20, l2: the Linux look's edits (text, search, password; libadwaita 1.5 `entry`) ------------------------------
+// An entry is 34 high with 6 px corners and a flat face: black 8 % over what it sits on (white 9.6 % Dark); error, warning and
+// success tint it with their colour at 10 % and colour the text. A focused entry (any focus, not only the keyboard's) wears the
+// 2 px accent ring at 50 % inside its edge, as the button does. Disabled is the whole entry at 50 %. The placeholder is the text
+// colour at 55 %. FieldOptions.chrome_kind is read here as the tone of a Linux entry: 1 warning, 2 success (invalid is the error).
+fn linux_tone(options: FieldOptions) -> u32 {
+    if options.invalid { ret 3u32 }
+    if options.chrome_kind == 1u32 || options.chrome_kind == 2u32 { ret options.chrome_kind }
+    ret 0u32
+}
+
+fn linux_tone_color(t: *const Theme, tone: u32) -> paint.Color {
+    if tone == 1u32 { ret style.color(t.tokens, .Warning) }
+    if tone == 2u32 { ret style.color(t.tokens, .Success) }
+    if tone == 3u32 { ret style.color(t.tokens, .Error) }
+    ret style.color(t.tokens, .Text)
+}
+
+// The face of an entry, a spin button or a drop down: an alpha tint, so it takes what it sits on.
+fn linux_entry_face(t: *const Theme, tone: u32) -> paint.Color {
+    var strength: f32 = 0.08
+    if t.tokens.palette == .Dark { strength = 0.096 }
+    if tone != 0u32 {
+        let c = linux_tone_color(t, tone)
+        ret paint.Color { red: c.red, green: c.green, blue: c.blue, alpha: 0.1 }
+    }
+    if t.tokens.palette == .Dark { ret paint.rgba(1.0, 1.0, 1.0, strength) }
+    ret paint.rgba(0.0, 0.0, 0.0, strength)
+}
+
+fn linux_ring_color(t: *const Theme, tone: u32) -> paint.Color {
+    if tone == 0u32 { ret style.color(t.tokens, .FocusRing) }
+    ret with_alpha(linux_tone_color(t, tone), 0.5)
+}
+
+// The editor of a Linux entry: the text in `ink` at body size, its selection the accent at 30 %.
+fn linux_editor(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, secret: bool, ink: paint.Color, multiline: bool, rows: u32) -> (widget.Node, err) {
+    var value_options = text_options()
+    value_options.role = .Body
+    value_options.mono = options.mono
+    let (text_look, style_error) = text_style_faced(a, t, value_options)
+    if style_error != ok { ret (zero, style_error) }
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: f32(rows) * 19.0 }
+    var caret: paint.Color = zero
+    if looks_native_caret_off { caret = paint.rgba(0.0, 0.0, 0.0, 0.0001) }
+    let selection = with_alpha(style.color(t.tokens, .Primary), 0.3)
+    let (named, named_error) = named_editor(a, key, label, options.placeholder, options.invalid, editor_style, widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: ink, selection: selection, change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: caret, untabbed: false, ringed: false }, editor_style))
+    ret (named, named_error)
+}
+
+// The value stack of a Linux entry: the placeholder (while empty) under the editor.
+fn linux_value(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, secret: bool, ink: paint.Color, multiline: bool, rows: u32) -> (widget.Node, err) {
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    if len == 0usize && options.placeholder.len != 0usize {
+        var hint = text_options()
+        hint.role = .Body
+        hint.wrap = .None
+        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, t, hint, with_alpha(ink, ink.alpha * 0.55))
+        if hint_error != ok { ret (zero, hint_error) }
+        layers[at] = hint_node
+        at += 1usize
+    }
+    let (editor, editor_error) = linux_editor(a, key, t, label, buffer, len, change, submit, options, secret, ink, multiline, rows)
+    if editor_error != ok { ret (zero, editor_error) }
+    layers[at] = editor
+    at += 1usize
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    grow.overflow = .Clip
+    // GTK sits the Cantarell line 1 px above the middle of the entry: a 2 px foot under the line.
+    ret (widget.padded(0u64, 0.0, 0.0, 0.0, 1.0, grow, widget_one_of(a, widget.stack(0u64, style.defaults(), layers[0usize..at]))), ok)
+}
+
+// The frame of a Linux entry round `parts`: width, height, face, the ring while `ringed`, 50 % when disabled.
+fn linux_frame(a: *mem.Arena, t: *const Theme, width: f32, height: f32, face: paint.Color, ring: paint.Color, ringed: bool, enabled: bool, left: f32, right: f32, parts: []const widget.Node) -> widget.Node {
+    var none: []const widget.Node = zero
+    ret linux_frame_over(a, t, width, height, face, ring, ringed, enabled, left, right, parts, none)
+}
+
+// The same with `over` laid above the face and below the ring (a spin button's arrows, as positioned nodes).
+fn linux_frame_over(a: *mem.Arena, t: *const Theme, width: f32, height: f32, face: paint.Color, ring: paint.Color, ringed: bool, enabled: bool, left: f32, right: f32, parts: []const widget.Node, over: []const widget.Node) -> widget.Node {
+    var frame = style.defaults()
+    frame.width = style.Length { Px: width }
+    frame.min_height = style.Length { Px: height }
+    frame.background = paint.Brush { Solid: face }
+    frame.radius = 6.0
+    frame.padding = style.EdgeLengths { left: style.Length { Px: left }, top: style.Length { Px: 0.0 }, right: style.Length { Px: right }, bottom: style.Length { Px: 0.0 } }
+    let boxed = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, frame, parts)
+    // The focus ring is its own layer over the face (its own layer keeps the face unshifted); the layer
+    // is always there, clear at rest, so the tree keeps its shape when the focus arrives.
+    var outline = sized_style(width, height)
+    if ringed { outline.border = style.Border { width: 2.0, color: ring } }
+    outline.radius = 5.7
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize + over.len)
+    if layers_error != ok { ret boxed }
+    layers[0usize] = boxed
+    var at = 1usize
+    var k = 0usize
+    while k < over.len {
+        layers[at] = over[k]
+        at += 1usize
+        k += 1usize
+    }
+    layers[at] = widget.box(0u64, outline, zero)
+    at += 1usize
+    var whole = sized_style(width, height)
+    if !enabled { whole.opacity = 0.5 }
+    ret widget.stack(0u64, whole, layers[0usize..at])
+}
+
+fn linux_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, secret: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    let focused = state.focused && options.enabled
+    let tone = linux_tone(options)
+    var h = options.height
+    if !(h > 0.0) { h = 34.0 }
+    let multiline = options.rows > 1u32
+    if multiline {
+        let (view, view_error) = linux_textview(a, key, t, label, buffer, len, change, options)
+        ret (view, view_error)
+    }
+    let (value, value_error) = linux_value(a, key, t, label, buffer, len, change, submit, options, secret, linux_tone_color(t, tone), multiline, options.rows)
+    if value_error != ok { ret (zero, value_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = value
+    let boxed = linux_frame(a, t, options.width, h, linux_entry_face(t, tone), linux_ring_color(t, tone), focused, options.enabled, 9.0 + options.start_space, 9.0 + options.end_space, parts[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, boxed)), ok)
+}
+// An icon button inside an entry (the peek eye, the search clear): a 16 px symbolic icon at 70 % of the text colour.
+fn linux_icon_hit(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, ink: paint.Color, action: *const widget.Submit, name: str, enabled: bool) -> (widget.Node, err) {
+    let (mark, mark_error) = adwicon.icon(a, svg, with_alpha(ink, ink.alpha * 0.7), 16.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    let region = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: false }, style.defaults(), widget_one_of(a, mark))
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = name
+    sem.actions = accessibility.ACTION_PRESS
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, region)), ok)
+}
+
+// A password entry: the entry with the peek eye 9 px from its end (`view-reveal`, `view-conceal` while the text shows).
+fn linux_password(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, revealed: bool, reveal: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    let focused = state.focused && options.enabled
+    let tone = linux_tone(options)
+    let ink = linux_tone_color(t, tone)
+    let (value, value_error) = linux_value(a, key, t, label, buffer, len, change, submit, options, !revealed, ink, false, 1u32)
+    if value_error != ok { ret (zero, value_error) }
+    var svg = adwicon.view_reveal()
+    if revealed { svg = adwicon.view_conceal() }
+    let (eye, eye_error) = linux_icon_hit(a, key + 1u64, t, svg, ink, reveal, "Show password", options.enabled)
+    if eye_error != ok { ret (zero, eye_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = value
+    parts[1usize] = eye
+    var h = options.height
+    if !(h > 0.0) { h = 34.0 }
+    let boxed = linux_frame(a, t, options.width, h, linux_entry_face(t, tone), linux_ring_color(t, tone), focused, options.enabled, 9.0, 9.0, parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, boxed)), ok)
+}
+
+// A search entry (GtkSearchEntry): the magnifier 9 px from the start, the clear icon 9 px from the end while it holds text.
+fn linux_search(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, clear: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    let focused = state.focused && options.enabled
+    let ink = style.color(t.tokens, .Text)
+    var shown = options
+    if shown.placeholder.len == 0usize { shown.placeholder = "Search" }
+    let (value, value_error) = linux_value(a, key, t, "", buffer, len, change, submit, shown, false, ink, false, 1u32)
+    if value_error != ok { ret (zero, value_error) }
+    let (lens, lens_error) = adwicon.icon(a, adwicon.edit_find(), with_alpha(ink, ink.alpha * 0.7), 16.0)
+    if lens_error != ok { ret (zero, lens_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = lens
+    parts[1usize] = value
+    var count = 2usize
+    if len != 0usize {
+        let (cross, cross_error) = linux_icon_hit(a, key + 1u64, t, adwicon.edit_clear(), ink, clear, "Clear", options.enabled)
+        if cross_error != ok { ret (zero, cross_error) }
+        parts[2usize] = cross
+        count = 3usize
+    }
+    var h = options.height
+    if !(h > 0.0) { h = 34.0 }
+    let boxed = linux_frame(a, t, options.width, h, linux_entry_face(t, 0u32), linux_ring_color(t, 0u32), focused, options.enabled, 9.0, 9.0, parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, boxed)), ok)
+}
+
+// A text view (GtkTextView in a framed scrolled window): square, the view colour in a 1 px frame, 8 px of margin round the
+// text, no focus ring. The frame colours are the measured #ddd (Light) and #454545 (Dark).
+fn linux_textview(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], options: FieldOptions) -> (widget.Node, err) {
+    var ink = style.color(t.tokens, .Text)
+    var view = style.color(t.tokens, .Surface)
+    // Disabled, the view and its text are at half strength and the frame keeps its colour.
+    if !options.enabled {
+        ink = with_alpha(ink, ink.alpha * 0.5)
+        view = with_alpha(view, 0.5)
+    }
+    let (editor, editor_error) = linux_editor(a, key, t, label, buffer, len, change, zero, options, false, ink, true, options.rows)
+    if editor_error != ok { ret (zero, editor_error) }
+    var frame = style.defaults()
+    frame.width = style.Length { Px: options.width }
+    var h = options.height
+    if !(h > 0.0) { h = f32(options.rows) * 19.0 + 18.0 }
+    frame.min_height = style.Length { Px: h }
+    frame.background = paint.Brush { Solid: view }
+    var edge = style.hex(0xDDDDDDu32)
+    if t.tokens.palette == .Dark { edge = style.hex(0x454545u32) }
+    frame.border = style.Border { width: 1.0, color: edge }
+    frame.overflow = .Clip
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
+    ret (widget.box(0u64, frame, widget_one_of(a, editor)), ok)
+}
+
+// A spin button's arrow (libadwaita `spinbutton > button`): 33 x 34, a flat face that takes the button's flat tints (black 5.6 % hovered,
+// 12.4 % pressed; white 6.8 / 15.1 % Dark), a 1 px divider on its left (black 7.8 %, white 9.6 % Dark, which the tint darkens too) and
+// the 16 px symbolic icon in the text colour. An arrow that cannot step has the icon at 15 % and the divider at 27 %. `last` rounds
+// the right corners with the spin button's. Not a Tab stop (GTK's arrows are not).
+fn linux_spin_arrow(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, label: str, action: *const widget.Submit, usable: bool, last: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, usable, false)
+    let dark = t.tokens.palette == .Dark
+    var tint = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var rule = paint.rgba(0.0, 0.0, 0.0, 0.078)
+    var over: f32 = 0.0
+    if state.hovered && !state.pressed { over = 0.056 }
+    if state.pressed { over = 0.124 }
+    if dark {
+        rule = paint.rgba(1.0, 1.0, 1.0, 0.096)
+        if state.hovered && !state.pressed { over = 0.068 }
+        if state.pressed { over = 0.151 }
+    }
+    if dark { tint = paint.rgba(1.0, 1.0, 1.0, over) } else { tint = paint.rgba(0.0, 0.0, 0.0, over) }
+    let ink = style.color(t.tokens, .Text)
+    var shown = ink
+    if !usable {
+        shown = with_alpha(ink, ink.alpha * 0.15)
+        rule = with_alpha(rule, rule.alpha * 0.27)
+    }
+    let (mark, mark_error) = adwicon.icon(a, svg, shown, 16.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    var line = style.defaults()
+    line.width = style.Length { Px: 1.0 }
+    line.height = style.Length { Px: 34.0 }
+    line.background = paint.Brush { Solid: rule }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.box(0u64, line, zero)
+    parts[1usize] = widget.aligned(0u64, .Center, .Center, sized_style(32.0, 34.0), widget_one_of(a, mark))
+    var face = sized_style(33.0, 34.0)
+    face.background = paint.Brush { Solid: tint }
+    if last { face.corners = style.Corners { top_left: 0.0, top_right: 6.0, bottom_right: 6.0, bottom_left: 0.0 } }
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, face, parts[0usize..2usize])
+    let region = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: usable, focusable: false }, style.defaults(), widget_one_of(a, row))
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if !usable { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, region)), ok)
+}
+
+// A spin button (GtkSpinButton): the entry's flat face holding the value and, 54 px in, the two arrows (`key + 2` up, `key + 1` down).
+fn linux_spin(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32, enabled: bool, invalid: bool) -> (widget.Node, err) {
+    let (buttons, shortcuts, pair_error) = step_pair_enabled(a, t, key + 1u64, key + 2u64, value, low, high, step, change, enabled)
+    if pair_error != ok { ret (zero, pair_error) }
+    let len = write_i64(buffer, value)
+    var options = field_options()
+    options.width = width
+    options.enabled = enabled
+    options.invalid = invalid
+    let state = control_state(t, key, enabled, false)
+    let focused = state.focused && enabled
+    let tone = linux_tone(options)
+    let (editor, editor_error) = linux_value(a, key, t, label, buffer, len, typed, zero, options, false, linux_tone_color(t, tone), false, 1u32)
+    if editor_error != ok { ret (zero, editor_error) }
+    let (down, down_error) = linux_spin_arrow(a, key + 1u64, t, adwicon.value_decrease(), "Decrease", &shortcuts[0usize].action, enabled && value > low, false)
+    if down_error != ok { ret (zero, down_error) }
+    let (up, up_error) = linux_spin_arrow(a, key + 2u64, t, adwicon.value_increase(), "Increase", &shortcuts[1usize].action, enabled && value < high, true)
+    if up_error != ok { ret (zero, up_error) }
+    let (pair, pair_nodes_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_nodes_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = down
+    pair[1usize] = up
+    let arrows = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = editor
+    let (over, over_error) = mem.alloc[widget.Node](a, 1usize)
+    if over_error != ok { ret (zero, TooLarge) }
+    over[0usize] = widget.positioned(0u64, width - 66.0, 0.0, style.defaults(), widget_one_of(a, arrows))
+    let boxed = linux_frame_over(a, t, width, 34.0, linux_entry_face(t, tone), linux_ring_color(t, tone), focused, enabled, 9.0, 66.0, parts[0usize..1usize], over[0usize..1usize])
+    var none: []widget.Node = zero
+    let (made, made_error) = stepped(a, key + 3u64, t, label, value, boxed, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
+    ret (made, made_error)
+}
+
+// ---- round 20, l2: the Linux look's combo boxes (GtkDropDown and GtkComboBoxText with an entry) ----------------------------
+// A read-only combo box is libadwaita's drop down: the default button (black 8 % / 11.6 % / 23.6 %; the open list leaves it at rest) holding the bold value at 10 px and the `pan-down` arrow; with room to spare the arrow sits 17 px from the end (a natural-width
+// drop down puts it 10 px in). An editable one is the entry with a 36 px arrow button on the end (a 1 px divider, the flat tints, right
+// corners 6); a focused editor wears the ring round the entry part only.
+fn linux_ring_layer(width: f32, height: f32, ring: paint.Color, ringed: bool, left_radius: f32, right_radius: f32) -> widget.Node {
+    var outline = sized_style(width, height)
+    if ringed { outline.border = style.Border { width: 2.0, color: ring } }
+    outline.corners = style.Corners { top_left: left_radius, top_right: right_radius, bottom_right: right_radius, bottom_left: left_radius }
+    ret widget.box(0u64, outline, zero)
+}
+
+fn linux_dropdown(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    // A drop down shows the chosen item.
+    var shown = ""
+    if active < choices.len { shown = choices[active] }
+    var h: f32 = 34.0
+    if options.height > 0.0 { h = options.height }
+    let (made, made_error) = linux_dropdown_core(a, key, t, label, shown, zero, false, options.width, h, options.enabled, open, choices, active, picks, activate, toggle)
+    ret (made, made_error)
+}
+
+// A drop down with an optional 16 px picture before the value (an image combo box); `width` 0 is its natural width.
+fn linux_dropdown_core(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, lead: widget.Node, has_lead: bool, width: f32, height: f32, enabled: bool, open: bool, choices: []const str, active: usize, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit) -> (widget.Node, err) {
+    let (boxed, w, boxed_error) = linux_menu_button(a, key, t, label, shown, lead, has_lead, width, height, enabled, open, toggle, false)
+    if boxed_error != ok { ret (zero, boxed_error) }
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting_wide(a, key, t, label, boxed, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle, w)
+    ret (made, made_error)
+}
+
+// `linux_label_width` with an advance of exactly a half pixel (a digit of the bold face is 8.5) rounded down, as Pango's hinted metrics do.
+fn linux_label_width_half_down(a: *mem.Arena, t: *const Theme, caption: TextOptions, label: str) -> (f32, err) {
+    var ascii = true
+    var i = 0usize
+    while i < label.len {
+        if label[i] >= 128u8 { ascii = false }
+        i += 1usize
+    }
+    if !ascii {
+        let (advance, fit, baseline, whole_error) = run_metrics_faced(a, t, caption, label)
+        ret (f32(u32(fit + 0.5)), whole_error)
+    }
+    var sum: f32 = 0.0
+    i = 0usize
+    while i < label.len {
+        let (advance, fit, baseline, letter_error) = run_metrics_faced(a, t, caption, label[i..i + 1usize])
+        if letter_error != ok { ret (0.0, letter_error) }
+        sum += f32(u32(advance + 0.49))
+        i += 1usize
+    }
+    ret (sum, ok)
+}
+
+// The face of a drop down or menu button (see linux_dropdown); answers the node and the width it came to.
+fn linux_menu_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, lead: widget.Node, has_lead: bool, width: f32, height: f32, enabled: bool, open: bool, toggle: *const widget.Submit, tight: bool) -> (widget.Node, f32, err) {
+    let state = control_state(t, key, enabled, false)
+    var look = style.adwaita_resolve(t.tokens, .Tonal, state)
+    look.border_width = 0.0
+    look.border = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, shown, t, caption, look.foreground)
+    if word_error != ok { ret (zero, 0.0, word_error) }
+    let (wide, wide_error) = linux_label_width_half_down(a, t, caption, shown)
+    if wide_error != ok { ret (zero, 0.0, wide_error) }
+    var picture_w: f32 = 0.0
+    if has_lead { picture_w = 16.0 + 6.0 }
+    // A GtkMenuButton (a date edit's) keeps its arrow 3 px from the label and 9 from the end.
+    var gap: f32 = 6.0
+    var rim: f32 = 10.0
+    if tight {
+        gap = 3.0
+        rim = 9.0
+    }
+    let natural = 10.0 + picture_w + wide + gap + 16.0 + rim
+    var w = width
+    if !(w > 0.0) { w = natural }
+    var end_pad: f32 = rim
+    if w >= natural + 7.0 { end_pad = 17.0 }
+    let label_w = max_zero(w - 10.0 - end_pad - picture_w - gap - 16.0)
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+    let (arrow, arrow_error) = adwicon.icon(a, adwicon.pan_down(), look.foreground, 16.0)
+    if arrow_error != ok { ret (zero, 0.0, arrow_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, 0.0, TooLarge) }
+    var clipped = style.defaults()
+    clipped.width = style.Length { Px: label_w }
+    clipped.height = style.Length { Px: 21.0 }
+    clipped.overflow = .Clip
+    var used = 0usize
+    if has_lead {
+        parts[used] = lead
+        used += 1usize
+    }
+    parts[used] = widget.box(0u64, clipped, mem_one_node(a, held))
+    used += 1usize
+    parts[used] = arrow
+    used += 1usize
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), parts[0usize..used])
+    look.custom_padding = true
+    look.padding_start = 10.0
+    look.padding = end_pad
+    look.padding_y = max_zero((height - 21.0) * 0.5)
+    look.min_width = w
+    look.min_height = height
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (face_button, face_button_error) = pressable_states(a, key, t, 3u8, label, look, enabled, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, row)
+    if face_button_error != ok { ret (zero, 0.0, face_button_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, 0.0, TooLarge) }
+    layers[0usize] = face_button
+    layers[1usize] = linux_ring_layer(w, height, linux_ring_color(t, 0u32), state.focus_visible && enabled, 5.7, 5.7)
+    ret (widget.stack(0u64, sized_style(w, height), layers[0usize..2usize]), w, ok)
+}
+
+fn linux_combo_entry(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    let focused = state.focused && options.enabled
+    let ink = style.color(t.tokens, .Text)
+    var edit_options = options
+    edit_options.invalid = false
+    let (value, value_error) = linux_value(a, key, t, label, buffer, len, typed, zero, edit_options, false, ink, false, 1u32)
+    if value_error != ok { ret (zero, value_error) }
+    let side = control_state(t, key + 1u64, options.enabled, open)
+    let dark = t.tokens.palette == .Dark
+    var tint = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var rule = paint.rgba(0.0, 0.0, 0.0, 0.078)
+    var over: f32 = 0.0
+    if side.hovered && !side.pressed { over = 0.056 }
+    if side.pressed || open { over = 0.124 }
+    if dark {
+        rule = paint.rgba(1.0, 1.0, 1.0, 0.096)
+        if side.hovered && !side.pressed { over = 0.068 }
+        if side.pressed || open { over = 0.151 }
+        tint = paint.rgba(1.0, 1.0, 1.0, over)
+    } else {
+        tint = paint.rgba(0.0, 0.0, 0.0, over)
+    }
+    let (arrow, arrow_error) = adwicon.icon(a, adwicon.pan_down(), ink, 16.0)
+    if arrow_error != ok { ret (zero, arrow_error) }
+    var line = style.defaults()
+    line.width = style.Length { Px: 1.0 }
+    line.height = style.Length { Px: 34.0 }
+    line.background = paint.Brush { Solid: rule }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.box(0u64, line, zero)
+    parts[1usize] = widget.positioned(0u64, 10.0, 9.0, style.defaults(), widget_one_of(a, arrow))
+    var face = sized_style(36.0, 34.0)
+    face.background = paint.Brush { Solid: tint }
+    face.corners = style.Corners { top_left: 0.0, top_right: 6.0, bottom_right: 6.0, bottom_left: 0.0 }
+    let side_box = widget.stack(0u64, face, parts[0usize..2usize])
+    let region = widget.region(key + 1u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](toggle), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: options.enabled, focusable: false }, style.defaults(), widget_one_of(a, side_box))
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = "Choices"
+    sem.actions = accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU
+    if open { sem.states = accessibility.STATE_EXPANDED }
+    sem.controls = key + 2u64
+    let opener = widget.semantics(0u64, sem, style.defaults(), widget_one_of(a, region))
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.positioned(0u64, options.width - 36.0, 0.0, style.defaults(), widget_one_of(a, opener))
+    layers[1usize] = linux_ring_layer(options.width - 35.0, 34.0, linux_ring_color(t, 0u32), focused, 5.7, 0.0)
+    let (parts_in, parts_in_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_in_error != ok { ret (zero, TooLarge) }
+    parts_in[0usize] = value
+    let boxed = linux_frame_over(a, t, options.width, 34.0, linux_entry_face(t, 0u32), linux_ring_color(t, 0u32), false, options.enabled, 9.0, 45.0, parts_in[0usize..1usize], layers[0usize..2usize])
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting_wide(a, key, t, label, boxed, none, key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle, options.width)
+    ret (made, made_error)
+}
+// A row of a Linux drop-down list (a GtkListView row in the popover): 35.5 high (a 19.5 line and 8 above and below), 12 px sides,
+// the value in the regular weight, the `object-select` check 6 px after the chosen one's text, the flat button tints under the pointer.
+fn linux_list_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chosen: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    let ink = style.color(t.tokens, .Text)
+    var tint = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if state.hovered || state.pressed {
+        var over: f32 = 0.056
+        if state.pressed { over = 0.124 }
+        if t.tokens.palette == .Dark {
+            over = 0.068
+            if state.pressed { over = 0.151 }
+            tint = paint.rgba(1.0, 1.0, 1.0, over)
+        } else {
+            tint = paint.rgba(0.0, 0.0, 0.0, over)
+        }
+    }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.foreground = ink
+    look.background = tint
+    look.border_width = 0.0
+    look.radius = 6.0
+    look.custom_padding = true
+    look.padding_start = 12.0
+    look.padding = 12.0
+    look.padding_y = 8.0
+    look.min_height = 35.5
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if word_error != ok { ret (zero, word_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 1.0, style.defaults(), mem_one_node(a, word))
+    var count = 1usize
+    if chosen {
+        let (tick, tick_error) = adwicon.icon(a, adwicon.object_select(), ink, 16.0)
+        if tick_error != ok { ret (zero, tick_error) }
+        parts[1usize] = tick
+        count = 2usize
+    }
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), parts[0usize..count])
+    let (node, node_error) = pressable_states_fill(a, key, t, 3u8, label, look, true, false, 0u32, accessibility.ACTION_PRESS, 0u64, action, true, row)
+    ret (node, node_error)
+}
+
+// The popover that holds a Linux list (`popover > contents`): the popover colour, 12 px corners, 6 px of padding at the sides and 6.15
+// above and below the rows, `menu_w` less 2 wide when the anchor's width is known.
+fn linux_popover_style(t: *const Theme, menu_w: f32, rows: usize) -> style.Style {
+    var sheet = style.defaults()
+    sheet.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceBright) }
+    sheet.radius = 12.0
+    sheet.padding = style.EdgeLengths { left: style.Length { Px: 6.0 }, top: style.Length { Px: 6.15 }, right: style.Length { Px: 6.0 }, bottom: style.Length { Px: 6.15 } }
+    if menu_w > 0.0 { sheet.width = style.Length { Px: menu_w - 2.0 } }
+    sheet.height = style.Length { Px: 12.3 + 35.5 * f32(rows) }
+    ret sheet
+}
+
+// ---- end combo boxes ----------------------------------------------------------------------------------------------------
+
+// ---- round 20, l2: the Linux look's token edit ----------------------------------------------------------------------------
+// GTK has no token entry; the capture is libadwaita's `pill` buttons in a row. Here each token is such a pill (the default button's face
+// and tints, bold text, 32 px sides, 44 high, full corners; a press removes it) and the typing field follows them as an entry, all
+// wrapping at `width` with 6 px between.
+fn linux_pill(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    var look = style.adwaita_resolve(t.tokens, .Tonal, state)
+    look.border_width = 0.0
+    look.border = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    look.radius = 22.0
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if word_error != ok { ret (zero, word_error) }
+    let (wide, wide_error) = linux_label_width(a, t, caption, label)
+    if wide_error != ok { ret (zero, wide_error) }
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+    let row = widget.aligned(0u64, .Start, .Center, sized_style(wide, 21.0), mem_one_node(a, held))
+    look.custom_padding = true
+    look.padding_start = 32.0
+    look.padding = 32.0
+    look.padding_y = 11.5
+    look.min_width = 0.0
+    look.min_height = 44.0
+    let (pill, pill_error) = pressable(a, key, t, 3u8, label, look, true, false, action, row)
+    ret (pill, pill_error)
+}
+
+fn linux_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < tokens.len {
+        let (pill, pill_error) = linux_pill(a, key + 1u64 + 2u64 * u64(i), t, tokens[i], &removes[i])
+        if pill_error != ok { ret (zero, pill_error) }
+        items[i] = pill
+        i += 1usize
+    }
+    var options = field_options()
+    options.width = 120.0
+    options.placeholder = label
+    let state = control_state(t, key, true, false)
+    let (value, value_error) = linux_value(a, key, t, label, buffer, len, typed, add, options, false, style.color(t.tokens, .Text), false, 1u32)
+    if value_error != ok { ret (zero, value_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = value
+    items[tokens.len] = linux_frame(a, t, 120.0, 34.0, linux_entry_face(t, 0u32), linux_ring_color(t, 0u32), state.focused, true, 9.0, 9.0, parts[0usize..1usize])
+    var flow_style = style.defaults()
+    flow_style.width = style.Length { Px: width }
+    let flow = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 6.0, cross_gap: 6.0 }, flow_style, items[0usize..tokens.len + 1usize])
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting(a, key, t, label, flow, none, key + 62u64, key + 63u64, suggestions, active, open, picks, activate, dismiss)
+    ret (made, made_error)
+}
+// ---- end token edit ---------------------------------------------------------------------------------------------------------
+
+// ---- end round 20, l2 -----------------------------------------------------------------------------------------
 
 // ---- round 11: the native Windows 11 light tooltip (ref/windows-native/light/tooltip-rest@1x, 126 x 20) ----------------------
 // A uxtheme window v3 never shows (its hint is the cxHint of win5_hint): a #F9F9F9 face in a 1 px #E5E5E5 frame with 4 px rounded corners,
@@ -20657,3 +22034,591 @@ fn win_dark_bullets(a: *mem.Arena, count: usize) -> (widget.Node, err) {
     }
     ret (widget.stack(0u64, style.defaults(), kids[0usize..n]), ok)
 }
+
+// ---- the Linux look, choices (round 20, worker l1) --------------------------------------------------------------
+// GtkCheckButton and the radio of GtkCheckButton in a group (libadwaita 1.5): a 20 x 20 indicator at 4, 4 in a 28 high row,
+// 6 px corners (a disc for the radio), a 2 px ring of black 11.6 % (white 15 % Dark; hover 15.6 / 20 %, pressed 20 / 25 %
+// and filled solid) while off, the accent fill (#3584e4, hover #4990e7, pressed #2a6ab6) with a white tick, dash or 8 px dot
+// while on, the label 4 px after it, the whole row at 50 % when disabled, and a 2 px accent ring round the row when the
+// keyboard focuses it.
+fn linux_tick_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let g = mem.cast[*Glyph](ctx)
+    let (pb, pb_error) = geometry.path_builder(g.arena, 4usize, 6usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try geometry.move_to(&builder, geometry.Point { x: area.x + 4.8, y: area.y + 10.3 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 8.0, y: area.y + 13.6 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 15.0, y: area.y + 6.4 })
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: g.color }, stroke: paint.Stroke { width: g.stroke, cap: .Round, join: .Round, miter_limit: 4.0 } } })
+}
+
+fn linux_tick(a: *mem.Arena, color: paint.Color) -> (widget.Node, err) {
+    let (made, made_error) = stroked_glyph(a, color, .Check, 20.0, 2.3)
+    if made_error != ok { ret (zero, made_error) }
+    var out = made
+    switch out.kind {
+    case .Custom as c:
+        var painted = c
+        painted.paint = linux_tick_paint
+        out.kind = widget.Kind { Custom: painted }
+    default:
+        out = out
+    }
+    ret (out, ok)
+}
+
+// The indicator's colours: (fill, ring, ring width).
+fn linux_choice_colors(t: *const Theme, state: style.ControlState, filled: bool) -> (paint.Color, paint.Color, f32) {
+    let dark = t.tokens.palette == .Dark
+    var rest: f32 = 0.116
+    var hover: f32 = 0.156
+    var press: f32 = 0.2
+    var tint = paint.rgba(0.0, 0.0, 0.0, 1.0)
+    if dark {
+        tint = paint.rgba(1.0, 1.0, 1.0, 1.0)
+        rest = 0.15
+        hover = 0.2
+        press = 0.25
+    }
+    if filled {
+        var face = style.hex_raw(0x3584E4u32)
+        if state.hovered && !state.pressed { face = style.hex_raw(0x4990E7u32) }
+        if state.pressed { face = style.hex_raw(0x2A6AB6u32) }
+        ret (face, paint.rgba(0.0, 0.0, 0.0, 0.0), 0.0)
+    }
+    var alpha = rest
+    if state.hovered { alpha = hover }
+    var ring = paint.Color { red: tint.red, green: tint.green, blue: tint.blue, alpha: alpha }
+    if state.pressed {
+        ring.alpha = press
+        ret (ring, paint.rgba(0.0, 0.0, 0.0, 0.0), 0.0)
+    }
+    ret (paint.rgba(0.0, 0.0, 0.0, 0.0), ring, 2.0)
+}
+
+fn linux_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let filled = chosen || mixed
+    let (face, ring, ring_w) = linux_choice_colors(t, state, filled)
+    var box = sized_style(20.0, 20.0)
+    box.background = paint.Brush { Solid: face }
+    box.border = style.Border { width: ring_w, color: ring }
+    box.radius = 6.0
+    if round {
+        box = sized_style(20.1, 20.1)
+        box.background = paint.Brush { Solid: face }
+        box.border = style.Border { width: ring_w, color: ring }
+        box.radius = 10.05
+    }
+    let white = style.hex_raw(0xFFFFFFu32)
+    let (inside, inside_error) = mem.alloc[widget.Node](a, 1usize)
+    if inside_error != ok { ret (zero, TooLarge) }
+    var drawn = 0usize
+    if filled && round {
+        var dot = sized_style(8.0, 8.0)
+        dot.background = paint.Brush { Solid: white }
+        dot.radius = 4.0
+        inside[0usize] = widget.box(0u64, dot, zero)
+        drawn = 1usize
+    }
+    if filled && !round && mixed {
+        var dash = sized_style(12.0, 4.0)
+        dash.background = paint.Brush { Solid: white }
+        dash.radius = 2.0
+        inside[0usize] = widget.box(0u64, dash, zero)
+        drawn = 1usize
+    }
+    if filled && !round && !mixed {
+        let (tick, tick_error) = linux_tick(a, white)
+        if tick_error != ok { ret (zero, tick_error) }
+        inside[0usize] = tick
+        drawn = 1usize
+    }
+    var mark = widget.aligned(0u64, .Center, .Center, box, inside[0usize..drawn])
+    // The disc is 20.1 across (measured), centred on the 20 x 20 slot.
+    var caption = text_options()
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, label, t, caption, style.color(t.tokens, .Text))
+    if word_error != ok { ret (zero, word_error) }
+    let (wide, wide_error) = linux_label_width(a, t, caption, label)
+    if wide_error != ok { ret (zero, wide_error) }
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), mem_one_node(a, word))
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = mark
+    parts[1usize] = widget.aligned(0u64, .Center, .Center, sized_style(wide, 21.0), mem_one_node(a, held))
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), parts[0usize..2usize])
+    var s = sized_style(32.0 + wide, 28.0)
+    s.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+    if state.focus_visible && enabled { s.border = style.Border { width: 1.78, color: with_alpha(style.color(t.tokens, .FocusRing), 0.49) } }
+    s.radius = 9.0
+    s.opacity = 1.0
+    if !enabled { s.opacity = 0.5 }
+    s.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+    let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+    if centred_error != ok { ret (zero, TooLarge) }
+    centred[0usize] = widget.aligned(0u64, .Start, .Center, sized_style(24.0 + wide, 28.0), mem_one_node(a, row))
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, s, centred[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if chosen { sem.states = accessibility.STATE_CHECKED }
+    if mixed { sem.states = sem.states | accessibility.STATE_MIXED }
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
+}
+// ---- end the Linux look, choices --------------------------------------------------------------------------------
+
+// ---- the Linux look, labels (round 20, worker l1) ---------------------------------------------------------------
+// GtkLabel (libadwaita 1.5): kind 0 the plain label (black 80 %), 1 `.dim-label` (the same ink at 55 % opacity), 2 `.heading`
+// (bold). The box is as wide as GTK's hinted label (`linux_label_width`) and 19 high, the line GTK's.
+fn linux_label(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str, kind: u32) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.wrap = .None
+    if kind == 2u32 { caption.role = .Label }
+    var ink = style.color(t.tokens, .Text)
+    if kind == 1u32 { ink = with_alpha(ink, ink.alpha * 0.55) }
+    let (word, word_error) = colored_text(a, 0u64, value, t, caption, ink)
+    if word_error != ok { ret (zero, word_error) }
+    let (wide, wide_error) = linux_label_width(a, t, caption, value)
+    if wide_error != ok { ret (zero, wide_error) }
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, 0.0, style.defaults(), mem_one_node(a, word))
+    ret (widget.aligned(key, .Start, .Start, sized_style(wide, 19.0), mem_one_node(a, held)), ok)
+}
+// ---- end the Linux look, labels ---------------------------------------------------------------------------------
+
+// ---- the Linux look, group boxes (round 20, worker l1) ----------------------------------------------------------
+// Filled is libadwaita's `.card`: a 12 px rounded `@card_bg_color` surface (white; white 8 % Dark) inside a 1 px ring of black 4 %
+// that lies outside its box, its children as they come. Outlined is a GtkFrame: a 1 px ring (black 11.6 %, white 15 % Dark) round
+// 12 px corners, the caption at 4, 5 and the children from 28 down. A disabled group is the whole thing at 50 %.
+fn linux_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: GroupOptions, children: []const widget.Node) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    var inner = style.defaults()
+    inner.radius = 12.0
+    if options.width > 0.0 { inner.width = style.Length { Px: options.width } }
+    let n = children.len
+    let (parts, parts_error) = mem.alloc[widget.Node](a, n + 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    if options.variant == .Filled || options.variant == .Plain {
+        if options.variant == .Filled { inner.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) } }
+    } else {
+        var edge = paint.rgba(0.0, 0.0, 0.0, 0.116)
+        if dark { edge = paint.rgba(1.0, 1.0, 1.0, 0.15) }
+        inner.border = style.Border { width: 1.0, color: edge }
+        inner.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 1.0 } }
+        var caption = text_options()
+        caption.wrap = .None
+        let (word, word_error) = colored_text(a, 0u64, label, t, caption, style.color(t.tokens, .Text))
+        if word_error != ok { ret (zero, word_error) }
+        parts[0usize] = widget.padded(0u64, 3.0, 4.0, 0.0, 4.0, style.defaults(), mem_one_node(a, word))
+        count = 1usize
+    }
+    var i = 0usize
+    while i < n {
+        parts[count] = children[i]
+        count += 1usize
+        i += 1usize
+    }
+    let body = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, parts[0usize..count])
+    var shell = style.defaults()
+    shell.radius = 13.0
+    if options.variant == .Filled { shell.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } } }
+    if options.variant == .Filled { shell.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.04) } }
+    if !options.enabled { shell.opacity = 0.5 }
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, shell, mem_one_node(a, body)), ok)
+}
+// ---- end the Linux look, group boxes ----------------------------------------------------------------------------
+
+// ---- the Linux look, button edit (round 20, worker l1) ----------------------------------------------------------
+// An entry (34 high, 6 px corners, black 8 % / white 9.6 % face, text from 9) with a flat icon button in its last 34 px behind
+// a 1 px rule of the same ink (GtkEntry with a trailing GtkButton, libadwaita 1.5). The icon stands in for the symbolic
+// folder-open: an outline folder, 16 x 14 at 176, 10.
+fn linux_folder_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let g = mem.cast[*Glyph](ctx)
+    let (pb, pb_error) = geometry.path_builder(g.arena, 16usize, 24usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try geometry.move_to(&builder, geometry.Point { x: area.x + 1.0, y: area.y + 12.5 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 1.0, y: area.y + 2.0 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 6.0, y: area.y + 2.0 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 8.0, y: area.y + 4.0 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 13.0, y: area.y + 4.0 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 13.0, y: area.y + 6.0 })
+    try geometry.move_to(&builder, geometry.Point { x: area.x + 1.5, y: area.y + 12.5 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 3.5, y: area.y + 6.5 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 14.5, y: area.y + 6.5 })
+    try geometry.line_to(&builder, geometry.Point { x: area.x + 12.5, y: area.y + 12.5 })
+    try geometry.close_path(&builder)
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: g.color }, stroke: paint.Stroke { width: 1.7, cap: .Round, join: .Round, miter_limit: 4.0 } } })
+}
+
+fn linux_folder(a: *mem.Arena, color: paint.Color) -> (widget.Node, err) {
+    let (made, made_error) = stroked_glyph(a, color, .Check, 16.0, 1.7)
+    if made_error != ok { ret (zero, made_error) }
+    var out = made
+    switch out.kind {
+    case .Custom as c:
+        var painted = c
+        painted.paint = linux_folder_paint
+        out.kind = widget.Kind { Custom: painted }
+    default:
+        out = out
+    }
+    ret (out, ok)
+}
+
+fn linux_button_edit(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, action: *const widget.Submit, button_label: str, options: FieldOptions) -> (widget.Node, err) {
+    let dark = t.tokens.palette == .Dark
+    var w = options.width
+    if w <= 0.0 { w = 201.0 }
+    let h: f32 = 34.0
+    var wash = paint.rgba(0.0, 0.0, 0.0, 0.08)
+    if dark { wash = paint.rgba(1.0, 1.0, 1.0, 0.096) }
+    let usable = options.enabled && !options.read_only
+    let edit_state = control_state(t, key, options.enabled, false)
+    var face = sized_style(w, h)
+    face.radius = 6.0
+    face.background = paint.Brush { Solid: wash }
+    if edit_state.focus_visible && options.enabled { face.border = style.Border { width: 1.86, color: with_alpha(style.color(t.tokens, .FocusRing), 0.49) } }
+    let none = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    let (editor, editor_error) = bare_field(a, key, t, label, buffer, len, change, submit, w - 6.0 - 34.0, h, 14.667, none, none)
+    if editor_error != ok { ret (zero, editor_error) }
+    var rule = sized_style(1.0, h)
+    rule.background = paint.Brush { Solid: wash }
+    let (folder, folder_error) = linux_folder(a, style.color(t.tokens, .Text))
+    if folder_error != ok { ret (zero, folder_error) }
+    let state = control_state(t, key + 1u64, usable, false)
+    var look = style.adwaita_resolve(t.tokens, .Plain, state)
+    look.radius = 6.0
+    look.custom_padding = true
+    look.padding = 8.5
+    look.padding_y = 9.0
+    look.min_width = 33.0
+    look.min_height = 34.0
+    look.opacity = 1.0
+    let (pick, pick_error) = pressable(a, key + 1u64, t, 3u8, button_label, look, usable, false, action, folder)
+    if pick_error != ok { ret (zero, pick_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.box(0u64, face, zero)
+    layers[1usize] = widget.positioned(0u64, 7.0, 6.0, style.defaults(), mem_one_node(a, editor))
+    layers[2usize] = widget.positioned(0u64, w - 34.0, 0.0, style.defaults(), mem_one_node(a, widget.box(0u64, rule, zero)))
+    layers[3usize] = widget.positioned(0u64, w - 33.0, 0.0, style.defaults(), mem_one_node(a, pick))
+    var outer = sized_style(w, h)
+    if !options.enabled { outer.opacity = 0.5 }
+    ret (widget.stack(0u64, outer, layers[0usize..4usize]), ok)
+}
+// ---- end the Linux look, button edit ----------------------------------------------------------------------------
+
+// ---- the Linux look, linked buttons (round 20, worker l1) -------------------------------------------------------
+// GTK's `.linked` box: buttons side by side, 1 px rules between them (black 8 % / white 9.6 %), 6 px corners on the outer ends only.
+// `actions` is one per label, caller-owned; the buttons are keyed `key + index`.
+fn linux_linked_buttons(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    if actions.len != labels.len || labels.len == 0usize { ret (zero, TooLarge) }
+    let n = labels.len
+    let (parts, parts_error) = mem.alloc[widget.Node](a, n)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var rule = paint.rgba(0.0, 0.0, 0.0, 0.08)
+    if t.tokens.palette == .Dark { rule = paint.rgba(1.0, 1.0, 1.0, 0.096) }
+    var i = 0usize
+    while i < n {
+        var options = button_options()
+        options.variant = .Tonal
+        options.enabled = enabled
+        var caption = text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        let (wide, wide_error) = linux_label_width(a, t, caption, labels[i])
+        if wide_error != ok { ret (zero, wide_error) }
+        var width = wide + 34.0
+        // Every button but the first owns the rule on its left edge, drawn over its face.
+        if i > 0usize { width = width + 1.0 }
+        options.width = width
+        // A near-zero radius stands for "square": a zero `corners` would give the button its plain 6.
+        var rounded = style.Corners { top_left: 0.01, top_right: 0.01, bottom_right: 0.01, bottom_left: 0.01 }
+        if i == 0usize { rounded = style.Corners { top_left: 6.0, top_right: 0.01, bottom_right: 0.01, bottom_left: 6.0 } }
+        if i == n - 1usize { rounded = style.Corners { top_left: 0.01, top_right: 6.0, bottom_right: 6.0, bottom_left: 0.01 } }
+        if n == 1usize { rounded = style.Corners { top_left: 6.0, top_right: 6.0, bottom_right: 6.0, bottom_left: 6.0 } }
+        let (one, one_error) = linux_button_shaped(a, key + u64(i), t, labels[i], widget.spacer(0u64, 0.0), false, &actions[i], options, rounded)
+        if one_error != ok { ret (zero, one_error) }
+        if i == 0usize {
+            parts[i] = one
+        } else {
+            var line = sized_style(1.0, 34.0)
+            line.background = paint.Brush { Solid: rule }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = one
+            pair[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, widget.box(0u64, line, zero)))
+            parts[i] = widget.stack(0u64, sized_style(width, 34.0), pair[0usize..2usize])
+        }
+        i += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), parts[0usize..n]), ok)
+}
+// ---- end the Linux look, linked buttons -------------------------------------------------------------------------
+
+// ---- the Linux look, switch (round 20, worker l1) ----------------------------------------------------------------
+// GtkSwitch (libadwaita 1.5): a 46 x 26 capsule, off the check button's ring ink as a fill (black 11.6 / 15.6 / 20 % for rest, hover
+// and pressed; white 15 / 20 / 25 % Dark), on the accent fills of the check button, a 20 px white knob 3 px in with a soft shadow
+// (the Dark off knob is #d2d2d2 at rest), the whole at 50 % when disabled, and a 2 px accent ring 2 px outside the capsule when the
+// keyboard focuses it. A caption, if any, stands 12 px after it (not captured: the library's switch has none).
+fn linux_switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, on: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let dark = t.tokens.palette == .Dark
+    var goal: f32 = 0.0
+    if on { goal = 1.0 }
+    let share = eased_on(t, key, key + 1048592u64, goal, false, t.tokens.durations.short3)
+    let (fill, ring, ring_w) = linux_choice_colors(t, state, false)
+    var track_fill = fill
+    if ring_w == 0.0 { track_fill = fill }
+    // Off: the ring ink is the fill (the pressed form of linux_choice_colors, which is a fill); at rest and hover it is a ring colour.
+    var off_fill = ring
+    if ring_w == 0.0 { off_fill = fill }
+    let (on_fill, on_ring, on_ring_w) = linux_choice_colors(t, state, true)
+    track_fill = style.mix(off_fill, on_fill, share)
+    if share < 0.001 { track_fill = off_fill }
+    if share > 0.999 { track_fill = on_fill }
+    var track = sized_style(46.0, 26.0)
+    track.radius = 13.0
+    track.background = paint.Brush { Solid: track_fill }
+    var knob_ink = style.hex_raw(0xFFFFFFu32)
+    if dark && !on && !state.hovered && !state.pressed { knob_ink = style.hex_raw(0xD2D2D2u32) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 8usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if state.focus_visible && enabled {
+        var halo = sized_style(53.0, 33.0)
+        halo.radius = 16.5
+        halo.border = style.Border { width: 1.8, color: with_alpha(style.color(t.tokens, .FocusRing), 0.49) }
+        layers[n] = widget.positioned(0u64, -3.5, -3.5, halo, zero)
+        n += 1usize
+    }
+    layers[n] = widget.positioned(0u64, 0.0, 0.0, track, zero)
+    n += 1usize
+    let kx = 3.0 + 20.0 * share
+    // The knob's shadow: three washes under it, a little lower than the knob.
+    let reach = [3]f32{ 0.3, 1.0, 2.0 }
+    let wash = [3]f32{ 0.04, 0.05, 0.05 }
+    var k = 0usize
+    while k < 3usize {
+        let d = 20.0 + 2.0 * reach[k]
+        var s = sized_style(d, d)
+        s.radius = d * 0.5
+        s.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, wash[k]) }
+        layers[n] = widget.positioned(0u64, kx - reach[k], 3.0 - reach[k] + 2.8, s, zero)
+        n += 1usize
+        k += 1usize
+    }
+    var disc = sized_style(20.0, 20.0)
+    disc.radius = 10.0
+    disc.background = paint.Brush { Solid: knob_ink }
+    layers[n] = widget.positioned(0u64, kx, 3.0, disc, zero)
+    n += 1usize
+    var holder = sized_style(46.0, 26.0)
+    if !enabled { holder.opacity = 0.5 }
+    let mark = widget.stack(0u64, holder, layers[0usize..n])
+    var parts_count = 1usize
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = mark
+    if label.len > 0usize {
+        var caption = text_options()
+        caption.wrap = .None
+        var words = style.color(t.tokens, .Text)
+        if !enabled { words = with_alpha(words, words.alpha * 0.5) }
+        let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, words)
+        if label_error != ok { ret (zero, label_error) }
+        parts[1usize] = label_node
+        parts_count = 2usize
+    }
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), parts[0usize..parts_count])
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, style.defaults(), mem_one_node(a, row))
+    var sem: widget.Semantics = zero
+    sem.role = 18u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if on { sem.states = accessibility.STATE_CHECKED }
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
+}
+// ---- end the Linux look, switch ---------------------------------------------------------------------------------
+
+// ---- the Linux look, lists, trees, grids and the alert dialog (worker l4, round 20) ------------------------------------
+// libadwaita 1.5 boxed list: a 12 px card (card_bg_color: white, white 8 % over the window Dark) of rows 47 high, each after the
+// first under a 1 px rule (card_shade_color: black 6.7 % Light, 36 % Dark; measured 238 and 34). A row is its label at 12 px from the
+// side with 12 above and below (Cantarell line 23). A selected row is accent_bg at 25 %; the pointer over a row washes the
+// card's foreground colour over it at 3 %; a pressed row 7 % (stylesheet; no capture).
+fn linux_rule_for(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret paint.rgba(0.0, 0.0, 0.0, 0.3584) }
+    ret paint.rgba(0.0, 0.0, 0.0, 0.0667)
+}
+fn linux_card_fill(t: *const Theme) -> paint.Color { ret style.color(t.tokens, .SurfaceContainer) }
+
+// The fill of a row of a boxed list or a tree: nothing at rest, the foreground at 3 % under the pointer (7 % pressed), accent_bg
+// at 25 % chosen (the wash adds over it).
+fn linux_row_fill(t: *const Theme, state: style.ControlState, chosen: bool) -> paint.Color {
+    var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if chosen { fill = with_alpha(style.color(t.tokens, .Primary), 0.25) }
+    var wash: f32 = 0.0
+    if state.hovered { wash = 0.03 }
+    if state.pressed { wash = 0.07 }
+    if wash > 0.0 {
+        let ink = style.color(t.tokens, .OnSurface)
+        let over_alpha = ink.alpha * wash
+        let out_alpha = over_alpha + fill.alpha * (1.0 - over_alpha)
+        let keep = fill.alpha * (1.0 - over_alpha)
+        fill = paint.Color { red: (ink.red * over_alpha + fill.red * keep) / out_alpha, green: (ink.green * over_alpha + fill.green * keep) / out_alpha, blue: (ink.blue * over_alpha + fill.blue * keep) / out_alpha, alpha: out_alpha }
+    }
+    ret fill
+}
+
+// A label as GTK sets it: a 23 high holder (the Cantarell line), the glyphs centred in it.
+fn linux_row_label(a: *mem.Arena, t: *const Theme, label: str, ink: paint.Color, high: f32, lift: f32) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (word, word_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if word_error != ok { ret (zero, word_error) }
+    let held = widget.padded(0u64, 0.0, 0.0, 0.0, lift * 2.0, style.defaults(), mem_one_node(a, word))
+    ret (widget.aligned(0u64, .Start, .Center, sized_style(0.0, high), mem_one_node(a, held)), ok)
+}
+
+// The rows of a boxed list (list box, check list box): a tick box leads each row when `checks`.
+fn linux_listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32, checks: bool) -> (widget.Node, err) {
+    var row_h: f32 = 47.0
+    if checks { row_h = 30.0 }
+    let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < options.len {
+        let row_key = key + 1u64 + u64(i)
+        let state = control_state(t, row_key, true, false)
+        var row_style = style.defaults()
+        row_style.width = style.Length { Px: width }
+        row_style.height = style.Length { Px: row_h }
+        var shown = chosen[i]
+        if checks { shown = false }
+        row_style.background = paint.Brush { Solid: linux_row_fill(t, state, shown) }
+        var lift: f32 = 0.0
+        if checks { lift = 1.0 } else { lift = 0.5 }
+        let (word, word_error) = linux_row_label(a, t, options[i], style.color(t.tokens, .OnSurface), 23.0, lift)
+        if word_error != ok { ret (zero, word_error) }
+        var line_style = style.defaults()
+        line_style.width = style.Length { Px: width }
+        line_style.height = style.Length { Px: row_h }
+        var lead: f32 = 14.0
+        var parts_count = 1usize
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        if checks {
+            lead = 5.0
+            let (tick_box, box_error) = linux_check_box(a, t, chosen[i], state)
+            if box_error != ok { ret (zero, box_error) }
+            parts[0usize] = tick_box
+            parts[1usize] = word
+            parts_count = 2usize
+        } else {
+            parts[0usize] = word
+        }
+        line_style.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 0.0 } }
+        let line = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 9.0 }, line_style, parts[0usize..parts_count])
+        let region = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, mem_one_node(a, line))
+        var entry: widget.Semantics = zero
+        entry.role = accessibility.ROLE_OPTION
+        entry.label = options[i]
+        entry.row = u32(i + 1usize)
+        entry.row_count = u32(options.len)
+        if chosen[i] { entry.states = accessibility.STATE_SELECTED }
+        let row_node = widget.semantics(0u64, entry, style.defaults(), mem_one_node(a, region))
+        if i == 0usize {
+            items[i] = row_node
+        } else {
+            var rule_style = sized_style(width, 1.0)
+            rule_style.background = paint.Brush { Solid: linux_rule_for(t) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = widget.box(0u64, rule_style, zero)
+            pair[1usize] = row_node
+            items[i] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sized_style(width, row_h + 1.0), pair[0usize..2usize])
+        }
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    var total: f32 = 0.0
+    if rows > 0u32 { total = f32(rows) * row_h + f32(rows - 1u32) }
+    view_style.height = style.Length { Px: total }
+    view_style.background = paint.Brush { Solid: linux_card_fill(t) }
+    view_style.radius = 12.0
+    view_style.overflow = .Clip
+    let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
+    if view_error != ok { ret (zero, TooLarge) }
+    // The card's rim and glow at the corners (baked from the library's crops, 100 % only) over the rows.
+    let (corners, corners_error) = linux_card.corners_node(a, width, total, t.tokens.palette == .Dark)
+    if corners_error != ok { ret (zero, corners_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = view
+    pair[1usize] = corners
+    let boxed = widget.stack(0u64, sized_style(width, total), pair[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_LISTBOX
+    sem.label = label
+    sem.row_count = u32(options.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, boxed)), ok)
+}
+
+// A GTK check button's box, 20 x 20 (the row's own; the check box control's Linux look is another worker's): 2 px frame of the
+// foreground at 15 %, 4 px corners; chosen it is accent_bg with a white tick.
+fn linux_check_box(a: *mem.Arena, t: *const Theme, chosen: bool, state: style.ControlState) -> (widget.Node, err) {
+    var face = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var edge = with_alpha(style.color(t.tokens, .Outline), 0.1176)
+    if t.tokens.palette == .Dark { edge = with_alpha(style.color(t.tokens, .Outline), 0.1486) }
+    if chosen {
+        face = style.color(t.tokens, .Primary)
+        edge = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    }
+    var box_style = sized_style(20.0, 20.0)
+    box_style.background = paint.Brush { Solid: face }
+    box_style.border = style.Border { width: 2.0, color: edge }
+    box_style.radius = 6.0
+    var base = widget.box(0u64, box_style, zero)
+    if chosen {
+        let (tick, tick_error) = mark_glyph(a, style.hex_raw(0xFFFFFFu32), .Check, 12.0)
+        if tick_error != ok { ret (zero, tick_error) }
+        base = widget.aligned(0u64, .Center, .Center, box_style, mem_one_node(a, tick))
+    }
+    // At 100 % the library's own pixels go over it (baked, e.ui.linux_card); other scales keep the drawn box.
+    let (pixels, pixels_error) = linux_card.check_box_node(a, t.tokens.palette == .Dark, chosen)
+    if pixels_error != ok { ret (zero, pixels_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = base
+    pair[1usize] = pixels
+    ret (widget.stack(0u64, sized_style(20.0, 20.0), pair[0usize..2usize]), ok)
+}
+// ---- end the Linux look, lists (worker l4) ----------------------------------------------------------------------------
+
+// ---- the Linux look, framed views (worker l4, round 20) -----------------------------------------------------------------
+// A scrolled window frame, 1 px: the borders colour over the window (black 11.6 % Light, white 15 % Dark), as the opaque pixel the
+// library draws, 221 and 69, since the frame's own face runs under its edge here.
+fn linux_frame_for(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret style.hex_raw(0x454545u32) }
+    ret style.hex_raw(0xDDDDDDu32)
+}
+// The rule under a view header: the borders colour over the view (black 11.8 % Light, white 15 % Dark: 225 and 64).
+fn linux_rule_edge_for(t: *const Theme) -> paint.Color {
+    if t.tokens.palette == .Dark { ret paint.rgba(1.0, 1.0, 1.0, 0.1493) }
+    ret paint.rgba(0.0, 0.0, 0.0, 0.1176)
+}
+// ---- end the Linux look, framed views (worker l4) -----------------------------------------------------------------------

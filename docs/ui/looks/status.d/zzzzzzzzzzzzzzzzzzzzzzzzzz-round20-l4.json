@@ -1,0 +1,156 @@
+{
+ "list_box": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/list_box.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). Rest, selected and hover: 0 off pixels in Light and Dark (text 2182 px set apart). Rows 47 px under 1 px rules, accent 25 % selection, foreground 3 % hover; the card corners' rim and glow are baked from the crops (painted at 100 % only).",
+    "gaps": [
+     "Pressed row is the stylesheet's 7 % wash, no capture",
+     "Hover on a chosen row adds the wash over the selection, no capture",
+     "The card corner glow is a baked picture at 100 %; other scales draw the plain 12 px corner",
+     "The 1.5x sheet is rendered but has no reference"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/list_box.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). Rest, selected and hover: 0 off pixels in Light and Dark (text 2182 px set apart). Rows 47 px under 1 px rules, accent 25 % selection, foreground 3 % hover; the card corners' rim and glow are baked from the crops (painted at 100 % only).",
+    "gaps": [
+     "Pressed row is the stylesheet's 7 % wash, no capture",
+     "Hover on a chosen row adds the wash over the selection, no capture",
+     "The card corner glow is a baked picture at 100 %; other scales draw the plain 12 px corner",
+     "The 1.5x sheet is rendered but has no reference"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/check_list_box.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). The one captured state: 0 off pixels in both schemes (text 1400 px and the tick set apart). Rows 30 px; the 20 px check box is baked at 100 % over a drawn box.",
+    "gaps": [
+     "Only the rest state is captured: hover and keyboard focus of a row use the list box's wash",
+     "Check box tile and card corners are baked pictures at 100 %",
+     "Check box ownership: the check box control's own Linux look is another worker's; this row carries its own"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/check_list_box.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). The one captured state: 0 off pixels in both schemes (text 1400 px and the tick set apart). Rows 30 px; the 20 px check box is baked at 100 % over a drawn box.",
+    "gaps": [
+     "Only the rest state is captured: hover and keyboard focus of a row use the list box's wash",
+     "Check box tile and card corners are baked pictures at 100 %",
+     "Check box ownership: the check box control's own Linux look is another worker's; this row carries its own"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/tree_list.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). Rest and selected: 0 off pixels in both schemes (text 7990 px and the disclosure triangles set apart). Header 30 px of 12 px bold titles at 40 % over a rule with the library's one-pixel gap, rows 23 px, 18 px per level, 1 px frame.",
+    "gaps": [
+     "Resize grip and header keyboard shortcuts are not drawn in this look; sort by tap and reorder by drag are kept",
+     "The shut-branch triangle (pointing right) has no capture",
+     "Hover and pressed rows have no capture",
+     "Sort arrow in the header is not drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/tree_list.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). Rest and selected: 0 off pixels in both schemes (text 7990 px and the disclosure triangles set apart). Header 30 px of 12 px bold titles at 40 % over a rule with the library's one-pixel gap, rows 23 px, 18 px per level, 1 px frame.",
+    "gaps": [
+     "Resize grip and header keyboard shortcuts are not drawn in this look; sort by tap and reorder by drag are kept",
+     "The shut-branch triangle (pointing right) has no capture",
+     "Hover and pressed rows have no capture",
+     "Sort arrow in the header is not drawn"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/data_grid.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). The one captured state: 0 off pixels in both schemes (text 7006 px set apart). Header 30 px, rows 35 px with no lines, 1 px frame; the overlay scroll bar indicator and its shade are the library's pixels, baked and drawn at every scale while the rows overflow.",
+    "gaps": [
+     "Only the engine's plain columns are styled: filter row, footers, group rows, indicators and cell editors keep the generic look",
+     "Hover and pressed rows have no capture",
+     "The scroll indicator is a fixed picture (53 x 198), not driven by the scroll position",
+     "Sort arrow in the header is not drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/data_grid.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). The one captured state: 0 off pixels in both schemes (text 7006 px set apart). Header 30 px, rows 35 px with no lines, 1 px frame; the overlay scroll bar indicator and its shade are the library's pixels, baked and drawn at every scale while the rows overflow.",
+    "gaps": [
+     "Only the engine's plain columns are styled: filter row, footers, group rows, indicators and cell editors keep the generic look",
+     "Hover and pressed rows have no capture",
+     "The scroll indicator is a fixed picture (53 x 198), not driven by the scroll position",
+     "Sort arrow in the header is not drawn"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/vertical_grid.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). Action rows and preferences group: one pixel differs by more than 2 levels (the down arrow of the combo row, 1 px beyond the reference's ink); everything else 0 in both schemes (text 5510 and 3576 px, pencil and arrow pictures set apart). The AdwSwitch (on) and the glow over the card's top edge are baked pictures at 100 %.",
+    "gaps": [
+     "collection.linux_rows is a new function; the property grid (collection.property_grid_of) is not mapped to this look yet",
+     "Switch off state, entry row focused or with text, combo row open and a row hovered have no capture",
+     "Switch is a baked picture at 100 % over a drawn switch",
+     "Pencil and arrow are drawn approximations"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/vertical_grid.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). Action rows and preferences group: one pixel differs by more than 2 levels (the down arrow of the combo row, 1 px beyond the reference's ink); everything else 0 in both schemes (text 5510 and 3576 px, pencil and arrow pictures set apart). The AdwSwitch (on) and the glow over the card's top edge are baked pictures at 100 %.",
+    "gaps": [
+     "collection.linux_rows is a new function; the property grid (collection.property_grid_of) is not mapped to this look yet",
+     "Switch off state, entry row focused or with text, combo row open and a row hovered have no capture",
+     "Switch is a baked picture at 100 % over a drawn switch",
+     "Pencil and arrow are drawn approximations"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/dialog.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). The one captured state (the library's 550 x 410 window with an AdwAlertDialog): 13 pixels differ by more than 2 levels in each scheme (the body text's edge and the frame's four corners), text 4801 px set apart. The card, hairline, responses, 13.6 % (Dark 50 %) dimming and the compositor frame match; the card's rim and shadow are baked (left half, mirrored).",
+    "gaps": [
+     "The shadow is baked for a one-line card; a taller card gets it at the baked height",
+     "Hover, pressed and focused responses and suggested or three response layouts have no capture",
+     "The window frame is drawn by the sheet, not by the dialog",
+     "Body text is 4 px wider than the library's hinted one"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/dialog.png",
+    "notes": "Round 20 (worker l4): compared with the real GTK 4.14 / libadwaita 1.5 crops by scripts/linux_cmp_l4.py (strict: more than 2 levels off; only glyph pixels within 2 px of the reference's ink and icon pictures are set apart). The one captured state (the library's 550 x 410 window with an AdwAlertDialog): 13 pixels differ by more than 2 levels in each scheme (the body text's edge and the frame's four corners), text 4801 px set apart. The card, hairline, responses, 13.6 % (Dark 50 %) dimming and the compositor frame match; the card's rim and shadow are baked (left half, mirrored).",
+    "gaps": [
+     "The shadow is baked for a one-line card; a taller card gets it at the baked height",
+     "Hover, pressed and focused responses and suggested or three response layouts have no capture",
+     "The window frame is drawn by the sheet, not by the dialog",
+     "Body text is 4 px wider than the library's hinted one"
+    ]
+   }
+  }
+ }
+}
