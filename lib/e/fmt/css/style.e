@@ -1397,7 +1397,7 @@ fn declared_writing_mode(declared: []const cascade.Declared, parent: *const Styl
         i += 1usize
     }
     if have {
-        let v = cv.lower(cv.trim_ws(winner.declaration.value))
+        let v = cv.trim_ws(winner.declaration.value)
         if str.eq(v, "vertical-rl") || str.eq(v, "sideways-rl") { wm = 1u8 } else if str.eq(v, "vertical-lr") || str.eq(v, "sideways-lr") { wm = 2u8 } else if str.eq(v, "horizontal-tb") { wm = 0u8 }
     }
     ret wm

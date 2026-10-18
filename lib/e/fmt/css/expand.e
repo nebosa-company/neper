@@ -823,14 +823,51 @@ fn expand_place(a: *mem.Arena, value: str, first: str, second: str, out: *list.L
 }
 
 // The physical side `start` / `end` of the inline axis in this direction.
+// The writing mode the logical properties of the element being expanded resolve against (0 horizontal, 1 vertical-rl, 2 vertical-lr).
+var logical_wm: u8 = 0u8
+
+fn set_logical_wm(wm: u8) { logical_wm = wm }
+
 fn inline_start(rtl: bool) -> str {
+    if logical_wm != 0u8 {
+        if rtl { ret "bottom" }
+        ret "top"
+    }
     if rtl { ret "right" }
     ret "left"
 }
 
 fn inline_end(rtl: bool) -> str {
+    if logical_wm != 0u8 {
+        if rtl { ret "top" }
+        ret "bottom"
+    }
     if rtl { ret "left" }
     ret "right"
+}
+
+// The physical sides the block axis starts and ends on.
+fn block_start() -> str {
+    if logical_wm == 1u8 { ret "right" }
+    if logical_wm == 2u8 { ret "left" }
+    ret "top"
+}
+
+fn block_end() -> str {
+    if logical_wm == 1u8 { ret "left" }
+    if logical_wm == 2u8 { ret "right" }
+    ret "bottom"
+}
+
+// `height` is the block size in a horizontal mode, `width` in a vertical one.
+fn block_dim() -> str {
+    if logical_wm != 0u8 { ret "width" }
+    ret "height"
+}
+
+fn inline_dim() -> str {
+    if logical_wm != 0u8 { ret "height" }
+    ret "width"
 }
 
 // Expands `property`; true when it is a shorthand or a logical property.
@@ -878,24 +915,24 @@ fn sample_value(p: str) -> str {
 fn logical_target(a: *mem.Arena, p: str, rtl: bool) -> str {
     let istart = inline_start(rtl)
     let iend = inline_end(rtl)
-    if str.eq(p, "margin-block-start") { ret "margin-top" }
-    if str.eq(p, "margin-block-end") { ret "margin-bottom" }
+    if str.eq(p, "margin-block-start") { ret dash(a, "margin", block_start()) }
+    if str.eq(p, "margin-block-end") { ret dash(a, "margin", block_end()) }
     if str.eq(p, "margin-inline-start") { ret dash(a, "margin", istart) }
     if str.eq(p, "margin-inline-end") { ret dash(a, "margin", iend) }
-    if str.eq(p, "padding-block-start") { ret "padding-top" }
-    if str.eq(p, "padding-block-end") { ret "padding-bottom" }
+    if str.eq(p, "padding-block-start") { ret dash(a, "padding", block_start()) }
+    if str.eq(p, "padding-block-end") { ret dash(a, "padding", block_end()) }
     if str.eq(p, "padding-inline-start") { ret dash(a, "padding", istart) }
     if str.eq(p, "padding-inline-end") { ret dash(a, "padding", iend) }
-    if str.eq(p, "inset-block-start") { ret "top" }
-    if str.eq(p, "inset-block-end") { ret "bottom" }
+    if str.eq(p, "inset-block-start") { ret block_start() }
+    if str.eq(p, "inset-block-end") { ret block_end() }
     if str.eq(p, "inset-inline-start") { ret istart }
     if str.eq(p, "inset-inline-end") { ret iend }
-    if str.eq(p, "block-size") { ret "height" }
-    if str.eq(p, "inline-size") { ret "width" }
-    if str.eq(p, "min-block-size") { ret "min-height" }
-    if str.eq(p, "min-inline-size") { ret "min-width" }
-    if str.eq(p, "max-block-size") { ret "max-height" }
-    if str.eq(p, "max-inline-size") { ret "max-width" }
+    if str.eq(p, "block-size") { ret block_dim() }
+    if str.eq(p, "inline-size") { ret inline_dim() }
+    if str.eq(p, "min-block-size") { ret dash(a, "min", block_dim()) }
+    if str.eq(p, "min-inline-size") { ret dash(a, "min", inline_dim()) }
+    if str.eq(p, "max-block-size") { ret dash(a, "max", block_dim()) }
+    if str.eq(p, "max-inline-size") { ret dash(a, "max", inline_dim()) }
     ret ""
 }
 
@@ -934,7 +971,7 @@ fn expand_value(a: *mem.Arena, p: str, v: str, rtl: bool, out: *list.List[Pair])
         ret true
     }
     if str.eq(p, "margin-block") {
-        expand_pair(a, v, "margin-top", "margin-bottom", out)
+        expand_pair(a, v, dash(a, "margin", block_start()), dash(a, "margin", block_end()), out)
         ret true
     }
     if str.eq(p, "margin-inline") {
@@ -942,7 +979,7 @@ fn expand_value(a: *mem.Arena, p: str, v: str, rtl: bool, out: *list.List[Pair])
         ret true
     }
     if str.eq(p, "padding-block") {
-        expand_pair(a, v, "padding-top", "padding-bottom", out)
+        expand_pair(a, v, dash(a, "padding", block_start()), dash(a, "padding", block_end()), out)
         ret true
     }
     if str.eq(p, "padding-inline") {
@@ -950,7 +987,7 @@ fn expand_value(a: *mem.Arena, p: str, v: str, rtl: bool, out: *list.List[Pair])
         ret true
     }
     if str.eq(p, "inset-block") {
-        expand_pair(a, v, "top", "bottom", out)
+        expand_pair(a, v, block_start(), block_end(), out)
         ret true
     }
     if str.eq(p, "inset-inline") {
