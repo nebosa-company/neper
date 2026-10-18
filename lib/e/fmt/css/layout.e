@@ -3730,6 +3730,17 @@ fn table_widths(l: *Layout, t: u32) -> (f64, f64) {
     let ti = build_table(l, t)
     let td = l.tables.items[usize(ti)]
     let gaps = td.sh * f64(td.cols + 1usize)
+    // A fixed layout ignores the cells' content: only the columns with a specified width count towards the minimum.
+    let ts = bstyle(l, t)
+    if ts.table_layout == .Fixed && ts.width.kind == .Px {
+        var spec_sum = 0.0f64
+        var k = 0usize
+        while k < td.cols {
+            if td.col_spec[k] >= 0.0f64 { spec_sum += td.col_spec[k] }
+            k += 1usize
+        }
+        ret (spec_sum + gaps, td.sum_max + gaps)
+    }
     ret (td.sum_min + gaps, td.sum_max + gaps)
 }
 
