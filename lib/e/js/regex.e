@@ -10,6 +10,7 @@ use e.js.lex as lex
 use e.mem
 use e.str
 use e.text.unicode as unicode
+use e.text.uprops as uprops
 
 const NONE: u32 = 4294967295u32
 
@@ -384,6 +385,10 @@ fn parse_property(p: *Parse, negated: bool) -> (u32, u32, err) {
     p.i += 1usize
     var neg_bit = 0u32
     if negated { neg_bit = 1073741824u32 }
+    // The property tables: every spelling the specification allows (long and short names, with or without gc= / sc= / scx=).
+    let (tid, tfound) = uprops.find(text)
+    if tfound { ret (2147483648u32 | neg_bit | (63u32 << 24u32), tid, ok) }
+    ret (0u32, 0u32, fail(p, "Invalid property name"))
     let (eq_at, has_eq) = str.find(text, "=")
     if has_eq {
         let key = text[0usize..eq_at]
@@ -405,7 +410,9 @@ fn parse_property(p: *Parse, negated: bool) -> (u32, u32, err) {
 fn property_matches(lo: u32, hi: u32, c: u32) -> bool {
     var result = false
     let kind = (lo >> 24u32) & 63u32
-    if kind == 0u32 {
+    if kind == 63u32 {
+        result = uprops.contains(hi, c)
+    } else if kind == 0u32 {
         let idx = category_index(unicode.category(c))
         result = ((hi >> idx) & 1u32) != 0u32
     } else if kind == 1u32 {

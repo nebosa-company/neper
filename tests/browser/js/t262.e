@@ -32,7 +32,7 @@ fn features_of(meta: str) -> str {
 
 fn skipped_feature(full_meta: str) -> bool {
     let meta = features_of(full_meta)
-    let feats = "Intl|Temporal|IsHTMLDDA|ShadowRealm|source-phase-imports|decorators|tail-call-optimization|regexp-duplicate-named-groups|canonical-tz|import-defer|regexp-unicode-property-escapes|"
+    let feats = "Intl|Temporal|IsHTMLDDA|ShadowRealm|source-phase-imports|decorators|tail-call-optimization|regexp-duplicate-named-groups|canonical-tz|import-defer|"
     var start = 0usize
     var i = 0usize
     while i < feats.len {
