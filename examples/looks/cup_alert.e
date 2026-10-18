@@ -96,6 +96,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let open = looks.Sheet { name: "dialog_open", cells: 1usize, columns: 1usize, cell_w: 380.0, cell_h: 240.0, ctx: zero, build: build_open }
         ret looks.run_cupertino(a, &open)
     }
-    let sheet = looks.Sheet { name: "dialog", cells: 5usize, columns: 3usize, cell_w: 290.0, cell_h: 190.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "dialog", cells: 5usize, columns: 3usize, cell_w: 290.0, cell_h: 250.0, ctx: zero, build: build }
     ret looks.run_cupertino(a, &sheet)
 }
