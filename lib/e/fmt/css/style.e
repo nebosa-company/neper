@@ -833,12 +833,12 @@ fn apply_flex(ap: *Ap, prop: str, v: str) -> bool {
         s.align_content = parse_align(ap, low, s.align_content)
         ret true
     }
-    if str.eq(prop, "row-gap") {
+    if str.eq(prop, "row-gap") || str.eq(prop, "grid-row-gap") {
         let (l, good) = parse_len(ap.c, low, s.font_size, A_NORMAL | A_PERCENT)
         if good { s.row_gap = l }
         ret true
     }
-    if str.eq(prop, "column-gap") {
+    if str.eq(prop, "column-gap") || str.eq(prop, "grid-column-gap") {
         let (l, good) = parse_len(ap.c, low, s.font_size, A_NORMAL | A_PERCENT)
         if good { s.column_gap = l }
         ret true
