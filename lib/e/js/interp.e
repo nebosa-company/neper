@@ -141,7 +141,7 @@ type Interp = struct {
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
     sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
-    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str
+    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool
 }
 
 fn root_realm(it: *Interp) -> *Interp {
@@ -2642,7 +2642,7 @@ fn declare_var(it: *Interp, e: *Env, name: str) -> err {
 type Frame = struct {
     prog: *const ast.Program, env: *Env, this_val: Value, has_this: bool, func: *Obj, has_func: bool, new_target: Value,
     strict: bool, home: *Obj, has_home: bool, args: []const Value, gen: *void, has_gen: bool, this_cell: *Obj, derived_ctor: bool,
-    disp: *list.List[DispRes], has_disp: bool
+    disp: *list.List[DispRes], has_disp: bool, tail_ok: bool, no_tail: u32
 }
 
 // A resource registered by a `using` declaration: disposed in reverse order when its scope ends.
@@ -3211,7 +3211,32 @@ fn field_define(it: *Interp, inst: *Obj, key: Key, val: Value) -> err {
     ret ok
 }
 
-fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_target: Value, constructing: bool) -> (Value, err) {
+// Runs a JS function; a strict `return f(...)` in tail position is stashed by the callee's frame and looped on here, so proper
+// tail calls use no native stack.
+fn call_js(it: *Interp, fo0: *Obj, this0: Value, args0: []const Value, nt0: Value, constructing0: bool) -> (Value, err) {
+    var fo = fo0
+    var this_in = this0
+    var args = args0
+    var nt = nt0
+    var constructing = constructing0
+    while true {
+        let (r, e) = call_js_once(it, fo, this_in, args, nt, constructing)
+        if e != ok {
+            it.tail_set = false
+            ret (r, e)
+        }
+        if !it.tail_set { ret (r, e) }
+        it.tail_set = false
+        fo = as_object(it.tail_fn)
+        this_in = it.tail_this
+        args = it.tail_args
+        nt = undefv()
+        constructing = false
+    }
+    ret (undefv(), ok)
+}
+
+fn call_js_once(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_target: Value, constructing: bool) -> (Value, err) {
     let n = fo.prog.nodes[usize(fo.node)]
     let is_arrow = (n.flags & ast.F_ARROW) != 0u16 && (n.flags & ast.F_METHOD) == 0u16
     let is_class_ctor = fo.ctor_kind == K_DERIVED || (fo.ctor_kind == K_BASE && fo.num == 1.0f64)
@@ -3284,6 +3309,7 @@ fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_targe
             result = v
         }
     } else {
+        f.tail_ok = f.strict && !constructing
         let (c, ce) = exec_body(it, &f, n.c)
         if ce != ok { ret (undefv(), ce) }
         if c.kind == CK_RETURN { result = c.value }
@@ -4457,6 +4483,59 @@ fn eval_super_member(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
 }
 
 fn eval_call(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
+    let (r, e) = eval_call_x(it, f, n, false)
+    ret (r, e)
+}
+
+// The expression of a `return` statement: a call in tail position (through ?:, &&, ||, ?? and the comma operator) is deferred.
+fn tail_eval(it: *Interp, f: *Frame, id: u32, tail: bool) -> (Value, err) {
+    let n = f.prog.nodes[usize(id)]
+    if tail {
+        if n.kind == ast.N_CALL && (n.flags & ast.F_OPTIONAL) == 0u16 {
+            let (cr, ce) = eval_call_x(it, f, n, true)
+            ret (cr, ce)
+        }
+        if n.kind == ast.N_TAGGED {
+            let (tr, te) = eval_tagged_x(it, f, n, true)
+            ret (tr, te)
+        }
+        if n.kind == ast.N_COND {
+            let (c, ce) = eval(it, f, n.a)
+            if ce != ok { ret (undefv(), ce) }
+            var pick = n.c
+            if to_boolean(c) { pick = n.b }
+            let (v, e) = tail_eval(it, f, pick, true)
+            ret (v, e)
+        }
+        if n.kind == ast.N_LOGICAL {
+            let (l, le) = eval(it, f, n.a)
+            if le != ok { ret (undefv(), le) }
+            if n.op == ast.O_AND {
+                if !to_boolean(l) { ret (l, ok) }
+            } else if n.op == ast.O_OR {
+                if to_boolean(l) { ret (l, ok) }
+            } else {
+                if !is_nullish(l) { ret (l, ok) }
+            }
+            let (v2, e2) = tail_eval(it, f, n.b, true)
+            ret (v2, e2)
+        }
+        if n.kind == ast.N_SEQ && n.b > 0u32 {
+            var i = 0usize
+            while i + 1usize < usize(n.b) {
+                let (sv, se) = eval(it, f, f.prog.kids[usize(n.a) + i])
+                if se != ok { ret (undefv(), se) }
+                i += 1usize
+            }
+            let (v3, e3) = tail_eval(it, f, f.prog.kids[usize(n.a) + i], true)
+            ret (v3, e3)
+        }
+    }
+    let (v4, e4) = eval(it, f, id)
+    ret (v4, e4)
+}
+
+fn eval_call_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err) {
     let callee = f.prog.nodes[usize(n.a)]
     if callee.kind == ast.N_SUPER {
         // super(...): construct the parent with this frame's new.tgt.
@@ -4492,8 +4571,24 @@ fn eval_call(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         let (r2, re2) = direct_eval(it, f, args2[0usize])
         ret (r2, re2)
     }
-    let (r3, re3) = call_function(it, fv, this_val, args2)
+    let (r3, re3) = call_or_tail(it, fv, this_val, args2, tail)
     ret (r3, re3)
+}
+
+// Calls `fv`, or, in tail position, stashes a plain JS function for the caller's call_js loop to run.
+fn call_or_tail(it: *Interp, fv: Value, this_val: Value, args: []const Value, tail: bool) -> (Value, err) {
+    if tail && is_object(fv) {
+        let tfo = as_object(fv)
+        if tfo.class == C_FUNCTION && !tfo.has_native && (tfo.realm == it || tfo.realm == null_interp()) {
+            it.tail_fn = fv
+            it.tail_this = this_val
+            it.tail_args = args
+            it.tail_set = true
+            ret (undefv(), ok)
+        }
+    }
+    let (r, re) = call_function(it, fv, this_val, args)
+    ret (r, re)
 }
 
 // --- the expression evaluator
@@ -4904,6 +4999,11 @@ fn make_regexp(it: *Interp, pattern: str, flags: str) -> (Value, err) {
 }
 
 fn eval_tagged(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
+    let (r, e) = eval_tagged_x(it, f, n, false)
+    ret (r, e)
+}
+
+fn eval_tagged_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err) {
     let tn = f.prog.nodes[usize(n.b)]
     let (fv, this_val, fe) = eval_callee(it, f, n.a)
     if fe != ok { ret (undefv(), fe) }
@@ -4932,7 +5032,7 @@ fn eval_tagged(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         e += 1usize
     }
     if !is_callable(fv) { ret (undefv(), throw_type(it, "tag is not a function")) }
-    let (r, re) = call_function(it, fv, this_val, list.slice_const[Value](&args))
+    let (r, re) = call_or_tail(it, fv, this_val, list.slice_const[Value](&args), tail)
     ret (r, re)
 }
 
@@ -6185,7 +6285,7 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
     if k == ast.N_RETURN {
         var v2 = undefv()
         if n.a != ast.NONE {
-            let (rv, re) = eval(it, f, n.a)
+            let (rv, re) = tail_eval(it, f, n.a, f.tail_ok && f.no_tail == 0u32 && !f.has_disp)
             if re != ok { ret (normal(), re) }
             v2 = rv
         }
@@ -6296,7 +6396,9 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
         ret (res2, ok)
     }
     if k == ast.N_FORIN || k == ast.N_FOROF {
+        f.no_tail += 1u32
         let (rt9, re9) = exec_for_in_of(it, f, n, labels)
+        f.no_tail -= 1u32
         ret (rt9, re9)
     }
     if k == ast.N_BREAK { ret (Completion { kind: CK_BREAK, value: empty_value(), label: n.text }, ok) }
@@ -6663,7 +6765,10 @@ fn is_reference_error(it: *Interp) -> bool {
 fn exec_try(it: *Interp, f: *Frame, n: ast.Node) -> (Completion, err) {
     let saved_env = f.env
     let saved_depth = it.depth
+    let guarded = n.b != ast.NONE || n.c != ast.NONE
+    if guarded { f.no_tail += 1u32 }
     var (c, e) = exec(it, f, n.a)
+    if guarded { f.no_tail -= 1u32 }
     if e == Throw && n.b != ast.NONE {
         // Catch: bind the parameter in a fresh scope.
         let caught = it.thrown
@@ -6681,7 +6786,9 @@ fn exec_try(it: *Interp, f: *Frame, n: ast.Node) -> (Completion, err) {
             c = normal()
             e = pe
         } else {
+            if n.c != ast.NONE { f.no_tail += 1u32 }
             let (cb, cbe) = exec_block(it, f, f.prog.nodes[usize(cn.b)])
+            if n.c != ast.NONE { f.no_tail -= 1u32 }
             c = cb
             e = cbe
         }
