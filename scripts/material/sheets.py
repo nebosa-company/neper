@@ -14,10 +14,10 @@ SHEETS = {
 }
 
 IB = ["standard", "filled", "tonal", "outlined"]
-SHEETS["fab"] = {"columns": 6, "cell_w": 150, "cell_h": 108, "cells": [
+SHEETS["fab"] = {"columns": 6, "cell_w": 150, "cell_h": 128, "cells": [
     "fab-small-rest", "fab-rest", "fab-large-rest", "fab-extended-rest", "fab-extended-hover", "fab-extended-pressed"] + [
     "icon-button-%s-%s" % (v, s) for v in IB for s in ["rest", "toggled", "hover", "focus", "pressed", "disabled"]] + [
-    "fab%s-%s" % (k, s) for k in ["-small", "", "-large"] for s in ["hover", "focus", "pressed"]] + ["fab-extended-focus"]}
+    "fab%s-%s" % (k, s) for k in ["-small", "", "-large"] for s in ["hover", "focus", "pressed"]] + ["fab-extended-focus"] + ["fab-%s-rest" % c for c in ["primary", "secondary", "tertiary", "surface"]]}
 
 S6 = ["rest", "hover", "focus", "pressed", "disabled", "error"]
 SHEETS["checkbox"] = {"columns": 6, "cell_w": 72, "cell_h": 64, "cells": ["checkbox-%s-%s" % (k, s) for k in ["unchecked", "checked", "indeterminate"] for s in S6]}
@@ -29,17 +29,21 @@ SHEETS["text_field"] = {"columns": 6, "cell_w": 270, "cell_h": 96, "cells": [
     ["empty-rest", "empty-hover", "empty-focus", "value-focus", "value-disabled", "value-error"]]}
 # cells 12 to 19: filled then outlined with a value, with a value hovered, empty disabled, empty error
 SHEETS["text_field"]["cells"] += ["text-field-%s-%s" % (v, k) for v in ["filled", "outlined"] for k in ["value-rest", "value-hover", "empty-disabled", "empty-error"]]
+SHEETS["text_field"]["cells"] += ["text-field-filled-icons-rest", "text-field-outlined-icons-rest"]
 
 SHEETS["combo_box"] = {"columns": 3, "cell_w": 270, "cell_h": 96, "cells": [
     "select-outlined-value-rest", "select-outlined-value-hover", "select-outlined-value-focus", "select-outlined-value-disabled",
-    "select-outlined-value-error", "select-filled-value-rest", "select-filled-value-hover", "select-filled-value-focus"]}
+    "select-outlined-value-error", "select-filled-value-rest", "select-filled-value-hover", "select-filled-value-focus",
+    "select-filled-value-disabled", "select-filled-value-error"] + ["select-%s-empty-%s" % (v, k) for v in ["outlined", "filled"] for k in ["rest", "hover", "focus", "disabled", "error"]]}
 
 SHEETS["chips"] = {"columns": 4, "cell_w": 130, "cell_h": 48, "cells": [
-    "chip-%s-%s" % (k, s) for k in ["assist", "filter", "filter-selected", "input", "suggestion"] for s in ["rest", "hover", "focus", "pressed"]]}
+    "chip-%s-%s" % (k, s) for k in ["assist", "filter", "filter-selected", "input", "suggestion", "assist-icon", "assist-elevated", "suggestion-elevated", "input-selected"] for s in ["rest", "hover", "focus", "pressed"]] + [
+    "chip-%s-disabled" % k for k in ["assist", "assist-elevated", "assist-icon", "filter", "filter-selected", "input", "input-selected", "suggestion", "suggestion-elevated"]]}
 
 SHEETS["progress"] = {"columns": 5, "cell_w": 270, "cell_h": 64, "cells": [
     "progress-linear-0", "progress-linear-30", "progress-linear-60", "progress-linear-100", None,
-    "progress-circular-0", "progress-circular-30", "progress-circular-60", "progress-circular-100", None]}
+    "progress-circular-0", "progress-circular-30", "progress-circular-60", "progress-circular-100", None,
+    "progress-linear-buffer", "progress-linear-four-color", "progress-linear-disabled"]}
 
 SHEETS["tabs"] = {"columns": 2, "cell_w": 310, "cell_h": 73, "cells": [
     "tabs-primary-rest", "tabs-primary-icons-rest", "tabs-secondary-rest", "tabs-secondary-second-rest", "tabs-primary-disabled",
@@ -49,7 +53,8 @@ SHEETS["menu"] = {"columns": 1, "cell_w": 220, "cell_h": 345, "at": (18, 8), "ce
 SHEETS["menu_hover"] = {"columns": 1, "cell_w": 220, "cell_h": 345, "at": (18, 8), "cells": ["menu-hover"]}
 
 SHEETS["list"] = {"columns": 4, "cell_w": 350, "cell_h": 96, "cells": [
-    "list-item-one-rest", "list-item-two-rest", None, "list-item-two-hover", "list-item-two-focus", "list-item-two-pressed", None, "list-item-two-disabled"]}
+    "list-item-one-rest", "list-item-two-rest", None, "list-item-two-hover", "list-item-two-focus", "list-item-two-pressed", None, "list-item-two-disabled",
+    "list-item-one-hover", "list-item-one-focus", "list-item-one-pressed", "list-item-one-disabled"]}
 
 SHEETS["dialog"] = {"columns": 1, "cell_w": 330, "cell_h": 300, "at": (-9, 16), "cells": ["dialog-rest"]}
 SHEETS["dialog_icon"] = {"columns": 1, "cell_w": 330, "cell_h": 340, "at": (-9, 26), "cells": ["dialog-icon"]}
@@ -62,7 +67,7 @@ SHEETS["navigation_bar"] = {"columns": 2, "cell_w": 370, "cell_h": 96, "cells": 
 SHEETS["app_bar"] = {"columns": 2, "cell_w": 360, "cell_h": 154, "cells": [
     "app-bar-small", "app-bar-small-scrolled", "app-bar-center", None, None, "app-bar-no-leading"]}
 SHEETS["search_bar"] = {"columns": 3, "cell_w": 340, "cell_h": 70, "cells": [
-    "search-bar-rest", "search-bar-hover", None, None, "search-bar-value", "search-bar-disabled"]}
+    "search-bar-rest", "search-bar-hover", None, None, "search-bar-value", "search-bar-disabled", "search-bar-pressed"]}
 SHEETS["badge"] = {"columns": 6, "cell_w": 100, "cell_h": 56, "cells": [
     "badge-dot", "badge-3", "badge-99", "badge-999", "badge-icon-dot", "badge-icon-3"]}
 

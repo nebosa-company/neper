@@ -31,10 +31,24 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: names[column], node: node, drive: .None }
         i += 1usize
     }
-    ret (10usize, ok)
+    // Three more linear forms: a buffer to 70 % behind the value, the four-colour form (the same at rest) and the disabled one.
+    let more = [3]str{ "Buffer", "Four colour", "Disabled" }
+    var j = 0usize
+    while j < 3usize {
+        var options = control.progress_options()
+        options.phase = 0.0 - 1.0
+        if j == 0usize { options.buffer = 0.7 }
+        let (n, e) = control.progress_bar_of(a, u64(20usize + j), t, "Loading", 0.4, false, 240.0, options)
+        if e != ok { ret (0usize, e) }
+        var shown = n
+        if j == 2usize { shown.style.opacity = 0.38 }
+        cells[10usize + j] = looks.Cell { caption: more[j], node: shown, drive: .None }
+        j += 1usize
+    }
+    ret (13usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "progress", cells: 10usize, columns: 5usize, cell_w: 270.0, cell_h: 64.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "progress", cells: 13usize, columns: 5usize, cell_w: 270.0, cell_h: 64.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

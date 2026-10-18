@@ -90,10 +90,60 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: caption, node: column_node, drive: drive }
         i += 1usize
     }
-    ret (20usize, ok)
+    // Cells 20 and 21: a leading search icon and a trailing clear icon (24 dp in `on-surface-variant`, 12 in from the sides), filled then outlined.
+    var j = 0usize
+    while j < 2usize {
+        let (buffer, buffer_error) = mem.alloc[u8](a, 64usize)
+        if buffer_error != ok { ret (0usize, buffer_error) }
+        let words = "Terminate"
+        var n = 0usize
+        while n < words.len {
+            buffer[n] = words[n]
+            n += 1usize
+        }
+        var options = control.field_options()
+        options.width = 240.0
+        options.filled = j == 0usize
+        options.start_space = 36.0
+        options.end_space = 36.0
+        let (field, field_error) = control.text_field(a, u64(100usize + j), t, "Label", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, options)
+        if field_error != ok { ret (0usize, field_error) }
+        let ink = style.color(t.tokens, .OnSurfaceVariant)
+        let (lens, lens_error) = control.icon_square(a, ink, .Search, 24.0)
+        if lens_error != ok { ret (0usize, lens_error) }
+        let (clear, clear_error) = control.icon_square(a, ink, .Cross, 24.0)
+        if clear_error != ok { ret (0usize, clear_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+        if held_error != ok { ret (0usize, held_error) }
+        held[0usize] = lens
+        held[1usize] = clear
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+        if layers_error != ok { ret (0usize, layers_error) }
+        layers[0usize] = field
+        layers[1usize] = widget.positioned(0u64, 12.0, 16.0, style.defaults(), held[0usize..1usize])
+        layers[2usize] = widget.positioned(0u64, 204.0, 16.0, style.defaults(), held[1usize..2usize])
+        var support = control.text_options()
+        support.role = .BodySmall
+        support.wrap = .None
+        support.color = .OnSurfaceVariant
+        let (note, note_error) = control.text(a, 0u64, "Supporting text", t, support)
+        if note_error != ok { ret (0usize, note_error) }
+        var inset = style.defaults()
+        inset.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        let (under, under_error) = mem.alloc[widget.Node](a, 1usize)
+        if under_error != ok { ret (0usize, under_error) }
+        under[0usize] = note
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (0usize, pair_error) }
+        pair[0usize] = widget.stack(0u64, style.defaults(), layers[0usize..3usize])
+        pair[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, inset, under[0usize..1usize])
+        cells[20usize + j] = looks.Cell { caption: "Icons", node: widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), pair[0usize..2usize]), drive: .None }
+        j += 1usize
+    }
+    ret (22usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "text_field", cells: 20usize, columns: 6usize, cell_w: 270.0, cell_h: 96.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "text_field", cells: 22usize, columns: 6usize, cell_w: 270.0, cell_h: 96.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }
