@@ -163,7 +163,19 @@ fn text_node(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, option
     ret (node, node_error)
 }
 
-fn colored_text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions, color: paint.Color) -> (widget.Node, err) {
+// v3's Dev Express controls (page control, tree list, grids) draw their text without ClearType; an app that shows them turns this on and the
+// Windows light look sets that text greyscale (see `scene.gray_text`).
+var dx_text_on: bool = false
+
+fn set_dx_text(on: bool) { dx_text_on = on }
+
+fn dx_ink(t: *const Theme, color: paint.Color) -> paint.Color {
+    if dx_text_on && t.tokens.profile == .Windows && t.tokens.palette != .Dark { ret scene.gray_text(color) }
+    ret color
+}
+
+fn colored_text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions, shown_color: paint.Color) -> (widget.Node, err) {
+    let color = dx_ink(t, shown_color)
     let (text_look, style_error) = text_style_faced(a, t, options)
     if style_error != ok { ret (zero, style_error) }
     ret (widget.text(key, widget.Text { value: value, style: text_look, color: style.lift_ink(t.tokens, color), wrap: options.wrap, align: options.align, max_lines: options.max_lines, ellipsis: options.ellipsis }, style.defaults()), ok)
@@ -3363,7 +3375,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter, Table, Sigma }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32, filled: bool, ground: paint.Color }
 
 // (D1530) Whether a glyph has a body its filled "on" form fills; one without (a
@@ -4380,7 +4392,8 @@ fn choices_hinted_width(value: str) -> f32 {
 
 // `shown` as words at GDI's advances: a node `width` x 15 (the dialog text's line height) and the width. `options`
 // carry the 11 px size and the face; the caller's own node replaces `colored_text`.
-fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: paint.Color, shown: str) -> (widget.Node, f32, err) {
+fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, plain_ink: paint.Color, shown: str) -> (widget.Node, f32, err) {
+    let ink = dx_ink(t, plain_ink)
     let total = choices_hinted_width(shown)
     if total == 0.0 {
         let (one, one_error) = colored_text(a, 0u64, shown, t, options, ink)
@@ -4408,7 +4421,7 @@ fn choices_words(a: *mem.Arena, t: *const Theme, options: TextOptions, ink: pain
         var size = options.size
         if size == 0.0 { size = 11.0 }
         // ClearType sets a whole-pixel size at GDI's hinted advances itself, so the word keeps its size.
-        if natural > 0.0 && scene.text_aa_mode() != .ClearType {
+        if natural > 0.0 && (scene.text_aa_mode() != .ClearType || scene.is_gray_text(ink)) {
             size = size * hinted / natural
             if size < 10.0 { size = 10.0 }
             if size > 12.0 { size = 12.0 }
@@ -4841,6 +4854,8 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if current { ink = style.hex_raw(16777215u32) }
+    // v3's Dev Express list draws its text without ClearType (the pages' lists, which pass their window position as mark_y).
+    if t.tokens.palette != .Dark && mark_y >= 0.0 { ink = scene.gray_text(ink) }
     let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)

@@ -2207,7 +2207,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
             } else if c.pictured && !c.radio && !c.checkable {
                 var icon_ink = muted
                 if c.destructive { icon_ink = ink }
-                let (tick, tick_error) = control.icon_square(a, icon_ink, c.glyph, 18.0)
+                let (tick, tick_error) = control.icon_square(a, icon_ink, menu_base_glyph(c.glyph), 18.0)
                 if tick_error != ok { ret (zero, tick_error) }
                 parts[p] = tick
             } else {
@@ -9819,6 +9819,47 @@ fn windows_menu_check(a: *mem.Arena, ink: paint.Color) -> (widget.Node, err) {
     ret (sprite, sprite_error)
 }
 
+// Table and Sigma are v3 menu bitmaps drawn only by the Windows light menu; every other menu shows the picture glyph.
+fn menu_base_glyph(g: control.GlyphKind) -> control.GlyphKind {
+    if g == .Table || g == .Sigma { ret .Picture }
+    ret g
+}
+
+// (round 20) v3's 14 x 14 menu bitmaps drawn as pixels: `rows` holds 14 strings of 14 marks, 0 ink, c the grey #C6C6C6, f white.
+fn windows_menu_pixmap(a: *mem.Arena, rows: [14]str, ink: paint.Color, shift: usize) -> (widget.Node, err) {
+    let (codes, codes_error) = mem.alloc[u8](a, 196usize)
+    if codes_error != ok { ret (zero, TooLarge) }
+    let (colors, colors_error) = mem.alloc[paint.Color](a, 196usize)
+    if colors_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var y = 0usize
+    while y < 14usize {
+        var x = 0usize
+        while x < 14usize {
+            codes[n] = u8((x + shift) * 16usize + y + shift)
+            var color = ink
+            if rows[y][x] == 99u8 { color = style.hex(13027014u32) }
+            if rows[y][x] == 102u8 { color = style.hex(16777215u32) }
+            colors[n] = color
+            n += 1usize
+            x += 1usize
+        }
+        y += 1usize
+    }
+    let (sprite, sprite_error) = winpx.sprite(a, codes[0usize..196usize], colors[0usize..196usize], 16.0, 16.0)
+    ret (sprite, sprite_error)
+}
+
+fn windows_menu_table(a: *mem.Arena, ink: paint.Color, shift: usize) -> (widget.Node, err) {
+    let (node, node_error) = windows_menu_pixmap(a, [14]str{ "00000000000000", "0cccccccccccc0", "0cccccccccccc0", "00000000000000", "0ffffffffffff0", "0cccccccccccc0", "0ffffffffffff0", "0cccccccccccc0", "0ffffffffffff0", "0cccccccccccc0", "0ffffffffffff0", "0cccccccccccc0", "0ffffffffffff0", "00000000000000" }, ink, shift)
+    ret (node, node_error)
+}
+
+fn windows_menu_sigma(a: *mem.Arena, ink: paint.Color, shift: usize) -> (widget.Node, err) {
+    let (node, node_error) = windows_menu_pixmap(a, [14]str{ "00000000000000", "0cccccccccccc0", "0ff0000000fff0", "0ccc00ccc0ccc0", "0ffff00ffffff0", "0ccccc00ccccc0", "0ffff00ffffff0", "0ccc00ccc0ccc0", "0ff0000000fff0", "0cccccccccccc0", "00000000000000", "0cccccccccccc0", "0cccccccccccc0", "00000000000000" }, ink, shift)
+    ret (node, node_error)
+}
+
 // The ground of a checked item's slot, 18 x 18: v3 dithers white pixels (every other one, where x + y
 // is odd) over the face, and the 16 px `picture` sits 1 in.
 fn windows_menu_checked_ground(a: *mem.Arena, picture: widget.Node, flip: bool, plain: bool) -> (widget.Node, err) {
@@ -10024,9 +10065,23 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             picture = tick
         }
         if c.pictured && !c.radio && !c.checkable {
-            let (glyph, glyph_error) = control.icon_square(a, picture_ink, c.glyph, 16.0)
+            var base_glyph = c.glyph
+            var shift_checked = 0usize
+            if c.checked { shift_checked = 1usize }
+            if c.glyph == .Table || c.glyph == .Sigma { base_glyph = .Picture }
+            let (glyph, glyph_error) = control.icon_square(a, picture_ink, base_glyph, 16.0)
             if glyph_error != ok { ret (zero, glyph_error) }
             picture = glyph
+            if c.glyph == .Table && !dark {
+                let (table, table_error) = windows_menu_table(a, picture_ink, 1usize + shift_checked)
+                if table_error != ok { ret (zero, table_error) }
+                picture = table
+            }
+            if c.glyph == .Sigma && !dark {
+                let (sigma, sigma_error) = windows_menu_sigma(a, picture_ink, 1usize + shift_checked)
+                if sigma_error != ok { ret (zero, sigma_error) }
+                picture = sigma
+            }
         }
         if c.radio && c.checked {
             let (dot, dot_error) = overlay.menu_radio_dot(a, picture_ink, 16.0)
@@ -11140,7 +11195,7 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         }
         // a picture or a radio dot sits in the check column (no capture: the native menu has none)
         if c.pictured && !c.radio && !c.checkable {
-            let (glyph, glyph_error) = control.icon_square(a, ink, c.glyph, 16.0)
+            let (glyph, glyph_error) = control.icon_square(a, ink, menu_base_glyph(c.glyph), 16.0)
             if glyph_error != ok { ret (zero, glyph_error) }
             parts[p] = widget.positioned(0u64, 4.0, 3.0, style.defaults(), mem_one(a, glyph))
             p += 1usize

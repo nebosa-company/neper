@@ -389,6 +389,7 @@ fn build_state(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main_states(a: *mem.Arena) -> err {
+    control.set_dx_text(true)
     pick.selected = 1usize
     let author = looks.Sheet { name: "vertical_grid_author", cells: 1usize, columns: 1usize, cell_w: 330.0, cell_h: 425.0, ctx: zero, build: build_state }
     try looks.run_all(a, &author)
@@ -437,6 +438,7 @@ fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    control.set_dx_text(true)
     if args.len > 1usize && args[1usize][0usize] == 104u8 {
         let hover = looks.Sheet { name: "vertical_grid_hover", cells: 5usize, columns: 3usize, cell_w: 330.0, cell_h: 425.0, ctx: zero, build: build_hover }
         ret looks.run_all(a, &hover)
