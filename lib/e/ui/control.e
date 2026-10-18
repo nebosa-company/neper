@@ -21306,7 +21306,7 @@ fn material_caret(t: *const Theme) -> paint.Color {
     if t.tokens.profile != .MaterialLike { ret zero }
     let primary = style.color(t.tokens, .Primary)
     if looks_caret_hidden { ret paint.rgba(primary.red, primary.green, primary.blue, 0.001) }
-    ret primary
+    ret paint.rgba(primary.red, primary.green, primary.blue, 0.999)
 }
 
 // round 15: the native dark edit's own caret (a system overlay that blinks) in its off phase, for the next edits built.
