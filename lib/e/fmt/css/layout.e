@@ -2613,7 +2613,7 @@ fn used_margins_vertical(l: *Layout, c: u32, cbw: f64) {
             var first = true
             var k = l.boxes.items[usize(par)].first
             while k != c && k != NONE {
-                if is_flow_sibling(l, k) { first = false }
+                if is_flow_sibling(l, k) && !self_collapsing(l, k, cbw) { first = false }
                 k = l.boxes.items[usize(k)].next
             }
             if first { bx(l, c).margin[0usize] = 0.0f64 }
@@ -2622,7 +2622,7 @@ fn used_margins_vertical(l: *Layout, c: u32, cbw: f64) {
             var last = true
             var k2 = l.boxes.items[usize(c)].next
             while k2 != NONE {
-                if is_flow_sibling(l, k2) { last = false }
+                if is_flow_sibling(l, k2) && !self_collapsing(l, k2, cbw) { last = false }
                 k2 = l.boxes.items[usize(k2)].next
             }
             if last { bx(l, c).margin[2usize] = 0.0f64 }
