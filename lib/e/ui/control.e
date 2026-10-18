@@ -34,6 +34,7 @@ use e.ui.winedit
 use e.ui.winmark
 use e.ui.winnative
 use e.ui.wintile
+use e.ui.winpageicon
 use e.ui.wintoolicon
 use e.ui.winpx
 
@@ -18364,6 +18365,14 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
         let (picture, picture_error) = icon_square(a, ink, picture_kind, 16.0)
         if picture_error != ok { ret (zero, picture_error) }
         row_parts[0usize] = picture
+        // v3's own bitmap of the tab (e.ui.winpageicon), in the light look only
+        let art = winpageicon.find(plain_label)
+        if art < 1000usize && !win_dark(t) {
+            let atlas = winpageicon.atlas()
+            let (tile, tile_error) = wintile.tile_node(a, 16usize, 16usize, atlas[art * 256usize..art * 256usize + 256usize])
+            if tile_error != ok { ret (zero, tile_error) }
+            row_parts[0usize] = tile
+        }
         row_parts[1usize] = said
         count = 2usize
         h = 22.0
