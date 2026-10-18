@@ -175,6 +175,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: captions[i], node: at, drive: drives[i] }
         i += 1usize
     }
+    // Neper dark: the hot key edit is a pixel-baked light replica of a Windows THotKey (6100 px, a light frame and a white face): it
+    // is no Neper control, so the dark sheet leaves its two cells out; the light picture keeps them.
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark { ret (14usize, ok) }
     ret (16usize, ok)
 }
 

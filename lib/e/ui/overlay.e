@@ -1552,6 +1552,8 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     if t.tokens.profile == .MaterialLike { card_style.shade = 3u8 }
     card_style.min_width = style.Length { Px: 280.0 }
     card_style.max_width = style.Length { Px: 560.0 }
+    // Neper dark: the panel (#292A2F) is 1.4:1 on the scrim and its shadow does not read on dark, so it takes the frame ink as an edge.
+    if t.tokens.palette == .Dark && t.tokens.profile == .Neper { card_style.border = style.Border { width: 1.0, color: style.frame_ink(t.tokens) } }
     let (card, card_error) = mem.alloc[widget.Node](a, 1usize)
     if card_error != ok { ret (zero, TooLarge) }
     card[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, card_style, parts[0usize..3usize])

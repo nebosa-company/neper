@@ -1601,6 +1601,15 @@ fn card_with_slots(a: *mem.Arena, key: widget.Key, t: *const Theme, options: Car
     ret (made, made_error)
 }
 
+// The group box's frame and row hairlines. Neper dark's OutlineVariant (#434653) is 1.98:1 on the page, and the
+// frame is all that marks the group, so it takes Outline (#8D909E, 5.8:1, the text field's frame; a hairline a third
+// of a pixel off the grid still keeps 3:1); every other look keeps the token.
+fn group_rule_color(t: *const Theme) -> paint.Color {
+    let rule = style.color(t.tokens, .OutlineVariant)
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark { ret style.color(t.tokens, .Outline) }
+    ret rule
+}
+
 // A group box: the outlined group box of D965 below.
 fn group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, children: []const widget.Node) -> (widget.Node, err) {
     let (made, made_error) = group_box_of(a, key, t, label, group_options(), children)
@@ -1663,7 +1672,7 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
             var line = style.defaults()
             line.height = style.Length { Px: t.tokens.sizes.divider }
             if options.width > 0.0 { line.width = style.Length { Px: options.width } }
-            line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            line.background = paint.Brush { Solid: group_rule_color(t) }
             if cupertino {
                 line.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
                 line.height = style.Length { Px: 0.5 }
@@ -1705,7 +1714,7 @@ fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
             box_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
         } else {
             box_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-            box_style.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+            box_style.border = style.Border { width: t.tokens.sizes.divider, color: group_rule_color(t) }
         }
         if !options.enabled { box_style.border = style.Border { width: t.tokens.sizes.divider, color: with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_container) } }
         if options.message.len != 0usize { box_style.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Error) } }
@@ -10915,6 +10924,13 @@ fn glyph_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // tonal, `secondary-container` with the glyph in `on-secondary-container`, and
 // Selected in the tree.
 fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool) -> (widget.Node, err) {
+    let (node, node_error) = glyph_toggle_state(a, key, t, kind, label, action, side, glyph_size, selected, true)
+    ret (node, node_error)
+}
+
+// `glyph_toggle` that can be disabled. Only Neper dark draws it so (the glyph at the disabled content level, no fill, not pressable);
+// every other look and the Neper light palette draw the enabled picture whatever `enabled` says, as they always did.
+fn glyph_toggle_state(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool, enabled: bool) -> (widget.Node, err) {
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = windows_glyph_toggle(a, key, t, kind, label, action, true, selected)
         ret (flat, flat_error)
@@ -10924,7 +10940,8 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
         let (linux, linux_error) = linux_glyph_toggle(a, key, t, kind, label, action, side, glyph_size, selected)
         ret (linux, linux_error)
     }
-    let state = control_state(t, key, true, selected)
+    let off = !enabled && t.tokens.profile == .Neper && t.tokens.palette == .Dark
+    let state = control_state(t, key, !off, selected)
     var muted = style.color(t.tokens, .OnSurfaceVariant)
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = with_alpha(muted, state_opacity(t, state))
@@ -10932,8 +10949,10 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
         muted = style.color(t.tokens, .OnSecondaryContainer)
         look.background = style.layer(style.color(t.tokens, .SecondaryContainer), muted, state_opacity(t, state))
     }
+    if off { muted = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
     look.foreground = muted
     look.border_width = 0.0
+    if off { look.background = paint.rgba(0.0, 0.0, 0.0, 0.0) }
     look.opacity = 1.0
     look.radius = side * 0.5
     look.custom_padding = true
@@ -10954,7 +10973,7 @@ fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
     // (D1532) Selected, the glyph is its filled "on" form (docs/ux/components/IconButton).
     let (mark, mark_error) = icon_square_of(a, muted, kind, glyph_size, selected, style.color(t.tokens, .SecondaryContainer))
     if mark_error != ok { ret (zero, mark_error) }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, selected, action, mark)
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, !off, selected, action, mark)
     ret (node, node_error)
 }
 
@@ -16952,7 +16971,20 @@ fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     }
     if t.tokens.profile != .Windows {
         let (plain, plain_error) = select_icons(a, key, t, label, options, icons, selected, open, enabled, toggle, picks)
-        ret (plain, plain_error)
+        if plain_error != ok { ret (zero, plain_error) }
+        // Neper dark: the disabled select is the whole field at the disabled content level (the light Neper picture is unchanged).
+        if !enabled && t.tokens.profile == .Neper && t.tokens.palette == .Dark {
+            var dimmed = style.defaults()
+            dimmed.opacity = t.tokens.states.disabled_content
+            // the label stands on the frame's top edge, above the head's box: the dimmed box takes it in and gives the room back
+            dimmed.padding.top = style.Length { Px: 10.0 }
+            dimmed.margin.top = style.Length { Px: -10.0 }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = plain
+            ret (widget.box(0u64, dimmed, held[0usize..1usize]), ok)
+        }
+        ret (plain, ok)
     }
     let (made, made_error) = win_image_select(a, key, t, label, options, icons, selected, open, enabled, toggle, picks, 0.0, 0.0, 0.0)
     ret (made, made_error)

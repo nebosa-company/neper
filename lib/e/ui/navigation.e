@@ -2287,6 +2287,8 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     sheet_style.padding = style.EdgeLengths { left: flat, top: rim, right: flat, bottom: rim }
     sheet_style.min_width = style.Length { Px: 200.0 }
     sheet_style.max_width = style.Length { Px: 320.0 }
+    // Neper dark: the panel is 1.1:1 on the page and its shadow does not read on dark, so it takes the frame ink as an edge.
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark { sheet_style.border = style.Border { width: 1.0, color: style.frame_ink(t.tokens) } }
     if t.tokens.profile == .CupertinoLike {
         sheet_style = control.cupertino_menu_sheet_style(t, 4.0)
         sheet_style.min_width = style.Length { Px: 190.0 }

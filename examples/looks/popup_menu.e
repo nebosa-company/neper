@@ -98,8 +98,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if node_a_error != ok { ret (0usize, node_a_error) }
     let (node_b, node_b_error) = hung(a, t, 20000u64, second, 4.0, 0.0, 300.0, 250.0, action)
     if node_b_error != ok { ret (0usize, node_b_error) }
-    cells[0usize] = looks.Cell { caption: "Commands, disabled, separators, shortcuts", node: node_a, drive: .None }
-    cells[1usize] = looks.Cell { caption: "Checked, arrows, narrow", node: node_b, drive: .None }
+    var drive: looks.Drive = .None
+    // Neper dark: the menu fades in over frames, so a resting cell shows none. Settled (the pointer parked in the cell's corner, off
+    // the menu), the frames run and the menu is drawn; the light picture is left as it is.
+    if t.tokens.profile == .Neper && t.tokens.palette == .Dark {
+        drive = .Settle
+        looks.aim(0usize, 140.0, -115.0)
+        looks.aim(1usize, 140.0, -115.0)
+    }
+    cells[0usize] = looks.Cell { caption: "Commands, disabled, separators, shortcuts", node: node_a, drive: drive }
+    cells[1usize] = looks.Cell { caption: "Checked, arrows, narrow", node: node_b, drive: drive }
     ret (2usize, ok)
 }
 
@@ -262,6 +270,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if only.len == 0usize || strs.eq(only, "popup_menu") {
         let states = looks.Sheet { name: "popup_menu", cells: 2usize, columns: 2usize, cell_w: 300.0, cell_h: 250.0, ctx: zero, build: build }
         try looks.run_all(a, &states)
+        // the aim outlives the sheet: the hover sheet after it must find the pointer at its cell's centre
+        looks.aim(0usize, 0.0, 0.0)
+        looks.aim(1usize, 0.0, 0.0)
     }
     if only.len == 0usize || strs.eq(only, "popup_menu-hover") {
         let hover = looks.Sheet { name: "popup_menu-hover", cells: 1usize, columns: 1usize, cell_w: 300.0, cell_h: 250.0, ctx: zero, build: build_hover }
