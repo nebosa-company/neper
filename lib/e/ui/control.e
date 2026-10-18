@@ -30,6 +30,7 @@ use e.ui.widget
 use e.ui.linux_card
 use e.ui.linuxsoft_lb as linuxsoft
 use e.ui.linuxspin_lb as linuxspin
+use e.ui.linuxmark_lb as linuxmark
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -80,7 +81,10 @@ fn text_style(a: *mem.Arena, t: *const Theme, role: style.TextRole) -> (layout.S
         choices[i] = layout.FontChoice { font: t.fonts[i], size: sized.size }
         i += 1usize
     }
-    ret (layout.Style { fonts: choices, language: t.language, line_height: sized.line_height }, ok)
+    // the Linux look sets Pango's whole pixel advances (see text.layout `shape_options`)
+    var language = t.language
+    if t.tokens.profile == .Linux && language.len == 0usize { language = "pngo" }
+    ret (layout.Style { fonts: choices, language: language, line_height: sized.line_height }, ok)
 }
 
 // (D1453) `text_style` with the theme's fonts ordered so the face nearest the
@@ -2394,6 +2398,7 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 fn focus_look(t: *const Theme) {
     widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux)
     scene.set_fine_curves(t.tokens.profile == .Linux)
+    scene.set_cff_text(t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
     widget.set_focus_ring(t.runtime, style.color(t.tokens, .FocusRing), t.tokens.metrics.focus_ring, t.tokens.metrics.focus_offset)
     // v2 (D983, widget plan P5-02): a touch theme's press ripple is `on-surface`
@@ -20961,26 +20966,6 @@ fn linux_outset_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err
     ret widget.fill_ring(ring.arena, b, grown, style.Corners { top_left: corner, top_right: corner, bottom_right: corner, bottom_left: corner }, 2.0, ring.color)
 }
 
-// The bullet of a selected radio: libadwaita's own asset (assets/bullet-symbolic, a circle of radius 4) is a smooth raster, not Cairo's
-// 8-part corners, so it is a 48-sided polygon here.
-fn linux_dot_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
-    let dot = mem.cast[*LinuxOutset](ctx)
-    let (pb, pb_error) = geometry.path_builder(dot.arena, 49usize, 49usize)
-    if pb_error != ok { ret TooLarge }
-    var builder = pb
-    let cx = area.x + area.width * 0.5
-    let cy = area.y + area.height * 0.5
-    var i = 0usize
-    while i < 48usize {
-        let angle = f32(i) * 6.2831853 / 48.0
-        let at = geometry.Point { x: cx + dot.radius * math.cos[f32](angle), y: cy + dot.radius * math.sin[f32](angle) }
-        if i == 0usize { try geometry.move_to(&builder, at) } else { try geometry.line_to(&builder, at) }
-        i += 1usize
-    }
-    try geometry.close_path(&builder)
-    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: dot.color } } })
-}
-
 // A suggested or destructive button as GTK composes it (round 22, lb): the accent or destructive colour as its own layer, the hover or
 // pressed wash as the pressable's face over it (each layer antialiased alone at the corners), the label above, and the keyboard
 // focus ring OUTSIDE the box (2 px wide, 1 px off: `outline-offset: 1px`), where a plain button's is inside. The whole is one layer
@@ -21035,6 +21020,34 @@ fn linux_glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Gly
     let (mark, mark_error) = icon_square(a, look.foreground, kind, glyph_size)
     if mark_error != ok { ret (zero, mark_error) }
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, selected, action, mark)
+    ret (node, node_error)
+}
+
+// The same with an Adwaita symbolic icon (e.ui.adwicon_l2) as the picture (round 22, lb).
+fn linux_svg_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, true, selected)
+    var look = style.adwaita_resolve(t.tokens, .Plain, state)
+    look.padding = (side - glyph_size) * 0.5
+    look.padding_y = look.padding
+    look.min_width = side
+    look.min_height = side
+    // a disabled button dims its icon again by half (the label is not: `button:disabled label` has no filter)
+    var ink = look.foreground
+    if state.disabled { ink = with_alpha(ink, ink.alpha * 0.5) }
+    let (mark, mark_error) = adwicon.icon(a, svg, ink, glyph_size)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, selected, action, mark)
+    ret (node, node_error)
+}
+
+// A Linux button of any variant whose picture is an Adwaita symbolic icon, with an optional caption after it.
+fn button_with_svg(a: *mem.Arena, key: widget.Key, t: *const Theme, svg: str, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    var ink = style.adwaita_resolve(t.tokens, options.variant, state).foreground
+    if state.disabled { ink = with_alpha(ink, ink.alpha * 0.5) }
+    let (mark, mark_error) = adwicon.icon(a, svg, ink, 16.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (node, node_error) = linux_button(a, key, t, label, mark, true, action, options)
     ret (node, node_error)
 }
 
@@ -22233,12 +22246,9 @@ fn linux_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label
     if inside_error != ok { ret (zero, TooLarge) }
     var drawn = 0usize
     if filled && round {
-        let (dots, dots_error) = mem.alloc[LinuxOutset](a, 1usize)
-        if dots_error != ok { ret (zero, TooLarge) }
-        dots[0usize] = LinuxOutset { arena: a, color: white, radius: 4.0 }
-        var dot = sized_style(8.0, 8.0)
-        var none: []const widget.Node = zero
-        inside[drawn] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: linux_outset_measure, paint: linux_dot_paint, state: widget.bytes_of[LinuxOutset](&dots[0usize]) } }, style: dot, children: none }
+        let (dot, dot_error) = linuxmark.mark_node(a, 1u8, white)
+        if dot_error != ok { ret (zero, dot_error) }
+        inside[drawn] = dot
         drawn += 1usize
     }
     if filled && !round && mixed {
@@ -22249,7 +22259,7 @@ fn linux_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label
         drawn += 1usize
     }
     if filled && !round && !mixed {
-        let (tick, tick_error) = adwicon.icon(a, adwicon.check_symbolic(), white, 14.0)
+        let (tick, tick_error) = linuxmark.mark_node(a, 0u8, white)
         if tick_error != ok { ret (zero, tick_error) }
         inside[drawn] = tick
         drawn += 1usize

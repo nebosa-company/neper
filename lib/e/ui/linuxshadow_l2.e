@@ -190,6 +190,14 @@ fn card_node(a: *mem.Arena, w: f32, h: f32, face: paint.Color) -> (widget.Node, 
     sh.own_face = true
     sh.face = face
     sh.count = 3usize
+    // The Dark capture's card is a little smaller than the Light one's fit (its rim is at 27, 29 and 26 where this was at 30, 32 and 31): a Dark face
+    // (a dark colour) gives the box back 0.08 px on three sides and 0.2 at the foot.
+    if face.red < 0.5 {
+        sh.rl = sh.rl + 0.075
+        sh.rt = sh.rt + 0.077
+        sh.rw = sh.rw - 0.15
+        sh.rh = sh.rh - 0.2
+    }
     sh.layers[0usize] = Layer { oy: 0.1296, spread: 0.777, sigma: 0.5818, alpha: 0.0663 }
     sh.layers[1usize] = Layer { oy: 2.6152, spread: 3.2317, sigma: 4.2192, alpha: 0.0772 }
     sh.layers[2usize] = Layer { oy: 4.1836, spread: 19.6311, sigma: 8.3439, alpha: 0.033 }

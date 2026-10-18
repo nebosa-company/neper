@@ -1770,7 +1770,11 @@ fn adwaita_resolve(t: *const ThemeTokens, variant: ControlVariant, state: Contro
         }
     }
     var opacity: f32 = 1.0
-    if state.disabled { opacity = 0.5 }
+    // `button.flat:disabled:not(:checked)` is `filter: opacity(0.3)`, every other button 0.5
+    if state.disabled {
+        opacity = 0.5
+        if flat && !state.selected { opacity = 0.3 }
+    }
     ret ResolvedControl { background: face, foreground: ink, border: ring, border_width: stroke, focus_ring: 0.0, opacity: opacity, radius: t.radii.sm, elevation: 0u8, padding: 10.0, padding_start: 0.0, padding_y: 7.5, custom_padding: true, min_width: 0.0, min_height: 34.0, corners: zero }
 }
 // A coloured Linux button (suggested-action, destructive-action) is two layers in GTK: its background colour, then a
