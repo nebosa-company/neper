@@ -178,3 +178,4 @@ run-in-whitespace-float-001.html | run-in-whitespace-float-001-ref.html | match
 pseudo-display-contents-001.html | pseudo-display-contents-001-ref.html | match
 soft-hyphen-001.html | soft-hyphen-001-ref.html | match
 soft-hyphen-none-001.html | soft-hyphen-none-001-ref.html | match
+grid-lanes-basic-001.html | grid-lanes-basic-001-ref.html | match

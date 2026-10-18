@@ -84,7 +84,7 @@ type Custom = struct { name: str, value: str }
 type Extra = struct { name: str, value: str }
 
 type Style = struct {
-    display: Display, was_inline: bool, position: Position, floating: Float, clear: Clear, box_sizing: BoxSizing,
+    display: Display, was_inline: bool, lanes: bool, position: Position, floating: Float, clear: Clear, box_sizing: BoxSizing,
     overflow_x: Overflow, overflow_y: Overflow, visibility: Visibility,
     width: Len, height: Len, min_width: Len, min_height: Len, max_width: Len, max_height: Len,
     inset: [4]Len, margin: [4]Len, padding: [4]Len,
@@ -860,7 +860,16 @@ fn apply_misc(ap: *Ap, prop: str, v: str) -> bool {
     let low = cv.lower(ap.a, v)
     if str.eq(prop, "display") {
         let (dv, good) = parse_display(low)
-        if good { s.display = dv }
+        if good {
+            s.display = dv
+            s.lanes = false
+        } else if str.eq(low, "grid-lanes") || str.eq(low, "masonry") {
+            s.display = .Grid
+            s.lanes = true
+        } else if str.eq(low, "inline-grid-lanes") || str.eq(low, "inline-masonry") {
+            s.display = .InlineGrid
+            s.lanes = true
+        }
         ret true
     }
     if str.eq(prop, "position") {
@@ -1076,7 +1085,8 @@ fn apply_wide(ap: *Ap, prop: str, keyword: str) {
 
 fn copy_prop(ap: *Ap, src: *const Style, prop: str) {
     let s = ap.s
-    if str.eq(prop, "display") { s.display = src.display } else if str.eq(prop, "position") { s.position = src.position } else if str.eq(prop, "float") { s.floating = src.floating } else if str.eq(prop, "clear") { s.clear = src.clear } else if str.eq(prop, "box-sizing") { s.box_sizing = src.box_sizing } else if str.eq(prop, "overflow-x") { s.overflow_x = src.overflow_x } else if str.eq(prop, "overflow-y") { s.overflow_y = src.overflow_y } else if str.eq(prop, "visibility") { s.visibility = src.visibility } else if str.eq(prop, "opacity") { s.opacity = src.opacity } else if str.eq(prop, "z-index") {
+    if str.eq(prop, "display") { s.display = src.display
+        s.lanes = src.lanes } else if str.eq(prop, "position") { s.position = src.position } else if str.eq(prop, "float") { s.floating = src.floating } else if str.eq(prop, "clear") { s.clear = src.clear } else if str.eq(prop, "box-sizing") { s.box_sizing = src.box_sizing } else if str.eq(prop, "overflow-x") { s.overflow_x = src.overflow_x } else if str.eq(prop, "overflow-y") { s.overflow_y = src.overflow_y } else if str.eq(prop, "visibility") { s.visibility = src.visibility } else if str.eq(prop, "opacity") { s.opacity = src.opacity } else if str.eq(prop, "z-index") {
         s.z_index_auto = src.z_index_auto
         s.z_index = src.z_index
     } else if str.eq(prop, "width") { s.width = src.width } else if str.eq(prop, "height") { s.height = src.height } else if str.eq(prop, "min-width") { s.min_width = src.min_width } else if str.eq(prop, "min-height") { s.min_height = src.min_height } else if str.eq(prop, "max-width") { s.max_width = src.max_width } else if str.eq(prop, "max-height") { s.max_height = src.max_height } else if str.eq(prop, "color") { s.color = src.color } else if str.eq(prop, "background-color") { s.background_color = src.background_color } else if str.eq(prop, "font-size") { s.font_size = src.font_size } else if str.eq(prop, "font-weight") { s.font_weight = src.font_weight } else if str.eq(prop, "font-style") { s.font_style = src.font_style } else if str.eq(prop, "font-family") { s.font_family = src.font_family } else if str.eq(prop, "line-height") { s.line_height = src.line_height } else if str.eq(prop, "letter-spacing") { s.letter_spacing = src.letter_spacing } else if str.eq(prop, "word-spacing") { s.word_spacing = src.word_spacing } else if str.eq(prop, "text-indent") { s.text_indent = src.text_indent } else if str.eq(prop, "text-align") { s.text_align = src.text_align } else if str.eq(prop, "text-transform") { s.text_transform = src.text_transform } else if str.eq(prop, "white-space") { s.white_space = src.white_space } else if str.eq(prop, "word-break") { s.word_break = src.word_break } else if str.eq(prop, "overflow-wrap") || str.eq(prop, "word-wrap") { s.overflow_wrap = src.overflow_wrap } else if str.eq(prop, "text-overflow") { s.text_overflow = src.text_overflow } else if str.eq(prop, "direction") { s.direction = src.direction } else if str.eq(prop, "writing-mode") { s.writing_mode = src.writing_mode } else if str.eq(prop, "vertical-align") {

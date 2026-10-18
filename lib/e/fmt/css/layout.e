@@ -6200,6 +6200,34 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     if !built { ret 0.0f64 }
     let stretch_cols = cs.justify_content == .Normal || cs.justify_content == .Stretch
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
+    if cs.lanes {
+        // A masonry item may land in any lane, so each one counts towards the size of every lane it could occupy.
+        let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nc + 1usize) + 1usize)
+        if exe == ok {
+            var exn = 0usize
+            var xi = 0usize
+            while xi < g.n {
+                let item = g.items[xi]
+                var s0 = 0usize
+                // (an item spanning several lanes does not size any of them)
+                while s0 + usize(maxf(1.0f64, f64(item.cn))) <= g.nc && item.cn <= 1i32 {
+                    var copy = item
+                    copy.cs = i32(s0)
+                    ex[exn] = copy
+                    exn += 1usize
+                    s0 += 1usize
+                }
+                xi += 1usize
+            }
+            // (items only size lanes when the container's width is not definite; here `auto` lanes share it equally)
+            if cs.width.kind == .Px || cs.display == .Grid { exn = 0usize }
+            size_tracks(g.cols, g.nc, g.gap_c, cw, ex, exn, true, false, stretch_cols)
+        } else {
+            size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
+        }
+        let lanes_h = layout_lanes(l, b, g, cs, cw)
+        ret lanes_h
+    }
     size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
     // Row contributions are the items' heights at their column widths.
     var i = 0usize
@@ -6299,6 +6327,88 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         }
         let gg = GridGeom { box: b, nc: g.nc, nr: g.nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: g.ec, er: g.er }
         let gp2 = list.push[GridGeom](&l.grids, gg)
+    }
+    ret total
+}
+
+// `display: grid-lanes` (masonry) with the lanes along the columns: each item goes to the lane, or run of lanes, whose
+// content ends highest (within `flow-tolerance`, the first such lane), and the container's height is the tallest lane.
+fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64 {
+    position_tracks(g.cols, g.nc, g.gap_c, cw, cs.justify_content)
+    let bb0 = bx(l, b)
+    let ox0 = bb0.border[3usize] + bb0.padding[3usize]
+    let oy0 = bb0.border[0usize] + bb0.padding[0usize]
+    let (ends, ee) = mem.alloc[f64](l.a, g.nc + 1usize)
+    if ee != ok { ret 0.0f64 }
+    var q = 0usize
+    while q < g.nc {
+        ends[q] = 0.0f64 - g.gap_r
+        q += 1usize
+    }
+    var tol = cs.font_size
+    let (tv, has_tv) = extra_text(cs, "flow-tolerance")
+    if has_tv {
+        let tl = cv.lower(l.a, cv.trim_ws(tv))
+        tol = 0.0f64
+        if str.ends_with(tl, "px") {
+            let (nv, ne) = str.parse_i64(tl[..tl.len - 2usize])
+            if ne == ok { tol = f64(nv) }
+        }
+    }
+    var total = 0.0f64
+    var i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let is = bstyle(l, id)
+        let (sc, ecs) = item_axis_specs(l.a, is, true)
+        let span = usize(maxf(1.0f64, f64(g.items[i].cn)))
+        var start = usize(g.items[i].cs)
+        if sc.kind == 0u8 && ecs.kind != 0u8 && g.nc >= span { start = 0usize }
+        if sc.kind == 0u8 {
+            // Auto placement: the lane whose spanned run ends highest.
+            var best = 0usize
+            var best_end = 1000000000.0f64
+            var s0 = 0usize
+            while s0 + span <= g.nc {
+                var e = -1000000000.0f64
+                var t = s0
+                while t < s0 + span {
+                    if ends[t] > e { e = ends[t] }
+                    t += 1usize
+                }
+                if e < best_end - tol {
+                    best_end = e
+                    best = s0
+                }
+                s0 += 1usize
+            }
+            start = best
+        }
+        if start + span > g.nc { start = 0usize }
+        var top = -1000000000.0f64
+        var t2 = start
+        while t2 < start + span && t2 < g.nc {
+            if ends[t2] > top { top = ends[t2] }
+            t2 += 1usize
+        }
+        let area_w = grid_area_size(g.cols, i32(start), i32(span), g.gap_c)
+        let w = grid_item_width(l, id, cs, area_w)
+        var hs = -1.0f64
+        let (hv, has_h) = resolve_len(is.height, -1.0f64)
+        if is.height.kind == .Px && has_h { hs = to_content_h(l, id, hv) }
+        flex_place_item(l, id, w, hs)
+        let pb = bx(l, id)
+        let y0 = top + g.gap_r
+        pb.x = ox0 + g.cols[start].pos + pb.margin[3usize]
+        pb.y = oy0 + y0 + pb.margin[0usize]
+        let bottom = y0 + pb.margin[0usize] + pb.h + pb.margin[2usize]
+        var t3 = start
+        while t3 < start + span && t3 < g.nc {
+            ends[t3] = bottom
+            t3 += 1usize
+        }
+        if bottom > total { total = bottom }
+        i += 1usize
     }
     ret total
 }
