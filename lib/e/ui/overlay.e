@@ -69,16 +69,29 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
         entering = 1.0
         leaving = 0.0
     }
+    // The Linux look (worker l3) shows its tooltip at once, as the reference crop is a settled one.
+    if t.tokens.profile == .Linux {
+        entering = 1.0
+        leaving = 0.0
+    }
     if !shown && !(leaving > 0.0) { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
     var ink = style.color(t.tokens, .InverseOnSurface)
     if windows { ink = style.color(t.tokens, .Text) }
     let cupertino = t.tokens.profile == .CupertinoLike
     if cupertino { ink = style.color(t.tokens, .Text) }
+    let linux = t.tokens.profile == .Linux
+    if linux { ink = style.hex_raw(0xFFFFFFu32) }
     var caption = control.text_options()
     caption.role = .BodySmall
     caption.wrap = .Word
     caption.max_lines = 2u32
     if cupertino { caption.size = 11.0 }
+    if linux {
+        // libadwaita's tooltip: the body text on one line (GTK wraps only past its own width limit).
+        caption.role = .Body
+        caption.wrap = .None
+        caption.max_lines = 0u32
+    }
     if windows {
         caption.role = .Body
         // v3's hint does not wrap by itself: its text carries its own line breaks.
@@ -145,6 +158,24 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
     surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, plate, parts[0usize..n])
+    if linux {
+        // (worker l3) tooltip.background: black 80 % with 9 px corners, 6 10 padding and a 1 px white 10 % line round it that
+        // the fill does not run under (background-clip: padding-box), so the line is a box of its own around the fill.
+        var fill = style.defaults()
+        fill.background = paint.Brush { Solid: style.hexa(0x000000u32, 0.8) }
+        fill.radius = 8.0
+        fill.padding = style.EdgeLengths { left: style.Length { Px: 10.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 10.0 }, bottom: style.Length { Px: 6.0 } }
+        var line = style.defaults()
+        line.border = style.Border { width: 1.0, color: style.hexa(0xFFFFFFu32, 0.1) }
+        line.radius = 9.0
+        line.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
+        let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if inner_error != ok { ret (zero, TooLarge) }
+        inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, fill, parts[0usize..n])
+        surface[0usize] = widget.box(0u64, line, inner[0usize..1usize])
+        gap_y = 0.0
+        placement = .BelowCenter
+    }
     if windows {
         // looks5 group d: v3's toolbar hint window (#FFFFE1, bevelled), the shortcut in parentheses after the text.
         var hint_line = text

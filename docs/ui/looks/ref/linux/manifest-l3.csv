@@ -1,0 +1,3 @@
+scheme,neper_control,name,png_1x,png_2x,w_1x,h_1x,note
+light,hint,tooltip-real,light/tooltip-real@1x.png,light/tooltip-real@2x.png,95,33,tooltip.background > box > label as GtkTooltipWindow builds it
+dark,hint,tooltip-real,dark/tooltip-real@1x.png,dark/tooltip-real@2x.png,95,33,tooltip.background > box > label as GtkTooltipWindow builds it

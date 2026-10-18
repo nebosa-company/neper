@@ -53,6 +53,8 @@ sheet("scroll_bar", 2, 210, 170, [
     "scrollbar-h-disabled", "scrollbar-v-disabled", "scrolled-overlay", "scrolled-classic",
 ])
 
+sheet("hint", 1, 210, 90, [("tooltip-real", [(10, 8, 84, 26)])])
+
 
 def origin(sh, i):
     col, row = i % sh["columns"], i // sh["columns"]
