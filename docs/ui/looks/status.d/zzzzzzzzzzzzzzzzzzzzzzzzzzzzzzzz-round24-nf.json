@@ -1,0 +1,126 @@
+{
+ "group_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/group_box.png",
+    "notes": "Round 24: the frame and the row hairlines were OutlineVariant (#434653), 1.98:1 on the page (1.8:1 as drawn, a blended pixel). Under Neper dark they now take Outline (#8D909E): 5.8:1, and 3.5:1 or better where a hairline falls a third of a pixel off the grid (the row divider of the sheet is drawn at 103,105,117 on 18,19,24). Neper light and every other look keep the token (group_rule_color). scripts/neper_dark_contrast.py could not see the old frame, because the 12 % ink of a disabled edge is the very colour of OutlineVariant, so it now also measures long one pixel hairlines in the group box sheets (frame lines and dividers need 3:1 unless they are the disabled 12 % mix); it flags the old frame (1.84, 1.55 and 1.98:1) and passes group_box and group_box_dialog now. Text, as before, passes 4.5:1.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/dialog.png",
+    "notes": "Round 24: the dialog panel (#292A2F) had no edge on the scrim (#0C0D10, 1.4:1) and its shadow does not read on dark; under Neper dark it now has a 1 px edge in the frame ink (#707380, 4:1 on the scrim), as the hint plate has. dialog, dialog_message, dialog_wide and dialog_more* were re-rendered; Neper light and the other looks are unchanged. scripts/neper_dark_contrast.py finds no violation in dialog, dialog_message, dialog_wide.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/image_combo_box.png",
+    "notes": "Round 24: the Disabled cell is no longer the enabled picture: under Neper dark the whole field (frame, label, picture, value and chevron) is drawn at the 38 % disabled content level, as the Material look does, and is exempt as disabled content in scripts/neper_dark_contrast.py (no violation). The control ignored its enabled flag outside Windows and Material; the light Neper picture still does, which is why the change is gated to the dark palette. Its focus ring (B3C5FF, two-tone against the face) passes scripts/neper_dark_focus.py.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/toolbar_button.png",
+    "notes": "Round 24: the Disabled glyph and the Caption disabled button are drawn dimmed under Neper dark (glyph_toggle_state: the glyph at the 38 % disabled content level, no fill, not pressable; the captioned Print button disabled). Both are exempt as disabled content in scripts/neper_dark_contrast.py, which finds no violation. Neper light and the other looks still draw the enabled picture in those cells.",
+    "gaps": [
+     "The Focus cell's ring is cut at the top and bottom by that cell's 26 px crop (it reads as two parentheses); the ring is B3C5FF on the page and passes 3:1, but the sheet geometry is shared with the Windows look and was not changed",
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/menu_bar-open.png",
+    "notes": "Round 24: the open menu is now rendered. An open Neper menu fades in over frames (appeared_share), so a resting cell showed only the highlighted title. The sheet harness has a Settle drive (the pointer parked off the menu, four more 100 ms frames) that only the Neper dark cell uses; the cell shows the first four commands of the Cards menu so the taller Neper menu hangs under the bar instead of being moved over the titles by the window edge. The panel takes a 1 px frame-ink edge under Neper dark (it was 1.1:1 on the page). scripts/neper_dark_contrast.py finds no violation in menu_bar, menu_bar-open (disabled commands are exempt).",
+    "gaps": [
+     "The other menu_bar_open_<title> sheets are Windows-only pictures and render empty under Neper (light too)",
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "Round 24: popup_menu is no longer empty. Its two static cells were open Neper menus at the first frame of their fade, so nothing was drawn; the dark cells now use the Settle drive and show the context menu (disabled item, separators, shortcuts) and the checked and arrow menu. The panel takes a 1 px frame-ink edge under Neper dark. scripts/neper_dark_contrast.py finds no violation in popup_menu and popup_menu-hover.",
+    "gaps": [
+     "The other popup_menu_* sheets are Windows-only menu pictures and render empty under Neper (light too), so only popup_menu and popup_menu-hover are judged",
+     "A hover row on a disabled item is a state layer of 1.1:1 on the panel (decorative, the item is disabled)",
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/text_edit.png",
+    "notes": "Round 24: the pixel-baked Windows THotKey replica (a light frame and a white face, 1.8:1) is no longer drawn by the dark sheets edits_states and edits_hover; the light Neper pictures keep it. scripts/neper_dark_contrast.py finds no violation in edits_dialog, edits_hover, edits_states, text_edit. The focus rings of the Neper text fields (a 2 px border) pass 3:1 in scripts/neper_dark_focus.py.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/tree_list.png",
+    "notes": "Round 24: unchanged, still review. tree_list_rules is the Windows conditional-formatting list grid, whose header carries a light grey top line (#D0D2D5) and frame lines (#828790) from the shared grid chrome, not mapped to dark tokens; the sheet is written by a Windows-only app and cannot be left out of the Neper dark directory without a stale file. scripts/neper_dark_contrast.py finds no violation in tree_list and tree_list_rules.",
+    "gaps": [
+     "tree_list_rules: light grid chrome constants in the Neper dark picture",
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/data_grid.png",
+    "notes": "Round 24: unchanged, still review. Baked 96 DPI v3 tiles (indicator icons, star, filter funnel, navigator buttons), white column rules in data_grid_top, main, bottom and sort_states, and the hard-coded light v3 dialogs of datagrid.e (page setup, format rules, statistics) remain in the Neper dark pictures; mapping them to dark tokens is a rewrite of the grid chrome, not a look change. The grid's focus ring passes scripts/neper_dark_focus.py.",
+    "gaps": [
+     "Light baked v3 pixels remain: the indicator icons, star, filter funnel, navigator buttons, and the white column rules",
+     "The v3 dialogs of datagrid.e are hard-coded light colours and Windows-only",
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ }
+}
