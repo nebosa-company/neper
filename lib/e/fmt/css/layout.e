@@ -547,6 +547,15 @@ fn gen_pseudo(l: *Layout, node: u32, parent_box: u32, kind: usize) {
     if !has { ret }
     let id = push_style(l, ps)
     let pd = l.anon.items[usize(id) - l.styles.len].display
+    // `display: contents` leaves only the generated text, in the parent.
+    if pd == .Contents {
+        if text.len > 0usize {
+            let tc = new_box(l, .Text, true, false, node, id)
+            bx(l, tc).text = text
+            append(l, parent_box, tc)
+        }
+        ret
+    }
     let b = new_box(l, inner_for_display(pd), is_inline_level_display(pd), true, node, id)
     append(l, parent_box, b)
     // Counters of the pseudo-element itself apply inside it.
