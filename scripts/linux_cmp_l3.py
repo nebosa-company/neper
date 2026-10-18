@@ -37,10 +37,11 @@ def sheet(name, columns, cell_w, cell_h, cells):
 
 
 # ---- sheets (kept in step with examples/looks/linux_<name>.e) ----
-sheet("progress_bar", 3, 210, 44, [
+sheet("progress_bar", 3, 210, 47, [
     "progress-0", "progress-40", "progress-100", "progress-osd", "levelbar",
     ("spinner", [(0, 0, 31, 31)]),
     "scale-normal", "scale-hover", "scale-active", "scale-focus", "scale-disabled",
+    ("scale-marks", [(5, 31, 20, 44), (168, 31, 198, 44)]),
 ])
 
 sheet("splitter", 2, 210, 90, [

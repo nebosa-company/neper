@@ -72,67 +72,87 @@ fn soft_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 
 // The shadow of the disc of `radius` centred in `area`, `dy` px lower, `alpha` black at its strongest, the blur boxes `box` px wide.
 fn soft_disc(arena: *mem.Arena, b: *scene.Builder, area: geometry.Rect, radius: f32, dy: f32, alpha: f32, box: f32) -> err {
-    let soft = Soft { arena: arena, radius: radius, dy: dy, alpha: alpha, box: box }
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    ret soft_shape(arena, b, cx, cy, radius, false, 0.0, 0.0 - 0.0 + dy, 0.0, paint.rgba(0.0, 0.0, 0.0, alpha), box)
+}
+
+// Whether (px, py), relative to the centre, is inside the shape grown by `grow`: a disc of `radius`, or with `tear` the slider of a marked
+// scale, a disc with its lower right corner square, turned 45 degrees clockwise (so its point is down).
+fn inside(px: f32, py: f32, radius: f32, tear: bool, grow: f32) -> bool {
+    let rr = radius + grow
+    if !tear { ret px * px + py * py <= rr * rr }
+    let u = (px + py) * 0.70710678
+    let v = (py - px) * 0.70710678
+    if u >= 0.0 && v >= 0.0 { ret u <= rr && v <= rr }
+    ret u * u + v * v <= rr * rr
+}
+
+// A soft shape: the coverage of the shape (centre `cx`, `cy` logical px) grown by `grow`, moved (`mx`, `my`), blurred by three boxes of
+// `box` px, drawn in `color` (its alpha the strongest level) outside the shape's own outline (the shape itself, not moved or grown, is cut
+// out, as GTK clips an outset shadow to outside the box). `box` 0 draws it crisp: a ring when `grow` is its width.
+fn soft_shape(arena: *mem.Arena, b: *scene.Builder, cx0: f32, cy0: f32, radius: f32, tear: bool, mx: f32, my: f32, grow: f32, color: paint.Color, box: f32) -> err {
     let scale = scene.builder_scale(b)
-    var d = i32(soft.box * scale + 0.5)
+    var d = i32(box * scale + 0.5)
     if d < 1 { d = 1 }
     let reach = 3 * (d / 2) + 2
-    let margin = reach + i32(soft.dy * scale + 1.0)
-    let side = area.width * scale
-    // the grid: whole device pixels around the disc's box
-    let gx0 = i32(math.floor[f32](area.x * scale)) - margin
-    let gy0 = i32(math.floor[f32](area.y * scale)) - margin
-    var n = usize(side + 1.0) + usize(2 * margin) + 1usize
-    if n > 96usize { n = 96usize }
-    let (grid, grid_error) = mem.alloc[f32](soft.arena, n * n)
+    let shift = math.max[f32](math.abs[f32](mx), math.abs[f32](my))
+    let margin = reach + i32(shift * scale + grow * scale + 2.0)
+    let span = (radius + 1.0 + grow) * 2.0 * scale
+    let gx0 = i32(math.floor[f32](cx0 * scale - span * 0.5)) - margin
+    let gy0 = i32(math.floor[f32](cy0 * scale - span * 0.5)) - margin
+    var n = usize(span + 1.0) + usize(2 * margin) + 1usize
+    if n > 120usize { n = 120usize }
+    let (grid, grid_error) = mem.alloc[f32](arena, n * n)
     if grid_error != ok { ret grid_error }
-    let (tmp, tmp_error) = mem.alloc[f32](soft.arena, n * n)
+    let (tmp, tmp_error) = mem.alloc[f32](arena, n * n)
     if tmp_error != ok { ret tmp_error }
-    let cx = area.x * scale + side * 0.5 - f32(gx0)
-    let cy0 = area.y * scale + area.height * scale * 0.5 - f32(gy0)
-    let cy = cy0 + soft.dy * scale
-    let rr = soft.radius * scale
+    let cx = cx0 * scale - f32(gx0)
+    let cy = cy0 * scale - f32(gy0)
+    let rr = radius * scale
     var y: usize = 0usize
     while y < n {
         var x: usize = 0usize
         while x < n {
-            var inside: i32 = 0
+            var hit: i32 = 0
+            var sy: i32 = 0
+            while sy < 8 {
+                var sx: i32 = 0
+                while sx < 8 {
+                    let px = f32(x) + (f32(sx) + 0.5) / 8.0 - cx - mx * scale
+                    let py = f32(y) + (f32(sy) + 0.5) / 8.0 - cy - my * scale
+                    if inside(px, py, rr, tear, grow * scale) { hit += 1 }
+                    sx += 1
+                }
+                sy += 1
+            }
+            grid[y * n + x] = f32(hit) / 64.0
+            x += 1usize
+        }
+        y += 1usize
+    }
+    if d > 1 {
+        blur_axis(grid, tmp, n, true, d)
+        blur_axis(grid, tmp, n, false, d)
+    }
+    // the shape's own pixels are cut out
+    y = 0usize
+    while y < n {
+        var x: usize = 0usize
+        while x < n {
+            var hit: i32 = 0
             var sy: i32 = 0
             while sy < 8 {
                 var sx: i32 = 0
                 while sx < 8 {
                     let px = f32(x) + (f32(sx) + 0.5) / 8.0 - cx
                     let py = f32(y) + (f32(sy) + 0.5) / 8.0 - cy
-                    if px * px + py * py <= rr * rr { inside += 1 }
+                    if inside(px, py, rr, tear, 0.0) { hit += 1 }
                     sx += 1
                 }
                 sy += 1
             }
-            grid[y * n + x] = f32(inside) / 64.0
-            x += 1usize
-        }
-        y += 1usize
-    }
-    blur_axis(grid, tmp, n, true, d)
-    blur_axis(grid, tmp, n, false, d)
-    // GTK clips an outset shadow to outside the box's own shape: the knob's antialiased edge pixels keep only what it leaves.
-    y = 0usize
-    while y < n {
-        var x: usize = 0usize
-        while x < n {
-            var inside: i32 = 0
-            var sy: i32 = 0
-            while sy < 8 {
-                var sx: i32 = 0
-                while sx < 8 {
-                    let px = f32(x) + (f32(sx) + 0.5) / 8.0 - cx
-                    let py = f32(y) + (f32(sy) + 0.5) / 8.0 - cy0
-                    if px * px + py * py <= rr * rr { inside += 1 }
-                    sx += 1
-                }
-                sy += 1
-            }
-            grid[y * n + x] = grid[y * n + x] * (1.0 - f32(inside) / 64.0)
+            grid[y * n + x] = grid[y * n + x] * (1.0 - f32(hit) / 64.0)
             x += 1usize
         }
         y += 1usize
@@ -142,16 +162,16 @@ fn soft_disc(arena: *mem.Arena, b: *scene.Builder, area: geometry.Rect, radius: 
     while row < n {
         var col: usize = 0usize
         while col < n {
-            let level = u32(grid[row * n + col] * soft.alpha * 255.0 + 0.5)
+            let level = u32(grid[row * n + col] * color.alpha * 255.0 + 0.5)
             if level == 0u32 {
                 col += 1usize
                 continue
             }
             var run: usize = 1usize
-            while col + run < n && u32(grid[row * n + col + run] * soft.alpha * 255.0 + 0.5) == level { run += 1usize }
-            let x = f32(gx0 + i32(col)) / scale
-            let yy = f32(gy0 + i32(row)) / scale
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: x, y: yy, width: f32(run) / scale, height: 1.0 / scale }, brush: paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, f32(level) / 255.0) } } })
+            while col + run < n && u32(grid[row * n + col + run] * color.alpha * 255.0 + 0.5) == level { run += 1usize }
+            let rx = f32(gx0 + i32(col)) / scale
+            let ry = f32(gy0 + i32(row)) / scale
+            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: rx, y: ry, width: f32(run) / scale, height: 1.0 / scale }, brush: paint.Brush { Solid: paint.Color { red: color.red, green: color.green, blue: color.blue, alpha: f32(level) / 255.0 } } } })
             col += run
         }
         row += 1usize

@@ -46,7 +46,7 @@ def sheets():
     for n in ("progress_bar", "toolbar_button"):
         s = l3.SHEETS[n]
         ink = {c: r for c, r in s["cells"]}
-        out[n] = (s["columns"], s["cell_w"], s["cell_h"], [c for c, _ in s["cells"]], lambda c, ink=ink, n=n: [r for r in ink.get(c, []) if n != "toolbar_button" or c.startswith(("toggle", "headerbar", "toolbar"))])
+        out[n] = (s["columns"], s["cell_w"], s["cell_h"], [c for c, _ in s["cells"]], lambda c, ink=ink, n=n: [r for r in ink.get(c, []) if (n == "toolbar_button" and c.startswith(("toggle", "headerbar", "toolbar"))) or c == "scale-marks"])
     for n in ("vertical_grid", "dialog"):
         s = l4.SHEETS[n]
         out[n] = (s["columns"], s["cell_w"], s["cell_h"], s["cells"], lambda c, s=s: s["text"].get(c, []))
