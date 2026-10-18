@@ -1593,6 +1593,13 @@ fn tz_database(it: *js.Interp) -> (tz.Database, bool) {
     ret (db, true)
 }
 
+// __tzLinks(): the IANA link table as "target alias" lines.
+fn tz_links_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (text, te) = tzpack.links(js.root_realm(it).a)
+    if te != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    ret (js.str_value(text), ok)
+}
+
 fn tz_names_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let arr = js.new_array(it)
     let (db, ok_db) = tz_database(it)
@@ -1643,6 +1650,7 @@ fn install_host(it: *js.Interp) {
     let edda = js.define_data(it, it.last, js.key_of("IsHTMLDDA"), js.obj_value(dda), js.P_HIDDEN)
     js.add_method(it, it.global, "__tzNames", 0u32, tz_names_native)
     js.add_method(it, it.global, "__tzOffset", 2u32, tz_offset_native)
+    js.add_method(it, it.global, "__tzLinks", 0u32, tz_links_native)
 }
 
 // --- bootstrap

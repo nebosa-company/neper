@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 166236)
+    var b = try str.builder(a, 165761)
     try str.push(&b, "// The Intl built-ins (ECMA-402), evaluated into the main realm after Temporal (generated into intl.e by scripts/gen_js_prelude.py).\n")
     try str.push(&b, "// Locale data is a compact built-in set (English plus the language tags the algorithms need); intrinsics are captured up front.\n")
     try str.push(&b, "(function (global) {\n")
@@ -1543,9 +1543,6 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "      zoneIndex = create(null);\n")
     try str.push(&b, "      var names = tzNames();\n")
     try str.push(&b, "      for (var i = 0; i < names.length; i++) zoneIndex[lower(names[i])] = names[i];\n")
-    try str.push(&b, "      zoneIndex['etc/utc'] = 'UTC'; zoneIndex['etc/gmt'] = 'UTC'; zoneIndex['gmt'] = 'UTC'; zoneIndex['utc'] = 'UTC'; zoneIndex['etc/uct'] = 'UTC';\n")
-    try str.push(&b, "      zoneIndex['etc/zulu'] = 'UTC'; zoneIndex['uct'] = 'UTC'; zoneIndex['zulu'] = 'UTC'; zoneIndex['etc/greenwich'] = 'UTC'; zoneIndex['greenwich'] = 'UTC';\n")
-    try str.push(&b, "      zoneIndex['etc/universal'] = 'UTC'; zoneIndex['universal'] = 'UTC'; zoneIndex['gmt0'] = 'UTC'; zoneIndex['etc/gmt0'] = 'UTC'; zoneIndex['etc/gmt+0'] = 'UTC'; zoneIndex['etc/gmt-0'] = 'UTC';\n")
     try str.push(&b, "    }\n")
     try str.push(&b, "    return zoneIndex;\n")
     try str.push(&b, "  }\n")
@@ -2710,6 +2707,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "  }.localeCompare, 1));\n")
     try str.push(&b, "  delete global.__tzNames;\n")
     try str.push(&b, "  delete global.__tzOffset;\n")
+    try str.push(&b, "  delete global.__tzLinks;\n")
     try str.push(&b, "  delete global.__temporalFormat;\n")
     try str.push(&b, "  define(global, 'Intl', Intl);\n")
     try str.push(&b, "})(globalThis);\n")
