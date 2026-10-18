@@ -5091,9 +5091,9 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         if layers_error != ok { ret (zero, TooLarge) }
         layers[0usize] = column_node[0usize]
         if f32(total) * row_extent > body_height && inner_width > 60.0 {
-            let (glow, glow_error) = linux_card.scroll_glow_node(a, t.tokens.palette == .Dark)
+            let (glow, glow_error) = linux_card.scroll_glow_node(a, t.tokens.palette == .Dark, body_height)
             if glow_error != ok { ret (zero, glow_error) }
-            layers[1usize] = widget.positioned(0u64, inner_width - 53.0, 0.0, style.defaults(), one_node(a, glow))
+            layers[1usize] = widget.positioned(0u64, inner_width - 53.0, head_height, style.defaults(), one_node(a, glow))
             layers_count = 2usize
         }
         column_node[0usize] = widget.box(0u64, frame, one_node(a, widget.stack(0u64, control.sized_style(inner_width, head_height + body_height), layers[0usize..layers_count])))

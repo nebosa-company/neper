@@ -8701,12 +8701,12 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     column[3usize] = responses
     var face = style.defaults()
     face.width = style.Length { Px: width }
-    face.background = paint.Brush { Solid: linux_dialog_face(t) }
-    face.radius = 18.0
+    // the shadow node under it paints the card's face (its fractional rim included); this box only clips to the corners
+    face.radius = 13.0
     face.overflow = .Clip
     let card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, column[0usize..4usize])
     // the rim and shadow round it, then the card
-    let (shadow, shadow_error) = linux_card.alert_shadow_node(a, t.tokens.palette == .Dark)
+    let (shadow, shadow_error) = linux_card.alert_shadow_node(a, width, 142.0, linux_dialog_face(t))
     if shadow_error != ok { ret (zero, shadow_error) }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
