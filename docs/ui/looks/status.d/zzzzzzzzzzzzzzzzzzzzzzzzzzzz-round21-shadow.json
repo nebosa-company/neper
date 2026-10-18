@@ -1,0 +1,82 @@
+{
+ "data_grid": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/data_grid.png",
+    "notes": "ROUND 21 (shadow worker): the scroll indicator glow is drawn (a cone and an ellipse fitted by scripts/linux/fit_shadow.py, sized by the view's body height, at every scale), the 53 x 198 baked region is deleted. Strict compare scripts/linux_cmp_shadow.py (flat reference pixel = 8 neighbours within 2 levels; off = ours more than 2 levels away; only glyph pixels within 2 px of ink set apart): the one captured state 0 flat px off in both schemes, 32 / 34 px off counting steep pixels (before this round with the baked painter disabled: 3356 / 3824 flat). Scale check passes at 1.25, 1.5 and 2.0. No baked large region remains (only the 12 px card corners, 20 x 20 check box and 46 x 28 switch of other controls).",
+    "gaps": [
+     "Only the engine's plain columns are styled: filter row, footers, group rows, indicators and cell editors keep the generic look",
+     "Hover and pressed rows have no capture",
+     "The scroll indicator's thumb fills the track and sits at the top: its length and place do not follow the content or the scroll offset",
+     "Sort arrow in the header is not drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/data_grid.png",
+    "notes": "ROUND 21 (shadow worker): the scroll indicator glow is drawn (a cone and an ellipse fitted by scripts/linux/fit_shadow.py, sized by the view's body height, at every scale), the 53 x 198 baked region is deleted. Strict compare scripts/linux_cmp_shadow.py (flat reference pixel = 8 neighbours within 2 levels; off = ours more than 2 levels away; only glyph pixels within 2 px of ink set apart): the one captured state 0 flat px off in both schemes, 32 / 34 px off counting steep pixels (before this round with the baked painter disabled: 3356 / 3824 flat). Scale check passes at 1.25, 1.5 and 2.0. No baked large region remains (only the 12 px card corners, 20 x 20 check box and 46 x 28 switch of other controls).",
+    "gaps": [
+     "Only the engine's plain columns are styled: filter row, footers, group rows, indicators and cell editors keep the generic look",
+     "Hover and pressed rows have no capture",
+     "The scroll indicator's thumb fills the track and sits at the top: its length and place do not follow the content or the scroll offset",
+     "Sort arrow in the header is not drawn"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "linux": {
+    "status": "matched",
+    "screenshot": "linux/dialog.png",
+    "notes": "ROUND 21 (shadow worker): the alert card's face, its fractional 1 px rim and its shadow are drawn by e.ui.linuxshadow_l2 (three blurred rounded-rectangle layers fitted to alert-dialog@1x, radius 13), the 183 x 212 baked shadow is deleted and the card's own 18 px background is gone. scripts/linux_cmp_shadow.py: the one captured state 0 flat px off in Light and Dark, 10 / 783 counting steep pixels (Light before this round with the baked painter disabled: 17,264 flat; Dark 0 flat, 784 steep). Scale check passes at 1.25, 1.5 and 2.0.",
+    "gaps": [
+     "Hover, pressed and focused responses and suggested or three response layouts have no capture",
+     "The window frame is drawn by the sheet, not by the dialog",
+     "Body text is 4 px wider than the library's hinted one",
+     "The card is 294 x 142 (a one-line body); a taller card would need its own box, the shadow node takes the card's size from the caller"
+    ]
+   },
+   "linux_dark": {
+    "status": "matched",
+    "screenshot": "linux-dark/dialog.png",
+    "notes": "ROUND 21 (shadow worker): the alert card's face, its fractional 1 px rim and its shadow are drawn by e.ui.linuxshadow_l2 (three blurred rounded-rectangle layers fitted to alert-dialog@1x, radius 13), the 183 x 212 baked shadow is deleted and the card's own 18 px background is gone. scripts/linux_cmp_shadow.py: the one captured state 0 flat px off in Light and Dark, 10 / 783 counting steep pixels (Light before this round with the baked painter disabled: 17,264 flat; Dark 0 flat, 784 steep). Scale check passes at 1.25, 1.5 and 2.0.",
+    "gaps": [
+     "Hover, pressed and focused responses and suggested or three response layouts have no capture",
+     "The window frame is drawn by the sheet, not by the dialog",
+     "Body text is 4 px wider than the library's hinted one",
+     "The card is 294 x 142 (a one-line body); a taller card would need its own box, the shadow node takes the card's size from the caller"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/combo_box.png",
+    "notes": "ROUND 21 (shadow worker): the popover's soft shadow is drawn (three blurred rounded-rectangle layers fitted to the alpha of dropdown-open@1x, sized by the popover), the baked 9-slice and its generator are deleted. scripts/linux_cmp_shadow.py: every state of combo_box and combo_box_open 0 flat px off in both schemes; steep pixels off: focus-ring states 39 / 53 (Light), 48 / 58 (Dark), dark active 17, open list 60 / 32 (before, painter disabled: open list 2066 / 508 flat). Stays review, not matched: the focus ring corners are off by up to 10 levels on those steep pixels and the popover's offset below the button is a guess. Scale check passes at 1.25, 1.5 and 2.0 (closed and open sheets).",
+    "gaps": [
+     "Focus ring corners: GTK's 2 px outline has a 6 px outer and 4 px inner corner; ours is a border at radius 5.7, whose antialiasing differs by up to 10 levels on about 40 corner pixels per ring (the straight sides match)",
+     "The gap between the button and its popover (7.07 px) is a guess: the capture holds the popover surface alone",
+     "Hover and pressed are the library with state flags forced, not a real pointer",
+     "Rows are 35.5 px in GTK; Neper snaps box heights to whole pixels, so the second and third rows' text can sit 0.5 px off",
+     "The combo box with an entry opens the same popover list (only the drop down's was captured)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/combo_box.png",
+    "notes": "ROUND 21 (shadow worker): the popover's soft shadow is drawn (three blurred rounded-rectangle layers fitted to the alpha of dropdown-open@1x, sized by the popover), the baked 9-slice and its generator are deleted. scripts/linux_cmp_shadow.py: every state of combo_box and combo_box_open 0 flat px off in both schemes; steep pixels off: focus-ring states 39 / 53 (Light), 48 / 58 (Dark), dark active 17, open list 60 / 32 (before, painter disabled: open list 2066 / 508 flat). Stays review, not matched: the focus ring corners are off by up to 10 levels on those steep pixels and the popover's offset below the button is a guess. Scale check passes at 1.25, 1.5 and 2.0 (closed and open sheets).",
+    "gaps": [
+     "Focus ring corners: GTK's 2 px outline has a 6 px outer and 4 px inner corner; ours is a border at radius 5.7, whose antialiasing differs by up to 10 levels on about 40 corner pixels per ring (the straight sides match)",
+     "The gap between the button and its popover (7.07 px) is a guess: the capture holds the popover surface alone",
+     "Hover and pressed are the library with state flags forced, not a real pointer",
+     "Rows are 35.5 px in GTK; Neper snaps box heights to whole pixels, so the second and third rows' text can sit 0.5 px off",
+     "The combo box with an entry opens the same popover list (only the drop down's was captured)"
+    ]
+   }
+  }
+ }
+}

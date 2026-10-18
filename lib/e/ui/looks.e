@@ -735,10 +735,18 @@ fn run_cupertino(a: *mem.Arena, s: *const Sheet) -> err {
 // scripts/linux/compose_ref.py), docs/ui/looks/<linux dir>/<name>-vs-ref[@1.5x].png (reference left, ours right).
 fn run_linux(a: *mem.Arena, s: *const Sheet) -> err {
     try read_linux_fonts(a)
+    // As run_all: NEPER_LOOKS_SCALE renders that one scale and NEPER_LOOKS_NOTEXT leaves the text out (the scale check, scripts/looks_scale_check.py).
+    let only_scale = env_scale(a)
+    let (no_text, no_text_error) = os.env(a, "NEPER_LOOKS_NOTEXT")
+    scene.set_text_hidden(no_text_error == ok && no_text.len > 0usize)
     var scale_index = 0usize
     while scale_index < 2usize {
         var scale: f32 = 1.0
         if scale_index == 1usize { scale = 1.5 }
+        if only_scale > 0.0 {
+            if scale_index == 1usize { break }
+            scale = only_scale
+        }
         var look_index = 0usize
         while look_index < 2usize {
             var look: Look = .Linux

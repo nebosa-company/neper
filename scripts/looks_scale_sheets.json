@@ -700,6 +700,70 @@
   "label",
   []
  ],
+ "linux-dark:combo_box": [
+  "linux_combo_box",
+  []
+ ],
+ "linux-dark:combo_box_open": [
+  "linux_combo_box",
+  []
+ ],
+ "linux-dark:data_grid": [
+  "linux_data_grid",
+  []
+ ],
+ "linux-dark:dialog": [
+  "linux_dialog",
+  []
+ ],
+ "linux-dark:list_box": [
+  "linux_list_box",
+  []
+ ],
+ "linux-dark:progress_bar": [
+  "linux_progress_bar",
+  []
+ ],
+ "linux-dark:scroll_bar": [
+  "linux_scroll_bar",
+  []
+ ],
+ "linux-dark:tree_list": [
+  "linux_tree_list",
+  []
+ ],
+ "linux:combo_box": [
+  "linux_combo_box",
+  []
+ ],
+ "linux:combo_box_open": [
+  "linux_combo_box",
+  []
+ ],
+ "linux:data_grid": [
+  "linux_data_grid",
+  []
+ ],
+ "linux:dialog": [
+  "linux_dialog",
+  []
+ ],
+ "linux:list_box": [
+  "linux_list_box",
+  []
+ ],
+ "linux:progress_bar": [
+  "linux_progress_bar",
+  []
+ ],
+ "linux:scroll_bar": [
+  "linux_scroll_bar",
+  []
+ ],
+ "linux:tree_list": [
+  "linux_tree_list",
+  []
+ ],
  "list_box": [
   "list_box",
   []
