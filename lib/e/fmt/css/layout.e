@@ -6200,6 +6200,13 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     if !built { ret 0.0f64 }
     let stretch_cols = cs.justify_content == .Normal || cs.justify_content == .Stretch
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
+    // Lanes are the explicit tracks: the implicit ones auto-placement made up are not lanes.
+    if cs.lanes && g.ec > 0i32 && usize(g.ec) < g.nc { g.nc = usize(g.ec) }
+    if cs.lanes && g.er > 0i32 && g.ec == 0i32 && usize(g.er) < g.nr { g.nr = usize(g.er) }
+    if cs.lanes && g.er > 0i32 && g.ec == 0i32 {
+        let rows_h = layout_lanes_rows(l, b, g, cs, cw, ch)
+        ret rows_h
+    }
     if cs.lanes {
         // A masonry item may land in any lane, so each one counts towards the size of every lane it could occupy.
         let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nc + 1usize) + 1usize)
@@ -6327,6 +6334,134 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         }
         let gg = GridGeom { box: b, nc: g.nc, nr: g.nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: g.ec, er: g.er }
         let gp2 = list.push[GridGeom](&l.grids, gg)
+    }
+    ret total
+}
+
+// `display: grid-lanes` with the lanes along the rows: items flow sideways, each into the lane (or run of lanes) whose
+// content ends furthest left, and take their width from their content.
+fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64 {
+    let bb0 = bx(l, b)
+    let ox0 = bb0.border[3usize] + bb0.padding[3usize]
+    let oy0 = bb0.border[0usize] + bb0.padding[0usize]
+    // Natural heights (at a fit-content width) size the lanes when the container's height is not definite.
+    var i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let is = bstyle(l, id)
+        let ib = bx(l, id)
+        let (mn, mx) = content_widths(l, id)
+        let w = maxf(mn, minf(mx, cw - ib.margin[3usize] - ib.margin[1usize] - horizontal_extras(ib)))
+        flex_place_item(l, id, w, -1.0f64)
+        let outer = bx(l, id).h + ib.margin[0usize] + ib.margin[2usize]
+        g.items[i].rmin = outer
+        g.items[i].rmax = outer
+        i += 1usize
+    }
+    let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
+    if ch < 0.0f64 {
+        let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nr + 1usize) + 1usize)
+        var exn = 0usize
+        if exe == ok {
+            var xi = 0usize
+            while xi < g.n {
+                let item = g.items[xi]
+                var s0 = 0usize
+                while s0 < g.nr && item.rn <= 1i32 {
+                    var copy = item
+                    copy.rs = i32(s0)
+                    ex[exn] = copy
+                    exn += 1usize
+                    s0 += 1usize
+                }
+                xi += 1usize
+            }
+        }
+        size_tracks(g.rows, g.nr, g.gap_r, ch, ex, exn, false, false, false)
+    } else {
+        size_tracks(g.rows, g.nr, g.gap_r, ch, g.items, 0usize, false, false, stretch_rows)
+    }
+    position_tracks(g.rows, g.nr, g.gap_r, ch, cs.align_content)
+    let (ends, ee) = mem.alloc[f64](l.a, g.nr + 1usize)
+    if ee != ok { ret 0.0f64 }
+    var q = 0usize
+    while q < g.nr {
+        ends[q] = 0.0f64 - g.gap_c
+        q += 1usize
+    }
+    var tol = cs.font_size
+    let (tv, has_tv) = extra_text(cs, "flow-tolerance")
+    if has_tv {
+        let tl = cv.lower(l.a, cv.trim_ws(tv))
+        tol = 0.0f64
+        if str.ends_with(tl, "px") {
+            let (nv, ne) = str.parse_i64(tl[..tl.len - 2usize])
+            if ne == ok { tol = f64(nv) }
+        }
+    }
+    i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let is = bstyle(l, id)
+        let (sr, ers) = item_axis_specs(l.a, is, false)
+        let span = usize(maxf(1.0f64, f64(g.items[i].rn)))
+        var start = usize(g.items[i].rs)
+        if sr.kind == 0u8 {
+            var best = 0usize
+            var best_end = 1000000000.0f64
+            var s0 = 0usize
+            while s0 + span <= g.nr {
+                var e = -1000000000.0f64
+                var t = s0
+                while t < s0 + span {
+                    if ends[t] > e { e = ends[t] }
+                    t += 1usize
+                }
+                if e < best_end - tol {
+                    best_end = e
+                    best = s0
+                }
+                s0 += 1usize
+            }
+            start = best
+        }
+        if start + span > g.nr { start = 0usize }
+        var left = -1000000000.0f64
+        var t2 = start
+        while t2 < start + span && t2 < g.nr {
+            if ends[t2] > left { left = ends[t2] }
+            t2 += 1usize
+        }
+        let area_h = grid_area_size(g.rows, i32(start), i32(span), g.gap_r)
+        let ib = bx(l, id)
+        let (mn, mx) = content_widths(l, id)
+        var w = maxf(mn, minf(mx, cw - ib.margin[3usize] - ib.margin[1usize] - horizontal_extras(ib)))
+        let (wv, has_w) = resolve_len(is.width, cw)
+        if is.width.kind == .Px && has_w { w = to_content_w(l, id, wv) }
+        var hs = -1.0f64
+        let (hv, has_h) = resolve_len(is.height, area_h)
+        if is.height.kind == .Px && has_h {
+            hs = to_content_h(l, id, hv)
+        } else if is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced {
+            hs = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
+        }
+        flex_place_item(l, id, w, hs)
+        let pb = bx(l, id)
+        let x0 = left + g.gap_c
+        pb.x = ox0 + x0 + pb.margin[3usize]
+        pb.y = oy0 + g.rows[start].pos + pb.margin[0usize]
+        let right = x0 + pb.margin[3usize] + pb.w + pb.margin[1usize]
+        var t3 = start
+        while t3 < start + span && t3 < g.nr {
+            ends[t3] = right
+            t3 += 1usize
+        }
+        i += 1usize
+    }
+    var total = tracks_total(g.rows, g.nr, g.gap_r)
+    if g.nr > 0usize {
+        let last = g.rows[g.nr - 1usize]
+        total = maxf(total, last.pos + last.base)
     }
     ret total
 }
