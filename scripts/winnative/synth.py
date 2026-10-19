@@ -176,7 +176,7 @@ def build(path, family, glyphs, fpgm="", prep="", hdmx=None, ppem=16, extra_cvt=
     f.save(path)
 
 
-CTDUMP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "build", "t", "ctdump.exe")
+CTDUMP = os.environ.get("CTDUMP") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "build", "t", "ctdump.exe")
 
 
 CTDUMP_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "build", "t", "ctdump_base.exe")

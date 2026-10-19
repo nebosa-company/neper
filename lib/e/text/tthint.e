@@ -64,7 +64,7 @@ type Hinter = struct {
     code_lo: usize, code_hi: usize, ip: usize, depth: usize, steps: usize,
     ppem: i64, xs: i64, cleartype: bool, composite: bool,
     sr_per: i64, sr_phase: i64, sr_thr: i64,
-    ctA: i64, ctX: i64, ctOff: i64, ran: bool, ct_stop: bool
+    ctA: i64, ctX: i64, ctOff: i64, ran: bool, ct_stop: bool, ct_cyc: bool
 }
 // What `hint_glyph` answers: the points of the outline (x, y interleaved, 26.6, x relative to the glyph's left phantom point),
 // whether each is on the curve (bit 0 of `tags`), the last point of each contour, the glyph's advance in this mode and the
@@ -764,6 +764,21 @@ fn ct_adjacent(z: *Zone, a: usize, b: usize) -> bool {
     ret false
 }
 
+// Whether point `from` is, through the points that were set against each other, a follower of `to`.
+fn ct_follows(z: *Zone, from: usize, to: usize) -> bool {
+    let npt = z.n - 4usize
+    var q = from
+    var steps = 0usize
+    while steps <= npt {
+        if q == to { ret true }
+        let m = z.mp[q]
+        if m <= 0i64 || z.ipd[q] || usize(m - 1i64) >= npt { ret false }
+        q = usize(m - 1i64)
+        steps += 1usize
+    }
+    ret false
+}
+
 // A follower an instruction sets against another along the freedom vector y but with a projection that has some x in it (a diagonal stem
 // measured across, say) still takes its reference's shift when it had none: GDI notes the relation whatever the freedom vector.
 fn ct_derive_y(h: *Hinter, p: usize, r: usize) {
@@ -771,7 +786,7 @@ fn ct_derive_y(h: *Hinter, p: usize, r: usize) {
     if h.gs.proj_x == 0i64 && h.gs.proj_y == 16384i64 { ret }
     let z = &h.zone[1usize]
     if p + 4usize > z.n { ret }
-    if ct_live(z, p) { ret }
+    if ct_live(z, p) && !ct_follows(z, r, p) { ret }
     ct_derive(h, p, r, 0i64)
 }
 
@@ -803,6 +818,16 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, kind: i64) {
         z.tags[p] = z.tags[p] & (0i64 - 129i64)
         ret
     }
+    // The first point a point is set against is the one it follows; a later instruction setting it against another changes nothing, but one
+    // that would make its reference follow it in turn (a circle) tells GDI to fit the whole glyph by another rule (ct_cycles).
+    if !is_pair && r < npt {
+        if r != p && ct_follows(z, r, p) {
+            h.ct_cyc = true
+            ret
+        }
+        if z.mp[p] > 0i64 && !z.ipd[p] { ret }
+    }
+    if r + 3usize == z.n && z.mp[p] > 0i64 && !z.ipd[p] { ret }
     z.tags[p] = z.tags[p] | 128i64
     if r + 3usize == z.n {
         z.mp[p] = i64(r) + 1i64
@@ -895,6 +920,20 @@ fn ct_resolve(h: *Hinter, p: usize, depth: usize) {
     z.tags[r] = z.tags[r] | 64i64
 }
 
+// A glyph in which an instruction tried to set a point against one that follows it (a diagonal measured across, say) is fitted by another
+// rule, found with synthetic fonts: every point that follows another moves by its own share, round(x * (A - X) / X) at the x it has,
+// and only the points no instruction set against another keep their shift of nought.
+fn ct_cycles(h: *Hinter) {
+    if !h.ct_cyc { ret }
+    let z = &h.zone[1usize]
+    let npt = z.n - 4usize
+    var p = 0usize
+    while p < npt {
+        if z.mp[p] > 0i64 && !z.ipd[p] && z.lp[p] == 0i64 && usize(z.mp[p] - 1i64) < npt { z.sh[p] = ct_centre(h, 2i64 * z.cur[2usize * p]) }
+        p += 1usize
+    }
+}
+
 // What IUP[x] of a ClearType glyph does first: the shifts settle and the points that carry one move.
 fn ct_scale(h: *Hinter) {
     let z = &h.zone[1usize]
@@ -942,6 +981,7 @@ fn ct_scale(h: *Hinter) {
         }
         pass += 1usize
     }
+    ct_cycles(h)
     if trace_on {
         let e5 = io.printf["ct_scale ip {} n {} A {} X {} off {} part {}: "](h.ip, z.n, h.ctA, h.ctX, h.ctOff, h.ct_part)
         p = 0usize
@@ -1418,7 +1458,11 @@ fn vm_mirp(h: *Hinter, flags: i64) {
         }
     }
     vm_move(h, h.gs.gep1, pi, dist - cur_dist)
-    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, ct_kind_mirp(h, flags)) }
+    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 {
+        ct_derive(h, pi, r0, ct_kind_mirp(h, flags))
+    } else if h.gs.gep0 == 1usize && h.gs.gep1 == 1usize {
+        ct_derive_y(h, pi, r0)
+    }
     h.gs.rp1 = h.gs.rp0
     if (flags & 16i64) != 0i64 { h.gs.rp0 = p }
     h.gs.rp2 = p
