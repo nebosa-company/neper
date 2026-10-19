@@ -983,7 +983,7 @@ fn wrap_flex_items(l: *Layout, b: u32) {
     }
 }
 
-type Flag = struct { v: bool }
+type Flag = struct { v: bool, cleared: bool }
 
 // --- Lengths and the box model.
 
@@ -2002,7 +2002,7 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
     let (made, me) = list.init[Piece](l.a, 32usize)
     if me != ok { ret 0.0f64 }
     var bd = Builder { l: l, pieces: made, last_space: true, ws_pending: false, cbw: cbw, cbh: cbh }
-    var ends = Flag { v: true }
+    var ends = Flag { v: true, cleared: false }
     var kid = l.boxes.items[usize(cont)].first
     while kid != NONE {
         let kb = &l.boxes.items[usize(kid)]
@@ -2568,7 +2568,7 @@ fn inline_widths(l: *Layout, cont: u32) -> (f64, f64) {
     let (made, me) = list.init[Piece](l.a, 32usize)
     if me != ok { ret (0.0f64, 0.0f64) }
     var bd = Builder { l: l, pieces: made, last_space: true, ws_pending: false, cbw: -1.0f64, cbh: -1.0f64 }
-    var ends = Flag { v: true }
+    var ends = Flag { v: true, cleared: false }
     var kid = l.boxes.items[usize(cont)].first
     while kid != NONE {
         let kb = &l.boxes.items[usize(kid)]
@@ -2871,9 +2871,11 @@ fn peek_top(l: *Layout, c: u32, cbw: f64) -> Margin {
     if s.border_width[0usize] != 0.0f64 || resolve_or(s.padding[0usize], base, 0.0f64) != 0.0f64 { ret m }
     // The first in-flow block child, past empty blocks whose margins adjoin.
     var kid = cb.first
+    var seen_float = false
     while kid != NONE {
         let kb = &l.boxes.items[usize(kid)]
         if kb.inner == .Marker || (!kb.inline_level && is_out_of_flow(st(l, kb.style))) {
+            if !kb.inline_level && st(l, kb.style).floating != .None { seen_float = true }
             kid = kb.next
             continue
         }
@@ -2882,6 +2884,8 @@ fn peek_top(l: *Layout, c: u32, cbw: f64) -> Margin {
             continue
         }
         if kb.inline_level || kb.inner == .Text { ret m }
+        // A child that clears an earlier float is likely to get clearance, which stops its margin collapsing upward.
+        if seen_float && st(l, kb.style).clear != .None { ret m }
         // The child's width decides its own percentage edges; its parent's content width is a close enough base.
         used_margins_vertical(l, kid, cbw)
         if self_collapsing(l, kid, cbw) {
@@ -3082,7 +3086,7 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     let oy0 = bb.border[0usize] + bb.padding[0usize]
     var y = 0.0f64
     var acc = no_margin()
-    var consumed = Flag { v: through_top }
+    var consumed = Flag { v: through_top, cleared: false }
     var kid = bb.first
     while kid != NONE {
         let nxt = l.boxes.items[usize(kid)].next
@@ -3128,7 +3132,7 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     // The last child's bottom margin collapses through when nothing separates it from the parent's.
     let s = bstyle(l, b)
     var base = cw
-    let closed = is_bfc_root(l, b) || bb.border[2usize] != 0.0f64 || bb.padding[2usize] != 0.0f64 || s.height.kind == .Px
+    let closed = consumed.cleared || is_bfc_root(l, b) || bb.border[2usize] != 0.0f64 || bb.padding[2usize] != 0.0f64 || s.height.kind == .Px
     if closed {
         y += margin_value(acc)
         ret (y, no_margin())
@@ -3252,6 +3256,7 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     used_margins_vertical(l, c, cw)
     let m_top_own = margin_of(l.boxes.items[usize(c)].margin[0usize])
     let m_bottom_own = margin_of(l.boxes.items[usize(c)].margin[2usize])
+    consumed.cleared = false
     // Self-collapsing: it takes no height and its margins join the pending ones.
     if self_collapsing(l, c, cw) && s.clear == .None {
         var m_in = m_top_own
@@ -3286,6 +3291,7 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
         if clear_to > y_top {
             y_top = clear_to
             total = no_margin()
+            consumed.cleared = true
         }
     }
     // A context root (or a replaced or table box) must not overlap floats: narrow it, or move it down.
@@ -7115,7 +7121,7 @@ fn layout_multicol_spans(l: *Layout, b: u32, cw: f64, cols: Cols, fc: *Flow) -> 
         }
         if is_spanner(l, kid) {
             var acc = no_margin()
-            var consumed = Flag { v: false }
+            var consumed = Flag { v: false, cleared: false }
             var sub = Flow { base: l.floats.len, ox: ox0, oy: oy0 }
             cursor = layout_block_child(l, b, kid, cw, -1.0f64, &sub, cursor, &acc, &consumed, ox0, oy0)
             cursor += margin_value(acc)

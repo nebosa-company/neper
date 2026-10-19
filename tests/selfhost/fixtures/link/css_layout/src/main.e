@@ -387,5 +387,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 64. A float between blocks is not wrapped in an anonymous block that would stop margins collapsing across it.
     let (p64, ok64) = build(a, "<div id=w><div style=\"height:10px;margin-bottom:20px\"></div> <div style=\"float:left;height:10px\"></div> <div id=c style=\"clear:left;margin-top:80px;height:10px\"></div></div>", "")
     if !ok64 || !is_rect(rect_of(p64, "c"), 0.0f64, 90.0f64, 800.0f64, 10.0f64) { os.exit(101) }
+    // 65. A last child with clearance keeps its bottom margin inside its parent.
+    let (p65, ok65) = build(a, "<div id=w style=\"margin-bottom:40px\"><div style=\"height:20px;margin-bottom:20px\"></div><div style=\"float:left;height:20px\"></div><div style=\"clear:both;margin:30px 0 20px\"></div></div><div id=n style=\"height:10px\"></div>", "")
+    if !ok65 || !is_rect(rect_of(p65, "n"), 0.0f64, 120.0f64, 800.0f64, 10.0f64) { os.exit(102) }
+    // 66. A first child that clears a float does not pull its top margin out of its parent.
+    let (p66, ok66) = build(a, "<div style=\"height:20px\"></div><div id=w><div style=\"float:left;height:60px\"></div><div style=\"clear:both;margin-top:20px\"></div></div>", "")
+    if !ok66 || !is_rect(rect_of(p66, "w"), 0.0f64, 20.0f64, 800.0f64, 60.0f64) { os.exit(103) }
     ret ok
 }
