@@ -719,8 +719,9 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
     let npt = z.n - 4usize
     if p >= npt || r >= z.n { ret }
     var plain = r + 4usize == z.n
+    var is_pair = pair
     if pair && r < npt {
-        if abs64(z.org[2usize * p + 1usize] - z.org[2usize * r + 1usize]) >= 512i64 && abs64(z.cur[2usize * p] - z.cur[2usize * r]) < 64i64 { plain = true }
+        if abs64(z.org[2usize * p + 1usize] - z.org[2usize * r + 1usize]) >= 512i64 && abs64(z.cur[2usize * p] - z.cur[2usize * r]) < 64i64 { is_pair = false }
     }
     if plain {
         z.mp[p] = 0i64
@@ -735,7 +736,7 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
         ret
     }
     if r >= npt { ret }
-    if !pair {
+    if !is_pair {
         z.mp[p] = i64(r) + 1i64
         z.sh[p] = 0i64
         if ct_live(z, r) { z.sh[p] = z.sh[r] }
