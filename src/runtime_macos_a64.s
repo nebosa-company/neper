@@ -781,3 +781,20 @@ neper_os_clock:
     movz w1, #0xb651
     movk w1, #0x2f8b, lsl #16
     ret
+
+// os.syscall(n, a0..a5) -> isize: the raw BSD call, n in x16 and the six arguments in x0-x5.
+// The result is the kernel's own, a negative errno on failure.
+.global neper_os_syscall
+neper_os_syscall:
+    mov x16, x0
+    mov x0, x1
+    mov x1, x2
+    mov x2, x3
+    mov x3, x4
+    mov x4, x5
+    mov x5, x6
+    svc #0x80
+    b.cc 1f
+    neg x0, x0
+1:
+    ret
