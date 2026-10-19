@@ -436,5 +436,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 79. A table caption honours its height.
     let (p79, ok79) = build(a, "<div style=\"display:table;width:100px\"><div id=a style=\"display:table-caption;height:30px\"></div></div>", "")
     if !ok79 || !near(rect_of(p79, "a").h, 30.0f64) { os.exit(116) }
+    // 80. :lang() matches the language of the element or its nearest ancestor with one, by prefix.
+    let (p80, ok80) = build(a, "<div lang=\"en-US\"><p id=a>x</p></div><p id=b>y</p>", "p:lang(en) { width: 50px; }")
+    if !ok80 || !near(rect_of(p80, "a").w, 50.0f64) || near(rect_of(p80, "b").w, 50.0f64) { os.exit(117) }
     ret ok
 }

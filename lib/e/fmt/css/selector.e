@@ -639,6 +639,7 @@ fn functional_pseudo(p: *const Parser, name: str, arg: []const syntax.Token) -> 
     if str.eq(name, "is") || str.eq(name, "matches") { ret (Simple { kind: .Is, name: "is", argument: raw, subs: plain_list(p, arg), attr_ci: false }, true) }
     if str.eq(name, "where") { ret (Simple { kind: .Where, name: name, argument: raw, subs: plain_list(p, arg), attr_ci: false }, true) }
     if str.eq(name, "has") { ret (Simple { kind: .Has, name: name, argument: raw, subs: relative_list(p, arg), attr_ci: false }, true) }
+    if str.eq(name, "lang") { ret (Simple { kind: .PseudoClass, name: "lang", argument: raw, subs: zero, attr_ci: false }, true) }
     if str.eq(name, "nth-child") { ret (parse_nth(p, .NthChild, arg), true) }
     if str.eq(name, "nth-last-child") { ret (parse_nth(p, .NthLastChild, arg), true) }
     if str.eq(name, "nth-of-type") { ret (parse_nth(p, .NthOfType, arg), true) }

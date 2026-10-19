@@ -207,6 +207,47 @@ fn any_sub_matches(m: *const Matcher, subs: []const selector.Selector, el: html.
     ret false
 }
 
+// `:lang(a, b)`: the element's language (the `lang` or `xml:lang` of it or its nearest ancestor that has one) equals a range
+// or extends it after a hyphen, ignoring case. Quotes around a range are dropped; a wildcard range matches any language set.
+fn matches_lang(m: *const Matcher, el: html.NodeId, argument: str) -> bool {
+    var cur = el
+    var found = false
+    var tag = ""
+    while cur != html.NONE && !found {
+        let (v, has) = attr(m, cur, "lang")
+        if has {
+            tag = v
+            found = true
+        } else {
+            let (v2, has2) = attr(m, cur, "xml:lang")
+            if has2 {
+                tag = v2
+                found = true
+            }
+        }
+        cur = parent_element(m, cur)
+    }
+    if !found { ret false }
+    let lt = lower(m.a, str.trim(tag))
+    var start = 0usize
+    var i = 0usize
+    while i <= argument.len {
+        if i == argument.len || argument[i] == 44u8 {
+            var range = str.trim(argument[start..i])
+            start = i + 1usize
+            if range.len >= 2usize && (range[0usize] == 34u8 || range[0usize] == 39u8) { range = range[1usize..range.len - 1usize] }
+            let lr = lower(m.a, range)
+            if lr.len > 0usize {
+                if str.eq(lr, "*") { ret lt.len > 0usize }
+                if str.eq(lt, lr) { ret true }
+                if lt.len > lr.len && str.eq(lt[0usize..lr.len], lr) && lt[lr.len] == 45u8 { ret true }
+            }
+        }
+        i += 1usize
+    }
+    ret false
+}
+
 fn matches_part(m: *const Matcher, part: selector.Simple, el: html.NodeId) -> bool {
     switch part.kind {
     case .Universal:
@@ -218,6 +259,7 @@ fn matches_part(m: *const Matcher, part: selector.Simple, el: html.NodeId) -> bo
     case .Id:
         ret str.eq(element_id(m, el), part.name)
     case .PseudoClass:
+        if str.eq(part.name, "lang") { ret matches_lang(m, el, part.argument) }
         ret matches_pseudo_class(m, part.name, el)
     case .FirstChild:
         ret is_first_child(m, el)
