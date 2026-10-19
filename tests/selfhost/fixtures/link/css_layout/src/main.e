@@ -430,5 +430,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (p77, ok77) = build(a, "<svg:svg id=a height=\"50\"></svg:svg>", "")
     html.set_xml_syntax(false)
     if !ok77 || p77.lay.boxes.items[usize(box_of(p77, "a"))].inner != layout.Inner.Replaced { os.exit(114) }
+    // 78. The trailing space of a line does not widen a shrink-to-fit box.
+    let (p78, ok78) = build(a, "<div id=a style=\"position:absolute\"><span style=\"display:inline-block;width:100px;height:10px\"></span> </div>", "")
+    if !ok78 || !near(rect_of(p78, "a").w, 100.0f64) { os.exit(115) }
     ret ok
 }

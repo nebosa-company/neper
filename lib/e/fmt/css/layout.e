@@ -2581,15 +2581,18 @@ fn inline_widths(l: *Layout, cont: u32) -> (f64, f64) {
     var line = 0.0f64
     var mx = 0.0f64
     var run = 0.0f64
+    var tail_trail = 0.0f64
     var i = 0usize
     while i < bd.pieces.len {
         let p = bd.pieces.items[i]
         i += 1usize
         if p.kind == .Hard {
-            mx = maxf(mx, line)
+            // A line's trailing collapsible space hangs: it is not part of the line's width.
+            mx = maxf(mx, line - tail_trail)
             mn = maxf(mn, run)
             line = 0.0f64
             run = 0.0f64
+            tail_trail = 0.0f64
             continue
         }
         if p.kind == .Float || p.kind == .Abs { continue }
@@ -2597,13 +2600,14 @@ fn inline_widths(l: *Layout, cont: u32) -> (f64, f64) {
         var minw = p.w
         if p.kind == .Atomic { minw = p.trail }
         line += w + (if_trail(p))
+        if p.kind == .Text { tail_trail = p.trail } else if p.kind == .Atomic { tail_trail = 0.0f64 }
         run += minw
         if p.soft {
             mn = maxf(mn, run)
             run = 0.0f64
         }
     }
-    mx = maxf(mx, line)
+    mx = maxf(mx, line - tail_trail)
     mn = maxf(mn, run)
     ret (mn, mx)
 }
