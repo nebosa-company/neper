@@ -972,7 +972,7 @@ fn vm_shpix(h: *Hinter) {
         if h.fail { ret }
         var blocked = false
         if h.cleartype && h.gs.free_y == 0i64 && vm_pt(h, zi, p) {
-            if h.in_delta || h.composite || abs64(d) >= 64i64 { blocked = true }
+            if h.in_delta || h.composite { blocked = true }
         }
         if h.cleartype && h.gs.free_x == 0i64 && vm_pt(h, zi, p) && vm_delta_skipped(h, zi, usize(p)) { blocked = true }
         if !blocked && vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }
@@ -1328,14 +1328,13 @@ fn vm_instctrl(h: *Hinter) {
 
 // ClearType's compatibility code finds the functions that apply a delta (SHPIX at one ppem) by their first instructions:
 // MPPEM GTEQ SWAP MPPEM LTEQ AND IF SHPIX ELSE POP POP EIF ENDF, or MPPEM EQ IF SHPIX ELSE POP POP EIF ENDF.
-fn vm_is_delta_function(h: *Hinter, at: usize) -> bool {
-    if at + 13usize > h.data.len { ret false }
+fn vm_is_delta_function(h: *Hinter, at: usize, end: usize) -> bool {
     let d = h.data
-    if d[at] != 0x4Bu8 { ret false }
+    if at + 9usize > end || d[at] != 0x4Bu8 { ret false }
     if d[at + 1usize] == 0x54u8 {
         ret d[at + 2usize] == 0x58u8 && d[at + 3usize] == 0x38u8 && d[at + 4usize] == 0x1Bu8 && d[at + 5usize] == 0x21u8 && d[at + 6usize] == 0x21u8 && d[at + 7usize] == 0x59u8 && d[at + 8usize] == 0x2Du8
     }
-    ret d[at + 1usize] == 0x53u8 && d[at + 2usize] == 0x23u8 && d[at + 3usize] == 0x4Bu8 && d[at + 4usize] == 0x52u8 && d[at + 5usize] == 0x5Au8 && d[at + 6usize] == 0x58u8 && d[at + 7usize] == 0x38u8 && d[at + 8usize] == 0x1Bu8 && d[at + 9usize] == 0x21u8 && d[at + 10usize] == 0x21u8 && d[at + 11usize] == 0x59u8 && d[at + 12usize] == 0x2Du8
+    ret at + 13usize <= end && d[at + 1usize] == 0x53u8 && d[at + 2usize] == 0x23u8 && d[at + 3usize] == 0x4Bu8 && d[at + 4usize] == 0x51u8 && d[at + 5usize] == 0x5Au8 && d[at + 6usize] == 0x58u8 && d[at + 7usize] == 0x38u8 && d[at + 8usize] == 0x1Bu8 && d[at + 9usize] == 0x21u8 && d[at + 10usize] == 0x21u8 && d[at + 11usize] == 0x59u8 && d[at + 12usize] == 0x2Du8
 }
 
 // ClearType bypasses the legacy TypeMan Talk spacing and stroke functions by making their storage switch read zero: a function that
@@ -1701,7 +1700,7 @@ fn vm_step_run(h: *Hinter) {
             } else {
                 h.fdef_lo[usize(f)] = start
                 h.fdef_hi[usize(f)] = h.ip - 1usize
-                h.fdef_delta[usize(f)] = vm_is_delta_function(h, start)
+                h.fdef_delta[usize(f)] = vm_is_delta_function(h, start, h.ip)
                 h.fdef_bypass[usize(f)] = vm_bypass_slot(h, start)
             }
         }
