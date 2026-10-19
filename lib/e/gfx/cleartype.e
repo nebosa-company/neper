@@ -737,7 +737,7 @@ fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) ->
     let cols = usize(hi - lo) * 6usize
     if cols > MAX_COLS { ret false }
     var vs = 1i64
-    if !o.hinted { vs = 5i64 }
+    if !o.hinted || o.smooth { vs = 5i64 }
     let rows = usize(y_hi - y_lo) * usize(vs)
     if cols * rows > MAX_BITMAP { ret false }
     sc.bmw = cols
@@ -753,7 +753,7 @@ fn add_glyph(sc: *Scratch, o: *const tthint.Outline, pen: i64, baseline: i64) ->
     sc.mode = o.scan & 7i64
     sc.shift_smart = (o.scan & 8i64) != 0i64
     sc.has_bb = false
-    if o.hinted {
+    if vs == 1i64 {
         // drop-out pixels stay inside the glyph's own bitmap: whole pixel rows and columns round the outline's box
         sc.has_bb = true
         let rlo = tthint.fdiv(miny, 64i64) - y_lo

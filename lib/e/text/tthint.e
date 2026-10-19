@@ -30,6 +30,7 @@ const TAG_CVT: u32 = 0x63767420u32
 const TAG_FPGM: u32 = 0x6670676Du32
 const TAG_PREP: u32 = 0x70726570u32
 const TAG_HDMX: u32 = 0x68646D78u32
+const TAG_GASP: u32 = 0x67617370u32
 
 const MAX_PTS: usize = 800usize
 const MAX_ENDS: usize = 160usize
@@ -51,8 +52,9 @@ type Hinter = struct {
     cvt_at: usize, cvt_count: usize,
     fpgm_at: usize, fpgm_len: usize, prep_at: usize, prep_len: usize,
     hdmx_at: usize, hdmx_records: usize, hdmx_record_size: usize,
+    gasp_at: usize, gasp_ranges: usize,
     max_storage: usize, max_twilight: usize, max_fdefs: usize, max_stack: usize,
-    fdef_lo: []usize, fdef_hi: []usize, fdef_delta: []bool, in_delta: bool, fpgm_done: bool,
+    fdef_lo: []usize, fdef_hi: []usize, fdef_delta: []bool, fdef_bypass: []i64, in_delta: bool, bypass: i64, fpgm_done: bool,
     sizes: [24]Size, size_count: usize,
     zsets: [14]Zone, level: usize,
     stack: []i64, sp: usize, fail: bool,
@@ -68,7 +70,7 @@ type Hinter = struct {
 // whether each is on the curve (bit 0 of `tags`), the last point of each contour, the glyph's advance in this mode and the
 // scan conversion the size's `prep` asked for (`scan`: bit 0 exclude stubs, bit 1 no drop-out control, bit 2 smart rounding; 8 added
 // when the font never set a scan type).
-type Outline = struct { n: usize, cur: []i64, hinted: bool, tags: []i64, ends: []usize, nends: usize, pp1x: i64, adv: i64, scan: i64 }
+type Outline = struct { n: usize, cur: []i64, hinted: bool, tags: []i64, ends: []usize, nends: usize, pp1x: i64, adv: i64, scan: i64, smooth: bool }
 
 fn sgn1(x: i64) -> i64 {
     if x < 0i64 { ret -1i64 }
@@ -153,6 +155,16 @@ fn mulfix14(a: i64, b: i64) -> i64 {
 fn pix_round(x: i64) -> i64 { ret (x + 32i64) & (0i64 - 64i64) }
 fn pix_floor(x: i64) -> i64 { ret x & (0i64 - 64i64) }
 fn pix_ceil(x: i64) -> i64 { ret (x + 63i64) & (0i64 - 64i64) }
+
+// The gasp flags of the first range that reaches `ppem` (0 without a table).
+fn gasp_flags(h: *Hinter, ppem: i64) -> i64 {
+    var r = 0usize
+    while r < h.gasp_ranges {
+        if ppem <= rd16(h.data, h.gasp_at + 4usize * r) { ret rd16(h.data, h.gasp_at + 4usize * r + 2usize) }
+        r += 1usize
+    }
+    ret 0i64
+}
 
 // The hdmx advance of `gid` at `ppem` in whole pixels, if the table has the size.
 fn hdmx_width(h: *Hinter, ppem: i64, gid: usize) -> (i64, bool) {
@@ -280,6 +292,12 @@ fn open(a: *mem.Arena, data: []const u8) -> (*Hinter, err) {
             h.hdmx_records = 0usize
         }
     }
+    // The gasp table says at which sizes symmetric smoothing (six samples by five rows) is on.
+    let (gasp, has_gasp) = shape.find_table(font, TAG_GASP)
+    if has_gasp && gasp.len >= 4usize {
+        h.gasp_ranges = usize(rd16(data, gasp.at + 2usize))
+        if 4usize + 4usize * h.gasp_ranges <= gasp.len { h.gasp_at = gasp.at + 4usize } else { h.gasp_ranges = 0usize }
+    }
     if h.max_storage > 4096usize || h.max_fdefs > 4096usize || h.max_twilight > 4096usize || h.max_stack > 8192usize { ret (zero, Unsupported) }
     let (lo, lo_error) = mem.alloc[usize](a, h.max_fdefs + 1usize)
     if lo_error != ok { ret (zero, NoRoom) }
@@ -299,6 +317,15 @@ fn open(a: *mem.Arena, data: []const u8) -> (*Hinter, err) {
         f += 1usize
     }
     h.fdef_delta = dk
+    let (bp, bp_error) = mem.alloc[i64](a, h.max_fdefs + 1usize)
+    if bp_error != ok { ret (zero, NoRoom) }
+    f = 0usize
+    while f <= h.max_fdefs {
+        bp[f] = -1i64
+        f += 1usize
+    }
+    h.fdef_bypass = bp
+    h.bypass = -1i64
     h.fdef_lo = lo
     h.fdef_hi = hi
     let (stack, stack_error) = mem.alloc[i64](a, h.max_stack + 96usize)
@@ -617,6 +644,8 @@ fn vm_getinfo(h: *Hinter, sel: i64) -> i64 {
         if (sel & 128i64) != 0i64 { k = k | 16384i64 }
         if (sel & 8i64) != 0i64 { k = k | 1024i64 }
         if (sel & 16i64) != 0i64 { k = k | 2048i64 }
+        // symmetrically smoothed ClearType (six samples by five rows): the font's gasp table switches it on
+        if (sel & 2048i64) != 0i64 && (gasp_flags(h, h.ppem) & 8i64) != 0i64 { k = k | 262144i64 }
     }
     ret k
 }
@@ -1220,7 +1249,7 @@ fn vm_mirp(h: *Hinter, flags: i64) {
     let rx = z0.cur[2usize * r0]
     let cur_dist = vm_project(h, z1.cur[2usize * pi] - rx, z1.cur[2usize * pi + 1usize] - z0.cur[2usize * r0 + 1usize])
     if h.gs.auto_flip && ((org_dist ^ cvt_dist) < 0i64) { cvt_dist = 0i64 - cvt_dist }
-    if ((flags & 4i64) != 0i64 || vm_is_x(h)) && h.gs.gep0 == h.gs.gep1 {
+    if ((flags & 4i64) != 0i64 || (h.cleartype && h.zone[1usize].n != 0usize)) && h.gs.gep0 == h.gs.gep1 {
         if abs64(cvt_dist - org_dist) > vm_cutin(h) { cvt_dist = org_dist }
     }
     var dist = cvt_dist
@@ -1306,6 +1335,22 @@ fn vm_is_delta_function(h: *Hinter, at: usize) -> bool {
     ret d[at + 1usize] == 0x53u8 && d[at + 2usize] == 0x23u8 && d[at + 3usize] == 0x4Bu8 && d[at + 4usize] == 0x52u8 && d[at + 5usize] == 0x5Au8 && d[at + 6usize] == 0x58u8 && d[at + 7usize] == 0x38u8 && d[at + 8usize] == 0x1Bu8 && d[at + 9usize] == 0x21u8 && d[at + 10usize] == 0x21u8 && d[at + 11usize] == 0x59u8 && d[at + 12usize] == 0x2Du8
 }
 
+// ClearType bypasses the legacy TypeMan Talk spacing and stroke functions by making their storage switch read zero: a function that
+// starts with `SVTCA[x] (RTG) PUSH 24 RS IF` (spacing) or `PUSH 22 RS IF` (DStroke and IStroke). The slot, or -1.
+fn vm_bypass_slot(h: *Hinter, at: usize) -> i64 {
+    if at + 7usize > h.data.len { ret -1i64 }
+    let d = h.data
+    var k = at
+    if d[k] == 0x01u8 {
+        k += 1usize
+        if d[k] == 0x18u8 { k += 1usize }
+        if d[k] == 0xB0u8 && d[k + 1usize] == 24u8 && d[k + 2usize] == 0x43u8 && d[k + 3usize] == 0x58u8 { ret 24i64 }
+        ret -1i64
+    }
+    if d[k] == 0xB0u8 && d[k + 1usize] == 22u8 && d[k + 2usize] == 0x43u8 && d[k + 3usize] == 0x58u8 { ret 22i64 }
+    ret -1i64
+}
+
 // Runs the function `f` `count` times.
 fn vm_call(h: *Hinter, f: i64, count: i64) {
     if f < 0i64 || usize(f) > h.max_fdefs || h.fdef_hi[usize(f)] == 0usize {
@@ -1320,7 +1365,9 @@ fn vm_call(h: *Hinter, f: i64, count: i64) {
     let lo = h.fdef_lo[usize(f)]
     let hi = h.fdef_hi[usize(f)]
     let saved_delta = h.in_delta
+    let saved_bypass = h.bypass
     if h.fdef_delta[usize(f)] { h.in_delta = true }
+    if h.cleartype && h.zone[1usize].n != 0usize && h.fdef_bypass[usize(f)] >= 0i64 { h.bypass = h.fdef_bypass[usize(f)] }
     var k = 0i64
     while k < count {
         let saved_lo = h.code_lo
@@ -1341,6 +1388,7 @@ fn vm_call(h: *Hinter, f: i64, count: i64) {
         k += 1i64
     }
     h.in_delta = saved_delta
+    h.bypass = saved_bypass
     h.depth = h.depth - 1usize
 }
 
@@ -1651,6 +1699,7 @@ fn vm_step_run(h: *Hinter) {
                 h.fdef_lo[usize(f)] = start
                 h.fdef_hi[usize(f)] = h.ip - 1usize
                 h.fdef_delta[usize(f)] = vm_is_delta_function(h, start)
+                h.fdef_bypass[usize(f)] = vm_bypass_slot(h, start)
             }
         }
     case 0x2D:
@@ -1690,7 +1739,11 @@ fn vm_step_run(h: *Hinter) {
         if i < 0i64 || i >= i64(h.storage.len) {
             h.fail = true
         } else {
-            vm_push(h, h.storage[usize(i)])
+            if i == h.bypass {
+                vm_push(h, 0i64)
+            } else {
+                vm_push(h, h.storage[usize(i)])
+            }
         }
     case 0x44:
         let v = vm_pop(h)

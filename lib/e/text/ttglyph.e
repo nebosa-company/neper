@@ -562,6 +562,7 @@ fn hint_glyph(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, gid: u32, cleartype: 
     out.nends = z.nends
     out.pp1x = loaded.pp1x
     out.adv = device_advance(h, false, ppem, usize(gid), loaded.adv)
+    out.smooth = (tthint.gasp_flags(h, ppem) & 8i64) != 0i64
     out.scan = scan_mode(h.sizes[si].gs.scan_control, h.sizes[si].gs.scan_type, ppem)
     ret (out, ok)
 }
