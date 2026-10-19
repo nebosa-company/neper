@@ -1,0 +1,26 @@
+{
+ "chip": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/chips.png",
+    "notes": "AUDIT 16 (matched to review): own comparer (the reference crop trimmed to the component plus 6 px, template-placed in the committed 1x sheet with the text ink masked out; the sheets equal a clean re-render byte for byte): flat px off beyond the ink margin at most 2 per cell in all 45 cells, but the input chip remove icon is 83 to 101 ring px over 12 levels in light and 91 to 101 in dark (rest, hover, focus, pressed; selected 50 to 51), where round 31 reports 2 to 6. Pixel dump of chip-input-rest light: the capture's X spans rows 27 to 36 and columns 77 to 86 with a pale 80 to 120 level stroke, ours rows 26 to 35, columns 76 to 87 with a 106 to 134 level double pixel diagonal, so the icon is 1 px high and half a pixel left and heavier; no placement of the icon within 3 px gets under 68 px off. The label fix of round 31 holds (the input chip text now sits on the capture's row), the filled corner arcs are 5 to 7 px at up to 53 levels, as in the dialog. Same finding as audit 15, the remove icon never reached the reference. | ROUND 31 (review to matched): the input chip's label kept the padding for a 24 dp remove button where md-input-chip's is 18 dp, so it sat 2 px high; fixed, input chip pixels off 24 to 33 per cell become 0 to 2. Whole sheet, strict: 5 flat px off and 41 ring px over 12 levels in light (was 217 and 136), 6 and 40 in dark (was 232 and 129). Remaining: the remove icon's ring (2 to 6 px per input chip cell, at most 30 levels) and the 1 px placement of fractional-width chips. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Input chip: the remove icon sits one pixel up and a half pixel left of the capture's and is drawn heavier: 69 to 101 px over 12 levels (up to 160) per input chip cell in every state, light and dark; the 2 to 6 px of round 31 are not reproduced",
+     "Chip corner arcs: 5 to 7 px at each of the four corners, up to 53 levels (the 8 dp radius)",
+     "Filter chip selected disabled: the check icon, 33 px up to 48 levels"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/chips.png",
+    "notes": "AUDIT 16 (matched to review): own comparer (the reference crop trimmed to the component plus 6 px, template-placed in the committed 1x sheet with the text ink masked out; the sheets equal a clean re-render byte for byte): flat px off beyond the ink margin at most 2 per cell in all 45 cells, but the input chip remove icon is 83 to 101 ring px over 12 levels in light and 91 to 101 in dark (rest, hover, focus, pressed; selected 50 to 51), where round 31 reports 2 to 6. Pixel dump of chip-input-rest light: the capture's X spans rows 27 to 36 and columns 77 to 86 with a pale 80 to 120 level stroke, ours rows 26 to 35, columns 76 to 87 with a 106 to 134 level double pixel diagonal, so the icon is 1 px high and half a pixel left and heavier; no placement of the icon within 3 px gets under 68 px off. The label fix of round 31 holds (the input chip text now sits on the capture's row), the filled corner arcs are 5 to 7 px at up to 53 levels, as in the dialog. Same finding as audit 15, the remove icon never reached the reference. | ROUND 31 (review to matched): the input chip's label kept the padding for a 24 dp remove button where md-input-chip's is 18 dp, so it sat 2 px high; fixed, input chip pixels off 24 to 33 per cell become 0 to 2. Whole sheet, strict: 5 flat px off and 41 ring px over 12 levels in light (was 217 and 136), 6 and 40 in dark (was 232 and 129). Remaining: the remove icon's ring (2 to 6 px per input chip cell, at most 30 levels) and the 1 px placement of fractional-width chips. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Input chip: the remove icon sits one pixel up and a half pixel left of the capture's and is drawn heavier: 69 to 101 px over 12 levels (up to 160) per input chip cell in every state, light and dark; the 2 to 6 px of round 31 are not reproduced",
+     "Chip corner arcs: 5 to 7 px at each of the four corners, up to 53 levels (the 8 dp radius)",
+     "Filter chip selected disabled: the check icon, 33 px up to 48 levels"
+    ]
+   }
+  }
+ }
+}
