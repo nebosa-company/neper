@@ -451,5 +451,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 84. A table's height applies to its grid; the caption adds to it.
     let (p84, ok84) = build(a, "<table id=a style=\"height:100px;border-spacing:0\"><caption style=\"height:20px\"></caption><tr><td></td></tr></table>", "td { padding: 0 }")
     if !ok84 || !near(rect_of(p84, "a").h, 120.0f64) { os.exit(121) }
+    // 85. White space between table parts is dropped even when `white-space` preserves it.
+    let (p85, ok85) = build(a, "<div id=t style=\"display:table;white-space:pre\">\n  <div style=\"display:table-row\">\n    <div id=c style=\"display:table-cell;width:10px;height:10px\"></div>\n  </div>\n</div>", "")
+    if !ok85 || !near(rect_of(p85, "t").h, 10.0f64) { os.exit(122) }
     ret ok
 }

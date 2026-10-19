@@ -824,7 +824,8 @@ fn wrap_orphan_table_parts(l: *Layout, b: u32) {
         } else if run_first != NONE {
             // White space between the parts belongs to the run; anything else ends it.
             let kb = &l.boxes.items[usize(kid)]
-            if kb.inner == .Text && is_ws_only(kb.text) && collapses(l, kid) {
+            // (CSS 2.1 17.2.1: a white-space-only run between table parts is dropped whatever `white-space` says.)
+            if kb.inner == .Text && is_ws_only(kb.text) {
                 // keep scanning
             } else {
                 wrap_table_run(l, b, run_first, run_last, .Table, orphan_display(l, b))
@@ -3557,7 +3558,7 @@ type TableData = struct {
 
 fn is_ws_text(l: *const Layout, k: u32) -> bool {
     let kb = &l.boxes.items[usize(k)]
-    ret kb.inner == .Text && is_ws_only(kb.text) && collapses(l, k)
+    ret kb.inner == .Text && is_ws_only(kb.text)
 }
 
 // Wraps the siblings first..last into one anonymous box (white-space-only runs just go).
