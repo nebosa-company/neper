@@ -3553,6 +3553,9 @@ fn tb_run(p: *Ps) -> err {
     var tk: Tok = zero
     while !p.stopped {
         try tk_next(p, &tk)
+        // XHTML written with a prefixed SVG vocabulary (`<svg:svg xmlns:svg=...>`): the prefix names the namespace the foreign
+        // content rules already give an `<svg>` element, so it is dropped.
+        if p.xml && (tk.kind == .Start || tk.kind == .End) && tk.name.len > 4usize && str.eq(tk.name[0usize..4usize], "svg:") { tk.name = tk.name[4usize..] }
         try tb_process(p, &tk)
         if p.xml && tk.kind == .Start && tk.self_closing && !is_void(tk.name) && p.nopen > 0usize {
             var et: Tok = zero

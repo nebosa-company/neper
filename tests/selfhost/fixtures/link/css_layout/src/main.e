@@ -425,5 +425,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 76. A block-level image with an auto height takes its intrinsic height.
     let (p76, ok76) = build(a, "<div><img id=a width=15 height=12 style=\"display:block\"></div>", "")
     if !ok76 || !is_rect(rect_of(p76, "a"), 0.0f64, 0.0f64, 15.0f64, 12.0f64) { os.exit(113) }
+    // 77. In an XHTML document a prefixed `svg:svg` is the SVG element, a replaced box.
+    html.set_xml_syntax(true)
+    let (p77, ok77) = build(a, "<svg:svg id=a height=\"50\"></svg:svg>", "")
+    html.set_xml_syntax(false)
+    if !ok77 || p77.lay.boxes.items[usize(box_of(p77, "a"))].inner != layout.Inner.Replaced { os.exit(114) }
     ret ok
 }

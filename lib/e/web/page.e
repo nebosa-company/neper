@@ -498,12 +498,71 @@ fn known(w: f64, h: f64, ratio: f64) -> layout.Intrinsic {
     ret layout.Intrinsic { kind: 2u8, has_width: true, width: w, has_height: true, height: h, ratio: ratio }
 }
 
+fn is_inline_svg(p: *Page, node: html.NodeId) -> bool {
+    let n = &p.tree.nodes[usize(node)]
+    ret n.namespace == html.Namespace.Svg && str.eq(n.name, "svg")
+}
+
+// The entry of an inline `<svg>`: its serialised markup, sized by its width and height attributes (300 x 150 when absent).
+fn svg_entry(p: *Page, node: html.NodeId) -> *ImageEntry {
+    let key = concat_str(p.pa, "inline-svg:", decimal_text(p.pa, u64(node)))
+    var i = 0usize
+    while i < p.images.len {
+        if str.eq(p.images.items[i].url, key) { ret &p.images.items[i] }
+        i += 1usize
+    }
+    var e: ImageEntry = zero
+    e.url = key
+    e.state = 2u8
+    let (text, te) = dom.outer_html(p.pa, &p.tree, node)
+    if te == ok {
+        e.state = 1u8
+        e.svg = text
+        e.width = u32(attr_number(p, node, "width", 300.0f64))
+        e.height = u32(attr_number(p, node, "height", 150.0f64))
+    }
+    let pushed = list.push[ImageEntry](&p.images, e)
+    ret &p.images.items[p.images.len - 1usize]
+}
+
+fn concat_str(a: *mem.Arena, x: str, y: str) -> str {
+    let (s, e) = str.concat(a, x, y)
+    if e != ok { ret x }
+    ret s
+}
+
+fn decimal_text(a: *mem.Arena, v: u64) -> str {
+    if v == 0u64 { ret "0" }
+    var digits: [20]u8 = zero
+    var n = 0usize
+    var x = v
+    while x > 0u64 {
+        digits[n] = u8(48u64 + x % 10u64)
+        n += 1usize
+        x = x / 10u64
+    }
+    let (out, e) = mem.alloc[u8](a, n)
+    if e != ok { ret "" }
+    var i = 0usize
+    while i < n {
+        out[i] = digits[n - 1usize - i]
+        i += 1usize
+    }
+    ret out[0usize..n]
+}
+
 // The intrinsic size of replaced content and form controls.
 fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic {
     let p = mem.cast[*Page](ctx)
     let n = &p.tree.nodes[usize(node)]
     let name = n.name
     var out: layout.Intrinsic = zero
+    if is_inline_svg(p, node) {
+        let se = svg_entry(p, node)
+        var sratio = 0.0f64
+        if se.height > 0u32 { sratio = f64(se.width) / f64(se.height) }
+        ret layout.Intrinsic { kind: 1u8, has_width: true, width: f64(se.width), has_height: true, height: f64(se.height), ratio: sratio }
+    }
     if str.eq(name, "img") {
         let (abs, good) = img_source(p, node)
         if good {
@@ -653,6 +712,10 @@ fn upload(p: *Page, e: *ImageEntry) -> cpaint.ImageRef {
 
 fn paint_image_of(ctx: *void, node: html.NodeId) -> cpaint.ImageRef {
     let p = mem.cast[*Page](ctx)
+    if is_inline_svg(p, node) {
+        let se = svg_entry(p, node)
+        ret upload(p, se)
+    }
     if !str.eq(p.tree.nodes[usize(node)].name, "img") { ret zero }
     let (abs, good) = img_source(p, node)
     if !good { ret zero }
