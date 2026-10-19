@@ -31,6 +31,7 @@
 // the last line drops characters until `ellipsis` fits after it and carries
 // its glyphs as a final run whose clusters all name the line's end.
 
+use e.math
 use e.mem
 use e.gfx.geometry
 use e.text.shape
@@ -108,7 +109,21 @@ fn metrics_of(choice: FontChoice) -> Metrics {
     if em <= 0i32 || ascent - descent <= 0i32 { ret Metrics { ascent: 0.8 * choice.size, descent: 0.2 * choice.size } }
     var down = 0i32 - descent
     if down < 0i32 { down = 0i32 }
-    ret Metrics { ascent: f32(ascent) * choice.size / f32(em), descent: f32(down) * choice.size / f32(em) }
+    let exact_ascent = f32(ascent) * choice.size / f32(em)
+    let exact_descent = f32(down) * choice.size / f32(em)
+    if chromium_lines {
+        // FreeType's metrics at the pixel size (what Skia reads on Linux): the ascender rounded up and the descender down to whole
+        // pixels, then Blink's own rounding leaves them as they are.
+        ret Metrics { ascent: math.ceil[f32](exact_ascent - 0.001), descent: math.ceil[f32](exact_descent - 0.001) }
+    }
+    ret Metrics { ascent: exact_ascent, descent: exact_descent }
+}
+
+// The Android look lays a line out as Blink does (set by `ui.looks.set_look`): whole pixel ascent (up) and descent (down) as FreeType sizes them, and the half leading floored.
+var chromium_lines: bool = false
+
+fn set_chromium_lines(on: bool) {
+    chromium_lines = on
 }
 
 // round 22, la: the pseudo-language "tnum" shapes with the font's tabular figures (GtkCalendar's day numbers).
@@ -588,7 +603,8 @@ fn build_line(a: *mem.Arena, items: []const Item, style: Style, source: str, cut
     let natural = ascent + descent
     var height = natural
     if style.line_height > 0.0 { height = style.line_height }
-    let baseline = top + ascent + (height - natural) / 2.0
+    var baseline = top + ascent + (height - natural) / 2.0
+    if chromium_lines { baseline = top + ascent + math.floor[f32]((height - natural) / 2.0) }
     var x: f32 = 0.0
     if options.width > 0.0 {
         var align = options.align

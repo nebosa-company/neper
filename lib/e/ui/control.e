@@ -7920,6 +7920,13 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     }
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
+    if t.tokens.profile == .MaterialLike {
+        // The query field is the bar less its padding, the 24 dp icon and the clear button, as wide as that and no more (a percentage of
+        // an unsized stack would ask for the field's intrinsic width and squeeze the icon).
+        var room = options.width - lead - trail - 24.0 - 16.0
+        if len != 0usize { room = room - 16.0 - 40.0 }
+        editor_style.width = style.Length { Px: max_zero(room) }
+    }
     editor_style.min_height = style.Length { Px: line }
     layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: material_caret(t), untabbed: false, ringed: false }, editor_style)
     var search_name = options.placeholder
@@ -9627,6 +9634,8 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             var inner_style = style.defaults()
             inner_style.height = style.Length { Flex: 1.0 }
             inner_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+            // md-secondary-tab centres the label in the whole 48 dp, the 2 dp indicator drawn over its foot.
+            if t.tokens.profile == .MaterialLike { inner_style.padding.top = style.Length { Px: 2.0 } }
             let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, inner_style, inner[0usize..1usize])
@@ -9643,6 +9652,15 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.spacer(0u64, 1.0)
             parts[1usize] = label_node
+            // md-primary-tab centres the label in the whole 48 dp, the indicator drawn over its foot.
+            if t.tokens.profile == .MaterialLike {
+                let (low, low_error) = mem.alloc[widget.Node](a, 1usize)
+                if low_error != ok { ret (zero, TooLarge) }
+                low[0usize] = label_node
+                var low_style = style.defaults()
+                low_style.margin.top = style.Length { Px: 3.0 }
+                parts[1usize] = widget.box(0u64, low_style, low[0usize..1usize])
+            }
             parts[2usize] = widget.spacer(0u64, 1.0)
             parts[3usize] = widget.box(0u64, mark, zero)
             var column_style = style.defaults()
@@ -11524,6 +11542,8 @@ fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind
         layer_ink = words
         look.border_width = 0.0
     }
+    // md-filter-chip, md-input-chip and md-suggestion-chip set their label in on-surface-variant (assist: on-surface).
+    if t.tokens.profile == .MaterialLike && kind != .Assist && !chosen && !tinted { words = style.color(t.tokens, .OnSurfaceVariant) }
     if elevated && !chosen && !tinted {
         fill = style.color(t.tokens, .SurfaceContainerLow)
         look.border_width = 0.0
@@ -11553,6 +11573,8 @@ fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind
     look.custom_padding = true
     look.padding = 16.0
     look.padding_y = max_zero((height - look.border_width * 2.0 - style.text_style(t.tokens, .Label).line_height) * 0.5)
+    // Blink puts the label line at the border plus the padding: 6 dp under the 32 dp chip, outlined or not.
+    if t.tokens.profile == .MaterialLike { look.padding_y = max_zero((height - style.text_style(t.tokens, .Label).line_height) * 0.5) }
     look.min_height = height
     var caption = text_options()
     caption.role = .Label
@@ -23562,8 +23584,10 @@ fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bo
     let (pb, pb_error) = geometry.path_builder(g.arena, 48usize, 160usize)
     if pb_error != ok { ret (false, TooLarge) }
     var builder = pb
-    let x = area.x
-    let y = area.y
+    // Chromium paints an svg icon's box on whole device pixels (a label's fractional width moves the icon, not its picture).
+    let scale = scene.builder_scale(b)
+    let x = math.floor[f32](area.x * scale + 0.5) / scale
+    let y = math.floor[f32](area.y * scale + 0.5) / scale
     let w = area.width
     let h = area.height
     var made = true
