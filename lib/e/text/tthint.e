@@ -39,7 +39,7 @@ const MAX_SIZES: usize = 24usize
 const MAX_CALL: usize = 64usize
 const MAX_STEPS: usize = 2000000usize
 
-type Zone = struct { n: usize, org: []i64, cur: []i64, orus: []i64, tags: []i64, sh: []i64, ipd: []bool, mp: []i64, lp: []i64, ends: []usize, nends: usize }
+type Zone = struct { n: usize, org: []i64, cur: []i64, orus: []i64, tags: []i64, sh: []i64, ipd: []bool, mp: []i64, lp: []i64, ipr: []i64, ends: []usize, nends: usize }
 type Gs = struct { rp0: i64, rp1: i64, rp2: i64, dual_x: i64, dual_y: i64, proj_x: i64, proj_y: i64, free_x: i64, free_y: i64, lp: i64, min_dist: i64, round_state: i64, auto_flip: bool, cvt_cut_in: i64, sw_cut_in: i64, sw_value: i64, delta_base: i64, delta_shift: i64, instruct_control: i64, scan_control: i64, scan_type: i64, gep0: usize, gep1: usize, gep2: usize }
 // A size of the face in one mode: its cvt and storage after `prep`, the graphics state `prep` left, and the twilight zone
 // with a copy of how `prep` left it (restored before every glyph so a glyph never sees another's twilight points).
@@ -198,6 +198,8 @@ fn zone_new(a: *mem.Arena, n: usize, nends: usize) -> (Zone, err) {
     let (mp, e8) = mem.alloc[i64](a, n)
     let (lpp, e9) = mem.alloc[i64](a, n)
     if e9 != ok { ret (z, NoRoom) }
+    let (iprr, e10) = mem.alloc[i64](a, n)
+    if e10 != ok { ret (z, NoRoom) }
     if e8 != ok { ret (z, NoRoom) }
     let (ends, e7) = mem.alloc[usize](a, nends)
     if e7 != ok { ret (z, NoRoom) }
@@ -210,6 +212,7 @@ fn zone_new(a: *mem.Arena, n: usize, nends: usize) -> (Zone, err) {
     z.ipd = ipd
     z.mp = mp
     z.lp = lpp
+    z.ipr = iprr
     z.ends = ends
     ret (z, ok)
 }
@@ -230,6 +233,7 @@ fn zone_clear(z: *Zone, n: usize) {
         z.ipd[i] = false
         z.mp[i] = 0i64
         z.lp[i] = 0i64
+        z.ipr[i] = 0i64
         i += 1usize
     }
 }
@@ -758,7 +762,7 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
     z.tags[r] = z.tags[r] | 128i64
 }
 
-fn ct_ip_shift(h: *Hinter, r1: usize, r2: usize, p: usize) -> i64 {
+fn ct_ip_shift(h: *Hinter, r1: usize, r2: usize, p: usize, lazy: bool) -> i64 {
     let z = &h.zone[1usize]
     let n = z.n
     var o1 = z.org[2usize * r1]
@@ -769,13 +773,13 @@ fn ct_ip_shift(h: *Hinter, r1: usize, r2: usize, p: usize) -> i64 {
     if r1 + 3usize == n {
         o1 = h.ctX
         s1 = h.ctA - h.ctX
-    } else if r1 + 4usize != n && ct_live(z, r1) {
+    } else if r1 + 4usize != n && (lazy || ct_live(z, r1)) {
         s1 = z.sh[r1]
     }
     if r2 + 3usize == n {
         o2 = h.ctX
         s2 = h.ctA - h.ctX
-    } else if r2 + 4usize != n && ct_live(z, r2) {
+    } else if r2 + 4usize != n && (lazy || ct_live(z, r2)) {
         s2 = z.sh[r2]
     }
     if o2 == o1 { ret s1 }
@@ -838,6 +842,27 @@ fn ct_scale(h: *Hinter) {
     while p < npt {
         ct_resolve(h, p, 0usize)
         p += 1usize
+    }
+    var again = 0usize
+    while again < 2usize {
+        p = 0usize
+        while p < npt {
+            if z.ipd[p] {
+                z.sh[p] = ct_ip_shift(h, usize(z.ipr[p] / 65536i64 - 1i64), usize(z.ipr[p] % 65536i64 - 1i64), p, true)
+            }
+            p += 1usize
+        }
+        p = 0usize
+        while p < npt {
+            if !z.ipd[p] { z.tags[p] = z.tags[p] & (0i64 - 225i64) }
+            p += 1usize
+        }
+        p = 0usize
+        while p < npt {
+            ct_resolve(h, p, 0usize)
+            p += 1usize
+        }
+        again += 1usize
     }
     p = 0usize
     while p < npt {
@@ -1042,7 +1067,8 @@ fn vm_ip(h: *Hinter) {
         }
         vm_move(h, h.gs.gep2, pi, new_dist - cur_dist)
         if vm_is_x(h) && h.ctA != 0i64 && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.gs.gep2 == 1usize && pi + 4usize <= z2.n && r1 < z2.n && r2 < z2.n {
-            z2.sh[pi] = ct_ip_shift(h, r1, r2, pi)
+            z2.sh[pi] = ct_ip_shift(h, r1, r2, pi, false)
+            z2.ipr[pi] = (i64(r1) + 1i64) * 65536i64 + i64(r2) + 1i64
             z2.ipd[pi] = true
         }
         k += 1i64
