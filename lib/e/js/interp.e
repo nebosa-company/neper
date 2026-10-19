@@ -5062,7 +5062,7 @@ fn eval_tagged_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err
 }
 
 fn freeze_object(it: *Interp, o: *Obj) {
-    if o.class == C_ARRAY { let m = materialize_elements(it, o) }
+    if o.class == C_ARRAY || o.class == C_ARGUMENTS { let m = materialize_elements(it, o) }
     var i = 0usize
     while i < o.props.len {
         o.props.items[i].flags = o.props.items[i].flags & (255u8 - P_CONFIGURABLE)

@@ -404,6 +404,8 @@ fn set_integrity_generic(it: *js.Interp, o: *js.Obj, frozen: bool) -> (bool, err
 fn set_integrity(it: *js.Interp, v: js.Value, frozen: bool) -> (js.Value, err) {
     if !js.is_object(v) { ret (v, ok) }
     let o = js.as_object(v)
+    // A typed array on a resizable buffer cannot be frozen, even when it is empty: its elements may appear later.
+    if frozen && o.class == js.C_TYPEDARRAY && js.buf_of(js.ta_of(o).buffer).resizable { ret (js.undefv(), js.throw_type(it, "Cannot freeze array buffer views backed by resizable buffers")) }
     if o.class == js.C_PROXY || o.class == js.C_TYPEDARRAY || o.class == js.C_NAMESPACE {
         let (done, e) = set_integrity_generic(it, o, frozen)
         if e != ok { ret (js.undefv(), e) }
