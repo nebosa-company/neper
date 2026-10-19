@@ -1,0 +1,26 @@
+{
+ "popup_menu": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/menu.png",
+    "notes": "AUDIT 18 (matched to review): own comparer (tm2.py: reference crop trimmed to the component plus 6 px, template-placed in the committed 1x sheet by the pixels outside the text mask and then by the whole crop; flat = 3 x 3 spread of at most 6 levels, ink margin 2 px). Text ink within 2 levels: 99.0 % light, 99.5 % dark, flat px off 0 in both, so round 35 text did make the glyphs exact. But the menu box lost a pixel: light: the menu fill is 136 px wide against the reference 137 (md-menu-rest), so the right edge column is off in all 301 rows, 301 px over 12 levels per cell (0 at audit 17); the shadow tail beside it is the same 306 rows over 2 levels as before. The same comparer on the sheets of audit 17 (113b678bf) gives 0, so the round 35 line and width change caused it, and no other Android control changed outside its text. A shape error over the full height of the menu is not a rounding difference; one column of width fixes it. | ROUND 31 (review to matched): the Search row's text and shortcut sat 4 px off because the row put its 16 dp gap on both sides of the filler and so overflowed the menu; md-menu-item's gaps are now paddings. The gallery's star and plus placeholders for Settings and Refresh are replaced by the settings, refresh and image Material Icons paths that matglyph.e draws and the references re-captured. Flat px off 26 to 0 and with glyphs 228 to 18 (light and dark, rest and hover). | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "The menu is one pixel narrower than the reference since round 35 (the round 35 change that sizes a menu by its widest row at exact advances; the cause was not traced further, only the width measured); the right edge column is wrong in every row",
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Text ink within 2 levels is now 99.0 % (light) and 99.5 % (dark) of the menu cells; the earlier gap about text edges that are not pixel equal is out of date, the rasteriser is the DirectWrite model of android-text.md"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/menu.png",
+    "notes": "AUDIT 18 (matched to review): own comparer (tm2.py: reference crop trimmed to the component plus 6 px, template-placed in the committed 1x sheet by the pixels outside the text mask and then by the whole crop; flat = 3 x 3 spread of at most 6 levels, ink margin 2 px). Text ink within 2 levels: 99.0 % light, 99.5 % dark, flat px off 0 in both, so round 35 text did make the glyphs exact. But the menu box lost a pixel: dark: the same one column, 311 rows more than 2 levels off at the right edge, 57 px over 12 levels in the hover cell (0 at audit 17). The same comparer on the sheets of audit 17 (113b678bf) gives 0, so the round 35 line and width change caused it, and no other Android control changed outside its text. A shape error over the full height of the menu is not a rounding difference; one column of width fixes it. | ROUND 31 (review to matched): the Search row's text and shortcut sat 4 px off because the row put its 16 dp gap on both sides of the filler and so overflowed the menu; md-menu-item's gaps are now paddings. The gallery's star and plus placeholders for Settings and Refresh are replaced by the settings, refresh and image Material Icons paths that matglyph.e draws and the references re-captured. Flat px off 26 to 0 and with glyphs 228 to 18 (light and dark, rest and hover). | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "The menu is one pixel narrower than the reference since round 35 (the round 35 change that sizes a menu by its widest row at exact advances; the cause was not traced further, only the width measured); the right edge column is wrong in every row",
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Text ink within 2 levels is now 99.0 % (light) and 99.5 % (dark) of the menu cells; the earlier gap about text edges that are not pixel equal is out of date, the rasteriser is the DirectWrite model of android-text.md"
+    ]
+   }
+  }
+ }
+}
