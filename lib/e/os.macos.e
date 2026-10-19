@@ -557,3 +557,234 @@ fn readdir(a: *mem.Arena, path: str) -> ([]DirEntry, err) {
     let ignored_close = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
     ret (entries[0usize..count], ok)
 }
+
+// Directory handles: a descriptor, with the openat family relative to it. The Linux variant
+// resolves under RESOLVE_BENEATH with openat2; macOS has no such call, so a path that is
+// absolute or climbs with `..` is refused here and links are refused with O_NOFOLLOW_ANY.
+type Dir = resource(dir_close) struct { raw: usize }
+type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
+
+const SYS_OPENAT: usize = 463usize
+const SYS_RENAMEAT: usize = 465usize
+const SYS_UNLINKAT: usize = 472usize
+const SYS_RENAMEATX: usize = 488usize
+const SYS_FSYNC: usize = 95usize
+const AT_FDCWD: usize = 18446744073709551516usize
+const AT_REMOVEDIR: usize = 128usize
+const O_WRONLY: usize = 1usize
+const O_TRUNC: usize = 1024usize
+const O_APPEND: usize = 8usize
+const O_NOFOLLOW_ANY: usize = 536870912usize
+const RENAME_EXCL: usize = 4usize
+const FILE_MODE: usize = 438usize
+
+fn relative_path_ok(path: str) -> bool {
+    if path.len == 0usize { ret false }
+    if path[0usize] == 47u8 { ret false }
+    var start = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 0u8 { ret false }
+        if path[at] == 47u8 {
+            if at == start + 2usize && path[start] == 46u8 && path[start + 1usize] == 46u8 { ret false }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    if at == start + 2usize && path[start] == 46u8 && path[start + 1usize] == 46u8 { ret false }
+    ret true
+}
+
+fn open_bits(flags: OpenFlags) -> usize {
+    var bits = O_RDONLY
+    if flags.read && flags.write { bits = O_RDWR }
+    if !flags.read && flags.write { bits = O_WRONLY }
+    if flags.create { bits = bits | O_CREAT }
+    if flags.truncate { bits = bits | O_TRUNC }
+    if flags.append { bits = bits | O_APPEND }
+    ret bits | O_CLOEXEC
+}
+
+fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
+    var dir: Dir = zero
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (dir, path_error)
+    }
+    let descriptor = syscall(SYS_OPEN, path_address, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize { ret (dir, from_errno(descriptor)) }
+    dir.raw = usize(descriptor)
+    ret (dir, ok)
+}
+
+fn dir_close(dir: own Dir) -> err {
+    let result = syscall(SYS_CLOSE, dir.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+    ret from_errno(result)
+}
+
+fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err) {
+    let (dir, open_error) = dir_open(a, path)
+    if open_error != ok {
+        *detail = last_error_detail("dir_open", path)
+        ret (dir, open_error)
+    }
+    ret (dir, ok)
+}
+
+fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) {
+    var file: File = zero
+    if !relative_path_ok(relative_path) { ret (file, Denied) }
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, relative_path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (file, path_error)
+    }
+    var bits = open_bits(flags)
+    if policy == .NoSymlinks { bits = bits | O_NOFOLLOW_ANY }
+    var mode = 0usize
+    if flags.create { mode = FILE_MODE }
+    let descriptor = syscall(SYS_OPENAT, dir.raw, path_address, bits, mode, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize { ret (file, from_errno(descriptor)) }
+    file.raw = usize(descriptor)
+    ret (file, ok)
+}
+
+// The parent of the final component, opened with links refused, so the last name is acted
+// on relative to it. The returned handle is the caller's to close only when it is not the
+// one passed in.
+fn open_parent(a: *mem.Arena, dir: Dir, relative_path: str) -> (Dir, str, err) {
+    var parent: Dir = zero
+    parent.raw = dir.raw
+    var cut = 0usize
+    var found = false
+    var at = 0usize
+    while at < relative_path.len {
+        if relative_path[at] == 47u8 {
+            cut = at
+            found = true
+        }
+        at += 1usize
+    }
+    if !found { ret (parent, relative_path, ok) }
+    let head = relative_path[0usize..cut]
+    let tail = relative_path[cut + 1usize..relative_path.len]
+    if tail.len == 0usize { ret (parent, "", Denied) }
+    let checkpoint = mem.mark(a)
+    let (head_address, head_error) = c_string(a, head)
+    if head_error != ok {
+        mem.reset(a, checkpoint)
+        ret (parent, "", head_error)
+    }
+    let descriptor = syscall(SYS_OPENAT, dir.raw, head_address, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW_ANY, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize { ret (parent, "", from_errno(descriptor)) }
+    parent.raw = usize(descriptor)
+    ret (parent, tail, ok)
+}
+
+@unsafe
+fn release_parent(parent: own Dir, dir: Dir) {
+    if parent.raw != dir.raw {
+        let closed = syscall(SYS_CLOSE, parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+    }
+}
+
+fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret name_error
+    }
+    var modifier = 0usize
+    if directory { modifier = AT_REMOVEDIR }
+    let result = syscall(SYS_UNLINKAT, parent.raw, name_address, modifier, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    ret from_errno(result)
+}
+
+fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err {
+    if !relative_path_ok(src_path) { ret Denied }
+    if !relative_path_ok(dst_path) { ret Denied }
+    let (src_parent, src_name, src_parent_error) = open_parent(a, src_dir, src_path)
+    if src_parent_error != ok { ret src_parent_error }
+    let (dst_parent, dst_name, dst_parent_error) = open_parent(a, dst_dir, dst_path)
+    if dst_parent_error != ok {
+        release_parent(src_parent, src_dir)
+        ret dst_parent_error
+    }
+    let checkpoint = mem.mark(a)
+    let (from_address, from_error) = c_string(a, src_name)
+    if from_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(src_parent, src_dir)
+        release_parent(dst_parent, dst_dir)
+        ret from_error
+    }
+    let (to_address, to_error) = c_string(a, dst_name)
+    if to_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(src_parent, src_dir)
+        release_parent(dst_parent, dst_dir)
+        ret to_error
+    }
+    var result = 0isize
+    if overwrite {
+        result = syscall(SYS_RENAMEAT, src_parent.raw, from_address, dst_parent.raw, to_address, 0usize, 0usize)
+    } else {
+        result = syscall(SYS_RENAMEATX, src_parent.raw, from_address, dst_parent.raw, to_address, RENAME_EXCL, 0usize)
+    }
+    var answer = ok
+    if result < 0isize { answer = from_errno(result) }
+    if answer == ok && durable {
+        let flushed = syscall(SYS_FSYNC, dst_parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        if flushed < 0isize { answer = from_errno(flushed) }
+    }
+    mem.reset(a, checkpoint)
+    release_parent(src_parent, src_dir)
+    release_parent(dst_parent, dst_dir)
+    ret answer
+}
+
+// File mappings and change watches are not served on macOS yet; e.fs compiles against these
+// and they answer Unsupported.
+type Mapping = resource(mapping_close) struct { raw: usize, address: *u8, len: usize }
+type Watch = resource(watch_close) struct { state: *void }
+type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
+type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
+
+fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err) {
+    var none: Mapping = zero
+    ret (none, Unsupported)
+}
+fn mapping_bytes(m: Mapping) -> []const u8 {
+    var none: []const u8 = zero
+    ret none
+}
+fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
+    var none: []u8 = zero
+    ret (none, Unsupported)
+}
+fn mapping_region(m: Mapping) -> []u8 {
+    var none: []u8 = zero
+    ret none
+}
+fn mapping_flush(m: Mapping) -> err { ret Unsupported }
+fn mapping_close(m: own Mapping) -> err { ret ok }
+
+fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
+    var none: Watch = zero
+    ret (none, Unsupported)
+}
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) { ret (0usize, Unsupported) }
+fn watch_close(w: own Watch) -> err { ret ok }

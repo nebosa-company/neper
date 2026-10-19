@@ -1,7 +1,7 @@
 name: macos-a64
 on:
   push:
-    branches: [macos-a64]
+    branches: [macos-a64, macos-dir]
   workflow_dispatch:
 jobs:
   run:
@@ -16,7 +16,7 @@ jobs:
         run: |
           sw_vers; uname -m
           status=0
-          for name in hello imp os1 fs1 hello_x64 imp_x64 os1_x64 fs1_x64; do
+          for name in hello imp os1 fs1 fs2 hello_x64 imp_x64 os1_x64 fs1_x64 fs2_x64; do
             cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
             echo "== $name"; codesign --verify --verbose=4 /tmp/$name 2>&1 || true
             case $name in *_x64) runner="arch -x86_64" ;; *) runner="" ;; esac
