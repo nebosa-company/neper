@@ -1128,14 +1128,34 @@ neper_os_syscall:
     add rsp, 16
     ret
 
-# os.clock(kind) -> (i64, err): nanoseconds since the epoch.
-# ponytail: the monotonic clock is gettimeofday too, so it can step back if the wall clock is
-# set; the commpage's mach_absolute_time would be monotonic.
+# The runtime calls libSystem for threads (pthread_create, pthread_join, pthread_detach) and for
+# the monotonic clock (clock_gettime_nsec_np), which dyld binds
+# into four slots the linker adds after the program's own imports whenever one of the
+# functions below is reached. Each word of this table holds its distance from itself to its
+# slot, patched by the linker.
+.global neper_runtime_imports
+neper_runtime_imports:
+.Lruntime_imports:
+    .quad 0, 0, 0, 0
+
+# rax = 8 * the index of the pthread function: its address, in rax. Clobbers r10.
+np_pthread:
+    lea r10, [rip+.Lruntime_imports]
+    add r10, rax
+    mov rax, QWORD PTR [r10]
+    add r10, rax
+    mov rax, QWORD PTR [r10]
+    ret
+
+# os.clock(kind) -> (i64, err): nanoseconds. The wall clock is gettimeofday; the monotonic one
+# is libSystem's clock_gettime_nsec_np(CLOCK_UPTIME_RAW), the same counter mach_absolute_time
+# reads, through the fourth runtime import slot.
 .global neper_os_clock
 neper_os_clock:
     sub rsp, 24
     cmp edi, 1
     ja .Lclock_unsupported
+    je .Lclock_monotonic
     mov rdi, rsp
     xor esi, esi
     xor edx, edx
@@ -1148,6 +1168,16 @@ neper_os_clock:
     mov ecx, dword ptr [rsp + 8]
     imul rcx, rcx, 1000
     add rax, rcx
+    xor edx, edx
+    add rsp, 24
+    ret
+.Lclock_monotonic:
+    mov eax, 24
+    call np_pthread
+    mov edi, 8
+    call rax
+    test rax, rax
+    je .Lclock_failed
     xor edx, edx
     add rsp, 24
     ret
@@ -1275,24 +1305,6 @@ neper_os_wait:
     mov eax, -1
     mov edx, 0x6f777ebf
     add rsp, 24
-    ret
-
-# Threads are libSystem's: pthread_create, pthread_join and pthread_detach, which dyld binds
-# into three slots the linker adds after the program's own imports whenever one of the
-# functions below is reached. Each word of this table holds its distance from itself to its
-# slot, patched by the linker.
-.global neper_thread_imports
-neper_thread_imports:
-.Lthread_imports:
-    .quad 0, 0, 0
-
-# rax = 8 * the index of the pthread function: its address, in rax. Clobbers r10.
-np_pthread:
-    lea r10, [rip+.Lthread_imports]
-    add r10, rax
-    mov rax, QWORD PTR [r10]
-    add r10, rax
-    mov rax, QWORD PTR [r10]
     ret
 
 # os.thread_create: rdi = the result {Thread, err}, rsi = the entry, rdx = its context, rcx =

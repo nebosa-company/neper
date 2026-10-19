@@ -164,14 +164,14 @@ fn place_code(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, funct
     let (args_literal, has_args_literal) = runtime_symbol(x64, "neper_start_args")
     if !has_args_literal { ret InvalidImage }
     try link_elf.patch_little_u64(output, runtime_start + args_literal, (data_address -% MACHO_BASE) -% (runtime_start + args_literal))
-    // The thread primitives call libSystem through three more slots, after the program's own;
-    // their table is in the runtime only when one of them is.
+    // The runtime calls libSystem through four more slots, after the program's own;
+    // their table is in the runtime only when a function that uses one is.
     *threads = false
-    let (thread_table, has_thread_table) = runtime_symbol(x64, "neper_thread_imports")
-    if has_thread_table && thread_table + 24usize <= limit {
+    let (thread_table, has_thread_table) = runtime_symbol(x64, "neper_runtime_imports")
+    if has_thread_table && thread_table + 32usize <= limit {
         *threads = true
         var thread_at = 0usize
-        while thread_at < 3usize {
+        while thread_at < 4usize {
             let slot_address = data_address + MACHO_SLOT + (nir.import_symbol_total(builder) + thread_at) * 8usize
             let literal = runtime_start + thread_table + 8usize * thread_at
             try link_elf.patch_little_u64(output, literal, (slot_address -% MACHO_BASE) -% literal)
@@ -415,12 +415,13 @@ fn fixups_size(builder: *nir.Builder, segment_count: usize, data_size: usize, im
     ret link_elf.align_up_to(imports_offset + 4usize * imports + strings, 8usize)
 }
 
-// The libSystem functions the runtime's thread primitives call, bound like any import: their
+// The libSystem functions the runtime calls (the thread primitives, the x64 monotonic clock), bound like any import: their
 // slots follow the program's own, in this order.
 fn runtime_import_name(k: usize) -> str {
     if k == 0usize { ret "pthread_create" }
     if k == 1usize { ret "pthread_join" }
-    ret "pthread_detach"
+    if k == 2usize { ret "pthread_detach" }
+    ret "clock_gettime_nsec_np"
 }
 
 fn extra_name_offset(k: usize) -> usize {
@@ -552,7 +553,7 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
     try place_code(x64, builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + 268435456usize, output, &entry_address, &threads)
     let text_end = output.count
     var slots = imports
-    if threads { slots = imports + 3usize }
+    if threads { slots = imports + 4usize }
     let text_size = link_elf.align_up_to(text_end, MACHO_PAGE)
     let data_offset = text_size
     var data_end = text_size

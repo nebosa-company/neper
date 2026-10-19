@@ -913,14 +913,14 @@ neper_os_wait:
 // into three slots the linker adds after the program's own imports whenever one of the
 // functions below is reached. Each word of this table holds its distance from itself to its
 // slot, patched by the linker.
-.global neper_thread_imports
-neper_thread_imports:
-.Lthread_imports:
-    .quad 0, 0, 0
+.global neper_runtime_imports
+neper_runtime_imports:
+.Lruntime_imports:
+    .quad 0, 0, 0, 0
 
 // x9 = 8 * the index of the pthread function: its address, in x9. Clobbers x10, x11.
 np_pthread:
-    adr x10, .Lthread_imports
+    adr x10, .Lruntime_imports
     add x10, x10, x9
     ldr x11, [x10]
     add x10, x10, x11
