@@ -439,5 +439,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 80. :lang() matches the language of the element or its nearest ancestor with one, by prefix.
     let (p80, ok80) = build(a, "<div lang=\"en-US\"><p id=a>x</p></div><p id=b>y</p>", "p:lang(en) { width: 50px; }")
     if !ok80 || !near(rect_of(p80, "a").w, 50.0f64) || near(rect_of(p80, "b").w, 50.0f64) { os.exit(117) }
+    // 81. An absolute box with auto left and right in a right-to-left container ends at the static right edge.
+    let (p81, ok81) = build(a, "<div style=\"direction:rtl;position:relative;width:200px;height:50px\"><div id=a style=\"position:absolute;width:30px;height:10px\"></div></div>", "")
+    if !ok81 || !near(rect_of(p81, "a").x, 170.0f64) { os.exit(118) }
     ret ok
 }

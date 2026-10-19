@@ -7389,6 +7389,10 @@ fn layout_abs(l: *Layout, b: u32) {
         var ja = s.justify_self
         if ja == .Auto { ja = bstyle(l, bb.parent).justify_items }
         left += static_align_offset(ja, rect_w - bb.w - ml - mr, true)
+    } else if swap_code == 0u8 && !grid_cb && (bb.aux == 0u32 || bb.aux == 3u32) && bstyle(l, bb.parent).direction == .Rtl && (pb.inner == .Flow || pb.inner == .FlowRoot) && !bb.inline_level {
+        // In a right-to-left container the static position is the right edge: the box ends there.
+        let room = pb.w - pb.border[1usize] - pb.border[3usize] - pb.padding[1usize] - pb.padding[3usize]
+        left = static_x + room - bb.w - ml - mr
     }
     // Height.
     var spec_h = -1.0f64
