@@ -25,6 +25,10 @@
 # 111 when the arena could not be had.
 .global neper_start
 neper_start:
+    # The environment pointer (rdx) is kept beside the argument table for `os.env_block`.
+    lea rax, [rip+.Lstart_args]
+    add rax, QWORD PTR [rip+.Lstart_args]
+    mov QWORD PTR [rax+16], rdx
     mov r12, rdi
     mov r13, rsi
     mov r14, QWORD PTR [rip+.Lstart_arena]
@@ -1095,6 +1099,10 @@ neper_os_args:
 # is the kernel's own: a negative errno on failure.
 .global neper_os_syscall
 neper_os_syscall:
+    # pipe(2) answers with two descriptors, in eax and edx; for it the first argument is the
+    # address of two 32-bit slots they are stored to, and the result is zero.
+    push rsi
+    push rdi
     mov rax, rdi
     or rax, 0x2000000
     mov r10, r8
@@ -1102,9 +1110,22 @@ neper_os_syscall:
     mov rsi, rdx
     mov rdx, rcx
     mov r11, r9
-    mov r9, qword ptr [rsp + 8]
+    mov r9, qword ptr [rsp + 24]
     mov r8, r11
-    darwin_syscall
+    syscall
+    jc .Lsys_error
+    cmp qword ptr [rsp], 42
+    jne .Lsys_done
+    mov rcx, qword ptr [rsp + 8]
+    mov dword ptr [rcx], eax
+    mov dword ptr [rcx + 4], edx
+    xor eax, eax
+.Lsys_done:
+    add rsp, 16
+    ret
+.Lsys_error:
+    neg rax
+    add rsp, 16
     ret
 
 # os.clock(kind) -> (i64, err): nanoseconds since the epoch.
@@ -1155,4 +1176,103 @@ neper_os_seek:
 .Lseek_failed:
     xor eax, eax
     mov edx, 0x6f777ebf
+    ret
+
+# os.env_block: rdi = the result (str, err), rsi = the arena. The environment as the kernel
+# gave it, NAME=VALUE records each ended by a NUL, copied into the arena.
+.global neper_os_env_block
+neper_os_env_block:
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 8
+    mov r12, rdi
+    mov r13, rsi
+    mov QWORD PTR [r12], 0
+    mov QWORD PTR [r12+8], 0
+    mov DWORD PTR [r12+16], 0
+    lea rax, [rip+.Lstart_args]
+    add rax, QWORD PTR [rip+.Lstart_args]
+    mov r14, QWORD PTR [rax+16]
+    xor ebx, ebx
+    xor ecx, ecx
+.Lenv_measure:
+    mov rsi, QWORD PTR [r14+rcx*8]
+    test rsi, rsi
+    je .Lenv_measured
+.Lenv_length:
+    inc rbx
+    cmp BYTE PTR [rsi], 0
+    lea rsi, [rsi+1]
+    jne .Lenv_length
+    inc rcx
+    jmp .Lenv_measure
+.Lenv_measured:
+    mov rdi, r13
+    lea rsi, [rbx+1]
+    mov edx, 1
+    call np_alloc
+    test rax, rax
+    je .Lenv_oom
+    mov rdi, rax
+    mov r8, rax
+    xor ecx, ecx
+.Lenv_copy:
+    mov rsi, QWORD PTR [r14+rcx*8]
+    test rsi, rsi
+    je .Lenv_done
+.Lenv_byte:
+    mov dl, BYTE PTR [rsi]
+    mov BYTE PTR [rdi], dl
+    inc rsi
+    inc rdi
+    test dl, dl
+    jne .Lenv_byte
+    inc rcx
+    jmp .Lenv_copy
+.Lenv_done:
+    mov QWORD PTR [r12], r8
+    mov QWORD PTR [r12+8], rbx
+    jmp .Lenv_out
+.Lenv_oom:
+    mov DWORD PTR [r12+16], 0x6979aadc
+.Lenv_out:
+    add rsp, 8
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+# os.wait(proc: *Proc) -> (i32, err): the exit status, or 128 plus the signal that ended it.
+.global neper_os_wait
+neper_os_wait:
+    sub rsp, 24
+    mov rdi, QWORD PTR [rdi]
+    lea rsi, [rsp]
+    xor edx, edx
+    xor r10d, r10d
+    mov eax, 0x2000007
+    darwin_syscall
+    test rax, rax
+    js .Lwait_failed
+    mov eax, DWORD PTR [rsp]
+    mov ecx, eax
+    and ecx, 0x7f
+    jne .Lwait_signal
+    shr eax, 8
+    and eax, 0xff
+    xor edx, edx
+    add rsp, 24
+    ret
+.Lwait_signal:
+    lea eax, [rcx+128]
+    xor edx, edx
+    add rsp, 24
+    ret
+.Lwait_failed:
+    mov eax, -1
+    mov edx, 0x6f777ebf
+    add rsp, 24
     ret

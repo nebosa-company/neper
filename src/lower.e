@@ -901,6 +901,7 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "wait") { ret ("neper_os_wait", ok) }
     if check.same(name, "exit") { ret ("neper_os_exit", ok) }
     if check.same(name, "args") { ret ("neper_os_args", ok) }
+    if check.same(name, "env_block") { ret ("neper_os_env_block", ok) }
     if check.same(name, "reserve") { ret ("neper_os_reserve", ok) }
     if check.same(name, "commit") { ret ("neper_os_commit", ok) }
     if check.same(name, "clock") { ret ("neper_os_clock", ok) }

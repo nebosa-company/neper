@@ -31,6 +31,11 @@
 neper_start:
     // dyld calls LC_MAIN's entry as main(argc, argv): x19 is made to stand where the
     // kernel's initial stack would have put the count, the vector 8 bytes after it.
+    // The environment pointer (x2) is kept beside the argument table for `os.env_block`.
+    adr x9, .Lstart_args
+    ldr x10, [x9]
+    add x9, x9, x10
+    str x2, [x9, #16]
     mov x22, x0
     sub x19, x1, #8
     ldr x20, .Lstart_arena
@@ -786,6 +791,11 @@ neper_os_clock:
 // The result is the kernel's own, a negative errno on failure.
 .global neper_os_syscall
 neper_os_syscall:
+    // pipe(2) answers with two descriptors, in x0 and x1; for it the first argument is the
+    // address of two 32-bit slots they are stored to, and the result is zero.
+    sub sp, sp, #16
+    str x1, [sp]
+    str x0, [sp, #8]
     mov x16, x0
     mov x0, x1
     mov x1, x2
@@ -796,5 +806,105 @@ neper_os_syscall:
     svc #0x80
     b.cc 1f
     neg x0, x0
+    add sp, sp, #16
+    ret
 1:
+    ldr x9, [sp, #8]
+    cmp x9, #42
+    b.ne 2f
+    ldr x9, [sp]
+    stp w0, w1, [x9]
+    mov x0, #0
+2:
+    add sp, sp, #16
+    ret
+
+// os.env_block: the result (str, err) at x0, the arena at x1. The environment as the kernel
+// gave it, NAME=VALUE records each ended by a NUL, copied into the arena.
+.global neper_os_env_block
+neper_os_env_block:
+    stp x29, x30, [sp, #-48]!
+    mov x29, sp
+    stp x19, x20, [sp, #16]
+    str x21, [sp, #32]
+    mov x19, x0
+    mov x20, x1
+    stp xzr, xzr, [x19]
+    str wzr, [x19, #16]
+    adr x9, .Lstart_args
+    ldr x10, [x9]
+    add x9, x9, x10
+    ldr x21, [x9, #16]
+    mov x11, #0
+    mov x12, #0
+.Lenv_measure:
+    ldr x13, [x21, x12, lsl #3]
+    cbz x13, .Lenv_measured
+.Lenv_length:
+    ldrb w15, [x13], #1
+    add x11, x11, #1
+    cbnz w15, .Lenv_length
+    add x12, x12, #1
+    b .Lenv_measure
+.Lenv_measured:
+    mov x0, x20
+    add x1, x11, #1
+    mov x2, #1
+    stp x11, x21, [sp, #-16]!
+    bl np_alloc
+    ldp x11, x21, [sp], #16
+    cbz x0, .Lenv_oom
+    mov x14, x0
+    mov x12, #0
+.Lenv_copy:
+    ldr x13, [x21, x12, lsl #3]
+    cbz x13, .Lenv_done
+.Lenv_byte:
+    ldrb w15, [x13], #1
+    strb w15, [x14], #1
+    cbnz w15, .Lenv_byte
+    add x12, x12, #1
+    b .Lenv_copy
+.Lenv_done:
+    str x0, [x19]
+    str x11, [x19, #8]
+    b .Lenv_out
+.Lenv_oom:
+    movz w9, #0xaadc
+    movk w9, #0x6979, lsl #16
+    str w9, [x19, #16]
+.Lenv_out:
+    ldr x21, [sp, #32]
+    ldp x19, x20, [sp, #16]
+    ldp x29, x30, [sp], #48
+    ret
+
+// os.wait(proc: *Proc) -> (i32, err): the exit status, or 128 plus the signal that ended it.
+.global neper_os_wait
+neper_os_wait:
+    stp x29, x30, [sp, #-32]!
+    mov x29, sp
+    ldr x0, [x0]
+    add x1, sp, #16
+    mov x2, #0
+    mov x3, #0
+    sys 7
+    tbnz x0, #63, .Lwait_failed
+    ldr w0, [sp, #16]
+    ands w9, w0, #0x7f
+    b.ne .Lwait_signal
+    ubfx w0, w0, #8, #8
+    mov x1, #0
+    ldp x29, x30, [sp], #32
+    ret
+.Lwait_signal:
+    add w0, w9, #128
+    mov x1, #0
+    ldp x29, x30, [sp], #32
+    ret
+.Lwait_failed:
+    mov x0, #-1
+    movz w1, #0x7ebf
+    movk w1, #0x6f77, lsl #16
+    ldp x29, x30, [sp], #32
     ret

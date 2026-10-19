@@ -29,6 +29,9 @@ error MissingRuntime
 const MACHO_BASE: usize = 4294967296usize
 const MACHO_PAGE: usize = 16384usize
 const MACHO_HASH_PAGE: usize = 4096usize
+// The runtime's slot at the start of __DATA: the argument table and count, the environment
+// pointer, one spare word. The import slots follow.
+const MACHO_SLOT: usize = 32usize
 
 fn big_u32(output: *emit_x64.Buffer, value: usize) -> err {
     try emit_x64.byte(output, (value >> 24usize) & 255usize)
@@ -175,7 +178,7 @@ fn place_code(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, funct
                     let (library, slot_entry, is_import) = nir.import_slot_of(builder, relocation.function_ref)
                     if is_import {
                         let flat = nir.import_flat_index(builder, library, slot_entry)
-                        try patch_data(x64, output, site, data_address + 16usize + flat * 8usize)
+                        try patch_data(x64, output, site, data_address + MACHO_SLOT + flat * 8usize)
                         relocations[relocation_at].resolved = true
                         relocation_at += 1usize
                         continue
@@ -435,7 +438,7 @@ fn append_fixups(builder: *nir.Builder, output: *emit_x64.Buffer, base: usize, s
         try link_elf.little_u16(output, pages)
         var page = 0usize
         while page < pages {
-            if page == 0usize { try link_elf.little_u16(output, 16usize) } else { try link_elf.little_u16(output, 65535usize) }
+            if page == 0usize { try link_elf.little_u16(output, MACHO_SLOT) } else { try link_elf.little_u16(output, 65535usize) }
             page += 1usize
         }
         try link_elf.pad_to(output, base + imports_offset)
@@ -505,7 +508,7 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
     var data_end = text_size
     if has_data {
         // The slots first, the globals after them.
-        let globals_offset = link_elf.align_up_to(data_offset + 16usize + imports * 8usize, 16usize)
+        let globals_offset = link_elf.align_up_to(data_offset + MACHO_SLOT + imports * 8usize, 16usize)
         var data_bytes = globals_offset - data_offset
         if has_globals { data_bytes += nir.global_area_size(builder) }
         data_end = data_offset + link_elf.align_up_to(data_bytes, MACHO_PAGE)
@@ -514,7 +517,7 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
         try place_code(x64, builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + data_offset, output, &entry_address)
         if output.count != text_end { ret InvalidImage }
         try link_elf.pad_to(output, data_offset)
-        try link_elf.pad_to(output, data_offset + 16usize)
+        try link_elf.pad_to(output, data_offset + MACHO_SLOT)
         try append_slots(output, imports)
         try link_elf.pad_to(output, globals_offset)
         if has_globals {
