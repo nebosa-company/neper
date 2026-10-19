@@ -457,5 +457,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 86. The last item of a lane is not stretched unless align-self says so.
     let (p86, ok86) = build(a, "<div style=\"display:grid-lanes;grid-template-columns:50px 50px;width:100px\"><div id=a style=\"height:10px\"></div><div id=b></div><div id=c style=\"height:30px\"></div></div>", "")
     if !ok86 || !near(rect_of(p86, "b").h, 0.0f64) { os.exit(123) }
+    // 87. A max-content flex container sizes an inflexible item by its flex-basis clamped by max-width, borders included.
+    let (p87, ok87) = build(a, "<div id=t style=\"display:flex;width:max-content\"><div style=\"flex:0 0 200px;border:10px solid;box-sizing:border-box;max-width:100px\"></div></div>", "")
+    if !ok87 || !near(rect_of(p87, "t").w, 100.0f64) { os.exit(124) }
+    // 88. An auto minimum keeps a zero-basis item at its min-content width in the container's max-content width.
+    let (p88, ok88) = build(a, "<div id=t style=\"display:flex;width:max-content\"><div style=\"flex:0 0 0px;border:10px solid\"><div style=\"width:80px\"></div></div></div>", "")
+    if !ok88 || !near(rect_of(p88, "t").w, 100.0f64) { os.exit(125) }
     ret ok
 }

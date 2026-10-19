@@ -4591,7 +4591,15 @@ fn flex_widths(l: *Layout, b: u32) -> (f64, f64) {
     var kid = l.boxes.items[usize(b)].first
     while kid != NONE {
         if flex_in(l, kid) {
-            let (kmn, kmx) = outer_content_widths(l, kid)
+            let (kmn, kmx0) = outer_content_widths(l, kid)
+            var kmx = kmx0
+            let ks = bstyle(l, kid)
+            if row && ks.flex_basis.kind == .Px && ks.flex_basis.pct == 0.0f64 {
+                let kb = &l.boxes.items[usize(kid)]
+                let extras = horizontal_extras(kb) + kb.margin[1usize] + kb.margin[3usize]
+                kmx = clamp_width(l, kid, to_content_w(l, kid, ks.flex_basis.px), -1.0f64) + extras
+                kmx = maxf(kmx, kmn)
+            }
             if row {
                 mx += kmx
                 if wrap { mn = maxf(mn, kmn) } else { mn += kmn }
