@@ -9645,6 +9645,8 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let (shown, shown_error) = summary_text(a, s, grp.footer_summary(grid.g, usize(s.summary)))
             if shown_error != ok { ret (zero, shown_error) }
             text = shown
+            // v3 draws no amount in a footer cell too narrow for it; the cell keeps its fill
+            if footer_edged_on(grid) && grid.theme.tokens.palette != .Dark && grid.columns[at].width < 16.0 { text = " " }
         }
         var inner: widget.Node = zero
         let node_error = text_node(a, grid, text, !grid.look.group_flat, .Text, &inner)
@@ -9679,19 +9681,27 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, control.TooLarge) }
             pair[0usize] = cells[at]
-            pair[1usize] = footer_px(a, grid.columns[at].width - 2.0, 0.0, 1.0, 20.0, 0xBCBCBCu32)
+            var edge_rule: u32 = 0xBCBCBCu32
+            if grid.theme.tokens.palette != .Dark { edge_rule = 0xBFBFBFu32 }
+            pair[1usize] = footer_px(a, grid.columns[at].width - 2.0, 0.0, 1.0, 20.0, edge_rule)
             cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width - 1.0, 20.0), pair[0usize..2usize])
         }
         if live_footer && footer_edged_on(grid) && text.len == 0usize && s.kind == CellKind.Picture {
             let (trio, trio_error) = mem.alloc[widget.Node](a, 3usize)
             if trio_error != ok { ret (zero, control.TooLarge) }
             trio[0usize] = cells[at]
-            // round 13: in the yellow band (the pool grid) the picture column's two edge pixels are white
+            // round 13: in the yellow band (the pool grid) the picture column's two edge pixels are the band's own yellow (data_grid_main, v3)
             var trio_a: u32 = 0xFFFFFFu32
             var trio_b: u32 = 0xFFFFFFu32
+            if grid.theme.tokens.palette != .Dark {
+                trio_a = 0xFFFFDDu32
+                trio_b = 0xFFFFDDu32
+            }
             if grid.look.footer_band.red < grid.look.footer_band.green - 0.05 {
                 trio_a = 0xEBEEF2u32
+                if grid.theme.tokens.palette != .Dark { trio_a = 0xE8EBEFu32 }
                 trio_b = 0xC7E0C8u32
+                if grid.theme.tokens.palette != .Dark { trio_b = 0xC9E1CBu32 }
             }
             trio[1usize] = footer_px(a, 0.0, 0.0, 1.0, 20.0, trio_a)
             trio[2usize] = footer_px(a, 1.0, 0.0, 1.0, 20.0, trio_b)
