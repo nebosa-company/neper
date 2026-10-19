@@ -456,6 +456,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "wait", .Value, .Intrinsic)
     try seed(r, g, "e.os", "exit", .Value, .Intrinsic)
     try seed(r, g, "e.os", "args", .Value, .Intrinsic)
+    if same(g.os, "macos") { try seed(r, g, "e.os", "env_block", .Value, .Intrinsic) }
     try seed(r, g, "e.os", "reserve", .Value, .Intrinsic)
     try seed(r, g, "e.os", "commit", .Value, .Intrinsic)
     try seed(r, g, "e.os", "clock", .Value, .Intrinsic)

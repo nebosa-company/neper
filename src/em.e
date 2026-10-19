@@ -825,6 +825,7 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_wait") { ret ("wait", true) }
     if same(name, "neper_os_exit") { ret ("exit", true) }
     if same(name, "neper_os_args") { ret ("args", true) }
+    if same(name, "neper_os_env_block") { ret ("env_block", true) }
     if same(name, "neper_os_reserve") { ret ("reserve", true) }
     if same(name, "neper_os_commit") { ret ("commit", true) }
     if same(name, "neper_os_clock") { ret ("clock", true) }

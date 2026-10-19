@@ -467,7 +467,6 @@ fn random(buffer: []u8) -> err {
     ret ok
 }
 
-fn env(a: *mem.Arena, name: str) -> (str, err) { ret ("", NotFound) }
 fn executable_path(a: *mem.Arena) -> (str, err) { ret ("", Unsupported) }
 
 // Every entry but `.` and `..`, its name copied into the arena and its kind from d_type,
@@ -788,3 +787,277 @@ fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
 }
 fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) { ret (0usize, Unsupported) }
 fn watch_close(w: own Watch) -> err { ret ok }
+
+// ---------------------------------------------------------------- environment and processes
+
+const SYS_PIPE: usize = 42usize
+const SYS_DUP: usize = 41usize
+const SYS_DUP2: usize = 90usize
+const SYS_KILL: usize = 37usize
+const SYS_WAIT4: usize = 7usize
+const SYS_FCHDIR: usize = 13usize
+const SYS_POSIX_SPAWN: usize = 244usize
+const SYS_POLL: usize = 230usize
+const SIGKILL: usize = 9usize
+const SIGTERM: usize = 15usize
+const SPAWN_LIST_MAX: usize = 1024usize
+const EXEC_FAILED: usize = 127usize
+
+type ProcUsage = struct { exit_code: i32, peak_memory: usize }
+type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
+type ProcGroup = resource(proc_group_close) struct { raw: usize }
+// `struct rusage`: two `timeval`s and then fourteen longs, of which `ru_maxrss` is the first
+// -- bytes on macOS.
+type Rusage = struct { words: [18]i64 }
+
+// One NAME=VALUE record at a time. The name has to match to its whole length and end at the
+// `=`, or a lookup of `PAT` would be answered by `PATH`.
+fn environment_value(block: str, name: str) -> (str, bool) {
+    var at = 0usize
+    while at < block.len {
+        var end = at
+        while end < block.len && block[end] != 0u8 { end = end + 1usize }
+        if end > at + name.len && block[at + name.len] == 61u8 {
+            var matched = true
+            var offset = 0usize
+            while offset < name.len {
+                if block[at + offset] != name[offset] { matched = false }
+                offset += 1usize
+            }
+            if matched { ret (block[at + name.len + 1usize..end], true) }
+        }
+        at = end + 1usize
+    }
+    ret ("", false)
+}
+
+// The environment the process was started with. Nothing in this language changes an
+// environment, so the block the entry saved is the whole truth.
+fn env(a: *mem.Arena, name: str) -> (str, err) {
+    let (block, block_error) = env_block(a)
+    if block_error != ok { ret ("", block_error) }
+    let (value, found) = environment_value(block, name)
+    if !found { ret ("", NotFound) }
+    ret (value, ok)
+}
+
+fn c_string_vector(a: *mem.Arena, items: []const str) -> (usize, err) {
+    if items.len >= SPAWN_LIST_MAX { ret (0usize, Failed) }
+    let (vector, vector_error) = mem.alloc[usize](a, items.len + 1usize)
+    if vector_error != ok { ret (0usize, OutOfMemory) }
+    var at = 0usize
+    while at < items.len {
+        let (address, address_error) = c_string(a, items[at])
+        if address_error != ok { ret (0usize, address_error) }
+        vector[at] = address
+        at += 1usize
+    }
+    vector[items.len] = 0usize
+    ret (mem.address_of(&vector[0usize]), ok)
+}
+
+fn entry_name(entry: str) -> str {
+    var at = 0usize
+    while at < entry.len {
+        if entry[at] == 61u8 { ret entry[0usize..at] }
+        at += 1usize
+    }
+    ret entry
+}
+
+fn same_bytes(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn overridden(entry: str, additions: []const str) -> bool {
+    let name = entry_name(entry)
+    var at = 0usize
+    while at < additions.len {
+        if same_bytes(name, entry_name(additions[at])) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The parent's environment with the caller's entries laid over it: a record the caller also
+// sets is dropped in favour of theirs.
+fn environment_vector(a: *mem.Arena, additions: []const str) -> (usize, err) {
+    if additions.len >= SPAWN_LIST_MAX { ret (0usize, Failed) }
+    let (block, block_error) = env_block(a)
+    if block_error != ok { ret (0usize, block_error) }
+    let (vector, vector_error) = mem.alloc[usize](a, SPAWN_LIST_MAX)
+    if vector_error != ok { ret (0usize, OutOfMemory) }
+    var count = 0usize
+    var at = 0usize
+    while at < block.len && count + additions.len + 1usize < SPAWN_LIST_MAX {
+        var end = at
+        while end < block.len && block[end] != 0u8 { end = end + 1usize }
+        if end > at && !overridden(block[at..end], additions) {
+            vector[count] = mem.address_of(&block[at])
+            count += 1usize
+        }
+        at = end + 1usize
+    }
+    var added = 0usize
+    while added < additions.len {
+        let (address, address_error) = c_string(a, additions[added])
+        if address_error != ok { ret (0usize, address_error) }
+        vector[count] = address
+        count += 1usize
+        added += 1usize
+    }
+    vector[count] = 0usize
+    ret (mem.address_of(&vector[0usize]), ok)
+}
+
+// posix_spawn(2) is the one way to start a process here: fork without libSystem leaves the
+// child with no Mach state to exec from. It has no file actions in this call, so the child's
+// descriptors 0 to 2 are set up in the parent around it -- saved, replaced by the stdio the
+// caller named, and put back -- and likewise the working directory. That is not safe against
+// another thread spawning at the same moment.
+// ponytail: stdio and cwd are swapped in the parent around the spawn; add
+// POSIX_SPAWN file actions (psfa) when threads exist on macOS.
+fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
+    var child: Proc = zero
+    if options.argv.len == 0usize { ret (child, Failed) }
+    let (program, program_error) = c_string(a, options.argv[0usize])
+    if program_error != ok { ret (child, program_error) }
+    let (argv, argv_error) = c_string_vector(a, options.argv)
+    if argv_error != ok { ret (child, argv_error) }
+    var envp = 0usize
+    if options.inherit_env {
+        let (inherited, inherited_error) = environment_vector(a, options.env)
+        if inherited_error != ok { ret (child, inherited_error) }
+        envp = inherited
+    } else {
+        let (own_vector, own_error) = c_string_vector(a, options.env)
+        if own_error != ok { ret (child, own_error) }
+        envp = own_vector
+    }
+    var directory = 0usize
+    var home = 0isize
+    if options.cwd.len != 0usize {
+        let (directory_address, directory_error) = c_string(a, options.cwd)
+        if directory_error != ok { ret (child, directory_error) }
+        directory = directory_address
+        let (dot, dot_error) = c_string(a, ".")
+        if dot_error != ok { ret (child, dot_error) }
+        home = syscall(SYS_OPEN, dot, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+        if home < 0isize { ret (child, from_errno(home)) }
+        let moved = syscall(SYS_CHDIR, directory, 0usize, 0usize, 0usize, 0usize, 0usize)
+        if moved < 0isize {
+            let closed = syscall(SYS_CLOSE, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
+            ret (child, from_errno(moved))
+        }
+    }
+    var saved: [3]isize = zero
+    var slot = 0usize
+    while slot < 3usize {
+        saved[slot] = -1isize
+        var wanted = stdio_raw(options.stdio, slot)
+        if wanted != slot {
+            saved[slot] = syscall(SYS_DUP, slot, 0usize, 0usize, 0usize, 0usize, 0usize)
+            let bound = syscall(SYS_DUP2, wanted, slot, 0usize, 0usize, 0usize, 0usize)
+        }
+        slot += 1usize
+    }
+    var pid: i32 = 0i32
+    var description: [32]i64 = zero
+    let result = syscall(SYS_POSIX_SPAWN, mem.address_of(&pid), program, mem.address_of(&description[0usize]), argv, envp, 0usize)
+    var restore = 0usize
+    while restore < 3usize {
+        if saved[restore] >= 0isize {
+            let back = syscall(SYS_DUP2, usize(saved[restore]), restore, 0usize, 0usize, 0usize, 0usize)
+            let closed = syscall(SYS_CLOSE, usize(saved[restore]), 0usize, 0usize, 0usize, 0usize, 0usize)
+        }
+        restore += 1usize
+    }
+    if home >= 0isize && directory != 0usize {
+        let back = syscall(SYS_FCHDIR, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
+        let closed = syscall(SYS_CLOSE, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
+    }
+    if result < 0isize { ret (child, from_errno(result)) }
+    child.raw = usize(pid)
+    ret (child, ok)
+}
+
+fn stdio_raw(stdio: Stdio, slot: usize) -> usize {
+    if slot == 0usize { ret stdio.stdin.raw }
+    if slot == 1usize { ret stdio.stdout.raw }
+    ret stdio.stderr.raw
+}
+
+// `wait`, and what the child's peak was: `wait4` hands both back at once.
+@unsafe
+fn wait_usage(p: own Proc) -> (ProcUsage, err) {
+    var usage: ProcUsage = zero
+    usage.exit_code = -1i32
+    var status = 0u32
+    var used: Rusage = zero
+    let result = syscall(SYS_WAIT4, p.raw, mem.address_of(&status), 0usize, mem.address_of(&used), 0usize, 0usize)
+    if result < 0isize { ret (usage, from_errno(result)) }
+    if status & 127u32 == 0u32 {
+        usage.exit_code = i32((status >> 8u32) & 255u32)
+    } else {
+        usage.exit_code = i32(128u32 + (status & 127u32))
+    }
+    usage.peak_memory = usize(used.words[4usize])
+    ret (usage, ok)
+}
+
+fn peak_memory() -> (usize, err) { ret (0usize, Unsupported) }
+
+// SIGKILL, so this is not a request.
+fn kill(p: Proc) -> err {
+    ret from_errno(syscall(SYS_KILL, p.raw, SIGKILL, 0usize, 0usize, 0usize, 0usize))
+}
+
+// pipe(2) answers with two descriptors; the runtime's syscall stores them to the slots the
+// first argument names. macOS has no pipe2, so they are not close-on-exec.
+fn pipe() -> (File, File, err) {
+    var reading: File = zero
+    var writing: File = zero
+    var pair: [2]i32 = zero
+    let result = syscall(SYS_PIPE, mem.address_of(&pair[0usize]), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (reading, writing, from_errno(result)) }
+    reading.raw = usize(pair[0usize])
+    writing.raw = usize(pair[1usize])
+    ret (reading, writing, ok)
+}
+
+// A read that does not wait: poll for zero time, then read.
+fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    var descriptor: [2]u32 = zero
+    descriptor[0usize] = u32(f.raw)
+    descriptor[1usize] = 1u32
+    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), 1usize, 0usize, 0usize, 0usize, 0usize)
+    if ready < 0isize { ret (0usize, from_errno(ready)) }
+    if ready == 0isize { ret (0usize, WouldBlock) }
+    let taken = syscall(3usize, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    ret (usize(taken), ok)
+}
+
+fn dup(f: File) -> (File, err) {
+    var second: File = zero
+    let result = syscall(SYS_DUP, f.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (second, from_errno(result)) }
+    second.raw = usize(result)
+    ret (second, ok)
+}
+
+// Process groups are not set up on macOS yet.
+fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) {
+    var group: ProcGroup = zero
+    var child: Proc = zero
+    ret (group, child, Unsupported)
+}
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err { ret Unsupported }
+fn proc_group_close(group: own ProcGroup) -> err { ret ok }

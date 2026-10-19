@@ -77,7 +77,7 @@ class MachOA64(unittest.TestCase):
     def test_main_entry_lies_in_the_text_segment(self):
         entry = struct.unpack_from("<Q", self.image, commands(self.image)[0x80000028] + 8)[0]
         self.assertTrue(0x4000 <= entry < len(self.image))
-        self.assertEqual(struct.unpack_from("<I", self.image, entry)[0], 0xAA0003F6)  # mov x22, x0
+        self.assertEqual(struct.unpack_from("<I", self.image, entry)[0] & 0x9F000000, 0x10000000)  # adr x9, the argument slot literal
 
     def test_code_directory_hashes_every_page(self):
         found = commands(self.image)
@@ -114,7 +114,7 @@ class MachOImport(unittest.TestCase):
                 data = struct.unpack_from("<QQQQ", image, position + 24)
             position += length
         self.assertIsNotNone(data)
-        slot = struct.unpack_from("<Q", image, data[2] + 16)[0]
+        slot = struct.unpack_from("<Q", image, data[2] + 32)[0]
         self.assertEqual(slot, 1 << 63)  # bind, ordinal 0, end of chain
 
 

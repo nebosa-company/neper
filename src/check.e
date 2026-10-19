@@ -4917,6 +4917,12 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
         let (args_index, args_error) = add_seeded_function(c, os_module, "args", strings, true)
         if args_error != ok { ret args_error }
         try add_seeded_parameter(c, args_index, "a", arena_pointer)
+        // macOS keeps the environment block the kernel handed the entry (runtime_macos_*).
+        if macos_target {
+            let (env_index, env_error) = add_seeded_function(c, os_module, "env_block", string_type, true)
+            if env_error != ok { ret env_error }
+            try add_seeded_parameter(c, env_index, "a", arena_pointer)
+        }
     }
     ret ok
 }
