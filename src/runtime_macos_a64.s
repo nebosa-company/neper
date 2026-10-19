@@ -79,6 +79,12 @@ neper_start:
     add x24, x24, #1
     b .Lstart_argument
 .Lstart_main:
+    // The argument table is kept in the slot at the start of __DATA for `os.args`; the
+    // literal beside the arena's holds its distance from itself, patched by the linker.
+    adr x9, .Lstart_args
+    ldr x10, [x9]
+    add x9, x9, x10
+    stp x21, x22, [x9]
     sub sp, sp, #48
     stp x21, x20, [sp]
     str x23, [sp, #16]
@@ -97,6 +103,10 @@ neper_start_main:
     mov x0, #111
     sys 1
     brk #0
+.global neper_start_args
+neper_start_args:
+.Lstart_args:
+    .quad 0
 .global neper_start_arena
 neper_start_arena:
 .Lstart_arena:
@@ -613,3 +623,161 @@ neper_os_close:
     ldp x29, x30, [sp], #16
     ret
 
+
+// os.open: the result {File, err} at x0, the arena at x1 (the path's terminated copy is
+// taken from it and given back), the path's slice at x2, the OpenFlags at x3 -- read,
+// write, create, truncate, append, one byte each. Darwin's open(2) takes the path, the
+// flags and the mode; its O_CREAT is 0x200, O_TRUNC 0x400, O_APPEND 0x8, O_CLOEXEC 0x1000000.
+.global neper_os_open
+neper_os_open:
+    stp x29, x30, [sp, #-48]!
+    mov x29, sp
+    stp x19, x20, [sp, #16]
+    stp x21, x22, [sp, #32]
+    mov x19, x0
+    mov x20, x1
+    mov x21, x3
+    str xzr, [x19]
+    str wzr, [x19, #8]
+    ldr x22, [x20, #16]
+    ldr x9, [x2, #8]
+    ldr x10, [x2]
+    adds x1, x9, #1
+    b.cs .Los_open_oom
+    stp x9, x10, [sp, #-16]!
+    mov x0, x20
+    mov x2, #1
+    bl np_alloc
+    ldp x9, x10, [sp], #16
+    cbz x0, .Los_open_oom
+    mov x11, x0
+.Los_open_copy:
+    cbz x9, .Los_open_copied
+    ldrb w12, [x10], #1
+    strb w12, [x11], #1
+    sub x9, x9, #1
+    b .Los_open_copy
+.Los_open_copied:
+    strb wzr, [x11]
+    mov w1, #0
+    ldrb w9, [x21]
+    ldrb w10, [x21, #1]
+    cbz w9, .Los_open_write_only
+    cbz w10, .Los_open_flags
+    mov w1, #2
+    b .Los_open_flags
+.Los_open_write_only:
+    cbz w10, .Los_open_flags
+    mov w1, #1
+.Los_open_flags:
+    ldrb w9, [x21, #2]
+    cbz w9, .Los_open_truncate
+    orr w1, w1, #0x200
+.Los_open_truncate:
+    ldrb w9, [x21, #3]
+    cbz w9, .Los_open_append
+    orr w1, w1, #0x400
+.Los_open_append:
+    ldrb w9, [x21, #4]
+    cbz w9, .Los_open_call
+    orr w1, w1, #0x8
+.Los_open_call:
+    orr w1, w1, #0x1000000
+    mov x2, #0x1b6
+    sys 5
+    str x22, [x20, #16]
+    tbnz x0, #63, .Los_open_errno
+    str x0, [x19]
+    b .Los_open_done
+.Los_open_errno:
+    neg w0, w0
+    bl np_error
+    str w0, [x19, #8]
+    b .Los_open_done
+.Los_open_oom:
+    str x22, [x20, #16]
+    movz w9, #0xaadc
+    movk w9, #0x6979, lsl #16
+    str w9, [x19, #8]
+.Los_open_done:
+    ldp x21, x22, [sp, #32]
+    ldp x19, x20, [sp, #16]
+    ldp x29, x30, [sp], #48
+    ret
+
+// os.seek(file: *File, offset, whence) -> (usize, err).
+.global neper_os_seek
+neper_os_seek:
+    cmp w2, #2
+    b.hi .Lseek_failed
+    ldr x0, [x0]
+    sys 199
+    tbnz x0, #63, .Lseek_failed
+    mov x1, #0
+    ret
+.Lseek_failed:
+    mov x0, #0
+    movz w1, #0x7ebf
+    movk w1, #0x6f77, lsl #16
+    ret
+
+// os.args: the result ([]str, err) at x0. The table `neper_start` built is kept in the slot
+// at the start of __DATA, the literal at neper_start_args holding its distance.
+.global neper_os_args
+neper_os_args:
+    adr x9, .Lstart_args
+    ldr x10, [x9]
+    add x9, x9, x10
+    ldp x2, x3, [x9]
+    stp x2, x3, [x0]
+    str wzr, [x0, #16]
+    ret
+
+// os.clock(kind) -> (u64, err): nanoseconds of the wall or monotonic clock. The wall clock
+// is gettimeofday; the monotonic one is the virtual counter every Apple Silicon core lets
+// user code read, scaled by its own frequency register.
+.global neper_os_clock
+neper_os_clock:
+    cmp w0, #1
+    b.hi .Lclock_unsupported
+    movz x3, #0xca00
+    movk x3, #0x3b9a, lsl #16
+    cbnz w0, .Lclock_monotonic
+    sub sp, sp, #16
+    mov x0, sp
+    mov x1, #0
+    mov x2, #0
+    sys 116
+    tbnz x0, #63, .Lclock_failed_pop
+    ldr x0, [sp]
+    ldr w2, [sp, #8]
+    add sp, sp, #16
+    mov x4, #1000
+    mul x2, x2, x4
+    madd x0, x0, x3, x2
+    mov x1, #0
+    ret
+.Lclock_failed_pop:
+    add sp, sp, #16
+.Lclock_failed:
+    mov x0, #0
+    movz w1, #0x7ebf
+    movk w1, #0x6f77, lsl #16
+    ret
+.Lclock_monotonic:
+    mrs x9, cntvct_el0
+    mrs x10, cntfrq_el0
+    cbz x10, .Lclock_failed
+    udiv x11, x9, x10
+    msub x12, x11, x10, x9
+    mul x11, x11, x3
+    mul x12, x12, x3
+    udiv x12, x12, x10
+    add x0, x11, x12
+    mov x1, #0
+    ret
+.Lclock_unsupported:
+    mov x0, #0
+    movz w1, #0xb651
+    movk w1, #0x2f8b, lsl #16
+    ret

@@ -12,7 +12,7 @@ jobs:
         run: |
           sw_vers; uname -m
           status=0
-          for name in hello imp; do
+          for name in hello imp os1; do
             cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
             echo "== $name"; codesign --verify --verbose=4 /tmp/$name 2>&1 || true
             set +e; /tmp/$name; code=$?; set -e

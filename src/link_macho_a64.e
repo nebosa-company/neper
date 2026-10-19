@@ -82,7 +82,7 @@ fn runtime_limit(builder: *nir.Builder, relocations: []codegen_x64.Relocation, r
 
 // The code, the runtime and the symbol table from `code_offset` (a page), the main call and
 // every relocation but a global's patched. `entry_address` gets the runtime's entry.
-fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, got_address: usize, output: *emit_x64.Buffer, entry_address: *usize) -> err {
+fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, data_address: usize, output: *emit_x64.Buffer, entry_address: *usize) -> err {
     let (main_index, main_error) = link_elf.find_main(builder)
     if main_error != ok { ret main_error }
     try link_elf.pad_to(output, code_offset)
@@ -107,6 +107,10 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
     *entry_address = MACHO_BASE + runtime_start + entry
     try emit_a64.patch_relative(output, runtime_start + main_call, machine_start + function_offsets[main_index])
     if builder.arena_bytes != 0usize { try link_elf.patch_little_u64(output, runtime_start + arena_literal, builder.arena_bytes) }
+    // The argument slot's distance from its own literal, both as file offsets.
+    let (args_literal, has_args_literal) = runtime_macos_a64.symbol_offset("neper_start_args")
+    if !has_args_literal { ret InvalidImage }
+    try link_elf.patch_little_u64(output, runtime_start + args_literal, (data_address -% MACHO_BASE) -% (runtime_start + args_literal))
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         let relocation = relocations[relocation_at]
@@ -121,7 +125,7 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
                     let (library, slot_entry, is_import) = nir.import_slot_of(builder, relocation.function_ref)
                     if is_import {
                         let flat = nir.import_flat_index(builder, library, slot_entry)
-                        try emit_a64.patch_page(output, site, MACHO_BASE + site, got_address + flat * 8usize)
+                        try emit_a64.patch_page(output, site, MACHO_BASE + site, data_address + 16usize + flat * 8usize)
                         relocations[relocation_at].resolved = true
                         relocation_at += 1usize
                         continue
@@ -381,7 +385,7 @@ fn append_fixups(builder: *nir.Builder, output: *emit_x64.Buffer, base: usize, s
         try link_elf.little_u16(output, pages)
         var page = 0usize
         while page < pages {
-            if page == 0usize { try link_elf.little_u16(output, 0usize) } else { try link_elf.little_u16(output, 65535usize) }
+            if page == 0usize { try link_elf.little_u16(output, 16usize) } else { try link_elf.little_u16(output, 65535usize) }
             page += 1usize
         }
         try link_elf.pad_to(output, base + imports_offset)
@@ -430,7 +434,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let imports = nir.import_symbol_total(builder)
     if imports > 2048usize { ret InvalidImage }
     let has_globals = nir.live_global_count(builder) != 0usize
-    let has_data = has_globals || imports != 0usize
+    let has_data = true
     // __PAGEZERO, __TEXT, __DATA when there are slots or globals, __LINKEDIT, then LC_MAIN,
     // LC_LOAD_DYLINKER, LC_LOAD_DYLIB for libSystem and for each other library, LC_SYMTAB,
     // LC_DYSYMTAB, the chained fixups, LC_BUILD_VERSION and LC_CODE_SIGNATURE.
@@ -451,7 +455,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     var data_end = text_size
     if has_data {
         // The slots first, the globals after them.
-        let globals_offset = link_elf.align_up_to(data_offset + imports * 8usize, 16usize)
+        let globals_offset = link_elf.align_up_to(data_offset + 16usize + imports * 8usize, 16usize)
         var data_bytes = globals_offset - data_offset
         if has_globals { data_bytes += nir.global_area_size(builder) }
         data_end = data_offset + link_elf.align_up_to(data_bytes, MACHO_PAGE)
@@ -460,6 +464,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         try place_code(builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + data_offset, output, &entry_address)
         if output.count != text_end { ret InvalidImage }
         try link_elf.pad_to(output, data_offset)
+        try link_elf.pad_to(output, data_offset + 16usize)
         try append_slots(output, imports)
         try link_elf.pad_to(output, globals_offset)
         if has_globals {

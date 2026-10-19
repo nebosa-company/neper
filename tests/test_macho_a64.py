@@ -114,7 +114,7 @@ class MachOImport(unittest.TestCase):
                 data = struct.unpack_from("<QQQQ", image, position + 24)
             position += length
         self.assertIsNotNone(data)
-        slot = struct.unpack_from("<Q", image, data[2])[0]
+        slot = struct.unpack_from("<Q", image, data[2] + 16)[0]
         self.assertEqual(slot, 1 << 63)  # bind, ordinal 0, end of chain
 
 
