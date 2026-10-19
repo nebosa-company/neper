@@ -729,7 +729,7 @@ type Ps = struct {
     mode: u8, orig_mode: u8,
     head: NodeId, form: NodeId, ctx: NodeId, fragment: bool,
     frameset_ok: bool, foster: bool, quirks: u8, ignore_lf: bool, stopped: bool, scripting: bool,
-    pend: []u8, npend: usize
+    pend: []u8, npend: usize, xml: bool
 }
 
 fn nm_in(set: str, name: str) -> bool {
@@ -3540,15 +3540,26 @@ fn ps_new(a: *mem.Arena, source: str, options: Options) -> (Ps, err) {
     let nodes = try mem.alloc[Node](a, options.max_nodes)
     let open = try mem.alloc[NodeId](a, usize(options.max_depth) + 1usize)
     let fmt_list = try mem.alloc[NodeId](a, usize(options.max_depth) + 1usize)
-    var p = Ps { a: a, src: src, pos: 0usize, nodes: nodes, used: 0usize, options: options, ts: TS_DATA, last_start: "", open: open, nopen: 0usize, fmt: fmt_list, nfmt: 0usize, tmodes: zero, ntmodes: 0usize, mode: M_INITIAL, orig_mode: M_INITIAL, head: NONE, form: NONE, ctx: NONE, fragment: false, frameset_ok: true, foster: false, quirks: Q_NO, ignore_lf: false, stopped: false, scripting: false, pend: zero, npend: 0usize }
+    var p = Ps { a: a, src: src, pos: 0usize, nodes: nodes, used: 0usize, options: options, ts: TS_DATA, last_start: "", open: open, nopen: 0usize, fmt: fmt_list, nfmt: 0usize, tmodes: zero, ntmodes: 0usize, mode: M_INITIAL, orig_mode: M_INITIAL, head: NONE, form: NONE, ctx: NONE, fragment: false, frameset_ok: true, foster: false, quirks: Q_NO, ignore_lf: false, stopped: false, scripting: false, pend: zero, npend: 0usize, xml: xml_syntax }
     ret (p, ok)
 }
+
+// Documents served as XHTML close any element written `<x/>`; set by the host around a parse.
+var xml_syntax: bool = false
+
+fn set_xml_syntax(on: bool) { xml_syntax = on }
 
 fn tb_run(p: *Ps) -> err {
     var tk: Tok = zero
     while !p.stopped {
         try tk_next(p, &tk)
         try tb_process(p, &tk)
+        if p.xml && tk.kind == .Start && tk.self_closing && !is_void(tk.name) && p.nopen > 0usize {
+            var et: Tok = zero
+            et.kind = .End
+            et.name = tk.name
+            try tb_process(p, &et)
+        }
         if tk.kind == .Eof { break }
     }
     ret ok

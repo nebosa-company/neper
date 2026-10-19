@@ -983,7 +983,9 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
         ret (zero, NotRenderable)
     }
     // The browser runs scripts, so <noscript> content is not rendered.
+    html.set_xml_syntax(str.eq(p.mime, "application/xhtml+xml"))
     let (tree, pe) = dom.parse_with(a, source, view.parse_options(), 262144usize, true)
+    html.set_xml_syntax(false)
     if pe != ok { ret (zero, LoadFailed) }
     p.tree = tree
     // <base href> changes the base for relative references.

@@ -233,7 +233,8 @@ fn mime_of_extension(path: str) -> str {
     while dot > 0usize && path[dot - 1usize] != 46u8 && path[dot - 1usize] != 47u8 { dot -= 1usize }
     if dot == 0usize || path[dot - 1usize] != 46u8 { ret "application/octet-stream" }
     let ext = path[dot..]
-    if eq_fold(ext, "html") || eq_fold(ext, "htm") || eq_fold(ext, "xht") || eq_fold(ext, "xhtml") { ret "text/html" }
+    if eq_fold(ext, "html") || eq_fold(ext, "htm") { ret "text/html" }
+    if eq_fold(ext, "xht") || eq_fold(ext, "xhtml") { ret "application/xhtml+xml" }
     if eq_fold(ext, "css") { ret "text/css" }
     if eq_fold(ext, "js") { ret "text/javascript" }
     if eq_fold(ext, "json") { ret "application/json" }
