@@ -64,11 +64,8 @@ fn string_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 }
 
 fn from_char_code(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    let (b, be) = str.builder(it.a, args.len * 3usize + 4usize)
-    if be != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
-    var out = b
     var i = 0usize
-    // Units are collected first (a builder must stay on top of the arena), then paired up.
+    // Units are collected first (a builder must stay on top of the arena, and the coercions run script), then paired up.
     var units_buf: [64]u32 = zero
     var n = 0usize
     var pending: u32 = 0u32
@@ -80,6 +77,9 @@ fn from_char_code(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
         n += 1usize
         i += 1usize
     }
+    let (b, be) = str.builder(it.a, args.len * 3usize + 4usize)
+    if be != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    var out = b
     var k = 0usize
     while k < n {
         let u2 = units_buf[k]
