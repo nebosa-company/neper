@@ -2804,4 +2804,5 @@ D5168	1243	macOS gets Dir, env and spawn: a seeded env_block, posix_spawn, and a
 D5169	987	macOS threads are libSystem's pthreads, bound through slots the linker adds for the runtime
 D5170	659	macOS futex words are __ulock_wait and __ulock_wake
 D5171	759	macOS file mappings are mmap over reserved address space
-D5172	989	macOS process groups are made by posix_spawn, not by setpgid afterwards
+D5172	990	macOS process groups are made by posix_spawn, not by setpgid afterwards
+D5173	992	the x64 macOS monotonic clock is clock_gettime_nsec_np(CLOCK_UPTIME_RAW), through the runtime's import table
