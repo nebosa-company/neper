@@ -195,7 +195,8 @@ fn sig_digits(it: *js.Interp, x: f64, sig: usize) -> (str, i64) {
     if ax < 1e21f64 {
         let pe = str.push_f64_fixed(&out, ax, 99u8)
     } else {
-        let pe2 = str.push_f64(&out, ax)
+        // The exact integer value, not the shortest text that reads back as it: rounding to `sig` digits needs every digit.
+        let pe2 = str.push_f64_fixed(&out, ax, 0u8)
     }
     let text = str.done(&out)
     // Collect all digits and the position of the decimal point.
