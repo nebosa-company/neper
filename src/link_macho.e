@@ -135,7 +135,7 @@ fn runtime_limit(x64: bool, builder: *nir.Builder, relocations: []codegen_x64.Re
 
 // The code, the runtime and the symbol table from `code_offset` (a page), the main call and
 // every relocation but a global's patched. `entry_address` gets the runtime's entry.
-fn place_code(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, data_address: usize, output: *emit_x64.Buffer, entry_address: *usize) -> err {
+fn place_code(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, data_address: usize, output: *emit_x64.Buffer, entry_address: *usize, threads: *bool) -> err {
     let (main_index, main_error) = link_elf.find_main(builder)
     if main_error != ok { ret main_error }
     try link_elf.pad_to(output, code_offset)
@@ -164,6 +164,20 @@ fn place_code(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, funct
     let (args_literal, has_args_literal) = runtime_symbol(x64, "neper_start_args")
     if !has_args_literal { ret InvalidImage }
     try link_elf.patch_little_u64(output, runtime_start + args_literal, (data_address -% MACHO_BASE) -% (runtime_start + args_literal))
+    // The thread primitives call libSystem through three more slots, after the program's own;
+    // their table is in the runtime only when one of them is.
+    *threads = false
+    let (thread_table, has_thread_table) = runtime_symbol(x64, "neper_thread_imports")
+    if has_thread_table && thread_table + 24usize <= limit {
+        *threads = true
+        var thread_at = 0usize
+        while thread_at < 3usize {
+            let slot_address = data_address + MACHO_SLOT + (nir.import_symbol_total(builder) + thread_at) * 8usize
+            let literal = runtime_start + thread_table + 8usize * thread_at
+            try link_elf.patch_little_u64(output, literal, (slot_address -% MACHO_BASE) -% literal)
+            thread_at += 1usize
+        }
+    }
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         let relocation = relocations[relocation_at]
@@ -397,9 +411,29 @@ fn fixups_size(builder: *nir.Builder, segment_count: usize, data_size: usize, im
     if imports != 0usize { segment_size = 22usize + 2usize * pages }
     let imports_offset = link_elf.align_up_to(segment_starts + segment_size, 8usize)
     var strings = 0usize
-    if imports != 0usize { strings = symbols_size(builder) }
+    if imports != 0usize { strings = symbols_size(builder) + extra_names_size(imports - nir.import_symbol_total(builder)) }
     ret link_elf.align_up_to(imports_offset + 4usize * imports + strings, 8usize)
 }
+
+// The libSystem functions the runtime's thread primitives call, bound like any import: their
+// slots follow the program's own, in this order.
+fn runtime_import_name(k: usize) -> str {
+    if k == 0usize { ret "pthread_create" }
+    if k == 1usize { ret "pthread_join" }
+    ret "pthread_detach"
+}
+
+fn extra_name_offset(k: usize) -> usize {
+    var offset = 0usize
+    var at = 0usize
+    while at < k {
+        offset += runtime_import_name(at).len + 2usize
+        at += 1usize
+    }
+    ret offset
+}
+
+fn extra_names_size(extra: usize) -> usize { ret extra_name_offset(extra) }
 
 // The chained-fixups blob (dyld_chained_fixups_header) at file offset `base`: one chain
 // over the import slots at the start of __DATA, each a DYLD_CHAINED_PTR_64 bind to its
@@ -451,6 +485,12 @@ fn append_fixups(builder: *nir.Builder, output: *emit_x64.Buffer, base: usize, s
             }
             library += 1usize
         }
+        let user_imports = nir.import_symbol_total(builder)
+        var runtime_at = 0usize
+        while user_imports + runtime_at < imports {
+            try emit_x64.little_u32(output, 1usize | ((symbols_size(builder) + extra_name_offset(runtime_at)) << 9usize))
+            runtime_at += 1usize
+        }
         try emit_x64.byte(output, 0usize)
         library = 0usize
         while library < nir.import_library_count(builder) {
@@ -462,6 +502,13 @@ fn append_fixups(builder: *nir.Builder, output: *emit_x64.Buffer, base: usize, s
                 entry += 1usize
             }
             library += 1usize
+        }
+        runtime_at = 0usize
+        while user_imports + runtime_at < imports {
+            try emit_x64.byte(output, 95usize)
+            try link_elf.append_text(output, runtime_import_name(runtime_at))
+            try emit_x64.byte(output, 0usize)
+            runtime_at += 1usize
         }
     }
     ret ok
@@ -498,27 +545,30 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
     // The header and its commands fill the first page; the code starts on the second.
     let code_offset = MACHO_PAGE
     var entry_address = 0usize
+    var threads = false
     // The code is placed first into the output only to measure it, then again once the
     // slots' addresses are known; the header is written over the page left for it.
     try link_elf.pad_to(output, code_offset)
-    try place_code(x64, builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + 268435456usize, output, &entry_address)
+    try place_code(x64, builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + 268435456usize, output, &entry_address, &threads)
     let text_end = output.count
+    var slots = imports
+    if threads { slots = imports + 3usize }
     let text_size = link_elf.align_up_to(text_end, MACHO_PAGE)
     let data_offset = text_size
     var data_end = text_size
     if has_data {
         // The slots first, the globals after them.
-        let globals_offset = link_elf.align_up_to(data_offset + MACHO_SLOT + imports * 8usize, 16usize)
+        let globals_offset = link_elf.align_up_to(data_offset + MACHO_SLOT + slots * 8usize, 16usize)
         var data_bytes = globals_offset - data_offset
         if has_globals { data_bytes += nir.global_area_size(builder) }
         data_end = data_offset + link_elf.align_up_to(data_bytes, MACHO_PAGE)
         output.count = code_offset
         link_elf_a64.clear_resolved_imports(builder, relocations, relocation_count)
-        try place_code(x64, builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + data_offset, output, &entry_address)
+        try place_code(x64, builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + data_offset, output, &entry_address, &threads)
         if output.count != text_end { ret InvalidImage }
         try link_elf.pad_to(output, data_offset)
         try link_elf.pad_to(output, data_offset + MACHO_SLOT)
-        try append_slots(output, imports)
+        try append_slots(output, slots)
         try link_elf.pad_to(output, globals_offset)
         if has_globals {
             try link_elf.append_globals(builder, output, globals_offset)
@@ -533,13 +583,13 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
     // on, an empty symbol table, then the signature, whose hash covers all before it.
     let linkedit_offset = data_end
     let data_index = 2usize
-    let fixups_bytes = fixups_size(builder, segment_count, data_end - data_offset, imports)
+    let fixups_bytes = fixups_size(builder, segment_count, data_end - data_offset, slots)
     let strings_offset = linkedit_offset + fixups_bytes
     let signature_offset = link_elf.align_up_to(strings_offset + 8usize, 16usize)
     let directory = directory_size(signature_offset)
     let signature_size = 20usize + directory
     let linkedit_size = signature_offset - linkedit_offset + signature_size
-    try append_fixups(builder, output, linkedit_offset, segment_count, data_index, data_offset, data_end - data_offset, imports)
+    try append_fixups(builder, output, linkedit_offset, segment_count, data_index, data_offset, data_end - data_offset, slots)
     try link_elf.pad_to(output, linkedit_offset + fixups_bytes)
     try emit_x64.byte(output, 32usize)
     try link_elf.pad_to(output, signature_offset)

@@ -908,3 +908,91 @@ neper_os_wait:
     movk w1, #0x6f77, lsl #16
     ldp x29, x30, [sp], #32
     ret
+
+// Threads are libSystem's: pthread_create, pthread_join and pthread_detach, which dyld binds
+// into three slots the linker adds after the program's own imports whenever one of the
+// functions below is reached. Each word of this table holds its distance from itself to its
+// slot, patched by the linker.
+.global neper_thread_imports
+neper_thread_imports:
+.Lthread_imports:
+    .quad 0, 0, 0
+
+// x9 = 8 * the index of the pthread function: its address, in x9. Clobbers x10, x11.
+np_pthread:
+    adr x10, .Lthread_imports
+    add x10, x10, x9
+    ldr x11, [x10]
+    add x10, x10, x11
+    ldr x9, [x10]
+    ret
+
+// os.thread_create: the result {Thread, err} at x0, the entry at x1, its context at x2, the
+// stack size at x3. The pthread's own default stack is used; the size is not honoured.
+// ponytail: pthread_attr_setstacksize would need two more imports.
+.global neper_os_thread_create
+neper_os_thread_create:
+    stp x29, x30, [sp, #-32]!
+    mov x29, sp
+    str x19, [sp, #16]
+    mov x19, x0
+    mov x3, x2
+    mov x2, x1
+    mov x1, #0
+    add x0, sp, #24
+    mov x9, #0
+    bl np_pthread
+    blr x9
+    cbnz w0, .Lthread_create_failed
+    ldr x9, [sp, #24]
+    str x9, [x19]
+    str wzr, [x19, #8]
+    b .Lthread_create_out
+.Lthread_create_failed:
+    str xzr, [x19]
+    movz w9, #0x7ebf
+    movk w9, #0x6f77, lsl #16
+    str w9, [x19, #8]
+.Lthread_create_out:
+    ldr x19, [sp, #16]
+    ldp x29, x30, [sp], #32
+    ret
+
+// os.thread_join(thread: *Thread) -> err.
+.global neper_os_thread_join
+neper_os_thread_join:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    ldr x0, [x0]
+    cbz x0, .Lthread_join_failed
+    mov x1, #0
+    mov x9, #8
+    bl np_pthread
+    blr x9
+    cbnz w0, .Lthread_join_failed
+    ldp x29, x30, [sp], #16
+    ret
+.Lthread_join_failed:
+    movz w0, #0x7ebf
+    movk w0, #0x6f77, lsl #16
+    ldp x29, x30, [sp], #16
+    ret
+
+// os.thread_detach(thread: *Thread) -> err.
+.global neper_os_thread_detach
+neper_os_thread_detach:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    ldr x0, [x0]
+    cbz x0, .Lthread_detach_failed
+    mov x9, #16
+    bl np_pthread
+    blr x9
+    cbnz w0, .Lthread_detach_failed
+    ldp x29, x30, [sp], #16
+    ret
+.Lthread_detach_failed:
+    movz w0, #0x7ebf
+    movk w0, #0x6f77, lsl #16
+    ldp x29, x30, [sp], #16
+    ret

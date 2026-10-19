@@ -1276,3 +1276,88 @@ neper_os_wait:
     mov edx, 0x6f777ebf
     add rsp, 24
     ret
+
+# Threads are libSystem's: pthread_create, pthread_join and pthread_detach, which dyld binds
+# into three slots the linker adds after the program's own imports whenever one of the
+# functions below is reached. Each word of this table holds its distance from itself to its
+# slot, patched by the linker.
+.global neper_thread_imports
+neper_thread_imports:
+.Lthread_imports:
+    .quad 0, 0, 0
+
+# rax = 8 * the index of the pthread function: its address, in rax. Clobbers r10.
+np_pthread:
+    lea r10, [rip+.Lthread_imports]
+    add r10, rax
+    mov rax, QWORD PTR [r10]
+    add r10, rax
+    mov rax, QWORD PTR [r10]
+    ret
+
+# os.thread_create: rdi = the result {Thread, err}, rsi = the entry, rdx = its context, rcx =
+# the stack size. The pthread's own default stack is used; the size is not honoured.
+.global neper_os_thread_create
+neper_os_thread_create:
+    push rbx
+    sub rsp, 16
+    mov rbx, rdi
+    mov rcx, rdx
+    mov rdx, rsi
+    xor esi, esi
+    mov rdi, rsp
+    xor eax, eax
+    call np_pthread
+    call rax
+    test eax, eax
+    jne .Lthread_create_failed
+    mov rax, QWORD PTR [rsp]
+    mov QWORD PTR [rbx], rax
+    mov DWORD PTR [rbx+8], 0
+    jmp .Lthread_create_out
+.Lthread_create_failed:
+    mov QWORD PTR [rbx], 0
+    mov DWORD PTR [rbx+8], 0x6f777ebf
+.Lthread_create_out:
+    add rsp, 16
+    pop rbx
+    ret
+
+# os.thread_join(thread: *Thread) -> err.
+.global neper_os_thread_join
+neper_os_thread_join:
+    sub rsp, 8
+    mov rdi, QWORD PTR [rdi]
+    test rdi, rdi
+    je .Lthread_join_failed
+    xor esi, esi
+    mov eax, 8
+    call np_pthread
+    call rax
+    test eax, eax
+    jne .Lthread_join_failed
+    add rsp, 8
+    ret
+.Lthread_join_failed:
+    mov eax, 0x6f777ebf
+    add rsp, 8
+    ret
+
+# os.thread_detach(thread: *Thread) -> err.
+.global neper_os_thread_detach
+neper_os_thread_detach:
+    sub rsp, 8
+    mov rdi, QWORD PTR [rdi]
+    test rdi, rdi
+    je .Lthread_detach_failed
+    mov eax, 16
+    call np_pthread
+    call rax
+    test eax, eax
+    jne .Lthread_detach_failed
+    add rsp, 8
+    ret
+.Lthread_detach_failed:
+    mov eax, 0x6f777ebf
+    add rsp, 8
+    ret
