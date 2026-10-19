@@ -206,9 +206,6 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.ctX = 0i64
     h.ct_stop = false
     h.ct_cyc = false
-    h.ct_att = false
-    h.sd_a = -1i64
-    h.sd_b = -1i64
     if s.cleartype && !composite && bw_adv > 0i64 {
         h.ctX = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
         if top_gid != gid {

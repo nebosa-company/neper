@@ -64,7 +64,7 @@ type Hinter = struct {
     code_lo: usize, code_hi: usize, ip: usize, depth: usize, steps: usize,
     ppem: i64, xs: i64, cleartype: bool, composite: bool,
     sr_per: i64, sr_phase: i64, sr_thr: i64,
-    ctA: i64, ctX: i64, ctOff: i64, ran: bool, ct_stop: bool, ct_cyc: bool, ct_att: bool, sd_a: i64, sd_b: i64
+    ctA: i64, ctX: i64, ctOff: i64, ran: bool, ct_stop: bool, ct_cyc: bool
 }
 // What `hint_glyph` answers: the points of the outline (x, y interleaved, 26.6, x relative to the glyph's left phantom point),
 // whether each is on the curve (bit 0 of `tags`), the last point of each contour, the glyph's advance in this mode and the
@@ -609,8 +609,6 @@ fn vm_norm14(x: i64, y: i64) -> (i64, i64) {
 
 // The unit vector of the line between two points, `which` 0 the projection (and dual) vector, 1 the freedom vector.
 fn vm_line_vec(h: *Hinter, perpendicular: bool, org: bool, p1: i64, p2: i64, which: i64) {
-    h.sd_a = p1
-    h.sd_b = p2
     let z1 = &h.zone[h.gs.gep1]
     let z2 = &h.zone[h.gs.gep2]
     if p1 < 0i64 || p2 < 0i64 || p2 >= i64(z1.n) || p1 >= i64(z2.n) {
@@ -804,20 +802,13 @@ fn ct_derive_y(h: *Hinter, p: usize, r: usize) {
     if h.gs.proj_x == 0i64 && h.gs.proj_y == 16384i64 { ret }
     let z = &h.zone[1usize]
     if p + 4usize > z.n { ret }
-    h.ct_att = true
-    var nf = 0i64
     var q = 0usize
     while q + 4usize < z.n {
-        if z.mp[q] == i64(p) + 1i64 && !z.ipd[q] { nf += 1i64 }
+        if z.mp[q] == i64(p) + 1i64 && !z.ipd[q] {
+            h.ct_cyc = true
+            break
+        }
         q += 1usize
-    }
-    if nf > 0i64 { h.ct_cyc = true }
-    if feat_on {
-        var af = false
-        var bf = false
-        if h.sd_a >= 0i64 && usize(h.sd_a) + 4usize < z.n { af = ct_follows(z, usize(h.sd_a), p) && usize(h.sd_a) != p }
-        if h.sd_b >= 0i64 && usize(h.sd_b) + 4usize < z.n { bf = ct_follows(z, usize(h.sd_b), p) && usize(h.sd_b) != p }
-        let e14 = io.printf["FEAT code {} T {} R {} a {} b {} mp {} ipd {} mdap {} nfoll {} rfoll {} afoll {} bfoll {}\n"](feat_code, p, r, h.sd_a, h.sd_b, z.mp[p], z.ipd[p], (z.tags[p] & 512i64) != 0i64, nf, ct_follows(z, r, p), af, bf)
     }
     if ct_live(z, p) && !ct_follows(z, r, p) { ret }
     ct_derive(h, p, r, 0i64)
@@ -965,8 +956,7 @@ fn ct_resolve(h: *Hinter, p: usize, depth: usize) {
 // rule, found with synthetic fonts: every point that follows another moves by its own share, round(x * (A - X) / X) at the x it has,
 // and only the points no instruction set against another keep their shift of nought.
 fn ct_cycles(h: *Hinter) {
-    if ct_mode == 1i64 { ret }
-    if !(h.ct_cyc || (ct_mode == 2i64 && h.ct_att)) { ret }
+    if !h.ct_cyc { ret }
     let z = &h.zone[1usize]
     let npt = z.n - 4usize
     var p = 0usize
@@ -1429,7 +1419,6 @@ fn vm_mdap(h: *Hinter, round: bool) {
         d = vm_round(h, cur) - cur
     }
     vm_move(h, h.gs.gep0, pi, d)
-    if vm_is_x(h) && h.gs.gep0 == 1usize { h.zone[1usize].tags[pi] = h.zone[1usize].tags[pi] | 512i64 }
     h.gs.rp0 = p
     h.gs.rp1 = p
 }
@@ -1760,12 +1749,6 @@ var cut_here: bool = zero
 fn set_cut_here(b: bool) { cut_here = b }
 
 var trace_on: bool = zero
-var feat_on: bool = zero
-var ct_mode: i64 = zero
-fn set_feat(on: bool) { feat_on = on }
-var feat_code: i64 = zero
-fn set_feat_code(c: i64) { feat_code = c }
-fn set_ct_mode(m: i64) { ct_mode = m }
 var trace_before: [800]i64 = zero
 
 fn set_trace(on: bool) { trace_on = on }
