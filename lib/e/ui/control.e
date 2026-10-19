@@ -2152,24 +2152,34 @@ fn appeared_share(t: *const Theme, key: widget.Key, millis: u32) -> f32 {
 // an avatar): a dot with its centre 3 in from the corner, a count 2 above the top
 // and starting 12 before the end; the stack stands 2 taller to hold it.
 fn badge_anchor(a: *mem.Arena, key: widget.Key, anchor: widget.Node, side: f32, mark: widget.Node, dot: bool) -> (widget.Node, err) {
+    let (placed, placed_error) = badge_anchor_by(a, key, anchor, side, mark, dot, 0.0)
+    ret (placed, placed_error)
+}
+
+// `badge_anchor` with the badge `along` further toward the end (a navigation bar destination holds its count 2 dp further out).
+fn badge_anchor_by(a: *mem.Arena, key: widget.Key, anchor: widget.Node, side: f32, mark: widget.Node, dot: bool, along: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[2usize] = anchor
     parts[3usize] = mark
-    parts[0usize] = widget.positioned(0u64, 0.0, 2.0, style.defaults(), parts[2usize..3usize])
+    // The Android look's count badge (16 dp wide) starts 12 in, past the icon's 24: the stack is 16 wider, the icon 8 in, so that the
+    // badge is not squeezed to what is left of the icon's width.
+    var pad: f32 = 0.0
+    if looks_material_icons { pad = 8.0 }
+    parts[0usize] = widget.positioned(0u64, pad, 2.0, style.defaults(), parts[2usize..3usize])
     // The Android look (M3 badge on an icon): a dot starts 15 in from the start, a count 12 in and 4 above the icon.
     var dot_x = side - 6.0
     var count_y: f32 = 0.0
     if looks_material_icons {
         dot_x = side - 9.0
-        count_y = -2.0
+        count_y = -3.0
     }
     if dot {
-        parts[1usize] = widget.positioned(0u64, dot_x, 2.0, style.defaults(), parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, pad + dot_x, 2.0, style.defaults(), parts[3usize..4usize])
     } else {
-        parts[1usize] = widget.positioned(0u64, side - 12.0, count_y, style.defaults(), parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, pad + side - 12.0 + along, count_y, style.defaults(), parts[3usize..4usize])
     }
-    ret (widget.stack(key, sized_style(side, side + 2.0), parts[0usize..2usize]), ok)
+    ret (widget.stack(key, sized_style(side + 2.0 * pad, side + 2.0), parts[0usize..2usize]), ok)
 }
 
 // An anchor's name with its badge's meaning (D971): "Builds, 2 failed".
@@ -2418,6 +2428,7 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 // whichever element the keyboard focuses, so a control need only hand it the look.
 fn focus_look(t: *const Theme) {
     widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux)
+    widget.set_skia_corners(t.tokens.profile == .MaterialLike)
     scene.set_fine_curves(t.tokens.profile == .Linux)
     scene.set_cff_text(t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
@@ -7920,6 +7931,13 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     }
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
+    if t.tokens.profile == .MaterialLike {
+        // The query field is the bar less its padding, the 24 dp icon and the clear button, as wide as that and no more (a percentage of
+        // an unsized stack would ask for the field's intrinsic width and squeeze the icon).
+        var room = options.width - lead - trail - 24.0 - 16.0
+        if len != 0usize { room = room - 16.0 - 40.0 }
+        editor_style.width = style.Length { Px: max_zero(room) }
+    }
     editor_style.min_height = style.Length { Px: line }
     layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: material_caret(t), untabbed: false, ringed: false }, editor_style)
     var search_name = options.placeholder
@@ -9627,6 +9645,8 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             var inner_style = style.defaults()
             inner_style.height = style.Length { Flex: 1.0 }
             inner_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+            // md-secondary-tab centres the label in the whole 48 dp, the 2 dp indicator drawn over its foot.
+            if t.tokens.profile == .MaterialLike { inner_style.padding.top = style.Length { Px: 2.0 } }
             let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, inner_style, inner[0usize..1usize])
@@ -9643,6 +9663,15 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.spacer(0u64, 1.0)
             parts[1usize] = label_node
+            // md-primary-tab centres the label in the whole 48 dp, the indicator drawn over its foot.
+            if t.tokens.profile == .MaterialLike {
+                let (low, low_error) = mem.alloc[widget.Node](a, 1usize)
+                if low_error != ok { ret (zero, TooLarge) }
+                low[0usize] = label_node
+                var low_style = style.defaults()
+                low_style.margin.top = style.Length { Px: 3.0 }
+                parts[1usize] = widget.box(0u64, low_style, low[0usize..1usize])
+            }
             parts[2usize] = widget.spacer(0u64, 1.0)
             parts[3usize] = widget.box(0u64, mark, zero)
             var column_style = style.defaults()
@@ -11524,6 +11553,8 @@ fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind
         layer_ink = words
         look.border_width = 0.0
     }
+    // md-filter-chip, md-input-chip and md-suggestion-chip set their label in on-surface-variant (assist: on-surface).
+    if t.tokens.profile == .MaterialLike && kind != .Assist && !chosen && !tinted { words = style.color(t.tokens, .OnSurfaceVariant) }
     if elevated && !chosen && !tinted {
         fill = style.color(t.tokens, .SurfaceContainerLow)
         look.border_width = 0.0
@@ -11553,6 +11584,8 @@ fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind
     look.custom_padding = true
     look.padding = 16.0
     look.padding_y = max_zero((height - look.border_width * 2.0 - style.text_style(t.tokens, .Label).line_height) * 0.5)
+    // Blink puts the label line at the border plus the padding: 6 dp under the 32 dp chip, outlined or not.
+    if t.tokens.profile == .MaterialLike { look.padding_y = max_zero((height - style.text_style(t.tokens, .Label).line_height) * 0.5) }
     look.min_height = height
     var caption = text_options()
     caption.role = .Label
@@ -19553,7 +19586,9 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     let (message_held, message_held_error) = mem.alloc[widget.Node](a, 1usize)
     if message_held_error != ok { ret (zero, TooLarge) }
     message_held[0usize] = message
-    var grown = widget.padded(0u64, 0.0, 14.0, 0.0, 14.0, style.defaults(), message_held[0usize..1usize])
+    // A browser breaks a line at its advance width, the text layout here at its ink extent (a little less): 4 dp of margin keep the
+    // same words on each line as md-snackbar's.
+    var grown = widget.padded(0u64, 0.0, 14.0, 4.0, 14.0, style.defaults(), message_held[0usize..1usize])
     grown.style.width = style.Length { Flex: 1.0 }
     parts[0usize] = grown
     var at = 1usize
@@ -19578,7 +19613,7 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     sheet.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, sheet, parts[0usize..at])
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, sheet, parts[0usize..at])
     var sem: widget.Semantics = zero
     sem.role = 26u8
     sem.label = text_value
@@ -23614,8 +23649,10 @@ fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bo
     let (pb, pb_error) = geometry.path_builder(g.arena, 48usize, 160usize)
     if pb_error != ok { ret (false, TooLarge) }
     var builder = pb
-    let x = area.x
-    let y = area.y
+    // Chromium paints an svg icon's box on whole device pixels (a label's fractional width moves the icon, not its picture).
+    let scale = scene.builder_scale(b)
+    let x = math.floor[f32](area.x * scale + 0.5) / scale
+    let y = math.floor[f32](area.y * scale + 0.5) / scale
     let w = area.width
     let h = area.height
     var made = true

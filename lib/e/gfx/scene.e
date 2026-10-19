@@ -198,9 +198,71 @@ fn mat_warp(y: f32) -> f32 {
     ret px / s
 }
 
+// Chromium's greyscale text is not the exact area under the outline: the captures show each glyph's coverage spread a little
+// sideways (a 3 tap filter, 7 % to each neighbour, below 3 % nothing) and bent by a power, near 1 for dark text and 0.65 for light text (Skia's
+// luminance-keyed contrast tables). Fitted on the light and dark reference crops of every Android control (scripts/material/).
+fn mat_text_shape(s: *RendererState, coverage: []f32, brush: *const paint.Brush) {
+    if s.box_x1 <= s.box_x0 { ret }
+    var luma: f32 = 0.0
+    switch *brush {
+    case .Solid as c:
+        luma = 0.2126 * c.red + 0.7152 * c.green + 0.0722 * c.blue
+    default:
+        luma = 0.0
+    }
+    let g = 1.0 - 0.38 * luma
+    let side: f32 = 0.07
+    let centre: f32 = 1.0 - 2.0 * side
+    var x0 = s.box_x0
+    var x1 = s.box_x1
+    if x0 > s.dx0 { x0 -= 1usize }
+    if x1 < s.dx1 { x1 += 1usize }
+    var y = s.box_y0
+    while y < s.box_y1 {
+        let row = y * s.width
+        if x0 < s.box_x0 { coverage[row + x0] = 0.0 }
+        if x1 > s.box_x1 { coverage[row + x1 - 1usize] = 0.0 }
+        var prev: f32 = 0.0
+        var x = x0
+        while x < x1 {
+            let here = coverage[row + x]
+            var next: f32 = 0.0
+            if x + 1usize < x1 { next = coverage[row + x + 1usize] }
+            var c = side * prev + centre * here + side * next
+            if c > 0.03 {
+                if c > 1.0 { c = 1.0 }
+                c = math.pow[f32]((c - 0.03) / 0.97, g)
+            } else {
+                c = 0.0
+            }
+            coverage[row + x] = c
+            prev = here
+            x += 1usize
+        }
+        y += 1usize
+    }
+    s.box_x0 = x0
+    s.box_x1 = x1
+}
+
+// Skia's supersampling rasteriser (Chromium draws a small path with it) covers a partly covered pixel a little less than the exact
+// area: the radio ring of the captures is about 5 coverage points lighter at the middle of the range.
+fn mat_path_curve(s: *RendererState, coverage: []f32) {
+    var y = s.box_y0
+    while y < s.box_y1 {
+        var x = s.box_x0
+        while x < s.box_x1 {
+            let c = coverage[y * s.width + x]
+            if c > 0.0 && c < 1.0 { coverage[y * s.width + x] = math.pow[f32](c, 1.2) }
+            x += 1usize
+        }
+        y += 1usize
+    }
+}
+
 fn mat_snap(o: geometry.Point) -> geometry.Point {
     if !mat_text { ret o }
-    ret geometry.Point { x: o.x, y: math.floor[f32](o.y + 0.5) }
+    ret geometry.Point { x: math.floor[f32](o.x * 4.0 + 0.5) * 0.25, y: math.floor[f32](o.y + 0.5) }
 }
 
 fn set_text_hidden(hidden: bool) {
@@ -3247,11 +3309,13 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
             var f = fill_flattener(s, current.transform)
             try flatten(&f, fill.path)
             rasterize_edges(s, coverage)
+            if mat_text { mat_path_curve(s, coverage) }
             paint_coverage(s, current, coverage, &fill.brush)
         case .StrokePath as stroke:
             var f = stroke_flattener(s, current.transform, stroke.stroke)
             try flatten(&f, stroke.path)
             rasterize_edges(s, coverage)
+            if mat_text { mat_path_curve(s, coverage) }
             paint_coverage(s, current, coverage, &stroke.brush)
         case .Image as draw:
             try draw_image(s, current, draw)
@@ -3260,6 +3324,7 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
                 var f = fill_flattener(s, current.transform)
                 try text_edges(s, &f, text)
                 rasterize_edges(s, coverage)
+                if mat_text { mat_text_shape(s, coverage, &text.brush) }
                 paint_coverage(s, current, coverage, &text.brush)
             }
         case .OpacityLayer as layer:

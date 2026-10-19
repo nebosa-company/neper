@@ -1,0 +1,196 @@
+{
+ "search_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/search_bar.png",
+    "notes": "ROUND 33 (review to matched): every cell is flat 0 px off, 0 ring, 0 rim, 0 shadow, with glyph pixels counted too (off+glyph 0), in light and dark. Two causes fixed: the query field asked for its intrinsic width and squeezed the 24 dp search icon to 21 dp wide (the editor is now as wide as the room the bar leaves), which also moved the text 6 px left; and the Roboto line metrics (Blink: ascent up, descent down) that had put every 14 dp label one row low. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/search_bar.png",
+    "notes": "ROUND 33 (review to matched): every cell is flat 0 px off, 0 ring, 0 rim, 0 shadow, with glyph pixels counted too (off+glyph 0), in light and dark. Two causes fixed: the query field asked for its intrinsic width and squeezed the 24 dp search icon to 21 dp wide (the editor is now as wide as the room the bar leaves), which also moved the text 6 px left; and the Roboto line metrics (Blink: ascent up, descent down) that had put every 14 dp label one row low. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ },
+ "top_app_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/app_bar.png",
+    "notes": "ROUND 33 (review to matched): all four cells flat 0 off, 0 ring, 0 rim, 0 shadow with glyph pixels counted (off+glyph 0, was 21) in light and dark; the 22 dp title sits on the Blink baseline. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced.",
+     "The app bar reference is plain CSS written from the M3 spec, not a Material Web capture; its icons are the legacy Material Icons paths the gallery's author picked."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/app_bar.png",
+    "notes": "ROUND 33 (review to matched): all four cells flat 0 off, 0 ring, 0 rim, 0 shadow with glyph pixels counted (off+glyph 0, was 21) in light and dark; the 22 dp title sits on the Blink baseline. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced.",
+     "The app bar reference is plain CSS written from the M3 spec, not a Material Web capture; its icons are the legacy Material Icons paths the gallery's author picked."
+    ]
+   }
+  }
+ },
+ "chip": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/chips.png",
+    "notes": "ROUND 33 (review to matched, audit 16 downgrade answered): the input chip's remove icon is on the capture. It was one pixel high and half a pixel left because the icon box followed the label's fractional width (svg icons are now painted on whole device pixels) and the chip's padding assumed the border was additive (Blink: 6 dp under the 32 dp chip, outlined or not, with the label baseline now Blink's). Remove icon pixels over 12 levels per input cell: 83 to 101 before, at most 11 now (max 19 levels, the antialiasing of a 1.1 px diagonal). Whole sheet over 45 cells: light off 2, ring 10, rim 16; dark off 0, ring 1, rim 16. Filter, input and suggestion chips set their label in on-surface-variant (md-*-chip), it was on-surface. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced.",
+     "Selected filter chip, disabled: 11 rim px over 40 levels at the check's left tip."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/chips.png",
+    "notes": "ROUND 33 (review to matched, audit 16 downgrade answered): the input chip's remove icon is on the capture. It was one pixel high and half a pixel left because the icon box followed the label's fractional width (svg icons are now painted on whole device pixels) and the chip's padding assumed the border was additive (Blink: 6 dp under the 32 dp chip, outlined or not, with the label baseline now Blink's). Remove icon pixels over 12 levels per input cell: 83 to 101 before, at most 11 now (max 19 levels, the antialiasing of a 1.1 px diagonal). Whole sheet over 45 cells: light off 2, ring 10, rim 16; dark off 0, ring 1, rim 16. Filter, input and suggestion chips set their label in on-surface-variant (md-*-chip), it was on-surface. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced.",
+     "Selected filter chip, disabled: 11 rim px over 40 levels at the check's left tip."
+    ]
+   }
+  }
+ },
+ "badge": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/badge.png",
+    "notes": "ROUND 33 (review to matched): flat 0 off and 0 ring in all six cells, 3 shadow px (max 3 levels) at the count badge's rim, glyph pixels 14 light and 10 dark (were 34 and 33). A count badge placed 12 dp into the 24 dp icon box was squeezed to a 12 dp pill; the anchor box is now wider so the 16 dp badge keeps its size, and it rises 3 dp. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/badge.png",
+    "notes": "ROUND 33 (review to matched): flat 0 off and 0 ring in all six cells, 3 shadow px (max 3 levels) at the count badge's rim, glyph pixels 14 light and 10 dark (were 34 and 33). A count badge placed 12 dp into the 24 dp icon box was squeezed to a 12 dp pill; the anchor box is now wider so the 16 dp badge keeps its size, and it rises 3 dp. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/radio.png",
+    "notes": "ROUND 33 (still review, much closer): the diagonals are answered. Chromium's 20 px ring is a 16-gon (Skia cuts each 45 degree conic into 2^shift lines by SkEdge's distance rule; fitted on the reference, 16 sides with vertices on the circle give a residual 4 times below the true circle) and its partly covered pixels are lighter than exact area (a power of 1.2 on path coverage fits the rest); the Android profile now builds corners that way and fills a border as the area between two outlines. Ring px over 12 levels, unchecked: rest 62 before and 10 now, hover 15, focus 14, pressed 21, disabled 2 (max 37 levels, at the state layer's rim); checked hover, focus and pressed 16 each, disabled 5. The checked rest cell is 212 px over 12 levels (141 over 40): the reference caught the dot part way through its animation (dot centre coverage 72 against 83 in the hover capture of the same state), so no settled render can match it. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "radio-checked-rest: the reference shows the dot growing (centre coverage 72.4 against 83.4 settled), ours is 79; 212 px over 12 levels in light, 215 in dark.",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/radio.png",
+    "notes": "ROUND 33 (still review, much closer): the diagonals are answered. Chromium's 20 px ring is a 16-gon (Skia cuts each 45 degree conic into 2^shift lines by SkEdge's distance rule; fitted on the reference, 16 sides with vertices on the circle give a residual 4 times below the true circle) and its partly covered pixels are lighter than exact area (a power of 1.2 on path coverage fits the rest); the Android profile now builds corners that way and fills a border as the area between two outlines. Ring px over 12 levels, unchecked: rest 62 before and 10 now, hover 15, focus 14, pressed 21, disabled 2 (max 37 levels, at the state layer's rim); checked hover, focus and pressed 16 each, disabled 5. The checked rest cell is 212 px over 12 levels (141 over 40): the reference caught the dot part way through its animation (dot centre coverage 72 against 83 in the hover capture of the same state), so no settled render can match it. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "radio-checked-rest: the reference shows the dot growing (centre coverage 72.4 against 83.4 settled), ours is 79; 212 px over 12 levels in light, 215 in dark.",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/tooltip.png",
+    "notes": "ROUND 33 (still review, one defect left): the plain tooltip is flat 0 off in light and dark; the rich tooltip is flat 0 off with 6 glyph px (147 after the baseline fix, 17 before): its text sat one pixel high and moved with the Blink metrics (plate padding 12 above, 14 before the action row). The rich plate is placed BelowEnd against the anchor and its fractional width puts the left edge half a pixel into a column (ring 218 px light, 112 dark: two columns by 110 rows); snapping the placed rectangle moved the card a whole pixel and was reverted. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Rich tooltip left edge column: the plate's width is fractional where Chrome's box is whole pixels (218 ring px light, 112 dark).",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/tooltip.png",
+    "notes": "ROUND 33 (still review, one defect left): the plain tooltip is flat 0 off in light and dark; the rich tooltip is flat 0 off with 6 glyph px (147 after the baseline fix, 17 before): its text sat one pixel high and moved with the Blink metrics (plate padding 12 above, 14 before the action row). The rich plate is placed BelowEnd against the anchor and its fractional width puts the left edge half a pixel into a column (ring 218 px light, 112 dark: two columns by 110 rows); snapping the placed rectangle moved the card a whole pixel and was reverted. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Rich tooltip left edge column: the plate's width is fractional where Chrome's box is whole pixels (218 ring px light, 112 dark).",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ },
+ "snackbar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/snackbar.png",
+    "notes": "ROUND 33 (still review, closer): md-snackbar has no gap between the text, the action and the close button; ours had 8 dp, which put the action label 8 px left of the capture whenever a close button followed it. Three of the four cells are now flat 4 px off with glyph pixels 4 to 6 (rest, action, action with close); the two-line cell is 28 px off in light (24 dark) because its action label is one pixel left. The text keeps 4 dp of margin so it wraps where the browser's line does. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "snackbar-two-lines: the action label is 1 px left of the capture (28 flat px off in light, 24 in dark, max 188 levels).",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/snackbar.png",
+    "notes": "ROUND 33 (still review, closer): md-snackbar has no gap between the text, the action and the close button; ours had 8 dp, which put the action label 8 px left of the capture whenever a close button followed it. Three of the four cells are now flat 4 px off with glyph pixels 4 to 6 (rest, action, action with close); the two-line cell is 28 px off in light (24 dark) because its action label is one pixel left. The text keeps 4 dp of margin so it wraps where the browser's line does. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "snackbar-two-lines: the action label is 1 px left of the capture (28 flat px off in light, 24 in dark, max 188 levels).",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ },
+ "navigation_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "ROUND 33 (still review, closer): the three-destination cell is flat 0 off and the four-destination rest cell is flat 0 off with 2 glyph px. The bell's count badge was a squeezed 12 dp pill, 3 dp left and 1 dp low; it now keeps 16 dp and sits 2 dp further out. The hover and pressed cells still have 12 flat px off at the badge (max 12 to 16 levels): the capture's state layer is drawn over the badge, ours under it. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Hover and pressed: the destination's state layer covers the badge in the capture (12 px off, ring 2 to 17).",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_bar.png",
+    "notes": "ROUND 33 (still review, closer): the three-destination cell is flat 0 off and the four-destination rest cell is flat 0 off with 2 glyph px. The bell's count badge was a squeezed 12 dp pill, 3 dp left and 1 dp low; it now keeps 16 dp and sits 2 dp further out. The hover and pressed cells still have 12 flat px off at the badge (max 12 to 16 levels): the capture's state layer is drawn over the badge, ours under it. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Hover and pressed: the destination's state layer covers the badge in the capture (12 px off, ring 2 to 17).",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ },
+ "date_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/date_picker.png",
+    "notes": "ROUND 33 (spec-derived reference, capped at review): text and icons now sit on the capture's rows (dark: flat 0 off, glyph 17, ring 304 at the card's edges); in light the placement search now settles on the true offset and shows 8 rows of the card's bottom shadow differing, because the reference dialog is centred on a half pixel (its top and bottom rim rows are half covered where ours are whole pixels). | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "The reference dialog sits on a half pixel, ours on whole pixels (ring 302 light, 304 dark; light off 1516 at the bottom shadow).",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "ROUND 33 (spec-derived reference, capped at review): text and icons now sit on the capture's rows (dark: flat 0 off, glyph 17, ring 304 at the card's edges); in light the placement search now settles on the true offset and shows 8 rows of the card's bottom shadow differing, because the reference dialog is centred on a half pixel (its top and bottom rim rows are half covered where ours are whole pixels). | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "The reference dialog sits on a half pixel, ours on whole pixels (ring 302 light, 304 dark; light off 1516 at the bottom shadow).",
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ }
+}
