@@ -1423,3 +1423,37 @@ neper_os_wake_all_u32:
     mov eax, 0x2000204
     darwin_syscall
     ret
+
+# os.reserve(size) -> (usize, err): address space and no memory, PROT_NONE.
+.global neper_os_reserve
+neper_os_reserve:
+    mov rsi, rdi
+    xor edi, edi
+    xor edx, edx
+    mov r10d, 0x1002
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 0x20000c5
+    darwin_syscall
+    test rax, rax
+    js .Lreserve_failed
+    xor edx, edx
+    ret
+.Lreserve_failed:
+    xor eax, eax
+    mov edx, 0x6f777ebf
+    ret
+
+# os.commit(address, size) -> err: the reserved pages made readable and writable.
+.global neper_os_commit
+neper_os_commit:
+    mov edx, 3
+    mov eax, 0x200004a
+    darwin_syscall
+    test rax, rax
+    js .Lcommit_failed
+    xor eax, eax
+    ret
+.Lcommit_failed:
+    mov eax, 0x6f777ebf
+    ret

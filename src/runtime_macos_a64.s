@@ -1052,3 +1052,35 @@ neper_os_wake_all_u32:
     mov x2, #0
     sys 516
     ret
+
+// os.reserve(size) -> (usize, err): address space and no memory, PROT_NONE.
+.global neper_os_reserve
+neper_os_reserve:
+    mov x1, x0
+    mov x0, #0
+    mov x2, #0
+    mov x3, #0x1002
+    mov x4, #-1
+    mov x5, #0
+    sys 197
+    tbnz x0, #63, .Lreserve_failed
+    mov x1, #0
+    ret
+.Lreserve_failed:
+    mov x0, #0
+    movz w1, #0x7ebf
+    movk w1, #0x6f77, lsl #16
+    ret
+
+// os.commit(address, size) -> err: the reserved pages made readable and writable.
+.global neper_os_commit
+neper_os_commit:
+    mov x2, #3
+    sys 74
+    tbnz x0, #63, .Lcommit_failed
+    mov x0, #0
+    ret
+.Lcommit_failed:
+    movz w0, #0x7ebf
+    movk w0, #0x6f77, lsl #16
+    ret
