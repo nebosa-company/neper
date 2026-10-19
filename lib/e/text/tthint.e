@@ -395,6 +395,13 @@ fn vm_is_x(h: *Hinter) -> bool {
     ret h.cleartype && h.gs.free_x == 16384i64 && h.gs.free_y == 0i64
 }
 
+// Whether distances are rounded and limited on the 1/16 pixel grid of ClearType's x: in GDI that is every measure whose projection is
+// not along y (a diagonal measured across rounds as finely as x does; found with synthetic fonts).
+fn vm_grid_x(h: *Hinter) -> bool {
+    if h.zone[1usize].n == 0usize { ret false }
+    ret h.cleartype && !(h.gs.proj_x == 0i64 && h.gs.proj_y == 16384i64)
+}
+
 fn vm_project(h: *Hinter, dx: i64, dy: i64) -> i64 {
     if h.gs.proj_x == 16384i64 { ret dx }
     if h.gs.proj_y == 16384i64 { ret dy }
@@ -465,12 +472,12 @@ fn vm_move_by(h: *Hinter, zi: usize, p: usize, dx: i64, dy: i64) {
 }
 
 fn vm_mind(h: *Hinter) -> i64 {
-    if vm_is_x(h) { ret h.gs.min_dist / 2i64 }
+    if vm_grid_x(h) { ret h.gs.min_dist / 2i64 }
     ret h.gs.min_dist
 }
 
 fn vm_cutin(h: *Hinter) -> i64 {
-    if vm_is_x(h) { ret h.gs.cvt_cut_in / 16i64 }
+    if vm_grid_x(h) { ret h.gs.cvt_cut_in / 16i64 }
     ret h.gs.cvt_cut_in
 }
 
@@ -478,7 +485,7 @@ fn vm_cutin(h: *Hinter) -> i64 {
 fn vm_round(h: *Hinter, d: i64) -> i64 {
     let rs = h.gs.round_state
     var p = 64i64
-    if vm_is_x(h) { p = 4i64 }
+    if vm_grid_x(h) { p = 4i64 }
     let half = p >> 1u32
     var m = d
     var neg = false
