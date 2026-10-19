@@ -1135,8 +1135,20 @@ fn array_from(it: *Interp, items: []const Value) -> *Obj {
     ret o
 }
 
-// Sets the array length, dropping elements at or past it.
-fn array_set_length(it: *Interp, o: *Obj, len: f64) {
+// Sets the array length, dropping elements at or past it. Shrinking stops above the highest element that cannot be deleted;
+// answers false when it did.
+fn array_set_length(it: *Interp, o: *Obj, len_in: f64) -> bool {
+    var len = len_in
+    var blocked = false
+    var pi = 0usize
+    while pi < o.props.len {
+        let pk = o.props.items[pi].key
+        if pk.idx >= 0i64 && f64(pk.idx) >= len && (o.props.items[pi].flags & P_CONFIGURABLE) == 0u8 && f64(pk.idx) + 1.0f64 > len {
+            len = f64(pk.idx) + 1.0f64
+            blocked = true
+        }
+        pi += 1usize
+    }
     if len < f64(o.elems.len) { o.elems.len = usize(len) }
     // Generic index properties at or past the new length go too.
     var i = 0usize
@@ -1149,6 +1161,7 @@ fn array_set_length(it: *Interp, o: *Obj, len: f64) {
         }
     }
     o.num = len
+    ret !blocked
 }
 
 // Touching a string-keyed export of a deferred namespace evaluates the module first (`then` is exempt).
@@ -1551,8 +1564,8 @@ fn write_own_value(it: *Interp, o: *Obj, key: Key, val: Value) -> (bool, err) {
             let len = to_uint32_bits(n)
             if f64(len) != n { ret (false, throw_range(it, "Invalid array length")) }
             if o.text.len == 1usize { ret (false, ok) }
-            array_set_length(it, o, f64(len))
-            ret (true, ok)
+            let full = array_set_length(it, o, f64(len))
+            ret (full, ok)
         }
     }
     let (at, found) = index_of_prop(o, key)
@@ -1893,23 +1906,8 @@ fn define_own_ordinary(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err) {
             let old_len = array_length(o)
             if o.text.len == 1usize {
                 if f64(len) != old_len { ret (false, ok) }
-            } else if f64(len) >= old_len {
-                array_set_length(it, o, f64(len))
-            } else {
-                // Shrinking stops at the highest element that cannot be deleted.
-                var stop = -1.0f64
-                var pi = 0usize
-                while pi < o.props.len {
-                    let pk = o.props.items[pi].key
-                    if pk.idx >= 0i64 && f64(pk.idx) >= f64(len) && (o.props.items[pi].flags & P_CONFIGURABLE) == 0u8 && f64(pk.idx) > stop { stop = f64(pk.idx) }
-                    pi += 1usize
-                }
-                if stop >= 0.0f64 {
-                    array_set_length(it, o, stop + 1.0f64)
-                    blocked = true
-                } else {
-                    array_set_length(it, o, f64(len))
-                }
+            } else if !array_set_length(it, o, f64(len)) {
+                blocked = true
             }
         }
         if d.has_writable {
