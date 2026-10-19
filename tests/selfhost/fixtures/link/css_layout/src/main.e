@@ -399,5 +399,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 68. A vertical-rl absolute box keeps its static position when its own frame is mirrored.
     let (p68, ok68) = build(a, "<div style=\"position:relative;width:100px;height:100px\"><span id=a style=\"position:absolute;writing-mode:vertical-rl;font-size:10px\">X</span></div>", "")
     if !ok68 || !near(rect_of(p68, "a").x, 0.0f64) { os.exit(105) }
+    // 69. An absolute child of a grid in a named area aligns its static position inside that area.
+    let (p69, ok69) = build(a, "<div style=\"display:grid;position:relative;width:22px;height:30px;grid:2px 20px 2px / 3px 14px 3px;align-items:center\"><div id=a style=\"position:absolute;grid-area:2/2/3/3;width:8px;height:6px\"></div></div>", "")
+    if !ok69 || !near(rect_of(p69, "a").y, 9.0f64) { os.exit(106) }
     ret ok
 }

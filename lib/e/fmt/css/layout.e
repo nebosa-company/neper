@@ -7281,6 +7281,10 @@ fn layout_abs(l: *Layout, b: u32) {
     if grid_cb {
         static_x = 0.0f64
         static_y = 0.0f64
+        if swap_code == 0u8 {
+            rect_w = cb_w
+            rect_h = cb_h
+        }
     }
     let phys_sx = static_x
     let phys_sy = static_y
