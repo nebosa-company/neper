@@ -996,3 +996,59 @@ neper_os_thread_detach:
     movk w0, #0x6f77, lsl #16
     ldp x29, x30, [sp], #16
     ret
+
+// Section 8's blocking primitives, __ulock_wait (515) and __ulock_wake (516) with
+// UL_COMPARE_AND_WAIT (1) and ULF_WAKE_ALL (0x100). wait_u32(p, expected, timeout_ns) -> err:
+// a wake, a value that already differs and a signal are all `ok` -- the fence promises
+// spurious wakes -- a negative timeout waits for ever, and a zero one times out at once.
+// The kernel's timeout is in microseconds, rounded up and capped at 32 bits.
+.global neper_os_wait_u32
+neper_os_wait_u32:
+    mov x3, #0
+    tbnz x2, #63, .Lwait_u32_go
+    cbz x2, .Lwait_u32_timeout
+    mov x9, #1000
+    add x2, x2, x9
+    sub x2, x2, #1
+    udiv x3, x2, x9
+    mov x10, #0xffffffff
+    cmp x3, x10
+    csel x3, x10, x3, hi
+.Lwait_u32_go:
+    mov w2, w1
+    mov x1, x0
+    mov x0, #1
+    sys 515
+    tbz x0, #63, .Lwait_u32_ok
+    cmn x0, #4
+    b.eq .Lwait_u32_ok
+    cmn x0, #35
+    b.eq .Lwait_u32_ok
+    cmn x0, #60
+    b.eq .Lwait_u32_timeout
+    movz w0, #0x7ebf
+    movk w0, #0x6f77, lsl #16
+    ret
+.Lwait_u32_ok:
+    mov x0, #0
+    ret
+.Lwait_u32_timeout:
+    movz w0, #0x2f09
+    movk w0, #0x5281, lsl #16
+    ret
+
+.global neper_os_wake_one_u32
+neper_os_wake_one_u32:
+    mov x1, x0
+    mov x0, #1
+    mov x2, #0
+    sys 516
+    ret
+
+.global neper_os_wake_all_u32
+neper_os_wake_all_u32:
+    mov x1, x0
+    mov x0, #0x101
+    mov x2, #0
+    sys 516
+    ret
