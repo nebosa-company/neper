@@ -1210,6 +1210,8 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             m += 1usize
         }
         if across > 280.0 { across = 280.0 }
+        // Blink paints the box on the pixel grid (a shaped width of 167.6 is 168 wide, with a sharp edge), not on a fraction of one.
+        across = math.floor[f32](across + 0.5)
         sheet_style.width = style.Length { Px: across }
     }
     sheet_style.padding.top = style.Length { Px: rim }

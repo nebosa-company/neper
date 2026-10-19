@@ -89,7 +89,15 @@ fn fdiv(a: i64, b: i64) -> i64 {
     ret q
 }
 
-fn mulfix(a: i64, b: i64) -> i64 { ret (a * b + 32768i64) >> 16u32 }
+// Half up, which is what the hinter's own scaling uses. FreeType's `FT_MulFix` rounds half away from zero; the unhinted outline of the
+// Android look's FreeType mode (`ttglyph.set_skip_programs`) asks for that with `set_symmetric`.
+var symmetric: bool = false
+fn set_symmetric(on: bool) { symmetric = on }
+
+fn mulfix(a: i64, b: i64) -> i64 {
+    if symmetric && a * b < 0i64 { ret 0i64 - (((0i64 - a * b) + 32768i64) >> 16u32) }
+    ret (a * b + 32768i64) >> 16u32
+}
 
 fn divfix(a: i64, b: i64) -> i64 {
     let s = sgn1(a) * sgn1(b)
