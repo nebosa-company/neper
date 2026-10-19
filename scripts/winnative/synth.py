@@ -248,7 +248,7 @@ if __name__ == "__main__":
         print(p)
 
 
-def run_variants(srcfont, ppem, variants, weight=400, compare=True, keep=False):
+def run_variants(srcfont, ppem, variants, weight=400, compare=True, keep=False, hdmx_widths=None, adv_deltas=None):
     """Glyph variants of a real font through GDI's ClearType hinter: variants is a list of (template glyph name, edit) where edit(glyph) changes a
     copy of the template glyph in place (a composite's component offsets, say). Variant k answers on code CODES[k]; every other glyph of the font is
     dropped from the cmap. -> the list of GDI's point lists (and ours with compare=True), like run()."""
@@ -292,6 +292,15 @@ def run_variants(srcfont, ppem, variants, weight=400, compare=True, keep=False):
         except TypeError:
             edit(g)
         cmap[CODES[k]] = name
+    if adv_deltas:
+        for k, dlt in enumerate(adv_deltas):
+            a0, l0 = hmtx.metrics["var%d" % k]
+            hmtx.metrics["var%d" % k] = (a0 + dlt, l0)
+    if hdmx_widths:
+        if ppem not in f["hdmx"].hdmx:
+            f["hdmx"].hdmx[ppem] = {n: int(round(hmtx[n][0] * ppem / f["head"].unitsPerEm)) for n in order}
+        for k, w in enumerate(hdmx_widths):
+            f["hdmx"].hdmx[ppem]["var%d" % k] = w
     f.setGlyphOrder(order)
     glyf.glyphOrder = order
     f["maxp"].numGlyphs = len(order)

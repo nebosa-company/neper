@@ -1015,8 +1015,8 @@ fn ct_soft(h: *Hinter) {
                 }
             }
             if r1 < npt && r2 < npt {
-                var o1 = z.org[2usize * r1]
-                var o2 = z.org[2usize * r2]
+                var o1 = z.orus[2usize * r1]
+                var o2 = z.orus[2usize * r2]
                 var s1 = z.sh[r1]
                 var s2 = z.sh[r2]
                 if o1 > o2 {
@@ -1027,7 +1027,7 @@ fn ct_soft(h: *Hinter) {
                     s1 = s2
                     s2 = ts
                 }
-                let op = z.org[2usize * p]
+                let op = z.orus[2usize * p]
                 if op <= o1 {
                     z.sh[p] = s1
                 } else if op >= o2 {
