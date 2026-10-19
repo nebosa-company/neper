@@ -8,7 +8,6 @@
 // row (the harness taps the cell's centre) and a vertical scroll bar. Right: grouped by rarity, two
 // groups open, group rows, footer summaries.
 
-use e.fs
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.data.tableview as view
@@ -408,11 +407,16 @@ fn setup_main(m: *Main, windows: bool) -> err {
     pool_look.soft_x0 = 183.0
     pool_look.soft_slope = 0.0 - 0.0005
     pool_look.nav_rule = true
-    pool_look.ring_marks = "0 0 1 999ca0;0 1 161 9599a0;0 162 1 8e9299;0 163 49 878b93;1 0 1 8d9096;1 1 1 bbbdc1;1 2 34 dddedf;1 36 1 e5e5e7;1 37 128 eaeaec;1 165 1 e5e7eb;1 166 21 e0e4e9;1 187 1 c5c8cb;1 188 1 c5c5c7;1 189 23 dddedf;479 2 34 f8f8f8;480 2 34 f7f7f7;487 18 1 d1d1d1;487 19 1 b9b9b9;487 20 16 b6b6b6;488 18 1 b7b7b7;488 19 1 8a8a8a;488 20 16 858585;489 18 1 d6d6d6;489 19 1 c1c1c1;489 20 16 bfbfbf;67 212 1 bfc2c6;68 212 1 c1c3c8 69;137 212 1 bbbec2;479 36 1 fcfcfc;480 36 1 f7f7f7;481 36 1 f0f0f0 6;487 36 1 b6b6b6;488 36 1 858585;489 36 1 bfbfbf;490 36 1 f0f0f0 6;370 0 1 a0a3a9;371 0 1 acafb4 126;479 1 1 cbcdd1;480 1 1 cbccd0;496 1 1 a2a5ac"
+    if !m.light { pool_look.ring_marks = "0 0 1 999ca0;0 1 161 9599a0;0 162 1 8e9299;0 163 49 878b93;1 0 1 8d9096;1 1 1 bbbdc1;1 2 34 dddedf;1 36 1 e5e5e7;1 37 128 eaeaec;1 165 1 e5e7eb;1 166 21 e0e4e9;1 187 1 c5c8cb;1 188 1 c5c5c7;1 189 23 dddedf;479 2 34 f8f8f8;480 2 34 f7f7f7;487 18 1 d1d1d1;487 19 1 b9b9b9;487 20 16 b6b6b6;488 18 1 b7b7b7;488 19 1 8a8a8a;488 20 16 858585;489 18 1 d6d6d6;489 19 1 c1c1c1;489 20 16 bfbfbf;67 212 1 bfc2c6;68 212 1 c1c3c8 69;137 212 1 bbbec2;479 36 1 fcfcfc;480 36 1 f7f7f7;481 36 1 f0f0f0 6;487 36 1 b6b6b6;488 36 1 858585;489 36 1 bfbfbf;490 36 1 f0f0f0 6;370 0 1 a0a3a9;371 0 1 acafb4 126;479 1 1 cbcdd1;480 1 1 cbccd0;496 1 1 a2a5ac" }
     if windows && m.light {
-        let (joined, joined_error) = with_fix_marks(a, pool_look.bar_marks, 0usize)
-        if joined_error != ok { ret joined_error }
-        pool_look.bar_marks = joined
+        pool_look.ring_model = 2u8
+        pool_look.ring_gy = 0.0
+        pool_look.ring_w = 497.0
+        pool_look.ring_h = 213.0
+        pool_look.ring_head_end = 35.0
+        pool_look.ring_foot = true
+        pool_look.ring_bar = 2u8
+        pool_look.ring_thumb = 2u8
     }
     dg.set_look(&m.pool_grid, pool_look)
     dg.show_filter_row(&m.pool_grid, true)
@@ -452,12 +456,15 @@ fn setup_main(m: *Main, windows: bool) -> err {
     look.soft_x0 = 183.0
     look.soft_slope = 0.0 - 0.0005
     // round 13: the position field's foot row (live main window)
-    look.bar_marks = "67 241 1 d2d4d7;68 241 1 d4d6d9 39;107 241 1 ccced1"
-    look.ring_marks = "0 1 79 878b93;0 80 1 8d9199;0 81 160 9599a0;1 1 1 b5b8bd;1 2 192 eaeaec;1 194 1 e6e8eb;1 195 21 e0e4e9;1 216 1 cdd0d4;1 217 1 bdbec0;1 218 23 dddedf;0 0 1 b6b8bb;1 0 1 babdc1 173;174 0 1 9d9fa3;175 0 1 919498 149;324 0 1 abaeb2;325 0 1 babdc1 172;0 1 1 878b93;1 1 1 b5b8bd;2 1 1 bfc2c6 10;12 1 1 b5b7bc;13 1 1 bdbfc4;14 1 1 bfc2c6 19;33 1 1 b5b7bc;34 1 1 bdbfc4;35 1 1 bfc2c6 148;183 1 1 b6b8bd;184 1 1 bbbec3;185 1 1 bfc2c6 68;253 1 1 b6b9be;254 1 1 bbbec2;255 1 1 bfc2c6 48;303 1 1 b7b9be;304 1 1 bbbdc2;305 1 1 bfc2c6 48;353 1 1 b7babe;354 1 1 babdc1;355 1 1 bfc2c6 63;418 1 1 b8babf;419 1 1 babcc1;420 1 1 bfc2c6 63;483 1 1 b8bbbf;484 1 1 b9bcc0;485 1 1 bfc2c6 11;496 1 1 9ea2a9;0 2 1 878b93;1 2 1 eaeaec;2 2 1 ffffff 10;12 2 1 eaeaea;13 2 1 fafafa;14 2 1 ffffff 19;33 2 1 eaeaea;34 2 1 fafafa;35 2 1 ffffff 148;183 2 1 ececec;184 2 1 f8f8f8;185 2 1 ffffff 68;253 2 1 ededed;254 2 1 f7f7f7;255 2 1 ffffff 48;303 2 1 eeeeee;304 2 1 f6f6f6;305 2 1 ffffff 48;353 2 1 efefef;354 2 1 f5f5f5;355 2 1 ffffff 63;418 2 1 f0f0f0;419 2 1 f4f4f4;420 2 1 ffffff 63;483 2 1 f1f1f1;484 2 1 f3f3f3;485 2 1 ffffff 11;496 2 1 bcbfc4;495 3 6 ffffff;495 9 1 918383;495 10 1 797c7c;495 11 1 738484;495 12 1 727b7b;495 13 1 d4efff;495 14 1 6c7384;495 15 1 897b7b;495 16 4 ffffff;495 20 1 f7f7f7;495 21 17 efefef;495 38 1 e6e6e6;495 39 1 ececec;495 40 17 ffffff;495 57 1 efefef;495 58 1 e5e5e5;495 59 17 efefef;495 76 1 e7e7e7;495 77 1 ebebeb;495 78 17 ffffff;495 95 1 f0f0f0;495 96 1 e4e4e4;495 97 17 efefef;495 114 1 e7e7e7;495 115 1 ebebeb;495 116 17 ffffff;495 133 1 f1f1f1;495 134 1 e4e4e4;495 135 17 efefef;495 152 1 e7e7e7;495 153 1 eaeaea;495 154 17 ffffff;495 171 1 f1f1f1;495 172 1 e7e0df;495 173 1 f4e3df;495 174 1 efdad8;495 175 1 f2d8da;495 176 1 f7dbdf;495 177 1 fbdce1;495 178 1 fbdde0;495 179 1 f8dddf;495 180 1 f0d9da;495 181 1 f1e0de;495 182 1 faefec;495 183 1 faf2ee;495 184 1 eee9e4;495 185 1 dfddd9;495 186 1 dbdad7;495 187 1 dfdcda;495 188 1 e9e5e5;495 189 1 efeaea;495 190 1 eee8e8;495 191 1 e9e2e2;495 192 1 e6e0dd;495 193 1 eae4e3;495 194 1 eeedef;495 195 1 e1ede6;495 196 1 c8dac8;495 197 1 dcdddd;495 198 16 e7eaea;495 214 1 e1e3e3;495 215 1 ced8ce;495 216 1 bccebc;495 217 1 cfcfcf;495 218 1 fafafa;495 219 22 f0f0f0;496 3 6 bcbfc4;496 9 1 83858a;496 10 1 7f8286;496 11 1 83868b;496 12 1 7f8186;496 13 1 bcbfc4;496 14 1 83868b;496 15 1 7f8186;496 16 4 bcbfc4;496 20 1 b9bbc0;496 21 17 b5b7bc;496 38 1 b1b3b8;496 39 1 b3b6bb;496 40 17 bcbfc4;496 57 1 b5b7bc;496 58 1 b0b3b7;496 59 17 b5b7bc;496 76 1 b1b3b8;496 77 1 b3b6bb;496 78 17 bcbfc4;496 95 1 b5b8bd;496 96 1 b0b2b7;496 97 17 b5b7bc;496 114 1 b1b4b8;496 115 1 b3b5ba;496 116 17 bcbfc4;496 133 1 b5b8bd;496 134 1 afb2b7;496 135 17 b5b7bc;496 152 1 b1b4b9;496 153 1 b2b5ba;496 154 17 bcbfc4;496 171 1 b6b8bd;496 172 1 b1b1b5;496 173 1 b7b2b4;496 174 1 b5adb1;496 175 1 b7adb3;496 176 1 b9aeb5;496 177 1 bbafb6;496 178 1 bbb0b6;496 179 1 b9afb4;496 180 1 b4adb2;496 181 1 b4afb3;496 182 1 b8b7ba;496 183 1 b9b9bc;496 184 1 b3b5b8;496 185 1 aeb0b3;496 186 1 aeafb3;496 187 1 b0b1b5;496 188 1 b4b5ba;496 189 1 b5b5bb;496 190 1 b3b3b8;496 191 1 b1b0b5;496 192 1 b1b0b4;496 193 1 b2b2b6;496 194 1 b3b6bc;496 195 1 aeb6b8;496 196 1 a3adaa;496 197 1 acafb4;496 198 16 b1b5ba;496 214 1 aeb2b6;496 215 1 a5adad;496 216 1 9da8a4;496 217 1 a6a8ad;496 218 1 babcc1;496 219 22 b5b8bd"
+    if !m.light { look.bar_marks = "67 241 1 d2d4d7;68 241 1 d4d6d9 39;107 241 1 ccced1" }
+    if !m.light { look.ring_marks = "0 1 79 878b93;0 80 1 8d9199;0 81 160 9599a0;1 1 1 b5b8bd;1 2 192 eaeaec;1 194 1 e6e8eb;1 195 21 e0e4e9;1 216 1 cdd0d4;1 217 1 bdbec0;1 218 23 dddedf;0 0 1 b6b8bb;1 0 1 babdc1 173;174 0 1 9d9fa3;175 0 1 919498 149;324 0 1 abaeb2;325 0 1 babdc1 172;0 1 1 878b93;1 1 1 b5b8bd;2 1 1 bfc2c6 10;12 1 1 b5b7bc;13 1 1 bdbfc4;14 1 1 bfc2c6 19;33 1 1 b5b7bc;34 1 1 bdbfc4;35 1 1 bfc2c6 148;183 1 1 b6b8bd;184 1 1 bbbec3;185 1 1 bfc2c6 68;253 1 1 b6b9be;254 1 1 bbbec2;255 1 1 bfc2c6 48;303 1 1 b7b9be;304 1 1 bbbdc2;305 1 1 bfc2c6 48;353 1 1 b7babe;354 1 1 babdc1;355 1 1 bfc2c6 63;418 1 1 b8babf;419 1 1 babcc1;420 1 1 bfc2c6 63;483 1 1 b8bbbf;484 1 1 b9bcc0;485 1 1 bfc2c6 11;496 1 1 9ea2a9;0 2 1 878b93;1 2 1 eaeaec;2 2 1 ffffff 10;12 2 1 eaeaea;13 2 1 fafafa;14 2 1 ffffff 19;33 2 1 eaeaea;34 2 1 fafafa;35 2 1 ffffff 148;183 2 1 ececec;184 2 1 f8f8f8;185 2 1 ffffff 68;253 2 1 ededed;254 2 1 f7f7f7;255 2 1 ffffff 48;303 2 1 eeeeee;304 2 1 f6f6f6;305 2 1 ffffff 48;353 2 1 efefef;354 2 1 f5f5f5;355 2 1 ffffff 63;418 2 1 f0f0f0;419 2 1 f4f4f4;420 2 1 ffffff 63;483 2 1 f1f1f1;484 2 1 f3f3f3;485 2 1 ffffff 11;496 2 1 bcbfc4;495 3 6 ffffff;495 9 1 918383;495 10 1 797c7c;495 11 1 738484;495 12 1 727b7b;495 13 1 d4efff;495 14 1 6c7384;495 15 1 897b7b;495 16 4 ffffff;495 20 1 f7f7f7;495 21 17 efefef;495 38 1 e6e6e6;495 39 1 ececec;495 40 17 ffffff;495 57 1 efefef;495 58 1 e5e5e5;495 59 17 efefef;495 76 1 e7e7e7;495 77 1 ebebeb;495 78 17 ffffff;495 95 1 f0f0f0;495 96 1 e4e4e4;495 97 17 efefef;495 114 1 e7e7e7;495 115 1 ebebeb;495 116 17 ffffff;495 133 1 f1f1f1;495 134 1 e4e4e4;495 135 17 efefef;495 152 1 e7e7e7;495 153 1 eaeaea;495 154 17 ffffff;495 171 1 f1f1f1;495 172 1 e7e0df;495 173 1 f4e3df;495 174 1 efdad8;495 175 1 f2d8da;495 176 1 f7dbdf;495 177 1 fbdce1;495 178 1 fbdde0;495 179 1 f8dddf;495 180 1 f0d9da;495 181 1 f1e0de;495 182 1 faefec;495 183 1 faf2ee;495 184 1 eee9e4;495 185 1 dfddd9;495 186 1 dbdad7;495 187 1 dfdcda;495 188 1 e9e5e5;495 189 1 efeaea;495 190 1 eee8e8;495 191 1 e9e2e2;495 192 1 e6e0dd;495 193 1 eae4e3;495 194 1 eeedef;495 195 1 e1ede6;495 196 1 c8dac8;495 197 1 dcdddd;495 198 16 e7eaea;495 214 1 e1e3e3;495 215 1 ced8ce;495 216 1 bccebc;495 217 1 cfcfcf;495 218 1 fafafa;495 219 22 f0f0f0;496 3 6 bcbfc4;496 9 1 83858a;496 10 1 7f8286;496 11 1 83868b;496 12 1 7f8186;496 13 1 bcbfc4;496 14 1 83868b;496 15 1 7f8186;496 16 4 bcbfc4;496 20 1 b9bbc0;496 21 17 b5b7bc;496 38 1 b1b3b8;496 39 1 b3b6bb;496 40 17 bcbfc4;496 57 1 b5b7bc;496 58 1 b0b3b7;496 59 17 b5b7bc;496 76 1 b1b3b8;496 77 1 b3b6bb;496 78 17 bcbfc4;496 95 1 b5b8bd;496 96 1 b0b2b7;496 97 17 b5b7bc;496 114 1 b1b4b8;496 115 1 b3b5ba;496 116 17 bcbfc4;496 133 1 b5b8bd;496 134 1 afb2b7;496 135 17 b5b7bc;496 152 1 b1b4b9;496 153 1 b2b5ba;496 154 17 bcbfc4;496 171 1 b6b8bd;496 172 1 b1b1b5;496 173 1 b7b2b4;496 174 1 b5adb1;496 175 1 b7adb3;496 176 1 b9aeb5;496 177 1 bbafb6;496 178 1 bbb0b6;496 179 1 b9afb4;496 180 1 b4adb2;496 181 1 b4afb3;496 182 1 b8b7ba;496 183 1 b9b9bc;496 184 1 b3b5b8;496 185 1 aeb0b3;496 186 1 aeafb3;496 187 1 b0b1b5;496 188 1 b4b5ba;496 189 1 b5b5bb;496 190 1 b3b3b8;496 191 1 b1b0b5;496 192 1 b1b0b4;496 193 1 b2b2b6;496 194 1 b3b6bc;496 195 1 aeb6b8;496 196 1 a3adaa;496 197 1 acafb4;496 198 16 b1b5ba;496 214 1 aeb2b6;496 215 1 a5adad;496 216 1 9da8a4;496 217 1 a6a8ad;496 218 1 babcc1;496 219 22 b5b8bd" }
     if windows && m.light {
-        let (joined, joined_error) = with_fix_marks(a, look.bar_marks, 1usize)
-        if joined_error != ok { ret joined_error }
-        look.bar_marks = joined
+        look.ring_model = 2u8
+        look.ring_gy = 221.0
+        look.ring_w = 497.0
+        look.ring_h = 242.0
+        look.ring_foot = true
+        look.ring_rows = true
     }
     dg.set_look(&m.coll_grid, look)
     dg.set_row_ink(&m.coll_grid, mem.cast[*void](m), coll_ink)
@@ -733,41 +740,4 @@ fn main(a: *mem.Arena, args: []str) -> err {
     mains[0usize] = mseed
     let second = looks.Sheet { name: "data_grid_main", cells: 1usize, columns: 1usize, cell_w: 500.0, cell_h: 468.0, ctx: mem.cast[*void](&mains[0usize]), build: build_main }
     ret looks.run_all(a, &second)
-}
-
-// round 18: the live capture's leftover pixels of the main window's two grids (docs/ui/looks/marks/data_grid_main.txt, key 0 the pool
-// grid, 1 the collection grid; scripts/looks_marks_diff.py), appended to `existing` (a Look.bar_marks text); Windows light only
-fn with_fix_marks(a: *mem.Arena, existing: str, k: usize) -> (str, err) {
-    let path = "docs/ui/looks/marks/data_grid_main.txt"
-    let (present, present_error) = fs.exists(a, path)
-    if present_error != ok || !present { ret (existing, ok) }
-    let (bytes, read_error) = fs.read_file(a, path, 1048576usize)
-    if read_error != ok { ret (existing, read_error) }
-    var extra: str = ""
-    var at = 0usize
-    while at < bytes.len {
-        var end = at
-        while end < bytes.len && bytes[end] != 10u8 { end += 1usize }
-        var key = 0usize
-        var cur = at
-        while cur < end && bytes[cur] >= 48u8 && bytes[cur] <= 57u8 {
-            key = key * 10usize + usize(bytes[cur] - 48u8)
-            cur += 1usize
-        }
-        if cur > at && cur < end && bytes[cur] == 32u8 && key == k {
-            var stop = end
-            if stop > cur + 1usize && bytes[stop - 1usize] == 13u8 { stop -= 1usize }
-            extra = bytes[cur + 1usize..stop]
-        }
-        at = end + 1usize
-    }
-    if extra.len == 0usize { ret (existing, ok) }
-    let (joined, joined_error) = strs.builder(a, existing.len + extra.len + 2usize)
-    if joined_error != ok { ret (existing, joined_error) }
-    var jb = joined
-    if existing.len > 0usize {
-        if strs.push(&jb, existing) != ok || strs.push(&jb, ";") != ok { ret (existing, control.TooLarge) }
-    }
-    if strs.push(&jb, extra) != ok { ret (existing, control.TooLarge) }
-    ret (strs.done(&jb), ok)
 }
