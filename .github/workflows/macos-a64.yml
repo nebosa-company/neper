@@ -1,0 +1,31 @@
+name: macos-a64
+on:
+  push:
+    branches: [macos-a64]
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rosetta, for the x86-64 binaries
+        run: |
+          softwareupdate --install-rosetta --agree-to-license 2>&1 | tail -3 || true
+          arch -x86_64 /usr/bin/true && echo "rosetta ok"
+      - name: Run the Neper-emitted macOS binaries
+        run: |
+          sw_vers; uname -m
+          status=0
+          for name in hello imp os1 fs1 hello_x64 imp_x64 os1_x64 fs1_x64; do
+            cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
+            echo "== $name"; codesign --verify --verbose=4 /tmp/$name 2>&1 || true
+            case $name in *_x64) runner="arch -x86_64" ;; *) runner="" ;; esac
+            set +e; $runner /tmp/$name; code=$?; set -e
+            echo "exit=$code"
+            if [ "$code" -ne 0 ]; then
+              status=1
+              lldb -b -o run -o quit /tmp/$name 2>&1 | tail -15
+              log show --last 2m --style compact --predicate 'process == "kernel" OR process == "amfid" OR sender == "AppleMobileFileIntegrity" OR process == "dyld"' 2>&1 | tail -30
+            fi
+          done
+          exit $status

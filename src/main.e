@@ -21,6 +21,7 @@ use lex
 use link_elf
 use link_elf_a64
 use link_image_a64
+use link_macho
 use link_pe
 use lower
 use nir
@@ -14377,10 +14378,18 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                         if same(args[5usize], "none") || same(args[5usize], "neperos") {
                             try link_image_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, table_at, same(args[5usize], "neperos"), &executable)
                         } else {
-                            try link_elf_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                            if same(args[5usize], "macos") {
+                                try link_macho.write(same(args[4usize], "x64"), &builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                            } else {
+                                try link_elf_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                            }
                         }
                     } else {
-                        try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                        if same(args[5usize], "macos") {
+                            try link_macho.write(true, &builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                        } else {
+                            try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                        }
                     }
                 }
                 report.arena_used = mem.stats(a).used
