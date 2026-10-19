@@ -6886,7 +6886,7 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -
                     pb.y += free / 2.0f64
                 } else if al == .End || al == .FlexEnd || al == .SelfEnd {
                     pb.y += free
-                } else if (al == .Normal || al == .Stretch) && is.height.kind == .Auto {
+                } else if al == .Stretch && is.height.kind == .Auto {
                     let wcontent = pb.w - horizontal_extras(pb)
                     flex_place_item(l, id, wcontent, pb.h - vertical_extras(pb) + free)
                 }

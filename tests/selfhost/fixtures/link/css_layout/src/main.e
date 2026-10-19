@@ -454,5 +454,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 85. White space between table parts is dropped even when `white-space` preserves it.
     let (p85, ok85) = build(a, "<div id=t style=\"display:table;white-space:pre\">\n  <div style=\"display:table-row\">\n    <div id=c style=\"display:table-cell;width:10px;height:10px\"></div>\n  </div>\n</div>", "")
     if !ok85 || !near(rect_of(p85, "t").h, 10.0f64) { os.exit(122) }
+    // 86. The last item of a lane is not stretched unless align-self says so.
+    let (p86, ok86) = build(a, "<div style=\"display:grid-lanes;grid-template-columns:50px 50px;width:100px\"><div id=a style=\"height:10px\"></div><div id=b></div><div id=c style=\"height:30px\"></div></div>", "")
+    if !ok86 || !near(rect_of(p86, "b").h, 0.0f64) { os.exit(123) }
     ret ok
 }
