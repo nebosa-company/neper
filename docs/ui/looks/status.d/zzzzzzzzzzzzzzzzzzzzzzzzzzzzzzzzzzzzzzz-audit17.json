@@ -1,0 +1,154 @@
+{
+ "progress_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/progress_bar.png",
+    "notes": "AUDIT 17 (matched to review): a real native dark progress now exists (x-progress-explorer-* and progress-*, 178 x 16 and 9240 px crops) and the derived sheet fails it: own comparer (every pixel, best placement in progress_bar.png, off = any channel over 2 levels) 2004 (empty) to 3969 (full, disabled) px off counted, 1423 to 1645 with ink halos cut; the white fill with a black outline against our cyan fill is the whole difference. Rule: a derived row that has a real native dark capture of its control and does not reproduce it is review, whatever the reason; derived stays matched only where no capture of the control exists. | ROUND 33 (derived, measured against the new real dark progress): x-progress-explorer-* (DarkMode_Explorer on a Win32 progress bar: a white fill with a 1 px black outline on a #383838 track with a #575757 rim, 178 x 16). Ours is the derived accent bar, a cyan fill on a #3A3A3A track with a #5A5A5A rim: x-progress-explorer-full 3954 structure px off, -determinate, -paused and -error 2682 (natively all three show the same white fill), -empty 1521, -disabled 3566. Track and rim are within 2 to 3 levels; the fill colour is a deliberate difference. Status stays as derived, not claimed as native. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native progress bar is the light one: uxtheme has no dark progress bar). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: progress_bar 429 px off, 0 outside the text zone",
+    "gaps": [
+     "No native dark reference exists",
+     "Paused and error tones are not measured"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/toolbar_button.png",
+    "notes": "AUDIT 17 (matched to review): the native dark icon toolbars (x-toolbar-icons-rest, -hot, -checked and the older toolbar-*) are real references and the derived sheets fail them: own comparer counted 1220 to 1276 px off at rest and checked, 1942 hot, 3046 to 4870 for toolbar-hot, -checked and -dropdown-hot (the native hot and checked fills stay light, ours are dark). Rule: a derived row with a real native dark capture that it does not reproduce is review. | ROUND 33 (derived, measured): new real reference x-toolbar-icons-rest, -hot, -checked (icon-only toolbar with a separator and a drop arrow, DarkMode_Explorer) against toolbar_button: rest 779 structure and 384 text px off, hot 5347 and 655, checked against toolbar_button_row 7453 and 540. The hot and checked fills of the native bar stay light where the derived look draws dark fills. Stays derived. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native dark toolbar (toolbar-rest .. toolbar-dropdown-hot of ref/windows-native/dark) draws dim text on #202020 and keeps the light hot and checked faces (#E5F3FF), so it is not a look to copy. The dark sheet is the palette's: icon and text #CECECE on the #3C3C3C hot face (7.0 : 1), unmeasured washes.",
+    "gaps": [
+     "Hot, pressed, checked and disabled washes are guesses from the Windows 11 ramp",
+     "The native dark toolbar is broken (dim text, light hot faces): nothing to match"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/status_bar.png",
+    "notes": "AUDIT 17 (matched to review): x-statusbar-explorer, statusbar-nogrip and statusbar-panels are real native dark-mode captures (the bar stays light, DarkMode_Explorer) and the derived dark bar differs from all three: 7124 to 7320 px off counted at best placement. Dark by design is a design choice, not a match of the capture. Rule: a derived row with a real native dark capture that it does not reproduce is review. | ROUND 33 (derived, measured): new real reference x-statusbar-explorer (a status bar stays light natively under DarkMode_Explorer): 7878 structure and 526 text px off against status_bar. The derived dark bar is dark by design. Stays derived. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native status bar stays light under DarkMode. Dark sheet = text white on #2B2B2B 13.5 to 14.2 : 1, no drawn border.",
+    "gaps": [
+     "No native dark reference exists",
+     "Panel hover is none (as v3); the progress fill is a guess"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/page_control.png",
+    "notes": "AUDIT 17 (matched to review): x-tab-explorer and tab-* are real native dark-mode captures (the tab control stays light) and the derived dark page control differs: 23,140 to 23,333 of 27,600 px counted at best placement in page_control.png. Rule: a derived row with a real native dark capture that it does not reproduce is review. | ROUND 33 (derived, measured): new real reference x-tab-explorer (a tab control stays light natively under DarkMode_Explorer) against page_control: 21,376 structure and 1439 text px off at the best placement. The derived dark page control is dark by design. Stays derived. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native tab control stays light under DarkMode). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: page_control sheets 0 px outside the text zone (stats 250 to 470 off, all inside 2 px of text), bottom strips 1 to 2 px, page_control_bottom_states 28 px outside the text zone The round 15 bottom-strip frame columns follow in dark.",
+    "gaps": [
+     "No native dark reference exists",
+     "The tab outlines are 2.4 : 1 against the page: below the 3 : 1 bar for every state"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/group_box.png",
+    "notes": "AUDIT 17 (matched to review): groupbox-rest and -disabled are real native dark captures (an unthemed frame #DCDCDC with a black caption on the dark client) and the derived sheet draws a muted frame: 1670 px counted off per capture at best placement, not a rounding difference. The round 15 note that no usable reference exists was about the caption being unreadable natively, not about the capture being absent. Rule: a derived row with a real native dark capture that it does not reproduce is review. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native group box frame stays light #DCDCDC in dark). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: group_box 1 px outside the text zone of 1880 off px, group_box_dialog 1512 of 7961 The frame (#333333 against the page 1.29 : 1) is below the 3 : 1 border bar.",
+    "gaps": [
+     "No native dark reference: the capture is the unthemed light frame",
+     "The frame is below the 3 : 1 border bar, so the status stays started"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/menu_bar.png",
+    "notes": "AUDIT 17 (matched to review): menubar-rest, -hot-first, -hot-second, -open and -open-hover-item are real native dark captures (a white bar with black text, unthemed) and the derived dark bar is a dark bar: the bar and its open popups differ over thousands of px. Rule: a derived row with a real native dark capture that it does not reproduce is review. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native menu bar stays white under DarkMode (menubar-rest, -hot-*, -open of ref/windows-native/dark). Dark sheet = titles white on #202020 (16.3 : 1), hot and open washes unmeasured. The open menu under a title now is the native dark flyout (see popup_menu).",
+    "gaps": [
+     "Hot/open washes are guesses; title paddings are v3's",
+     "The native menu bar capture is white: nothing to match"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "AUDIT 17 (stays matched, flagged derived): no native or v3 dark capture of a splitter exists, so the derived dark sheet is the only claim and it is unmeasured; it stays matched on the maintainer's 2026-10-17 acceptance, not on a comparison. Counted as an unmeasured match in audit 17. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (there is no native splitter control and no dark app splitter capture). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: splitter 0 px off in all 9 sheets but the main one (40 px, 0 outside the text zone)",
+    "gaps": [
+     "No native or live dark reference exists"
+    ]
+   }
+  }
+ },
+ "search_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/search_bar.png",
+    "notes": "AUDIT 17 (matched to review, capped): the reference is plain HTML and CSS written from the M3 specification (scripts/material/gallery.html '.searchbar'; Material Web has no search bar), so a pixel match proves the spec reading, not the platform. Own comparer (reference crop plus 6 px, text ink masked in the search, every state): flat 0 off and 0 px over 12 levels outside the 2 px ink margin in all five cells in light and dark, confirmed, but 19 to 40 percent of the text ink pixels differ by more than 12 levels (rms 11 to 23 levels). Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): every cell is flat 0 px off, 0 ring, 0 rim, 0 shadow, with glyph pixels counted too (off+glyph 0), in light and dark. Two causes fixed: the query field asked for its intrinsic width and squeezed the 24 dp search icon to 21 dp wide (the editor is now as wide as the room the bar leaves), which also moved the text 6 px left; and the Roboto line metrics (Blink: ascent up, descent down) that had put every 14 dp label one row low. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/search_bar.png",
+    "notes": "AUDIT 17 (matched to review, capped): the reference is plain HTML and CSS written from the M3 specification (scripts/material/gallery.html '.searchbar'; Material Web has no search bar), so a pixel match proves the spec reading, not the platform. Own comparer (reference crop plus 6 px, text ink masked in the search, every state): flat 0 off and 0 px over 12 levels outside the 2 px ink margin in all five cells in light and dark, confirmed, but 19 to 40 percent of the text ink pixels differ by more than 12 levels (rms 11 to 23 levels). Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): every cell is flat 0 px off, 0 ring, 0 rim, 0 shadow, with glyph pixels counted too (off+glyph 0), in light and dark. Two causes fixed: the query field asked for its intrinsic width and squeezed the 24 dp search icon to 21 dp wide (the editor is now as wide as the room the bar leaves), which also moved the text 6 px left; and the Roboto line metrics (Blink: ascent up, descent down) that had put every 14 dp label one row low. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ },
+ "top_app_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/app_bar.png",
+    "notes": "AUDIT 17 (matched to review, capped): the reference is CSS written from the M3 specification (gallery.html; Material Web has no top app bar). Own comparer: flat 0 off, 0 px over 12 levels outside ink in all four cells, light and dark, confirmed; text ink 40 percent (light) and 47 percent (dark) of ink pixels over 12 levels, rms 19 to 23. Baselines measured on the reference: the 22 px title baseline is row 55 of the capture (21 px under its 28 px line box) and the 16 px search text row 49 (17 under its 24 px box), which the ceil rule gives. Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): all four cells flat 0 off, 0 ring, 0 rim, 0 shadow with glyph pixels counted (off+glyph 0, was 21) in light and dark; the 22 dp title sits on the Blink baseline. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced.",
+     "The app bar reference is plain CSS written from the M3 spec, not a Material Web capture; its icons are the legacy Material Icons paths the gallery's author picked."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/app_bar.png",
+    "notes": "AUDIT 17 (matched to review, capped): the reference is CSS written from the M3 specification (gallery.html; Material Web has no top app bar). Own comparer: flat 0 off, 0 px over 12 levels outside ink in all four cells, light and dark, confirmed; text ink 40 percent (light) and 47 percent (dark) of ink pixels over 12 levels, rms 19 to 23. Baselines measured on the reference: the 22 px title baseline is row 55 of the capture (21 px under its 28 px line box) and the 16 px search text row 49 (17 under its 24 px box), which the ceil rule gives. Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): all four cells flat 0 off, 0 ring, 0 rim, 0 shadow with glyph pixels counted (off+glyph 0, was 21) in light and dark; the 22 dp title sits on the Blink baseline. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced.",
+     "The app bar reference is plain CSS written from the M3 spec, not a Material Web capture; its icons are the legacy Material Icons paths the gallery's author picked."
+    ]
+   }
+  }
+ },
+ "badge": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/badge.png",
+    "notes": "AUDIT 17 (matched to review, capped): the reference is CSS written from the M3 specification (gallery.html '.badge'; Material Web has no badge). Own comparer: flat off 0 outside the ink margin, 5 to 7 flat px counted at the digits, but 137 to 146 px over 12 levels outside the ink margin across six cells (35 at most in one cell) where the worker reports 0 ring; text ink over 12 levels 45 to 51 percent. Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): flat 0 off and 0 ring in all six cells, 3 shadow px (max 3 levels) at the count badge's rim, glyph pixels 14 light and 10 dark (were 34 and 33). A count badge placed 12 dp into the 24 dp icon box was squeezed to a 12 dp pill; the anchor box is now wider so the 16 dp badge keeps its size, and it rises 3 dp. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/badge.png",
+    "notes": "AUDIT 17 (matched to review, capped): the reference is CSS written from the M3 specification (gallery.html '.badge'; Material Web has no badge). Own comparer: flat off 0 outside the ink margin, 5 to 7 flat px counted at the digits, but 137 to 146 px over 12 levels outside the ink margin across six cells (35 at most in one cell) where the worker reports 0 ring; text ink over 12 levels 45 to 51 percent. Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): flat 0 off and 0 ring in all six cells, 3 shadow px (max 3 levels) at the count badge's rim, glyph pixels 14 light and 10 dark (were 34 and 33). A count badge placed 12 dp into the 24 dp icon box was squeezed to a 12 dp pill; the anchor box is now wider so the 16 dp badge keeps its size, and it rises 3 dp. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte.",
+    "gaps": [
+     "Text edges are not pixel equal: after the round 33 fit about 78 % of ink pixels still differ by more than 2 levels (dialog: 7344 ink px, rms 12 light and 18 dark, was 16 and 31); Skia's glyph rasteriser is fitted, not reproduced."
+    ]
+   }
+  }
+ }
+}
