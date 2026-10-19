@@ -1075,6 +1075,13 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     ret (p, ok)
 }
 
+// Releases what the page holds outside its arena: its realms' generator threads and its web fonts. Call before the arena
+// the page was loaded into is rewound or reused.
+fn close(p: *Page) {
+    if p.scripted { script.close(p.ctx) }
+    release_fonts(p)
+}
+
 // Drops the web fonts the page added (the font set outlives pages; the renderer keeps at most 16 faces).
 fn release_fonts(p: *Page) {
     if p.fonts.faces.len > p.font_base { p.fonts.faces.len = p.font_base }

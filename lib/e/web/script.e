@@ -1301,6 +1301,17 @@ fn run_script(it: *js.Interp, source: str, name: str) -> bool {
     ret false
 }
 
+// Parks the generator threads of `it` and of the frame realms under it (a page being closed).
+fn close(it: *js.Interp) {
+    let h = host_of(it)
+    var i = 0usize
+    while i < h.children.len {
+        close(h.children.items[i])
+        i += 1usize
+    }
+    js.shutdown_generators(it)
+}
+
 // Calls `__lifecycle[name]()`: the document's readyState changes and its load events.
 fn lifecycle(it: *js.Interp, name: str) {
     let (lc, le) = js.get_prop(it, it.global, js.key_of("__lifecycle"), js.obj_value(it.global))
