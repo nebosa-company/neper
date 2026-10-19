@@ -55,6 +55,11 @@ const C_DATAVIEW: u8 = 22u8
 const C_ITERATOR: u8 = 23u8
 const C_NAMESPACE: u8 = 24u8
 const C_SHADOWREALM: u8 = 25u8
+const C_WMODULE: u8 = 26u8
+const C_WINSTANCE: u8 = 27u8
+const C_WMEMORY: u8 = 28u8
+const C_WTABLE: u8 = 29u8
+const C_WGLOBAL: u8 = 30u8
 
 // Property flags.
 const P_WRITABLE: u8 = 1u8
@@ -142,7 +147,7 @@ type Interp = struct {
     sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool,
-    gens: list.List[*GenState]
+    gens: list.List[*GenState], wasm: *void
 }
 
 fn root_realm(it: *Interp) -> *Interp {

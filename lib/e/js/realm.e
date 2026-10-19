@@ -19,6 +19,7 @@ use e.js.b_proxy as b_proxy
 use e.js.b_regexp as b_regexp
 use e.js.b_string as b_string
 use e.js.b_atomics as b_atomics
+use e.js.b_wasm as b_wasm
 use e.js.b_typed as b_typed
 use e.js.interp as js
 use e.js.module as module
@@ -1777,6 +1778,7 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     b_typed.install_typed_arrays(it)
     b_typed.install_data_view(it)
     b_atomics.install_atomics(it)
+    b_wasm.install_wasm(it)
     b_misc.install_misc(it)
     b_proxy.install_proxy(it)
     js.add_method(it, it.global, "print", 1u32, global_print)
