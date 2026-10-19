@@ -7282,6 +7282,8 @@ fn layout_abs(l: *Layout, b: u32) {
         static_x = 0.0f64
         static_y = 0.0f64
     }
+    let phys_sx = static_x
+    let phys_sy = static_y
     if swap_code != 0u8 {
         let (sx, sy, sw0, sh0) = remap_rect(0u8, swap_code, phys_cb_w, phys_cb_h, static_x, static_y, 0.0f64, 0.0f64)
         static_x = sx
@@ -7402,6 +7404,12 @@ fn layout_abs(l: *Layout, b: u32) {
     }
     bbh.margin[0usize] = mt
     bbh.margin[2usize] = mb
+    if swap_code != 0u8 && mode_code(bstyle(l, bb.parent)) == 0u8 && bstyle(l, bb.parent).direction != .Rtl {
+        // A mirrored frame inside a horizontal parent needs the box's size to place its static position: re-map the static point as the box's rectangle.
+        let (fx, fy, fw0, fh0) = remap_rect(0u8, swap_code, phys_cb_w, phys_cb_h, phys_sx, phys_sy, bbh.h, bbh.w)
+        static_y = fy
+        if !has_l && !has_r && rect_w < 0.0f64 { left = fx }
+    }
     var top = static_y
     if has_t {
         top = tv

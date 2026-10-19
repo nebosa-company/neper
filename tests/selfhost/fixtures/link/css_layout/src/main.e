@@ -396,5 +396,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 67. Position absolute makes float compute to none: the box keeps its static position.
     let (p67, ok67) = build(a, "<div id=a style=\"position:absolute;float:right;width:10px;height:10px\"></div>", "")
     if !ok67 || !is_rect(rect_of(p67, "a"), 0.0f64, 0.0f64, 10.0f64, 10.0f64) { os.exit(104) }
+    // 68. A vertical-rl absolute box keeps its static position when its own frame is mirrored.
+    let (p68, ok68) = build(a, "<div style=\"position:relative;width:100px;height:100px\"><span id=a style=\"position:absolute;writing-mode:vertical-rl;font-size:10px\">X</span></div>", "")
+    if !ok68 || !near(rect_of(p68, "a").x, 0.0f64) { os.exit(105) }
     ret ok
 }
