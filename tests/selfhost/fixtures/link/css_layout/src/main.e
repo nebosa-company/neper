@@ -433,5 +433,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 78. The trailing space of a line does not widen a shrink-to-fit box.
     let (p78, ok78) = build(a, "<div id=a style=\"position:absolute\"><span style=\"display:inline-block;width:100px;height:10px\"></span> </div>", "")
     if !ok78 || !near(rect_of(p78, "a").w, 100.0f64) { os.exit(115) }
+    // 79. A table caption honours its height.
+    let (p79, ok79) = build(a, "<div style=\"display:table;width:100px\"><div id=a style=\"display:table-caption;height:30px\"></div></div>", "")
+    if !ok79 || !near(rect_of(p79, "a").h, 30.0f64) { os.exit(116) }
     ret ok
 }

@@ -4369,9 +4369,14 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
             let cap = bx(l, kid)
             cap.w = maxf(0.0f64, cw + horizontal_extras(bx(l, t)) - cap.margin[1usize] - cap.margin[3usize])
             let content_w = maxf(0.0f64, cap.w - horizontal_extras(cap))
-            let h = layout_in_new_bfc(l, kid, content_w, -1.0f64)
+            var cap_spec_h = -1.0f64
+            let (cap_hv, cap_has_h) = resolve_len(cs.height, -1.0f64)
+            if cs.height.kind == .Px && cap_has_h { cap_spec_h = to_content_h(l, kid, cap_hv) }
+            let h = layout_in_new_bfc(l, kid, content_w, cap_spec_h)
             let cap2 = bx(l, kid)
-            cap2.h = h + vertical_extras(cap2)
+            var cap_content_h = h
+            if cap_spec_h >= 0.0f64 { cap_content_h = cap_spec_h }
+            cap2.h = cap_content_h + vertical_extras(cap2)
             let outer = cap2.h + cap2.margin[0usize] + cap2.margin[2usize]
             if cs.caption_side == .Bottom { cap_bottom += outer } else { cap_top += outer }
         }
