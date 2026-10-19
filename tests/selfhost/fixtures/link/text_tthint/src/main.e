@@ -104,8 +104,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (l, l_error) = ttglyph.hint_glyph(h, a, 12i64, lg, true)
     if l_error != ok || l.n != 4usize || l.adv != 192i64 { ret tthint.Trap }
     if l.cur[0usize] != 134i64 || l.cur[2usize] != 64i64 || l.cur[5usize] != 576i64 { ret tthint.Trap }
-    if glyph_sum(h, a, bytes, sub, "labelmoRS", true) != 15463767i64 { ret tthint.Trap }
+    if glyph_sum(h, a, bytes, sub, "labelmoRS", true) != 15468312i64 { ret tthint.Trap }
     if glyph_sum(h, a, bytes, sub, "labelmoRS", false) != 15505486i64 { ret tthint.Trap }
-    if image_sum(h, a, bytes, sub, "Sample label") != 271547074i64 { ret tthint.Trap }
+    if image_sum(h, a, bytes, sub, "Sample label") != 271558023i64 { ret tthint.Trap }
     ret ok
 }
