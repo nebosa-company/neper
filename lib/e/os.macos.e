@@ -970,6 +970,11 @@ fn environment_vector(a: *mem.Arena, additions: []const str) -> (usize, err) {
 // ponytail: stdio and cwd are swapped in the parent around the spawn; add
 // POSIX_SPAWN file actions (psfa) when threads exist on macOS.
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
+    let (child, spawn_error) = spawn_inner(a, options, false)
+    ret (child, spawn_error)
+}
+
+fn spawn_inner(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (Proc, err) {
     var child: Proc = zero
     if options.argv.len == 0usize { ret (child, Failed) }
     let (program, program_error) = c_string(a, options.argv[0usize])
@@ -1015,6 +1020,17 @@ fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
     }
     var pid: i32 = 0i32
     var description: [32]i64 = zero
+    // A group is the child's own, made by the kernel as it starts: POSIX_SPAWN_SETPGROUP (2) in
+    // the attribute block's flags, with a group of 0 meaning the child's pid. Afterwards it is too
+    // late -- setpgid on a child that has exec'd answers EACCES. The descriptor's first word is
+    // the attribute block's size and its second the block's address; the flags are the first
+    // short of the block and the group its fourth word, so a 16-byte block is enough.
+    var attributes: [4]i32 = zero
+    if grouped {
+        attributes[0usize] = 2i32
+        description[0usize] = 16i64
+        description[1usize] = i64(mem.address_of(&attributes[0usize]))
+    }
     let result = syscall(SYS_POSIX_SPAWN, mem.address_of(&pid), program, mem.address_of(&description[0usize]), argv, envp, 0usize)
     var restore = 0usize
     while restore < 3usize {
@@ -1099,11 +1115,26 @@ fn dup(f: File) -> (File, err) {
     ret (second, ok)
 }
 
-// Process groups are not set up on macOS yet.
+// The group is the child's own and its identifier is the child's pid. Containment is what the
+// host gives and no more: a descendant that starts a group of its own leaves it.
 fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) {
     var group: ProcGroup = zero
-    var child: Proc = zero
-    ret (group, child, Unsupported)
+    let (child, spawn_error) = spawn_inner(a, options, true)
+    if spawn_error != ok { ret (group, child, spawn_error) }
+    group.raw = child.raw
+    ret (group, child, ok)
 }
-fn proc_group_terminate(group: ProcGroup, force: bool) -> err { ret Unsupported }
+
+// A negative pid is the whole group, which is what killpg is.
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
+    var number = SIGTERM
+    if force { number = SIGKILL }
+    let negated = 0usize -% group.raw
+    let result = syscall(SYS_KILL, negated, number, 0usize, 0usize, 0usize, 0usize)
+    // ESRCH: the group is already empty, which is what termination was after.
+    if result == -3isize { ret ok }
+    ret from_errno(result)
+}
+
+// A group identifier is not a handle here, so there is nothing to give back.
 fn proc_group_close(group: own ProcGroup) -> err { ret ok }
