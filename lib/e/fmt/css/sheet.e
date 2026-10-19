@@ -863,7 +863,7 @@ fn decls_of(l: *Loader, src: str, tokens: []const syntax.Token) -> []const casca
     if me != ok { ret zero }
     var i = 0usize
     while i < parsed.len {
-        out[i] = cascade.Declaration { property: cv.lower(l.a, parsed[i].name), value: cv.trim_ws(syntax.raw_text(src, parsed[i].value)), important: parsed[i].important }
+        out[i] = cascade.Declaration { property: cv.lower(l.a, parsed[i].name), value: cv.trim_ws(syntax.decoded_text(l.a, src, parsed[i].value)), important: parsed[i].important }
         i += 1usize
     }
     ret out[..parsed.len]

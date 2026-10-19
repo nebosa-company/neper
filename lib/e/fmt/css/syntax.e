@@ -899,6 +899,30 @@ fn parse_declarations(a: *mem.Arena, tokens: []const Token) -> ([]const Declarat
 }
 
 // The source text of a token range (the empty text for none).
+// The source text of `tokens` with escaped identifiers decoded (`7 reen` reads `green`); strings, urls and everything else stay as written.
+fn decoded_text(a: *mem.Arena, source: str, tokens: []const Token) -> str {
+    let raw = raw_text(source, tokens)
+    var has_escape = false
+    var i = 0usize
+    while i < raw.len {
+        if raw[i] == 92u8 { has_escape = true }
+        i += 1usize
+    }
+    if !has_escape { ret raw }
+    var out = ""
+    var k = 0usize
+    while k < tokens.len {
+        let t = tokens[k]
+        var piece = source[t.start..t.end]
+        if t.kind == .Ident { piece = t.value }
+        let (joined, je) = str.concat(a, out, piece)
+        if je != ok { ret raw }
+        out = joined
+        k += 1usize
+    }
+    ret out
+}
+
 fn raw_text(source: str, tokens: []const Token) -> str {
     if tokens.len == 0usize { ret "" }
     ret source[tokens[0].start..tokens[tokens.len - 1usize].end]

@@ -419,5 +419,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 74. A flex item's automatic minimum size is capped by its max-width.
     let (p74, ok74) = build(a, "<div style=\"display:flex;width:1px\"><div id=a style=\"width:100px;max-width:50px\"><div style=\"width:80px;height:5px\"></div></div></div>", "")
     if !ok74 || !near(rect_of(p74, "a").w, 50.0f64) { os.exit(111) }
+    // 75. An escaped identifier in a value is decoded (`\31 00px` is `100px`).
+    let (p75, ok75) = build(a, "<div id=a></div>", "#a { width: \\31 00px; height: 10px; }")
+    if !ok75 || !near(rect_of(p75, "a").w, 100.0f64) { os.exit(112) }
     ret ok
 }
