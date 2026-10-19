@@ -1,0 +1,154 @@
+{
+ "chip": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/chips.png",
+    "notes": "ROUND 31 (review to matched): the input chip's label kept the padding for a 24 dp remove button where md-input-chip's is 18 dp, so it sat 2 px high; fixed, input chip pixels off 24 to 33 per cell become 0 to 2. Whole sheet, strict: 5 flat px off and 41 ring px over 12 levels in light (was 217 and 136), 6 and 40 in dark (was 232 and 129). Remaining: the remove icon's ring (2 to 6 px per input chip cell, at most 30 levels) and the 1 px placement of fractional-width chips. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Input chip: the remove icon is the Symbols close the capture draws; 2 to 6 ring px per cell differ and the chip sits within 1 px of the reference because its width is fractional",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/chips.png",
+    "notes": "ROUND 31 (review to matched): the input chip's label kept the padding for a 24 dp remove button where md-input-chip's is 18 dp, so it sat 2 px high; fixed, input chip pixels off 24 to 33 per cell become 0 to 2. Whole sheet, strict: 5 flat px off and 41 ring px over 12 levels in light (was 217 and 136), 6 and 40 in dark (was 232 and 129). Remaining: the remove icon's ring (2 to 6 px per input chip cell, at most 30 levels) and the 1 px placement of fractional-width chips. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Input chip: the remove icon is the Symbols close the capture draws; 2 to 6 ring px per cell differ and the chip sits within 1 px of the reference because its width is fractional",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/tabs.png",
+    "notes": "ROUND 31 (review to matched): the middle tab now draws the Material image icon and the reference draws the same icon (the gallery's star placeholder was replaced and the reference re-captured); flat px off 0 in all seven cells, light and dark, ring 0, the indicator corners 10 px at rim level as before. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Tab labels carry the text edge difference below",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/tabs.png",
+    "notes": "ROUND 31 (review to matched): the middle tab now draws the Material image icon and the reference draws the same icon (the gallery's star placeholder was replaced and the reference re-captured); flat px off 0 in all seven cells, light and dark, ring 0, the indicator corners 10 px at rim level as before. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Tab labels carry the text edge difference below",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/menu.png",
+    "notes": "ROUND 31 (review to matched): the Search row's text and shortcut sat 4 px off because the row put its 16 dp gap on both sides of the filler and so overflowed the menu; md-menu-item's gaps are now paddings. The gallery's star and plus placeholders for Settings and Refresh are replaced by the settings, refresh and image Material Icons paths that matglyph.e draws and the references re-captured. Flat px off 26 to 0 and with glyphs 228 to 18 (light and dark, rest and hover). | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/menu.png",
+    "notes": "ROUND 31 (review to matched): the Search row's text and shortcut sat 4 px off because the row put its 16 dp gap on both sides of the filler and so overflowed the menu; md-menu-item's gaps are now paddings. The gallery's star and plus placeholders for Settings and Refresh are replaced by the settings, refresh and image Material Icons paths that matglyph.e draws and the references re-captured. Flat px off 26 to 0 and with glyphs 228 to 18 (light and dark, rest and hover). | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/list.png",
+    "notes": "ROUND 31 (review to matched): md-list-item ends its trailing icon 16 dp from the edge and the row kept 24, which put the chevron 8 px left of the reference in the two-line rows; fixed. Flat px off 36 to 0 (light) and 44 to 0 (dark), ring 0. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Material Web has no selected list item and no three-line item: those sheet cells are not compared",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/list.png",
+    "notes": "ROUND 31 (review to matched): md-list-item ends its trailing icon 16 dp from the edge and the row kept 24, which put the chevron 8 px left of the reference in the two-line rows; fixed. Flat px off 36 to 0 (light) and 44 to 0 (dark), ring 0. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Material Web has no selected list item and no three-line item: those sheet cells are not compared",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/radio.png",
+    "notes": "ROUND 31 (still review): the ring is 8 % heavy in ink (1.079 light, 1.085 dark) and the cause is the reference's rasteriser, not geometry: on the axes the ring pixels equal ours (84 against 89 at the rim, the stroke 2.0 wide) but on the diagonals Skia's distance-based edge coverage gives about 10 % less than exact area coverage (ours 159, 200 where it has 182, 214). A 1.9 stroke lowers the mass to 1.02 but raises the pixels over 2 levels from 1038 to 1140, so it was not taken. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Ring ink 8 % heavy on the diagonals (Skia's analytic circle coverage against Neper's exact area coverage); 1038 ring px over 2 levels in light, 510 over 12",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/radio.png",
+    "notes": "ROUND 31 (still review): the ring is 8 % heavy in ink (1.079 light, 1.085 dark) and the cause is the reference's rasteriser, not geometry: on the axes the ring pixels equal ours (84 against 89 at the rim, the stroke 2.0 wide) but on the diagonals Skia's distance-based edge coverage gives about 10 % less than exact area coverage (ours 159, 200 where it has 182, 214). A 1.9 stroke lowers the mass to 1.02 but raises the pixels over 2 levels from 1038 to 1140, so it was not taken. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Ring ink 8 % heavy on the diagonals (Skia's analytic circle coverage against Neper's exact area coverage); 1038 ring px over 2 levels in light, 510 over 12",
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/dialog.png",
+    "notes": "ROUND 31: text placement now follows Chromium (whole baseline, vertical fit); flat px, ring and shadow stay 0. Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/dialog.png",
+    "notes": "ROUND 31: text placement now follows Chromium (whole baseline, vertical fit); flat px, ring and shadow stay 0. Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "Text edges are not pixel equal: the reference's glyph edges have a soft horizontal fall-off (DirectWrite natural mode, vertical hinting and a horizontal filter) that Neper's exact-area fill does not reproduce; after the vertical fit the dialog's ink pixels differing by more than 2 levels are 6231 of 7344 (was 6575) and by more than 8 levels 4386 (was 5191); seven text sheets together 45,583 of 69,663 over 8 levels (was 50,061)."
+    ]
+   }
+  }
+ },
+ "date_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/date_picker.png",
+    "notes": "ROUND 31: the comparer assumed the card at (0, 3) in its cell and absorbed the rows with its shift, lighting the card's bottom shadow (1516 off px in light); the sheet places it at (0, 0). Flat px off now 0 in light and 4 in dark; the card is 0.6 px short of the spec-derived reference's 461 rows (the bottom edge row is partial, 1411 ring px at the edges). Spec-derived reference (CSS written from the M3 spec), so the cap is review. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "The card is 460.4 rows tall against 461 in the spec-derived reference",
+     "Reference is not a Material Web capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "ROUND 31: the comparer assumed the card at (0, 3) in its cell and absorbed the rows with its shift, lighting the card's bottom shadow (1516 off px in light); the sheet places it at (0, 0). Flat px off now 0 in light and 4 in dark; the card is 0.6 px short of the spec-derived reference's 461 rows (the bottom edge row is partial, 1411 ring px at the edges). Spec-derived reference (CSS written from the M3 spec), so the cap is review. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only.",
+    "gaps": [
+     "The card is 460.4 rows tall against 461 in the spec-derived reference",
+     "Reference is not a Material Web capture"
+    ]
+   }
+  }
+ }
+}
