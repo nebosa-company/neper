@@ -935,6 +935,15 @@ fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
         ret (watch, OutOfMemory)
     }
     let state = &holder[0usize]
+    // `mem.alloc` hands back memory as it was, so the snapshot is cleared here.
+    var clear = 0usize
+    while clear < WATCH_ENTRIES {
+        state.entries[clear].live = false
+        state.entries[clear].name_length = 0usize
+        state.entries[clear].descriptor = -1isize
+        state.found[clear] = false
+        clear += 1usize
+    }
     state.queue = usize(queue)
     state.base = path
     // The directory itself, so a name added or removed wakes the wait.
