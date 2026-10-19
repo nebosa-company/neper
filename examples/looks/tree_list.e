@@ -217,7 +217,7 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
         ret ok
     }
     // v3's edition pictures sit in the ES column of the Windows light list (e.ui.wintreeicon)
-    if node >= 200u64 && column == 1usize && t.tokens.profile == .Windows && t.tokens.palette != .Dark && usize(node - 200u64) < wintreeicon.count() {
+    if node >= 200u64 && column == 1usize && t.tokens.profile == .Windows && usize(node - 200u64) < wintreeicon.count() {
         let k = usize(node - 200u64)
         let atlas = wintreeicon.atlas()
         let (tile, tile_error) = wintile.tile_node(a, wintreeicon.w(), wintreeicon.h(), atlas[k * 352usize..k * 352usize + 352usize])
