@@ -150,6 +150,13 @@ fn r_point(sc: *Scratch, o: *const tthint.Outline, i: usize) -> (i64, i64) {
     ret (x, y)
 }
 
+// The implied on-curve point between two off-curve points, rounded on the raster base grid (1/64 sample, 1/64 sub-row) like the scan converter.
+fn r_mid(a: i64, b: i64) -> i64 {
+    let ra = (a + PHALF) / PSCALE
+    let rb = (b + PHALF) / PSCALE
+    ret ((ra + rb + 1i64) >> 1u32) * PSCALE - PHALF
+}
+
 fn r_new_profile(sc: *Scratch, st: i64) {
     var p = sc.cprof
     if p < 0i64 || sc.pht[usize(p)] != 0i64 {
@@ -423,8 +430,8 @@ fn r_contour(sc: *Scratch, o: *const tthint.Outline, first: usize, last: usize) 
             vsy = ly
             lim -= 1i64
         } else {
-            vsx = (fx + lx) / 2i64
-            vsy = (fy + ly) / 2i64
+            vsx = r_mid(fx, lx)
+            vsy = r_mid(fy, ly)
         }
         pt -= 1i64
     }
@@ -447,7 +454,7 @@ fn r_contour(sc: *Scratch, o: *const tthint.Outline, first: usize, last: usize) 
                     r_conic_to(sc, cx, cy, nx, ny)
                     break
                 }
-                r_conic_to(sc, cx, cy, (cx + nx) / 2i64, (cy + ny) / 2i64)
+                r_conic_to(sc, cx, cy, r_mid(cx, nx), r_mid(cy, ny))
                 cx = nx
                 cy = ny
                 continue
