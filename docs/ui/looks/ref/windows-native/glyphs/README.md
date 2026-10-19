@@ -37,15 +37,31 @@ The odd-k ties round the way they do because of the 16.16 fraction.
 
 Model the Neper pipeline fits to these atlases (`lib/e/text/tthint.e`, `ttglyph.e`, `lib/e/gfx/cleartype.e`):
 
-- GDI's ClearType pen advance is the font's `hdmx` advance, and hinting runs at the fonts' own sizes with x fitting added at `IUP[x]`
-  (per-point whole-pixel shifts that spread the difference between the `hdmx` advance and the rounded scaled advance over the glyph:
-  IP interpolates its reference shifts, pairs take the centre rule or follow a shifted reference, `SHPIX` of a pixel or more is ignored,
-  the right phantom is never moved by x moves, x `DELTAP` is ignored). `Outline.adv` is that advance.
-- A glyph whose program ran is sampled on one line per pixel row (y + 0.5) with six samples per pixel; a channel's coverage level is the
-  number of samples in its six-sample window. A glyph without a program (the NProbe fonts) is sampled on five weighted lines instead.
+- Rasteriser (`cleartype.e`): GDI's ClearType is the TrueType scan converter run on a grid six samples wide per pixel (the six-sample window
+  of each subpixel gives its coverage, 0..6) and one sample row per pixel row, with the outline curves flattened exactly (a quadratic's x per
+  scan line, rounded). Two consecutive off-curve points imply an on-curve midpoint that is rounded on the 1/64 sample grid before the
+  curve is drawn (worth 42 glyphs of 756 in the probe atlases). Drop-out control follows the font's scan type (Segoe UI mode 1, Tahoma
+  mode 5), a stub is dropped, the bounding box is clamped. Sizes the `gasp` table marks for symmetric smoothing (Segoe UI above 19 ppem,
+  Tahoma above 17) are sampled six by five with the vertical weights 1 2 3 2 1 and level (n + 4) / 9.
+- Hinting (`tthint.e`): the font's own programs run in ClearType mode with the rules of Microsoft's "Backwards compatibility of TrueType
+  instructions with ClearType" note: x moves are on a 1/16 pixel grid, x `DELTAP` and `SHPIX` of a pixel or more are ignored (a delta
+  function is recognised by its signature), `GETINFO` answers the ClearType and symmetric smoothing bits, the freedom vector says which
+  direction is x. Storage 22 and 24 bypass the legacy Talk functions.
+- Advance fit: GDI's ClearType pen advance is the `hdmx` advance A (the rounded scaled advance); the scaled advance X is rounded to 1/16.
+  At `IUP[x]` the points that x instructions touched move by the difference spread over the glyph: a stem (MIRP or MSIRP pair) by
+  round(centre * (A - X) / X), IP by the interpolated shifts of its two references (settled after the whole program, so a reference that a
+  later MIRP pairs counts with its final shift), a point that MDRP, ALIGNRP or SHP set against another with that one's shift, the right
+  phantom never moved by x moves. A composite component is fitted to the device advance of the top glyph (its offset rounds to 1/16 in x).
 - The hinted points are checked against `GetGlyphOutline` in black and white (the whole-pixel machine) and against the ClearType machine
   through the tap fonts in `scripts/winnative/tap*.py`: copies of the font whose programs write the `GC` reading of every point into
   storage and show it as bits, cut after K instructions or after `IUP[x]`.
-- Status at the end of round 22 (non-probe atlases): 4830 of 14144 ink glyphs pixel-identical, ClearType points equal to GDI's for
-  7188 of 12082 glyphs; the black-and-white outline and advance already match for 99%. Open: Segoe UI 24 (the stem is not rounded), Tahoma
-  (single-point y differences of 16 to 64 and x on `# f L ] r X { }`), composites (no fitting), `&PRUcm~` at Segoe UI 12.
+- Status at the end of round 23 (non-probe atlases, 189 ink glyphs each): pixel-identical for Segoe UI regular 11 to 18 px 91.5 to 97.9 %
+  (24 px 72.5 %), Segoe UI bold 86 to 95 % (24 px 75.7 %), Tahoma regular 78 to 88 % (21 px 79.4 %), Tahoma bold 77 to 86 % (21 px
+  84.7 %); 86.9 % over the 28 atlases, 4601 of 5292. ClearType points equal GDI's for 10566 of 12082 glyphs; the black-and-white outline
+  and advance already match for 99 %. Fed GDI's own hinted points, the rasteriser alone reproduces 97.5 % of the glyphs at 11 to 18 px
+  and 76 % at 24 and 21 px, so the first cap is the hinter.
+- What blocks 95 %: (1) the x fit of single touched points. A point that MDAP rounds alone shifts by 0, but a point that ALIGNRP, SHP or
+  MDRP sets against it sometimes shifts in proportion to its own position (`<`, `>`: 15 of A - X = 17 at x = 480) and sometimes with the
+  group of its reference (`#`: both bars 17 and 0), and the instruction order in the programs does not tell which; the stem-centre rule
+  fits `H`, `o`, `A` and most letters but not `# $ 4 6 Z z { }`. (2) The six by five path at Segoe UI 24 and Tahoma 21: a pure function of
+  the five line levels leaves 0.17 % of the cells wrong, so one glyph in four has a cell off. (3) Accented composites of Segoe UI bold.
