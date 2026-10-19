@@ -827,12 +827,270 @@ fn mapping_close(m: own Mapping) -> err {
     ret from_errno(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
 }
 
-fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
-    var none: Watch = zero
-    ret (none, Unsupported)
+// Change watches are kqueue's. A vnode event wakes the wait but names nothing, so a watch keeps
+// a snapshot of the directory -- each entry's name, inode, size and modification time -- and a
+// wake is a rescan and a diff against it: a new name is Added, a missing one Removed, a changed
+// size or time Modified. Every entry, and the directory, is registered for vnode events so a
+// change to a file's contents wakes the wait too, not only a change to the listing.
+// ponytail: one level only (recursive is refused, as on Linux) and at most WATCH_ENTRIES
+// entries are tracked; a larger directory is watched for its first ones.
+const SYS_KQUEUE: usize = 362usize
+const SYS_KEVENT: usize = 363usize
+const EVFILT_VNODE: i16 = -4i16
+const EV_ADD_CLEAR: u16 = 33u16
+const NOTE_ALL_VNODE: u32 = 63u32
+const O_EVTONLY: usize = 32768usize
+const O_SYMLINK: usize = 2097152usize
+const WATCH_ENTRIES: usize = 256usize
+const WATCH_NAME: usize = 256usize
+
+// `struct kevent`, 32 bytes: the identifier (a descriptor), the filter, the flags, the filter's
+// flags, its data, and the caller's word.
+type Kevent = struct { ident: u64, filter: i16, flags: u16, fflags: u32, data: i64, udata: u64 }
+type Snapshot = struct { name: [256]u8, name_length: usize, inode: u64, size: u64, modified_ns: i64, descriptor: isize, live: bool }
+type WatchState = struct { queue: usize, directory: usize, base: str, entries: [256]Snapshot, found: [256]bool }
+
+fn snapshot_has(entry: *const Snapshot, name: str) -> bool {
+    if !entry.live || entry.name_length != name.len { ret false }
+    var at = 0usize
+    while at < name.len {
+        if entry.name[at] != name[at] { ret false }
+        at += 1usize
+    }
+    ret true
 }
-fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) { ret (0usize, Unsupported) }
-fn watch_close(w: own Watch) -> err { ret ok }
+
+fn snapshot_find(state: *WatchState, name: str) -> isize {
+    var at = 0usize
+    while at < WATCH_ENTRIES {
+        if snapshot_has(&state.entries[at], name) { ret isize(at) }
+        at += 1usize
+    }
+    ret -1isize
+}
+
+fn snapshot_free(state: *WatchState) -> isize {
+    var at = 0usize
+    while at < WATCH_ENTRIES {
+        if !state.entries[at].live { ret isize(at) }
+        at += 1usize
+    }
+    ret -1isize
+}
+
+// A descriptor opened only to be watched, registered on the queue for every vnode event;
+// -1 when it could not be had, in which case the entry is still diffed but cannot wake a wait.
+fn watch_register(a: *mem.Arena, state: *WatchState, full: str) -> isize {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, full)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret -1isize
+    }
+    let descriptor = syscall(SYS_OPEN, path_address, O_RDONLY | O_EVTONLY | O_SYMLINK | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize { ret -1isize }
+    var change: Kevent = zero
+    change.ident = u64(descriptor)
+    change.filter = EVFILT_VNODE
+    change.flags = EV_ADD_CLEAR
+    change.fflags = NOTE_ALL_VNODE
+    let added = syscall(SYS_KEVENT, state.queue, mem.address_of(&change), 1usize, 0usize, 0usize, 0usize)
+    if added < 0isize {
+        let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret -1isize
+    }
+    ret descriptor
+}
+
+// The watched directory and a name joined, in the arena.
+fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
+    let (bytes, allocation_error) = mem.alloc[u8](a, base.len + 1usize + name.len)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < base.len {
+        bytes[at] = base[at]
+        at += 1usize
+    }
+    if at != 0usize && bytes[at - 1usize] != 47u8 {
+        bytes[at] = 47u8
+        at += 1usize
+    }
+    var offset = 0usize
+    while offset < name.len {
+        bytes[at + offset] = name[offset]
+        offset += 1usize
+    }
+    ret (bytes[0usize..at + name.len], ok)
+}
+
+fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
+    var watch: Watch = zero
+    if recursive { ret (watch, Unsupported) }
+    let queue = syscall(SYS_KQUEUE, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if queue < 0isize { ret (watch, from_errno(queue)) }
+    let (holder, holder_error) = mem.alloc[WatchState](a, 1usize)
+    if holder_error != ok {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (watch, OutOfMemory)
+    }
+    let state = &holder[0usize]
+    state.queue = usize(queue)
+    state.base = path
+    // The directory itself, so a name added or removed wakes the wait.
+    let directory = watch_register(a, state, path)
+    if directory < 0isize {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (watch, Failed)
+    }
+    state.directory = usize(directory)
+    // The first snapshot: what is there now is not news.
+    let (listing, listing_error) = readdir(a, path)
+    if listing_error != ok {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        let closed_directory = syscall(SYS_CLOSE, usize(directory), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (watch, listing_error)
+    }
+    var at = 0usize
+    while at < listing.len {
+        let slot = snapshot_free(state)
+        if slot < 0isize { break }
+        let name = listing[at].name
+        if name.len < WATCH_NAME {
+            let (full, full_error) = watch_path(a, path, name)
+            if full_error == ok {
+                let (info, info_error) = lstat(a, full)
+                if info_error == ok {
+                    var entry = &state.entries[usize(slot)]
+                    var letter = 0usize
+                    while letter < name.len {
+                        entry.name[letter] = name[letter]
+                        letter += 1usize
+                    }
+                    entry.name_length = name.len
+                    entry.inode = info.file_id
+                    entry.size = info.size
+                    entry.modified_ns = info.modified_ns
+                    entry.descriptor = watch_register(a, state, full)
+                    entry.live = true
+                }
+            }
+        }
+        at += 1usize
+    }
+    watch.state = mem.cast[*void](state)
+    ret (watch, ok)
+}
+
+// The next changes, waiting for one if there are none: a rescan first, since a change may have
+// landed since the last, then the kqueue until something moves. At most `events.len` are
+// reported at a time; the snapshot is updated only for those, so the rest are found again.
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
+    let state = mem.cast[*WatchState](w.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    while true {
+        let checkpoint = mem.mark(a)
+        let (listing, listing_error) = readdir(a, state.base)
+        if listing_error != ok {
+            mem.reset(a, checkpoint)
+            ret (0usize, listing_error)
+        }
+        // Names seen this scan are marked; whatever stays unmarked in the snapshot is gone.
+        var mark = 0usize
+        while mark < WATCH_ENTRIES {
+            state.found[mark] = false
+            mark += 1usize
+        }
+        var produced = 0usize
+        var at = 0usize
+        while at < listing.len && produced < events.len {
+            let name = listing[at].name
+            at += 1usize
+            if name.len >= WATCH_NAME { continue }
+            let slot = snapshot_find(state, name)
+            let (full, full_error) = watch_path(a, state.base, name)
+            if full_error != ok { ret (produced, full_error) }
+            let (info, info_error) = lstat(a, full)
+            if info_error != ok { continue }
+            if slot < 0isize {
+                let free = snapshot_free(state)
+                if free < 0isize { continue }
+                var entry = &state.entries[usize(free)]
+                var letter = 0usize
+                while letter < name.len {
+                    entry.name[letter] = name[letter]
+                    letter += 1usize
+                }
+                entry.name_length = name.len
+                entry.inode = info.file_id
+                entry.size = info.size
+                entry.modified_ns = info.modified_ns
+                entry.descriptor = watch_register(a, state, full)
+                entry.live = true
+                state.found[usize(free)] = true
+                var added: WatchEvent = zero
+                added.action = .Added
+                added.path = full
+                events[produced] = added
+                produced += 1usize
+            } else {
+                state.found[usize(slot)] = true
+                var entry = &state.entries[usize(slot)]
+                if entry.inode != info.file_id || entry.size != info.size || entry.modified_ns != info.modified_ns {
+                    entry.inode = info.file_id
+                    entry.size = info.size
+                    entry.modified_ns = info.modified_ns
+                    var changed: WatchEvent = zero
+                    changed.action = .Modified
+                    changed.path = full
+                    events[produced] = changed
+                    produced += 1usize
+                }
+            }
+        }
+        // The names that are gone, when every name has been looked at and room is left.
+        if at >= listing.len {
+            var gone = 0usize
+            while gone < WATCH_ENTRIES && produced < events.len {
+                var entry = &state.entries[gone]
+                if entry.live && !state.found[gone] {
+                    let (full, full_error) = watch_path(a, state.base, entry.name[0usize..entry.name_length])
+                    if full_error != ok { ret (produced, full_error) }
+                    if entry.descriptor >= 0isize {
+                        let closed = syscall(SYS_CLOSE, usize(entry.descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+                    }
+                    entry.live = false
+                    var removed: WatchEvent = zero
+                    removed.action = .Removed
+                    removed.path = full
+                    events[produced] = removed
+                    produced += 1usize
+                }
+                gone += 1usize
+            }
+        }
+        if produced != 0usize { ret (produced, ok) }
+        mem.reset(a, checkpoint)
+        // Nothing changed: wait for the kernel to say something did.
+        var arrived: Kevent = zero
+        let waited = syscall(SYS_KEVENT, state.queue, 0usize, 0usize, mem.address_of(&arrived), 1usize, 0usize)
+        if waited < 0isize && waited != -4isize { ret (0usize, from_errno(waited)) }
+    }
+    ret (0usize, ok)
+}
+
+fn watch_close(w: own Watch) -> err {
+    let state = mem.cast[*WatchState](w.state)
+    var at = 0usize
+    while at < WATCH_ENTRIES {
+        if state.entries[at].live && state.entries[at].descriptor >= 0isize {
+            let closed = syscall(SYS_CLOSE, usize(state.entries[at].descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        }
+        at += 1usize
+    }
+    let closed_directory = syscall(SYS_CLOSE, state.directory, 0usize, 0usize, 0usize, 0usize, 0usize)
+    ret from_errno(syscall(SYS_CLOSE, state.queue, 0usize, 0usize, 0usize, 0usize, 0usize))
+}
 
 // ---------------------------------------------------------------- environment and processes
 
