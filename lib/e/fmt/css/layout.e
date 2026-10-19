@@ -3495,7 +3495,10 @@ fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64) {
     let cb = bx(l, c)
     var dx = 0.0f64
     var dy = 0.0f64
-    if s.inset[3usize].kind != .Auto {
+    // With both given, `left` wins in a left-to-right container and `right` in a right-to-left one.
+    var right_wins = false
+    if cb.parent != NONE && bstyle(l, cb.parent).direction == .Rtl && s.inset[1usize].kind != .Auto { right_wins = true }
+    if s.inset[3usize].kind != .Auto && !right_wins {
         dx = resolve_or(s.inset[3usize], maxf(cbw, 0.0f64), 0.0f64)
     } else if s.inset[1usize].kind != .Auto {
         dx = -resolve_or(s.inset[1usize], maxf(cbw, 0.0f64), 0.0f64)

@@ -442,5 +442,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 81. An absolute box with auto left and right in a right-to-left container ends at the static right edge.
     let (p81, ok81) = build(a, "<div style=\"direction:rtl;position:relative;width:200px;height:50px\"><div id=a style=\"position:absolute;width:30px;height:10px\"></div></div>", "")
     if !ok81 || !near(rect_of(p81, "a").x, 170.0f64) { os.exit(118) }
+    // 82. With left and right both given, right wins in a right-to-left container.
+    let (p82, ok82) = build(a, "<div style=\"direction:rtl;width:200px\"><div id=a style=\"position:relative;left:30px;right:10px;width:50px;height:10px\"></div></div>", "")
+    if !ok82 || !near(rect_of(p82, "a").x, 140.0f64) { os.exit(119) }
     ret ok
 }
