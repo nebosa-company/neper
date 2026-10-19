@@ -349,5 +349,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !ok13 { os.exit(30) }
     let (c13, pc13) = paint_page(a, p13, &counter, view)
     if !pc13 || fill_count(c13) != 50usize { os.exit(31) }
+    // 14. A text decoration on a block reaches the text of its in-flow block descendants.
+    let (p14, ok14) = build(a, "<div style=\"text-decoration:underline\"><div>xx</div></div>", "")
+    let (p14b, ok14b) = build(a, "<div><div>xx</div></div>", "")
+    if !ok14 || !ok14b { os.exit(32) }
+    let (c14, pc14) = paint_page(a, p14, &counter, view)
+    let (c14b, pc14b) = paint_page(a, p14b, &counter, view)
+    if !pc14 || !pc14b || fill_count(c14) != fill_count(c14b) + 1usize { os.exit(33) }
     ret ok
 }

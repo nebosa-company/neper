@@ -840,7 +840,12 @@ fn decoration_in_force(p: *Painter, text_box: u32) -> (u8, u32, style.Decoration
             if cs.decoration_current { c = cs.color }
             ret (cs.decoration_line, c, cs.decoration_style)
         }
-        if !cb.inline_level && cb.inner != .Text { break }
+        // Decorations propagate from a block container to its in-flow block descendants; floats, absolutely positioned boxes and
+        // atomic inlines (inline-block, inline-table, replaced) start afresh.
+        if cb.inner != .Text {
+            if cs.floating != .None || cs.position == .Absolute || cs.position == .Fixed { break }
+            if cb.inline_level && cb.inner != .Flow { break }
+        }
         cur = cb.parent
     }
     ret (0u8, 0u32, .Solid)
