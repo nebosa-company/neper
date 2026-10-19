@@ -58,19 +58,19 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     var at = 0usize
     // 0: listbox-rest (118 x 110 at (16, 10)): seven rows of Alpha to Golf
-    let words = [9]str{ "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India" }
-    let (picks, picks_error) = pick_actions(a, 9usize)
+    let words = [10]str{ "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliet" }
+    let (picks, picks_error) = pick_actions(a, 10usize)
     if picks_error != ok { ret (0usize, picks_error) }
-    let (list, list_error) = control.list_box(a, 9000u64, t, "List", words[0usize..9usize], 9usize, picks, 7u32, 118.0)
+    let (list, list_error) = control.list_box(a, 9000u64, t, "List", words[0usize..10usize], 9usize, picks, 7u32, 118.0)
     if list_error != ok { ret (0usize, list_error) }
     let (list_cell, list_cell_error) = placed(a, list, 16.0, 10.0)
     if list_cell_error != ok { ret (0usize, list_cell_error) }
     cells[at] = looks.Cell { caption: "listbox-rest", node: list_cell, drive: .None }
     at += 1usize
     // 1: listbox-selected-focused (Charlie chosen)
-    let (picks2, picks2_error) = pick_actions(a, 9usize)
+    let (picks2, picks2_error) = pick_actions(a, 10usize)
     if picks2_error != ok { ret (0usize, picks2_error) }
-    let (list2, list2_error) = control.list_box(a, 9100u64, t, "List", words[0usize..9usize], 2usize, picks2, 7u32, 118.0)
+    let (list2, list2_error) = control.list_box(a, 9100u64, t, "List", words[0usize..10usize], 2usize, picks2, 7u32, 118.0)
     if list2_error != ok { ret (0usize, list2_error) }
     let (list2_cell, list2_cell_error) = placed(a, list2, 16.0, 10.0)
     if list2_cell_error != ok { ret (0usize, list2_cell_error) }
@@ -78,9 +78,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     cells[at] = looks.Cell { caption: "listbox-selected-focused", node: list2_cell, drive: .Focus }
     at += 1usize
     // 5: listbox-selected-unfocused (and -hover: the same pixels)
-    let (picks3, picks3_error) = pick_actions(a, 9usize)
+    let (picks3, picks3_error) = pick_actions(a, 10usize)
     if picks3_error != ok { ret (0usize, picks3_error) }
-    let (list3, list3_error) = control.list_box(a, 9150u64, t, "List", words[0usize..9usize], 2usize, picks3, 7u32, 118.0)
+    let (list3, list3_error) = control.list_box(a, 9150u64, t, "List", words[0usize..10usize], 2usize, picks3, 7u32, 118.0)
     if list3_error != ok { ret (0usize, list3_error) }
     let (list3_cell, list3_cell_error) = placed(a, list3, 16.0, 10.0)
     if list3_cell_error != ok { ret (0usize, list3_cell_error) }
@@ -130,10 +130,19 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if check5_cell_error != ok { ret (0usize, check5_cell_error) }
     cells[at] = looks.Cell { caption: "checklist-selected-unfocused", node: check5_cell, drive: .None }
     at += 1usize
+    // 6: listbox-disabled (the chosen Charlie keeps its fill, the words are #6D6D6D)
+    let (picks6, picks6_error) = pick_actions(a, 10usize)
+    if picks6_error != ok { ret (0usize, picks6_error) }
+    let (list6, list6_error) = control.windows_dark_list_box_disabled(a, 9500u64, t, "List", words[0usize..10usize], 2usize, picks6, 7u32, 118.0)
+    if list6_error != ok { ret (0usize, list6_error) }
+    let (list6_cell, list6_cell_error) = placed(a, list6, 16.0, 10.0)
+    if list6_cell_error != ok { ret (0usize, list6_cell_error) }
+    cells[at] = looks.Cell { caption: "listbox-disabled", node: list6_cell, drive: .None }
+    at += 1usize
     ret (at, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark4", cells: 6usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark4", cells: 7usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

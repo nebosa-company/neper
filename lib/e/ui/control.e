@@ -17893,17 +17893,30 @@ fn win3_lines(a: *mem.Arena) -> (widget.Node, err) {
 // and the #202020 face from (2, 2), rows 15 high with the text origin at x 4 (Segoe UI 12 px), a chosen row #0078D7 under white text over
 // the whole row (the list's 99 px left of its scroll column) whether or not the list has the focus, the focus's XOR rectangle round it.
 // The capture's scroll column is the light unthemed one (the gallery leaves list boxes out of dark mode); this look keeps its dark bar there.
-type DarkListFrame = struct { w: f32, h: f32 }
+type DarkListFrame = struct { w: f32, h: f32, bar: bool }
 
 fn dark_list_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let m = mem.cast[*DarkListFrame](ctx)
     try win3_rect(b, area.x, area.y, m.w, m.h, style.hex_raw(0x828790u32))
     try win3_rect(b, area.x + 1.0, area.y + 1.0, m.w - 2.0, m.h - 2.0, style.hex_raw(0xFFFFFFu32))
     try win3_rect(b, area.x + 2.0, area.y + 2.0, 98.0 - 0.0, m.h - 4.0, style.hex_raw(0x202020u32))
+    // a ListBox is left unthemed under dark mode (listbox-rest): its scroll column is the classic light one, #F0F0F0
+    if m.bar { ret win3_rect(b, area.x + 99.0, area.y + 2.0, m.w - 101.0, m.h - 4.0, style.hex_raw(0xF0F0F0u32)) }
     ret win3_rect(b, area.x + 100.0, area.y + 2.0, m.w - 102.0, m.h - 4.0, style.hex_raw(0x171717u32))
 }
 
 fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = win_dark_list_box_with(a, key, t, label, options, selected, picks, rows, width, true)
+    ret (made, made_error)
+}
+
+// listbox-disabled: the rows stay as they are (the chosen row keeps its #0078D7 fill) and the words turn COLOR_GRAYTEXT, #6D6D6D.
+fn windows_dark_list_box_disabled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = win_dark_list_box_with(a, key, t, label, options, selected, picks, rows, width, false)
+    ret (made, made_error)
+}
+
+fn win_dark_list_box_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32, enabled: bool) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
     let (dark_t, dark_error) = windows_edit_theme(a, t, 15.0)
     if dark_error != ok { ret (zero, dark_error) }
@@ -17917,6 +17930,7 @@ fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         words.role = .BodyMedium
         words.wrap = .None
         var ink = style.hex_raw(0xFFFFFFu32)
+        if !enabled { ink = style.hex_raw(0x6D6D6Du32) }
         let (label_node, label_error) = colored_text(a, 0u64, options[i], &dark_t, words, ink)
         if label_error != ok { ret (zero, label_error) }
         var line_style = style.defaults()
@@ -17928,7 +17942,7 @@ fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         let (text_held, text_held_error) = mem.alloc[widget.Node](a, 1usize)
         if text_held_error != ok { ret (zero, TooLarge) }
         text_held[0usize] = label_node
-        layers[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, text_held[0usize..1usize])
+        layers[0usize] = widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, text_held[0usize..1usize])))
         var count = 1usize
         if state.focused {
             let (dots_plain, dots_error) = win4_xor_dots(a, true, f32(i % 2usize))
@@ -17973,7 +17987,7 @@ fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (frames, frames_error) = mem.alloc[DarkListFrame](a, 1usize)
     if frames_error != ok { ret (zero, TooLarge) }
     let height = f32(rows) * 15.0 + 5.0
-    frames[0usize] = DarkListFrame { w: width, h: height }
+    frames[0usize] = DarkListFrame { w: width, h: height, bar: options.len > usize(rows) }
     var none: []const widget.Node = zero
     var fill = sized_style(width, height)
     let frame = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&frames[0usize]), measure: win3_measure, paint: dark_list_frame_paint, state: widget.bytes_of[DarkListFrame](&frames[0usize]) } }, style: fill, children: none }
@@ -17983,9 +17997,12 @@ fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     stacked[1usize] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), widget_one_of(a, view))
     var layers_used = 2usize
     if options.len > usize(rows) {
-        let (bar, bar_error) = windows_scroll_bar(a, key + 8888u64, t, true, f32(rows) * 15.0 + 1.0, f32(rows), f32(options.len), 0.0)
-        if bar_error != ok { ret (zero, bar_error) }
-        stacked[2usize] = widget.positioned(0u64, width - 18.0, 2.0, style.defaults(), widget_one_of(a, bar))
+        let (bars, bars_error) = mem.alloc[WinDarkBar](a, 1usize)
+        if bars_error != ok { ret (zero, TooLarge) }
+        bars[0usize] = WinDarkBar { first: 0u32, rows: rows, lines: u32(options.len), classic: true }
+        var bar_none: []const widget.Node = zero
+        let bar = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&bars[0usize]), measure: win3_measure, paint: win_dark_bar_paint, state: widget.bytes_of[WinDarkBar](&bars[0usize]) } }, style: sized_style(17.0, f32(rows) * 15.0 + 1.0), children: bar_none }
+        stacked[2usize] = widget.positioned(0u64, width - 19.0, 2.0, style.defaults(), widget_one_of(a, bar))
         layers_used = 3usize
     }
     var sem: widget.Semantics = zero
