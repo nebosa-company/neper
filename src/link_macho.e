@@ -1,4 +1,4 @@
-// The aarch64 macOS image: a Mach-O executable dyld loads, with libSystem linked and no
+// The macOS image, aarch64 and x86-64: a Mach-O executable dyld loads, with libSystem linked and no
 // imports used, the runtime (runtime_macos_a64.s) reaching the kernel by BSD system call.
 // The kernel kills an arm64 executable with no dyld (D5166). The header page holds the
 // load commands -- __PAGEZERO, __TEXT, __DATA when there are globals, __LINKEDIT, LC_MAIN
@@ -17,6 +17,7 @@ use link_elf
 use link_elf_a64
 use nir
 use runtime_macos_a64
+use runtime_macos_x64
 use e.crypto.hash as crypto_hash
 
 error InvalidImage
@@ -63,8 +64,57 @@ fn segment(output: *emit_x64.Buffer, name: str, address: usize, size: usize, fil
     ret emit_x64.little_u32(output, 0usize)
 }
 
-fn runtime_limit(builder: *nir.Builder, relocations: []codegen_x64.Relocation, relocation_count: usize) -> (usize, err) {
-    let (limit, has_start) = runtime_macos_a64.symbol_end("neper_start_arena")
+// The two runtimes' generated tables and the two instruction sets' patches, by the image's
+// architecture.
+fn runtime_symbol(x64: bool, name: str) -> (usize, bool) {
+    if x64 {
+        let (offset, found) = runtime_macos_x64.symbol_offset(name)
+        ret (offset, found)
+    }
+    let (arm_offset, arm_found) = runtime_macos_a64.symbol_offset(name)
+    ret (arm_offset, arm_found)
+}
+
+fn runtime_end(x64: bool, name: str) -> (usize, bool) {
+    if x64 {
+        let (end, found) = runtime_macos_x64.symbol_end(name)
+        ret (end, found)
+    }
+    let (arm_end, arm_found) = runtime_macos_a64.symbol_end(name)
+    ret (arm_end, arm_found)
+}
+
+fn runtime_append(x64: bool, output: *emit_x64.Buffer, limit: usize) -> err {
+    if x64 { ret runtime_macos_x64.append(output, limit) }
+    ret runtime_macos_a64.append(output, limit)
+}
+
+// Where a call's displacement sits in its instruction: x86-64's `call rel32` has the opcode
+// byte first.
+fn call_field(x64: bool) -> usize {
+    if x64 { ret 1usize }
+    ret 0usize
+}
+
+// A branch, call or address form at file offset `site` pointed at the file offset `destination`.
+fn patch_branch(x64: bool, output: *emit_x64.Buffer, site: usize, destination: usize) -> err {
+    if x64 { ret emit_x64.patch_relative32(output, site, destination) }
+    ret emit_a64.patch_relative(output, site, destination)
+}
+
+// A reference at `site` to the virtual address `destination`: an ADRP pair or a rip-relative
+// displacement from the end of the field.
+fn patch_data(x64: bool, output: *emit_x64.Buffer, site: usize, destination: usize) -> err {
+    if x64 {
+        let next_address = MACHO_BASE + site + 4usize
+        if destination < next_address { ret InvalidImage }
+        ret emit_x64.patch_little_u32(output, site, destination - next_address)
+    }
+    ret emit_a64.patch_page(output, site, MACHO_BASE + site, destination)
+}
+
+fn runtime_limit(x64: bool, builder: *nir.Builder, relocations: []codegen_x64.Relocation, relocation_count: usize) -> (usize, err) {
+    let (limit, has_start) = runtime_end(x64, "neper_start_arena")
     if !has_start { ret (0usize, InvalidImage) }
     var most = limit
     var at = 0usize
@@ -72,7 +122,7 @@ fn runtime_limit(builder: *nir.Builder, relocations: []codegen_x64.Relocation, r
         if !relocations[at].global && !relocations[at].resolved {
             let reference_index = relocations[at].function_ref
             if reference_index >= builder.function_ref_count { ret (0usize, InvalidImage) }
-            let (end, found) = runtime_macos_a64.symbol_end(builder.function_refs[reference_index].name)
+            let (end, found) = runtime_end(x64, builder.function_refs[reference_index].name)
             if found && end > most { most = end }
         }
         at += 1usize
@@ -82,7 +132,7 @@ fn runtime_limit(builder: *nir.Builder, relocations: []codegen_x64.Relocation, r
 
 // The code, the runtime and the symbol table from `code_offset` (a page), the main call and
 // every relocation but a global's patched. `entry_address` gets the runtime's entry.
-fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, data_address: usize, output: *emit_x64.Buffer, entry_address: *usize) -> err {
+fn place_code(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, data_address: usize, output: *emit_x64.Buffer, entry_address: *usize) -> err {
     let (main_index, main_error) = link_elf.find_main(builder)
     if main_error != ok { ret main_error }
     try link_elf.pad_to(output, code_offset)
@@ -90,9 +140,9 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
     try emit_x64.append_bytes(output, machine.bytes[0usize..table_at])
     try link_elf.pad_to(output, link_elf.align_up_to(output.count, 4usize))
     let runtime_start = output.count
-    let (limit, limit_error) = runtime_limit(builder, relocations, relocation_count)
+    let (limit, limit_error) = runtime_limit(x64, builder, relocations, relocation_count)
     if limit_error != ok { ret limit_error }
-    try runtime_macos_a64.append(output, limit)
+    try runtime_append(x64, output, limit)
     var table_file = output.count
     if table_at < machine.count {
         try link_elf.pad_to(output, link_elf.align_up_to(output.count, 8usize))
@@ -100,15 +150,15 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
         try emit_x64.append_bytes(output, machine.bytes[table_at..machine.count])
         try codegen_x64.rebase_symbol_table(output, table_file, MACHO_BASE + machine_start)
     }
-    let (entry, has_entry) = runtime_macos_a64.symbol_offset("neper_start")
-    let (main_call, has_main_call) = runtime_macos_a64.symbol_offset("neper_start_main")
-    let (arena_literal, has_arena_literal) = runtime_macos_a64.symbol_offset("neper_start_arena")
+    let (entry, has_entry) = runtime_symbol(x64, "neper_start")
+    let (main_call, has_main_call) = runtime_symbol(x64, "neper_start_main")
+    let (arena_literal, has_arena_literal) = runtime_symbol(x64, "neper_start_arena")
     if !has_entry || !has_main_call || !has_arena_literal { ret InvalidImage }
     *entry_address = MACHO_BASE + runtime_start + entry
-    try emit_a64.patch_relative(output, runtime_start + main_call, machine_start + function_offsets[main_index])
+    try patch_branch(x64, output, runtime_start + main_call + call_field(x64), machine_start + function_offsets[main_index])
     if builder.arena_bytes != 0usize { try link_elf.patch_little_u64(output, runtime_start + arena_literal, builder.arena_bytes) }
     // The argument slot's distance from its own literal, both as file offsets.
-    let (args_literal, has_args_literal) = runtime_macos_a64.symbol_offset("neper_start_args")
+    let (args_literal, has_args_literal) = runtime_symbol(x64, "neper_start_args")
     if !has_args_literal { ret InvalidImage }
     try link_elf.patch_little_u64(output, runtime_start + args_literal, (data_address -% MACHO_BASE) -% (runtime_start + args_literal))
     var relocation_at = 0usize
@@ -118,21 +168,21 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
             if relocation.function_ref >= builder.function_ref_count { ret InvalidImage }
             let site = machine_start + relocation.displacement_at
             if codegen_x64.is_symbols_reference(builder, relocation) {
-                try emit_a64.patch_relative(output, site, table_file)
+                try patch_branch(x64, output, site, table_file)
                 relocations[relocation_at].resolved = true
             } else {
                 if !relocation.resolved {
                     let (library, slot_entry, is_import) = nir.import_slot_of(builder, relocation.function_ref)
                     if is_import {
                         let flat = nir.import_flat_index(builder, library, slot_entry)
-                        try emit_a64.patch_page(output, site, MACHO_BASE + site, data_address + 16usize + flat * 8usize)
+                        try patch_data(x64, output, site, data_address + 16usize + flat * 8usize)
                         relocations[relocation_at].resolved = true
                         relocation_at += 1usize
                         continue
                     }
-                    let (runtime_offset, found_runtime) = runtime_macos_a64.symbol_offset(builder.function_refs[relocation.function_ref].name)
+                    let (runtime_offset, found_runtime) = runtime_symbol(x64, builder.function_refs[relocation.function_ref].name)
                     if !found_runtime { ret MissingRuntime }
-                    try emit_a64.patch_relative(output, site, runtime_start + runtime_offset)
+                    try patch_branch(x64, output, site, runtime_start + runtime_offset)
                     relocations[relocation_at].resolved = true
                 }
             }
@@ -143,14 +193,14 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
 }
 
 // Each module-scope `var`'s ADRP pair pointed into the area at `area_address`.
-fn place_globals(builder: *nir.Builder, relocations: []codegen_x64.Relocation, relocation_count: usize, machine_start: usize, area_address: usize, output: *emit_x64.Buffer) -> err {
+fn place_globals(x64: bool, builder: *nir.Builder, relocations: []codegen_x64.Relocation, relocation_count: usize, machine_start: usize, area_address: usize, output: *emit_x64.Buffer) -> err {
     var global_at = 0usize
     while global_at < relocation_count {
         if relocations[global_at].global {
             let reference_index = relocations[global_at].function_ref
             if reference_index >= builder.global_count { ret InvalidImage }
             let site = machine_start + relocations[global_at].displacement_at
-            try emit_a64.patch_page(output, site, MACHO_BASE + site, area_address + nir.global_area_offset(builder, reference_index))
+            try patch_data(x64, output, site, area_address + nir.global_area_offset(builder, reference_index))
             relocations[global_at].resolved = true
         }
         global_at += 1usize
@@ -428,7 +478,7 @@ fn append_slots(output: *emit_x64.Buffer, imports: usize) -> err {
     ret ok
 }
 
-fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, table_at: usize, output: *emit_x64.Buffer) -> err {
+fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, table_at: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len || table_at > machine.count { ret InvalidImage }
     codegen_x64.mark_live_globals(builder, relocations, relocation_count)
     let imports = nir.import_symbol_total(builder)
@@ -448,7 +498,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     // The code is placed first into the output only to measure it, then again once the
     // slots' addresses are known; the header is written over the page left for it.
     try link_elf.pad_to(output, code_offset)
-    try place_code(builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE, output, &entry_address)
+    try place_code(x64, builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + 268435456usize, output, &entry_address)
     let text_end = output.count
     let text_size = link_elf.align_up_to(text_end, MACHO_PAGE)
     let data_offset = text_size
@@ -461,7 +511,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         data_end = data_offset + link_elf.align_up_to(data_bytes, MACHO_PAGE)
         output.count = code_offset
         link_elf_a64.clear_resolved_imports(builder, relocations, relocation_count)
-        try place_code(builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + data_offset, output, &entry_address)
+        try place_code(x64, builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + data_offset, output, &entry_address)
         if output.count != text_end { ret InvalidImage }
         try link_elf.pad_to(output, data_offset)
         try link_elf.pad_to(output, data_offset + 16usize)
@@ -470,7 +520,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         if has_globals {
             try link_elf.append_globals(builder, output, globals_offset)
             try link_elf.pad_to(output, globals_offset + nir.global_area_size(builder))
-            try place_globals(builder, relocations, relocation_count, code_offset, MACHO_BASE + globals_offset, output)
+            try place_globals(x64, builder, relocations, relocation_count, code_offset, MACHO_BASE + globals_offset, output)
         }
         try link_elf.pad_to(output, data_end)
     } else {
@@ -493,8 +543,14 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let end = output.count
     output.count = 0usize
     try emit_x64.little_u32(output, 4277009103usize)
-    try emit_x64.little_u32(output, 16777228usize)
-    try emit_x64.little_u32(output, 0usize)
+    // CPU_TYPE_X86_64 / CPU_SUBTYPE_X86_64_ALL, or CPU_TYPE_ARM64 / CPU_SUBTYPE_ARM64_ALL.
+    if x64 {
+        try emit_x64.little_u32(output, 16777223usize)
+        try emit_x64.little_u32(output, 3usize)
+    } else {
+        try emit_x64.little_u32(output, 16777228usize)
+        try emit_x64.little_u32(output, 0usize)
+    }
     try emit_x64.little_u32(output, 2usize)
     try emit_x64.little_u32(output, command_count)
     try emit_x64.little_u32(output, commands_size)

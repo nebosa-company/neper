@@ -1,17 +1,17 @@
 # -Arch a64 embeds the aarch64 runtime (D2123) with the cross binutils; -Arch none the
 # aarch64 kernel runtime (D2126); -Arch macos the aarch64 macOS one; -Arch neperos the runtime of a NeperOS program (D2127).
-param([ValidateSet('x64', 'a64', 'none', 'neperos', 'macos')][string]$Arch = 'x64')
+param([ValidateSet('x64', 'a64', 'none', 'neperos', 'macos', 'macosx64')][string]$Arch = 'x64')
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
-$stem = if ($Arch -eq 'none' -or $Arch -eq 'neperos' -or $Arch -eq 'macos') { "runtime_$($Arch)_a64" } else { "runtime_elf_$Arch" }
+$stem = if ($Arch -eq 'none' -or $Arch -eq 'neperos' -or $Arch -eq 'macos') { "runtime_$($Arch)_a64" } elseif ($Arch -eq 'macosx64') { 'runtime_macos_x64' } else { "runtime_elf_$Arch" }
 $source = Join-Path $repo "src\$stem.s"
 $output = Join-Path $repo "src\$stem.e"
-$arm = $Arch -ne 'x64'
+$arm = $Arch -ne 'x64' -and $Arch -ne 'macosx64'
 $tools = if ($arm) { 'aarch64-linux-gnu-' } else { '' }
 $assemble = if ($arm) { @('aarch64-linux-gnu-as', '-march=armv8.2-a') } else { @('as', '--64') }
 $machine = if ($arm) { 'aarch64' } else { 'x86-64' }
-$kind = if ($Arch -eq 'none') { 'kernel' } elseif ($Arch -eq 'neperos') { 'NeperOS program' } elseif ($Arch -eq 'macos') { 'macOS syscall' } else { 'Linux syscall' }
+$kind = if ($Arch -eq 'none') { 'kernel' } elseif ($Arch -eq 'neperos') { 'NeperOS program' } elseif ($Arch -eq 'macos' -or $Arch -eq 'macosx64') { 'macOS syscall' } else { 'Linux syscall' }
 $build = Join-Path $repo 'build\windows\runtime-embed'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
