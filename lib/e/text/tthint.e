@@ -54,7 +54,7 @@ type Hinter = struct {
     hdmx_at: usize, hdmx_records: usize, hdmx_record_size: usize,
     gasp_at: usize, gasp_ranges: usize,
     max_storage: usize, max_twilight: usize, max_fdefs: usize, max_stack: usize,
-    fdef_lo: []usize, fdef_hi: []usize, fdef_delta: []bool, fdef_bypass: []i64, in_delta: bool, iup_y: bool, bypass: i64, fpgm_done: bool,
+    fdef_lo: []usize, fdef_hi: []usize, fdef_delta: []bool, fdef_bypass: []i64, in_delta: bool, iup_y: bool, ct_done: bool, ct_part: bool, bypass: i64, fpgm_done: bool,
     sizes: [24]Size, size_count: usize,
     zsets: [14]Zone, level: usize,
     stack: []i64, sp: usize, fail: bool,
@@ -839,13 +839,22 @@ fn ct_scale(h: *Hinter) {
 }
 
 fn vm_iup(h: *Hinter, x_axis: bool) {
-    if !x_axis { h.iup_y = true }
+    if !x_axis {
+        h.iup_y = true
+        if h.ct_part && !h.ct_done && h.cleartype && h.ctA != 0i64 && h.ctX > 0i64 && h.zone[1usize].n > 4usize {
+            ct_scale(h)
+            h.ct_done = true
+        }
+    }
     var ax = 1usize
     var mask = 16i64
     if x_axis {
         ax = 0usize
         mask = 8i64
-        if h.cleartype && h.ctA != 0i64 && h.ctX > 0i64 && h.zone[1usize].n > 4usize { ct_scale(h) }
+        if h.cleartype && h.ctA != 0i64 && h.ctX > 0i64 && h.zone[1usize].n > 4usize {
+            ct_scale(h)
+            h.ct_done = true
+        }
     }
     let z = &h.zone[1usize]
     var first = 0usize

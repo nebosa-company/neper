@@ -233,7 +233,10 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.zone[0usize] = s.twi
     h.zone[1usize] = *z
     tthint.set_trace(i64(gid) == trace_gid && s.cleartype)
+    h.ct_done = false
+    h.ct_part = top_gid != gid
     let run_error = tthint.vm_run(h, lo, hi)
+    if top_gid != gid && h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
     tthint.set_trace(false)
     ret ok
 }
@@ -431,7 +434,12 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
         var px = tthint.mulfix(dx, s.xscale)
         var py = tthint.mulfix(dy, s.xscale)
         if (flags & 4i64) != 0i64 {
-            px = tthint.pix_round(px)
+            // ClearType rounds along x on its grid of 1/16 pixel
+            if s.cleartype {
+                px = tthint.fdiv(px + 2i64, 4i64) * 4i64
+            } else {
+                px = tthint.pix_round(px)
+            }
             py = tthint.pix_round(py)
         }
         part_offset = px
