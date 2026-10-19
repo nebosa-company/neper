@@ -11600,7 +11600,8 @@ fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind
         parts[1usize] = widget.semantics(0u64, remove_sem, style.defaults(), region[0usize..1usize])
         look.padding = 8.0
         look.padding_start = 16.0
-        look.padding_y = max_zero((height - 2.0 - 24.0) * 0.5)
+        // The Android chip's remove icon (18 dp) is shorter than its label line: the label keeps the padding of the other chips.
+        if t.tokens.profile != .MaterialLike { look.padding_y = max_zero((height - 2.0 - 24.0) * 0.5) }
         content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), parts[0usize..2usize])
     }
     var role = 3u8
