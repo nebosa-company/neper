@@ -23,6 +23,7 @@ use e.gpu
 use e.math
 use e.mem
 use e.gfx.cleartype
+use e.gfx.dwtext
 use e.gfx.geometry
 use e.gfx.image
 use e.gfx.paint
@@ -69,7 +70,7 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
-type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
+type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
 type TargetState = struct { target: *gpu.Target }
 
 // ------------------------------------------------------------------ the builder
@@ -153,96 +154,12 @@ fn cff_text_on() -> bool {
     ret cff_text
 }
 
-// The Android look draws Roboto as Chromium's captures show it: the baseline on a whole device line (the glyph pen stays
-// fractional) and the outline fitted vertically (`mat_warp`). Set by `ui.looks.set_look`.
+// The Android look draws its text the way Chromium's captures show it: `e.gfx.dwtext` (hinted outline, DirectWrite's six by five
+// sample grid, Skia's pre-blend table), the pen on a quarter pixel and the baseline on a whole device line. Set by `ui.looks.set_look`.
 var mat_text: bool = false
 
 fn set_mat_text(on: bool) {
     mat_text = on
-}
-
-// Roboto's vertical fit as FreeType's autohinter does it (and DirectWrite's natural mode, which Chromium's captures show): the
-// x-height is rounded up from a 0.375 fraction and the y scale adjusted to it, then cap height, ascender and descender are rounded
-// to whole pixels; between the blue zones the outline stays linear. `mat_warp_sy` is the device pixel per font unit of the glyph
-// being drawn (0 off).
-var mat_warp_sy: f32 = zero
-
-fn mat_round(v: f32) -> f32 {
-    ret math.floor[f32](v + 0.5)
-}
-
-fn mat_warp(y: f32) -> f32 {
-    let s = mat_warp_sy
-    if !(s > 0.0) { ret y }
-    let xs = 1082.0 * s
-    var fx = math.floor[f32](xs + 0.625)
-    if fx < 1.0 { fx = 1.0 }
-    let r = fx / xs
-    let fc = mat_round(1456.0 * s * r)
-    let fa = mat_round(1560.0 * s * r)
-    let fd = mat_round(-437.0 * s * r)
-    var px: f32 = 0.0
-    if y >= 1560.0 {
-        px = fa + (y - 1560.0) * s * r
-    } else if y >= 1456.0 {
-        px = fc + (y - 1456.0) * (fa - fc) / 104.0
-    } else if y >= 1082.0 {
-        px = fx + (y - 1082.0) * (fc - fx) / 374.0
-    } else if y >= 0.0 {
-        px = y * fx / 1082.0
-    } else if y >= -437.0 {
-        px = y * fd / -437.0
-    } else {
-        px = fd + (y + 437.0) * s * r
-    }
-    ret px / s
-}
-
-// Chromium's greyscale text is not the exact area under the outline: the captures show each glyph's coverage spread a little
-// sideways (a 3 tap filter, 7 % to each neighbour, below 3 % nothing) and bent by a power, near 1 for dark text and 0.65 for light text (Skia's
-// luminance-keyed contrast tables). Fitted on the light and dark reference crops of every Android control (scripts/material/).
-fn mat_text_shape(s: *RendererState, coverage: []f32, brush: *const paint.Brush) {
-    if s.box_x1 <= s.box_x0 { ret }
-    var luma: f32 = 0.0
-    switch *brush {
-    case .Solid as c:
-        luma = 0.2126 * c.red + 0.7152 * c.green + 0.0722 * c.blue
-    default:
-        luma = 0.0
-    }
-    let g = 1.0 - 0.38 * luma
-    let side: f32 = 0.07
-    let centre: f32 = 1.0 - 2.0 * side
-    var x0 = s.box_x0
-    var x1 = s.box_x1
-    if x0 > s.dx0 { x0 -= 1usize }
-    if x1 < s.dx1 { x1 += 1usize }
-    var y = s.box_y0
-    while y < s.box_y1 {
-        let row = y * s.width
-        if x0 < s.box_x0 { coverage[row + x0] = 0.0 }
-        if x1 > s.box_x1 { coverage[row + x1 - 1usize] = 0.0 }
-        var prev: f32 = 0.0
-        var x = x0
-        while x < x1 {
-            let here = coverage[row + x]
-            var next: f32 = 0.0
-            if x + 1usize < x1 { next = coverage[row + x + 1usize] }
-            var c = side * prev + centre * here + side * next
-            if c > 0.03 {
-                if c > 1.0 { c = 1.0 }
-                c = math.pow[f32]((c - 0.03) / 0.97, g)
-            } else {
-                c = 0.0
-            }
-            coverage[row + x] = c
-            prev = here
-            x += 1usize
-        }
-        y += 1usize
-    }
-    s.box_x0 = x0
-    s.box_x1 = x1
 }
 
 // Skia's supersampling rasteriser (Chromium draws a small path with it) covers a partly covered pixel a little less than the exact
@@ -258,11 +175,6 @@ fn mat_path_curve(s: *RendererState, coverage: []f32) {
         }
         y += 1usize
     }
-}
-
-fn mat_snap(o: geometry.Point) -> geometry.Point {
-    if !mat_text { ret o }
-    ret geometry.Point { x: math.floor[f32](o.x * 4.0 + 0.5) * 0.25, y: math.floor[f32](o.y + 0.5) }
 }
 
 fn set_text_hidden(hidden: bool) {
@@ -1736,7 +1648,7 @@ fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy:
                 at += 2usize
             }
         }
-        ys[i] = mat_warp(f32(value))
+        ys[i] = f32(value)
         i += 1usize
     }
     // Each contour: on-curve points are line targets, off-curve ones quadratic
@@ -1873,12 +1785,9 @@ fn text_edges(s: *RendererState, f: *Flattener, text: DrawText) -> err {
                 var g = 0usize
                 while g < run.run.glyphs.len {
                     let glyph = run.run.glyphs[g]
-                    let origin = mat_snap(geometry.transform_point(f.t, geometry.Point { x: pen + glyph.offset_x * run.size, y: baseline - glyph.offset_y * run.size }))
+                    let origin = geometry.transform_point(f.t, geometry.Point { x: pen + glyph.offset_x * run.size, y: baseline - glyph.offset_y * run.size })
                     // The glyph's own scale under the whole linear part of the transform (D4504: a rotated run).
-                    mat_warp_sy = 0.0
-                    if mat_text && (font.id == 11u32 || font.id == 12u32) && f.t.m01 == 0.0 && f.t.m10 == 0.0 { mat_warp_sy = scale * f.t.m11 }
                     try glyph_outline(f, font, glyph.id, origin.x, origin.y, scale * f.t.m00, 0.0 - scale * f.t.m01, scale * f.t.m10, 0.0 - scale * f.t.m11, 0usize)
-                    mat_warp_sy = 0.0
                     pen = pen + glyph.advance_x * run.size
                     g += 1usize
                 }
@@ -2253,6 +2162,115 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
         }
         y += 1usize
     }
+    ret true
+}
+
+// The Android look's pre-blend tables (`dwtext.lut_build`), one per luminance key of the text colour, made on first use.
+var mat_luts: [2048]u8 = zero
+var mat_lut_built: [8]bool = zero
+
+// The whole pixel size a run is hinted at under a scale; 0 when it is out of the range the scratch holds.
+fn mat_ppem(size: f32, scale: f32) -> i64 {
+    let ppem = i64(math.floor[f32](size * scale + 0.5))
+    if ppem < 4i64 || ppem > 160i64 { ret 0i64 }
+    ret ppem
+}
+
+// Draws `text` the way the references draw it (`e.gfx.dwtext`): every glyph its own A8 mask under the solid text colour, composed
+// in order as Skia does (two neighbours that share a pixel blend twice, not once with the sum). The pen's device x goes to a quarter
+// pixel (Skia's sub-pixel position) and the baseline to a whole line. False, with nothing drawn, when the brush is not a solid
+// colour, the transform is not a plain scale or a font has no hinter; a glyph that does not hint or fit is left out.
+fn draw_text_mat(s: *RendererState, state: DrawState, text: DrawText) -> bool {
+    var color: paint.Color = zero
+    switch text.brush {
+    case .Solid as solid:
+        color = solid
+    default:
+        ret false
+    }
+    let t = state.transform
+    if t.m01 != 0.0 || t.m10 != 0.0 || !(t.m00 > 0.0) || t.m00 != t.m11 { ret false }
+    if !s.mat_tried {
+        s.mat_tried = true
+        let (buf, buf_error) = mem.alloc[u8](s.arena, dwtext.scratch_bytes())
+        if buf_error == ok { s.mat_buf = buf }
+    }
+    if s.mat_buf.len < dwtext.scratch_bytes() { ret false }
+    var l = 0usize
+    while l < text.layout.lines.len {
+        let line = &text.layout.lines[l]
+        var ri = 0usize
+        while ri < line.runs.len {
+            let run = &line.runs[ri]
+            let (fi, has_font) = font_of(s, run.run.font)
+            if !has_font || mem.address_of(s.fonts[fi].cff) != 0usize { ret false }
+            let (probe, has_hinter) = lcd_hinter(s, fi)
+            if !has_hinter || mat_ppem(run.size, t.m00) == 0i64 { ret false }
+            ri += 1usize
+        }
+        l += 1usize
+    }
+    let key = dwtext.lut_key(color.red, color.green, color.blue)
+    if !mat_lut_built[key] {
+        dwtext.lut_build(key, mat_luts[key * 256usize..key * 256usize + 256usize])
+        mat_lut_built[key] = true
+    }
+    let lut = mat_luts[key * 256usize..key * 256usize + 256usize]
+    let canvas = s.canvases[state.layer].data
+    let (sx0, sy0, sx1, sy1) = scissor_bounds(s, state.scissor)
+    let premult = paint.premultiply(color)
+    // The programs of a glyph that never reaches IUP[x] are not fitted to the advance here (that is GDI's habit, not DirectWrite's).
+    ttglyph.set_end_fit(false)
+    l = 0usize
+    while l < text.layout.lines.len {
+        let line = &text.layout.lines[l]
+        var ri = 0usize
+        while ri < line.runs.len {
+            let run = &line.runs[ri]
+            let (fi, has_font) = font_of(s, run.run.font)
+            let (hinter, has_hinter) = lcd_hinter(s, fi)
+            let ppem = mat_ppem(run.size, t.m00)
+            let ratio = run.size * t.m00 / f32(ppem)
+            var pen: f32 = t.m00 * math.floor[f32]((text.origin.x + run.origin.x) * 64.0) / 64.0 + t.m02
+            var g = 0usize
+            while g < run.run.glyphs.len {
+                let glyph = run.run.glyphs[g]
+                let quarter = math.floor[f32]((pen + glyph.offset_x * run.size * t.m00) * 4.0 + 0.5) * 0.25
+                let whole = math.floor[f32](quarter)
+                let sixth = math.floor[f32]((quarter - whole) * 6.0 + 0.5) / 6.0
+                let gx = i64(whole)
+                let gy = i64(math.floor[f32](t.m11 * (text.origin.y + run.origin.y - glyph.offset_y * run.size) + t.m12 + 0.5))
+                pen = pen + glyph.advance_x * run.size * t.m00
+                g += 1usize
+                let (outline, hint_error) = ttglyph.hint_glyph(hinter, s.arena, ppem, glyph.id, true)
+                if hint_error != ok { continue }
+                let (mask, drawn) = dwtext.rasterize(s.mat_buf, outline.cur, outline.tags, outline.ends, outline.nends, outline.n, ratio, sixth, lut)
+                if !drawn { continue }
+                var my = 0usize
+                while my < mask.height {
+                    let dy = gy + mask.y0 + i64(my)
+                    if dy >= i64(sy0) && dy < i64(sy1) {
+                        var mx = 0usize
+                        while mx < mask.width {
+                            let dx = gx + mask.x0 + i64(mx)
+                            let a = s.mat_buf[dwtext.GRID_BYTES + my * mask.width + mx]
+                            if a != 0u8 && dx >= i64(sx0) && dx < i64(sx1) {
+                                let index = usize(dy) * s.width + usize(dx)
+                                var weight = f32(a) / 255.0
+                                if state.has_mask { weight = weight * s.masks[state.mask].data[index] }
+                                blend_pixel(canvas, index * 4usize, premult, weight)
+                            }
+                            mx += 1usize
+                        }
+                    }
+                    my += 1usize
+                }
+            }
+            ri += 1usize
+        }
+        l += 1usize
+    }
+    ttglyph.set_end_fit(true)
     ret true
 }
 
@@ -3320,11 +3338,10 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
         case .Image as draw:
             try draw_image(s, current, draw)
         case .Text as text:
-            if !(text_aa == .ClearType && draw_text_lcd(s, current, text)) {
+            if !(mat_text && draw_text_mat(s, current, text)) && !(text_aa == .ClearType && draw_text_lcd(s, current, text)) {
                 var f = fill_flattener(s, current.transform)
                 try text_edges(s, &f, text)
                 rasterize_edges(s, coverage)
-                if mat_text { mat_text_shape(s, coverage, &text.brush) }
                 paint_coverage(s, current, coverage, &text.brush)
             }
         case .OpacityLayer as layer:

@@ -7966,10 +7966,20 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
         muted = style.mix(muted, picked_ink, picked_share)
         fill = style.mix(fill, picked_fill, picked_share)
     }
+    // md-list-item (Android): the state layer is drawn over the text, so the text takes it on.
+    if t.tokens.profile == .MaterialLike && enabled {
+        ink = style.layer(ink, surface_ink, control.state_opacity(t, state))
+        muted = style.layer(muted, surface_ink, control.state_opacity(t, state))
+    }
     if !enabled {
         ink = control.with_alpha(surface_ink, t.tokens.states.disabled_content)
         muted = ink
         fill = control.with_alpha(surface_ink, 0.0)
+        // md-list-item (Android): a disabled item's label and supporting text are 30 % opaque, each in its own colour.
+        if t.tokens.profile == .MaterialLike {
+            ink = control.with_alpha(surface_ink, 0.3)
+            muted = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.3)
+        }
     }
     let glyph_side = control.if_else(dense, t.tokens.sizes.icon_sm, t.tokens.sizes.icon_md)
     let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
