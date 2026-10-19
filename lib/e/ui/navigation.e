@@ -1724,9 +1724,20 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
             if item.dot || item.badge.len > 0usize {
                 var kind: control.BadgeKind = .Urgent
                 if item.dot { kind = .Dot }
-                let (mark, mark_error) = control.badge_of(a, 0u64, t, item.badge, kind)
+                var mark: widget.Node = zero
+                var mark_error: err = ok
+                if t.tokens.profile == .MaterialLike {
+                    // The Android look's captures hold the badge settled, not growing in.
+                    let (bare, bare_error) = control.badge_bare(a, 0u64, t, item.badge, kind)
+                    mark = bare
+                    mark_error = bare_error
+                } else {
+                    let (swelled, swelled_error) = control.badge_of(a, 0u64, t, item.badge, kind)
+                    mark = swelled
+                    mark_error = swelled_error
+                }
                 if mark_error != ok { ret (zero, mark_error) }
-                let (marked, marked_error) = control.badge_anchor(a, 0u64, icon, 24.0, mark, item.dot)
+                let (marked, marked_error) = control.badge_anchor_by(a, 0u64, icon, 24.0, mark, item.dot, nav_badge_along(t))
                 if marked_error != ok { ret (zero, marked_error) }
                 held[0usize] = marked
             }
@@ -11357,4 +11368,10 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if lifted_error != ok { ret (zero, TooLarge) }
     lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
     ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
+}
+
+// The Android look holds a destination's badge 2 dp further out than the badge sheet's anchored icon.
+fn nav_badge_along(t: *const control.Theme) -> f32 {
+    if t.tokens.profile == .MaterialLike { ret 2.0 }
+    ret 0.0
 }

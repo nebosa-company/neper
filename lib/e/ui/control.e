@@ -2152,24 +2152,34 @@ fn appeared_share(t: *const Theme, key: widget.Key, millis: u32) -> f32 {
 // an avatar): a dot with its centre 3 in from the corner, a count 2 above the top
 // and starting 12 before the end; the stack stands 2 taller to hold it.
 fn badge_anchor(a: *mem.Arena, key: widget.Key, anchor: widget.Node, side: f32, mark: widget.Node, dot: bool) -> (widget.Node, err) {
+    let (placed, placed_error) = badge_anchor_by(a, key, anchor, side, mark, dot, 0.0)
+    ret (placed, placed_error)
+}
+
+// `badge_anchor` with the badge `along` further toward the end (a navigation bar destination holds its count 2 dp further out).
+fn badge_anchor_by(a: *mem.Arena, key: widget.Key, anchor: widget.Node, side: f32, mark: widget.Node, dot: bool, along: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[2usize] = anchor
     parts[3usize] = mark
-    parts[0usize] = widget.positioned(0u64, 0.0, 2.0, style.defaults(), parts[2usize..3usize])
+    // The Android look's count badge (16 dp wide) starts 12 in, past the icon's 24: the stack is 16 wider, the icon 8 in, so that the
+    // badge is not squeezed to what is left of the icon's width.
+    var pad: f32 = 0.0
+    if looks_material_icons { pad = 8.0 }
+    parts[0usize] = widget.positioned(0u64, pad, 2.0, style.defaults(), parts[2usize..3usize])
     // The Android look (M3 badge on an icon): a dot starts 15 in from the start, a count 12 in and 4 above the icon.
     var dot_x = side - 6.0
     var count_y: f32 = 0.0
     if looks_material_icons {
         dot_x = side - 9.0
-        count_y = -2.0
+        count_y = -3.0
     }
     if dot {
-        parts[1usize] = widget.positioned(0u64, dot_x, 2.0, style.defaults(), parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, pad + dot_x, 2.0, style.defaults(), parts[3usize..4usize])
     } else {
-        parts[1usize] = widget.positioned(0u64, side - 12.0, count_y, style.defaults(), parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, pad + side - 12.0 + along, count_y, style.defaults(), parts[3usize..4usize])
     }
-    ret (widget.stack(key, sized_style(side, side + 2.0), parts[0usize..2usize]), ok)
+    ret (widget.stack(key, sized_style(side + 2.0 * pad, side + 2.0), parts[0usize..2usize]), ok)
 }
 
 // An anchor's name with its badge's meaning (D971): "Builds, 2 failed".
