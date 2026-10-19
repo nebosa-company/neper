@@ -2378,4 +2378,6 @@ D5095	308	G012: typing in the Color Editor's R box seen
 D5096	296	G012: typing in the Color Editor's G and B boxes seen
 D5097	1723	G012: TcxGrid audit, and v3's own control sizes for the hand-built dialogs
 D5098	695	G012: Messages, Options > Shortcuts and Statistics (Editions, Advanced) as read-only v3-style tables
-D5099	979	G012: Statistics Probability, Mana Slots and Start Hand tabs, and the window laid out to v3's capture
+D5099	980	G012: Statistics Probability, Mana Slots and Start Hand tabs, and the window laid out to v3's capture
+D5165	1300	aarch64-macos: a static Mach-O over raw BSD system calls, ad-hoc signed by the linker
+D5166	776	aarch64-macos is dyld-loaded, because the kernel kills a static arm64 image
