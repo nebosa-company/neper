@@ -8081,7 +8081,9 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     row_style.background = paint.Brush { Solid: fill }
     let side = style.Length { Px: control.if_else(dense, 0.0, 8.0) }
     let led = item.has_checkbox || item.control == .Checkbox || item.control == .Radio
-    row_style.padding = style.EdgeLengths { left: style.Length { Px: control.if_else(led, 4.0, 16.0) }, top: side, right: style.Length { Px: control.if_else(dense, 12.0, 24.0) }, bottom: side }
+    // md-list-item: 16 dp of trailing space in the Android look, 24 elsewhere.
+    let trail = control.if_else(t.tokens.profile == .MaterialLike, 16.0, 24.0)
+    row_style.padding = style.EdgeLengths { left: style.Length { Px: control.if_else(led, 4.0, 16.0) }, top: side, right: style.Length { Px: control.if_else(dense, 12.0, trail) }, bottom: side }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
     control.focus_look(t)

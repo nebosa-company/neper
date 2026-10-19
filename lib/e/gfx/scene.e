@@ -153,6 +153,56 @@ fn cff_text_on() -> bool {
     ret cff_text
 }
 
+// The Android look draws Roboto as Chromium's captures show it: the baseline on a whole device line (the glyph pen stays
+// fractional) and the outline fitted vertically (`mat_warp`). Set by `ui.looks.set_look`.
+var mat_text: bool = false
+
+fn set_mat_text(on: bool) {
+    mat_text = on
+}
+
+// Roboto's vertical fit as FreeType's autohinter does it (and DirectWrite's natural mode, which Chromium's captures show): the
+// x-height is rounded up from a 0.375 fraction and the y scale adjusted to it, then cap height, ascender and descender are rounded
+// to whole pixels; between the blue zones the outline stays linear. `mat_warp_sy` is the device pixel per font unit of the glyph
+// being drawn (0 off).
+var mat_warp_sy: f32 = zero
+
+fn mat_round(v: f32) -> f32 {
+    ret math.floor[f32](v + 0.5)
+}
+
+fn mat_warp(y: f32) -> f32 {
+    let s = mat_warp_sy
+    if !(s > 0.0) { ret y }
+    let xs = 1082.0 * s
+    var fx = math.floor[f32](xs + 0.625)
+    if fx < 1.0 { fx = 1.0 }
+    let r = fx / xs
+    let fc = mat_round(1456.0 * s * r)
+    let fa = mat_round(1560.0 * s * r)
+    let fd = mat_round(-437.0 * s * r)
+    var px: f32 = 0.0
+    if y >= 1560.0 {
+        px = fa + (y - 1560.0) * s * r
+    } else if y >= 1456.0 {
+        px = fc + (y - 1456.0) * (fa - fc) / 104.0
+    } else if y >= 1082.0 {
+        px = fx + (y - 1082.0) * (fc - fx) / 374.0
+    } else if y >= 0.0 {
+        px = y * fx / 1082.0
+    } else if y >= -437.0 {
+        px = y * fd / -437.0
+    } else {
+        px = fd + (y + 437.0) * s * r
+    }
+    ret px / s
+}
+
+fn mat_snap(o: geometry.Point) -> geometry.Point {
+    if !mat_text { ret o }
+    ret geometry.Point { x: o.x, y: math.floor[f32](o.y + 0.5) }
+}
+
 fn set_text_hidden(hidden: bool) {
     text_hidden = hidden
 }
@@ -1624,7 +1674,7 @@ fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy:
                 at += 2usize
             }
         }
-        ys[i] = f32(value)
+        ys[i] = mat_warp(f32(value))
         i += 1usize
     }
     // Each contour: on-curve points are line targets, off-curve ones quadratic
@@ -1761,9 +1811,12 @@ fn text_edges(s: *RendererState, f: *Flattener, text: DrawText) -> err {
                 var g = 0usize
                 while g < run.run.glyphs.len {
                     let glyph = run.run.glyphs[g]
-                    let origin = geometry.transform_point(f.t, geometry.Point { x: pen + glyph.offset_x * run.size, y: baseline - glyph.offset_y * run.size })
+                    let origin = mat_snap(geometry.transform_point(f.t, geometry.Point { x: pen + glyph.offset_x * run.size, y: baseline - glyph.offset_y * run.size }))
                     // The glyph's own scale under the whole linear part of the transform (D4504: a rotated run).
+                    mat_warp_sy = 0.0
+                    if mat_text && (font.id == 11u32 || font.id == 12u32) && f.t.m01 == 0.0 && f.t.m10 == 0.0 { mat_warp_sy = scale * f.t.m11 }
                     try glyph_outline(f, font, glyph.id, origin.x, origin.y, scale * f.t.m00, 0.0 - scale * f.t.m01, scale * f.t.m10, 0.0 - scale * f.t.m11, 0usize)
+                    mat_warp_sy = 0.0
                     pen = pen + glyph.advance_x * run.size
                     g += 1usize
                 }

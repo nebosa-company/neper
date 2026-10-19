@@ -11614,7 +11614,8 @@ fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind
         parts[1usize] = widget.semantics(0u64, remove_sem, style.defaults(), region[0usize..1usize])
         look.padding = 8.0
         look.padding_start = 16.0
-        look.padding_y = max_zero((height - 2.0 - 24.0) * 0.5)
+        // The Android chip's remove icon (18 dp) is shorter than its label line: the label keeps the padding of the other chips.
+        if t.tokens.profile != .MaterialLike { look.padding_y = max_zero((height - 2.0 - 24.0) * 0.5) }
         content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), parts[0usize..2usize])
     }
     var role = 3u8
@@ -23554,7 +23555,7 @@ fn chip_icon_stroke(t: *const Theme) -> f32 {
 fn set_material_icons(on: bool) { looks_material_icons = on }
 
 fn material_has_icon(kind: GlyphKind) -> bool {
-    ret kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings
+    ret kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings || kind == .Refresh || kind == .Picture
 }
 
 fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bool, err) {
@@ -23596,6 +23597,10 @@ fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bo
         try matglyph.mat_more(&builder, x, y, w, h)
     } else if g.kind == .Settings {
         try matglyph.mat_settings(&builder, x, y, w, h)
+    } else if g.kind == .Refresh {
+        try matglyph.mat_refresh(&builder, x, y, w, h)
+    } else if g.kind == .Picture {
+        try matglyph.mat_image(&builder, x, y, w, h)
     } else {
         made = false
     }

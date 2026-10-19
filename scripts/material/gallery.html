@@ -159,6 +159,8 @@ const ICON = {
   edit: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
   settings: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z",
   down: "M7 10l5 5 5-5z", prev: "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z", next: "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+  refresh: "M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
+  image: "M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z",
   home: "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z", star: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
   person: "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z",
 };
@@ -279,10 +281,10 @@ add("tabs-primary-pressed", tabs("md-primary-tab", 0));
 add("tabs-primary-disabled", tabs("md-primary-tab", 0, (i) => i === 2 ? " disabled" : ""));
 add("tabs-secondary-rest", tabs("md-secondary-tab", 0));
 add("tabs-secondary-second-rest", tabs("md-secondary-tab", 1));
-add("tabs-primary-icons-rest", `<md-tabs style="width:300px">` + ["search", "star", "person"].map((n, i) => `<md-primary-tab${i === 0 ? " active" : ""}>${sl(n, "icon")}${TL[i]}</md-primary-tab>`).join("") + `</md-tabs>`);
+add("tabs-primary-icons-rest", `<md-tabs style="width:300px">` + ["search", "image", "person"].map((n, i) => `<md-primary-tab${i === 0 ? " active" : ""}>${sl(n, "icon")}${TL[i]}</md-primary-tab>`).join("") + `</md-tabs>`);
 // menu: an open menu (the sheet's: icons, shortcuts, a divider and a disabled item); the capture clips the surface
 const mi = (icon, text, key, extra) => `<md-menu-item${extra || ""}>${sl(icon, "start")}<div slot="headline">${text}</div>${key ? `<div slot="trailing-supporting-text">${key}</div>` : ""}</md-menu-item>`;
-const menuHtml = `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute">${mi("edit", "Edit", "Ctrl+E")}${mi("search", "Search", "Ctrl+F")}<md-divider role="separator" tabindex="-1"></md-divider>${mi("star", "Settings")}${mi("add", "Refresh", "", " disabled")}${mi("add", "Add")}</md-menu>`;
+const menuHtml = `<span id="anchor" style="display:inline-block;width:1px;height:1px"></span><md-menu id="m" open anchor="anchor" positioning="absolute">${mi("edit", "Edit", "Ctrl+E")}${mi("search", "Search", "Ctrl+F")}<md-divider role="separator" tabindex="-1"></md-divider>${mi("settings", "Settings")}${mi("refresh", "Refresh", "", " disabled")}${mi("add", "Add")}</md-menu>`;
 add("menu-rest", menuHtml, { target: "md-menu", shadow: ".menu" });
 add("menu-hover", menuHtml, { target: "md-menu", shadow: ".menu" });
 // list (the sheet's rows: 340 dp wide, a leading person icon; two lines with a trailing chevron)
