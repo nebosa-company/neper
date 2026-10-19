@@ -894,6 +894,12 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
         muted = ink
         mark_ink = ink
         look.background = control.with_alpha(ink, 0.0)
+        // md-menu-item (Android): a disabled item's label is 30 % opaque, its icon and supporting text in on-surface-variant at 30 %.
+        if t.tokens.profile == .MaterialLike {
+            ink = control.with_alpha(surface_ink, 0.3)
+            muted = control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.3)
+            mark_ink = ink
+        }
     }
     look.foreground = ink
     look.border_width = 0.0
@@ -1191,12 +1197,12 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         var m = 0usize
         while m < commands.len {
             let cm = &commands[m]
-            let (label_w, label_error) = control.linux_label_width(a, t, body_caption, cm.label)
+            let (label_w, _label_fit, _label_base, label_error) = control.run_metrics_faced(a, t, body_caption, cm.label)
             if label_error != ok { ret (zero, label_error) }
             var row_w = 32.0 + label_w
             if slotted { row_w += 40.0 }
             if cm.shortcut.len > 0usize {
-                let (keys_w, keys_error) = control.linux_label_width(a, t, keys_caption, cm.shortcut)
+                let (keys_w, _keys_fit, _keys_base, keys_error) = control.run_metrics_faced(a, t, keys_caption, cm.shortcut)
                 if keys_error != ok { ret (zero, keys_error) }
                 row_w += 16.0 + keys_w
             }
@@ -4115,6 +4121,9 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     }
     let ink = style.color(t.tokens, .OnSurface)
     let muted = style.color(t.tokens, .OnSurfaceVariant)
+    // md-date-picker (Android): the weekday initials are on-surface.
+    var week_ink = muted
+    if t.tokens.profile == .MaterialLike { week_ink = style.color(t.tokens, .OnSurface) }
     let primary = style.color(t.tokens, .Primary)
     let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
     var lead = 0usize
@@ -4218,7 +4227,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
         var caption = control.text_options()
         caption.role = .LabelMedium
         caption.wrap = .None
-        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_name_in((week_start + weekday) % 7usize, touch, t.language), t, caption, muted)
+        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_name_in((week_start + weekday) % 7usize, touch, t.language), t, caption, week_ink)
         if name_error != ok { ret (zero, name_error) }
         let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
         if named_error != ok { ret (zero, TooLarge) }

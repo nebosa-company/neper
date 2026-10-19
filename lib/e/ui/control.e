@@ -2963,6 +2963,11 @@ fn button_with_glyph(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: Glyp
     }
     var look = button_look(t, base, options.enabled)
     look.padding_start = 16.0
+    // md-text-button with an icon: 12 before it and 16 after the label (a container button: 16 and 24).
+    if t.tokens.profile == .MaterialLike && look.padding == 12.0 {
+        look.padding_start = 12.0
+        look.padding = 16.0
+    }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
@@ -6854,6 +6859,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         if t.tokens.profile == .MaterialLike && !focused { edge_width = t.tokens.sizes.divider }
         label_color = edge
     }
+    // Android (md-outlined-text-field, md-filled-text-field): the label is on-surface under the pointer.
+    if t.tokens.profile == .MaterialLike && hovered && !focused && !options.invalid { label_color = ink }
     if options.read_only && !options.invalid {
         edge = style.frame_ink(t.tokens)
         edge_width = t.tokens.sizes.divider
@@ -6893,7 +6900,10 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         hint.wrap = .None
         var hint_text = options.placeholder
         if resting { hint_text = label }
-        let (hint_node, hint_error) = colored_text(a, 0u64, hint_text, t, hint, with_alpha(muted, value_color.alpha))
+        var hint_color = with_alpha(muted, value_color.alpha)
+        // Android: the resting label has the label's colour (on-surface under the pointer, error when invalid, on-surface at 38 % when disabled).
+        if resting && t.tokens.profile == .MaterialLike { hint_color = label_color }
+        let (hint_node, hint_error) = colored_text(a, 0u64, hint_text, t, hint, hint_color)
         if hint_error != ok { ret (zero, hint_error) }
         editor[at] = hint_node
         at += 1usize
@@ -7130,10 +7140,7 @@ fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color
     let none = style.Length { Px: 0.0 }
     cut.padding = style.EdgeLengths { left: four, top: none, right: four, bottom: none }
     notch_parts[1usize] = frame
-    // Android: the floated label stands a pixel higher than the line box's middle on the edge (md-outlined-text-field).
-    var notch_up: f32 = 0.0
-    if t.tokens.profile == .MaterialLike { notch_up = 1.0 }
-    notch_parts[2usize] = widget.positioned(0u64, pad_x - 4.0, 0.0 - style.text_style(t.tokens, .BodySmall).line_height * 0.5 - notch_up, cut, notch_parts[0usize..1usize])
+    notch_parts[2usize] = widget.positioned(0u64, pad_x - 4.0, 0.0 - style.text_style(t.tokens, .BodySmall).line_height * 0.5, cut, notch_parts[0usize..1usize])
     ret (widget.stack(0u64, style.defaults(), notch_parts[1usize..3usize]), ok)
 }
 
@@ -7924,8 +7931,19 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
         hint.role = role
         hint.color = .OnSurfaceVariant
         hint.wrap = .None
-        let (hint_node, hint_error) = text_node(a, 0u64, prompt, t, hint)
-        if hint_error != ok { ret (zero, hint_error) }
+        var hint_node: widget.Node = zero
+        if t.tokens.profile == .MaterialLike {
+            // md-search-bar: the state layer lies over the placeholder, which takes it on.
+            var layer_opacity: f32 = 0.0
+            if state.pressed { layer_opacity = t.tokens.states.pressed } else if state.hovered { layer_opacity = t.tokens.states.hover }
+            let (made, made_error) = colored_text(a, 0u64, prompt, t, hint, style.layer(style.color(t.tokens, .OnSurfaceVariant), style.color(t.tokens, .OnSurface), layer_opacity))
+            if made_error != ok { ret (zero, made_error) }
+            hint_node = made
+        } else {
+            let (made, made_error) = text_node(a, 0u64, prompt, t, hint)
+            if made_error != ok { ret (zero, made_error) }
+            hint_node = made
+        }
         layers[at] = hint_node
         at += 1usize
     }
@@ -9598,9 +9616,11 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         var ink = style.color(t.tokens, .OnSurfaceVariant)
         if chosen && options.secondary { ink = style.color(t.tokens, .OnSurface) }
         if chosen && !options.secondary { ink = style.color(t.tokens, .Primary) }
+        // md-primary-tab and md-secondary-tab: an unchosen tab's label is on-surface under the pointer and while pressed.
+        if t.tokens.profile == .MaterialLike && enabled && !chosen && (state.hovered || state.pressed) { ink = style.color(t.tokens, .OnSurface) }
         if !enabled { ink = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
         var look = style.resolve(t.tokens, .Plain, state)
-        // M3: an unchosen tab's hover layer is on-surface (the label stays on-surface-variant); a pressed tab takes primary.
+        // M3: an unchosen tab's hover layer is on-surface; a pressed tab takes primary.
         var wash = ink
         if t.tokens.profile == .MaterialLike && enabled && !chosen { wash = style.color(t.tokens, .OnSurface) }
         if t.tokens.profile == .MaterialLike && enabled && state.pressed { wash = style.color(t.tokens, .Primary) }

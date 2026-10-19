@@ -5,7 +5,8 @@
 Placement is cmp.py's (the cell's reference crop centred in our cell, best offset within 3 px). The text ink of a cell is the set of
 reference pixels that change when the text is made transparent (`<cell>@1x-textmask.png`, made by capture_textonly.mjs and
 textmask.py: the icons stay visible, so this is the ink of the text alone). Over those pixels a pixel is EXACT when every channel of ours is within
-2 levels of the reference and FAR when one is more than 12 levels off. `--all` runs every sheet in sheets.SHEETS; `--cells`
+2 levels of the reference and FAR when one is more than 12 levels off. `--corrected` first takes the fill's own error off (see
+`background_corrected`). `--all` runs every sheet in sheets.SHEETS; `--cells`
 prints one line per cell, not per sheet.
 """
 import os
@@ -13,6 +14,7 @@ import sys
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 sys.path.insert(0, os.path.dirname(__file__))
 import cmp as mcmp  # noqa: E402
@@ -72,9 +74,27 @@ def cells(name, dark, only=None):
         yield ref_name, ink & win, ref, ours[Y0:Y0 + ref.shape[0], X0:X0 + ref.shape[1]]
 
 
+CORRECT = False
+
+
+def background_corrected(ink, ref, o):
+    """ours with, per text line, the median difference to the reference on the ring of plain pixels around the ink taken off: what is
+    left is the text, not the fill (a state layer or a ripple that is a level or two off) that it stands on"""
+    lines, count = ndimage.label(ndimage.binary_dilation(ink, structure=np.ones((3, 25), bool)))
+    out = o.copy()
+    for i in range(1, count + 1):
+        m = (lines == i) & ink
+        ring = ndimage.binary_dilation(m, iterations=4) & ~ndimage.binary_dilation(m, iterations=2) & ~ink
+        if ring.sum() >= 8:
+            out[lines == i] = o[lines == i] - np.median((o - ref)[ring], axis=0).astype(int)
+    return out
+
+
 def run(name, dark, only=None, per_cell=False):
     n = ex = far = 0
     for ref_name, ink, ref, o in cells(name, dark, only):
+        if CORRECT:
+            o = background_corrected(ink, ref, o)
         d = np.abs(o - ref).max(axis=2)
         k = int(ink.sum())
         e = int(((d <= 2) & ink).sum())
@@ -90,6 +110,7 @@ def run(name, dark, only=None, per_cell=False):
 if __name__ == "__main__":
     args = sys.argv[1:]
     dark = "--dark" in args
+    CORRECT = "--corrected" in args
     names = [a for a in args if not a.startswith("--")]
     if "--all" in args:
         names = list(SHEETS)

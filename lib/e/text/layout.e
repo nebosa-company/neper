@@ -93,6 +93,8 @@ fn metrics_of(choice: FontChoice) -> Metrics {
     var em = 0i32
     var ascent = 0i32
     var descent = 0i32
+    var win_ascent = 0i32
+    var win_descent = 0i32
     let count = usize(read16(d, 4usize))
     var i = 0usize
     while i < count {
@@ -104,6 +106,10 @@ fn metrics_of(choice: FontChoice) -> Metrics {
             ascent = read16(d, at + 4usize)
             descent = read16(d, at + 6usize)
         }
+        if tag == 1330851634u32 {
+            win_ascent = i32(u16(read16(d, at + 74usize)))
+            win_descent = i32(u16(read16(d, at + 76usize)))
+        }
         i += 1usize
     }
     if em <= 0i32 || ascent - descent <= 0i32 { ret Metrics { ascent: 0.8 * choice.size, descent: 0.2 * choice.size } }
@@ -111,15 +117,15 @@ fn metrics_of(choice: FontChoice) -> Metrics {
     if down < 0i32 { down = 0i32 }
     let exact_ascent = f32(ascent) * choice.size / f32(em)
     let exact_descent = f32(down) * choice.size / f32(em)
-    if chromium_lines {
-        // FreeType's metrics at the pixel size (what Skia reads on Linux): the ascender rounded up and the descender down to whole
-        // pixels, then Blink's own rounding leaves them as they are.
-        ret Metrics { ascent: math.ceil[f32](exact_ascent - 0.001), descent: math.ceil[f32](exact_descent - 0.001) }
+    if chromium_lines && win_ascent + win_descent > 0i32 {
+        // What Chromium on Windows does with DirectWrite's metrics (the OS/2 usWinAscent and usWinDescent of the pixel size) is
+        // to round each to a whole pixel; Blink then leaves them as they are (measured on Roboto, 64 sizes and line heights).
+        ret Metrics { ascent: math.floor[f32](f32(win_ascent) * choice.size / f32(em) + 0.5), descent: math.floor[f32](f32(win_descent) * choice.size / f32(em) + 0.5) }
     }
     ret Metrics { ascent: exact_ascent, descent: exact_descent }
 }
 
-// The Android look lays a line out as Blink does (set by `ui.looks.set_look`): whole pixel ascent (up) and descent (down) as FreeType sizes them, and the half leading floored.
+// The Android look lays a line out as Blink does (set by `ui.looks.set_look`): whole pixel ascent and descent (`metrics_of`) and the half leading floored.
 var chromium_lines: bool = false
 
 fn set_chromium_lines(on: bool) {
@@ -553,6 +559,8 @@ fn build_line(a: *mem.Arena, items: []const Item, style: Style, source: str, cut
     let last_content = content_end(source, cut.start, cut.end)
     var width = measure(items, cut.item_from, cut.item_to, style, source, cut.start, cut.end)
     if has_tail { width += run_width(tail) }
+    // Blink's inline size is a LayoutUnit (a 64th of a pixel), rounded up from the shaped width.
+    if chromium_lines { width = math.ceil[f32](width * 64.0 - 0.001) / 64.0 }
     var extra: f32 = 0.0
     if options.align == .Justify && options.width > width && !cut.paragraph_end {
         let spaces = count_spaces(source, cut.start, last_content)

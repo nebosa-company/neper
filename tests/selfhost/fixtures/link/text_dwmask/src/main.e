@@ -2,7 +2,7 @@
 // from a Chromium 149 capture of black text on white at 1x (--disable-lcd-text --font-render-hinting=none, the face from the Windows
 // font directory as a web font). The mask of "H" at 16 px is checked on the four sub-pixel positions Skia has (0, 1/4, 1/2 and 3/4 of
 // a pixel, which DirectWrite takes as 0, 1/3, 1/2 and 5/6), all of its 12 rows by 15 columns, byte for byte. The whole check passes
-// when the font is not there. `main dump` prints the four masks instead of checking them.
+// when the font is not there (the table keys are checked first). `main dump` prints the four masks instead of checking them.
 
 use e.fs
 use e.gfx.dwtext
@@ -53,6 +53,12 @@ fn expected() -> str {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // The table a colour selects (measured on Chromium's text in 90 colours): each channel is cut to three bits before the luminance is taken.
+    if dwtext.lut_key(56.0 / 255.0, 30.0 / 255.0, 114.0 / 255.0) != 0usize { ret tthint.Trap }
+    if dwtext.lut_key(28.0 / 255.0, 16.0 / 255.0, 252.0 / 255.0) != 0usize { ret tthint.Trap }
+    if dwtext.lut_key(192.0 / 255.0, 4.0 / 255.0, 231.0 / 255.0) != 2usize { ret tthint.Trap }
+    if dwtext.lut_key(36.0 / 255.0, 36.0 / 255.0, 36.0 / 255.0) != 1usize { ret tthint.Trap }
+    if dwtext.lut_key(1.0, 1.0, 1.0) != 7usize { ret tthint.Trap }
     let (bytes, read_error) = fs.read_file(a, font_path(), 16777216usize)
     if read_error != ok { ret ok }
     let (h, open_error) = tthint.open(a, bytes)

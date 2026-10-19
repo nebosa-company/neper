@@ -8,7 +8,7 @@
 //   3. A pixel's three ClearType channels are boxes of six sample columns, two columns apart (columns -2..3, 0..5 and 2..7 of the
 //      pixel), each column a vertical sum of the five sample rows weighted 4 9 10 9 4; a channel is 255 * sum / 216, rounded.
 //   4. Skia's grey mask is the whole-number mean of the three channels, put through its pre-blend table: a gamma-correcting
-//      table keyed on the luminance of the text colour (`SkComputeLuminance` on the sRGB bytes, three bits of it), sRGB as the
+//      table keyed on the luminance of the text colour (each sRGB byte cut to three bits, then `SkComputeLuminance`, three bits of it), sRGB as the
 //      transfer curve and a contrast of 1 (`SkTMaskGamma_build_correcting_lut`).
 //
 // The mask is composed by the caller as an A8 mask under the text colour, glyph by glyph.
@@ -50,9 +50,16 @@ fn byte_of(v: f32) -> i64 {
     ret b
 }
 
-// The pre-blend table a text colour selects: `SkComputeLuminance` of its sRGB bytes, the top three bits.
+// The three bits of a colour channel, repeated to a byte: Skia's `SkMaskGamma::CanonicalColor`, which quantises each channel before
+// the luminance is taken.
+fn canonical(v: i64) -> i64 {
+    let q = v / 32i64
+    ret q * 32i64 + q * 4i64 + q / 2i64
+}
+
+// The pre-blend table a text colour selects: `SkComputeLuminance` of its canonical colour, the top three bits.
 fn lut_key(red: f32, green: f32, blue: f32) -> usize {
-    let lum = (byte_of(red) * 54i64 + byte_of(green) * 183i64 + byte_of(blue) * 19i64) / 256i64
+    let lum = (canonical(byte_of(red)) * 54i64 + canonical(byte_of(green)) * 183i64 + canonical(byte_of(blue)) * 19i64) / 256i64
     ret usize(lum / 32i64)
 }
 

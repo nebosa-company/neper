@@ -2231,7 +2231,7 @@ fn draw_text_mat(s: *RendererState, state: DrawState, text: DrawText) -> bool {
             let (hinter, has_hinter) = lcd_hinter(s, fi)
             let ppem = mat_ppem(run.size, t.m00)
             let ratio = run.size * t.m00 / f32(ppem)
-            var pen: f32 = t.m00 * (text.origin.x + run.origin.x) + t.m02
+            var pen: f32 = t.m00 * math.floor[f32]((text.origin.x + run.origin.x) * 64.0) / 64.0 + t.m02
             var g = 0usize
             while g < run.run.glyphs.len {
                 let glyph = run.run.glyphs[g]

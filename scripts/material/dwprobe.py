@@ -8,8 +8,8 @@ DirectWrite, not FreeType. Roboto is a web font from C:/Windows/Fonts. The stage
             (Skia) and then to a sixth (DirectWrite)
   filter    three channels = boxes of 6 sample columns at columns -2..3, 0..5, 2..7 of the pixel; a column is the sum of the five
             rows weighted 4 9 10 9 4; channel byte = round(255 * sum / 216)
-  mask      (r + g + b) / 3 (integer) through Skia's pre-blend table: SkComputeLuminance of the text colour's sRGB bytes, top three
-            bits, sRGB transfer curve, contrast 1 (SkTMaskGamma_build_correcting_lut); composed as an A8 mask under the colour
+  mask      (r + g + b) / 3 (integer) through Skia's pre-blend table: SkComputeLuminance of the text colour with each sRGB byte cut
+            to three bits, top three bits of that, sRGB transfer curve, contrast 1 (SkTMaskGamma_build_correcting_lut); composed as an A8 mask under the colour
 
   python -I scripts/material/dwprobe.py CTDUMP.exe [--shot]     (CTDUMP.exe: build tools/ctdump with the compiler)
 
@@ -56,8 +56,13 @@ def lut(key):
     return t
 
 
+def canonical(c):
+    return (c >> 5) * 32 + (c >> 5) * 4 + (c >> 5) // 2
+
+
 def lut_key(r, g, b):
-    return ((r * 54 + g * 183 + b * 19) >> 8) >> 5
+    """each channel cut to three bits first (SkMaskGamma::CanonicalColor), then SkComputeLuminance"""
+    return ((canonical(r) * 54 + canonical(g) * 183 + canonical(b) * 19) >> 8) >> 5
 
 
 @functools.lru_cache(None)
