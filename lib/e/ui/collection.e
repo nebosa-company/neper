@@ -2062,7 +2062,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let win_glyphs = look.on && look.soft_lines && t.tokens.profile == .Windows && !look.dialog_lines && !glyph_header && !numeric_column(numeric, i)
         var win_hot = state.hovered || state.pressed
         // round 15: the Shortcuts grid's hot header has no filter button
-        if look.top_edge_on { win_hot = state.pressed }
+        if look.top_edge_on { win_hot = false }
         if win_glyphs {
             if b == 2usize { b = 1usize }
             if (sorted || win_hot) && numeric_column(look.center_head, i) {
@@ -2100,7 +2100,9 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 if state.pressed { filter_pix = gl.gx_chip_filter_pressed() }
                 let (filter_node, filter_error) = gl.pixels(a, filter_pix, 12.0, 11.0)
                 if filter_error != ok { ret (zero, filter_error) }
-                layers[layer_n] = widget.positioned(0u64, columns[i].width - 15.0 - pad, 0.0, style.defaults(), one_node(a, filter_node))
+                var filter_top: f32 = 0.0
+                if look.dialog_lines && state.pressed { filter_top = 0.0 - 1.0 }
+                layers[layer_n] = widget.positioned(0u64, columns[i].width - 15.0 - pad, filter_top, style.defaults(), one_node(a, filter_node))
                 layer_n += 1usize
             }
             var layer_style = style.defaults()
@@ -2284,6 +2286,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                     upto += 1usize
                 }
                 var drift = (line_sum - 12.0) * 0.01633
+                // looks33: the Shortcuts list's header lines run from #E9 at x = 22 to #F0 at x = 347 (live capture)
+                if look.top_edge_on { drift = 1.0 + (line_sum - 22.0) * 0.0212 }
                 if drift < 0.0 { drift = 0.0 }
                 first_line.background = paint.Brush { Solid: dk(t, 0xE8E8E8u32 + u32(drift + 0.5) * 65793u32) }
                 second_line.background = paint.Brush { Solid: dk(t, 0xFCFCFCu32 - u32(drift + 0.5) * 65793u32) }
@@ -2949,7 +2953,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             dotted_width += columns[dotted_at].width
             dotted_at += 1usize
         }
-        if look.cell_select != 0usize && look.cell_select <= columns.len {
+        if look.cell_select != 0usize && look.cell_select <= columns.len && !look.dialog_lines {
             // the rectangle round the focused cell only
             var before: f32 = 0.0
             var scan = 0usize
