@@ -970,7 +970,7 @@ fn vm_shpix(h: *Hinter) {
         if h.fail { ret }
         var blocked = false
         if h.cleartype && h.gs.free_y == 0i64 && vm_pt(h, zi, p) {
-            if h.in_delta || abs64(d) >= 64i64 { blocked = true }
+            if h.in_delta || h.composite || abs64(d) >= 64i64 { blocked = true }
         }
         if h.cleartype && h.gs.free_x == 0i64 && vm_pt(h, zi, p) && vm_delta_skipped(h, zi, usize(p)) { blocked = true }
         if !blocked && vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }

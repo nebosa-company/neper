@@ -171,7 +171,7 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
         // a component is fitted to the advance of the glyph it belongs to
         let (loaded, load_error) = gl_load(h, a, bw, top_gid, 0usize)
         if load_error != ok { ret load_error }
-        bw_adv = loaded.adv
+        bw_adv = device_advance(h, false, s.ppem, top_gid, loaded.adv)
         h.level = loaded.lv
     }
     var i = 0usize
