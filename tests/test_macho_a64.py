@@ -52,12 +52,17 @@ class MachOA64(unittest.TestCase):
         magic, cpu, _, kind = struct.unpack_from("<IIII", self.image)
         self.assertEqual((magic, cpu, kind), (0xFEEDFACF, 0x0100000C, 2))
 
-    def test_thread_pc_lies_in_the_text_segment(self):
-        offset = commands(self.image)[5]
-        pc = struct.unpack_from("<Q", self.image, offset + 16 + 32 * 8)[0]
-        base = 1 << 32
-        self.assertTrue(base < pc < base + len(self.image))
-        self.assertEqual(struct.unpack_from("<I", self.image, pc - base)[0], 0x910003F3)  # mov x19, sp
+    def test_dyld_loads_it_with_libsystem(self):
+        found = commands(self.image)
+        for kind in (0xE, 0xC, 0x80000034):  # dylinker, dylib, chained fixups
+            self.assertIn(kind, found)
+        self.assertNotIn(5, found)  # LC_UNIXTHREAD: the kernel kills arm64 images without dyld
+        self.assertEqual(struct.unpack_from("<I", self.image, 24)[0] & 0x200084, 0x200084)
+
+    def test_main_entry_lies_in_the_text_segment(self):
+        entry = struct.unpack_from("<Q", self.image, commands(self.image)[0x80000028] + 8)[0]
+        self.assertTrue(0x4000 <= entry < len(self.image))
+        self.assertEqual(struct.unpack_from("<I", self.image, entry)[0], 0xAA0003F6)  # mov x22, x0
 
     def test_code_directory_hashes_every_page(self):
         found = commands(self.image)
