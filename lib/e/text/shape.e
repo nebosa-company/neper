@@ -749,7 +749,10 @@ fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err)
         }
         i += 1usize
     }
-    ret (Run { font: font.id, direction: options.direction, script: options.script, language: options.language, glyphs: glyphs }, ok)
+    // A run set on GDI advances (language "kern") keeps its advances when drawn as hinted ClearType: the kern pair is not in the hinter's advance.
+    var made_language = options.language
+    if options.ppem != 0u32 && options.ppem & 2147483648u32 == 0u32 && options.features.len == 0usize { made_language = "kern" }
+    ret (Run { font: font.id, direction: options.direction, script: options.script, language: made_language, glyphs: glyphs }, ok)
 }
 
 // Font fallback by `cmap` coverage: `covers` asks one font for one scalar (a font that

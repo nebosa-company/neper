@@ -1988,6 +1988,16 @@ fn gray_text(color: paint.Color) -> paint.Color {
 
 fn is_gray_text(color: paint.Color) -> bool { ret color.alpha < 1.0 && color.alpha > 0.999 }
 
+// `color` marked to be drawn as GDI's monochrome text (a disabled static's DrawState): the ClearType coverage thresholded to whole pixels, opaque.
+fn mono_text(color: paint.Color) -> paint.Color {
+    ret paint.Color { red: color.red, green: color.green, blue: color.blue, alpha: 0.9995 }
+}
+
+fn is_mono_text(color: paint.Color) -> bool { ret color.alpha > 0.99945 && color.alpha < 0.99955 }
+
+// The coverage (of 18: six samples on three channels) from which a monochrome pixel is set.
+fn MONO_CUT() -> i64 { ret 10i64 }
+
 fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
     var color: paint.Color = zero
     switch text.brush {
@@ -1997,7 +2007,8 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
         ret false
     }
     // A brush alpha of 0.9999 (see `gray_text`) asks for the greyscale path: v3's Dev Express controls draw unhinted, unfringed text.
-    if color.alpha < 1.0 && color.alpha > 0.999 { ret false }
+    let mono = is_mono_text(color)
+    if !mono && color.alpha < 1.0 && color.alpha > 0.999 { ret false }
     let t = state.transform
     if t.m01 != 0.0 || t.m10 != 0.0 || !(t.m00 > 0.0) || t.m00 != t.m11 { ret false }
     if !lcd_ready(s) { ret false }
@@ -2060,7 +2071,11 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
                 if hint_error != ok { ret false }
                 let at = pen_px(pen + glyph.offset_x * run.size * t.m00)
                 if !cleartype.add_glyph(sc, &outline, at, base) { ret false }
-                pen = pen + f32(tthint.fdiv(outline.adv + 32i64, 64i64))
+                if run.run.language.len == 4usize && run.run.language[0usize] == 107u8 {
+                    pen = pen + glyph.advance_x * run.size * t.m00
+                } else {
+                    pen = pen + f32(tthint.fdiv(outline.adv + 32i64, 64i64))
+                }
                 g += 1usize
             }
             ri += 1usize
@@ -2088,7 +2103,16 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
             let kr = cleartype.coverage(sc, i64(x), i64(y), 0usize)
             let kg = cleartype.coverage(sc, i64(x), i64(y), 1usize)
             let kb = cleartype.coverage(sc, i64(x), i64(y), 2usize)
-            if kr + kg + kb > 0i64 {
+            if mono && kr + kg + kb >= MONO_CUT() {
+                let index = y * s.width + x
+                let at = index * 4usize
+                if canvas[at + 3usize] >= 0.9999 {
+                    canvas[at] = color.red
+                    canvas[at + 1usize] = color.green
+                    canvas[at + 2usize] = color.blue
+                }
+            } else if mono {
+            } else if kr + kg + kb > 0i64 {
                 let index = y * s.width + x
                 let at = index * 4usize
                 var weight: f64 = f64(color.alpha)

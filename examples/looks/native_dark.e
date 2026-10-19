@@ -299,7 +299,17 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     // labels: label-rest and label-disabled (native static text, white Segoe UI 9 pt; the disabled capture is white too: the app colours it)
     var l = 0usize
     while l < 2usize {
-        let (word, word_error) = control.windows_label_faced(a, t, "Static text label", 12.0, 400u32, style.hex_raw(0xFFFFFFu32), false, 0.0, 7u32, 0.0, 0.0, false)
+        var word: widget.Node = zero
+        var word_error: err = ok
+        if l == 0usize {
+            let (plain, plain_error) = control.windows_label_faced(a, t, "Static text label", 12.0, 400u32, style.hex_raw(0xFFFFFFu32), false, 0.0, 7u32, 0.0, 0.0, false)
+            word = plain
+            word_error = plain_error
+        } else {
+            let (engraved, engraved_error) = control.windows_label_engraved(a, t, "Static text label", 12.0, 7u32)
+            word = engraved
+            word_error = engraved_error
+        }
         if word_error != ok { ret (0usize, word_error) }
         let (boxed, boxed_error) = placed(a, word, 40.0, 39.0)
         if boxed_error != ok { ret (0usize, boxed_error) }
@@ -341,10 +351,27 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         at += 1usize
         m += 1usize
     }
+    // edit-multiline-vscroll: the same edit with the unthemed light bar the capture shows
+    if at < 1000usize {
+        let (buffer, buffer_error) = mem.alloc[u8](a, 128usize)
+        if buffer_error != ok { ret (0usize, buffer_error) }
+        let n = control.copy_text(buffer, "Line one\nLine two\nLine three\nLine four\nLine five\nLine six\nLine seven\nLine eight")
+        var options = control.field_options()
+        options.width = 167.0
+        options.height = 90.0
+        options.rows = 5u32
+        options.classic_bar = true
+        let (memo, memo_error) = control.text_area(a, 4200u64, t, "Notes", buffer, n, widget.Change[str] { ctx: zero, invoke: noop_change }, options)
+        if memo_error != ok { ret (0usize, memo_error) }
+        let (boxed, boxed_error) = placed(a, memo, 15.0, 5.0)
+        if boxed_error != ok { ret (0usize, boxed_error) }
+        cells[at] = looks.Cell { caption: "memo-vscroll", node: boxed, drive: .None }
+        at += 1usize
+    }
     ret (at, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "native_dark", cells: 60usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "native_dark", cells: 61usize, columns: 7usize, cell_w: cell_w(), cell_h: cell_h(), ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

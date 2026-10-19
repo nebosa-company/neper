@@ -2194,7 +2194,9 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             }
         }
     }
-    if focused_here && ed.marked.alpha > 0.0 {
+    // The native dark edit's selected glyphs are the text colour itself (white): GDI sets them once, so a second pass would double the edge blend.
+    let marked_again = !(native_caret_face(ed.caret) && ed.marked.red == ed.color.red && ed.marked.green == ed.color.green && ed.marked.blue == ed.color.blue)
+    if focused_here && ed.marked.alpha > 0.0 && marked_again {
         // The selected glyphs again in their own colour, clipped to the selection.
         let (lo, hi) = selection_of(e)
         if lo < hi {

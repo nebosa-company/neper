@@ -8924,7 +8924,11 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     let (title_cell, title_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if title_cell_error != ok { ret (zero, TooLarge) }
     title_cell[0usize] = word
-    let title_look = control.sized_style(caption.drag.width, caption.drag.height)
+    var title_look = control.sized_style(caption.drag.width, caption.drag.height)
+    // the native dark dialog (no icon) sets its title one pixel higher than the centred line box (dialog-active, dialog-inactive)
+    if windows && style.windows_dark_on() && !options.icon && !options.light && !options.tool {
+        title_look.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 2.0 } }
+    }
     var title_main: ui_layout.MainAlign = .Start
     if options.platform == .Mac { title_main = .Center }
     if options.rtl && options.platform != .Mac { title_main = .End }
@@ -11149,6 +11153,25 @@ fn dark_menu_outline(a: *mem.Arena, width: f32) -> (widget.Node, err) {
     ret (widget.stack(0u64, control.sized_style(width, 22.0), parts[0usize..8usize]), ok)
 }
 
+// The hovered row of the native dark menu is a #353535 fill whose four corners are rounded (menu-popup-submenu): three pixels of antialiasing each.
+fn dark_hover_corners(a: *mem.Arena, width: f32) -> (widget.Node, err) {
+    let (tl, tl_error) = control.raw_pixels(a, "2C2C2C2D2D2D3333332D2D2D343434353535323232353535353535", 3.0, 3.0)
+    if tl_error != ok { ret (zero, tl_error) }
+    let (tr, tr_error) = control.raw_pixels(a, "3232322D2D2D2C2C2C3535353434342D2D2D353535353535333333", 3.0, 3.0)
+    if tr_error != ok { ret (zero, tr_error) }
+    let (bl, bl_error) = control.raw_pixels(a, "3333333535353535352D2D2D3434343535352C2C2C2D2D2D323232", 3.0, 3.0)
+    if bl_error != ok { ret (zero, bl_error) }
+    let (br, br_error) = control.raw_pixels(a, "3535353535353131313535353434342D2D2D3232322D2D2D2C2C2C", 3.0, 3.0)
+    if br_error != ok { ret (zero, br_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one(a, tl))
+    parts[1usize] = widget.positioned(0u64, width - 3.0, 0.0, style.defaults(), mem_one(a, tr))
+    parts[2usize] = widget.positioned(0u64, 0.0, 19.0, style.defaults(), mem_one(a, bl))
+    parts[3usize] = widget.positioned(0u64, width - 3.0, 19.0, style.defaults(), mem_one(a, br))
+    ret (widget.stack(0u64, control.sized_style(width, 22.0), parts[0usize..4usize]), ok)
+}
+
 fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8) -> (widget.Node, err) {
     var caption = control.text_options()
     caption.size = 12.0
@@ -11202,6 +11225,10 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         p += 1usize
         if state.hovered && c.enabled && !keyed {
             parts[p] = windows_rect_raw(0.0, 0.0, item_w, 22.0, 0x353535u32)
+            p += 1usize
+            let (round, round_error) = dark_hover_corners(a, item_w)
+            if round_error != ok { ret (zero, round_error) }
+            parts[p] = round
             p += 1usize
         }
         if keyed {

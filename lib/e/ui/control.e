@@ -2978,6 +2978,20 @@ fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: 
     ret (node, node_error)
 }
 
+// The native Windows 11 dark disabled static (label-disabled): DrawState sets the text as a monochrome bitmap, #A0A0A0 (COLOR_3DSHADOW)
+// over a #FFFFFF copy (COLOR_3DHILIGHT) one pixel right and down.
+fn windows_label_engraved(a: *mem.Arena, t: *const Theme, value: str, size: f32, face: u32) -> (widget.Node, err) {
+    let (shadow, shadow_error) = windows_label_faced(a, t, value, size, 400u32, scene.mono_text(style.hex_raw(0xFFFFFFu32)), false, 0.0, face, 0.0, 0.0, false)
+    if shadow_error != ok { ret (zero, shadow_error) }
+    let (top, top_error) = windows_label_faced(a, t, value, size, 400u32, scene.mono_text(style.hex_raw(0xA0A0A0u32)), false, 0.0, face, 0.0, 0.0, false)
+    if top_error != ok { ret (zero, top_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = widget.positioned(0u64, 1.0, 1.0, style.defaults(), mem_one_node(a, shadow))
+    pair[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, top))
+    ret (widget.stack(0u64, sized_style(150.0, 20.0), pair[0usize..2usize]), ok)
+}
+
 // looks4: the same label in another face. A TcxLabel with ParentFont = False and no Style.Font of its own (v3's Deck
 // Properties file name, Missing Set Cards description) draws DevExpress's default font, Segoe UI 9 pt = 12 px (face 7);
 // the ones that inherit the form font or set Style.Font are Tahoma (face 8).
@@ -6762,10 +6776,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D1453) `mono` sets the typed text in the theme's fixed-pitch face.
 // (looks) `flat`: under the Windows look, a combo box as a toolbar hosts it (v3's dxBar editors:
 // no rounded native frame, a flat white face and a grey drop button with a black triangle).
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32 }
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32, classic_bar: bool }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32 }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32, classic_bar: false }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -7444,7 +7458,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
         layers_at += 1usize
     }
-    if dark_bar {
+    if dark_bar && !options.classic_bar {
         // the themed bar belongs to DarkMode_Explorer, whose frame is white (edit-multiline-explorer)
         let (rimmed, rimmed_error) = win_explorer_frame(a, w + 1.0, h)
         if rimmed_error != ok { ret (zero, rimmed_error) }
@@ -7454,7 +7468,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     if dark_bar {
         let (bars, bars_error) = mem.alloc[WinDarkBar](a, 1usize)
         if bars_error != ok { ret (zero, TooLarge) }
-        bars[0usize] = WinDarkBar { first: u32(bar_first), rows: options.rows, lines: u32(bar_lines) }
+        bars[0usize] = WinDarkBar { first: u32(bar_first), rows: options.rows, lines: u32(bar_lines), classic: options.classic_bar }
         var bar_none: []const widget.Node = zero
         let bar_node = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&bars[0usize]), measure: win3_measure, paint: win_dark_bar_paint, state: widget.bytes_of[WinDarkBar](&bars[0usize]) } }, style: sized_style(17.0, max_zero(h - 4.0)), children: bar_none }
         let (bar_held, bar_held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -22509,7 +22523,7 @@ fn win_native_tooltip(a: *mem.Arena, key: widget.Key, t: *const Theme, hint_text
         if dark_parts_error != ok { ret (zero, TooLarge) }
         dark_parts[0usize] = widget.box(0u64, rim, zero)
         dark_parts[1usize] = widget.positioned(0u64, 1.0, 1.0, style.defaults(), mem_one_node(a, widget.box(0u64, inside, zero)))
-        dark_parts[2usize] = widget.positioned(0u64, 5.0, 1.0, style.defaults(), mem_one_node(a, dark_said))
+        dark_parts[2usize] = widget.positioned(0u64, 6.0, 1.0, style.defaults(), mem_one_node(a, dark_said))
         ret (widget.stack(key, frame, dark_parts[0usize..3usize]), ok)
     }
     var line = sized_style(width - 12.0, 1.0)
@@ -22872,10 +22886,24 @@ fn raw_pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
 // Measured on ref/windows-native/dark/edit-multiline-explorer: a 17 wide #171717 column (x 149 of the 168 wide edit, rows 2 to 87), the
 // thumb 2 wide at x 157 (#959595, its end rows #858585); its length is the track (the column less two 17 px arrow rows) times the
 // visible lines over all lines (33 rows for 5 of 8), its top the track times the first line over all lines.
-type WinDarkBar = struct { first: u32, rows: u32, lines: u32 }
+type WinDarkBar = struct { first: u32, rows: u32, lines: u32, classic: bool }
 
 fn win_dark_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let m = mem.cast[*WinDarkBar](ctx)
+    // the unthemed bar (edit-multiline-vscroll): a #F0F0F0 column with a white left line and a #858585 thumb whose end rows are #929292
+    if m.classic {
+        try win3_rect(b, area.x, area.y, area.width, area.height, style.hex_raw(0xF0F0F0u32))
+        try win3_rect(b, area.x, area.y, 1.0, area.height, style.hex_raw(0xFFFFFFu32))
+        let classic_track = area.height - 34.0
+        var classic_long = f32(u32(classic_track * f32(m.rows) / f32(m.lines) + 0.5))
+        if classic_long < 8.0 { classic_long = 8.0 }
+        let classic_top = area.y + 17.0 + f32(u32(classic_track * f32(m.first) / f32(m.lines) + 0.5))
+        try win3_rect(b, area.x + 8.0, classic_top, 2.0, classic_long, style.hex_raw(0x858585u32))
+        try win3_rect(b, area.x + 8.0, classic_top, 1.0, 1.0, style.hex_raw(0x929292u32))
+        try win3_rect(b, area.x + 9.0, classic_top, 1.0, 1.0, style.hex_raw(0x939393u32))
+        try win3_rect(b, area.x + 8.0, classic_top + classic_long - 1.0, 1.0, 1.0, style.hex_raw(0x929292u32))
+        ret win3_rect(b, area.x + 9.0, classic_top + classic_long - 1.0, 1.0, 1.0, style.hex_raw(0x939393u32))
+    }
     try win3_rect(b, area.x, area.y, area.width, area.height, style.hex_raw(0x171717u32))
     let track = area.height - 34.0
     var long = f32(u32(track * f32(m.rows) / f32(m.lines) + 0.5))
@@ -22923,7 +22951,7 @@ fn win_explorer_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) 
 fn win_explorer_frame(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[WinDarkBar](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
-    cells[0usize] = WinDarkBar { first: 0u32, rows: 0u32, lines: 1u32 }
+    cells[0usize] = WinDarkBar { first: 0u32, rows: 0u32, lines: 1u32, classic: false }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_explorer_frame_paint, state: widget.bytes_of[WinDarkBar](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
