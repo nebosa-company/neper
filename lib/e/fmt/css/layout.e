@@ -2860,7 +2860,7 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
 }
 
 // The collapsed top margin of `c` and of the chain of first children it adjoins.
-fn peek_top(l: *Layout, c: u32, cbw: f64) -> Margin {
+fn peek_top(l: *Layout, c: u32, cbw: f64, floats: bool) -> Margin {
     used_margins_vertical(l, c, cbw)
     let cb = &l.boxes.items[usize(c)]
     var m = margin_of(cb.margin[0usize])
@@ -2871,7 +2871,7 @@ fn peek_top(l: *Layout, c: u32, cbw: f64) -> Margin {
     if s.border_width[0usize] != 0.0f64 || resolve_or(s.padding[0usize], base, 0.0f64) != 0.0f64 { ret m }
     // The first in-flow block child, past empty blocks whose margins adjoin.
     var kid = cb.first
-    var seen_float = false
+    var seen_float = floats
     while kid != NONE {
         let kb = &l.boxes.items[usize(kid)]
         if kb.inner == .Marker || (!kb.inline_level && is_out_of_flow(st(l, kb.style))) {
@@ -2894,7 +2894,7 @@ fn peek_top(l: *Layout, c: u32, cbw: f64) -> Margin {
             kid = kb.next
             continue
         }
-        ret collapse(m, peek_top(l, kid, cbw))
+        ret collapse(m, peek_top(l, kid, cbw, seen_float))
     }
     ret m
 }
@@ -3277,7 +3277,9 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     let orth = is_orthogonal(l, c)
     let bfc = is_bfc_root(l, c) || orth
     // The collapsed margin above the border edge, through first children and empty blocks.
-    var m_chain = peek_top(l, c, cw)
+    let float_low = maxf(float_bottom(l, fc.base, 0u32, -1000000.0f64), float_bottom(l, fc.base, 1u32, -1000000.0f64)) - fc.oy
+    var m_chain = peek_top(l, c, cw, false)
+    if float_low > y + margin_value(collapse(Margin { pos: acc.pos, neg: acc.neg }, m_chain)) { m_chain = peek_top(l, c, cw, true) }
     if consumed.v { m_chain = no_margin() }
     var total = collapse(Margin { pos: acc.pos, neg: acc.neg }, m_chain)
     var y_top = y + margin_value(total)

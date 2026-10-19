@@ -393,5 +393,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 66. A first child that clears a float does not pull its top margin out of its parent.
     let (p66, ok66) = build(a, "<div style=\"height:20px\"></div><div id=w><div style=\"float:left;height:60px\"></div><div style=\"clear:both;margin-top:20px\"></div></div>", "")
     if !ok66 || !is_rect(rect_of(p66, "w"), 0.0f64, 20.0f64, 800.0f64, 60.0f64) { os.exit(103) }
+    // 67. Position absolute makes float compute to none: the box keeps its static position.
+    let (p67, ok67) = build(a, "<div id=a style=\"position:absolute;float:right;width:10px;height:10px\"></div>", "")
+    if !ok67 || !is_rect(rect_of(p67, "a"), 0.0f64, 0.0f64, 10.0f64, 10.0f64) { os.exit(104) }
     ret ok
 }
