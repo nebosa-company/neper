@@ -706,6 +706,22 @@ fn vm_iup_interp(h: *Hinter, ax: usize, p1: usize, p2: usize, r1: usize, r2: usi
 // it against, or else, both points together, so that its centre lands at round(centre * A / X). A point MDRP, ALIGNRP or SHP placed
 // against another takes that one's shift; points no instruction touched follow in IUP. Zone tags: bit 32 a point resolved, 64 one that
 // carries a shift, 128 one that has one so far.
+// The advance of the zone's own glyph as scaled, and the shift its right phantom point carries. A component's advance is not the top
+// glyph's: the right phantom point of a component moves by (A - X) in proportion to the component's advance, round(own * (A - X) / X),
+// and a point IP places against it is interpolated over the component's own span (found with composites of synthetic fonts).
+fn ct_own(h: *Hinter, z: *Zone) -> i64 {
+    if !h.ct_part { ret h.ctX }
+    let own = z.org[2usize * (z.n - 3usize)] - z.org[2usize * (z.n - 4usize)]
+    if own <= 0i64 { ret h.ctX }
+    ret own
+}
+
+fn ct_pp2(h: *Hinter, z: *Zone) -> i64 {
+    if !h.ct_part { ret h.ctA - h.ctX }
+    let own = z.cur[2usize * (z.n - 3usize)] - z.cur[2usize * (z.n - 4usize)]
+    ret fdiv(2i64 * own * (h.ctA - h.ctX) + h.ctX, 2i64 * h.ctX)
+}
+
 fn ct_centre(h: *Hinter, c2: i64) -> i64 {
     let num = c2 * (h.ctA - h.ctX)
     let den = 2i64 * h.ctX
@@ -720,17 +736,66 @@ fn ct_off_shift(h: *Hinter) -> i64 {
 
 fn ct_live(z: *Zone, p: usize) -> bool { ret z.ipd[p] || z.mp[p] != 0i64 || (z.tags[p] & 128i64) != 0i64 }
 
+fn ct_kind_msirp(h: *Hinter) -> i64 {
+    if !vm_is_x(h) { ret 0i64 }
+    ret 3i64
+}
+
+fn ct_kind_mirp(h: *Hinter, flags: i64) -> i64 {
+    if !vm_is_x(h) { ret 0i64 }
+    if (flags & 3i64) == 1i64 { ret 1i64 }
+    ret 2i64
+}
+
+// Whether points `a` and `b` follow each other on one contour of the zone.
+fn ct_adjacent(z: *Zone, a: usize, b: usize) -> bool {
+    var first = 0usize
+    var c = 0usize
+    while c < z.nends {
+        let last = z.ends[c]
+        if a >= first && a <= last {
+            if b < first || b > last { ret false }
+            if a + 1usize == b || b + 1usize == a { ret true }
+            ret (a == first && b == last) || (b == first && a == last)
+        }
+        first = last + 1usize
+        c += 1usize
+    }
+    ret false
+}
+
+// A follower an instruction sets against another along the freedom vector y but with a projection that has some x in it (a diagonal stem
+// measured across, say) still takes its reference's shift when it had none: GDI notes the relation whatever the freedom vector.
+fn ct_derive_y(h: *Hinter, p: usize, r: usize) {
+    if h.zone[1usize].n == 0usize || h.ctA == 0i64 { ret }
+    if h.gs.proj_x == 0i64 && h.gs.proj_y == 16384i64 { ret }
+    let z = &h.zone[1usize]
+    if p + 4usize > z.n { ret }
+    if ct_live(z, p) { ret }
+    ct_derive(h, p, r, 0i64)
+}
+
 // MIRP and MSIRP (a pair) and MDRP, ALIGNRP and SHP (a point that follows) note which point they set against and give the point the
 // shift its reference has now; a pair is settled by IUP[x] once the points are where the program leaves them.
-fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
+// `kind`: 0 a follower (MDRP, ALIGNRP, SHP), 1 MIRP of distance type 01, 2 MIRP of another type, 3 MSIRP. Two points make a stem when they are
+// not neighbours on the contour and the MIRP is of type 01 (or an MSIRP), or when they are neighbours and the contour edge between them is flat
+// (a stem's top or bottom, not steeper than two to one); neighbours on a steep edge measure a height, not a width (found with synthetic
+// fonts of random polygons).
+fn ct_derive(h: *Hinter, p: usize, r: usize, kind: i64) {
     if h.ct_stop { ret }
     let z = &h.zone[1usize]
     let npt = z.n - 4usize
     if p >= npt || r >= z.n { ret }
     var plain = r + 4usize == z.n
-    var is_pair = pair
-    if pair && r < npt {
-        if abs64(z.org[2usize * p + 1usize] - z.org[2usize * r + 1usize]) >= 512i64 && abs64(z.cur[2usize * p] - z.cur[2usize * r]) < 64i64 { is_pair = false }
+    var is_pair = false
+    if kind != 0i64 && r < npt {
+        let adj = ct_adjacent(z, p, r)
+        let flat = abs64(z.org[2usize * p + 1usize] - z.org[2usize * r + 1usize]) <= 2i64 * abs64(z.org[2usize * p] - z.org[2usize * r])
+        if adj {
+            is_pair = flat
+        } else {
+            is_pair = kind != 2i64
+        }
     }
     if plain {
         z.mp[p] = 0i64
@@ -741,7 +806,7 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
     z.tags[p] = z.tags[p] | 128i64
     if r + 3usize == z.n {
         z.mp[p] = i64(r) + 1i64
-        z.sh[p] = h.ctA - h.ctX
+        z.sh[p] = ct_pp2(h, z)
         ret
     }
     if r >= npt { ret }
@@ -772,14 +837,14 @@ fn ct_ip_shift(h: *Hinter, r1: usize, r2: usize, p: usize, lazy: bool) -> i64 {
     var s1 = 0i64
     var s2 = 0i64
     if r1 + 3usize == n {
-        o1 = h.ctX
-        s1 = h.ctA - h.ctX
+        o1 = ct_own(h, z)
+        s1 = ct_pp2(h, z)
     } else if r1 + 4usize != n && (lazy || ct_live(z, r1)) {
         s1 = z.sh[r1]
     }
     if r2 + 3usize == n {
-        o2 = h.ctX
-        s2 = h.ctA - h.ctX
+        o2 = ct_own(h, z)
+        s2 = ct_pp2(h, z)
     } else if r2 + 4usize != n && (lazy || ct_live(z, r2)) {
         s2 = z.sh[r2]
     }
@@ -806,7 +871,7 @@ fn ct_resolve(h: *Hinter, p: usize, depth: usize) {
         ret
     }
     if r + 3usize == z.n {
-        z.sh[p] = h.ctA - h.ctX
+        z.sh[p] = ct_pp2(h, z)
         z.tags[p] = z.tags[p] | 64i64
         ret
     }
@@ -981,7 +1046,11 @@ fn vm_shp(h: *Hinter, one: bool) {
         if h.fail { ret }
         if vm_pt(h, zi, p) {
             vm_move_by(h, zi, usize(p), dx, dy)
-            if vm_is_x(h) && zi == 1usize && rzi == 1usize && h.ctA != 0i64 { ct_derive(h, usize(p), rr, false) }
+            if vm_is_x(h) && zi == 1usize && rzi == 1usize && h.ctA != 0i64 {
+                ct_derive(h, usize(p), rr, 0i64)
+            } else if zi == 1usize && rzi == 1usize {
+                ct_derive_y(h, usize(p), rr)
+            }
         }
         k += 1i64
     }
@@ -1010,7 +1079,11 @@ fn vm_shc(h: *Hinter, one: bool) {
     while p < e {
         if !(zi == rzi && p == rp) {
             vm_move_by(h, zi, p, dx, dy)
-            if vm_is_x(h) && zi == 1usize && rzi == 1usize && h.ctA != 0i64 && p + 4usize <= z.n { ct_derive(h, p, rp, false) }
+            if vm_is_x(h) && zi == 1usize && rzi == 1usize && h.ctA != 0i64 && p + 4usize <= z.n {
+                ct_derive(h, p, rp, 0i64)
+            } else if zi == 1usize && rzi == 1usize && p + 4usize <= z.n {
+                ct_derive_y(h, p, rp)
+            }
         }
         p += 1usize
     }
@@ -1122,7 +1195,7 @@ fn vm_msirp(h: *Hinter, set_rp0: bool) {
     }
     let dist = vm_project(h, z1.cur[2usize * pi] - z0.cur[2usize * r0], z1.cur[2usize * pi + 1usize] - z0.cur[2usize * r0 + 1usize])
     vm_move(h, h.gs.gep1, pi, d - dist)
-    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, true) }
+    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, ct_kind_msirp(h)) }
     h.gs.rp1 = h.gs.rp0
     h.gs.rp2 = p
     if set_rp0 { h.gs.rp0 = p }
@@ -1141,7 +1214,11 @@ fn vm_alignrp(h: *Hinter) {
         let pi = usize(p)
         let d = vm_project(h, z1.cur[2usize * pi] - z0.cur[2usize * r0], z1.cur[2usize * pi + 1usize] - z0.cur[2usize * r0 + 1usize])
         vm_move(h, h.gs.gep1, pi, 0i64 - d)
-        if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, false) }
+        if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 {
+            ct_derive(h, pi, r0, 0i64)
+        } else if h.gs.gep0 == 1usize && h.gs.gep1 == 1usize {
+            ct_derive_y(h, pi, r0)
+        }
         k += 1i64
     }
     h.gs.lp = 1i64
@@ -1283,7 +1360,11 @@ fn vm_mdrp(h: *Hinter, flags: i64) {
     }
     let cur = vm_project(h, z1.cur[2usize * pi] - z0.cur[2usize * r0], z1.cur[2usize * pi + 1usize] - z0.cur[2usize * r0 + 1usize])
     vm_move(h, h.gs.gep1, pi, dist - cur)
-    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, false) }
+    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 {
+        ct_derive(h, pi, r0, 0i64)
+    } else if h.gs.gep0 == 1usize && h.gs.gep1 == 1usize {
+        ct_derive_y(h, pi, r0)
+    }
     h.gs.rp1 = h.gs.rp0
     h.gs.rp2 = p
     if (flags & 16i64) != 0i64 { h.gs.rp0 = p }
@@ -1341,7 +1422,7 @@ fn vm_mirp(h: *Hinter, flags: i64) {
         }
     }
     vm_move(h, h.gs.gep1, pi, dist - cur_dist)
-    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, true) }
+    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, ct_kind_mirp(h, flags)) }
     h.gs.rp1 = h.gs.rp0
     if (flags & 16i64) != 0i64 { h.gs.rp0 = p }
     h.gs.rp2 = p

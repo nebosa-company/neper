@@ -5,6 +5,7 @@
 // the widths of the bitmap rasteriser), which is why a ClearType load makes a black-and-white one of the same glyph.
 
 use e.math
+use e.io
 use e.mem
 use e.text.shape
 use e.text.tthint
@@ -450,6 +451,9 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
         if part_error != ok { ret (out, part_error) }
         let cz = &h.zsets[part.lv]
         let m = cz.n - 4usize
+        if trace_gid == -2i64 {
+            let e9 = io.printf["component {} offset {} pp1x {} adv {} first x {}\n"](component, px, part.pp1x, part.adv, cz.cur[0usize])
+        }
         if np + m + 4usize > tthint.MAX_PTS + 4usize || ends_n + cz.nends > tthint.MAX_ENDS {
             h.level = part.lv
             ret (out, tthint.NoRoom)
