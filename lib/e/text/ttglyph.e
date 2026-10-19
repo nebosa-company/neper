@@ -239,7 +239,7 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.ct_part = top_gid != gid
     tthint.set_cut_here(top_gid == gid)
     let run_error = tthint.vm_run(h, lo, hi)
-    if top_gid != gid && h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
+    if h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
     tthint.set_trace(false)
     ret ok
 }
