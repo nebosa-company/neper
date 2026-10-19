@@ -1361,3 +1361,65 @@ neper_os_thread_detach:
     mov eax, 0x6f777ebf
     add rsp, 8
     ret
+
+# Section 8's blocking primitives, __ulock_wait (515) and __ulock_wake (516) with
+# UL_COMPARE_AND_WAIT (1) and ULF_WAKE_ALL (0x100). wait_u32(p, expected, timeout_ns) -> err:
+# a wake, a value that already differs and a signal are all `ok` -- the fence promises
+# spurious wakes -- a negative timeout waits for ever, and a zero one times out at once.
+# The kernel's timeout is in microseconds, rounded up and capped at 32 bits.
+.global neper_os_wait_u32
+neper_os_wait_u32:
+    xor r10d, r10d
+    mov rcx, rdx
+    test rcx, rcx
+    js .Lwait_u32_go
+    je .Lwait_u32_timeout
+    add rcx, 999
+    mov rax, rcx
+    xor edx, edx
+    mov r8d, 1000
+    div r8
+    mov r10, rax
+    mov eax, 0xffffffff
+    cmp r10, rax
+    cmova r10, rax
+.Lwait_u32_go:
+    mov edx, esi
+    mov rsi, rdi
+    mov edi, 1
+    mov eax, 0x2000203
+    darwin_syscall
+    test rax, rax
+    jns .Lwait_u32_ok
+    cmp rax, -4
+    je .Lwait_u32_ok
+    cmp rax, -35
+    je .Lwait_u32_ok
+    cmp rax, -60
+    je .Lwait_u32_timeout
+    mov eax, 0x6f777ebf
+    ret
+.Lwait_u32_ok:
+    xor eax, eax
+    ret
+.Lwait_u32_timeout:
+    mov eax, 0x52812f09
+    ret
+
+.global neper_os_wake_one_u32
+neper_os_wake_one_u32:
+    mov rsi, rdi
+    mov edi, 1
+    xor edx, edx
+    mov eax, 0x2000204
+    darwin_syscall
+    ret
+
+.global neper_os_wake_all_u32
+neper_os_wake_all_u32:
+    mov rsi, rdi
+    mov edi, 0x101
+    xor edx, edx
+    mov eax, 0x2000204
+    darwin_syscall
+    ret
