@@ -102,7 +102,20 @@ type Look = struct {
     soft_x0: f32,
     soft_slope: f32,
     // looks9-w1: one pixel marks over the frame ring (the live ring's colours change along its length): "x y h rrggbb;...", from the grid's top-left
-    ring_marks: str
+    ring_marks: str,
+    // round 31: the Windows light frame drawn from the window's own gradient (not stamped): 0 off, 1 the top-grid palette of the live captures, 2 the main window's; ring_gy is the grid's top in window y (0 the pool grid, 221 the collection grid), ring_w and ring_h its size
+    ring_model: u8,
+    ring_gy: f32,
+    ring_w: f32,
+    ring_h: f32,
+    // round 31: the frame's inner left line over the group box and header (rows 2 to ring_head_end, 0 none) and over a green footer band (ring_foot)
+    ring_head_end: f32,
+    ring_foot: bool,
+    // round 31: the vertical bar's end over the frame: 1 the top grids' (rule rows under the bar, light top line), 2 the main window's; ring_thumb draws the thumb's part over the group box (1 the whole 17 px thumb, 2 a longer one)
+    ring_bar: u8,
+    ring_thumb: u8,
+    // round 31: the right edge line over alternate rows (the collection grid has no bar: white rows lift it)
+    ring_rows: bool
 }
 
 // A colour from 0xRRGGBB; under the Windows dark map (`style.set_windark`) the dark counterpart of a light literal.
@@ -195,7 +208,16 @@ fn v3() -> Look {
         soft_a0: 0.0,
         soft_x0: 0.0,
         soft_slope: 0.0,
-        ring_marks: ""
+        ring_marks: "",
+        ring_model: 0u8,
+        ring_gy: 0.0,
+        ring_w: 0.0,
+        ring_h: 0.0,
+        ring_head_end: 0.0,
+        ring_foot: false,
+        ring_bar: 0u8,
+        ring_thumb: 0u8,
+        ring_rows: false
     }
 }
 

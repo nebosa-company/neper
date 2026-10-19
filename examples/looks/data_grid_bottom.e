@@ -4,8 +4,6 @@
 // states/grid-row-selected-focused-main-bottom@1x.png; the card pictures and the backdrop are artwork and not drawn).
 // Run from the repository root.
 
-use e.fs
-use e.str
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.data.tableview as view
@@ -162,27 +160,23 @@ fn setup(m: *Bottom) -> err {
     look.footer_band = gl.rgb(0xC0DCC0u32)
     look.footer_edges = true
     look.plain_col = 4usize
-    look.ring_marks = "0 1 79 868a92;0 80 1 8a8f96;0 81 161 90949c;1 2 192 eff0f1;1 194 1 ecedf0;1 195 21 e6e9ee;1 216 1 d2d4d8;1 217 1 c1c1c2;1 218 23 e2e3e4"
+    if !m.light { look.ring_marks = "0 1 79 868a92;0 80 1 8a8f96;0 81 161 90949c;1 2 192 eff0f1;1 194 1 ecedf0;1 195 21 e6e9ee;1 216 1 d2d4d8;1 217 1 c1c1c2;1 218 23 e2e3e4" }
     look.soft_a0 = 0.75
     look.soft_x0 = 183.0
     look.soft_slope = 0.0 - 0.0005
     look.ring_top_o = gl.rgb(0xBABDC1u32)
     look.ring_top_i = gl.rgb(0xBFC2C6u32)
     look.ring_left_o = gl.rgb(0x878B93u32)
-    look.ring_left_i = gl.rgb(0xEAEAECu32)
+    look.ring_left_i = gl.rgb(0xEFF0F1u32)
     look.ring_bottom = gl.rgb(0xCACCCFu32)
-    look.bar_marks = bottom_marks(k)
-    // round 18: the live capture's leftover pixels (docs/ui/looks/marks/data_grid_bottom.txt, scripts/looks_marks_diff.py), Windows light only
+    if !m.light { look.bar_marks = bottom_marks(k) }
     if m.windows && m.light {
-        let (extra, extra_error) = fix_marks_of(a, k)
-        if extra_error != ok { ret extra_error }
-        let (joined, joined_error) = str.builder(a, look.bar_marks.len + extra.len + 2usize)
-        if joined_error != ok { ret joined_error }
-        var jb = joined
-        if look.bar_marks.len > 0usize { if str.push(&jb, look.bar_marks) != ok { ret control.TooLarge } }
-        if look.bar_marks.len > 0usize && extra.len > 0usize { if str.push(&jb, ";") != ok { ret control.TooLarge } }
-        if extra.len > 0usize { if str.push(&jb, extra) != ok { ret control.TooLarge } }
-        look.bar_marks = str.done(&jb)
+        look.ring_model = 1u8
+        look.ring_gy = 221.0
+        look.ring_w = 576.0
+        look.ring_h = 242.0
+        look.ring_foot = true
+        look.ring_rows = true
     }
     dg.set_look(&m.grids[k], look)
     dg.set_row_ink(&m.grids[k], mem.cast[*void](m), coll_ink)
@@ -286,30 +280,3 @@ fn bottom_marks(k: usize) -> str {
     ret ""
 }
 // END GENERATED
-
-// round 18: "<k> <marks>" lines of docs/ui/looks/marks/data_grid_bottom.txt (Look.ring_marks text), cell k
-fn fix_marks_of(a: *mem.Arena, k: usize) -> (str, err) {
-    let path = "docs/ui/looks/marks/data_grid_bottom.txt"
-    let (present, present_error) = fs.exists(a, path)
-    if present_error != ok || !present { ret ("", ok) }
-    let (bytes, read_error) = fs.read_file(a, path, 1048576usize)
-    if read_error != ok { ret ("", read_error) }
-    var at = 0usize
-    while at < bytes.len {
-        var end = at
-        while end < bytes.len && bytes[end] != 10u8 { end += 1usize }
-        var key = 0usize
-        var cur = at
-        while cur < end && bytes[cur] >= 48u8 && bytes[cur] <= 57u8 {
-            key = key * 10usize + usize(bytes[cur] - 48u8)
-            cur += 1usize
-        }
-        if cur > at && cur < end && bytes[cur] == 32u8 && key == k {
-            var stop = end
-            if stop > cur + 1usize && bytes[stop - 1usize] == 13u8 { stop -= 1usize }
-            ret (bytes[cur + 1usize..stop], ok)
-        }
-        at = end + 1usize
-    }
-    ret ("", ok)
-}

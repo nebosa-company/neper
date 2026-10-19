@@ -2869,6 +2869,22 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         var stacked_count = 2usize
         if look.soft_lines { stacked_count = 3usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
+        if look.dialog_lines && look.soft_lines && !look.vertical_off && !style.windows_dark_on() {
+            // round 31: a dialog grid's column lines run through the two foot pixels of a row (live Sort dialog), not under them
+            let (over, over_error) = mem.alloc[widget.Node](a, columns.len + 1usize)
+            if over_error != ok { ret (zero, TooLarge) }
+            over[0usize] = lined[0usize]
+            var over_x: f32 = 0.0
+            var over_at = 0usize
+            while over_at < columns.len {
+                over_x += columns[over_at].width
+                var over_style = control.sized_style(1.0, 2.0)
+                over_style.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) }
+                over[over_at + 1usize] = widget.positioned(0u64, over_x - 1.0, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, over_style, zero)))
+                over_at += 1usize
+            }
+            lined[0usize] = widget.stack(0u64, style.defaults(), over[0usize..columns.len + 1usize])
+        }
     }
     if look.on && !selected && look.tree_dots {
         // looks5-e: one pixel at the foot of a tree row, #FAFAFA under a grey one and #F4F4F4 under a white one (live captures)

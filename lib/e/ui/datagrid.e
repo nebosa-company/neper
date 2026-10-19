@@ -59,6 +59,7 @@
 // ponytail: one level of header and the filter row sits above it (the table owns the header).
 
 use e.mem
+use e.math
 use e.str
 use e.time
 use e.data.table as table
@@ -288,6 +289,9 @@ cust_rgb: u32,
     hon: bool,
     hcontent: f32,
     hpane: f32,
+    // round 31: the navigator's white position box (x from the grid's left, width), noted when the row is built, for the frame's foot line under it
+    nav_pos_x: f32,
+    nav_pos_w: f32,
     pane_hint: f32,
     count_spec: usize,
     force_focus: bool,
@@ -8966,6 +8970,8 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let (gdi_info, gdi_info_width, gdi_info_error) = control.choices_words(a, grid.theme, info_words, style.color(grid.theme.tokens, .Text), str.done(&sb))
         info_text = gdi_info
         info_error = gdi_info_error
+        grid.nav_pos_w = gdi_info_width + 14.0
+        grid.nav_pos_x = nav_left(grid) + gl.gx_nav_win_w_if(true, 0usize) + gl.gx_nav_win_w_if(true, 1usize) + gl.gx_nav_win_w_if(true, 2usize)
     } else {
         let (plain_info, plain_info_error) = control.text(a, 0u64, str.done(&sb), grid.theme, text_options)
         info_text = plain_info
@@ -10611,6 +10617,11 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         let (ringed, ring_error) = ring_wrap(a, grid, stacked)
         if ring_error != ok { ret (zero, ring_error) }
         stacked = ringed
+        if grid.look.ring_model != 0u8 && win_look(grid) {
+            let (modeled, modeled_error) = ring_model_over(a, grid, stacked)
+            if modeled_error != ok { ret (zero, modeled_error) }
+            stacked = modeled
+        }
         if grid.look.ring_marks.len != 0usize && win_look(grid) {
             let (marked, marked_error) = ring_marks_over(a, grid, stacked)
             if marked_error != ok { ret (zero, marked_error) }
@@ -10637,6 +10648,211 @@ fn ring_wrap(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (widget.No
     node = ring_side(a, lk.ring_left_o, 1.0, 0.0, 0.0, 0.0, node)
     node = ring_side(a, lk.ring_top_o, 0.0, 1.0, 0.0, 0.0, node)
     ret (node, ok)
+}
+
+
+// round 31: the live frame's outer lines are the window's gradient seen through a one pixel themed line: the left one steps with the window y (light, a mid pixel
+// at 162, dark from 163 to 300, a mid pixel at 301, light again; the collection grid sits 221 below the pool grid), the top one with the window x (the pool grid's is
+// dark with a 126 px light tail at the right edge, the collection grid's steps at 0.3505 and 0.6515 of the width). `Look.ring_model` 1 is the palette of the
+// data_grid_top / bottom captures, 2 the main window's. Drawn as boxes over the ring; the rest of the ring (inner lines, notches) is the grid's own drawing.
+fn ring_band_left(a: *mem.Arena, parts: []widget.Node, n: usize, gy: f32, h: f32, w0: f32, w1: f32, col: u32) -> usize {
+    var y0 = w0 - gy
+    var y1 = w1 - gy
+    if y0 < 1.0 { y0 = 1.0 }
+    if y1 > h - 1.0 { y1 = h - 1.0 }
+    if y1 < y0 { ret n }
+    parts[n] = footer_px(a, 0.0, y0, 1.0, y1 - y0 + 1.0, col)
+    ret n + 1usize
+}
+
+fn ring_inner_band(a: *mem.Arena, parts: []widget.Node, n: usize, y0: f32, y1: f32, col: u32) -> usize {
+    if y1 < y0 { ret n }
+    parts[n] = footer_px(a, 1.0, y0, 1.0, y1 - y0 + 1.0, col)
+    ret n + 1usize
+}
+
+fn ring_model_over(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (widget.Node, err) {
+    let lk = grid.look
+    let w = lk.ring_w
+    let h = lk.ring_h
+    let gy = lk.ring_gy
+    let main = lk.ring_model == 2u8
+    var corner_pool = 0x96999Eu32
+    var corner_coll = 0xB7B9BDu32
+    var left_light = 0x90949Cu32
+    var left_mid1 = 0x8B8F97u32
+    var left_dark = 0x868A92u32
+    var left_mid2 = 0x8A8F96u32
+    var top_mid1 = 0x9B9EA2u32
+    var top_mid2 = 0xACAEB3u32
+    if main {
+        corner_pool = 0x999CA0u32
+        corner_coll = 0xB6B8BBu32
+        left_light = 0x9599A0u32
+        left_mid1 = 0x8E9299u32
+        left_dark = 0x878B93u32
+        left_mid2 = 0x8D9199u32
+        top_mid1 = 0x9D9FA3u32
+        top_mid2 = 0xABAEB2u32
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 72usize)
+    if parts_error != ok { ret (zero, parts_error) }
+    parts[0usize] = inner
+    var n = 1usize
+    // the inner left line is the themed line seen over what lies under it: the white rows, the grey group box and navigator, the footer band
+    var in_a = 0xE2E3E4u32
+    var in_b = 0xEFF0F1u32
+    var in_c = 0xE6E9EEu32
+    var in_th = 0xEAEBECu32
+    var in_tf1 = 0xECEDF0u32
+    var in_fe1 = 0xD2D4D8u32
+    var in_fe2 = 0xC1C1C2u32
+    if main {
+        in_a = 0xDDDEDFu32
+        in_b = 0xEAEAECu32
+        in_c = 0xE0E4E9u32
+        in_th = 0xE5E5E7u32
+        in_tf1 = 0xE5E7EBu32
+        in_fe1 = 0xC5C8CBu32
+        in_fe2 = 0xC5C5C7u32
+        if gy >= 1.0 {
+            in_tf1 = 0xE6E8EBu32
+            in_fe1 = 0xCDD0D4u32
+            in_fe2 = 0xBDBEC0u32
+        }
+    }
+    let nav_y = h - 24.0
+    n = ring_inner_band(a, parts, n, 2.0, h - 2.0, in_b)
+    if lk.ring_head_end > 0.0 {
+        n = ring_inner_band(a, parts, n, 2.0, lk.ring_head_end, in_a)
+        n = ring_inner_band(a, parts, n, lk.ring_head_end + 1.0, lk.ring_head_end + 1.0, in_th)
+    }
+    n = ring_inner_band(a, parts, n, nav_y, h - 2.0, in_a)
+    if lk.ring_foot {
+        n = ring_inner_band(a, parts, n, nav_y - 24.0, nav_y - 24.0, in_tf1)
+        n = ring_inner_band(a, parts, n, nav_y - 23.0, nav_y - 3.0, in_c)
+        n = ring_inner_band(a, parts, n, nav_y - 2.0, nav_y - 2.0, in_fe1)
+        n = ring_inner_band(a, parts, n, nav_y - 1.0, nav_y - 1.0, in_fe2)
+    } else {
+        n = ring_inner_band(a, parts, n, nav_y - 1.0, nav_y - 1.0, 0xE9E9EAu32)
+    }
+    n = ring_band_left(a, parts, n, gy, h, 1.0, 161.0, left_light)
+    n = ring_band_left(a, parts, n, gy, h, 162.0, 162.0, left_mid1)
+    n = ring_band_left(a, parts, n, gy, h, 163.0, 300.0, left_dark)
+    n = ring_band_left(a, parts, n, gy, h, 301.0, 301.0, left_mid2)
+    n = ring_band_left(a, parts, n, gy, h, 302.0, 100000.0, left_light)
+    if gy < 1.0 {
+        // the pool grid: dark top line, a mid pixel and the light tail of 126 px at the right edge
+        parts[n] = footer_px(a, 0.0, 0.0, 1.0, 1.0, corner_pool)
+        parts[n + 1usize] = footer_px(a, w - 127.0, 0.0, 1.0, 1.0, 0xA0A3A9u32)
+        parts[n + 2usize] = footer_px(a, w - 126.0, 0.0, 126.0, 1.0, 0xACAFB4u32)
+        n += 3usize
+    } else {
+        let m1 = math.round[f32](0.3505 * w)
+        let m2 = math.round[f32](0.6515 * w)
+        parts[n] = footer_px(a, 0.0, 0.0, 1.0, 1.0, corner_coll)
+        parts[n + 1usize] = footer_px(a, 1.0, 0.0, m1 - 1.0, 1.0, 0xBABDC1u32)
+        parts[n + 2usize] = footer_px(a, m1, 0.0, 1.0, 1.0, top_mid1)
+        parts[n + 3usize] = footer_px(a, m1 + 1.0, 0.0, m2 - m1 - 1.0, 1.0, 0x919498u32)
+        parts[n + 4usize] = footer_px(a, m2, 0.0, 1.0, 1.0, top_mid2)
+        parts[n + 5usize] = footer_px(a, m2 + 1.0, 0.0, w - m2 - 1.0, 1.0, 0xBABDC1u32)
+        n += 6usize
+    }
+    // the foot line (over the navigator, the white position box lifts it) and the right edge's end pixels
+    var foot_base = 0xB9BCC0u32
+    var foot_box = 0xC1C3C8u32
+    var foot_edge_l = 0xC0C2C7u32
+    var foot_edge_r = 0xBBBDC2u32
+    var foot_second = 0xB2B5BAu32
+    var foot_corner = 0x9CA0A6u32
+    var left_end = left_dark
+    if gy >= 1.0 {
+        foot_base = 0xCACCCFu32
+        foot_box = 0xD4D6D9u32
+        foot_edge_l = 0xD2D4D7u32
+        foot_edge_r = 0xCCCED1u32
+        foot_second = 0xC1C3C7u32
+        foot_corner = 0xA4A7ADu32
+        left_end = left_light
+    }
+    if lk.ring_bar != 0u8 {
+        // the bar's column: the light top line stops over its track, the navigator's rule is the track's grey there
+        var rule_w: f32 = 14.0
+        var rule_h: f32 = 2.0
+        if lk.ring_bar == 2u8 {
+            rule_w = 13.0
+            rule_h = 1.0
+        }
+        parts[n] = footer_px(a, w - 15.0, h - 25.0, rule_w, rule_h, 0xF0F0F0u32)
+        n += 1usize
+        if lk.ring_bar == 1u8 {
+            parts[n] = footer_px(a, w - 15.0, 1.0, 13.0, 1.0, 0xC6C8CCu32)
+            n += 1usize
+        }
+    }
+    if lk.ring_head_end > 0.0 && lk.ring_bar != 0u8 {
+        // the bar runs up over the group box: its two edge columns, a line under it and the thumb's part there
+        parts[n] = footer_px(a, w - 18.0, 2.0, 1.0, 34.0, 0xF8F8F8u32)
+        parts[n + 1usize] = footer_px(a, w - 17.0, 2.0, 1.0, 34.0, 0xF7F7F7u32)
+        n += 2usize
+        if lk.ring_bar == 2u8 {
+            parts[n] = footer_px(a, w - 16.0, 35.0, 14.0, 1.0, 0xF0F0F0u32)
+        } else {
+            parts[n] = footer_px(a, w - 16.0, 36.0, 15.0, 1.0, 0xF0F0F0u32)
+        }
+        n += 1usize
+        if lk.ring_thumb != 0u8 {
+            var last: f32 = 35.0
+            if lk.ring_thumb == 1u8 { last = 34.0 }
+            parts[n] = footer_px(a, w - 10.0, 18.0, 1.0, 1.0, 0xD1D1D1u32)
+            parts[n + 1usize] = footer_px(a, w - 9.0, 18.0, 1.0, 1.0, 0xB7B7B7u32)
+            parts[n + 2usize] = footer_px(a, w - 8.0, 18.0, 1.0, 1.0, 0xD6D6D6u32)
+            parts[n + 3usize] = footer_px(a, w - 10.0, 19.0, 1.0, 1.0, 0xB9B9B9u32)
+            parts[n + 4usize] = footer_px(a, w - 9.0, 19.0, 1.0, 1.0, 0x8A8A8Au32)
+            parts[n + 5usize] = footer_px(a, w - 8.0, 19.0, 1.0, 1.0, 0xC1C1C1u32)
+            n += 6usize
+            var body_end = last
+            if lk.ring_thumb == 1u8 { body_end = last - 2.0 }
+            parts[n] = footer_px(a, w - 10.0, 20.0, 1.0, body_end - 19.0, 0xB6B6B6u32)
+            parts[n + 1usize] = footer_px(a, w - 9.0, 20.0, 1.0, body_end - 19.0, 0x858585u32)
+            parts[n + 2usize] = footer_px(a, w - 8.0, 20.0, 1.0, body_end - 19.0, 0xBFBFBFu32)
+            n += 3usize
+            if lk.ring_thumb == 1u8 {
+                parts[n] = footer_px(a, w - 10.0, last - 1.0, 1.0, 1.0, 0xBBBBBBu32)
+                parts[n + 1usize] = footer_px(a, w - 9.0, last - 1.0, 1.0, 1.0, 0x8D8D8Du32)
+                parts[n + 2usize] = footer_px(a, w - 8.0, last - 1.0, 1.0, 1.0, 0xC3C3C3u32)
+                parts[n + 3usize] = footer_px(a, w - 10.0, last, 1.0, 1.0, 0xDCDCDCu32)
+                parts[n + 4usize] = footer_px(a, w - 9.0, last, 1.0, 1.0, 0xCBCBCBu32)
+                parts[n + 5usize] = footer_px(a, w - 8.0, last, 1.0, 1.0, 0xDFDFDFu32)
+                n += 6usize
+            }
+        }
+    }
+    if lk.ring_rows {
+        // rows are 19 apart (17 and a rule of 2); the white ones start at 40 and lift the right edge line
+        var row_y: f32 = 40.0
+        while row_y + 17.0 <= nav_y - 24.0 {
+            parts[n] = footer_px(a, w - 1.0, row_y, 1.0, 17.0, 0xBCBFC4u32)
+            n += 1usize
+            row_y += 38.0
+        }
+    }
+    parts[n] = footer_px(a, 0.0, h - 1.0, 1.0, 1.0, left_end)
+    parts[n + 1usize] = footer_px(a, 1.0, h - 1.0, 1.0, 1.0, foot_second)
+    parts[n + 2usize] = footer_px(a, 2.0, h - 1.0, w - 3.0, 1.0, foot_base)
+    parts[n + 3usize] = footer_px(a, w - 1.0, h - 1.0, 1.0, 1.0, foot_corner)
+    n += 4usize
+    if grid.nav_pos_w > 0.0 {
+        parts[n] = footer_px(a, grid.nav_pos_x - 1.0, h - 1.0, 1.0, 1.0, foot_edge_l)
+        parts[n + 1usize] = footer_px(a, grid.nav_pos_x, h - 1.0, grid.nav_pos_w, 1.0, foot_box)
+        parts[n + 2usize] = footer_px(a, grid.nav_pos_x + grid.nav_pos_w, h - 1.0, 1.0, 1.0, foot_edge_r)
+        n += 3usize
+    }
+    if gy < 1.0 {
+        parts[n] = footer_px(a, w - 1.0, 1.0, 1.0, 1.0, 0xA2A5ACu32)
+        n += 1usize
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
 }
 
 // looks9-w1: the ring's one-pixel marks, from `Look.ring_marks`: "x y h rrggbb;..." (x and y from the grid's top-left, decimal)

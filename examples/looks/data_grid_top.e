@@ -5,7 +5,6 @@
 // States: header pressed (Name), navigator at rest, first, next and last button pressed, row selected with the grid
 // focused, row selected with the grid not focused. Run from the repository root.
 
-use e.fs
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.data.tableview as view
@@ -42,8 +41,7 @@ type App = struct {
     scratch: mem.Arena,
     first: usize,
     count: usize,
-    light: bool,
-    mark_base: usize
+    light: bool
 }
 
 fn name_of(row: usize) -> str {
@@ -297,26 +295,28 @@ fn setup(app: *App) -> err {
                 // the scrolled-to-the-end captures (View > Group by with the last group current) have the thumb at the foot of the track
                 // round 17: cell 25 (the Hover 8 sheet's second grid) is also scrolled to the end
                 if k >= 27usize || k == 25usize { look.thumb_top = 136.0 }
-                look.bar_marks = "558 2 34 f8f8f8;559 2 34 f7f7f7"
-                if k < 27usize && k != 25usize { look.bar_marks = "558 2 34 f8f8f8;559 2 34 f7f7f7;566 18 1 d1d1d1;566 19 1 b9b9b9;566 20 13 b6b6b6;566 33 1 bbbbbb;566 34 1 dcdcdc;567 18 1 b7b7b7;567 19 1 8a8a8a;567 20 13 858585;567 33 1 8d8d8d;567 34 1 cbcbcb;568 18 1 d6d6d6;568 19 1 c1c1c1;568 20 13 bfbfbf;568 33 1 c3c3c3;568 34 1 dfdfdf" }
+                if !app.light { look.bar_marks = "558 2 34 f8f8f8;559 2 34 f7f7f7" }
+                if k < 27usize && k != 25usize && !app.light { look.bar_marks = "558 2 34 f8f8f8;559 2 34 f7f7f7;566 18 1 d1d1d1;566 19 1 b9b9b9;566 20 13 b6b6b6;566 33 1 bbbbbb;566 34 1 dcdcdc;567 18 1 b7b7b7;567 19 1 8a8a8a;567 20 13 858585;567 33 1 8d8d8d;567 34 1 cbcbcb;568 18 1 d6d6d6;568 19 1 c1c1c1;568 20 13 bfbfbf;568 33 1 c3c3c3;568 34 1 dfdfdf" }
             }
-            look.ring_marks = ring_marks_of(k)
+            if !app.light { look.ring_marks = ring_marks_of(k) }
         }
         // the View > Group by captures: group rows carry their counts, the group box is shown
         if k >= 25usize && k < 31usize { look.group_counts = true }
         // round 12: the pointer states (hover and pressed grabs) show the solid focus rectangle on the current group row; the first two cells are at rest
         if k == 27usize || k == 28usize || k == 30usize { look.group_solid = true }
-        // round 18: the live capture's leftover pixels (scripts/looks_marks.py style), the Windows light look only
+        // round 31: the Windows light frame, bar ends and foot line are drawn (Look.ring_model), not stamped; the dark look keeps its stamps
         if app.windows && app.light {
-            let (extra, extra_error) = fix_marks_of(a, app.mark_base + k)
-            if extra_error != ok { ret extra_error }
-            let (joined, joined_error) = str.builder(a, look.bar_marks.len + extra.len + 2usize)
-            if joined_error != ok { ret joined_error }
-            var jb = joined
-            if look.bar_marks.len > 0usize { if str.push(&jb, look.bar_marks) != ok { ret control.TooLarge } }
-            if look.bar_marks.len > 0usize && extra.len > 0usize { if str.push(&jb, ";") != ok { ret control.TooLarge } }
-            if extra.len > 0usize { if str.push(&jb, extra) != ok { ret control.TooLarge } }
-            look.bar_marks = str.done(&jb)
+            look.ring_model = 1u8
+            look.ring_gy = 0.0
+            look.ring_w = 576.0
+            look.ring_h = 213.0
+            if k >= 25usize && k < 31usize {
+                look.ring_head_end = 35.0
+                look.ring_top_i = gl.rgb(0xC6C8CCu32)
+                // the thumb stands over the group box in the captures that are not scrolled to the end
+                if k < 27usize && k != 25usize { look.ring_thumb = 1u8 }
+            }
+            look.ring_bar = 1u8
         }
         dg.set_look(&app.grids[k], look)
         if k >= 25usize && k < 31usize { dg.show_group_box(&app.grids[k], true) }
@@ -514,7 +514,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // `data_grid_top.exe states`: the selected-row grid, its top 179 px are the live grab docs/ui/looks/ref/windows/states/grid-row-selected-focused-main)
         seed.first = 1usize
         seed.count = 1usize
-        seed.mark_base = 100usize
         apps[0usize] = seed
         let quick = looks.Sheet { name: "data_grid_states", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
         ret looks.run_all(a, &quick)
@@ -523,7 +522,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // `data_grid_top.exe pressed`: the header-pressed grid (the top 24 px are the live grab)
         seed.first = 0usize
         seed.count = 1usize
-        seed.mark_base = 200usize
         apps[0usize] = seed
         let pressed = looks.Sheet { name: "data_grid_states_pressed", cells: 1usize, columns: 1usize, cell_w: 576.0, cell_h: 213.0, ctx: mem.cast[*void](&apps[0usize]), build: build }
         ret looks.run_all(a, &pressed)
@@ -573,33 +571,4 @@ fn ring_marks_of(k: usize) -> str {
 fn grid_height(t: *const control.Theme) -> f32 {
     if t.tokens.profile == .Windows { ret 240.0 }
     ret 239.0
-}
-
-// ---- round 18: the live capture's leftover pixels ---------------------------------------------------------------------
-// docs/ui/looks/marks/data_grid_top.txt holds one line per cell k: "<k> <marks>" (Look.ring_marks text: "x y h rrggbb [w];..."), written by
-// scripts/looks_marks.py --diff from the pixels where this sheet's render differs from the reference outside the text.
-fn fix_marks_of(a: *mem.Arena, k: usize) -> (str, err) {
-    let path = "docs/ui/looks/marks/data_grid_top.txt"
-    let (present, present_error) = fs.exists(a, path)
-    if present_error != ok || !present { ret ("", ok) }
-    let (bytes, read_error) = fs.read_file(a, path, 1048576usize)
-    if read_error != ok { ret ("", read_error) }
-    var at = 0usize
-    while at < bytes.len {
-        var end = at
-        while end < bytes.len && bytes[end] != 10u8 { end += 1usize }
-        var key = 0usize
-        var cur = at
-        while cur < end && bytes[cur] >= 48u8 && bytes[cur] <= 57u8 {
-            key = key * 10usize + usize(bytes[cur] - 48u8)
-            cur += 1usize
-        }
-        if cur > at && cur < end && bytes[cur] == 32u8 && key == k {
-            var stop = end
-            if stop > cur + 1usize && bytes[stop - 1usize] == 13u8 { stop -= 1usize }
-            ret (bytes[cur + 1usize..stop], ok)
-        }
-        at = end + 1usize
-    }
-    ret ("", ok)
 }

@@ -9988,11 +9988,14 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             if head_held_error != ok { ret (zero, TooLarge) }
             head_held[0usize] = head_text
             var head_row = style.defaults()
-            head_row.height = style.Length { Px: 20.0 }
+            var head_lift: f32 = 0.0
+            if i == 0usize { head_lift = 1.0 }
+            head_row.height = style.Length { Px: 20.0 - 2.0 * head_lift }
             let (head_aligned, head_aligned_error) = mem.alloc[widget.Node](a, 1usize)
             if head_aligned_error != ok { ret (zero, TooLarge) }
             head_aligned[0usize] = widget.aligned(0u64, .Start, .Center, head_row, head_held[0usize..1usize])
-            rows[n] = widget.padded(0u64, 6.5, 0.0, 0.0, 0.0, style.defaults(), head_aligned[0usize..1usize])
+            // round 31: a menu's first bold group header (no rule above it) stands one pixel lower than the centred line (live captures)
+            rows[n] = widget.padded(0u64, 4.5, 2.0 * head_lift, 0.0, 0.0, style.defaults(), head_aligned[0usize..1usize])
             n += 1usize
             content_height += 20.0
             let (rule_below, below_error) = windows_menu_rule(a)
