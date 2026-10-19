@@ -6,6 +6,7 @@ use e.data.list as list
 use e.js.interp as js
 use e.mem
 use e.str
+use e.text.normalize as norm
 use e.text.unicode as unicode
 
 fn arg(args: []const js.Value, i: usize) -> js.Value {
@@ -620,7 +621,12 @@ fn string_normalize(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
         form = f
     }
     if !(str.eq(form, "NFC") || str.eq(form, "NFD") || str.eq(form, "NFKC") || str.eq(form, "NFKD")) { ret (js.undefv(), js.throw_range(it, "The normalization form should be one of NFC, NFD, NFKC, NFKD.")) }
-    ret (js.str_value(s), ok)
+    var nf = norm.Form.Nfc
+    if str.eq(form, "NFD") { nf = norm.Form.Nfd } else if str.eq(form, "NFKC") { nf = norm.Form.Nfkc } else if str.eq(form, "NFKD") { nf = norm.Form.Nfkd }
+    let (out, ne) = norm.normalize(it.a, s, nf)
+    // A string with a lone surrogate is not valid text for the normalizer; it passes through unchanged.
+    if ne != ok { ret (js.str_value(s), ok) }
+    ret (js.str_value(out), ok)
 }
 
 // Replacement string expansion: $$, $&, $`, $', $n, $<name>.
