@@ -18937,7 +18937,8 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     layers[0usize] = face
     // looks5 group d: an unchosen tab's caption stands 2 closer to its picture (measured on the Statistics captures' ink boxes).
     var picture_gap: f32 = 6.0
-    if !chosen && has_icon && !strs.eq(plain_label, "Colors") { picture_gap = 4.0 }
+    // round 31: under ClearType the light look's hinted caption stands where the live one does (6 after the picture, chosen or not)
+    if win_dark(t) && !chosen && has_icon && !strs.eq(plain_label, "Colors") { picture_gap = 4.0 }
     layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: picture_gap }, line, row_parts[0usize..count])
     var shown = 2usize
     if chosen && state.focused && state.focus_visible {
