@@ -794,12 +794,88 @@ static void case_taskdialog(void) {
 
 /* ================= driver ================= */
 typedef struct { const char *name; void (*fn)(void); } CASE;
+
+/* ---- round 33: dark variants the other cases leave out (progress, header, tab and status bar under DarkMode_Explorer; a bare header; list view and tree view
+   with check boxes; an icon-only toolbar; a wrapped tooltip). Names start with x-. The theme is set by hand: dark_theme_for leaves progress unthemed. */
+static void themed(HWND h, const wchar_t *dark_theme) { if (g_dark) dark_one(h, dark_theme); else SetWindowTheme(h, L"Explorer", NULL); }
+static void case_darkx(void) {
+  begin(210, 44);
+  HWND p = ctl(PROGRESS_CLASSW, L"", 0, 0, 16, 14, 178, 16); themed(p, L"DarkMode_Explorer"); pump(80);
+  SendMessageW(p, PBM_SETPOS, 0, 0); pump(60); snap("x-progress-explorer-empty");
+  SendMessageW(p, PBM_SETPOS, 60, 0); pump(300); snap("x-progress-explorer-determinate");
+  SendMessageW(p, PBM_SETSTATE, PBST_PAUSED, 0); pump(200); snap("x-progress-explorer-paused");
+  SendMessageW(p, PBM_SETSTATE, PBST_ERROR, 0); pump(200); snap("x-progress-explorer-error");
+  SendMessageW(p, PBM_SETSTATE, PBST_NORMAL, 0); SendMessageW(p, PBM_SETPOS, 100, 0); pump(300); snap("x-progress-explorer-full");
+  enable(p, FALSE); snap("x-progress-explorer-disabled");
+  end();
+  for (int v = 0; v < 2; v++) {   /* the bare header: ItemsView (list view's) and Explorer */
+    begin(250, 40);
+    HWND hd = ctl(WC_HEADERW, L"", HDS_BUTTONS | HDS_HORZ | HDS_FULLDRAG | CCS_TOP, 0, 10, 8, 226, 24);
+    themed(hd, v == 0 ? L"DarkMode_ItemsView" : L"DarkMode_Explorer");
+    static const wchar_t *cn[] = { L"Name", L"Size", L"Kind" };
+    for (int i = 0; i < 3; i++) { HDITEMW it = { HDI_TEXT | HDI_WIDTH | HDI_FORMAT, S(i == 0 ? 90 : 60), (LPWSTR)cn[i], 0, 0, 0, HDF_LEFT | HDF_STRING }; SendMessageW(hd, HDM_INSERTITEMW, i, (LPARAM)&it); }
+    SendMessageW(hd, WM_SIZE, 0, 0); pump(100);
+    const char *pre = v == 0 ? "x-header-itemsview" : "x-header-explorer"; char nm[64];
+    snprintf(nm, sizeof nm, "%s-rest", pre); snap(nm);
+    RECT hr; Header_GetItemRect(hd, 1, &hr);
+    hover_px(hd, (hr.left + hr.right) / 2, (hr.top + hr.bottom) / 2); snprintf(nm, sizeof nm, "%s-hot", pre); snap(nm); unhover(hd);
+    press_snap(hd, (hr.left + hr.right) / 2, (hr.top + hr.bottom) / 2, (snprintf(nm, sizeof nm, "%s-pressed", pre), nm)); unhover(hd);
+    { HDITEMW hi = { HDI_FORMAT }; SendMessageW(hd, HDM_GETITEMW, 1, (LPARAM)&hi); hi.fmt |= HDF_SORTUP; SendMessageW(hd, HDM_SETITEMW, 1, (LPARAM)&hi); pump(100); snprintf(nm, sizeof nm, "%s-sort-up", pre); snap(nm); }
+    end();
+  }
+  begin(250, 150);
+  HWND l = mk_lv(12, 10, 226, 130, 0, LVS_EX_CHECKBOXES, 3, 7);
+  ListView_SetCheckState(l, 1, TRUE); ListView_SetCheckState(l, 4, TRUE); pump(100); snap("x-listview-checkboxes");
+  { RECT ir; ListView_GetItemRect(l, 2, &ir, LVIR_BOUNDS); hover_px(l, S(40), (ir.top + ir.bottom) / 2); snap("x-listview-checkboxes-hover"); unhover(l); }
+  lv_select(l, 1); focus(l); snap("x-listview-checkboxes-selected"); unfocus();
+  end();
+  begin(200, 150);
+  HWND t = mk_tree(TVS_LINESATROOT | TVS_CHECKBOXES);
+  pump(100); snap("x-tree-checkboxes");
+  { HTREEITEM r0 = TreeView_GetRoot(t); TreeView_SetCheckState(t, r0, TRUE); pump(100); snap("x-tree-checkboxes-checked"); }
+  end();
+  begin(260, 64);
+  HWND tb = ctl(TOOLBARCLASSNAMEW, L"", TBSTYLE_FLAT | TBSTYLE_TOOLTIPS | CCS_NODIVIDER | CCS_TOP, 0, 0, 0, 0, 0);
+  SendMessageW(tb, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
+  HIMAGELIST il = icons16(); SendMessageW(tb, TB_SETIMAGELIST, 0, (LPARAM)il);
+  SendMessageW(tb, TB_SETEXTENDEDSTYLE, 0, TBSTYLE_EX_DRAWDDARROWS);
+  TBBUTTON bb[5] = { { 0, 101, TBSTATE_ENABLED, BTNS_BUTTON, { 0 }, 0, 0 }, { 1, 102, TBSTATE_ENABLED, BTNS_CHECK, { 0 }, 0, 0 }, { 0, 0, TBSTATE_ENABLED, BTNS_SEP, { 0 }, 0, 0 },
+    { 2, 103, TBSTATE_ENABLED, BTNS_DROPDOWN, { 0 }, 0, 0 }, { 3, 104, 0, BTNS_BUTTON, { 0 }, 0, 0 } };
+  SendMessageW(tb, TB_ADDBUTTONSW, 5, (LPARAM)bb); SendMessageW(tb, TB_AUTOSIZE, 0, 0); pump(100); snap("x-toolbar-icons-rest");
+  SendMessageW(tb, TB_SETHOTITEM, 0, 0); pump(120); snap("x-toolbar-icons-hot"); SendMessageW(tb, TB_SETHOTITEM, -1, 0);
+  SendMessageW(tb, TB_CHECKBUTTON, 102, TRUE); pump(80); snap("x-toolbar-icons-checked");
+  end();
+  begin(260, 130);
+  { HWND b = ctl(L"Button", L"Hover me", WS_TABSTOP, 0, 20, 14, 100, 28); (void)b;
+    HWND tt = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, NULL, WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP, 0, 0, 0, 0, g_stage, NULL, GetModuleHandleW(NULL), NULL);
+    SendMessageW(tt, WM_SETFONT, (WPARAM)g_font, 0);
+    if (g_dark) { dark_top(tt); SetWindowTheme(tt, L"DarkMode_Explorer", NULL); }
+    TOOLINFOW ti = { sizeof ti, TTF_TRACK | TTF_ABSOLUTE, g_stage, 1, { 0 }, NULL, (LPWSTR)L"A longer tooltip text that wraps onto more than one line", 0 };
+    SendMessageW(tt, TTM_ADDTOOLW, 0, (LPARAM)&ti); SendMessageW(tt, TTM_SETMAXTIPWIDTH, 0, S(110));
+    POINT pt = { S(30), S(52) }; ClientToScreen(g_stage, &pt);
+    SendMessageW(tt, TTM_TRACKPOSITION, 0, MAKELPARAM(pt.x, pt.y)); SendMessageW(tt, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti); pump(300);
+    HWND ex[1] = { tt }; snapx("x-tooltip-wrapped", ex, 1);
+    SendMessageW(tt, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti); DestroyWindow(tt); pump(100); }
+  end();
+  begin(230, 120);
+  HWND tab = ctl(WC_TABCONTROLW, L"", WS_TABSTOP | WS_CLIPSIBLINGS, 0, 12, 10, 206, 100); themed(tab, L"DarkMode_Explorer");
+  { static const wchar_t *tn[] = { L"General", L"View", L"Advanced" };
+    for (int i = 0; i < 3; i++) { TCITEMW it = { TCIF_TEXT, 0, 0, (LPWSTR)tn[i] }; SendMessageW(tab, TCM_INSERTITEMW, i, (LPARAM)&it); } }
+  pump(100); snap("x-tab-explorer");
+  end();
+  begin(300, 60);
+  HWND sb = ctl(STATUSCLASSNAMEW, L"", SBARS_SIZEGRIP | CCS_BOTTOM, 0, 0, 0, 0, 0); themed(sb, L"DarkMode_Explorer");
+  { int pp[3] = { S(120), S(210), -1 }; SendMessageW(sb, SB_SETPARTS, 3, (LPARAM)pp); }
+  SendMessageW(sb, SB_SETTEXTW, 0, (LPARAM)L"Ready"); SendMessageW(sb, SB_SETTEXTW, 1, (LPARAM)L"12 items"); pump(100); snap("x-statusbar-explorer");
+  end();
+}
+
 static CASE CASES[] = {
   { "button", case_button }, { "checkbox", case_checkbox }, { "radio", case_radio }, { "groupbox", case_groupbox },
   { "edit", case_edit }, { "label", case_label }, { "spin", case_spin }, { "combo", case_combo }, { "listbox", case_listbox }, { "checklist", case_checklist },
   { "tab", case_tab }, { "progress", case_progress }, { "trackbar", case_trackbar }, { "scroll", case_scroll }, { "status", case_status }, { "toolbar", case_toolbar },
   { "popup_menu", case_popup_menu }, { "menubar", case_menubar }, { "tooltip", case_tooltip }, { "tree", case_tree }, { "listview", case_listview }, { "syslink", case_syslink },
-  { "datetime", case_datetime }, { "monthcal", case_monthcal }, { "dialog", case_dialog }, { "messagebox", case_messagebox }, { "taskdialog", case_taskdialog },
+  { "darkx", case_darkx }, { "datetime", case_datetime }, { "monthcal", case_monthcal }, { "dialog", case_dialog }, { "messagebox", case_messagebox }, { "taskdialog", case_taskdialog },
 };
 
 static void load_manifest(const wchar_t *dir) {

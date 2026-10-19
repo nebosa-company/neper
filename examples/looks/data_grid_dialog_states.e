@@ -5,7 +5,6 @@
 // selected without focus, scroll thumb pressed (the shortcuts and sort grids). The artwork (the shortcut icons, the sort glyphs)
 // is not drawn. Run from the repository root.
 
-use e.fs
 use e.data.table as table
 use e.data.tablegroup as grp
 use e.data.tableview as view
@@ -128,7 +127,7 @@ fn miss_ink(ctx: *void, row: usize) -> (paint.Color, bool) {
 fn rows_of(family: usize) -> usize {
     if family == 0usize { ret 20usize }
     if family == 1usize { ret 147usize }
-    ret 13usize
+    ret 300usize
 }
 
 fn load(a: *mem.Arena, app: *App) -> err {
@@ -284,7 +283,6 @@ fn arrange(app: *App, k: usize) {
         look.ring_left_i = gl.rgb(0xECEDEEu32)
         look.ring_right = gl.rgb(0xBBBDC1u32)
         look.ring_bottom = gl.rgb(0xCED0D4u32)
-        look.ring_marks = dialog_marks(app.name, k)
     } else {
         look.frame_none = true
         look.dialog_lines = true
@@ -294,22 +292,6 @@ fn arrange(app: *App, k: usize) {
         look.foot_w1 = gl.rgb(0xE8E8E8u32)
         look.foot_w2 = gl.rgb(0xE9E9E9u32)
         if app.family == 2usize { look.row_height = 18.0 }
-        look.ring_marks = dialog_marks(app.name, k)
-        // round 13: the Missing list's bar track keeps its white first column while the rows fit (live capture)
-        if app.family == 2usize { look.bar_marks = "216 2 253 ffffff" }
-    }
-    // round 18: the live capture's leftover pixels (docs/ui/looks/marks/data_grid_dialog_states.txt, scripts/looks_marks_diff.py), Windows light only
-    if app.light {
-        let (extra, extra_error) = fix_marks_of(app.a, app.name, k)
-        if extra_error == ok && extra.len > 0usize {
-            let (joined, joined_error) = strs.builder(app.a, look.bar_marks.len + extra.len + 2usize)
-            if joined_error == ok {
-                var jb = joined
-                var fits = true
-                if look.bar_marks.len > 0usize { if strs.push(&jb, look.bar_marks) != ok || strs.push(&jb, ";") != ok { fits = false } }
-                if fits && strs.push(&jb, extra) == ok { look.bar_marks = strs.done(&jb) }
-            }
-        }
     }
     dg.set_look(&app.grids[k], look)
     dg.show_indicator(&app.grids[k], false)
@@ -360,7 +342,9 @@ fn cell_of(a: *mem.Arena, t: *const control.Theme, app: *App, k: usize, w: f32, 
         held[0usize] = body
         var face = looks.size_style(w, h)
         face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-        ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize]), ok)
+        let plain = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize])
+        let (plain_over, plain_error) = chrome_over(a, app, k, w, h, plain)
+        ret (plain_over, plain_error)
     }
     // the dialogs' grid frame: 1 px #828790 at the sides, #A6AAB0 at the foot, #A7AAB0 over #D5D7DA at the top
     let (held, held_error) = mem.alloc[widget.Node](a, 3usize)
@@ -377,22 +361,122 @@ fn cell_of(a: *mem.Arena, t: *const control.Theme, app: *App, k: usize, w: f32, 
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, column_error) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, held[0usize..3usize])
-    var wrap = looks.size_style(w, h - 1.0)
+    // the sides are one #828790 box w x h: its corners at the foot stay the side colour, the top row (#A7AAB0) and the foot row (#A6AAB0)
+    // are laid over it, the top one across the corners (live capture: the top row owns its corners, the sides own the foot's)
+    var wrap = looks.size_style(w, h)
     wrap.background = paint.Brush { Solid: gl.rgb(0x828790u32) }
-    wrap.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 0.0 } }
+    wrap.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } }
     let (sides, sides_error) = mem.alloc[widget.Node](a, 1usize)
     if sides_error != ok { ret (zero, sides_error) }
     sides[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, wrap, column[0usize..1usize])
-    var foot = looks.size_style(w, h)
-    foot.background = paint.Brush { Solid: gl.rgb(0xA6AAB0u32) }
-    foot.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 1.0 } }
-    let framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, foot, sides[0usize..1usize])
-    // round 13: the capture's frame top row, the line under the header and the foot row (the hot header's tint, the notches), as marks
-    if app.grids[k].look.ring_marks.len != 0usize {
-        let (marked, marked_error) = dg.ring_marks_over(a, &app.grids[k], framed)
-        ret (marked, marked_error)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, layers_error) }
+    layers[0usize] = sides[0usize]
+    layers[1usize] = dg.footer_px(a, 0.0, 0.0, w, 1.0, 0xA7AAB0u32)
+    layers[2usize] = dg.footer_px(a, 1.0, h - 1.0, w - 2.0, 1.0, 0xA6AAB0u32)
+    let framed = widget.stack(0u64, style.defaults(), layers[0usize..3usize])
+    let (over, over_error) = chrome_over(a, app, k, w, h, framed)
+    ret (over, over_error)
+}
+
+fn put(a: *mem.Arena, parts: []widget.Node, n: usize, x: f32, y: f32, pw: f32, ph: f32, rgb: u32) -> usize {
+    parts[n] = dg.footer_px(a, x, y, pw, ph, rgb)
+    ret n + 1usize
+}
+
+// The lines the live dialog grids draw outside their rows (Windows light): the hot or pressed header's colour runs through the frame row above it
+// and the rule under it, and the scroll bar's own top and foot rows are darker than the frame's
+fn chrome_over(a: *mem.Arena, app: *App, k: usize, w: f32, h: f32, node: widget.Node) -> (widget.Node, err) {
+    if !app.windows || !app.light { ret (node, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 64usize)
+    if parts_error != ok { ret (zero, parts_error) }
+    parts[0usize] = node
+    var n = 1usize
+    let which = app.first + k
+    if app.family == 0usize {
+        // Sort: two 156 px headers from x = 1; a hot or pressed one is 156 px on the top row and 155 on the rule, the last pixel of which is its divider
+        var col: usize = 9usize
+        var top: u32 = 0xBCCAD6u32
+        var rule: u32 = 0xE8EEF2u32
+        var divider: u32 = 0xDBE1E6u32
+        if app.hover && k < 2usize { col = k }
+        if !app.hover && which == 1usize {
+            col = 1usize
+            top = 0xA9C0D3u32
+            rule = 0xDEE9F1u32
+            divider = 0xD1DCE4u32
+        }
+        if col < 2usize {
+            let x0 = 1.0 + 156.0 * f32(col)
+            n = put(a, parts, n, x0, 1.0, 156.0, 1.0, top)
+            n = put(a, parts, n, x0, 20.0, 155.0, 1.0, rule)
+            n = put(a, parts, n, x0 + 155.0, 20.0, 1.0, 1.0, divider)
+        }
+        n = put(a, parts, n, w - 17.0, 1.0, 16.0, 1.0, 0xCBCDD0u32)
     }
-    ret (framed, ok)
+    if app.family == 1usize {
+        // Shortcuts: the Command header is 153 to 348, the Shortcut one 348 to 478 (ends one pixel paler than the middle)
+        if (app.hover && which == 0usize) || (!app.hover && which == 1usize) {
+            var left_top: u32 = 0xBBC6CFu32
+            var mid_top: u32 = 0xB9C7D3u32
+            var right_top: u32 = 0xC8CED5u32
+            var left_rule: u32 = 0xD9E5EDu32
+            var mid_rule: u32 = 0xD6E7F2u32
+            var divider: u32 = 0xD9E4EBu32
+            var right_rule: u32 = 0xE1E9EFu32
+            if !app.hover {
+                left_top = 0xAEBFCDu32
+                mid_top = 0xA7BDD0u32
+                right_top = 0xC0CAD4u32
+                left_rule = 0xDDE6ECu32
+                mid_rule = 0xDCE8F1u32
+                divider = 0xD5E1EAu32
+                right_rule = 0xE6EBEEu32
+            }
+            n = put(a, parts, n, 153.0, 1.0, 1.0, 1.0, left_top)
+            n = put(a, parts, n, 154.0, 1.0, 194.0, 1.0, mid_top)
+            n = put(a, parts, n, 348.0, 1.0, 1.0, 1.0, right_top)
+            n = put(a, parts, n, 153.0, 20.0, 1.0, 1.0, left_rule)
+            n = put(a, parts, n, 154.0, 20.0, 193.0, 1.0, mid_rule)
+            n = put(a, parts, n, 347.0, 20.0, 1.0, 1.0, divider)
+            n = put(a, parts, n, 348.0, 20.0, 1.0, 1.0, right_rule)
+        }
+        if app.hover && which == 1usize {
+            n = put(a, parts, n, 348.0, 1.0, 1.0, 1.0, 0xBCC5CEu32)
+            n = put(a, parts, n, 349.0, 1.0, 129.0, 1.0, 0xB9C7D3u32)
+            n = put(a, parts, n, 478.0, 1.0, 1.0, 1.0, 0xC5CDD5u32)
+            n = put(a, parts, n, 348.0, 20.0, 1.0, 1.0, 0xDAE4EBu32)
+            n = put(a, parts, n, 349.0, 20.0, 128.0, 1.0, 0xD6E7F2u32)
+            n = put(a, parts, n, 477.0, 20.0, 1.0, 1.0, 0xD9E4EDu32)
+            n = put(a, parts, n, 478.0, 20.0, 1.0, 1.0, 0xEDF0F3u32)
+        }
+        // the frame's inner left line is #6B747C at an eighth over the rows (grey rows #DEDFE1 for #ECEDEE on the white ones, the idle selection #C8D6E0);
+        // the bar's first column is #EDEDED beside the rows, white beside the header
+        var idle_first = which == 0usize
+        if app.hover { idle_first = true }
+        var row_at = 0usize
+        while row_at < 17usize {
+            if row_at % 2usize == 0usize {
+                var edge: u32 = 0xDEDFE1u32
+                if row_at == 0usize && idle_first { edge = 0xC8D6E0u32 }
+                n = put(a, parts, n, 1.0, 21.0 + 18.0 * f32(row_at), 1.0, 16.0, edge)
+            }
+            row_at += 1usize
+        }
+        n = put(a, parts, n, 477.0, 2.0, 2.0, 17.0, 0xFFFFFFu32)
+        n = put(a, parts, n, 478.0, 20.0, 1.0, h - 21.0, 0xEDEDEDu32)
+        n = put(a, parts, n, 479.0, 1.0, 1.0, 1.0, 0xCDCFD2u32)
+        n = put(a, parts, n, 480.0, 1.0, 15.0, 1.0, 0xC8CACDu32)
+        n = put(a, parts, n, 481.0, h - 1.0, 13.0, 1.0, 0xC5C7CAu32)
+    }
+    if app.family == 2usize {
+        n = put(a, parts, n, 217.0, 1.0, 16.0, 1.0, 0xCBCDD0u32)
+        n = put(a, parts, n, 1.0, h - 1.0, 214.0, 1.0, 0xABAFB5u32)
+        n = put(a, parts, n, 215.0, h - 1.0, 1.0, 1.0, 0xA0A3A9u32)
+        n = put(a, parts, n, 216.0, h - 1.0, 1.0, 1.0, 0xABAFB5u32)
+        n = put(a, parts, n, 217.0, h - 1.0, 16.0, 1.0, 0xA7AAB0u32)
+    }
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -573,68 +657,4 @@ fn main(a: *mem.Arena, args: []str) -> err {
     apps[0usize] = seed
     let sheet = looks.Sheet { name: name, cells: seed.cells, columns: cols, cell_w: w, cell_h: h, ctx: mem.cast[*void](&apps[0usize]), build: build }
     ret looks.run_all(a, &sheet)
-}
-
-// BEGIN GENERATED (scripts/looks_dialog_marks.py)
-fn dialog_marks(sheet: str, cell: usize) -> str {
-    if strs.eq(sheet, "data_grid_shortcuts_hover") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 bbc6cf;154 1 1 b9c7d3 194;348 1 1 c8ced5;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 d9e5ed;154 20 1 d6e7f2 193;347 20 1 d9e4eb;348 20 1 e1e9ef;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_hover") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 bcc5ce;349 1 1 b9c7d3 129;478 1 1 c5cdd5;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 dae4eb;349 20 1 d6e7f2 128;477 20 1 d9e4ed;478 20 1 edf0f3;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_hover2") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_hover2") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 4;484 20 1 c6c6c6;485 20 1 909090;486 20 1 858585 3;489 20 1 919191;490 20 1 c6c6c6;491 20 1 f0f0f0 4;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_hover3") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 4;484 20 1 c6c6c6;485 20 1 909090;486 20 1 858585 3;489 20 1 919191;490 20 1 c6c6c6;491 20 1 f0f0f0 4;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_hover3") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_hover4") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_states") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 d6dee5;22 20 1 e0e2e3;23 20 1 e4ecf1;152 20 1 e1e3e5;153 20 1 e3eaef;347 20 1 e2e5e8;348 20 1 e3e8ec;477 20 1 e7ecef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_states") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 aebfcd;154 1 1 a7bdd0 194;348 1 1 c0cad4;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 dde6ec;154 20 1 dce8f1 193;347 20 1 d5e1ea;348 20 1 e6ebee;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_states2") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_states2") && cell == 1usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 6;486 20 1 bbbbbb;487 20 1 858585;488 20 1 b9b9b9;489 20 1 f0f0f0 6;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_shortcuts_states3") && cell == 0usize { ret "1 1 1 c5c8cc;22 1 1 c4c6c9;23 1 1 cfd1d4;152 1 1 c5c7ca;153 1 1 cdcfd2;347 1 1 c8cacd;348 1 1 cbcdd0;479 1 1 cdcfd2;480 1 1 c8cacd 15;1 20 1 e3e4e6;22 20 1 e3e3e3;23 20 1 f1f1f1;152 20 1 e5e5e5;153 20 1 efefef;347 20 1 e8e8e8;348 20 1 ececec;477 20 1 efefef;478 20 1 f4f4f4;479 20 1 f8f8f8;480 20 1 f0f0f0 4;484 20 1 c6c6c6;485 20 1 909090;486 20 1 858585 3;489 20 1 919191;490 20 1 c6c6c6;491 20 1 f0f0f0 4;478 21 311 ededed" }
-    if strs.eq(sheet, "data_grid_sort_states") && cell == 0usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 d5d7da 157;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_states") && cell == 1usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 a9c0d3 156;313 1 1 d5d7da;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 dee9f1 155;312 20 1 d1dce4;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_states") && cell == 2usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 d5d7da 157;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_states") && cell == 3usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 d5d7da 157;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_states") && cell == 4usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 d5d7da 157;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 5;319 20 1 999999;320 20 1 858585 4;324 20 1 9b9b9b;325 20 1 f0f0f0 5;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_hover") && cell == 0usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 bccad6 156;157 1 1 d5d7da 157;314 1 1 cbcdd0 16;1 20 1 e8eef2 155;156 20 1 dbe1e6;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_hover") && cell == 1usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 bccad6 156;313 1 1 d5d7da;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 e8eef2 155;312 20 1 dbe1e6;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_hover") && cell == 2usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 d5d7da 157;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 5;319 20 1 999999;320 20 1 858585 4;324 20 1 9b9b9b;325 20 1 f0f0f0 5;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_hover") && cell == 3usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 d5d7da 157;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_sort_hover") && cell == 4usize { ret "0 0 1 a7aab0;330 0 1 a7aab0;1 1 1 d5d7da 155;156 1 1 c4c6c9;157 1 1 d5d7da 157;314 1 1 cbcdd0 16;1 20 1 f4f4f4 155;156 20 1 dfdfdf;157 20 1 f4f4f4 155;312 20 1 e8e8e8;313 20 1 ffffff;314 20 1 f0f0f0 7;321 20 1 858585 2;323 20 1 f0f0f0 7;0 258 1 828790;330 258 1 828790" }
-    if strs.eq(sheet, "data_grid_missing_states") && cell == 0usize { ret "217 1 1 cbcdd0 16;1 255 1 abafb5 214;215 255 1 a0a3a9;216 255 1 abafb5;217 255 1 a7aab0 16" }
-    if strs.eq(sheet, "data_grid_missing_states") && cell == 1usize { ret "217 1 1 cbcdd0 16;1 255 1 abafb5 214;215 255 1 a0a3a9;216 255 1 abafb5;217 255 1 a7aab0 16" }
-    if strs.eq(sheet, "data_grid_missing_hover") && cell == 0usize { ret "217 1 1 cbcdd0 16;1 255 1 abafb5 214;215 255 1 a0a3a9;216 255 1 abafb5;217 255 1 a7aab0 16" }
-    ret ""
-}
-// END GENERATED
-
-// round 18: "<sheet> <cell> <marks>" lines of docs/ui/looks/marks/data_grid_dialog_states.txt
-fn fix_marks_of(a: *mem.Arena, sheet: str, k: usize) -> (str, err) {
-    let path = "docs/ui/looks/marks/data_grid_dialog_states.txt"
-    let (present, present_error) = fs.exists(a, path)
-    if present_error != ok || !present { ret ("", ok) }
-    let (bytes, read_error) = fs.read_file(a, path, 4194304usize)
-    if read_error != ok { ret ("", read_error) }
-    var at = 0usize
-    while at < bytes.len {
-        var end = at
-        while end < bytes.len && bytes[end] != 10u8 { end += 1usize }
-        var cur = at
-        while cur < end && bytes[cur] != 32u8 { cur += 1usize }
-        if cur < end && strs.eq(bytes[at..cur], sheet) {
-            cur += 1usize
-            var key = 0usize
-            var digits = 0usize
-            while cur < end && bytes[cur] >= 48u8 && bytes[cur] <= 57u8 {
-                key = key * 10usize + usize(bytes[cur] - 48u8)
-                cur += 1usize
-                digits += 1usize
-            }
-            if digits > 0usize && cur < end && bytes[cur] == 32u8 && key == k {
-                var stop = end
-                if stop > cur + 1usize && bytes[stop - 1usize] == 13u8 { stop -= 1usize }
-                ret (bytes[cur + 1usize..stop], ok)
-            }
-        }
-        at = end + 1usize
-    }
-    ret ("", ok)
 }

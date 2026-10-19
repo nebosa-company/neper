@@ -43,6 +43,15 @@ Model the Neper pipeline fits to these atlases (`lib/e/text/tthint.e`, `ttglyph.
   curve is drawn (worth 42 glyphs of 756 in the probe atlases). Drop-out control follows the font's scan type (Segoe UI mode 1, Tahoma
   mode 5), a stub is dropped, the bounding box is clamped. Sizes the `gasp` table marks for symmetric smoothing (Segoe UI above 19 ppem,
   Tahoma above 17) are sampled six by five with the vertical weights 1 2 3 2 1 and level (n + 4) / 9.
+- Curves (measured by rendering synthetic one-contour fonts through GDI: 3780 of 3780 straight-edged glyphs are exact, so only conics
+  deviate from the exact quadratic). Units are base units (bu), 1/64 sample, x26.6 * 6 in x. (a) A conic that is not monotone on an axis is
+  cut at the exact turning point t*, and the turning point and the two new control points are rounded to whole bu (the control coordinate
+  on the cut axis equals the turning point's): 98.9 % of 3780 domes with feet of unequal height, against 92.5 % for the exact curve. (b) A
+  big conic is scanned on a coarser grid: with bits = bitlength(twice the area of the triangle of its three points) + bitlength(x3 - x1),
+  both in bu, the grid is 2^level bu, level = (bits - 26) / 3 when bits is 29 or more, else none. Level 1 moves only y; level 2 and up also
+  x, each along the direction the conic runs: the first point goes to the nearest multiple (a tie down), the other two to the nearest
+  multiple of their distance from the first (a tie up). Fitted conics are right in 99.6 % of 485 at 29 to 31 bits, 97.7 % of 488 at 32.
+  In the six by five path the same rule on y in bu of the 1/5 row grid is a net gain but not exact (see below).
 - Hinting (`tthint.e`): the font's own programs run in ClearType mode with the rules of Microsoft's "Backwards compatibility of TrueType
   instructions with ClearType" note: x moves are on a 1/16 pixel grid, x `DELTAP` and `SHPIX` of a pixel or more are ignored (a delta
   function is recognised by its signature), `GETINFO` answers the ClearType and symmetric smoothing bits, the freedom vector says which
@@ -66,16 +75,18 @@ Model the Neper pipeline fits to these atlases (`lib/e/text/tthint.e`, `ttglyph.
 - The hinted points are checked against `GetGlyphOutline` in black and white (the whole-pixel machine) and against the ClearType machine
   through the tap fonts in `scripts/winnative/tap*.py`: copies of the font whose programs write the `GC` reading of every point into
   storage and show it as bits, cut after K instructions or after `IUP[x]`.
-- Status (non-probe atlases, 190 ink glyphs each, `text_cleartype_oracle --report`): pixel-identical within 2 levels for 5043 of 5320
-  glyphs, 94.8 %. Per atlas: 95 to 99.5 % for 20 of 28; below 95 %: Segoe UI Bold 14 px 93.7 %, Tahoma regular 11, 13 and 16 px 94.7,
-  93.7 and 94.2 %, Tahoma Bold 14 px 93.7 %, and the large sizes, Segoe UI 24 px 75.3 % (Bold 85.8 %) and Tahoma 21 px 86.8 %. The
+- Status (non-probe atlases, 190 ink glyphs each, `text_cleartype_oracle --report`): pixel-identical for 5105 of 5292
+  glyphs (189 per atlas), 96.5 %. Per atlas: 95 % or more for 21 of 28; below 95 %: Tahoma regular 13 and 16 px 94.2 and 94.7 %, Tahoma
+  Bold 14 and 21 px 94.2 %, and the large sizes, Segoe UI 24 px 82.5 % (Bold 89.4 %) and Tahoma 21 px 88.4 %. The
   ClearType points equal GDI's tap-font points for 5238 of 5285 glyphs (99.1 %); the black-and-white outline and advance match for 99 %.
 - What is left: (1) 47 glyphs whose hinted points differ, in a dozen programs: `$ f x` of Tahoma (a pair taking its shift from a
   follower of an IP'd point; `f`, whose top arc is fitted by rules not found), Segoe UI Bold `A` at 14, 18 and 24 px and its accents
-  (the interpolation of a diagonally measured point is off by one at those sizes), `#`, `s`, `m`. (2) About 240 glyphs whose points
-  are right and whose pixels differ by one sample at the extreme of a bowl: GDI's crossing of a near-horizontal arc differs from the
-  exact quadratic by 0.3 to 1.2 of 1/64 sample (a y error of a tenth of 1/64 px there), too fine for any flattening or quantising
-  model tried (uniform and adaptive chords, FreeType 1's halving with integer midpoints at steps 1 to 32, vertex rounding, a crossing
-  bias, tie rules, row and column offsets: each loses 40 to 2000 glyphs). (3) The six by five path at Segoe UI 24 and Tahoma 21: the
-  same edge noise on five times as many sample rows, one glyph in four with a cell off; the 0.17 % of cells that are wrong lie within
-  two samples of a level boundary, so they are single samples again.
+  (the interpolation of a diagonally measured point is off by one at those sizes), `#`, `s`, `m`. (2) About 100 hinted glyphs whose points
+  are right and whose pixels differ by one sample at the extreme of a bowl: the coarse-grid rule above is a soft fit (the cross product
+  alone is right for about 92 % of conics, the bit-length sum for 99.6 %), and a few conics with the same bit sum go either way
+  (Tahoma regular 21 px: conic 162 is coarsened, conic 182 is not). Flattening by uniform or adaptive chords, FreeType 1's halving, t
+  quantising, vertex rounding, crossing bias, row-boundary chords and global offsets each lost 300 to 3700 of 3780 synthetic glyphs.
+  (3) The six by five path at Segoe UI 24 and Tahoma 21 (86 glyphs): the rule is applied with y in bu of the 1/5 row grid; it gains 33
+  glyphs and loses 15 that the exact curve had right (listed as changed in exact.txt), conics running opposite in x and y at level 2 mostly.
+  Offsets of 1 to 4 bits on the criterion, caps on the level, the x frame of the move and tie flips did not help; scaling the grid to
+  whole 1/5 rows lost 24 more.

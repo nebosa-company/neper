@@ -375,7 +375,7 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
         if row_error != ok { ret (zero, TooLarge) }
         row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), buttons[0usize..actions.len])
         var row_gap = 8.0f32
-        if t.tokens.profile == .MaterialLike { row_gap = 15.0 }
+        if t.tokens.profile == .MaterialLike { row_gap = 14.0 }
         parts[n] = widget.padded(0u64, 0.0, row_gap, 0.0, 0.0, style.defaults(), row[0usize..1usize])
         n += 1usize
     }
@@ -398,7 +398,7 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     plate.padding.top = style.Length { Px: 12.0 }
     plate.padding.bottom = style.Length { Px: 8.0 }
     if t.tokens.profile == .MaterialLike {
-        plate.padding.top = style.Length { Px: 11.0 }
+        plate.padding.top = style.Length { Px: 12.0 }
         plate.padding.bottom = style.Length { Px: 17.0 }
         plate.padding.left = style.Length { Px: 4.0 }
     }
@@ -1580,7 +1580,7 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     held[0usize] = content
     var content_top: f32 = 16.0
     // md-dialog (measured on its capture): the supporting text starts 23 below the headline, not the 16 of the Neper default.
-    if t.tokens.profile == .MaterialLike { content_top = 23.0 }
+    if t.tokens.profile == .MaterialLike { content_top = 24.0 }
     parts[1usize] = widget.padded(0u64, 0.0, content_top, 0.0, 0.0, style.defaults(), held[0usize..1usize])
     var actions_style = style.defaults()
     actions_style.padding.top = style.Length { Px: 8.0 }
@@ -1588,7 +1588,7 @@ fn dialog_as_look(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     // The capture's panel ends 1 further under the buttons than the 24 of the card's padding.
     if t.tokens.profile == .MaterialLike {
         actions_style.padding.top = style.Length { Px: 24.0 }
-        actions_style.padding.bottom = style.Length { Px: 1.0 }
+        actions_style.padding.bottom = style.Length { Px: 0.0 }
     }
     parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, actions_style, row[0usize..buttons.len])
     var raised = control.surface_options(t)

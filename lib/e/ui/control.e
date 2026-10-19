@@ -2152,24 +2152,34 @@ fn appeared_share(t: *const Theme, key: widget.Key, millis: u32) -> f32 {
 // an avatar): a dot with its centre 3 in from the corner, a count 2 above the top
 // and starting 12 before the end; the stack stands 2 taller to hold it.
 fn badge_anchor(a: *mem.Arena, key: widget.Key, anchor: widget.Node, side: f32, mark: widget.Node, dot: bool) -> (widget.Node, err) {
+    let (placed, placed_error) = badge_anchor_by(a, key, anchor, side, mark, dot, 0.0)
+    ret (placed, placed_error)
+}
+
+// `badge_anchor` with the badge `along` further toward the end (a navigation bar destination holds its count 2 dp further out).
+fn badge_anchor_by(a: *mem.Arena, key: widget.Key, anchor: widget.Node, side: f32, mark: widget.Node, dot: bool, along: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[2usize] = anchor
     parts[3usize] = mark
-    parts[0usize] = widget.positioned(0u64, 0.0, 2.0, style.defaults(), parts[2usize..3usize])
+    // The Android look's count badge (16 dp wide) starts 12 in, past the icon's 24: the stack is 16 wider, the icon 8 in, so that the
+    // badge is not squeezed to what is left of the icon's width.
+    var pad: f32 = 0.0
+    if looks_material_icons { pad = 8.0 }
+    parts[0usize] = widget.positioned(0u64, pad, 2.0, style.defaults(), parts[2usize..3usize])
     // The Android look (M3 badge on an icon): a dot starts 15 in from the start, a count 12 in and 4 above the icon.
     var dot_x = side - 6.0
     var count_y: f32 = 0.0
     if looks_material_icons {
         dot_x = side - 9.0
-        count_y = -2.0
+        count_y = -3.0
     }
     if dot {
-        parts[1usize] = widget.positioned(0u64, dot_x, 2.0, style.defaults(), parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, pad + dot_x, 2.0, style.defaults(), parts[3usize..4usize])
     } else {
-        parts[1usize] = widget.positioned(0u64, side - 12.0, count_y, style.defaults(), parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, pad + side - 12.0 + along, count_y, style.defaults(), parts[3usize..4usize])
     }
-    ret (widget.stack(key, sized_style(side, side + 2.0), parts[0usize..2usize]), ok)
+    ret (widget.stack(key, sized_style(side + 2.0 * pad, side + 2.0), parts[0usize..2usize]), ok)
 }
 
 // An anchor's name with its badge's meaning (D971): "Builds, 2 failed".
@@ -2418,6 +2428,7 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 // whichever element the keyboard focuses, so a control need only hand it the look.
 fn focus_look(t: *const Theme) {
     widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux)
+    widget.set_skia_corners(t.tokens.profile == .MaterialLike)
     scene.set_fine_curves(t.tokens.profile == .Linux)
     scene.set_cff_text(t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
@@ -7920,6 +7931,13 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     }
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
+    if t.tokens.profile == .MaterialLike {
+        // The query field is the bar less its padding, the 24 dp icon and the clear button, as wide as that and no more (a percentage of
+        // an unsized stack would ask for the field's intrinsic width and squeeze the icon).
+        var room = options.width - lead - trail - 24.0 - 16.0
+        if len != 0usize { room = room - 16.0 - 40.0 }
+        editor_style.width = style.Length { Px: max_zero(room) }
+    }
     editor_style.min_height = style.Length { Px: line }
     layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: material_caret(t), untabbed: false, ringed: false }, editor_style)
     var search_name = options.placeholder
@@ -9627,6 +9645,8 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             var inner_style = style.defaults()
             inner_style.height = style.Length { Flex: 1.0 }
             inner_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
+            // md-secondary-tab centres the label in the whole 48 dp, the 2 dp indicator drawn over its foot.
+            if t.tokens.profile == .MaterialLike { inner_style.padding.top = style.Length { Px: 2.0 } }
             let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, inner_style, inner[0usize..1usize])
@@ -9643,6 +9663,15 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.spacer(0u64, 1.0)
             parts[1usize] = label_node
+            // md-primary-tab centres the label in the whole 48 dp, the indicator drawn over its foot.
+            if t.tokens.profile == .MaterialLike {
+                let (low, low_error) = mem.alloc[widget.Node](a, 1usize)
+                if low_error != ok { ret (zero, TooLarge) }
+                low[0usize] = label_node
+                var low_style = style.defaults()
+                low_style.margin.top = style.Length { Px: 3.0 }
+                parts[1usize] = widget.box(0u64, low_style, low[0usize..1usize])
+            }
             parts[2usize] = widget.spacer(0u64, 1.0)
             parts[3usize] = widget.box(0u64, mark, zero)
             var column_style = style.defaults()
@@ -11524,6 +11553,8 @@ fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind
         layer_ink = words
         look.border_width = 0.0
     }
+    // md-filter-chip, md-input-chip and md-suggestion-chip set their label in on-surface-variant (assist: on-surface).
+    if t.tokens.profile == .MaterialLike && kind != .Assist && !chosen && !tinted { words = style.color(t.tokens, .OnSurfaceVariant) }
     if elevated && !chosen && !tinted {
         fill = style.color(t.tokens, .SurfaceContainerLow)
         look.border_width = 0.0
@@ -11553,6 +11584,8 @@ fn chip_styled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind
     look.custom_padding = true
     look.padding = 16.0
     look.padding_y = max_zero((height - look.border_width * 2.0 - style.text_style(t.tokens, .Label).line_height) * 0.5)
+    // Blink puts the label line at the border plus the padding: 6 dp under the 32 dp chip, outlined or not.
+    if t.tokens.profile == .MaterialLike { look.padding_y = max_zero((height - style.text_style(t.tokens, .Label).line_height) * 0.5) }
     look.min_height = height
     var caption = text_options()
     caption.role = .Label
@@ -17893,17 +17926,30 @@ fn win3_lines(a: *mem.Arena) -> (widget.Node, err) {
 // and the #202020 face from (2, 2), rows 15 high with the text origin at x 4 (Segoe UI 12 px), a chosen row #0078D7 under white text over
 // the whole row (the list's 99 px left of its scroll column) whether or not the list has the focus, the focus's XOR rectangle round it.
 // The capture's scroll column is the light unthemed one (the gallery leaves list boxes out of dark mode); this look keeps its dark bar there.
-type DarkListFrame = struct { w: f32, h: f32 }
+type DarkListFrame = struct { w: f32, h: f32, bar: bool }
 
 fn dark_list_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let m = mem.cast[*DarkListFrame](ctx)
     try win3_rect(b, area.x, area.y, m.w, m.h, style.hex_raw(0x828790u32))
     try win3_rect(b, area.x + 1.0, area.y + 1.0, m.w - 2.0, m.h - 2.0, style.hex_raw(0xFFFFFFu32))
     try win3_rect(b, area.x + 2.0, area.y + 2.0, 98.0 - 0.0, m.h - 4.0, style.hex_raw(0x202020u32))
+    // a ListBox is left unthemed under dark mode (listbox-rest): its scroll column is the classic light one, #F0F0F0
+    if m.bar { ret win3_rect(b, area.x + 99.0, area.y + 2.0, m.w - 101.0, m.h - 4.0, style.hex_raw(0xF0F0F0u32)) }
     ret win3_rect(b, area.x + 100.0, area.y + 2.0, m.w - 102.0, m.h - 4.0, style.hex_raw(0x171717u32))
 }
 
 fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = win_dark_list_box_with(a, key, t, label, options, selected, picks, rows, width, true)
+    ret (made, made_error)
+}
+
+// listbox-disabled: the rows stay as they are (the chosen row keeps its #0078D7 fill) and the words turn COLOR_GRAYTEXT, #6D6D6D.
+fn windows_dark_list_box_disabled(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = win_dark_list_box_with(a, key, t, label, options, selected, picks, rows, width, false)
+    ret (made, made_error)
+}
+
+fn win_dark_list_box_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32, enabled: bool) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
     let (dark_t, dark_error) = windows_edit_theme(a, t, 15.0)
     if dark_error != ok { ret (zero, dark_error) }
@@ -17917,6 +17963,7 @@ fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         words.role = .BodyMedium
         words.wrap = .None
         var ink = style.hex_raw(0xFFFFFFu32)
+        if !enabled { ink = style.hex_raw(0x6D6D6Du32) }
         let (label_node, label_error) = colored_text(a, 0u64, options[i], &dark_t, words, ink)
         if label_error != ok { ret (zero, label_error) }
         var line_style = style.defaults()
@@ -17928,7 +17975,7 @@ fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         let (text_held, text_held_error) = mem.alloc[widget.Node](a, 1usize)
         if text_held_error != ok { ret (zero, TooLarge) }
         text_held[0usize] = label_node
-        layers[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, text_held[0usize..1usize])
+        layers[0usize] = widget.positioned(0u64, 0.0, 0.0 - 1.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line_style, text_held[0usize..1usize])))
         var count = 1usize
         if state.focused {
             let (dots_plain, dots_error) = win4_xor_dots(a, true, f32(i % 2usize))
@@ -17973,7 +18020,7 @@ fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (frames, frames_error) = mem.alloc[DarkListFrame](a, 1usize)
     if frames_error != ok { ret (zero, TooLarge) }
     let height = f32(rows) * 15.0 + 5.0
-    frames[0usize] = DarkListFrame { w: width, h: height }
+    frames[0usize] = DarkListFrame { w: width, h: height, bar: options.len > usize(rows) }
     var none: []const widget.Node = zero
     var fill = sized_style(width, height)
     let frame = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&frames[0usize]), measure: win3_measure, paint: dark_list_frame_paint, state: widget.bytes_of[DarkListFrame](&frames[0usize]) } }, style: fill, children: none }
@@ -17983,9 +18030,12 @@ fn win_dark_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     stacked[1usize] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), widget_one_of(a, view))
     var layers_used = 2usize
     if options.len > usize(rows) {
-        let (bar, bar_error) = windows_scroll_bar(a, key + 8888u64, t, true, f32(rows) * 15.0 + 1.0, f32(rows), f32(options.len), 0.0)
-        if bar_error != ok { ret (zero, bar_error) }
-        stacked[2usize] = widget.positioned(0u64, width - 18.0, 2.0, style.defaults(), widget_one_of(a, bar))
+        let (bars, bars_error) = mem.alloc[WinDarkBar](a, 1usize)
+        if bars_error != ok { ret (zero, TooLarge) }
+        bars[0usize] = WinDarkBar { first: 0u32, rows: rows, lines: u32(options.len), classic: true }
+        var bar_none: []const widget.Node = zero
+        let bar = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&bars[0usize]), measure: win3_measure, paint: win_dark_bar_paint, state: widget.bytes_of[WinDarkBar](&bars[0usize]) } }, style: sized_style(17.0, f32(rows) * 15.0 + 1.0), children: bar_none }
+        stacked[2usize] = widget.positioned(0u64, width - 19.0, 2.0, style.defaults(), widget_one_of(a, bar))
         layers_used = 3usize
     }
     var sem: widget.Semantics = zero
@@ -18356,15 +18406,32 @@ fn win3_chevron(a: *mem.Arena, ink: paint.Color, wide: bool, square: bool, scale
 // (#555555 over #AAAAAA below) and bottom, a line down each side alternating the two greys.
 fn win3_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Win3Dots](ctx)
-    let dark = style.hex(5592405u32)
-    let light = style.hex(11184810u32)
+    var dark = style.hex(5592405u32)
+    var light = style.hex(11184810u32)
+    // looks33: the ultra-flat tab strip's rectangle (its caller passes #5A5A5A) is #5A5A5A and #A5A5A5 in the live captures
+    var ultra = d.ink.red > 0.34 && d.ink.red < 0.37 && d.ink.green > 0.34 && d.ink.green < 0.37
+    if ultra {
+        dark = style.hex(5921370u32)
+        light = style.hex(10855845u32)
+    }
     var x: f32 = 1.0
     while x < area.width - 1.0 {
         try win3_rect(b, area.x + x, area.y, 1.0, 1.0, dark)
         try win3_rect(b, area.x + x, area.y + 1.0, 1.0, 1.0, light)
-        try win3_rect(b, area.x + x, area.y + area.height - 2.0, 1.0, 1.0, dark)
-        try win3_rect(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, light)
+        if !ultra {
+            try win3_rect(b, area.x + x, area.y + area.height - 2.0, 1.0, 1.0, dark)
+            try win3_rect(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, light)
+        }
         x += 2.0
+    }
+    if ultra {
+        // the ultra strip's foot row runs on the other phase, from the corner
+        var foot: f32 = 0.0
+        while foot < area.width {
+            try win3_rect(b, area.x + foot, area.y + area.height - 2.0, 1.0, 1.0, dark)
+            try win3_rect(b, area.x + foot, area.y + area.height - 1.0, 1.0, 1.0, light)
+            foot += 2.0
+        }
     }
     var y: f32 = 1.0
     while y < area.height - 1.0 {
@@ -18927,8 +18994,24 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
             let (tile, tile_error) = wintile.tile_node(a, 16usize, 16usize, atlas[art * 256usize..art * 256usize + 256usize])
             if tile_error != ok { ret (zero, tile_error) }
             row_parts[0usize] = tile
+            // looks33: the pictures stand at y 36 of the live Statistics captures, 2 px above the tab line box's middle
+            if true {
+                let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+                if lifted_error != ok { ret (zero, TooLarge) }
+                lifted[0usize] = tile
+                var lift = style.defaults()
+                lift.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+                row_parts[0usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 4.0, lift, lifted[0usize..1usize])
+            }
         }
         row_parts[1usize] = said
+        if chosen && !win_dark(t) {
+            // the chosen tab's caption stands a pixel higher than the others' (live captures)
+            let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if said_held_error != ok { ret (zero, TooLarge) }
+            said_held[0usize] = said
+            row_parts[1usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), said_held[0usize..1usize])
+        }
         count = 2usize
         h = 22.0
         w += 22.0
@@ -18944,6 +19027,8 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     var left: f32 = 2.5
     if has_icon { left = 4.0 }
     if chosen { left = 4.0 }
+    // looks33: the chosen tab of the live Statistics captures holds its picture and caption a pixel further right
+    if chosen && has_icon && !win_dark(t) { left = 5.0 }
     var below: f32 = 2.0
     if has_icon { below = 0.0 }
     line.padding = edges(left, 2.0, 0.0, below)
@@ -18957,7 +19042,7 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: picture_gap }, line, row_parts[0usize..count])
     var shown = 2usize
     if chosen && state.focused && state.focus_visible {
-        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(w - 4.0), h - 4.0)
+        let (dots, dots_error) = win3_dots(a, style.hex(5921370u32), max_zero(w - 4.0), h - 3.0)
         if dots_error != ok { ret (zero, dots_error) }
         let (dot_held, dot_held_error) = mem.alloc[widget.Node](a, 1usize)
         if dot_held_error != ok { ret (zero, TooLarge) }
@@ -19501,7 +19586,9 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     let (message_held, message_held_error) = mem.alloc[widget.Node](a, 1usize)
     if message_held_error != ok { ret (zero, TooLarge) }
     message_held[0usize] = message
-    var grown = widget.padded(0u64, 0.0, 14.0, 0.0, 14.0, style.defaults(), message_held[0usize..1usize])
+    // A browser breaks a line at its advance width, the text layout here at its ink extent (a little less): 4 dp of margin keep the
+    // same words on each line as md-snackbar's.
+    var grown = widget.padded(0u64, 0.0, 14.0, 4.0, 14.0, style.defaults(), message_held[0usize..1usize])
     grown.style.width = style.Length { Flex: 1.0 }
     parts[0usize] = grown
     var at = 1usize
@@ -19526,7 +19613,7 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     sheet.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, sheet, parts[0usize..at])
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, sheet, parts[0usize..at])
     var sem: widget.Semantics = zero
     sem.role = 26u8
     sem.label = text_value
@@ -23562,8 +23649,10 @@ fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bo
     let (pb, pb_error) = geometry.path_builder(g.arena, 48usize, 160usize)
     if pb_error != ok { ret (false, TooLarge) }
     var builder = pb
-    let x = area.x
-    let y = area.y
+    // Chromium paints an svg icon's box on whole device pixels (a label's fractional width moves the icon, not its picture).
+    let scale = scene.builder_scale(b)
+    let x = math.floor[f32](area.x * scale + 0.5) / scale
+    let y = math.floor[f32](area.y * scale + 0.5) / scale
     let w = area.width
     let h = area.height
     var made = true

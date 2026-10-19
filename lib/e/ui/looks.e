@@ -21,6 +21,7 @@ use e.io
 use e.mem
 use e.os
 use e.str as strs
+use e.text.layout
 use e.text.shape
 use e.time
 use e.ui.control
@@ -281,6 +282,7 @@ fn set_look(rig: *Rig, look: Look) {
     style.set_windark(look == .WindowsDark)
     style.set_neperdark(look == .NeperDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
+    widget.set_skia_corners(rig.tokens.profile == .MaterialLike)
     control.set_material_icons(rig.tokens.profile == .MaterialLike)
     // The Android captures are taken with the caret in its blink-off phase.
     if rig.tokens.profile == .MaterialLike { control.set_caret_hidden(true) }
@@ -297,6 +299,7 @@ fn set_look(rig: *Rig, look: Look) {
     scene.set_text_aa(text_aa)
     // The Android look places and fits Roboto as Chromium's captures show it (scene.mat_warp).
     scene.set_mat_text(rig.tokens.profile == .MaterialLike)
+    layout.set_chromium_lines(rig.tokens.profile == .MaterialLike)
     let (exact_text, exact_error) = os.env(rig.a, "NEPER_LOOKS_EXACT")
     scene.set_pixel_exact_at_one((exact_error == ok && exact_text.len > 0usize) || rig.tokens.profile == .MaterialLike)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
