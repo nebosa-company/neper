@@ -2060,7 +2060,11 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
                 if hint_error != ok { ret false }
                 let at = pen_px(pen + glyph.offset_x * run.size * t.m00)
                 if !cleartype.add_glyph(sc, &outline, at, base) { ret false }
-                pen = pen + f32(tthint.fdiv(outline.adv + 32i64, 64i64))
+                if run.run.language.len == 4usize && run.run.language[0usize] == 107u8 {
+                    pen = pen + glyph.advance_x * run.size * t.m00
+                } else {
+                    pen = pen + f32(tthint.fdiv(outline.adv + 32i64, 64i64))
+                }
                 g += 1usize
             }
             ri += 1usize
