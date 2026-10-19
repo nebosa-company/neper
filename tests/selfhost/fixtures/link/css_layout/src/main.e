@@ -416,5 +416,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 73. An auto-height column flexbox justifies within its min-height.
     let (p73, ok73) = build(a, "<div style=\"display:flex;flex-direction:column;min-height:100px;justify-content:center\"><div id=a style=\"height:10px\"></div></div>", "")
     if !ok73 || !near(rect_of(p73, "a").y, 45.0f64) { os.exit(110) }
+    // 74. A flex item's automatic minimum size is capped by its max-width.
+    let (p74, ok74) = build(a, "<div style=\"display:flex;width:1px\"><div id=a style=\"width:100px;max-width:50px\"><div style=\"width:80px;height:5px\"></div></div></div>", "")
+    if !ok74 || !near(rect_of(p74, "a").w, 50.0f64) { os.exit(111) }
     ret ok
 }

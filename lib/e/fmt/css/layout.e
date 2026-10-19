@@ -4799,6 +4799,8 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if max_len.kind == .Px && has_max {
             if row { max_main = to_content_w(l, id, maxv) } else { max_main = to_content_h(l, id, maxv) }
         }
+        // The automatic minimum size is clamped by a definite max-width / max-height.
+        if min_len.kind == .Auto && max_len.kind == .Px && has_max { min_main = minf(min_main, max_main) }
         items[i].basis = maxf(0.0f64, basis)
         items[i].min_main = min_main
         items[i].max_main = maxf(max_main, min_main)
