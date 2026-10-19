@@ -8924,7 +8924,11 @@ fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     let (title_cell, title_cell_error) = mem.alloc[widget.Node](a, 1usize)
     if title_cell_error != ok { ret (zero, TooLarge) }
     title_cell[0usize] = word
-    let title_look = control.sized_style(caption.drag.width, caption.drag.height)
+    var title_look = control.sized_style(caption.drag.width, caption.drag.height)
+    // the native dark dialog (no icon) sets its title one pixel higher than the centred line box (dialog-active, dialog-inactive)
+    if windows && style.windows_dark_on() && !options.icon && !options.light && !options.tool {
+        title_look.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 2.0 } }
+    }
     var title_main: ui_layout.MainAlign = .Start
     if options.platform == .Mac { title_main = .Center }
     if options.rtl && options.platform != .Mac { title_main = .End }
