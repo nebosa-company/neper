@@ -31,11 +31,15 @@ type StyleFn = fn(*void, u32, str) -> (str, bool)
 type NetResult = struct { status: u16, status_text: str, url: str, headers: str, body: []const u8 }
 type NetFn = fn(*void, str, str, str, []const u8, *NetResult) -> bool
 
+// The page's Content Security Policy for inline content: (context, kind, nonce, text) -> allowed. Kind 0 is an inline script,
+// 1 an event handler attribute.
+type CspFn = fn(*void, u32, str, str) -> bool
+
 type Host = struct {
     d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool,
     fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool,
     view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool,
-    net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32,
+    net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32, csp_ctx: *void, csp_fn: CspFn, has_csp: bool,
     parent: *js.Interp, has_parent: bool, children: list.List[*js.Interp], dom_prog: *void, has_dom_prog: bool
 }
 
@@ -1069,6 +1073,28 @@ fn n_navigate(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     ret (js.undefv(), ok)
 }
 
+// cspAllows(kind, nonce, text): whether the page's policy lets this inline content run (true when there is no policy).
+fn n_csp_allows(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let h = host_of(it)
+    if !h.has_csp { ret (js.bool_value(true), ok) }
+    let (k, ke) = js.to_number(it, arg(args, 0usize))
+    if ke != ok { ret (js.undefv(), ke) }
+    let (nonce, ne) = sarg(it, args, 1usize)
+    if ne != ok { ret (js.undefv(), ne) }
+    let (text, te) = sarg(it, args, 2usize)
+    if te != ok { ret (js.undefv(), te) }
+    ret (js.bool_value(h.csp_fn(h.csp_ctx, u32(k), nonce, text)), ok)
+}
+
+// evalBlocked(): whether `eval` and `new Function` are refused; setEvalBlocked(b) changes it (the page runtime lifts it while
+// it compiles an event handler it already vetted).
+fn n_eval_blocked(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { ret (js.bool_value(it.no_eval), ok) }
+
+fn n_set_eval_blocked(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    it.no_eval = js.to_boolean(arg(args, 0usize))
+    ret (js.undefv(), ok)
+}
+
 // runScript(source, name): evaluates a classic script; false after an uncaught exception (already reported to the page).
 fn n_run_script(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (src, se) = sarg(it, args, 0usize)
@@ -1149,6 +1175,9 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "urlSet", 3u32, n_url_set)
     js.add_method(it, n, "navigate", 1u32, n_navigate)
     js.add_method(it, n, "runScript", 2u32, n_run_script)
+    js.add_method(it, n, "cspAllows", 3u32, n_csp_allows)
+    js.add_method(it, n, "evalBlocked", 0u32, n_eval_blocked)
+    js.add_method(it, n, "setEvalBlocked", 1u32, n_set_eval_blocked)
 }
 
 // A realm bound to `d`. `base` is the document's URL (location.href).
@@ -1203,6 +1232,15 @@ fn set_fetch(it: *js.Interp, ctx: *void, f: FetchFn) {
     h.fetch_ctx = ctx
     h.fetch_fn = f
     h.has_fetch = true
+}
+
+// Gives scripts the page's Content Security Policy for inline content, and turns off `eval` when `block_eval` is set.
+fn set_csp(it: *js.Interp, ctx: *void, f: CspFn, block_eval: bool) {
+    let h = host_of(it)
+    h.csp_ctx = ctx
+    h.csp_fn = f
+    h.has_csp = true
+    it.no_eval = block_eval
 }
 
 // Gives scripts the page's network (XMLHttpRequest, fetch).

@@ -42,6 +42,7 @@ use e.text.charset_cjk as cjk
 use e.text.fontset as fontset
 use e.ui.html_view as view
 use e.web.cssom as cssom
+use e.web.csp as csp
 use e.web.script as script
 
 error NotRenderable
@@ -60,8 +61,28 @@ type Page = struct {
     images: list.List[ImageEntry],
     renderer: *scene.Renderer, has_renderer: bool, font_base: usize,
     view: *view.View,
-    ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32,
+    ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32, csp: csp.PolicySet,
     box_map: []u32, box_rev: u64, has_box_map: bool
+}
+
+// --- Content Security Policy.
+
+fn csp_url_ok(p: *Page, directive: str, u: str) -> bool {
+    if !csp.enforced(p.csp) { ret true }
+    ret csp.url_allowed(p.pa, p.csp, directive, u, p.url, false, false)
+}
+
+fn csp_inline_ok(p: *Page, directive: str, nonce: str, text: str) -> bool {
+    if !csp.enforced(p.csp) { ret true }
+    ret csp.inline_allowed(p.pa, p.csp, directive, nonce, text)
+}
+
+// The script context's question about inline content: kind 0 an inline script, 1 an event handler attribute.
+fn csp_hook(ctx: *void, kind: u32, nonce: str, text: str) -> bool {
+    let p = mem.cast[*Page](ctx)
+    var directive = "script-src-elem"
+    if kind == 1u32 { directive = "script-src-attr" }
+    ret csp_inline_ok(p, directive, nonce, text)
 }
 
 // --- Small helpers.
@@ -271,6 +292,7 @@ fn push_sheet(p: *Page, out: *list.List[str], text_in: str, base: *const url.Url
         let (abs, good) = resolve_against(p.pa, base, imports[i])
         i += 1usize
         if !good { continue }
+        if !csp_url_ok(p, "style-src-elem", abs) { continue }
         let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
         if fe != ok || resp.status >= 400u16 { continue }
         let (sub_base, be) = url.parse(p.pa, abs, zero, false)
@@ -293,7 +315,10 @@ fn collect_sheets(p: *Page) -> []const str {
             let (media, has_media) = dom.get_attribute(d, cur, "media")
             if !has_media || sheet.media_matches(&env, p.pa, media) {
                 let (text, te) = dom.text_content(p.pa, d, cur)
-                if te == ok { push_sheet(p, &out, absolutize_css(p.pa, strip_cdata(p.pa, text), &p.base), &p.base, 0usize) }
+                let (nonce, has_nonce) = dom.get_attribute(d, cur, "nonce")
+                var inline_ok = true
+                if te == ok && !csp_inline_ok(p, "style-src-elem", nonce, text) { inline_ok = false }
+                if te == ok && inline_ok { push_sheet(p, &out, absolutize_css(p.pa, strip_cdata(p.pa, text), &p.base), &p.base, 0usize) }
             }
         } else if dom.is_html_named(d, cur, "link") {
             let (rel, has_rel) = dom.get_attribute(d, cur, "rel")
@@ -301,7 +326,7 @@ fn collect_sheets(p: *Page) -> []const str {
             let (media2, has_media2) = dom.get_attribute(d, cur, "media")
             if has_rel && has_href && has_token(rel, "stylesheet") && !has_token(rel, "alternate") && href.len > 0usize && (!has_media2 || sheet.media_matches(&env, p.pa, media2)) {
                 let (abs, good) = resolve_against(p.pa, &p.base, href)
-                if good {
+                if good && csp_url_ok(p, "style-src-elem", abs) {
                     let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
                     if fe == ok && resp.status < 400u16 {
                         let (sheet_base, be) = url.parse(p.pa, abs, zero, false)
@@ -343,6 +368,7 @@ fn load_web_fonts(p: *Page) {
             let f = faces[fi]
             fi += 1usize
             if f.url.len == 0usize || f.family.len == 0usize { continue }
+            if !csp_url_ok(p, "font-src", f.url) { continue }
             let (resp, fe) = fetch.fetch(p.client, get_request(f.url, p.url, fetch.Credentials.SameOrigin))
             if fe != ok || resp.status >= 400u16 || resp.body.len < 12usize { continue }
             var data: []const u8 = resp.body
@@ -373,6 +399,10 @@ fn image_entry(p: *Page, abs: str) -> *ImageEntry {
     var e: ImageEntry = zero
     e.url = abs
     e.state = 2u8
+    if !csp_url_ok(p, "img-src", abs) {
+        let blocked = list.push[ImageEntry](&p.images, e)
+        ret &p.images.items[p.images.len - 1usize]
+    }
     let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
     if fe == ok && resp.status < 400u16 && resp.body.len > 0usize {
         var st = io.SliceReader { data: resp.body, off: 0usize }
@@ -707,6 +737,7 @@ fn collapse_space(a: *mem.Arena, s: str) -> str {
 // back as text lines of headers and the body bytes.
 fn net_hook(ctx: *void, method: str, u: str, header_lines: str, body: []const u8, out: *script.NetResult) -> bool {
     let p = mem.cast[*Page](ctx)
+    if !csp_url_ok(p, "connect-src", u) { ret false }
     var m = http.Method.Get
     if str.eq(method, "HEAD") { m = http.Method.Head }
     if str.eq(method, "POST") { m = http.Method.Post }
@@ -753,6 +784,7 @@ fn net_hook(ctx: *void, method: str, u: str, header_lines: str, body: []const u8
 
 fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
     let p = mem.cast[*Page](ctx)
+    if !csp_url_ok(p, "script-src-elem", u) { ret ("", 0u16, false) }
     let (resp, fe) = fetch.fetch(p.client, get_request(u, p.url, fetch.Credentials.Include))
     if fe != ok { ret ("", 0u16, false) }
     let (text, de) = cjk.decode_sniffing_bom(p.pa, "UTF-8", resp.body)
@@ -897,6 +929,7 @@ fn start_scripts(p: *Page) {
     p.ctx = ctx
     p.scripted = true
     script.set_fetch(ctx, mem.cast[*void](p), fetch_text_hook)
+    if csp.enforced(p.csp) { script.set_csp(ctx, mem.cast[*void](p), csp_hook, !csp.eval_allowed(p.csp)) }
     script.set_net(ctx, mem.cast[*void](p), net_hook)
     script.set_view(ctx, mem.cast[*void](p), geom_hook, style_hook)
     p.seen_version = v.tree.version
@@ -952,6 +985,7 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     p.fonts = fonts
     p.has_renderer = false
     p.scripted = false
+    p.csp = csp.PolicySet { items: zero }
     p.has_box_map = false
     p.box_rev = 0u64
     p.seen_version = 0u64
@@ -963,6 +997,14 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     p.url = resp.url
     p.status = resp.status
     p.mime = fetch.mime_type(a, &resp)
+    var ch = 0usize
+    while ch < resp.headers.len {
+        if eq_fold(resp.headers[ch].name, "content-security-policy") {
+            let (hp, hpe) = csp.parse_set(a, resp.headers[ch].value, false)
+            if hpe == ok { p.csp = csp.merge(a, p.csp, hp) }
+        }
+        ch += 1usize
+    }
     let (final_url, ue) = url.parse(a, resp.url, zero, false)
     if ue != ok { ret (zero, LoadFailed) }
     p.base = final_url
@@ -988,6 +1030,19 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     html.set_xml_syntax(false)
     if pe != ok { ret (zero, LoadFailed) }
     p.tree = tree
+    // A <meta http-equiv="Content-Security-Policy"> adds a policy for the rest of the document.
+    var mcur = dom.next_in_tree(&p.tree, p.tree.root, p.tree.root)
+    while mcur != html.NONE {
+        if dom.is_html_named(&p.tree, mcur, "meta") {
+            let (he, has_he) = dom.get_attribute(&p.tree, mcur, "http-equiv")
+            let (mc, has_mc) = dom.get_attribute(&p.tree, mcur, "content")
+            if has_he && has_mc && eq_fold(str.trim(he), "content-security-policy") {
+                let (mp, mpe) = csp.parse_set(a, mc, false)
+                if mpe == ok { p.csp = csp.merge(a, p.csp, mp) }
+            }
+        }
+        mcur = dom.next_in_tree(&p.tree, p.tree.root, mcur)
+    }
     // <base href> changes the base for relative references.
     let d = &p.tree
     var cur = dom.next_in_tree(d, d.root, d.root)

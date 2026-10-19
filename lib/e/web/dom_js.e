@@ -8507,7 +8507,7 @@ fn part33(b: *str.Builder) -> err {
     try str.push(b, "    const baseUrl = documentBaseURL(doc);\n")
     try str.push(b, "    const isAsync = getAttributeValue(el, 'async') !== null;\n")
     try str.push(b, "    let run;\n")
-    try str.push(b, "    if (src === null) run = () => { N.runModule(baseUrl, text); };\n")
+    try str.push(b, "    if (src === null) run = () => { if (N.cspAllows(0, getAttributeValue(el, 'nonce') || '', text)) N.runModule(baseUrl, text); else fireScriptEvent(el, 'error'); };\n")
     try str.push(b, "    else {\n")
     try str.push(b, "      if (src === '') { scheduleTimer(() => fireScriptEvent(el, 'error'), 0, false, []); return; }\n")
     try str.push(b, "      const parsed = N.urlParse(src, baseUrl);\n")
@@ -8536,6 +8536,7 @@ fn part33(b: *str.Builder) -> err {
     try str.push(b, "    run();\n")
     try str.push(b, "    return;\n")
     try str.push(b, "  }\n")
+    try str.push(b, "  if (!N.cspAllows(0, getAttributeValue(el, 'nonce') || '', text)) { scheduleTimer(() => fireScriptEvent(el, 'error'), 0, false, []); return; }\n")
     try str.push(b, "  executeScript(el, text, documentBaseURL(doc));\n")
     try str.push(b, "}\n")
     try str.push(b, "elementInserted = function (el) { if (isScriptElement(el)) prepareScript(el, false); };\n")
@@ -8635,11 +8636,11 @@ fn part33(b: *str.Builder) -> err {
     try str.push(b, "};\n")
     try str.push(b, "const prevRemoved = elementRemoved;\n")
     try str.push(b, "elementRemoved = function (el, parent) {\n")
-    try str.push(b, "  prevRemoved(el, parent);\n")
     ret ok
 }
 
 fn part34(b: *str.Builder) -> err {
+    try str.push(b, "  prevRemoved(el, parent);\n")
     try str.push(b, "  refreshNamedFor(el);\n")
     try str.push(b, "};\n")
     try str.push(b, "const prevAttrChanged = elementAttributeChanged;\n")
@@ -8859,7 +8860,10 @@ fn part34(b: *str.Builder) -> err {
     try str.push(b, "  const setter = eventHandlerAttribute(type).set;\n")
     try str.push(b, "  if (value === null) { apply(setter, target, [null]); return; }\n")
     try str.push(b, "  let fn = null;\n")
-    try str.push(b, "  try { fn = compileHandler(el, type, value, windowTarget); } catch (e) { reportException(e); }\n")
+    try str.push(b, "  if (!N.cspAllows(1, getAttributeValue(el, 'nonce') || '', value)) { apply(setter, target, [null]); return; }\n")
+    try str.push(b, "  const evalWasBlocked = N.evalBlocked();\n")
+    try str.push(b, "  N.setEvalBlocked(false);\n")
+    try str.push(b, "  try { fn = compileHandler(el, type, value, windowTarget); } catch (e) { reportException(e); } finally { N.setEvalBlocked(evalWasBlocked); }\n")
     try str.push(b, "  apply(setter, target, [fn]);\n")
     try str.push(b, "}\n")
     try str.push(b, "const prevAttrHandlers = elementAttributeChanged;\n")
@@ -8886,14 +8890,14 @@ fn part34(b: *str.Builder) -> err {
     try str.push(b, "function checkOffset(node, offset) {\n")
     try str.push(b, "  if (nodeType(node) === DOCUMENT_TYPE_NODE) throw domError('InvalidNodeTypeError', 'The node provided is a doctype');\n")
     try str.push(b, "  if (offset > nodeLength(node)) throw domError('IndexSizeError', 'The offset ' + offset + ' is larger than the node\\'s length (' + nodeLength(node) + ').');\n")
-    try str.push(b, "}\n")
-    try str.push(b, "function newSelectionRange(startNode, startOffset, endNode, endOffset) {\n")
-    try str.push(b, "  const r = new Range();\n")
-    try str.push(b, "  const rs = slotOf(r);\n")
     ret ok
 }
 
 fn part35(b: *str.Builder) -> err {
+    try str.push(b, "}\n")
+    try str.push(b, "function newSelectionRange(startNode, startOffset, endNode, endOffset) {\n")
+    try str.push(b, "  const r = new Range();\n")
+    try str.push(b, "  const rs = slotOf(r);\n")
     try str.push(b, "  rs.startNode = startNode; rs.startOffset = startOffset; rs.endNode = endNode; rs.endOffset = endOffset;\n")
     try str.push(b, "  return r;\n")
     try str.push(b, "}\n")
@@ -9140,14 +9144,14 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "    if (stack[stack.length - 1] === top) stack.pop();\n")
     try str.push(b, "  }\n")
     try str.push(b, "}\n")
-    try str.push(b, "function showPopoverInternal(el, invoker) {\n")
-    try str.push(b, "  const state = popoverStateOf(el), data = popoverData(el);\n")
-    try str.push(b, "  let shouldRestoreFocus = false;\n")
-    try str.push(b, "  let ancestor = null;\n")
     ret ok
 }
 
 fn part36(b: *str.Builder) -> err {
+    try str.push(b, "function showPopoverInternal(el, invoker) {\n")
+    try str.push(b, "  const state = popoverStateOf(el), data = popoverData(el);\n")
+    try str.push(b, "  let shouldRestoreFocus = false;\n")
+    try str.push(b, "  let ancestor = null;\n")
     try str.push(b, "  if (state === 'auto' || state === 'hint') ancestor = topmostPopoverAncestor(el, invoker, state === 'hint' ? popoverStack.concat(hintStack) : popoverStack);\n")
     try str.push(b, "  if (!fireToggleEvent('beforetoggle', el, 'closed', 'open', true, invoker)) return;\n")
     try str.push(b, "  if (!checkPopoverValidity(el, false, false, invoker)) return;\n")
@@ -9394,14 +9398,14 @@ fn part36(b: *str.Builder) -> err {
     try str.push(b, "  fireToggleEvent('toggle', el, 'open', 'closed', false, undefined);\n")
     try str.push(b, "  const prev = d.previousFocus;\n")
     try str.push(b, "  d.previousFocus = null;\n")
-    try str.push(b, "  scheduleTimer(() => { const ev = new Event('close', { bubbles: false, cancelable: false }); slotOf(ev).isTrusted = true; dispatch(ev, el); }, 0, false, []);\n")
-    try str.push(b, "  if (prev !== null && prev.isConnected) { try { prev.focus(); } catch (e) {} }\n")
-    try str.push(b, "}\n")
-    try str.push(b, "mainDocument.addEventListener('keydown', event => {\n")
     ret ok
 }
 
 fn part37(b: *str.Builder) -> err {
+    try str.push(b, "  scheduleTimer(() => { const ev = new Event('close', { bubbles: false, cancelable: false }); slotOf(ev).isTrusted = true; dispatch(ev, el); }, 0, false, []);\n")
+    try str.push(b, "  if (prev !== null && prev.isConnected) { try { prev.focus(); } catch (e) {} }\n")
+    try str.push(b, "}\n")
+    try str.push(b, "mainDocument.addEventListener('keydown', event => {\n")
     try str.push(b, "  if (event.key !== 'Escape') return;\n")
     try str.push(b, "  for (const d of descendantsOf(mainDocument)) {\n")
     try str.push(b, "    if (nodeType(d) === ELEMENT_NODE && htmlLocal(d) === 'dialog' && slotOf(d).dialog && slotOf(d).dialog.modal) {\n")
@@ -9648,14 +9652,14 @@ fn part37(b: *str.Builder) -> err {
     try str.push(b, "    return parseFragment(element, markup);\n")
     try str.push(b, "  },\n")
     try str.push(b, "  getBoundingClientRect() { rangeSlot(this); return makeDOMRect(0, 0, 0, 0); },\n")
-    try str.push(b, "  getClientRects() { rangeSlot(this); return []; }\n")
-    try str.push(b, "});\n")
-    try str.push(b, "attributes(Range.prototype, {\n")
-    try str.push(b, "  commonAncestorContainer: { get() { const s = rangeSlot(this); return commonAncestor(s.startNode, s.endNode); } }\n")
     ret ok
 }
 
 fn part38(b: *str.Builder) -> err {
+    try str.push(b, "  getClientRects() { rangeSlot(this); return []; }\n")
+    try str.push(b, "});\n")
+    try str.push(b, "attributes(Range.prototype, {\n")
+    try str.push(b, "  commonAncestorContainer: { get() { const s = rangeSlot(this); return commonAncestor(s.startNode, s.endNode); } }\n")
     try str.push(b, "});\n")
     try str.push(b, "attributes(AbstractRange.prototype, {\n")
     try str.push(b, "  startContainer: { get() { const s = slotOf(this); if (!s || (!s.isRange && !s.isStaticRange)) illegal(); return s.startNode; } },\n")
@@ -9902,14 +9906,14 @@ fn part38(b: *str.Builder) -> err {
     try str.push(b, "function precedingInRoot(node, root) {\n")
     try str.push(b, "  if (node === root) return null;\n")
     try str.push(b, "  const sib = previousSibling(node);\n")
-    try str.push(b, "  if (sib === null) return parentNode(node);\n")
-    try str.push(b, "  let n = sib;\n")
-    try str.push(b, "  while (lastChild(n) !== null) n = lastChild(n);\n")
-    try str.push(b, "  return n;\n")
     ret ok
 }
 
 fn part39(b: *str.Builder) -> err {
+    try str.push(b, "  if (sib === null) return parentNode(node);\n")
+    try str.push(b, "  let n = sib;\n")
+    try str.push(b, "  while (lastChild(n) !== null) n = lastChild(n);\n")
+    try str.push(b, "  return n;\n")
     try str.push(b, "}\n")
     try str.push(b, "function iterate(iterator, next) {\n")
     try str.push(b, "  const s = niSlot(iterator);\n")
@@ -10156,14 +10160,14 @@ fn part39(b: *str.Builder) -> err {
     try str.push(b, "function queueMicrotaskForObservers() {\n")
     try str.push(b, "  if (mutationObserverMicrotaskQueued) return;\n")
     try str.push(b, "  mutationObserverMicrotaskQueued = true;\n")
-    try str.push(b, "  Promise.resolve().then(notifyMutationObservers);\n")
-    try str.push(b, "}\n")
-    try str.push(b, "function notifyMutationObservers() {\n")
-    try str.push(b, "  mutationObserverMicrotaskQueued = false;\n")
     ret ok
 }
 
 fn part40(b: *str.Builder) -> err {
+    try str.push(b, "  Promise.resolve().then(notifyMutationObservers);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function notifyMutationObservers() {\n")
+    try str.push(b, "  mutationObserverMicrotaskQueued = false;\n")
     try str.push(b, "  const signals = signalSlots.length > 0;\n")
     try str.push(b, "  const notify = observerNotifyList.splice(0, observerNotifyList.length);\n")
     try str.push(b, "  for (const mo of notify) {\n")
@@ -10410,14 +10414,14 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "  forEach(callback, thisArg = undefined) {\n")
     try str.push(b, "    const s = fdSlot(this);\n")
     try str.push(b, "    required(arguments, 1, 'forEach');\n")
-    try str.push(b, "    if (typeof callback !== 'function') throw new TypeError(\"Failed to execute 'forEach' on 'FormData': parameter 1 is not of type 'Function'.\");\n")
-    try str.push(b, "    for (let i = 0; i < s.entries.length; i++) apply(callback, thisArg, [s.entries[i][1], s.entries[i][0], this]);\n")
-    try str.push(b, "  },\n")
-    try str.push(b, "  keys() { fdSlot(this); return makeListIterator(this, 'key', s => s.entries); },\n")
     ret ok
 }
 
 fn part41(b: *str.Builder) -> err {
+    try str.push(b, "    if (typeof callback !== 'function') throw new TypeError(\"Failed to execute 'forEach' on 'FormData': parameter 1 is not of type 'Function'.\");\n")
+    try str.push(b, "    for (let i = 0; i < s.entries.length; i++) apply(callback, thisArg, [s.entries[i][1], s.entries[i][0], this]);\n")
+    try str.push(b, "  },\n")
+    try str.push(b, "  keys() { fdSlot(this); return makeListIterator(this, 'key', s => s.entries); },\n")
     try str.push(b, "  values() { fdSlot(this); return makeListIterator(this, 'value', s => s.entries); },\n")
     try str.push(b, "  entries() { fdSlot(this); return makeListIterator(this, 'key+value', s => s.entries); }\n")
     try str.push(b, "});\n")
@@ -10664,14 +10668,14 @@ fn part41(b: *str.Builder) -> err {
     try str.push(b, "operations(Request.prototype, {\n")
     try str.push(b, "  clone() {\n")
     try str.push(b, "    const s = reqSlot(this);\n")
-    try str.push(b, "    if (s.bodyUsed) throw new TypeError(\"Failed to execute 'clone' on 'Request': Request body is already used\");\n")
-    try str.push(b, "    const r = new Request(this);\n")
-    try str.push(b, "    return r;\n")
-    try str.push(b, "  }\n")
     ret ok
 }
 
 fn part42(b: *str.Builder) -> err {
+    try str.push(b, "    if (s.bodyUsed) throw new TypeError(\"Failed to execute 'clone' on 'Request': Request body is already used\");\n")
+    try str.push(b, "    const r = new Request(this);\n")
+    try str.push(b, "    return r;\n")
+    try str.push(b, "  }\n")
     try str.push(b, "});\n")
     try str.push(b, "bodyMixin(Request.prototype, false);\n")
     try str.push(b, "function Response(body = null, init = undefined) {\n")
@@ -10918,14 +10922,14 @@ fn part42(b: *str.Builder) -> err {
     try str.push(b, "      if (s.token !== token || !s.sendFlag) return;\n")
     try str.push(b, "      xhrComplete(this, raw, false);\n")
     try str.push(b, "    }, 0, false, []);\n")
-    try str.push(b, "  },\n")
-    try str.push(b, "  abort() {\n")
-    try str.push(b, "    const s = xhrSlot(this);\n")
-    try str.push(b, "    s.token++;\n")
     ret ok
 }
 
 fn part43(b: *str.Builder) -> err {
+    try str.push(b, "  },\n")
+    try str.push(b, "  abort() {\n")
+    try str.push(b, "    const s = xhrSlot(this);\n")
+    try str.push(b, "    s.token++;\n")
     try str.push(b, "    if (s.sendFlag || s.state === 2 || s.state === 3) {\n")
     try str.push(b, "      s.sendFlag = false; s.errorFlag = true;\n")
     try str.push(b, "      xhrReadyState(this, 4);\n")
@@ -11172,14 +11176,14 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "          if (end < 0) fail('unterminated attribute value');\n")
     try str.push(b, "          const raw = text.slice(pos + 1, end);\n")
     try str.push(b, "          if (raw.indexOf('<') >= 0) fail('< in an attribute value');\n")
-    try str.push(b, "          for (const ch of raw) if (ch === '\\n') line++;\n")
-    try str.push(b, "          attrs.push([an, decodeRefs(raw.replace(/[\\t\\n\\r]/g, ' '), true)]);\n")
-    try str.push(b, "          pos = end + 1;\n")
-    try str.push(b, "          if (attrs.filter(a => a[0] === an).length > 1) fail('duplicate attribute ' + an);\n")
     ret ok
 }
 
 fn part44(b: *str.Builder) -> err {
+    try str.push(b, "          for (const ch of raw) if (ch === '\\n') line++;\n")
+    try str.push(b, "          attrs.push([an, decodeRefs(raw.replace(/[\\t\\n\\r]/g, ' '), true)]);\n")
+    try str.push(b, "          pos = end + 1;\n")
+    try str.push(b, "          if (attrs.filter(a => a[0] === an).length > 1) fail('duplicate attribute ' + an);\n")
     try str.push(b, "        }\n")
     try str.push(b, "        let selfClosing = false;\n")
     try str.push(b, "        if (text[pos] === '/') { selfClosing = true; pos++; }\n")
@@ -11426,14 +11430,14 @@ fn part44(b: *str.Builder) -> err {
     try str.push(b, "      if ('cause' in v) out.cause = clone(v.cause);\n")
     try str.push(b, "      return out;\n")
     try str.push(b, "    } else if (isObject(v) && slotOf(v) && (slotOf(v).isNode || slotOf(v).isTarget || slotOf(v).isBlob === undefined && slotOf(v).isPlatform)) {\n")
-    try str.push(b, "      if (slotOf(v).isBlob) { out = v; }\n")
-    try str.push(b, "      else throw domError('DataCloneError', 'An object could not be cloned.');\n")
-    try str.push(b, "    } else if (slotOf(v) && slotOf(v).isBlob) out = v;\n")
-    try str.push(b, "    else if (Array.isArray(v)) { out = new Array(v.length); memory.set(v, out); for (const k of Object.keys(v)) out[k] = clone(v[k]); return out; }\n")
     ret ok
 }
 
 fn part45(b: *str.Builder) -> err {
+    try str.push(b, "      if (slotOf(v).isBlob) { out = v; }\n")
+    try str.push(b, "      else throw domError('DataCloneError', 'An object could not be cloned.');\n")
+    try str.push(b, "    } else if (slotOf(v) && slotOf(v).isBlob) out = v;\n")
+    try str.push(b, "    else if (Array.isArray(v)) { out = new Array(v.length); memory.set(v, out); for (const k of Object.keys(v)) out[k] = clone(v[k]); return out; }\n")
     try str.push(b, "    else {\n")
     try str.push(b, "      if (slotOf(v)) throw domError('DataCloneError', 'An object could not be cloned.');\n")
     try str.push(b, "      out = {};\n")
@@ -11667,7 +11671,7 @@ fn part45(b: *str.Builder) -> err {
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 634376)
+    var b = try str.builder(a, 634845)
     try part0(&b)
     try part1(&b)
     try part2(&b)

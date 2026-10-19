@@ -760,6 +760,7 @@ fn function_proto_noop(it: *js.Interp, this_val: js.Value, args: []const js.Valu
 
 // CreateDynamicFunction: `kind` 0 function, 1 generator, 2 async function, 3 async generator.
 fn dynamic_function(it: *js.Interp, args: []const js.Value, kind: u8) -> (js.Value, err) {
+    if it.no_eval { ret (js.undefv(), js.throw_value(it, js.make_error(it, it.protos.eval_error, "Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source of script in the Content Security Policy"))) }
     // new Function(p1, p2, ..., body)
     var params = ""
     var body = ""

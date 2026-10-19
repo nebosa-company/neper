@@ -147,7 +147,7 @@ type Interp = struct {
     sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool,
-    gens: list.List[*GenState], wasm: *void
+    gens: list.List[*GenState], wasm: *void, no_eval: bool
 }
 
 fn root_realm(it: *Interp) -> *Interp {
@@ -7475,6 +7475,7 @@ fn zero_prog() -> *ast.Program {
 // `eval(source)` called directly: runs in the caller's scope (a fresh scope in strict code).
 fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
     if !is_string(arg) { ret (arg, ok) }
+    if it.no_eval { ret (undefv(), throw_value(it, make_error(it, it.protos.eval_error, "Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source of script in the Content Security Policy"))) }
     let source = value_str(arg)
     var eo: early.EvalOpts = zero
     eo.strict = f.strict
