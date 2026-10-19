@@ -2384,4 +2384,5 @@ D5166	777	aarch64-macos is dyld-loaded, because the kernel kills a static arm64 
 D5167	915	macOS grows an os.syscall, the path surface and x86-64 through one Mach-O writer
 D5168	1243	macOS gets Dir, env and spawn: a seeded env_block, posix_spawn, and a parent-side stdio swap
 D5169	987	macOS threads are libSystem's pthreads, bound through slots the linker adds for the runtime
-D5170	658	macOS futex words are __ulock_wait and __ulock_wake
+D5170	659	macOS futex words are __ulock_wait and __ulock_wake
+D5171	758	macOS file mappings are mmap over reserved address space
