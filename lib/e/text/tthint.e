@@ -39,7 +39,7 @@ const MAX_SIZES: usize = 24usize
 const MAX_CALL: usize = 64usize
 const MAX_STEPS: usize = 2000000usize
 
-type Zone = struct { n: usize, org: []i64, cur: []i64, orus: []i64, tags: []i64, sh: []i64, ipd: []bool, mp: []i64, ends: []usize, nends: usize }
+type Zone = struct { n: usize, org: []i64, cur: []i64, orus: []i64, tags: []i64, sh: []i64, ipd: []bool, mp: []i64, lp: []i64, ends: []usize, nends: usize }
 type Gs = struct { rp0: i64, rp1: i64, rp2: i64, dual_x: i64, dual_y: i64, proj_x: i64, proj_y: i64, free_x: i64, free_y: i64, lp: i64, min_dist: i64, round_state: i64, auto_flip: bool, cvt_cut_in: i64, sw_cut_in: i64, sw_value: i64, delta_base: i64, delta_shift: i64, instruct_control: i64, scan_control: i64, scan_type: i64, gep0: usize, gep1: usize, gep2: usize }
 // A size of the face in one mode: its cvt and storage after `prep`, the graphics state `prep` left, and the twilight zone
 // with a copy of how `prep` left it (restored before every glyph so a glyph never sees another's twilight points).
@@ -196,6 +196,8 @@ fn zone_new(a: *mem.Arena, n: usize, nends: usize) -> (Zone, err) {
     let (ipd, e6) = mem.alloc[bool](a, n)
     if e6 != ok { ret (z, NoRoom) }
     let (mp, e8) = mem.alloc[i64](a, n)
+    let (lpp, e9) = mem.alloc[i64](a, n)
+    if e9 != ok { ret (z, NoRoom) }
     if e8 != ok { ret (z, NoRoom) }
     let (ends, e7) = mem.alloc[usize](a, nends)
     if e7 != ok { ret (z, NoRoom) }
@@ -207,6 +209,7 @@ fn zone_new(a: *mem.Arena, n: usize, nends: usize) -> (Zone, err) {
     z.sh = sh
     z.ipd = ipd
     z.mp = mp
+    z.lp = lpp
     z.ends = ends
     ret (z, ok)
 }
@@ -226,6 +229,7 @@ fn zone_clear(z: *Zone, n: usize) {
         z.sh[i] = 0i64
         z.ipd[i] = false
         z.mp[i] = 0i64
+        z.lp[i] = 0i64
         i += 1usize
     }
 }
@@ -743,6 +747,7 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
         ret
     }
     z.mp[p] = 0i64 - (i64(r) + 1i64)
+    z.lp[r] = i64(p) + 1i64
     if z.ipd[r] || z.mp[r] < 0i64 {
         z.sh[p] = z.sh[r]
         ret
@@ -801,6 +806,13 @@ fn ct_resolve(h: *Hinter, p: usize, depth: usize) {
         ret
     }
     ct_resolve(h, r, depth + 1usize)
+    if m < 0i64 && !z.ipd[r] && z.mp[r] >= 0i64 && z.lp[r] > 0i64 && usize(z.lp[r] - 1i64) != p {
+        // an earlier mate of a point that a later pair has taken: it keeps the shift of that pair
+        ct_resolve(h, usize(z.lp[r] - 1i64), depth + 1usize)
+        z.sh[p] = z.sh[r]
+        z.tags[p] = z.tags[p] | 64i64
+        ret
+    }
     if m > 0i64 || z.ipd[r] || z.mp[r] < 0i64 {
         z.sh[p] = z.sh[r]
         if (z.tags[r] & 64i64) != 0i64 { z.tags[p] = z.tags[p] | 64i64 }

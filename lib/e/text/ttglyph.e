@@ -519,6 +519,7 @@ fn zone_prepare(z: *tthint.Zone, n: usize, ends: usize) {
         z.sh[i] = 0i64
         z.ipd[i] = false
         z.mp[i] = 0i64
+        z.lp[i] = 0i64
         i += 1usize
     }
 }
