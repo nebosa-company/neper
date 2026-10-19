@@ -152,6 +152,8 @@ fn build_stats(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     let (m, e) = build_stat_n(a, t, cells, 1usize)
     if e != ok { ret (0usize, e) }
     cells[0usize].drive = .Focus
+    // the keyboard focus goes to the chosen Colors tab, not to the strip's middle
+    looks.aim(0usize, 40.0 - 452.5, 0.0)
     ret (m, e)
 }
 

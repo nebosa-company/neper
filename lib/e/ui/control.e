@@ -18356,15 +18356,31 @@ fn win3_chevron(a: *mem.Arena, ink: paint.Color, wide: bool, square: bool, scale
 // (#555555 over #AAAAAA below) and bottom, a line down each side alternating the two greys.
 fn win3_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Win3Dots](ctx)
-    let dark = style.hex(5592405u32)
-    let light = style.hex(11184810u32)
+    var dark = style.hex(5592405u32)
+    var light = style.hex(11184810u32)
+    // looks33: the ultra-flat tab strip's rectangle (its caller passes #5A5A5A) is #5A5A5A and #A5A5A5 in the live captures
+    if d.ink.red > 0.1 {
+        dark = style.hex(5921370u32)
+        light = style.hex(10855845u32)
+    }
     var x: f32 = 1.0
     while x < area.width - 1.0 {
         try win3_rect(b, area.x + x, area.y, 1.0, 1.0, dark)
         try win3_rect(b, area.x + x, area.y + 1.0, 1.0, 1.0, light)
-        try win3_rect(b, area.x + x, area.y + area.height - 2.0, 1.0, 1.0, dark)
-        try win3_rect(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, light)
+        if d.ink.red <= 0.1 {
+            try win3_rect(b, area.x + x, area.y + area.height - 2.0, 1.0, 1.0, dark)
+            try win3_rect(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, light)
+        }
         x += 2.0
+    }
+    if d.ink.red > 0.1 {
+        // the ultra strip's foot row runs on the other phase, from the corner
+        var foot: f32 = 0.0
+        while foot < area.width {
+            try win3_rect(b, area.x + foot, area.y + area.height - 2.0, 1.0, 1.0, dark)
+            try win3_rect(b, area.x + foot, area.y + area.height - 1.0, 1.0, 1.0, light)
+            foot += 2.0
+        }
     }
     var y: f32 = 1.0
     while y < area.height - 1.0 {
@@ -18975,7 +18991,7 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: picture_gap }, line, row_parts[0usize..count])
     var shown = 2usize
     if chosen && state.focused && state.focus_visible {
-        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(w - 4.0), h - 4.0)
+        let (dots, dots_error) = win3_dots(a, style.hex(5921370u32), max_zero(w - 4.0), h - 3.0)
         if dots_error != ok { ret (zero, dots_error) }
         let (dot_held, dot_held_error) = mem.alloc[widget.Node](a, 1usize)
         if dot_held_error != ok { ret (zero, TooLarge) }
