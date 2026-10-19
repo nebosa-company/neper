@@ -9681,7 +9681,9 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, control.TooLarge) }
             pair[0usize] = cells[at]
-            pair[1usize] = footer_px(a, grid.columns[at].width - 2.0, 0.0, 1.0, 20.0, 0xBCBCBCu32)
+            var edge_rule: u32 = 0xBCBCBCu32
+            if grid.theme.tokens.palette != .Dark { edge_rule = 0xBFBFBFu32 }
+            pair[1usize] = footer_px(a, grid.columns[at].width - 2.0, 0.0, 1.0, 20.0, edge_rule)
             cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width - 1.0, 20.0), pair[0usize..2usize])
         }
         if live_footer && footer_edged_on(grid) && text.len == 0usize && s.kind == CellKind.Picture {
@@ -9697,7 +9699,9 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             }
             if grid.look.footer_band.red < grid.look.footer_band.green - 0.05 {
                 trio_a = 0xEBEEF2u32
+                if grid.theme.tokens.palette != .Dark { trio_a = 0xE8EBEFu32 }
                 trio_b = 0xC7E0C8u32
+                if grid.theme.tokens.palette != .Dark { trio_b = 0xC9E1CBu32 }
             }
             trio[1usize] = footer_px(a, 0.0, 0.0, 1.0, 20.0, trio_a)
             trio[2usize] = footer_px(a, 1.0, 0.0, 1.0, 20.0, trio_b)
