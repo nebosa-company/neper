@@ -6401,7 +6401,7 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let (hv, has_h) = resolve_len(is.height, area_h)
         if is.height.kind == .Px && has_h {
             hspec = to_content_h(l, id, hv)
-        } else if (align == .Normal || align == .Stretch) && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced {
+        } else if (align == .Normal || align == .Stretch) && is.height.kind == .Auto && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced {
             hspec = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
         }
         flex_place_item(l, id, w, hspec)
@@ -6813,12 +6813,11 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -
             if all_last && free > 0.0f64 {
                 var al = is.align_self
                 if al == .Auto { al = cs.align_items }
-                let (hv0, has0) = resolve_len(is.height, -1.0f64)
                 if al == .Center {
                     pb.y += free / 2.0f64
                 } else if al == .End || al == .FlexEnd || al == .SelfEnd {
                     pb.y += free
-                } else if (al == .Normal || al == .Stretch) && !(is.height.kind == .Px && has0) {
+                } else if (al == .Normal || al == .Stretch) && is.height.kind == .Auto {
                     let wcontent = pb.w - horizontal_extras(pb)
                     flex_place_item(l, id, wcontent, pb.h - vertical_extras(pb) + free)
                 }

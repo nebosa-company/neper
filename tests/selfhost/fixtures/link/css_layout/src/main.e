@@ -402,5 +402,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 69. An absolute child of a grid in a named area aligns its static position inside that area.
     let (p69, ok69) = build(a, "<div style=\"display:grid;position:relative;width:22px;height:30px;grid:2px 20px 2px / 3px 14px 3px;align-items:center\"><div id=a style=\"position:absolute;grid-area:2/2/3/3;width:8px;height:6px\"></div></div>", "")
     if !ok69 || !near(rect_of(p69, "a").y, 9.0f64) { os.exit(106) }
+    // 70. A grid item with a content-sized height does not stretch.
+    let (p70, ok70) = build(a, "<div style=\"display:grid;width:100px;height:100px\"><div id=a style=\"height:max-content\"></div></div>", "")
+    if !ok70 || !near(rect_of(p70, "a").h, 0.0f64) { os.exit(107) }
     ret ok
 }
