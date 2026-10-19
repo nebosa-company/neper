@@ -296,6 +296,14 @@ fn set_look(rig: *Rig, look: Look) {
     let (aa_text, aa_error) = os.env(rig.a, "NEPER_TEXT_AA")
     if aa_error == ok && strs.eq(aa_text, "grayscale") { text_aa = scene.TextAa.Grayscale }
     if aa_error == ok && strs.eq(aa_text, "cleartype") { text_aa = scene.TextAa.ClearType }
+    // The Android look has two text modes: ChromeWin (default, how the Chrome-on-Windows references are drawn) and AndroidSkia (a
+    // device's Skia over FreeType). NEPER_LOOKS_ANDROID_TEXT=androidskia (any other value but empty or "chromewin" too) picks the
+    // second for that look; NEPER_TEXT_AA=androidskia / chromewin does it for any look.
+    if rig.tokens.profile == .MaterialLike { text_aa = scene.TextAa.ChromeWin }
+    let (android_text, android_error) = os.env(rig.a, "NEPER_LOOKS_ANDROID_TEXT")
+    if rig.tokens.profile == .MaterialLike && android_error == ok && android_text.len > 0usize && !strs.eq(android_text, "chromewin") { text_aa = scene.TextAa.AndroidSkia }
+    if aa_error == ok && strs.eq(aa_text, "androidskia") { text_aa = scene.TextAa.AndroidSkia }
+    if aa_error == ok && strs.eq(aa_text, "chromewin") { text_aa = scene.TextAa.ChromeWin }
     scene.set_text_aa(text_aa)
     // The Android look places and fits Roboto as Chromium's captures show it (scene.mat_warp).
     scene.set_mat_text(rig.tokens.profile == .MaterialLike)

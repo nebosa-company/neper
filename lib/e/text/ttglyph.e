@@ -19,7 +19,10 @@ var part_offset: i64 = zero
 
 fn set_trace_glyph(gid: i64) { trace_gid = gid }
 
-fn set_skip_programs(on: bool) { skip_programs = on }
+fn set_skip_programs(on: bool) {
+    skip_programs = on
+    tthint.set_symmetric(on)
+}
 
 // Whether a glyph whose program never reaches IUP[x] is still fitted to its advance when it is drawn: GDI draws it so, while the points its
 // programs leave, which the tap fonts read, are not fitted (tools/ctdump and the oracle's point comparison turn this off).

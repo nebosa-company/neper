@@ -1,0 +1,13 @@
+{
+ "android_text_modes": {
+  "name": "Android text modes",
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "android-text/words_side.png",
+    "notes": "ROUND 36: a second text mode for the Android look, scene.TextAa.AndroidSkia (a device's Skia over FreeType: unhinted outline, FreeType exact-area coverage with its conic chords, quarter pixel pen, Skia's pre-blend table with Android's constants), next to ChromeWin (Chrome on Windows, the default while the references are that). Switch: scene.set_text_aa, NEPER_TEXT_AA=androidskia, NEPER_LOOKS_ANDROID_TEXT=1. Checked against real FreeType 2.13 on 128 glyph cells (ftprobe.py): 99.71 % of ink pixels within 2 levels. See docs/ui/looks/android-text.md.",
+    "gaps": "No device or emulator capture exists, so the Android gamma constants (contrast 0, exponent 1.4) and the unhinted choice are from knowledge of Skia's Android config, not measured; FreeType's light auto-hinter is not implemented."
+   }
+  }
+ }
+}

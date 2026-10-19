@@ -93,7 +93,11 @@ var text_hidden: bool = false
 // It needs a font with `glyf` and instructions, a solid brush, a uniform scale and a whole pixel size, and an opaque canvas
 // under the glyphs for the exact blend; any text that is not so is drawn as `Grayscale`. The default is `Grayscale`: a look
 // that wants ClearType sets it (`ui.looks.set_look` does for the Windows profile; NEPER_TEXT_AA=grayscale turns it off).
-type TextAa = enum u8 { Grayscale, ClearType }
+// `ChromeWin` and `AndroidSkia` are the two ways the Android look draws Roboto (`draw_text_mat`, `e.gfx.dwtext`): `ChromeWin` is Chrome on
+// Windows (Skia over DirectWrite, the mode the Material references were captured in, the Android look's default), `AndroidSkia` a device's
+// Skia over FreeType (unhinted, exact-area grey coverage, quarter pixel pen, Android's pre-blend table). Another look ignores both unless
+// `AndroidSkia` is asked for, which draws any TrueType text that way.
+type TextAa = enum u8 { Grayscale, ClearType, ChromeWin, AndroidSkia }
 var text_aa: TextAa = zero
 
 fn set_text_aa(mode: TextAa) {
@@ -2168,6 +2172,8 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
 // The Android look's pre-blend tables (`dwtext.lut_build`), one per luminance key of the text colour, made on first use.
 var mat_luts: [2048]u8 = zero
 var mat_lut_built: [8]bool = zero
+var and_luts: [2048]u8 = zero
+var and_lut_built: [8]bool = zero
 
 // The whole pixel size a run is hinted at under a scale; 0 when it is out of the range the scratch holds.
 fn mat_ppem(size: f32, scale: f32) -> i64 {
@@ -2210,17 +2216,26 @@ fn draw_text_mat(s: *RendererState, state: DrawState, text: DrawText) -> bool {
         }
         l += 1usize
     }
-    let key = dwtext.lut_key(color.red, color.green, color.blue)
-    if !mat_lut_built[key] {
+    let android = text_aa == .AndroidSkia
+    var key = dwtext.lut_key(color.red, color.green, color.blue)
+    if android { key = dwtext.lut_key_android(color.red, color.green, color.blue) }
+    if android && !and_lut_built[key] {
+        dwtext.lut_build_android(key, and_luts[key * 256usize..key * 256usize + 256usize])
+        and_lut_built[key] = true
+    }
+    if !android && !mat_lut_built[key] {
         dwtext.lut_build(key, mat_luts[key * 256usize..key * 256usize + 256usize])
         mat_lut_built[key] = true
     }
-    let lut = mat_luts[key * 256usize..key * 256usize + 256usize]
+    var lut = mat_luts[key * 256usize..key * 256usize + 256usize]
+    if android { lut = and_luts[key * 256usize..key * 256usize + 256usize] }
     let canvas = s.canvases[state.layer].data
     let (sx0, sy0, sx1, sy1) = scissor_bounds(s, state.scissor)
     let premult = paint.premultiply(color)
     // The programs of a glyph that never reaches IUP[x] are not fitted to the advance here (that is GDI's habit, not DirectWrite's).
     ttglyph.set_end_fit(false)
+    // AndroidSkia draws the unhinted outline: the font's programs are not run.
+    ttglyph.set_skip_programs(android)
     l = 0usize
     while l < text.layout.lines.len {
         let line = &text.layout.lines[l]
@@ -2237,14 +2252,25 @@ fn draw_text_mat(s: *RendererState, state: DrawState, text: DrawText) -> bool {
                 let glyph = run.run.glyphs[g]
                 let quarter = math.floor[f32]((pen + glyph.offset_x * run.size * t.m00) * 4.0 + 0.5) * 0.25
                 let whole = math.floor[f32](quarter)
-                let sixth = math.floor[f32]((quarter - whole) * 6.0 + 0.5) / 6.0
+                var sixth = math.floor[f32]((quarter - whole) * 6.0 + 0.5) / 6.0
+                if android { sixth = quarter - whole }
                 let gx = i64(whole)
                 let gy = i64(math.floor[f32](t.m11 * (text.origin.y + run.origin.y - glyph.offset_y * run.size) + t.m12 + 0.5))
                 pen = pen + glyph.advance_x * run.size * t.m00
                 g += 1usize
                 let (outline, hint_error) = ttglyph.hint_glyph(hinter, s.arena, ppem, glyph.id, true)
                 if hint_error != ok { continue }
-                let (mask, drawn) = dwtext.rasterize(s.mat_buf, outline.cur, outline.tags, outline.ends, outline.nends, outline.n, ratio, sixth, lut)
+                var mask: dwtext.GlyphMask = zero
+                var drawn = false
+                if android {
+                    let (m, d) = dwtext.rasterize_ft(s.mat_buf, outline.cur, outline.tags, outline.ends, outline.nends, outline.n, ratio, sixth, lut)
+                    mask = m
+                    drawn = d
+                } else {
+                    let (m, d) = dwtext.rasterize(s.mat_buf, outline.cur, outline.tags, outline.ends, outline.nends, outline.n, ratio, sixth, lut)
+                    mask = m
+                    drawn = d
+                }
                 if !drawn { continue }
                 var my = 0usize
                 while my < mask.height {
@@ -2271,6 +2297,7 @@ fn draw_text_mat(s: *RendererState, state: DrawState, text: DrawText) -> bool {
         l += 1usize
     }
     ttglyph.set_end_fit(true)
+    ttglyph.set_skip_programs(false)
     ret true
 }
 
@@ -3338,7 +3365,7 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
         case .Image as draw:
             try draw_image(s, current, draw)
         case .Text as text:
-            if !(mat_text && draw_text_mat(s, current, text)) && !(text_aa == .ClearType && draw_text_lcd(s, current, text)) {
+            if !((mat_text || text_aa == .AndroidSkia) && draw_text_mat(s, current, text)) && !(text_aa == .ClearType && draw_text_lcd(s, current, text)) {
                 var f = fill_flattener(s, current.transform)
                 try text_edges(s, &f, text)
                 rasterize_edges(s, coverage)

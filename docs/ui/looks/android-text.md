@@ -68,3 +68,29 @@ in the reference), the slider's value label, the switch's icon label, the progre
 two-line cell and the date picker's weekday row (the spec-written CSS sets 400 where the look uses label-medium) are control or reference
 differences, not the rasteriser. The primary-tab disabled cell: Material Web does not dim a disabled tab. Glyphs where the hinter differs from
 DirectWrite by a sixth of a pixel: `a` at 14 px medium (84 %), `` ` ``, `^`, `*`.
+
+## A second mode: AndroidSkia (a device's Skia over FreeType), round 36
+
+The references are Chrome on Windows, so `ChromeWin` (everything above) stays the Android look's default. A phone draws Roboto with Skia over FreeType, so the
+renderer has a second mode, `scene.TextAa.AndroidSkia`, chosen at run time: `scene.set_text_aa(.AndroidSkia)`, `NEPER_TEXT_AA=androidskia` (any look; `chromewin`
+turns it back), or `NEPER_LOOKS_ANDROID_TEXT=1` (the Android look only). Unset, every PNG is as before (the Material, Windows, Linux, Cupertino and Neper sheets
+were re-rendered and are byte identical). No Android emulator or Skia build is on this machine, so the mode is built from what the renderer does, and its coverage is checked against FreeType itself.
+
+1. **Outline.** Unhinted (a modern device uses no or slight hinting with sub-pixel text; `FT_LOAD_TARGET_LIGHT` is the font auto-hinter, y only, which is not built here).
+   The glyph is `e.text.ttglyph` with the programs skipped (`set_skip_programs`), whose points are `mulfix(font unit, scale)` in 26.6 like `FT_Load_Glyph`;
+   `tthint.set_symmetric` rounds a negative product half away from zero as `FT_MulFix` does (the hinter's own half-up cost one 64th on a descender and 4 levels).
+2. **Pen.** x to a quarter pixel (Skia's sub-pixel position, `floor(4x + 0.5) / 4`), added to the outline as 16/64 steps (`FT_Outline_Translate`); baseline to a whole line.
+3. **Coverage.** `dwtext.rasterize_ft`: FreeType's smooth rasteriser. Exact area of the non-zero fill under each pixel, `floor(256 * area)` capped at 255. Its conics are cut into
+   2^k chords (`gray_render_conic`: the second difference in 24.8 pixels is quartered per doubling until it is at most a quarter pixel), a coarser flattening than the curve; with a
+   fine flattening the glyphs came out 0.03 px too fat and only 67 % of ink matched, so the chord count is part of the model. Implied on-curve midpoints are the integer `(a + b) / 2` of `FT_Outline_Decompose`.
+4. **Table.** Skia's pre-blend (`dwtext.lut_build_android`): A8 text keeps one luminance, `SkComputeLuminance` of the text colour, top three bits; contrast 0 and a power-law
+   luminance with exponent 1.4 (`SK_GAMMA_CONTRAST` and `SK_GAMMA_EXPONENT` of Skia in the Android framework's SkUserConfig, from memory of that file, not checked against a device;
+   stock Skia is contrast 0.5 with sRGB, Chrome's Android build uses its own). Black text turns thinner than `ChromeWin` (linear-light blending, no contrast): see `words_side.png`.
+
+**Validation** (`scripts/material/ftprobe.py`, needs freetype-py, numpy, Pillow). `material_android_text probe` renders 128 black cells (16 glyphs at 11, 12, 14, 16, 22 and 28 px, 32 two-glyph words at 14 and 16 px)
+in `AndroidSkia`; the script renders the same glyphs with the real FreeType 2.13 (`FT_LOAD_NO_HINTING`, `FT_RENDER_MODE_NORMAL`, outline translated per quarter), applies the same table, blends black over each cell's own
+background and counts ink pixels within 2 levels: **10 622 of 10 653 = 99.71 %** (worst glyph pixel 5 levels, the pre-blend table amplifies a raw 1 to 2 level coverage difference to 3 to 5; 11 px glyphs 100 %).
+The whole-pixel placement is searched, the quarter too for single glyphs, since placement is layout and not coverage; the one word where the layout's second pen is a quarter left of hmtx (`re` at 14 px, `r` advance 4.90 px) is matched with that quarter, and is a shared `ChromeWin` layout matter.
+Sheets: `docs/ui/looks/android-text/words_side.png` (top `ChromeWin`, bottom `AndroidSkia`, type scale) and `probe_side.png`; built by `examples/looks/material_android_text.e [probe]`.
+
+Not done: FreeType's light auto-hinter (`FT_LOAD_TARGET_LIGHT`), LCD and fake bold; the constants above need a check against a device capture when one exists.
