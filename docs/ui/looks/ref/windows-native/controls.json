@@ -13862,5 +13862,1737 @@
     "h": 90
    }
   ]
+ },
+ "dark/x-header-explorer-hot@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-header-explorer-hot@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-header-explorer-pressed@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-header-explorer-pressed@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-header-explorer-rest@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-header-explorer-rest@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-header-explorer-sort-up@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-header-explorer-sort-up@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-header-itemsview-hot@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-header-itemsview-hot@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-header-itemsview-pressed@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-header-itemsview-pressed@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-header-itemsview-rest@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-header-itemsview-rest@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-header-itemsview-sort-up@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-header-itemsview-sort-up@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-listview-checkboxes-hover@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/x-listview-checkboxes-hover@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/x-listview-checkboxes-selected@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/x-listview-checkboxes-selected@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/x-listview-checkboxes@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "dark/x-listview-checkboxes@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "dark/x-progress-explorer-determinate@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-progress-explorer-determinate@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/x-progress-explorer-disabled@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-progress-explorer-disabled@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/x-progress-explorer-empty@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-progress-explorer-empty@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/x-progress-explorer-error@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-progress-explorer-error@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/x-progress-explorer-full@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-progress-explorer-full@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/x-progress-explorer-paused@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "dark/x-progress-explorer-paused@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "dark/x-statusbar-explorer@1.5x.png": {
+  "size": [
+   450,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Ready",
+    "x": 0,
+    "y": 54,
+    "w": 450,
+    "h": 36
+   }
+  ]
+ },
+ "dark/x-statusbar-explorer@1x.png": {
+  "size": [
+   300,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Ready",
+    "x": 0,
+    "y": 37,
+    "w": 300,
+    "h": 23
+   }
+  ]
+ },
+ "dark/x-tab-explorer@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "dark/x-tab-explorer@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "dark/x-toolbar-icons-checked@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 34
+   }
+  ]
+ },
+ "dark/x-toolbar-icons-checked@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 26
+   }
+  ]
+ },
+ "dark/x-toolbar-icons-hot@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 34
+   }
+  ]
+ },
+ "dark/x-toolbar-icons-hot@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 26
+   }
+  ]
+ },
+ "dark/x-toolbar-icons-rest@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 34
+   }
+  ]
+ },
+ "dark/x-toolbar-icons-rest@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 26
+   }
+  ]
+ },
+ "dark/x-tooltip-wrapped@1.5x.png": {
+  "size": [
+   390,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 30,
+    "y": 21,
+    "w": 150,
+    "h": 42
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "A longer tooltip text that wraps onto more than one line",
+    "x": 45,
+    "y": 78,
+    "w": 261,
+    "h": 55
+   }
+  ]
+ },
+ "dark/x-tooltip-wrapped@1x.png": {
+  "size": [
+   260,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 20,
+    "y": 14,
+    "w": 100,
+    "h": 28
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "A longer tooltip text that wraps onto more than one line",
+    "x": 30,
+    "y": 52,
+    "w": 118,
+    "h": 50
+   }
+  ]
+ },
+ "dark/x-tree-checkboxes-checked@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/x-tree-checkboxes-checked@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "dark/x-tree-checkboxes@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "dark/x-tree-checkboxes@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/x-header-explorer-hot@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-header-explorer-hot@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-header-explorer-pressed@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-header-explorer-pressed@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-header-explorer-rest@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-header-explorer-rest@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-header-explorer-sort-up@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-header-explorer-sort-up@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-header-itemsview-hot@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-header-itemsview-hot@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-header-itemsview-pressed@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-header-itemsview-pressed@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-header-itemsview-rest@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-header-itemsview-rest@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-header-itemsview-sort-up@1.5x.png": {
+  "size": [
+   375,
+   60
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 15,
+    "y": 12,
+    "w": 339,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-header-itemsview-sort-up@1x.png": {
+  "size": [
+   250,
+   40
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysHeader32",
+    "text": "",
+    "x": 10,
+    "y": 8,
+    "w": 226,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-listview-checkboxes-hover@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/x-listview-checkboxes-hover@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/x-listview-checkboxes-selected@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/x-listview-checkboxes-selected@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/x-listview-checkboxes@1.5x.png": {
+  "size": [
+   375,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 339,
+    "h": 195
+   }
+  ]
+ },
+ "light/x-listview-checkboxes@1x.png": {
+  "size": [
+   250,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysListView32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 226,
+    "h": 130
+   }
+  ]
+ },
+ "light/x-progress-explorer-determinate@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-progress-explorer-determinate@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/x-progress-explorer-disabled@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-progress-explorer-disabled@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/x-progress-explorer-empty@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-progress-explorer-empty@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/x-progress-explorer-error@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-progress-explorer-error@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/x-progress-explorer-full@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-progress-explorer-full@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/x-progress-explorer-paused@1.5x.png": {
+  "size": [
+   315,
+   66
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 24,
+    "y": 21,
+    "w": 267,
+    "h": 24
+   }
+  ]
+ },
+ "light/x-progress-explorer-paused@1x.png": {
+  "size": [
+   210,
+   44
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_progress32",
+    "text": "",
+    "x": 16,
+    "y": 14,
+    "w": 178,
+    "h": 16
+   }
+  ]
+ },
+ "light/x-statusbar-explorer@1.5x.png": {
+  "size": [
+   450,
+   90
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Ready",
+    "x": 0,
+    "y": 54,
+    "w": 450,
+    "h": 36
+   }
+  ]
+ },
+ "light/x-statusbar-explorer@1x.png": {
+  "size": [
+   300,
+   60
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "msctls_statusbar32",
+    "text": "Ready",
+    "x": 0,
+    "y": 37,
+    "w": 300,
+    "h": 23
+   }
+  ]
+ },
+ "light/x-tab-explorer@1.5x.png": {
+  "size": [
+   345,
+   180
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 18,
+    "y": 15,
+    "w": 309,
+    "h": 150
+   }
+  ]
+ },
+ "light/x-tab-explorer@1x.png": {
+  "size": [
+   230,
+   120
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTabControl32",
+    "text": "",
+    "x": 12,
+    "y": 10,
+    "w": 206,
+    "h": 100
+   }
+  ]
+ },
+ "light/x-toolbar-icons-checked@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 34
+   }
+  ]
+ },
+ "light/x-toolbar-icons-checked@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 26
+   }
+  ]
+ },
+ "light/x-toolbar-icons-hot@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 34
+   }
+  ]
+ },
+ "light/x-toolbar-icons-hot@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 26
+   }
+  ]
+ },
+ "light/x-toolbar-icons-rest@1.5x.png": {
+  "size": [
+   390,
+   96
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 390,
+    "h": 34
+   }
+  ]
+ },
+ "light/x-toolbar-icons-rest@1x.png": {
+  "size": [
+   260,
+   64
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "ToolbarWindow32",
+    "text": "",
+    "x": 0,
+    "y": 0,
+    "w": 260,
+    "h": 26
+   }
+  ]
+ },
+ "light/x-tooltip-wrapped@1.5x.png": {
+  "size": [
+   390,
+   195
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 30,
+    "y": 21,
+    "w": 150,
+    "h": 42
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "A longer tooltip text that wraps onto more than one line",
+    "x": 45,
+    "y": 78,
+    "w": 261,
+    "h": 55
+   }
+  ]
+ },
+ "light/x-tooltip-wrapped@1x.png": {
+  "size": [
+   260,
+   130
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "Button",
+    "text": "Hover me",
+    "x": 20,
+    "y": 14,
+    "w": 100,
+    "h": 28
+   },
+   {
+    "class": "tooltips_class32",
+    "text": "A longer tooltip text that wraps onto more than one line",
+    "x": 30,
+    "y": 52,
+    "w": 118,
+    "h": 50
+   }
+  ]
+ },
+ "light/x-tree-checkboxes-checked@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/x-tree-checkboxes-checked@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
+ },
+ "light/x-tree-checkboxes@1.5x.png": {
+  "size": [
+   300,
+   225
+  ],
+  "dpi": 144,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 24,
+    "y": 15,
+    "w": 252,
+    "h": 195
+   }
+  ]
+ },
+ "light/x-tree-checkboxes@1x.png": {
+  "size": [
+   200,
+   150
+  ],
+  "dpi": 96,
+  "controls": [
+   {
+    "class": "SysTreeView32",
+    "text": "",
+    "x": 16,
+    "y": 10,
+    "w": 168,
+    "h": 130
+   }
+  ]
  }
 }
