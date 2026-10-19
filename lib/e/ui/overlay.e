@@ -855,7 +855,7 @@ fn linux_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, 
 // ---- end the Linux look, popup menu -----------------------------------------------------------------------------------
 
 // One command of a v2 menu (D975), keyed `item_key`, as `menu_panel` draws it.
-fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
+fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool, snap: f32) -> (widget.Node, err) {
     if t.tokens.profile == .CupertinoLike {
         let (cup, cup_error) = cupertino_menu_row(a, item_key, submenu_key, t, c, slotted)
         ret (cup, cup_error)
@@ -983,7 +983,10 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
         held[0usize] = keys_node
         var before = 24.0 - gap
         if android { before = 16.0 }
-        parts[p] = widget.padded(0u64, before, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+        // Blink lays the shortcut out from the right edge of the unrounded row, then snaps the paint: `snap` is how far the box was widened to the pixel grid.
+        var after: f32 = 0.0
+        if android && snap > 0.0 { after = snap }
+        parts[p] = widget.padded(0u64, before, 0.0, after, 0.0, style.defaults(), held[0usize..1usize])
         p += 1usize
     }
     if has_submenu {
@@ -1103,6 +1106,36 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         if commands[k].checkable || commands[k].checked || commands[k].radio || commands[k].pictured || commands[k].has_picture { slotted = true }
         k += 1usize
     }
+    var snap: f32 = 0.0
+    var android_across: f32 = 0.0
+    if t.tokens.profile == .MaterialLike {
+        // md-menu is as wide as its widest row (16 sides, the 24 dp icon and 16 after it, the label, 16 before a trailing shortcut), 112 to 280.
+        var body_caption = control.text_options()
+        body_caption.role = .BodyLarge
+        body_caption.wrap = .None
+        var keys_caption = body_caption
+        keys_caption.role = .LabelSmall
+        android_across = 112.0
+        var m = 0usize
+        while m < commands.len {
+            let cm = &commands[m]
+            let (label_w, _label_fit, _label_base, label_error) = control.run_metrics_faced(a, t, body_caption, cm.label)
+            if label_error != ok { ret (zero, label_error) }
+            var row_w = 32.0 + label_w
+            if slotted { row_w += 40.0 }
+            if cm.shortcut.len > 0usize {
+                let (keys_w, _keys_fit, _keys_base, keys_error) = control.run_metrics_faced(a, t, keys_caption, cm.shortcut)
+                if keys_error != ok { ret (zero, keys_error) }
+                row_w += 16.0 + keys_w
+            }
+            if row_w > android_across { android_across = row_w }
+            m += 1usize
+        }
+        if android_across > 280.0 { android_across = 280.0 }
+        // Blink paints the box on the pixel grid (a shaped width of 167.6 is 168 wide, with a sharp edge), not on a fraction of one.
+        snap = math.floor[f32](android_across + 0.5) - android_across
+        android_across += snap
+    }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize * commands.len + 2usize)
     if rows_error != ok { ret (zero, TooLarge) }
     var n = 0usize
@@ -1162,7 +1195,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         }
         let item_key = key + 1u64 + u64(i)
         let submenu_key = key + 1024u64 + 16u64 * u64(i)
-        let (made, made_error) = menu_row_of(a, item_key, submenu_key, t, c, slotted)
+        let (made, made_error) = menu_row_of(a, item_key, submenu_key, t, c, slotted, snap)
         if made_error != ok { ret (zero, made_error) }
         rows[n] = made
         n += 1usize
@@ -1187,32 +1220,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     var sheet_style = control.surface_style(t, raised)
     if t.tokens.profile == .MaterialLike {
         sheet_style.shade = 2u8
-        // md-menu is as wide as its widest row (16 sides, the 24 dp icon and 16 after it, the label, 16 before a trailing shortcut), 112 to 280.
-        var body_caption = control.text_options()
-        body_caption.role = .BodyLarge
-        body_caption.wrap = .None
-        var keys_caption = body_caption
-        keys_caption.role = .LabelSmall
-        var across: f32 = 112.0
-        var m = 0usize
-        while m < commands.len {
-            let cm = &commands[m]
-            let (label_w, _label_fit, _label_base, label_error) = control.run_metrics_faced(a, t, body_caption, cm.label)
-            if label_error != ok { ret (zero, label_error) }
-            var row_w = 32.0 + label_w
-            if slotted { row_w += 40.0 }
-            if cm.shortcut.len > 0usize {
-                let (keys_w, _keys_fit, _keys_base, keys_error) = control.run_metrics_faced(a, t, keys_caption, cm.shortcut)
-                if keys_error != ok { ret (zero, keys_error) }
-                row_w += 16.0 + keys_w
-            }
-            if row_w > across { across = row_w }
-            m += 1usize
-        }
-        if across > 280.0 { across = 280.0 }
-        // Blink paints the box on the pixel grid (a shaped width of 167.6 is 168 wide, with a sharp edge), not on a fraction of one.
-        across = math.floor[f32](across + 0.5)
-        sheet_style.width = style.Length { Px: across }
+        sheet_style.width = style.Length { Px: android_across }
     }
     sheet_style.padding.top = style.Length { Px: rim }
     sheet_style.padding.bottom = style.Length { Px: rim }
