@@ -1572,6 +1572,10 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
         }
         pass += 1usize
     }
+    if parent.display == .Flex || parent.display == .InlineFlex || parent.display == .Grid || parent.display == .InlineGrid {
+        s.floating = .None
+        s.clear = .None
+    }
     finish(&s)
     s.extras = list.slice_const[Extra](&ap.extras)
     ret (s, true, ok)

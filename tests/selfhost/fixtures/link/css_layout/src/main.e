@@ -463,5 +463,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 88. An auto minimum keeps a zero-basis item at its min-content width in the container's max-content width.
     let (p88, ok88) = build(a, "<div id=t style=\"display:flex;width:max-content\"><div style=\"flex:0 0 0px;border:10px solid\"><div style=\"width:80px\"></div></div></div>", "")
     if !ok88 || !near(rect_of(p88, "t").w, 100.0f64) { os.exit(125) }
+    // 89. A row flex container in a vertical writing mode runs top to bottom and is as wide as its tallest line of items.
+    let (p89, ok89) = build(a, "<div id=t style=\"display:flex;flex-flow:row;writing-mode:vertical-rl;height:90px\"><div id=i style=\"line-height:0\"><span style=\"display:inline-block;width:15px;height:45px\"></span><br><span style=\"display:inline-block;width:15px;height:45px\"></span></div></div>", "")
+    if !ok89 { os.exit(126) }
+    if !near(rect_of(p89, "i").h, 45.0f64) { os.exit(127) }
+    if !near(rect_of(p89, "i").w, 30.0f64) { os.exit(128) }
+    if !near(rect_of(p89, "t").w, 30.0f64) { os.exit(129) }
+    let (p90, ok90) = build(a, "<div id=t style=\"display:flex;flex-flow:row;writing-mode:vertical-rl;height:90px;border:2px solid\"><div id=i style=\"line-height:0;float:right\"><span style=\"display:inline-block;width:15px;height:45px\"></span><br><span style=\"display:inline-block;width:15px;height:45px\"></span></div></div>", "")
+    if !ok90 || !near(rect_of(p90, "t").w, 34.0f64) { os.exit(130) }
+    if !near(rect_of(p90, "i").w, 30.0f64) { os.exit(131) }
     ret ok
 }
