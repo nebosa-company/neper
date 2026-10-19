@@ -965,10 +965,6 @@ fn ct_scale(h: *Hinter) {
 fn vm_iup(h: *Hinter, x_axis: bool) {
     if !x_axis {
         h.iup_y = true
-        if h.ct_part && !h.ct_done && h.cleartype && h.ctA != 0i64 && h.ctX > 0i64 && h.zone[1usize].n > 4usize {
-            ct_scale(h)
-            h.ct_done = true
-        }
     }
     var ax = 1usize
     var mask = 16i64
@@ -1121,7 +1117,7 @@ fn vm_shpix(h: *Hinter) {
         if h.cleartype && h.gs.free_y == 0i64 && vm_pt(h, zi, p) {
             if h.in_delta || h.composite { blocked = true }
         }
-        if h.cleartype && h.gs.free_x == 0i64 && vm_pt(h, zi, p) && vm_delta_skipped(h, zi, usize(p)) { blocked = true }
+        if h.cleartype && h.gs.free_x == 0i64 && h.in_delta && vm_pt(h, zi, p) && vm_delta_skipped(h, zi, usize(p)) { blocked = true }
         if !blocked && vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }
         k += 1i64
     }
