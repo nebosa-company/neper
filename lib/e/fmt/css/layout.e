@@ -4815,6 +4815,13 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             i += 1usize
         }
         avail += gap_main * f64(n - 1usize)
+        // An auto-height column container still grows to its min-height (and stops at its max-height).
+        if !row {
+            let (cmin, has_cmin) = resolve_len(cs.min_height, ch)
+            let (cmax, has_cmax) = resolve_len(cs.max_height, ch)
+            if cs.max_height.kind == .Px && has_cmax { avail = minf(avail, to_content_h(l, b, cmax)) }
+            if cs.min_height.kind == .Px && has_cmin { avail = maxf(avail, to_content_h(l, b, cmin)) }
+        }
     }
     let (line_start, ls_e) = mem.alloc[usize](l.a, n + 1usize)
     let (line_cross, lc_e) = mem.alloc[f64](l.a, n + 1usize)

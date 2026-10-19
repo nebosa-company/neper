@@ -413,5 +413,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 72. In a column flex container `justify-content: right` is the start of the block axis.
     let (p72, ok72) = build(a, "<div style=\"display:flex;flex-direction:column;height:100px;justify-content:right\"><div id=a style=\"height:10px\"></div></div>", "")
     if !ok72 || !near(rect_of(p72, "a").y, 0.0f64) { os.exit(109) }
+    // 73. An auto-height column flexbox justifies within its min-height.
+    let (p73, ok73) = build(a, "<div style=\"display:flex;flex-direction:column;min-height:100px;justify-content:center\"><div id=a style=\"height:10px\"></div></div>", "")
+    if !ok73 || !near(rect_of(p73, "a").y, 45.0f64) { os.exit(110) }
     ret ok
 }
