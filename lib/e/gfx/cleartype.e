@@ -351,7 +351,112 @@ fn r_line_to(sc: *Scratch, x: i64, y: i64) {
     sc.lasty = y
 }
 
-// A conic arc: split until each piece is monotone in y, then scanned.
+// The length in bits of a whole number.
+fn r_bits(v: i64) -> i64 {
+    var n = 0i64
+    var u = v
+    if u < 0i64 { u = 0i64 - u }
+    while u > 0i64 {
+        n += 1i64
+        u = u >> 1u32
+    }
+    ret n
+}
+
+// How coarse GDI makes a conic: the lengths in bits of twice the area of the triangle of its three points and of the distance its ends are
+// apart along x (base units) add up to 29 or more for a conic it keeps on a grid of 2^level base units, level = (bits - 26) / 3, and 0 below.
+// Measured on probe fonts (the fitted conics are right in 99.6 % of 485 at 29 to 31 bits, 97.7 % of 488 at 32) and on the Segoe UI and
+// Tahoma atlases (every one of the 69 conics a glyph's pixels decide for).
+fn r_level(x1: i64, y1: i64, x2: i64, y2: i64, x3: i64, y3: i64) -> i64 {
+    let bx0 = (x1 + PHALF) >> 10u32
+    let bx1 = (x2 + PHALF) >> 10u32
+    let bx2 = (x3 + PHALF) >> 10u32
+    let by0 = (y1 + PHALF) >> 10u32
+    let by1 = (y2 + PHALF) >> 10u32
+    let by2 = (y3 + PHALF) >> 10u32
+    let bits = r_bits((bx1 - bx0) * (by2 - by0) - (by1 - by0) * (bx2 - bx0)) + r_bits(bx2 - bx0)
+    if bits < 29i64 { ret 0i64 }
+    ret (bits - 26i64) / 3i64
+}
+
+type Coarse = struct { x1: i64, y1: i64, x2: i64, y2: i64, x3: i64, y3: i64 }
+
+// The conic on its grid of 2^level base units, along each axis in the direction the conic runs: the first point goes to the nearest multiple
+// (a tie to the lower one), the others to the nearest multiple of their distance from the first (a tie to the higher one). Along x with
+// level 1 nothing changes, the x of a hinted point being a multiple of six.
+fn r_coarsen(level: i64, x1: i64, y1: i64, x2: i64, y2: i64, x3: i64, y3: i64) -> Coarse {
+    let sh = u32(level)
+    let half = (1i64 << sh) >> 1u32
+    var sy = 1i64
+    if y3 < y1 { sy = -1i64 }
+    let b0 = sy * ((y1 + PHALF) >> 10u32)
+    let f0 = ((b0 + half - 1i64) >> sh) << sh
+    let n1 = f0 + (((sy * ((y2 + PHALF) >> 10u32) - b0 + half) >> sh) << sh)
+    let n2 = f0 + (((sy * ((y3 + PHALF) >> 10u32) - b0 + half) >> sh) << sh)
+    var out = Coarse { x1: x1, y1: (sy * f0) * PSCALE - PHALF, x2: x2, y2: (sy * n1) * PSCALE - PHALF, x3: x3, y3: (sy * n2) * PSCALE - PHALF }
+    if level > 1i64 {
+        var sx = 1i64
+        if x3 < x1 { sx = -1i64 }
+        let c0 = sx * ((x1 + PHALF) >> 10u32)
+        let g0 = ((c0 + half - 1i64) >> sh) << sh
+        let m1 = g0 + (((sx * ((x2 + PHALF) >> 10u32) - c0 + half) >> sh) << sh)
+        let m2 = g0 + (((sx * ((x3 + PHALF) >> 10u32) - c0 + half) >> sh) << sh)
+        out.x1 = (sx * g0) * PSCALE - PHALF
+        out.x2 = (sx * m1) * PSCALE - PHALF
+        out.x3 = (sx * m2) * PSCALE - PHALF
+    }
+    ret out
+}
+
+// The point where a conic turns on `axis` (0 the first coordinate, 1 the second) and the two control points that go with the pieces on either
+// side of it. GDI cuts a conic that is not monotone on an axis at that point and rounds all three to whole base units (probe fonts: 98.9 % of
+// 3780 domes with feet of unequal height, against 92.5 % for the exact curve). `inside` is false when the conic does not turn inside.
+type ConicCut = struct { inside: bool, mx: i64, my: i64, c1x: i64, c1y: i64, c2x: i64, c2y: i64 }
+
+fn r_round(v: f64) -> i64 { ret i64(math.floor[f64](v + 0.5f64)) }
+
+fn r_cut(sx: i64, sy: i64, cx: i64, cy: i64, ex: i64, ey: i64, axis: i64) -> ConicCut {
+    var out = ConicCut { inside: false, mx: 0i64, my: 0i64, c1x: 0i64, c1y: 0i64, c2x: 0i64, c2y: 0i64 }
+    let fsx = f64((sx + PHALF) >> 10u32)
+    let fsy = f64((sy + PHALF) >> 10u32)
+    let fcx = f64((cx + PHALF) >> 10u32)
+    let fcy = f64((cy + PHALF) >> 10u32)
+    let fex = f64((ex + PHALF) >> 10u32)
+    let fey = f64((ey + PHALF) >> 10u32)
+    var num = fsx - fcx
+    var den = fsx - 2.0f64 * fcx + fex
+    if axis == 1i64 {
+        num = fsy - fcy
+        den = fsy - 2.0f64 * fcy + fey
+    }
+    if !(den > 0.0000001f64 || den < -0.0000001f64) { ret out }
+    let t = num / den
+    if !(t > 0.0f64 && t < 1.0f64) { ret out }
+    let u = 1.0f64 - t
+    let mx = r_round(u * u * fsx + 2.0f64 * t * u * fcx + t * t * fex)
+    let my = r_round(u * u * fsy + 2.0f64 * t * u * fcy + t * t * fey)
+    var c1x = r_round(fsx + t * (fcx - fsx))
+    var c1y = r_round(fsy + t * (fcy - fsy))
+    var c2x = r_round(fcx + t * (fex - fcx))
+    var c2y = r_round(fcy + t * (fey - fcy))
+    if axis == 0i64 {
+        c1x = mx
+        c2x = mx
+    } else {
+        c1y = my
+        c2y = my
+    }
+    out.inside = true
+    out.mx = mx * PSCALE - PHALF
+    out.my = my * PSCALE - PHALF
+    out.c1x = c1x * PSCALE - PHALF
+    out.c1y = c1y * PSCALE - PHALF
+    out.c2x = c2x * PSCALE - PHALF
+    out.c2y = c2y * PSCALE - PHALF
+    ret out
+}
+
+// A conic arc: cut at the turning points of both axes, then every piece, monotone in y, is put on its grid and scanned.
 fn r_conic_to(sc: *Scratch, cx: i64, cy: i64, x: i64, y: i64) {
     var ax: [72]i64 = zero
     var ay: [72]i64 = zero
@@ -363,6 +468,8 @@ fn r_conic_to(sc: *Scratch, cx: i64, cy: i64, x: i64, y: i64) {
     ax[0usize] = x
     ay[0usize] = y
     while !sc.over {
+        let x1 = ax[a + 2usize]
+        let x2 = ax[a + 1usize]
         let y1 = ay[a + 2usize]
         let y2 = ay[a + 1usize]
         let y3 = ay[a]
@@ -373,30 +480,52 @@ fn r_conic_to(sc: *Scratch, cx: i64, cy: i64, x: i64, y: i64) {
             ymin = y3
             ymax = y1
         }
+        var xmin = x1
+        var xmax = x3
+        if x1 > x3 {
+            xmin = x3
+            xmax = x1
+        }
+        var axis = -1i64
         if y2 < r_floor(ymin) || y2 > r_ceil(ymax) {
+            axis = 1i64
+        } else if x2 < xmin || x2 > xmax {
+            axis = 0i64
+        }
+        if axis >= 0i64 {
             if a + 5usize >= MAX_ARC {
                 sc.over = true
                 ret
             }
-            // Split_Conic: the arc at `a` becomes two joined arcs at `a` and `a + 2`.
+            // the arc at `a` becomes two joined arcs at `a` and `a + 2`
             let p0x = ax[a]
             let p1x = ax[a + 1usize]
             let p2x = ax[a + 2usize]
             let p0y = ay[a]
             let p1y = ay[a + 1usize]
             let p2y = ay[a + 2usize]
+            let cut = r_cut(p2x, p2y, p1x, p1y, p0x, p0y, axis)
             ax[a + 4usize] = p2x
-            let xa = p0x + p1x
-            let xb = p1x + p2x
-            ax[a + 3usize] = xb >> 1u32
-            ax[a + 2usize] = (xa + xb) >> 2u32
-            ax[a + 1usize] = xa >> 1u32
             ay[a + 4usize] = p2y
-            let ya = p0y + p1y
-            let yb = p1y + p2y
-            ay[a + 3usize] = yb >> 1u32
-            ay[a + 2usize] = (ya + yb) >> 2u32
-            ay[a + 1usize] = ya >> 1u32
+            if cut.inside {
+                ax[a + 3usize] = cut.c1x
+                ay[a + 3usize] = cut.c1y
+                ax[a + 2usize] = cut.mx
+                ay[a + 2usize] = cut.my
+                ax[a + 1usize] = cut.c2x
+                ay[a + 1usize] = cut.c2y
+            } else {
+                let xa = p0x + p1x
+                let xb = p1x + p2x
+                ax[a + 3usize] = xb >> 1u32
+                ax[a + 2usize] = (xa + xb) >> 2u32
+                ax[a + 1usize] = xa >> 1u32
+                let ya = p0y + p1y
+                let yb = p1y + p2y
+                ay[a + 3usize] = yb >> 1u32
+                ay[a + 2usize] = (ya + yb) >> 2u32
+                ay[a + 1usize] = ya >> 1u32
+            }
             a += 2usize
             continue
         } else if y1 != y3 {
@@ -407,7 +536,12 @@ fn r_conic_to(sc: *Scratch, cx: i64, cy: i64, x: i64, y: i64) {
                 r_new_profile(sc, stb)
                 if sc.over { ret }
             }
-            r_arc(sc, ax[a + 2usize], y1, ax[a + 1usize], y2, ax[a], y3, stb == 2i64)
+            var grid = Coarse { x1: x1, y1: y1, x2: x2, y2: y2, x3: x3, y3: y3 }
+            if !sc.flipped {
+                let level = r_level(x1, y1, x2, y2, x3, y3)
+                if level > 0i64 { grid = r_coarsen(level, x1, y1, x2, y2, x3, y3) }
+            }
+            r_arc(sc, grid.x1, grid.y1, grid.x2, grid.y2, grid.x3, grid.y3, stb == 2i64)
         }
         sc.lastx = x3
         sc.lasty = y3
