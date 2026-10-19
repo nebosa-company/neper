@@ -199,6 +199,7 @@ fn run_all(ctx: *Ctx) {
     var dir = ""
     var list_path = ""
     var show = false
+    var trace = false
     var floor = 0usize
     var strict_all = false
     var i = 0usize
@@ -207,6 +208,8 @@ fn run_all(ctx: *Ctx) {
             // the program name
         } else if str.eq(args[i], "--show") {
             show = true
+        } else if str.eq(args[i], "--trace") {
+            trace = true
         } else if str.eq(args[i], "--strict") {
             strict_all = true
         } else if str.eq(args[i], "--floor") {
@@ -284,6 +287,7 @@ fn run_all(ctx: *Ctx) {
             continue
         }
         total += 1usize
+        if trace { let tp = io.printf["{}\n"](path) }
         var pass = false
         var why = ""
         let use_strict = only_strict || strict_all
@@ -402,6 +406,7 @@ fn run_all(ctx: *Ctx) {
                     }
                 }
                 js.agents_shutdown(it)
+                js.shutdown_generators(it)
             }
         }
         if pass {

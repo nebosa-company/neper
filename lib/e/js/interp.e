@@ -141,7 +141,8 @@ type Interp = struct {
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
     sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
-    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool
+    pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool,
+    gens: list.List[*GenState]
 }
 
 fn root_realm(it: *Interp) -> *Interp {
@@ -7628,6 +7629,7 @@ const GS_DONE: u8 = 3u8
 const RM_NEXT: u8 = 0u8
 const RM_THROW: u8 = 1u8
 const RM_RETURN: u8 = 2u8
+const RM_KILL: u8 = 3u8
 
 fn gen_state_of(f: *const Frame) -> *GenState { ret mem.cast[*GenState](f.gen) }
 
@@ -7692,6 +7694,7 @@ fn gen_resume(it: *Interp, gs: *GenState, mode: u8, val: Value) -> (Value, bool,
             ret (undefv(), true, throw_range(it, "cannot start generator thread"))
         }
         let de = thread.detach(th)
+        let ge = list.push[*GenState](&root_realm(it).gens, gs)
     } else {
         sync.event_set(&gs.gen_ev)
     }
@@ -7715,8 +7718,31 @@ fn gen_suspend(it: *Interp, gs: *GenState, v: Value, raw: bool) -> (u8, Value) {
     gs.saved_depth = it.depth
     sync.event_set(&gs.caller_ev)
     sync.event_wait(&gs.gen_ev)
+    if gs.mode == RM_KILL {
+        gs.state = GS_DONE
+        sync.event_set(&gs.caller_ev)
+        var never = sync.event(false, false)
+        sync.event_wait(&never)
+    }
     it.depth = gs.saved_depth
     ret (gs.mode, gs.send)
+}
+
+// Parks every abandoned generator thread of the realm on its own stack, off the arena, so the arena can be reset: a thread left waiting on an event
+// word in reset memory is woken by whatever event later lands at that address.
+fn shutdown_generators(it: *Interp) {
+    let root = root_realm(it)
+    var i = 0usize
+    while i < root.gens.len {
+        let gs = root.gens.items[i]
+        if gs.state == GS_SUSPENDED {
+            gs.mode = RM_KILL
+            sync.event_set(&gs.gen_ev)
+            sync.event_wait(&gs.caller_ev)
+        }
+        i += 1usize
+    }
+    root.gens.len = 0usize
 }
 
 // `yield v` inside a generator body.

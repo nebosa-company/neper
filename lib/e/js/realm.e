@@ -1715,6 +1715,8 @@ fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err) {
     it.registry = reg
     let (jl, jle) = list.init[js.Job](a, 16usize)
     it.jobs = jl
+    let (gl, gle) = list.init[*js.GenState](a, 8usize)
+    it.gens = gl
     it.hole = js.new_symbol(it, "hole", true)
     it.protos.object = js.new_obj(it, js.C_OBJECT, js.null_obj())
     it.protos.function = js.new_obj(it, js.C_FUNCTION, it.protos.object)
