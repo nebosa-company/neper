@@ -875,7 +875,8 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
     }
     let slot = control.if_else(touch, 24.0, 18.0)
     var gap = control.if_else(touch, 12.0, 8.0)
-    if android { gap = 16.0 }
+    // md-menu-item puts a 16 dp gap between its slots, not on both sides of the filler: the gaps are paddings below.
+    if android { gap = 0.0 }
     var role: style.TextRole = .BodyMedium
     if touch { role = .BodyLarge }
     let line = style.text_style(t.tokens, role).line_height
@@ -937,6 +938,12 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
         } else {
             parts[p] = widget.box(0u64, control.sized_style(slot, slot), zero)
         }
+        if android {
+            let (lead, lead_error) = mem.alloc[widget.Node](a, 1usize)
+            if lead_error != ok { ret (zero, TooLarge) }
+            lead[0usize] = parts[p]
+            parts[p] = widget.padded(0u64, 0.0, 0.0, 16.0, 0.0, style.defaults(), lead[0usize..1usize])
+        }
         p += 1usize
     }
     var caption = control.text_options()
@@ -969,7 +976,7 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = keys_node
         var before = 24.0 - gap
-        if android { before = 0.0 }
+        if android { before = 16.0 }
         parts[p] = widget.padded(0u64, before, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
         p += 1usize
     }
@@ -977,6 +984,12 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
         let (arrow, arrow_error) = control.icon_square(a, muted, .ChevronRight, slot)
         if arrow_error != ok { ret (zero, arrow_error) }
         parts[p] = arrow
+        if android {
+            let (tail, tail_error) = mem.alloc[widget.Node](a, 1usize)
+            if tail_error != ok { ret (zero, TooLarge) }
+            tail[0usize] = arrow
+            parts[p] = widget.padded(0u64, 16.0, 0.0, 0.0, 0.0, style.defaults(), tail[0usize..1usize])
+        }
         p += 1usize
     }
     var line_style = style.defaults()

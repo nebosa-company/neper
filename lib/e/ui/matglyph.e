@@ -268,6 +268,46 @@ fn mat_settings(b: *geometry.PathBuilder, x: f32, y: f32, w: f32, h: f32) -> err
     ret ok
 }
 
+fn mat_refresh(b: *geometry.PathBuilder, x: f32, y: f32, w: f32, h: f32) -> err {
+    try geometry.move_to(b, geometry.Point { x: x + w * 0.73542, y: y + h * 0.26458 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.675, y: y + h * 0.20417 }, geometry.Point { x: x + w * 0.59208, y: y + h * 0.16667 }, geometry.Point { x: x + w * 0.5, y: y + h * 0.16667 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.31583, y: y + h * 0.16667 }, geometry.Point { x: x + w * 0.16708, y: y + h * 0.31583 }, geometry.Point { x: x + w * 0.16708, y: y + h * 0.5 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.16708, y: y + h * 0.68417 }, geometry.Point { x: x + w * 0.31583, y: y + h * 0.83333 }, geometry.Point { x: x + w * 0.5, y: y + h * 0.83333 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.65542, y: y + h * 0.83333 }, geometry.Point { x: x + w * 0.785, y: y + h * 0.72708 }, geometry.Point { x: x + w * 0.82208, y: y + h * 0.58333 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.73542, y: y + h * 0.58333 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.70125, y: y + h * 0.68042 }, geometry.Point { x: x + w * 0.60875, y: y + h * 0.75 }, geometry.Point { x: x + w * 0.5, y: y + h * 0.75 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.36208, y: y + h * 0.75 }, geometry.Point { x: x + w * 0.25, y: y + h * 0.63792 }, geometry.Point { x: x + w * 0.25, y: y + h * 0.5 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.25, y: y + h * 0.36208 }, geometry.Point { x: x + w * 0.36208, y: y + h * 0.25 }, geometry.Point { x: x + w * 0.5, y: y + h * 0.25 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.56917, y: y + h * 0.25 }, geometry.Point { x: x + w * 0.63083, y: y + h * 0.27875 }, geometry.Point { x: x + w * 0.67583, y: y + h * 0.32417 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.54167, y: y + h * 0.45833 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.83333, y: y + h * 0.45833 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.83333, y: y + h * 0.16667 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.73542, y: y + h * 0.26458 })
+    try geometry.close_path(b)
+    ret ok
+}
+
+fn mat_image(b: *geometry.PathBuilder, x: f32, y: f32, w: f32, h: f32) -> err {
+    try geometry.move_to(b, geometry.Point { x: x + w * 0.875, y: y + h * 0.79167 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.875, y: y + h * 0.20833 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.875, y: y + h * 0.1625 }, geometry.Point { x: x + w * 0.8375, y: y + h * 0.125 }, geometry.Point { x: x + w * 0.79167, y: y + h * 0.125 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.20833, y: y + h * 0.125 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.1625, y: y + h * 0.125 }, geometry.Point { x: x + w * 0.125, y: y + h * 0.1625 }, geometry.Point { x: x + w * 0.125, y: y + h * 0.20833 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.125, y: y + h * 0.79167 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.125, y: y + h * 0.8375 }, geometry.Point { x: x + w * 0.1625, y: y + h * 0.875 }, geometry.Point { x: x + w * 0.20833, y: y + h * 0.875 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.79167, y: y + h * 0.875 })
+    try geometry.cubic_to(b, geometry.Point { x: x + w * 0.8375, y: y + h * 0.875 }, geometry.Point { x: x + w * 0.875, y: y + h * 0.8375 }, geometry.Point { x: x + w * 0.875, y: y + h * 0.79167 })
+    try geometry.close_path(b)
+    try geometry.move_to(b, geometry.Point { x: x + w * 0.35417, y: y + h * 0.5625 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.45833, y: y + h * 0.68792 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.60417, y: y + h * 0.5 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.79167, y: y + h * 0.75 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.20833, y: y + h * 0.75 })
+    try geometry.line_to(b, geometry.Point { x: x + w * 0.35417, y: y + h * 0.5625 })
+    try geometry.close_path(b)
+    ret ok
+}
+
 fn mat_person(b: *geometry.PathBuilder, x: f32, y: f32, w: f32, h: f32) -> err {
     try geometry.move_to(b, geometry.Point { x: x + w * 0.5, y: y + h * 0.5 })
     try geometry.cubic_to(b, geometry.Point { x: x + w * 0.59208, y: y + h * 0.5 }, geometry.Point { x: x + w * 0.66667, y: y + h * 0.42542 }, geometry.Point { x: x + w * 0.66667, y: y + h * 0.33333 })

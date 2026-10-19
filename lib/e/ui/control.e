@@ -23525,7 +23525,7 @@ fn chip_icon_stroke(t: *const Theme) -> f32 {
 fn set_material_icons(on: bool) { looks_material_icons = on }
 
 fn material_has_icon(kind: GlyphKind) -> bool {
-    ret kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings
+    ret kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings || kind == .Refresh || kind == .Picture
 }
 
 fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bool, err) {
@@ -23567,6 +23567,10 @@ fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bo
         try matglyph.mat_more(&builder, x, y, w, h)
     } else if g.kind == .Settings {
         try matglyph.mat_settings(&builder, x, y, w, h)
+    } else if g.kind == .Refresh {
+        try matglyph.mat_refresh(&builder, x, y, w, h)
+    } else if g.kind == .Picture {
+        try matglyph.mat_image(&builder, x, y, w, h)
     } else {
         made = false
     }
