@@ -18359,7 +18359,8 @@ fn win3_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var dark = style.hex(5592405u32)
     var light = style.hex(11184810u32)
     // looks33: the ultra-flat tab strip's rectangle (its caller passes #5A5A5A) is #5A5A5A and #A5A5A5 in the live captures
-    if d.ink.red > 0.1 {
+    var ultra = d.ink.red > 0.34 && d.ink.red < 0.37 && d.ink.green > 0.34 && d.ink.green < 0.37
+    if ultra {
         dark = style.hex(5921370u32)
         light = style.hex(10855845u32)
     }
@@ -18367,13 +18368,13 @@ fn win3_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     while x < area.width - 1.0 {
         try win3_rect(b, area.x + x, area.y, 1.0, 1.0, dark)
         try win3_rect(b, area.x + x, area.y + 1.0, 1.0, 1.0, light)
-        if d.ink.red <= 0.1 {
+        if !ultra {
             try win3_rect(b, area.x + x, area.y + area.height - 2.0, 1.0, 1.0, dark)
             try win3_rect(b, area.x + x, area.y + area.height - 1.0, 1.0, 1.0, light)
         }
         x += 2.0
     }
-    if d.ink.red > 0.1 {
+    if ultra {
         // the ultra strip's foot row runs on the other phase, from the corner
         var foot: f32 = 0.0
         while foot < area.width {
