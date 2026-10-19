@@ -4749,7 +4749,7 @@ fn seed_memory_signatures(c: *Checker, module_index: usize) -> err {
     ret ok
 }
 
-fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool, atomic_module: usize, has_atomic: bool, linux_target: bool, neperos_target: bool) -> err {
+fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool, atomic_module: usize, has_atomic: bool, linux_target: bool, neperos_target: bool, macos_target: bool) -> err {
     let file = make_type(.Named, "File", os_module)
     let process = make_type(.Named, "Proc", os_module)
     let clock = make_type(.Named, "Clock", os_module)
@@ -4881,7 +4881,7 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     // own -- a negative errno on failure -- so it is an `isize` and not an `err`, and
     // turning one into the other is what the `e.os` wrappers over it are for. Seeded on
     // Linux alone, which is where the intrinsic exists.
-    if linux_target {
+    if linux_target || macos_target {
         let isize_type = make_type(.Integer, "isize", os_module)
         let (syscall_index, syscall_error) = add_seeded_function(c, os_module, "syscall", isize_type, false)
         if syscall_error != ok { ret syscall_error }
@@ -4927,6 +4927,9 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
             try add_seeded_parameter(c, open_index, "a", arena_pointer)
             try add_seeded_parameter(c, open_index, "path", string_type)
             try add_seeded_parameter(c, open_index, "flags", flags)
+        }
+        // macOS writes readdir in its e.os variant over `syscall` (getdirentries64).
+        if !neperos_target && !macos_target {
             let (readdir_index, readdir_error) = add_seeded_function(c, os_module, "readdir", entries, true)
             if readdir_error != ok { ret readdir_error }
             try add_seeded_parameter(c, readdir_index, "a", arena_pointer)
@@ -4964,7 +4967,7 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     if has_memory { try seed_memory_signatures(c, mem_module) }
     let (os_module, has_os) = graph.find_module(g, "e.os")
     let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
-    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic, same(g.os, "linux"), same(g.os, "neperos")) }
+    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic, same(g.os, "linux"), same(g.os, "neperos"), same(g.os, "macos")) }
     if has_os && same(g.os, "none") && same(g.arch, "aarch64") { try seed_kernel_signatures(c, os_module) }
     if has_os && same(g.os, "neperos") {
         let (yield_index, yield_error) = add_seeded_function(c, os_module, "yield", make_type(.Void, "void", os_module), false)

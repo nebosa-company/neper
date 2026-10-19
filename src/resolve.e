@@ -454,7 +454,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "thread_detach", .Value, .Intrinsic)
     try seed(r, g, "e.os", "stdout", .Value, .Intrinsic)
     try seed(r, g, "e.os", "stderr", .Value, .Intrinsic)
-    if !same(g.os, "neperos") { try seed(r, g, "e.os", "readdir", .Value, .Intrinsic) }
+    if !same(g.os, "neperos") && !same(g.os, "macos") { try seed(r, g, "e.os", "readdir", .Value, .Intrinsic) }
     try seed(r, g, "e.os", "spawn", .Value, .Intrinsic)
     try seed(r, g, "e.os", "dlsym", .Value, .Intrinsic)
     try seed(r, g, "e.os", "wait", .Value, .Intrinsic)
@@ -465,7 +465,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "clock", .Value, .Intrinsic)
     // Section 5: `os.syscall` exists on Linux alone, so on any other target the name is
     // an unknown name like any other rather than something that fails when called.
-    if same(g.os, "linux") { try seed(r, g, "e.os", "syscall", .Value, .Intrinsic) }
+    if same(g.os, "linux") || same(g.os, "macos") { try seed(r, g, "e.os", "syscall", .Value, .Intrinsic) }
     // (D2127) A NeperOS program gives up its time slice; (D2128) and rendezvous over an
     // endpoint capability.
     if same(g.os, "neperos") {
