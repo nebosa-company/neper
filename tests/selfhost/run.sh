@@ -4241,6 +4241,11 @@ text_tthint_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$text_tthint_written" = 'executable written' ]
 chmod +x "$test_build/text-tthint-selfhost"
 "$test_build/text-tthint-selfhost"
+# The GDI glyph oracle (docs/ui/looks/ref/windows-native/glyphs) against hinting + ClearType: every glyph exact in exact.txt must still match (passes when the Windows fonts are absent, as they are here).
+text_oracle_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_cleartype_oracle/src/main.e" "$repo" x64 linux "$test_build/text-cleartype-oracle-selfhost" -j 2)
+[ "$text_oracle_written" = 'executable written' ]
+chmod +x "$test_build/text-cleartype-oracle-selfhost"
+"$test_build/text-cleartype-oracle-selfhost" --dir "$repo/docs/ui/looks/ref/windows-native/glyphs"
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 text_math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_math/src/main.e" "$repo" x64 linux "$test_build/text-math-selfhost" -j 2)
 [ "$text_math_written" = 'executable written' ]

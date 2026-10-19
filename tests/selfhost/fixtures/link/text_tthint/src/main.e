@@ -2,7 +2,7 @@
 // the Python reference interpreter gave for the same font (a fixture-local copy of the font is never made: the font is read
 // from the Windows font directory and the whole check passes when it is not there). The outline checksums cover every point of
 // the nine glyphs "labelmoRS" and their advances; the image checksum covers the 36 x 83 pixels of "Sample label" in black on
-// white after the gamma blend. Each check exits with its own code.
+// white after the gamma blend (GDI's, byte for byte: the sum moved when the blend became exact). Each check exits with its own code.
 
 use e.fs
 use e.gfx.cleartype
@@ -104,8 +104,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (l, l_error) = ttglyph.hint_glyph(h, a, 12i64, lg, true)
     if l_error != ok || l.n != 4usize || l.adv != 192i64 { ret tthint.Trap }
     if l.cur[0usize] != 134i64 || l.cur[2usize] != 64i64 || l.cur[5usize] != 576i64 { ret tthint.Trap }
-    if glyph_sum(h, a, bytes, sub, "labelmoRS", true) != 15483273i64 { ret tthint.Trap }
+    if glyph_sum(h, a, bytes, sub, "labelmoRS", true) != 15472296i64 { ret tthint.Trap }
     if glyph_sum(h, a, bytes, sub, "labelmoRS", false) != 15505486i64 { ret tthint.Trap }
-    if image_sum(h, a, bytes, sub, "Sample label") != 271674872i64 { ret tthint.Trap }
+    if image_sum(h, a, bytes, sub, "Sample label") != 271558393i64 { ret tthint.Trap }
     ret ok
 }

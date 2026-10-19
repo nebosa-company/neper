@@ -2094,9 +2094,16 @@ fn draw_text_lcd(s: *RendererState, state: DrawState, text: DrawText) -> bool {
                 var weight: f64 = f64(color.alpha)
                 if state.has_mask { weight = weight * f64(s.masks[state.mask].data[index]) }
                 if canvas[at + 3usize] >= 0.9999 {
-                    canvas[at] = cleartype.blend_a(canvas[at], color.red, f64(kr) / 6.0 * weight)
-                    canvas[at + 1usize] = cleartype.blend_a(canvas[at + 1usize], color.green, f64(kg) / 6.0 * weight)
-                    canvas[at + 2usize] = cleartype.blend_a(canvas[at + 2usize], color.blue, f64(kb) / 6.0 * weight)
+                    if weight == 1.0 {
+                        // opaque text over an opaque pixel: GDI's blend, byte for byte
+                        canvas[at] = cleartype.blend(canvas[at], color.red, kr)
+                        canvas[at + 1usize] = cleartype.blend(canvas[at + 1usize], color.green, kg)
+                        canvas[at + 2usize] = cleartype.blend(canvas[at + 2usize], color.blue, kb)
+                    } else {
+                        canvas[at] = cleartype.blend_a(canvas[at], color.red, f64(kr) / 6.0 * weight)
+                        canvas[at + 1usize] = cleartype.blend_a(canvas[at + 1usize], color.green, f64(kg) / 6.0 * weight)
+                        canvas[at + 2usize] = cleartype.blend_a(canvas[at + 2usize], color.blue, f64(kb) / 6.0 * weight)
+                    }
                 } else {
                     var plain: f32 = f32(f64(kr + kg + kb) / 18.0)
                     if state.has_mask { plain = plain * s.masks[state.mask].data[index] }

@@ -9,6 +9,21 @@ use e.mem
 use e.text.shape
 use e.text.tthint
 
+// The glyph programs are not run when set: the points stay as scaled and the phantom points as rounded (the state a program starts from;
+// the oracle tool compares it with a tap font whose glyphs have no programs).
+var skip_programs: bool = zero
+var trace_gid: i64 = -1i64
+var top_glyph: usize = zero
+var part_offset: i64 = zero
+
+fn set_trace_glyph(gid: i64) { trace_gid = gid }
+
+fn set_skip_programs(on: bool) { skip_programs = on }
+
+fn set_cut(n: i64) { tthint.set_cut(n) }
+
+fn set_cut_iup(b: bool) { tthint.set_cut_iup(b) }
+
 type Loaded = struct { lv: usize, pp1x: i64, adv: i64 }
 
 fn gl_metrics(h: *tthint.Hinter, gid: usize) -> (i64, i64) {
@@ -145,15 +160,18 @@ fn size_of(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, cleartype: bool) -> (usi
 // Fills the zone `z` (already holding its points scaled to 26.6) with the glyph program at `lo..hi` run over it. A program that
 // traps leaves the points where they had got to.
 fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zone, lo: usize, hi: usize, composite: bool) -> err {
+    let top_gid = top_glyph
+    let off_here = part_offset
     let s = &h.sizes[si]
     let n = z.n
     var bw_adv = 0i64
     if s.cleartype {
         let (bw, bw_error) = size_of(h, a, s.ppem, false)
         if bw_error != ok { ret bw_error }
-        let (loaded, load_error) = gl_load(h, a, bw, gid, 0usize)
+        // a component is fitted to the advance of the glyph it belongs to
+        let (loaded, load_error) = gl_load(h, a, bw, top_gid, 0usize)
         if load_error != ok { ret load_error }
-        bw_adv = loaded.adv
+        bw_adv = device_advance(h, false, s.ppem, top_gid, loaded.adv)
         h.level = loaded.lv
     }
     var i = 0usize
@@ -163,18 +181,36 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     }
     z.cur[2usize * (n - 4usize)] = tthint.pix_round(z.cur[2usize * (n - 4usize)])
     z.cur[2usize * (n - 3usize)] = tthint.pix_round(z.cur[2usize * (n - 3usize)])
-    if s.cleartype { z.cur[2usize * (n - 3usize)] = z.cur[2usize * (n - 4usize)] + bw_adv }
+    // In ClearType GDI starts the right phantom point at the advance rounded to 1/16 pixel (26.6 first, as scaled), not at the
+    // black-and-white advance: read back from a copy of Segoe UI whose glyphs have no programs, all 189 glyphs of the oracle.
+    if s.cleartype {
+        let scaled = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
+        z.cur[2usize * (n - 3usize)] = z.cur[2usize * (n - 4usize)] + tthint.fdiv(scaled + 2i64, 4i64) * 4i64
+    }
     z.cur[2usize * (n - 2usize) + 1usize] = tthint.pix_round(z.cur[2usize * (n - 2usize) + 1usize])
     z.cur[2usize * (n - 1usize) + 1usize] = tthint.pix_round(z.cur[2usize * (n - 1usize) + 1usize])
-    if (s.ic & 1i64) != 0i64 || hi <= lo { ret ok }
+    if (s.ic & 1i64) != 0i64 || hi <= lo || skip_programs { ret ok }
     h.ppem = s.ppem
     h.xs = s.xscale
     h.cleartype = s.cleartype
     h.composite = composite
-    h.wbw = 0i64
-    if s.cleartype { h.wbw = bw_adv }
+    // The advance fitting of GDI's ClearType (`tthint.ct_scale`): the points a glyph's x program interpolated or paired are stretched
+    // by the device table's advance over the scaled one when it reaches IUP[x]. Composites are not fitted yet.
+    h.ctA = 0i64
+    h.ctX = 0i64
+    if s.cleartype && !composite && bw_adv > 0i64 {
+        h.ctX = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
+        if top_gid != gid {
+            let (top_adv, top_lsb) = gl_metrics(h, top_gid)
+            h.ctX = tthint.mulfix(top_adv, s.xscale)
+        }
+        h.ctA = bw_adv
+        h.ctOff = 0i64
+    }
     h.gs = s.gs
     h.sp = 0usize
+    h.ran = true
+    h.iup_y = false
     var k = 0usize
     while k < h.cvt_count {
         h.cvt_work[k] = s.cvt[k]
@@ -196,8 +232,23 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     }
     h.zone[0usize] = s.twi
     h.zone[1usize] = *z
+    tthint.set_trace(i64(gid) == trace_gid && s.cleartype)
+    h.ct_done = false
+    h.ct_part = top_gid != gid
     let run_error = tthint.vm_run(h, lo, hi)
+    if top_gid != gid && h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
+    tthint.set_trace(false)
     ret ok
+}
+
+// The advance of a glyph: GDI takes it from the device metrics table at the sizes the table lists, whatever the hinted phantom point
+// says (every one of the 14000 advances of the oracle agrees with it), in ClearType too, where the pen steps by the same whole pixels.
+// The hinter itself keeps the hinted phantom point for the fitting of the outline.
+fn device_advance(h: *tthint.Hinter, cleartype: bool, ppem: i64, gid: usize, hinted: i64) -> i64 {
+    if cleartype { ret hinted }
+    let (w, found) = tthint.hdmx_width(h, ppem, gid)
+    if found { ret w * 64i64 }
+    ret hinted
 }
 
 // Loads a glyph at a size: its points in a zone of `h.zsets`, the zone's level in the answer. Levels are released by the caller
@@ -383,10 +434,17 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
         var px = tthint.mulfix(dx, s.xscale)
         var py = tthint.mulfix(dy, s.xscale)
         if (flags & 4i64) != 0i64 {
-            px = tthint.pix_round(px)
+            // ClearType rounds along x on its grid of 1/16 pixel
+            if s.cleartype {
+                px = tthint.fdiv(px + 2i64, 4i64) * 4i64
+            } else {
+                px = tthint.pix_round(px)
+            }
             py = tthint.pix_round(py)
         }
+        part_offset = px
         let (part, part_error) = gl_load(h, a, si, component, depth + 1usize)
+        part_offset = 0i64
         if part_error != ok { ret (out, part_error) }
         let cz = &h.zsets[part.lv]
         let m = cz.n - 4usize
@@ -460,6 +518,9 @@ fn zone_prepare(z: *tthint.Zone, n: usize, ends: usize) {
     while i < n {
         z.sh[i] = 0i64
         z.ipd[i] = false
+        z.mp[i] = 0i64
+        z.lp[i] = 0i64
+        z.ipr[i] = 0i64
         i += 1usize
     }
 }
@@ -472,21 +533,47 @@ fn composite_program(h: *tthint.Hinter, g0: usize, g1: usize, at: usize, last_fl
     ret (at + 2usize, at + 2usize + count)
 }
 
+// The scan conversion mode a size's SCANCTRL and SCANTYPE ask for, as the bits `Outline.scan` documents. Drop-out control is on when
+// SCANCTRL says so for this ppem (threshold in the low byte, 0x100 on up to the threshold, 0x800 off above it); a font that never
+// set either gets 4 + 8, the smart rounding the unhinted fonts show.
+fn scan_mode(ctrl: i64, kind: i64, ppem: i64) -> i64 {
+    if ctrl == 0i64 && kind == 0i64 { ret 12i64 }
+    let thr = ctrl & 255i64
+    var on = false
+    if thr == 255i64 {
+        on = true
+    } else if thr != 0i64 {
+        if (ctrl & 256i64) != 0i64 && ppem <= thr { on = true }
+        if (ctrl & 2048i64) != 0i64 && ppem > thr { on = false }
+    }
+    if !on { ret 2i64 }
+    if kind == 0i64 { ret 0i64 }
+    if kind == 1i64 { ret 1i64 }
+    if kind == 4i64 { ret 4i64 }
+    if kind == 5i64 { ret 5i64 }
+    ret 2i64
+}
+
 // The hinted outline of glyph `gid` at `ppem` pixels, in the mode. Its slices stay valid until the next call.
 fn hint_glyph(h: *tthint.Hinter, a: *mem.Arena, ppem: i64, gid: u32, cleartype: bool) -> (tthint.Outline, err) {
     var out: tthint.Outline = zero
     let (si, size_error) = size_of(h, a, ppem, cleartype)
     if size_error != ok { ret (out, size_error) }
     h.level = 0usize
+    h.ran = false
+    top_glyph = usize(gid)
     let (loaded, load_error) = gl_load(h, a, si, usize(gid), 0usize)
     if load_error != ok { ret (out, load_error) }
     let z = &h.zsets[loaded.lv]
     out.n = z.n - 4usize
     out.cur = z.cur
+    out.hinted = h.ran
     out.tags = z.tags
     out.ends = z.ends
     out.nends = z.nends
     out.pp1x = loaded.pp1x
-    out.adv = loaded.adv
+    out.adv = device_advance(h, false, ppem, usize(gid), loaded.adv)
+    out.smooth = (tthint.gasp_flags(h, ppem) & 8i64) != 0i64
+    out.scan = scan_mode(h.sizes[si].gs.scan_control, h.sizes[si].gs.scan_type, ppem)
     ret (out, ok)
 }

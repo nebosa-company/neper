@@ -11226,7 +11226,10 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             parts[p] = widget.positioned(0u64, 4.0, 3.0, style.defaults(), mem_one(a, dot))
             p += 1usize
         }
-        parts[p] = widget.positioned(0u64, 32.0, 2.0, style.defaults(), mem_one(a, said))
+        // the label sits at 32 under ClearType; the greyscale path keeps its older 31
+        var label_x = 31.0f32
+        if scene.text_aa_mode() == .ClearType { label_x = 32.0f32 }
+        parts[p] = widget.positioned(0u64, label_x, 2.0, style.defaults(), mem_one(a, said))
         p += 1usize
         if mark_at < plain.len {
             let (before, _, _, before_error) = control.run_metrics_faced(a, t, caption, plain[0usize..mark_at])

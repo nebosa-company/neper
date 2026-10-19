@@ -15,6 +15,7 @@
 // they are font units (`orus`). The result of `hint_glyph` points into the hinter's own
 // storage and is valid until the next call.
 
+use e.io
 use e.math
 use e.mem
 use e.text.shape
@@ -28,6 +29,8 @@ const TAG_LOCA: u32 = 0x6C6F6361u32
 const TAG_CVT: u32 = 0x63767420u32
 const TAG_FPGM: u32 = 0x6670676Du32
 const TAG_PREP: u32 = 0x70726570u32
+const TAG_HDMX: u32 = 0x68646D78u32
+const TAG_GASP: u32 = 0x67617370u32
 
 const MAX_PTS: usize = 800usize
 const MAX_ENDS: usize = 160usize
@@ -36,7 +39,7 @@ const MAX_SIZES: usize = 24usize
 const MAX_CALL: usize = 64usize
 const MAX_STEPS: usize = 2000000usize
 
-type Zone = struct { n: usize, org: []i64, cur: []i64, orus: []i64, tags: []i64, sh: []i64, ipd: []bool, ends: []usize, nends: usize }
+type Zone = struct { n: usize, org: []i64, cur: []i64, orus: []i64, tags: []i64, sh: []i64, ipd: []bool, mp: []i64, lp: []i64, ipr: []i64, ends: []usize, nends: usize }
 type Gs = struct { rp0: i64, rp1: i64, rp2: i64, dual_x: i64, dual_y: i64, proj_x: i64, proj_y: i64, free_x: i64, free_y: i64, lp: i64, min_dist: i64, round_state: i64, auto_flip: bool, cvt_cut_in: i64, sw_cut_in: i64, sw_value: i64, delta_base: i64, delta_shift: i64, instruct_control: i64, scan_control: i64, scan_type: i64, gep0: usize, gep1: usize, gep2: usize }
 // A size of the face in one mode: its cvt and storage after `prep`, the graphics state `prep` left, and the twilight zone
 // with a copy of how `prep` left it (restored before every glyph so a glyph never sees another's twilight points).
@@ -48,8 +51,10 @@ type Hinter = struct {
     hmtx: usize, hmetrics: usize,
     cvt_at: usize, cvt_count: usize,
     fpgm_at: usize, fpgm_len: usize, prep_at: usize, prep_len: usize,
+    hdmx_at: usize, hdmx_records: usize, hdmx_record_size: usize,
+    gasp_at: usize, gasp_ranges: usize,
     max_storage: usize, max_twilight: usize, max_fdefs: usize, max_stack: usize,
-    fdef_lo: []usize, fdef_hi: []usize, fpgm_done: bool,
+    fdef_lo: []usize, fdef_hi: []usize, fdef_delta: []bool, fdef_bypass: []i64, in_delta: bool, iup_y: bool, ct_done: bool, ct_part: bool, bypass: i64, fpgm_done: bool,
     sizes: [24]Size, size_count: usize,
     zsets: [14]Zone, level: usize,
     stack: []i64, sp: usize, fail: bool,
@@ -59,11 +64,13 @@ type Hinter = struct {
     code_lo: usize, code_hi: usize, ip: usize, depth: usize, steps: usize,
     ppem: i64, xs: i64, cleartype: bool, composite: bool,
     sr_per: i64, sr_phase: i64, sr_thr: i64,
-    wbw: i64
+    ctA: i64, ctX: i64, ctOff: i64, ran: bool
 }
 // What `hint_glyph` answers: the points of the outline (x, y interleaved, 26.6, x relative to the glyph's left phantom point),
-// whether each is on the curve (bit 0 of `tags`), the last point of each contour and the glyph's advance in this mode.
-type Outline = struct { n: usize, cur: []i64, tags: []i64, ends: []usize, nends: usize, pp1x: i64, adv: i64 }
+// whether each is on the curve (bit 0 of `tags`), the last point of each contour, the glyph's advance in this mode and the
+// scan conversion the size's `prep` asked for (`scan`: bit 0 exclude stubs, bit 1 no drop-out control, bit 2 smart rounding; 8 added
+// when the font never set a scan type).
+type Outline = struct { n: usize, cur: []i64, hinted: bool, tags: []i64, ends: []usize, nends: usize, pp1x: i64, adv: i64, scan: i64, smooth: bool }
 
 fn sgn1(x: i64) -> i64 {
     if x < 0i64 { ret -1i64 }
@@ -149,6 +156,27 @@ fn pix_round(x: i64) -> i64 { ret (x + 32i64) & (0i64 - 64i64) }
 fn pix_floor(x: i64) -> i64 { ret x & (0i64 - 64i64) }
 fn pix_ceil(x: i64) -> i64 { ret (x + 63i64) & (0i64 - 64i64) }
 
+// The gasp flags of the first range that reaches `ppem` (0 without a table).
+fn gasp_flags(h: *Hinter, ppem: i64) -> i64 {
+    var r = 0usize
+    while r < h.gasp_ranges {
+        if ppem <= rd16(h.data, h.gasp_at + 4usize * r) { ret rd16(h.data, h.gasp_at + 4usize * r + 2usize) }
+        r += 1usize
+    }
+    ret 0i64
+}
+
+// The hdmx advance of `gid` at `ppem` in whole pixels, if the table has the size.
+fn hdmx_width(h: *Hinter, ppem: i64, gid: usize) -> (i64, bool) {
+    var r = 0usize
+    while r < h.hdmx_records {
+        let at = h.hdmx_at + r * h.hdmx_record_size
+        if i64(h.data[at]) == ppem && gid < h.glyph_count { ret (i64(h.data[at + 2usize + gid]), true) }
+        r += 1usize
+    }
+    ret (0i64, false)
+}
+
 fn rd16(d: []const u8, at: usize) -> i64 { ret i64(shape.u16_at(d, at)) }
 fn rds16(d: []const u8, at: usize) -> i64 { ret i64(shape.i16_at(d, at)) }
 fn rd32(d: []const u8, at: usize) -> i64 { ret i64(shape.u32_at(d, at)) }
@@ -167,6 +195,12 @@ fn zone_new(a: *mem.Arena, n: usize, nends: usize) -> (Zone, err) {
     if e5 != ok { ret (z, NoRoom) }
     let (ipd, e6) = mem.alloc[bool](a, n)
     if e6 != ok { ret (z, NoRoom) }
+    let (mp, e8) = mem.alloc[i64](a, n)
+    let (lpp, e9) = mem.alloc[i64](a, n)
+    if e9 != ok { ret (z, NoRoom) }
+    let (iprr, e10) = mem.alloc[i64](a, n)
+    if e10 != ok { ret (z, NoRoom) }
+    if e8 != ok { ret (z, NoRoom) }
     let (ends, e7) = mem.alloc[usize](a, nends)
     if e7 != ok { ret (z, NoRoom) }
     z.n = n
@@ -176,6 +210,9 @@ fn zone_new(a: *mem.Arena, n: usize, nends: usize) -> (Zone, err) {
     z.tags = tags
     z.sh = sh
     z.ipd = ipd
+    z.mp = mp
+    z.lp = lpp
+    z.ipr = iprr
     z.ends = ends
     ret (z, ok)
 }
@@ -194,6 +231,9 @@ fn zone_clear(z: *Zone, n: usize) {
         z.tags[i] = 0i64
         z.sh[i] = 0i64
         z.ipd[i] = false
+        z.mp[i] = 0i64
+        z.lp[i] = 0i64
+        z.ipr[i] = 0i64
         i += 1usize
     }
 }
@@ -249,6 +289,23 @@ fn open(a: *mem.Arena, data: []const u8) -> (*Hinter, err) {
         h.prep_at = prep.at
         h.prep_len = prep.len
     }
+    // The device metrics: GDI takes a glyph's advance at the sizes this table lists from it, not from the hinted phantom point.
+    let (hdmx, has_hdmx) = shape.find_table(font, TAG_HDMX)
+    if has_hdmx && hdmx.len >= 8usize {
+        h.hdmx_records = usize(rd16(data, hdmx.at + 2usize))
+        h.hdmx_record_size = usize(rd32(data, hdmx.at + 4usize))
+        if h.hdmx_record_size >= 2usize + h.glyph_count && 8usize + h.hdmx_records * h.hdmx_record_size <= hdmx.len {
+            h.hdmx_at = hdmx.at + 8usize
+        } else {
+            h.hdmx_records = 0usize
+        }
+    }
+    // The gasp table says at which sizes symmetric smoothing (six samples by five rows) is on.
+    let (gasp, has_gasp) = shape.find_table(font, TAG_GASP)
+    if has_gasp && gasp.len >= 4usize {
+        h.gasp_ranges = usize(rd16(data, gasp.at + 2usize))
+        if 4usize + 4usize * h.gasp_ranges <= gasp.len { h.gasp_at = gasp.at + 4usize } else { h.gasp_ranges = 0usize }
+    }
     if h.max_storage > 4096usize || h.max_fdefs > 4096usize || h.max_twilight > 4096usize || h.max_stack > 8192usize { ret (zero, Unsupported) }
     let (lo, lo_error) = mem.alloc[usize](a, h.max_fdefs + 1usize)
     if lo_error != ok { ret (zero, NoRoom) }
@@ -260,6 +317,23 @@ fn open(a: *mem.Arena, data: []const u8) -> (*Hinter, err) {
         hi[f] = 0usize
         f += 1usize
     }
+    let (dk, dk_error) = mem.alloc[bool](a, h.max_fdefs + 1usize)
+    if dk_error != ok { ret (zero, NoRoom) }
+    f = 0usize
+    while f <= h.max_fdefs {
+        dk[f] = false
+        f += 1usize
+    }
+    h.fdef_delta = dk
+    let (bp, bp_error) = mem.alloc[i64](a, h.max_fdefs + 1usize)
+    if bp_error != ok { ret (zero, NoRoom) }
+    f = 0usize
+    while f <= h.max_fdefs {
+        bp[f] = -1i64
+        f += 1usize
+    }
+    h.fdef_bypass = bp
+    h.bypass = -1i64
     h.fdef_lo = lo
     h.fdef_hi = hi
     let (stack, stack_error) = mem.alloc[i64](a, h.max_stack + 96usize)
@@ -315,7 +389,10 @@ fn vm_pt(h: *Hinter, zi: usize, p: i64) -> bool {
 }
 
 fn vm_is_x(h: *Hinter) -> bool {
-    ret h.cleartype && h.gs.proj_x == 16384i64 && h.gs.proj_y == 0i64
+    // The programs that set the size up (`fpgm`, `prep`) have no glyph zone and run as the black-and-white machine does: GDI's control
+    // values come out of `prep` the same in ClearType (all 1297 of Segoe UI at 12 px), which they do not if x rounds to 1/16 pixel there.
+    if h.zone[1usize].n == 0usize { ret false }
+    ret h.cleartype && h.gs.free_x == 16384i64 && h.gs.free_y == 0i64
 }
 
 fn vm_project(h: *Hinter, dx: i64, dy: i64) -> i64 {
@@ -575,6 +652,8 @@ fn vm_getinfo(h: *Hinter, sel: i64) -> i64 {
         if (sel & 128i64) != 0i64 { k = k | 16384i64 }
         if (sel & 8i64) != 0i64 { k = k | 1024i64 }
         if (sel & 16i64) != 0i64 { k = k | 2048i64 }
+        // symmetrically smoothed ClearType (six samples by five rows): the font's gasp table switches it on
+        if (sel & 2048i64) != 0i64 && (gasp_flags(h, h.ppem) & 8i64) != 0i64 { k = k | 262144i64 }
     }
     ret k
 }
@@ -620,12 +699,199 @@ fn vm_iup_interp(h: *Hinter, ax: usize, p1: usize, p2: usize, r1: usize, r2: usi
     }
 }
 
+// GDI's ClearType fits a glyph to its device advance when its x program reaches IUP[x]: A is the advance of the device table, X the
+// advance as scaled, and every point an instruction placed carries a shift along x that IUP[x] adds. IP shifts a point by the shifts
+// of its two references (the left phantom point none, the right one A - X) interpolated by where the unhinted point lies between them,
+// cut towards zero. A stem (MIRP or MSIRP set a point against another that is not far above or below) moves with the point IP placed
+// it against, or else, both points together, so that its centre lands at round(centre * A / X). A point MDRP, ALIGNRP or SHP placed
+// against another takes that one's shift; points no instruction touched follow in IUP. Zone tags: bit 32 a point resolved, 64 one that
+// carries a shift, 128 one that has one so far.
+fn ct_centre(h: *Hinter, c2: i64) -> i64 {
+    let num = c2 * (h.ctA - h.ctX)
+    let den = 2i64 * h.ctX
+    ret fdiv(2i64 * num + den, 2i64 * den)
+}
+
+// A component is fitted as part of the glyph it belongs to: its offset is stretched by the same ratio.
+fn ct_off_shift(h: *Hinter) -> i64 {
+    if h.ctOff == 0i64 || h.ctX <= 0i64 { ret 0i64 }
+    ret fdiv(2i64 * h.ctOff * (h.ctA - h.ctX) + h.ctX, 2i64 * h.ctX)
+}
+
+fn ct_live(z: *Zone, p: usize) -> bool { ret z.ipd[p] || z.mp[p] != 0i64 || (z.tags[p] & 128i64) != 0i64 }
+
+// MIRP and MSIRP (a pair) and MDRP, ALIGNRP and SHP (a point that follows) note which point they set against and give the point the
+// shift its reference has now; a pair is settled by IUP[x] once the points are where the program leaves them.
+fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
+    let z = &h.zone[1usize]
+    let npt = z.n - 4usize
+    if p >= npt || r >= z.n { ret }
+    var plain = r + 4usize == z.n
+    var is_pair = pair
+    if pair && r < npt {
+        if abs64(z.org[2usize * p + 1usize] - z.org[2usize * r + 1usize]) >= 512i64 && abs64(z.cur[2usize * p] - z.cur[2usize * r]) < 64i64 { is_pair = false }
+    }
+    if plain {
+        z.mp[p] = 0i64
+        z.sh[p] = 0i64
+        z.tags[p] = z.tags[p] & (0i64 - 129i64)
+        ret
+    }
+    z.tags[p] = z.tags[p] | 128i64
+    if r + 3usize == z.n {
+        z.mp[p] = i64(r) + 1i64
+        z.sh[p] = h.ctA - h.ctX
+        ret
+    }
+    if r >= npt { ret }
+    if !is_pair {
+        z.mp[p] = i64(r) + 1i64
+        z.sh[p] = 0i64
+        if ct_live(z, r) { z.sh[p] = z.sh[r] }
+        ret
+    }
+    z.mp[p] = 0i64 - (i64(r) + 1i64)
+    z.lp[r] = i64(p) + 1i64
+    if z.ipd[r] || z.mp[r] < 0i64 {
+        z.sh[p] = z.sh[r]
+        ret
+    }
+    let d = ct_centre(h, z.cur[2usize * r] + z.cur[2usize * p])
+    z.sh[p] = d
+    z.sh[r] = d
+    z.tags[r] = z.tags[r] | 128i64
+}
+
+fn ct_ip_shift(h: *Hinter, r1: usize, r2: usize, p: usize, lazy: bool) -> i64 {
+    let z = &h.zone[1usize]
+    let n = z.n
+    var o1 = z.org[2usize * r1]
+    var o2 = z.org[2usize * r2]
+    let op = z.org[2usize * p]
+    var s1 = 0i64
+    var s2 = 0i64
+    if r1 + 3usize == n {
+        o1 = h.ctX
+        s1 = h.ctA - h.ctX
+    } else if r1 + 4usize != n && (lazy || ct_live(z, r1)) {
+        s1 = z.sh[r1]
+    }
+    if r2 + 3usize == n {
+        o2 = h.ctX
+        s2 = h.ctA - h.ctX
+    } else if r2 + 4usize != n && (lazy || ct_live(z, r2)) {
+        s2 = z.sh[r2]
+    }
+    if o2 == o1 { ret s1 }
+    ret (s1 * (o2 - op) + s2 * (op - o1)) / (o2 - o1)
+}
+
+fn ct_resolve(h: *Hinter, p: usize, depth: usize) {
+    let z = &h.zone[1usize]
+    if (z.tags[p] & 32i64) != 0i64 || depth > 64usize { ret }
+    z.tags[p] = z.tags[p] | 32i64
+    if z.ipd[p] {
+        z.tags[p] = z.tags[p] | 64i64
+        ret
+    }
+    let m = z.mp[p]
+    if m == 0i64 { ret }
+    var rr = m - 1i64
+    if m < 0i64 { rr = 0i64 - m - 1i64 }
+    if rr >= i64(z.n) { ret }
+    let r = usize(rr)
+    if r + 4usize == z.n {
+        z.sh[p] = 0i64
+        ret
+    }
+    if r + 3usize == z.n {
+        z.sh[p] = h.ctA - h.ctX
+        z.tags[p] = z.tags[p] | 64i64
+        ret
+    }
+    ct_resolve(h, r, depth + 1usize)
+    if m < 0i64 && !z.ipd[r] && z.mp[r] >= 0i64 && z.lp[r] > 0i64 && usize(z.lp[r] - 1i64) != p {
+        // an earlier mate of a point that a later pair has taken: it keeps the shift of that pair
+        ct_resolve(h, usize(z.lp[r] - 1i64), depth + 1usize)
+        z.sh[p] = z.sh[r]
+        z.tags[p] = z.tags[p] | 64i64
+        ret
+    }
+    if m > 0i64 || z.ipd[r] || z.mp[r] < 0i64 {
+        z.sh[p] = z.sh[r]
+        if (z.tags[r] & 64i64) != 0i64 { z.tags[p] = z.tags[p] | 64i64 }
+        ret
+    }
+    let d = ct_centre(h, z.cur[2usize * r] + z.cur[2usize * p])
+    z.sh[p] = d
+    z.sh[r] = d
+    z.tags[p] = z.tags[p] | 64i64
+    z.tags[r] = z.tags[r] | 64i64
+}
+
+// What IUP[x] of a ClearType glyph does first: the shifts settle and the points that carry one move.
+fn ct_scale(h: *Hinter) {
+    let z = &h.zone[1usize]
+    let npt = z.n - 4usize
+    var p = 0usize
+    while p < npt {
+        z.tags[p] = z.tags[p] & (0i64 - 225i64)
+        p += 1usize
+    }
+    p = 0usize
+    while p < npt {
+        ct_resolve(h, p, 0usize)
+        p += 1usize
+    }
+    var again = 0usize
+    while again < 2usize {
+        p = 0usize
+        while p < npt {
+            if z.ipd[p] {
+                z.sh[p] = ct_ip_shift(h, usize(z.ipr[p] / 65536i64 - 1i64), usize(z.ipr[p] % 65536i64 - 1i64), p, true)
+            }
+            p += 1usize
+        }
+        p = 0usize
+        while p < npt {
+            if !z.ipd[p] { z.tags[p] = z.tags[p] & (0i64 - 225i64) }
+            p += 1usize
+        }
+        p = 0usize
+        while p < npt {
+            ct_resolve(h, p, 0usize)
+            p += 1usize
+        }
+        again += 1usize
+    }
+    p = 0usize
+    while p < npt {
+        z.cur[2usize * p] = z.cur[2usize * p] + z.sh[p] + ct_off_shift(h)
+        z.tags[p] = z.tags[p] & (0i64 - 225i64)
+        z.ipd[p] = false
+        z.mp[p] = 0i64
+        z.sh[p] = 0i64
+        p += 1usize
+    }
+}
+
 fn vm_iup(h: *Hinter, x_axis: bool) {
+    if !x_axis {
+        h.iup_y = true
+        if h.ct_part && !h.ct_done && h.cleartype && h.ctA != 0i64 && h.ctX > 0i64 && h.zone[1usize].n > 4usize {
+            ct_scale(h)
+            h.ct_done = true
+        }
+    }
     var ax = 1usize
     var mask = 16i64
     if x_axis {
         ax = 0usize
         mask = 8i64
+        if h.cleartype && h.ctA != 0i64 && h.ctX > 0i64 && h.zone[1usize].n > 4usize {
+            ct_scale(h)
+            h.ct_done = true
+        }
     }
     let z = &h.zone[1usize]
     var first = 0usize
@@ -685,13 +951,16 @@ fn vm_shift_vec(h: *Hinter, one: bool) -> (i64, i64, usize, usize) {
 }
 
 fn vm_shp(h: *Hinter, one: bool) {
-    let (dx, dy, _, _) = vm_shift_vec(h, one)
+    let (dx, dy, rzi, rr) = vm_shift_vec(h, one)
     let zi = h.gs.gep2
     var k = 0i64
     while k < h.gs.lp {
         let p = vm_pop(h)
         if h.fail { ret }
-        if vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }
+        if vm_pt(h, zi, p) {
+            vm_move_by(h, zi, usize(p), dx, dy)
+            if vm_is_x(h) && zi == 1usize && rzi == 1usize && h.ctA != 0i64 { ct_derive(h, usize(p), rr, false) }
+        }
         k += 1i64
     }
     h.gs.lp = 1i64
@@ -747,9 +1016,12 @@ fn vm_shpix(h: *Hinter) {
     while k < h.gs.lp {
         let p = vm_pop(h)
         if h.fail { ret }
-        // GDI's ClearType ignores a shift of a whole pixel or more along x (the font's tweaks for the black-and-white advance).
-        let big = h.cleartype && h.gs.free_y == 0i64 && (d >= 64i64 || d <= -64i64)
-        if !big && vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }
+        var blocked = false
+        if h.cleartype && h.gs.free_y == 0i64 && vm_pt(h, zi, p) {
+            if h.in_delta || h.composite { blocked = true }
+        }
+        if h.cleartype && h.gs.free_x == 0i64 && vm_pt(h, zi, p) && vm_delta_skipped(h, zi, usize(p)) { blocked = true }
+        if !blocked && vm_pt(h, zi, p) { vm_move_by(h, zi, usize(p), dx, dy) }
         k += 1i64
     }
     h.gs.lp = 1i64
@@ -771,19 +1043,7 @@ fn vm_ip(h: *Hinter) {
     } else {
         old_range = vm_dualproj(h, z1.orus[2usize * r2] - z0.orus[2usize * r1], z1.orus[2usize * r2 + 1usize] - z0.orus[2usize * r1 + 1usize])
     }
-    var cur_range = vm_project(h, z1.cur[2usize * r2] - z0.cur[2usize * r1], z1.cur[2usize * r2 + 1usize] - z0.cur[2usize * r1 + 1usize])
-    // Along x in ClearType, a point interpolated against the glyph's right phantom point takes that point where GDI puts it: the
-    // advance the rounding grid gives (to 1/16 pixel) scaled by hinted width over unhinted width, so a stem lands where the
-    // advance-fitted glyph has it.
-    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && r2 + 3usize == z1.n && h.wbw != 0i64 {
-        let n = z1.n
-        let a_adv = z1.org[2usize * (n - 3usize)] - z1.org[2usize * (n - 4usize)]
-        if a_adv > 0i64 {
-            let grid_adv = ((a_adv + 2i64) / 4i64) * 4i64
-            let eff = i64(math.floor[f64](f64(grid_adv) * f64(h.wbw) / f64(a_adv) + 0.5f64))
-            cur_range = eff - (z0.cur[2usize * r1] - z1.cur[2usize * (n - 4usize)])
-        }
-    }
+    let cur_range = vm_project(h, z1.cur[2usize * r2] - z0.cur[2usize * r1], z1.cur[2usize * r2 + 1usize] - z0.cur[2usize * r1 + 1usize])
     var k = 0i64
     while k < h.gs.lp {
         let p = vm_pop(h)
@@ -806,7 +1066,11 @@ fn vm_ip(h: *Hinter) {
             }
         }
         vm_move(h, h.gs.gep2, pi, new_dist - cur_dist)
-        if vm_is_x(h) { z2.ipd[pi] = true }
+        if vm_is_x(h) && h.ctA != 0i64 && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.gs.gep2 == 1usize && pi + 4usize <= z2.n && r1 < z2.n && r2 < z2.n {
+            z2.sh[pi] = ct_ip_shift(h, r1, r2, pi, false)
+            z2.ipr[pi] = (i64(r1) + 1i64) * 65536i64 + i64(r2) + 1i64
+            z2.ipd[pi] = true
+        }
         k += 1i64
     }
     h.gs.lp = 1i64
@@ -830,6 +1094,7 @@ fn vm_msirp(h: *Hinter, set_rp0: bool) {
     }
     let dist = vm_project(h, z1.cur[2usize * pi] - z0.cur[2usize * r0], z1.cur[2usize * pi + 1usize] - z0.cur[2usize * r0 + 1usize])
     vm_move(h, h.gs.gep1, pi, d - dist)
+    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, true) }
     h.gs.rp1 = h.gs.rp0
     h.gs.rp2 = p
     if set_rp0 { h.gs.rp0 = p }
@@ -848,6 +1113,7 @@ fn vm_alignrp(h: *Hinter) {
         let pi = usize(p)
         let d = vm_project(h, z1.cur[2usize * pi] - z0.cur[2usize * r0], z1.cur[2usize * pi + 1usize] - z0.cur[2usize * r0 + 1usize])
         vm_move(h, h.gs.gep1, pi, 0i64 - d)
+        if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, false) }
         k += 1i64
     }
     h.gs.lp = 1i64
@@ -890,22 +1156,21 @@ fn vm_mdap(h: *Hinter, round: bool) {
     if round {
         let cur = vm_project(h, z.cur[2usize * pi], z.cur[2usize * pi + 1usize])
         d = vm_round(h, cur) - cur
-        // A point IP placed along x already carries the scale of the advance fitting: it is rounded on the unscaled grid and
-        // scaled again.
-        if vm_is_x(h) && h.gs.gep0 == 1usize && z.ipd[pi] && h.wbw != 0i64 {
-            let n = z.n
-            let a_adv = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
-            if a_adv > 0i64 {
-                let scale = f64(h.wbw) / f64(a_adv)
-                let unscaled = i64(math.floor[f64](f64(cur) / scale + 0.5f64))
-                let grid = vm_round(h, unscaled)
-                d = i64(math.floor[f64](f64(grid) * scale + 0.5f64)) - cur
-            }
-        }
     }
     vm_move(h, h.gs.gep0, pi, d)
     h.gs.rp0 = p
     h.gs.rp1 = p
+}
+
+// Whether ClearType's backward compatible mode drops a delta (DELTAP, SHPIX) on point `p`: a delta along x is dropped, and in the
+// other direction one on a point no instruction touched along y, because a delta there digs a dent in the outline where bilevel
+// rendering meant to flip a pixel. A composite glyph keeps its deltas along y: they place the accents.
+fn vm_delta_skipped(h: *Hinter, zi: usize, p: usize) -> bool {
+    if !h.cleartype || h.zone[1usize].n == 0usize { ret false }
+    if h.gs.free_x != 0i64 && h.gs.free_y == 0i64 { ret true }
+    if h.composite { ret false }
+    if h.iup_y { ret true }
+    ret (h.zone[zi].tags[p] & 16i64) == 0i64
 }
 
 // The step of one DELTA argument: a 64th of a pixel shifted down by the delta shift.
@@ -930,8 +1195,7 @@ fn vm_deltap(h: *Hinter, k: i64) {
             var amount = (b & 15i64) - 8i64
             if amount >= 0i64 { amount = amount + 1i64 }
             amount = amount * vm_delta_unit(h)
-            let along_x = h.cleartype && h.gs.free_x != 0i64 && h.gs.free_y == 0i64
-            if !along_x && vm_pt(h, h.gs.gep0, p) { vm_move(h, h.gs.gep0, usize(p), amount) }
+            if vm_pt(h, h.gs.gep0, p) && !vm_delta_skipped(h, h.gs.gep0, usize(p)) { vm_move(h, h.gs.gep0, usize(p), amount) }
         }
         i += 1i64
     }
@@ -991,6 +1255,7 @@ fn vm_mdrp(h: *Hinter, flags: i64) {
     }
     let cur = vm_project(h, z1.cur[2usize * pi] - z0.cur[2usize * r0], z1.cur[2usize * pi + 1usize] - z0.cur[2usize * r0 + 1usize])
     vm_move(h, h.gs.gep1, pi, dist - cur)
+    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, false) }
     h.gs.rp1 = h.gs.rp0
     h.gs.rp2 = p
     if (flags & 16i64) != 0i64 { h.gs.rp0 = p }
@@ -1031,11 +1296,10 @@ fn vm_mirp(h: *Hinter, flags: i64) {
         z1.cur[2usize * pi + 1usize] = z1.org[2usize * pi + 1usize]
     }
     let org_dist = vm_dualproj(h, z1.org[2usize * pi] - z0.org[2usize * r0], z1.org[2usize * pi + 1usize] - z0.org[2usize * r0 + 1usize])
-    var rx = z0.cur[2usize * r0]
-    if vm_is_x(h) { rx = rx - z0.sh[r0] }
+    let rx = z0.cur[2usize * r0]
     let cur_dist = vm_project(h, z1.cur[2usize * pi] - rx, z1.cur[2usize * pi + 1usize] - z0.cur[2usize * r0 + 1usize])
     if h.gs.auto_flip && ((org_dist ^ cvt_dist) < 0i64) { cvt_dist = 0i64 - cvt_dist }
-    if ((flags & 4i64) != 0i64 || vm_is_x(h)) && h.gs.gep0 == h.gs.gep1 {
+    if ((flags & 4i64) != 0i64 || (h.cleartype && h.zone[1usize].n != 0usize)) && h.gs.gep0 == h.gs.gep1 {
         if abs64(cvt_dist - org_dist) > vm_cutin(h) { cvt_dist = org_dist }
     }
     var dist = cvt_dist
@@ -1049,24 +1313,7 @@ fn vm_mirp(h: *Hinter, flags: i64) {
         }
     }
     vm_move(h, h.gs.gep1, pi, dist - cur_dist)
-    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize {
-        let dy = abs64(z0.org[2usize * r0 + 1usize] - z1.org[2usize * pi + 1usize])
-        let width = abs64(z1.cur[2usize * pi] - z0.cur[2usize * r0])
-        if dy < 128i64 && width <= 128i64 && !z0.ipd[r0] {
-            let g = &h.zone[1usize]
-            let n = g.n
-            let a_adv = g.org[2usize * (n - 3usize)] - g.org[2usize * (n - 4usize)]
-            let w_adv = g.cur[2usize * (n - 3usize)] - g.cur[2usize * (n - 4usize)]
-            if a_adv != 0i64 {
-                let centre = f64(z0.cur[2usize * r0] + z1.cur[2usize * pi]) / 2.0
-                let sh = i64(math.floor[f64](centre * f64(w_adv - a_adv) / f64(a_adv) + 0.5))
-                z0.cur[2usize * r0] = z0.cur[2usize * r0] + sh
-                z1.cur[2usize * pi] = z1.cur[2usize * pi] + sh
-                z0.sh[r0] = z0.sh[r0] + sh
-                z1.sh[pi] = z1.sh[pi] + sh
-            }
-        }
-    }
+    if vm_is_x(h) && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.ctA != 0i64 { ct_derive(h, pi, r0, true) }
     h.gs.rp1 = h.gs.rp0
     if (flags & 16i64) != 0i64 { h.gs.rp0 = p }
     h.gs.rp2 = p
@@ -1126,6 +1373,33 @@ fn vm_instctrl(h: *Hinter) {
     h.gs.instruct_control = (h.gs.instruct_control & (0i64 - bit - 1i64)) | (val & bit)
 }
 
+// ClearType's compatibility code finds the functions that apply a delta (SHPIX at one ppem) by their first instructions:
+// MPPEM GTEQ SWAP MPPEM LTEQ AND IF SHPIX ELSE POP POP EIF ENDF, or MPPEM EQ IF SHPIX ELSE POP POP EIF ENDF.
+fn vm_is_delta_function(h: *Hinter, at: usize, end: usize) -> bool {
+    let d = h.data
+    if at + 9usize > end || d[at] != 0x4Bu8 { ret false }
+    if d[at + 1usize] == 0x54u8 {
+        ret d[at + 2usize] == 0x58u8 && d[at + 3usize] == 0x38u8 && d[at + 4usize] == 0x1Bu8 && d[at + 5usize] == 0x21u8 && d[at + 6usize] == 0x21u8 && d[at + 7usize] == 0x59u8 && d[at + 8usize] == 0x2Du8
+    }
+    ret at + 13usize <= end && d[at + 1usize] == 0x53u8 && d[at + 2usize] == 0x23u8 && d[at + 3usize] == 0x4Bu8 && d[at + 4usize] == 0x51u8 && d[at + 5usize] == 0x5Au8 && d[at + 6usize] == 0x58u8 && d[at + 7usize] == 0x38u8 && d[at + 8usize] == 0x1Bu8 && d[at + 9usize] == 0x21u8 && d[at + 10usize] == 0x21u8 && d[at + 11usize] == 0x59u8 && d[at + 12usize] == 0x2Du8
+}
+
+// ClearType bypasses the legacy TypeMan Talk spacing and stroke functions by making their storage switch read zero: a function that
+// starts with `SVTCA[x] (RTG) PUSH 24 RS IF` (spacing) or `PUSH 22 RS IF` (DStroke and IStroke). The slot, or -1.
+fn vm_bypass_slot(h: *Hinter, at: usize) -> i64 {
+    if at + 7usize > h.data.len { ret -1i64 }
+    let d = h.data
+    var k = at
+    if d[k] == 0x01u8 {
+        k += 1usize
+        if d[k] == 0x18u8 { k += 1usize }
+        if d[k] == 0xB0u8 && d[k + 1usize] == 24u8 && d[k + 2usize] == 0x43u8 && d[k + 3usize] == 0x58u8 { ret 24i64 }
+        ret -1i64
+    }
+    if d[k] == 0xB0u8 && d[k + 1usize] == 22u8 && d[k + 2usize] == 0x43u8 && d[k + 3usize] == 0x58u8 { ret 22i64 }
+    ret -1i64
+}
+
 // Runs the function `f` `count` times.
 fn vm_call(h: *Hinter, f: i64, count: i64) {
     if f < 0i64 || usize(f) > h.max_fdefs || h.fdef_hi[usize(f)] == 0usize {
@@ -1139,6 +1413,10 @@ fn vm_call(h: *Hinter, f: i64, count: i64) {
     h.depth += 1usize
     let lo = h.fdef_lo[usize(f)]
     let hi = h.fdef_hi[usize(f)]
+    let saved_delta = h.in_delta
+    let saved_bypass = h.bypass
+    if h.fdef_delta[usize(f)] { h.in_delta = true }
+    if h.cleartype && h.zone[1usize].n != 0usize && h.fdef_bypass[usize(f)] >= 0i64 { h.bypass = h.fdef_bypass[usize(f)] }
     var k = 0i64
     while k < count {
         let saved_lo = h.code_lo
@@ -1158,6 +1436,8 @@ fn vm_call(h: *Hinter, f: i64, count: i64) {
         if h.fail { break }
         k += 1i64
     }
+    h.in_delta = saved_delta
+    h.bypass = saved_bypass
     h.depth = h.depth - 1usize
 }
 
@@ -1184,7 +1464,64 @@ fn vm_bool(b: bool) -> i64 {
     ret 0i64
 }
 
+// Tracing of a glyph program (a development aid: set from `ttglyph.set_trace`): every step prints its offset, opcode, the top of the
+// stack, the reference points, the vectors and the round state, and the points of the glyph zone it moved.
+var cut_ops: i64 = zero
+
+fn set_cut(n: i64) { cut_ops = n }
+
+var cut_iup: bool = zero
+
+fn set_cut_iup(b: bool) { cut_iup = b }
+
+var trace_on: bool = zero
+var trace_before: [800]i64 = zero
+
+fn set_trace(on: bool) { trace_on = on }
+
 fn vm_step(h: *Hinter) {
+    if !trace_on {
+        vm_step_run(h)
+        ret
+    }
+    let at = h.ip
+    let z = &h.zone[1usize]
+    var n = z.n
+    if n > 400usize { n = 400usize }
+    var i = 0usize
+    while i < 2usize * n {
+        trace_before[i] = z.cur[i]
+        i += 1usize
+    }
+    let sp0 = h.sp
+    var t0 = 0i64
+    var t1 = 0i64
+    var t2 = 0i64
+    if sp0 >= 1usize { t0 = h.stack[sp0 - 1usize] }
+    if sp0 >= 2usize { t1 = h.stack[sp0 - 2usize] }
+    if sp0 >= 3usize { t2 = h.stack[sp0 - 3usize] }
+    let opc = i64(h.data[at])
+    vm_step_run(h)
+    try_trace_print(h, at, opc, sp0, t0, t1, t2, n)
+}
+
+fn try_trace_print(h: *Hinter, at: usize, opc: i64, sp0: usize, t0: i64, t1: i64, t2: i64, n: usize) {
+    let z = &h.zone[1usize]
+    let e1 = io.printf["{} op {} sp {} top {} {} {} | rp {} {} {} gep {} {} {} pv {} {} fv {} {} rs {} md {}"](at, opc, sp0, t0, t1, t2, h.gs.rp0, h.gs.rp1, h.gs.rp2, h.gs.gep0, h.gs.gep1, h.gs.gep2, h.gs.proj_x, h.gs.proj_y, h.gs.free_x, h.gs.free_y, h.gs.round_state, h.gs.min_dist)
+    if (opc >= 0xE0i64 || opc == 0x3Ei64 || opc == 0x3Fi64 || opc == 0x45i64) && t0 >= 0i64 && t0 < i64(h.cvt.len) {
+        let e4 = io.printf[" | cvt[{}]={}"](t0, h.cvt[usize(t0)])
+    }
+    var i = 0usize
+    while i < n {
+        if z.cur[2usize * i] != trace_before[2usize * i] || z.cur[2usize * i + 1usize] != trace_before[2usize * i + 1usize] {
+            let e2 = io.printf[" | p{} {},{}->{},{}"](i, trace_before[2usize * i], trace_before[2usize * i + 1usize], z.cur[2usize * i], z.cur[2usize * i + 1usize])
+        }
+        i += 1usize
+    }
+    let e3 = io.print("\n")
+}
+
+fn vm_step_run(h: *Hinter) {
     let at = h.ip
     if at + 3usize >= h.data.len {
         h.fail = true
@@ -1410,6 +1747,8 @@ fn vm_step(h: *Hinter) {
             } else {
                 h.fdef_lo[usize(f)] = start
                 h.fdef_hi[usize(f)] = h.ip - 1usize
+                h.fdef_delta[usize(f)] = vm_is_delta_function(h, start, h.ip)
+                h.fdef_bypass[usize(f)] = vm_bypass_slot(h, start)
             }
         }
     case 0x2D:
@@ -1449,7 +1788,11 @@ fn vm_step(h: *Hinter) {
         if i < 0i64 || i >= i64(h.storage.len) {
             h.fail = true
         } else {
-            vm_push(h, h.storage[usize(i)])
+            if i == h.bypass {
+                vm_push(h, 0i64)
+            } else {
+                vm_push(h, h.storage[usize(i)])
+            }
         }
     case 0x44:
         let v = vm_pop(h)
@@ -1706,11 +2049,20 @@ fn vm_run(h: *Hinter, lo: usize, hi: usize) -> err {
     h.fail = false
     h.depth = 0usize
     h.steps = 0usize
+    var ops = 0i64
     while h.ip < hi && !h.fail {
+        let op = h.data[h.ip]
+        if cut_ops < 0i64 && op == 0x31u8 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize { break }
         vm_step(h)
         h.steps += 1usize
         if h.steps > MAX_STEPS { h.fail = true }
+        // a probe: stop after `cut_ops` instructions that are not pushes (the glyph program only)
+        if cut_ops > 0i64 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize {
+            if !(op == 0x40u8 || op == 0x41u8 || (op >= 0xB0u8 && op <= 0xBFu8)) { ops += 1i64 }
+            if ops >= cut_ops { break }
+        }
     }
+    if cut_iup && cut_ops > 0i64 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize && !h.fail { vm_iup(h, true) }
     if h.fail { ret Trap }
     ret ok
 }
