@@ -751,7 +751,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             let col = idx % 16usize
             let row = idx / 16usize
-            if trace_code.len > 0usize && usize(code) == trace_code_number(trace_code) { ttglyph.set_trace_glyph(i64(gid)) } else { ttglyph.set_trace_glyph(-1i64) }
+            if trace_code.len > 0usize && usize(code) == trace_code_number(trace_code) { ttglyph.set_trace_glyph(-2i64) } else { ttglyph.set_trace_glyph(-1i64) }
             let (ct, ct_error) = ttglyph.hint_glyph(hinters[fi], ha, at.px, gid, true)
             if !cleartype.begin(sc, 0i64, 0i64, at.cw, at.ch) { ret tthint.NoRoom }
             if ct_error == ok {

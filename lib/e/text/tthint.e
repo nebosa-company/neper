@@ -64,7 +64,7 @@ type Hinter = struct {
     code_lo: usize, code_hi: usize, ip: usize, depth: usize, steps: usize,
     ppem: i64, xs: i64, cleartype: bool, composite: bool,
     sr_per: i64, sr_phase: i64, sr_thr: i64,
-    ctA: i64, ctX: i64, ctOff: i64, ran: bool
+    ctA: i64, ctX: i64, ctOff: i64, ran: bool, ct_stop: bool
 }
 // What `hint_glyph` answers: the points of the outline (x, y interleaved, 26.6, x relative to the glyph's left phantom point),
 // whether each is on the curve (bit 0 of `tags`), the last point of each contour, the glyph's advance in this mode and the
@@ -723,6 +723,7 @@ fn ct_live(z: *Zone, p: usize) -> bool { ret z.ipd[p] || z.mp[p] != 0i64 || (z.t
 // MIRP and MSIRP (a pair) and MDRP, ALIGNRP and SHP (a point that follows) note which point they set against and give the point the
 // shift its reference has now; a pair is settled by IUP[x] once the points are where the program leaves them.
 fn ct_derive(h: *Hinter, p: usize, r: usize, pair: bool) {
+    if h.ct_stop { ret }
     let z = &h.zone[1usize]
     let npt = z.n - 4usize
     if p >= npt || r >= z.n { ret }
@@ -864,6 +865,27 @@ fn ct_scale(h: *Hinter) {
         }
         again += 1usize
     }
+    // A point SHP, MDRP or ALIGNRP set against another follows that point's shift as it ends up. The resolution above reads the shift the
+    // point has when it is visited, and a pair whose second point has the higher index changes its first point's shift after that.
+    var pass = 0usize
+    while pass < 4usize {
+        p = 0usize
+        while p < npt {
+            let m = z.mp[p]
+            if m > 0i64 && !z.ipd[p] && z.lp[p] == 0i64 && usize(m - 1i64) < npt { z.sh[p] = z.sh[usize(m - 1i64)] }
+            p += 1usize
+        }
+        pass += 1usize
+    }
+    if trace_on {
+        let e5 = io.printf["ct_scale ip {} n {} A {} X {} off {} part {}: "](h.ip, z.n, h.ctA, h.ctX, h.ctOff, h.ct_part)
+        p = 0usize
+        while p < npt {
+            let e6 = io.printf["{}:{}{} "](p, z.sh[p], z.ipd[p])
+            p += 1usize
+        }
+        let e7 = io.print("\n")
+    }
     p = 0usize
     while p < npt {
         z.cur[2usize * p] = z.cur[2usize * p] + z.sh[p] + ct_off_shift(h)
@@ -966,6 +988,8 @@ fn vm_shp(h: *Hinter, one: bool) {
     h.gs.lp = 1i64
 }
 
+// SHC ends the advance fitting for the rest of the glyph program: what was fitted before it stays, what comes after it is not (found by
+// probing GDI with synthetic programs; SHZ does not do this).
 fn vm_shc(h: *Hinter, one: bool) {
     let c = vm_pop(h)
     let (dx, dy, rzi, rp) = vm_shift_vec(h, one)
@@ -984,9 +1008,13 @@ fn vm_shc(h: *Hinter, one: bool) {
     }
     var p = s
     while p < e {
-        if !(zi == rzi && p == rp) { vm_move_by(h, zi, p, dx, dy) }
+        if !(zi == rzi && p == rp) {
+            vm_move_by(h, zi, p, dx, dy)
+            if vm_is_x(h) && zi == 1usize && rzi == 1usize && h.ctA != 0i64 && p + 4usize <= z.n { ct_derive(h, p, rp, false) }
+        }
         p += 1usize
     }
+    h.ct_stop = true
 }
 
 fn vm_shz(h: *Hinter, one: bool) {
@@ -1066,7 +1094,7 @@ fn vm_ip(h: *Hinter) {
             }
         }
         vm_move(h, h.gs.gep2, pi, new_dist - cur_dist)
-        if vm_is_x(h) && h.ctA != 0i64 && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.gs.gep2 == 1usize && pi + 4usize <= z2.n && r1 < z2.n && r2 < z2.n {
+        if vm_is_x(h) && h.ctA != 0i64 && !h.ct_stop && h.gs.gep0 == 1usize && h.gs.gep1 == 1usize && h.gs.gep2 == 1usize && pi + 4usize <= z2.n && r1 < z2.n && r2 < z2.n {
             z2.sh[pi] = ct_ip_shift(h, r1, r2, pi, false)
             z2.ipr[pi] = (i64(r1) + 1i64) * 65536i64 + i64(r2) + 1i64
             z2.ipd[pi] = true
@@ -1473,6 +1501,11 @@ fn set_cut(n: i64) { cut_ops = n }
 var cut_iup: bool = zero
 
 fn set_cut_iup(b: bool) { cut_iup = b }
+
+// The probe cuts only the program of the glyph asked for, not those of its components.
+var cut_here: bool = zero
+
+fn set_cut_here(b: bool) { cut_here = b }
 
 var trace_on: bool = zero
 var trace_before: [800]i64 = zero
@@ -2052,17 +2085,17 @@ fn vm_run(h: *Hinter, lo: usize, hi: usize) -> err {
     var ops = 0i64
     while h.ip < hi && !h.fail {
         let op = h.data[h.ip]
-        if cut_ops < 0i64 && op == 0x31u8 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize { break }
+        if cut_ops < 0i64 && op == 0x31u8 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize && cut_here { break }
         vm_step(h)
         h.steps += 1usize
         if h.steps > MAX_STEPS { h.fail = true }
         // a probe: stop after `cut_ops` instructions that are not pushes (the glyph program only)
-        if cut_ops > 0i64 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize {
+        if cut_ops > 0i64 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize && cut_here {
             if !(op == 0x40u8 || op == 0x41u8 || (op >= 0xB0u8 && op <= 0xBFu8)) { ops += 1i64 }
             if ops >= cut_ops { break }
         }
     }
-    if cut_iup && cut_ops > 0i64 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize && !h.fail { vm_iup(h, true) }
+    if cut_iup && cut_ops > 0i64 && h.zone[1usize].n > 0usize && h.cleartype && h.depth == 0usize && cut_here && !h.fail { vm_iup(h, true) }
     if h.fail { ret Trap }
     ret ok
 }

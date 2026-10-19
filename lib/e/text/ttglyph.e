@@ -198,6 +198,7 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     // by the device table's advance over the scaled one when it reaches IUP[x]. Composites are not fitted yet.
     h.ctA = 0i64
     h.ctX = 0i64
+    h.ct_stop = false
     if s.cleartype && !composite && bw_adv > 0i64 {
         h.ctX = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
         if top_gid != gid {
@@ -232,9 +233,10 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     }
     h.zone[0usize] = s.twi
     h.zone[1usize] = *z
-    tthint.set_trace(i64(gid) == trace_gid && s.cleartype)
+    tthint.set_trace((i64(gid) == trace_gid || trace_gid == -2i64) && s.cleartype)
     h.ct_done = false
     h.ct_part = top_gid != gid
+    tthint.set_cut_here(top_gid == gid)
     let run_error = tthint.vm_run(h, lo, hi)
     if top_gid != gid && h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
     tthint.set_trace(false)

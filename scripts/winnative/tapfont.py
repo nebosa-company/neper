@@ -3,7 +3,8 @@
 python tapfont.py <src.ttf> <out.ttf> <family> <ppem> [none | cut=K | cutiup=K]
 
 `cut=K` keeps only each glyph program's first K instructions that are not pushes (a CALL is one), the state of the hinter part way through;
-`cut=iupx` keeps what comes before the first IUP[x]; `cutiup=K` keeps the first K and then runs IUP[x] on what they left.
+`cut=iupx` keeps what comes before the first IUP[x]; `cutiup=K` keeps the first K and then runs IUP[x] on what they left;
+`cutmap=FILE` does that per code (FILE is JSON {"code": K}; a glyph not listed keeps its whole program).
 `none` drops the real glyphs' own programs, so the tap reads the state the hinter starts a glyph from (scaled points, rounded phantom points).
 
 GDI does not hand out the ClearType-hinted outline (GetGlyphOutline answers with the black-and-white machine), so the hinted positions are
@@ -210,7 +211,11 @@ def main():
     no_program = len(sys.argv) > 5 and sys.argv[5] == "none"
     cut = None
     cut_iup = False
-    if len(sys.argv) > 5 and sys.argv[5].startswith("cutiup="):
+    cutmap = None
+    if len(sys.argv) > 5 and sys.argv[5].startswith("cutmap="):
+        import json
+        cutmap = {int(k): v for k, v in json.load(open(sys.argv[5][7:])).items()}  # code -> K (cut after K instructions, then IUP[x])
+    elif len(sys.argv) > 5 and sys.argv[5].startswith("cutiup="):
         cut, cut_iup = int(sys.argv[5][7:]), True
     elif len(sys.argv) > 5 and sys.argv[5].startswith("cut="):
         cut = -1 if sys.argv[5] == "cut=iupx" else int(sys.argv[5][4:])
@@ -233,7 +238,10 @@ def main():
             continue
         g = glyf[name]
         old = g.program.getBytecode() if getattr(g, "program", None) and not no_program else b""
-        if cut is not None:
+        if cutmap is not None:
+            if code in cutmap:
+                old = cut_program(old, cutmap[code]) + bytes([0x31])
+        elif cut is not None:
             old = cut_program(old, cut) + (bytes([0x31]) if cut_iup else b"")
         tail = tail_program(n, slot_base)
         tapped[name] = slot_base
