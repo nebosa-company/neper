@@ -245,6 +245,21 @@ fn mat_text_shape(s: *RendererState, coverage: []f32, brush: *const paint.Brush)
     s.box_x1 = x1
 }
 
+// Skia's supersampling rasteriser (Chromium draws a small path with it) covers a partly covered pixel a little less than the exact
+// area: the radio ring of the captures is about 5 coverage points lighter at the middle of the range.
+fn mat_path_curve(s: *RendererState, coverage: []f32) {
+    var y = s.box_y0
+    while y < s.box_y1 {
+        var x = s.box_x0
+        while x < s.box_x1 {
+            let c = coverage[y * s.width + x]
+            if c > 0.0 && c < 1.0 { coverage[y * s.width + x] = math.pow[f32](c, 1.2) }
+            x += 1usize
+        }
+        y += 1usize
+    }
+}
+
 fn mat_snap(o: geometry.Point) -> geometry.Point {
     if !mat_text { ret o }
     ret geometry.Point { x: math.floor[f32](o.x * 4.0 + 0.5) * 0.25, y: math.floor[f32](o.y + 0.5) }
@@ -3294,11 +3309,13 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
             var f = fill_flattener(s, current.transform)
             try flatten(&f, fill.path)
             rasterize_edges(s, coverage)
+            if mat_text { mat_path_curve(s, coverage) }
             paint_coverage(s, current, coverage, &fill.brush)
         case .StrokePath as stroke:
             var f = stroke_flattener(s, current.transform, stroke.stroke)
             try flatten(&f, stroke.path)
             rasterize_edges(s, coverage)
+            if mat_text { mat_path_curve(s, coverage) }
             paint_coverage(s, current, coverage, &stroke.brush)
         case .Image as draw:
             try draw_image(s, current, draw)

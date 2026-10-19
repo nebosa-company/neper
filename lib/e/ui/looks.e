@@ -282,6 +282,7 @@ fn set_look(rig: *Rig, look: Look) {
     style.set_windark(look == .WindowsDark)
     style.set_neperdark(look == .NeperDark)
     widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
+    widget.set_skia_corners(rig.tokens.profile == .MaterialLike)
     control.set_material_icons(rig.tokens.profile == .MaterialLike)
     // The Android captures are taken with the caret in its blink-off phase.
     if rig.tokens.profile == .MaterialLike { control.set_caret_hidden(true) }

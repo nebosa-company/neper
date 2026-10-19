@@ -1950,7 +1950,7 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     // The border is stroked inside the bounds, on the rounded shape when there is one.
     if !shaped && scene.pixel_exact_on() && (scene.builder_scale(b) != 1.0 || scene.pixel_exact_at_one_on()) && node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
         try snapped_border(b, bounds, node.style.border.width, node.style.border.color)
-    } else if shaped && scene.fine_curves_on() && node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
+    } else if shaped && (scene.fine_curves_on() || skia_corners) && node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
         try fill_ring(a, b, drawn, corner, node.style.border.width, node.style.border.color)
     } else if node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
         let half = node.style.border.width * 0.5
@@ -2514,8 +2514,69 @@ fn set_arc_corners(on: bool) {
 }
 
 // A corner from `from` to `to` about the square corner point `at`.
+// The Android look's corners are the polygons Skia draws for Chromium: a quarter circle is two 45 degree conics turned into
+// quadratics, each cut into 2^shift lines with shift from the distance of its midpoint from the chord (SkEdge diff_to_shift at
+// the 4x anti-aliasing accuracy): 4 lines for a radius under about 11 px, 8 up to about 46, the true arc beyond. The radio
+// ring of the captures is that polygon (a 20 px circle is a 16-gon), 8 percent lighter than the circle. Set by `set_skia_corners`.
+var skia_corners: bool = false
+
+fn set_skia_corners(on: bool) {
+    skia_corners = on
+}
+
+fn skia_shift(radius: f32) -> i32 {
+    var dist = i64(22.65 * radius + 0.5)
+    dist = (dist + 16i64) / 32i64
+    var bits = 0i32
+    while dist > 0i64 {
+        dist = dist / 2i64
+        bits += 1i32
+    }
+    var shift = bits / 2i32
+    if shift == 0i32 { shift = 1i32 }
+    ret shift
+}
+
+fn skia_corner(builder: *geometry.PathBuilder, from: geometry.Point, at: geometry.Point, to: geometry.Point) -> err {
+    let centre = geometry.Point { x: from.x + to.x - at.x, y: from.y + to.y - at.y }
+    let ux = from.x - centre.x
+    let uy = from.y - centre.y
+    let vx = to.x - centre.x
+    let vy = to.y - centre.y
+    let radius = math.sqrt[f32](ux * ux + uy * uy)
+    let shift = skia_shift(radius)
+    var count = 1usize
+    var doubled = 0i32
+    while doubled < shift {
+        count = count * 2usize
+        doubled += 1i32
+    }
+    let along = 1.0 / math.cos[f32](0.3926991)
+    var half = 0usize
+    while half < 2usize {
+        // the 45 degree quadratic: ends on the circle, its control where the two tangents meet
+        let a0 = f32(half) * 0.7853982
+        let a1 = a0 + 0.7853982
+        let am = a0 + 0.3926991
+        let p0 = geometry.Point { x: centre.x + ux * math.cos[f32](a0) + vx * math.sin[f32](a0), y: centre.y + uy * math.cos[f32](a0) + vy * math.sin[f32](a0) }
+        let p2 = geometry.Point { x: centre.x + ux * math.cos[f32](a1) + vx * math.sin[f32](a1), y: centre.y + uy * math.cos[f32](a1) + vy * math.sin[f32](a1) }
+        let c1 = geometry.Point { x: centre.x + (ux * math.cos[f32](am) + vx * math.sin[f32](am)) * along, y: centre.y + (uy * math.cos[f32](am) + vy * math.sin[f32](am)) * along }
+        var k = 1usize
+        while k <= count {
+            let t = f32(k) / f32(count)
+            let m = 1.0 - t
+            let pt = geometry.Point { x: m * m * p0.x + 2.0 * m * t * c1.x + t * t * p2.x, y: m * m * p0.y + 2.0 * m * t * c1.y + t * t * p2.y }
+            try geometry.line_to(builder, pt)
+            k += 1usize
+        }
+        half += 1usize
+    }
+    ret ok
+}
+
 fn corner_curve(builder: *geometry.PathBuilder, from: geometry.Point, at: geometry.Point, to: geometry.Point) -> err {
     if !arc_corners { ret geometry.quad_to(builder, at, to) }
+    if skia_corners && skia_shift(math.sqrt[f32]((at.x - from.x) * (at.x - from.x) + (at.y - from.y) * (at.y - from.y))) <= 2i32 { ret skia_corner(builder, from, at, to) }
     let k: f32 = 0.5523
     let first = geometry.Point { x: from.x + (at.x - from.x) * k, y: from.y + (at.y - from.y) * k }
     let second = geometry.Point { x: to.x + (at.x - to.x) * k, y: to.y + (at.y - to.y) * k }
@@ -2542,7 +2603,7 @@ fn trace_rounded(builder: *geometry.PathBuilder, r: geometry.Rect, c: f32) -> er
 
 fn rounded_path(a: *mem.Arena, r: geometry.Rect, radius: f32) -> (geometry.Path, err) {
     let rr = rounded(r, radius)
-    let (pb, pb_error) = geometry.path_builder(a, 12usize, 32usize)
+    let (pb, pb_error) = geometry.path_builder(a, 24usize, 48usize)
     if pb_error != ok { ret (zero, TooLarge) }
     var builder = pb
     let traced = trace_rounded(&builder, r, rr.top_left.x)
@@ -2572,7 +2633,7 @@ fn corner_at(radius: f32, grow: f32, limit: f32) -> geometry.Radius {
 
 // A shape as a closed path: lines and a quadratic per rounded corner.
 fn shape_path(a: *mem.Arena, rr: geometry.RRect) -> (geometry.Path, err) {
-    let (pb, pb_error) = geometry.path_builder(a, 12usize, 32usize)
+    let (pb, pb_error) = geometry.path_builder(a, 48usize, 96usize)
     if pb_error != ok { ret (zero, TooLarge) }
     var builder = pb
     let r = rr.rect
@@ -6476,7 +6537,7 @@ fn focused_role(widget_runtime: *Runtime) -> (Key, u8, bool) {
 // A rounded border as the area between the box's shape and the same shape `width` smaller (the corner radii shrink by `width`), as
 // GTK paints a border or an outline: the stroke of the middle line leaves its inner corner a polygon of mitre joins, 10 % off in a 4 px corner.
 fn ring_path(a: *mem.Arena, outer: geometry.RRect, inner: geometry.RRect) -> (geometry.Path, err) {
-    let (pb, pb_error) = geometry.path_builder(a, 24usize, 64usize)
+    let (pb, pb_error) = geometry.path_builder(a, 96usize, 192usize)
     if pb_error != ok { ret (zero, TooLarge) }
     var builder = pb
     let r = outer.rect

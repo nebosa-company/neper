@@ -2418,6 +2418,7 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 // whichever element the keyboard focuses, so a control need only hand it the look.
 fn focus_look(t: *const Theme) {
     widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux)
+    widget.set_skia_corners(t.tokens.profile == .MaterialLike)
     scene.set_fine_curves(t.tokens.profile == .Linux)
     scene.set_cff_text(t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
