@@ -2853,7 +2853,14 @@ fn function_realm(it: *Interp, f: *Obj) -> *Interp {
     var guard = 0u32
     while guard < 64u32 {
         guard += 1u32
-        if cur.class == C_BOUND { cur = cur.bound_target } else { break }
+        if cur.class == C_BOUND {
+            cur = cur.bound_target
+        } else if cur.class == C_PROXY && cur.aux != null_obj() {
+            // A proxy's realm is its target's (a revoked proxy keeps the realm of the current function).
+            cur = cur.aux
+        } else {
+            break
+        }
     }
     if cur.realm == null_interp() { ret it }
     ret cur.realm
