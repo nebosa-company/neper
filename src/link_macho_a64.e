@@ -14,6 +14,7 @@ use codegen_x64
 use emit_x64
 use emit_a64
 use link_elf
+use link_elf_a64
 use nir
 use runtime_macos_a64
 use e.crypto.hash as crypto_hash
@@ -81,7 +82,7 @@ fn runtime_limit(builder: *nir.Builder, relocations: []codegen_x64.Relocation, r
 
 // The code, the runtime and the symbol table from `code_offset` (a page), the main call and
 // every relocation but a global's patched. `entry_address` gets the runtime's entry.
-fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, output: *emit_x64.Buffer, entry_address: *usize) -> err {
+fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, got_address: usize, output: *emit_x64.Buffer, entry_address: *usize) -> err {
     let (main_index, main_error) = link_elf.find_main(builder)
     if main_error != ok { ret main_error }
     try link_elf.pad_to(output, code_offset)
@@ -118,7 +119,13 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
             } else {
                 if !relocation.resolved {
                     let (library, slot_entry, is_import) = nir.import_slot_of(builder, relocation.function_ref)
-                    if is_import { ret NeedsLoader }
+                    if is_import {
+                        let flat = nir.import_flat_index(builder, library, slot_entry)
+                        try emit_a64.patch_page(output, site, MACHO_BASE + site, got_address + flat * 8usize)
+                        relocations[relocation_at].resolved = true
+                        relocation_at += 1usize
+                        continue
+                    }
                     let (runtime_offset, found_runtime) = runtime_macos_a64.symbol_offset(builder.function_refs[relocation.function_ref].name)
                     if !found_runtime { ret MissingRuntime }
                     try emit_a64.patch_relative(output, site, runtime_start + runtime_offset)
@@ -215,61 +222,267 @@ fn append_signature(output: *emit_x64.Buffer, limit: usize, text_size: usize) ->
     ret ok
 }
 
+fn is_system(name: str) -> bool {
+    ret check.same(name, "c") || check.same(name, "System") || check.same(name, "libSystem") || check.same(name, "libSystem.B.dylib")
+}
+
+// The install name dyld is told to load: libSystem for its aliases, an absolute path as
+// written, and any other `LIB` as /usr/lib/lib<LIB>.dylib.
+fn dylib_prefix(name: str) -> str {
+    if is_system(name) { ret "/usr/lib/libSystem.B.dylib" }
+    if name.len != 0usize && name[0usize] == 47u8 { ret "" }
+    ret "/usr/lib/lib"
+}
+
+fn dylib_suffix(name: str) -> str {
+    if is_system(name) || (name.len != 0usize && name[0usize] == 47u8) { ret "" }
+    ret ".dylib"
+}
+
+fn dylib_name(name: str) -> str {
+    if is_system(name) { ret "" }
+    ret name
+}
+
+fn dylib_command_size(name: str) -> usize {
+    ret link_elf.align_up_to(24usize + dylib_prefix(name).len + dylib_name(name).len + dylib_suffix(name).len + 1usize, 8usize)
+}
+
+fn dylib_command(output: *emit_x64.Buffer, name: str) -> err {
+    let size = dylib_command_size(name)
+    try emit_x64.little_u32(output, 12usize)
+    try emit_x64.little_u32(output, size)
+    try emit_x64.little_u32(output, 24usize)
+    try emit_x64.little_u32(output, 2usize)
+    try emit_x64.little_u32(output, 65536usize)
+    try emit_x64.little_u32(output, 65536usize)
+    try link_elf.append_text(output, dylib_prefix(name))
+    try link_elf.append_text(output, dylib_name(name))
+    try link_elf.append_text(output, dylib_suffix(name))
+    var at = 24usize + dylib_prefix(name).len + dylib_name(name).len + dylib_suffix(name).len
+    while at < size {
+        try emit_x64.byte(output, 0usize)
+        at += 1usize
+    }
+    ret ok
+}
+
+// libSystem is dylib 1 whether or not anything imports from it; each other library
+// follows in the order the imports name them.
+fn library_ordinal(builder: *nir.Builder, library: usize) -> usize {
+    if is_system(nir.import_library_name(builder, library)) { ret 1usize }
+    var ordinal = 2usize
+    var at = 0usize
+    while at < library {
+        if !is_system(nir.import_library_name(builder, at)) { ordinal += 1usize }
+        at += 1usize
+    }
+    ret ordinal
+}
+
+fn extra_library_count(builder: *nir.Builder) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < nir.import_library_count(builder) {
+        if !is_system(nir.import_library_name(builder, at)) { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn extra_libraries_size(builder: *nir.Builder) -> usize {
+    var size = 0usize
+    var at = 0usize
+    while at < nir.import_library_count(builder) {
+        let name = nir.import_library_name(builder, at)
+        if !is_system(name) { size += dylib_command_size(name) }
+        at += 1usize
+    }
+    ret size
+}
+
+// The symbols' names, a NUL first so offset 0 is the empty name, each with the underscore
+// Mach-O gives a C symbol.
+fn symbols_size(builder: *nir.Builder) -> usize {
+    var size = 1usize
+    var library = 0usize
+    while library < nir.import_library_count(builder) {
+        var entry = 0usize
+        while entry < nir.import_symbol_count(builder, library) {
+            size += nir.import_symbol_name(builder, library, entry).len + 2usize
+            entry += 1usize
+        }
+        library += 1usize
+    }
+    ret size
+}
+
+fn symbol_name_offset(builder: *nir.Builder, library: usize, entry: usize) -> usize {
+    var offset = 1usize
+    var at_library = 0usize
+    while at_library <= library {
+        var limit = nir.import_symbol_count(builder, at_library)
+        if at_library == library { limit = entry }
+        var at = 0usize
+        while at < limit {
+            offset += nir.import_symbol_name(builder, at_library, at).len + 2usize
+            at += 1usize
+        }
+        at_library += 1usize
+    }
+    ret offset
+}
+
+fn fixups_size(builder: *nir.Builder, segment_count: usize, data_size: usize, imports: usize) -> usize {
+    let pages = (data_size + MACHO_PAGE - 1usize) / MACHO_PAGE
+    let segment_starts = link_elf.align_up_to(32usize + 4usize + 4usize * segment_count, 8usize)
+    var segment_size = 0usize
+    if imports != 0usize { segment_size = 22usize + 2usize * pages }
+    let imports_offset = link_elf.align_up_to(segment_starts + segment_size, 8usize)
+    var strings = 0usize
+    if imports != 0usize { strings = symbols_size(builder) }
+    ret link_elf.align_up_to(imports_offset + 4usize * imports + strings, 8usize)
+}
+
+// The chained-fixups blob (dyld_chained_fixups_header) at file offset `base`: one chain
+// over the import slots at the start of __DATA, each a DYLD_CHAINED_PTR_64 bind to its
+// import, the imports naming their dylib by ordinal and their symbol by offset into the
+// string table.
+fn append_fixups(builder: *nir.Builder, output: *emit_x64.Buffer, base: usize, segment_count: usize, data_index: usize, data_offset: usize, data_size: usize, imports: usize) -> err {
+    let pages = (data_size + MACHO_PAGE - 1usize) / MACHO_PAGE
+    let starts_offset = 32usize
+    let segment_starts = link_elf.align_up_to(starts_offset + 4usize + 4usize * segment_count, 8usize)
+    var segment_size = 0usize
+    if imports != 0usize { segment_size = 22usize + 2usize * pages }
+    let imports_offset = link_elf.align_up_to(segment_starts + segment_size, 8usize)
+    let symbols_offset = imports_offset + 4usize * imports
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, starts_offset)
+    try emit_x64.little_u32(output, imports_offset)
+    try emit_x64.little_u32(output, symbols_offset)
+    try emit_x64.little_u32(output, imports)
+    try emit_x64.little_u32(output, 1usize)
+    try emit_x64.little_u32(output, 0usize)
+    try link_elf.pad_to(output, base + starts_offset)
+    try emit_x64.little_u32(output, segment_count)
+    var segment_at = 0usize
+    while segment_at < segment_count {
+        if imports != 0usize && segment_at == data_index { try emit_x64.little_u32(output, segment_starts - starts_offset) } else { try emit_x64.little_u32(output, 0usize) }
+        segment_at += 1usize
+    }
+    if imports != 0usize {
+        try link_elf.pad_to(output, base + segment_starts)
+        try emit_x64.little_u32(output, segment_size)
+        try link_elf.little_u16(output, MACHO_PAGE)
+        // DYLD_CHAINED_PTR_64.
+        try link_elf.little_u16(output, 2usize)
+        try emit_x64.little_u64(output, data_offset)
+        try emit_x64.little_u32(output, 0usize)
+        try link_elf.little_u16(output, pages)
+        var page = 0usize
+        while page < pages {
+            if page == 0usize { try link_elf.little_u16(output, 0usize) } else { try link_elf.little_u16(output, 65535usize) }
+            page += 1usize
+        }
+        try link_elf.pad_to(output, base + imports_offset)
+        var library = 0usize
+        while library < nir.import_library_count(builder) {
+            var entry = 0usize
+            while entry < nir.import_symbol_count(builder, library) {
+                try emit_x64.little_u32(output, library_ordinal(builder, library) | (symbol_name_offset(builder, library, entry) << 9usize))
+                entry += 1usize
+            }
+            library += 1usize
+        }
+        try emit_x64.byte(output, 0usize)
+        library = 0usize
+        while library < nir.import_library_count(builder) {
+            var entry = 0usize
+            while entry < nir.import_symbol_count(builder, library) {
+                try emit_x64.byte(output, 95usize)
+                try link_elf.append_text(output, nir.import_symbol_name(builder, library, entry))
+                try emit_x64.byte(output, 0usize)
+                entry += 1usize
+            }
+            library += 1usize
+        }
+    }
+    ret ok
+}
+
+// The import slots, one chained bind each: the import's index, the distance in 4-byte
+// strides to the next slot, and the bind bit.
+fn append_slots(output: *emit_x64.Buffer, imports: usize) -> err {
+    var slot = 0usize
+    while slot < imports {
+        var next = 2usize
+        if slot + 1usize == imports { next = 0usize }
+        try emit_x64.little_u32(output, slot)
+        try emit_x64.little_u32(output, (next << 19usize) | 2147483648usize)
+        slot += 1usize
+    }
+    ret ok
+}
+
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, table_at: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len || table_at > machine.count { ret InvalidImage }
-    if nir.import_library_count(builder) != 0usize { ret NeedsLoader }
     codegen_x64.mark_live_globals(builder, relocations, relocation_count)
+    let imports = nir.import_symbol_total(builder)
+    if imports > 2048usize { ret InvalidImage }
     let has_globals = nir.live_global_count(builder) != 0usize
-    // __PAGEZERO, __TEXT, __LINKEDIT and __DATA's when there are globals, then LC_MAIN,
-    // LC_LOAD_DYLINKER, LC_LOAD_DYLIB, LC_SYMTAB, LC_DYSYMTAB, the chained fixups,
-    // LC_BUILD_VERSION and LC_CODE_SIGNATURE.
+    let has_data = has_globals || imports != 0usize
+    // __PAGEZERO, __TEXT, __DATA when there are slots or globals, __LINKEDIT, then LC_MAIN,
+    // LC_LOAD_DYLINKER, LC_LOAD_DYLIB for libSystem and for each other library, LC_SYMTAB,
+    // LC_DYSYMTAB, the chained fixups, LC_BUILD_VERSION and LC_CODE_SIGNATURE.
     var segment_count = 3usize
-    if has_globals { segment_count = 4usize }
-    let command_count = segment_count + 8usize
-    let commands_size = 72usize * segment_count + 272usize
+    if has_data { segment_count = 4usize }
+    let command_count = segment_count + 8usize + extra_library_count(builder)
+    let commands_size = 72usize * segment_count + 272usize + extra_libraries_size(builder)
     // The header and its commands fill the first page; the code starts on the second.
     let code_offset = MACHO_PAGE
     var entry_address = 0usize
-    // The code is placed first into the output only to measure it and to learn the entry;
-    // the header is written after, over the page left for it.
+    // The code is placed first into the output only to measure it, then again once the
+    // slots' addresses are known; the header is written over the page left for it.
     try link_elf.pad_to(output, code_offset)
-    try place_code(builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, output, &entry_address)
+    try place_code(builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE, output, &entry_address)
     let text_end = output.count
     let text_size = link_elf.align_up_to(text_end, MACHO_PAGE)
     let data_offset = text_size
     var data_end = text_size
-    if has_globals {
+    if has_data {
+        // The slots first, the globals after them.
+        let globals_offset = link_elf.align_up_to(data_offset + imports * 8usize, 16usize)
+        var data_bytes = globals_offset - data_offset
+        if has_globals { data_bytes += nir.global_area_size(builder) }
+        data_end = data_offset + link_elf.align_up_to(data_bytes, MACHO_PAGE)
+        output.count = code_offset
+        link_elf_a64.clear_resolved_imports(builder, relocations, relocation_count)
+        try place_code(builder, machine, function_offsets, relocations, relocation_count, table_at, code_offset, MACHO_BASE + data_offset, output, &entry_address)
+        if output.count != text_end { ret InvalidImage }
         try link_elf.pad_to(output, data_offset)
-        try link_elf.append_globals(builder, output, data_offset)
-        try link_elf.pad_to(output, data_offset + nir.global_area_size(builder))
-        data_end = link_elf.align_up_to(output.count, MACHO_PAGE)
+        try append_slots(output, imports)
+        try link_elf.pad_to(output, globals_offset)
+        if has_globals {
+            try link_elf.append_globals(builder, output, globals_offset)
+            try link_elf.pad_to(output, globals_offset + nir.global_area_size(builder))
+            try place_globals(builder, relocations, relocation_count, code_offset, MACHO_BASE + globals_offset, output)
+        }
         try link_elf.pad_to(output, data_end)
-        try place_globals(builder, relocations, relocation_count, code_offset, MACHO_BASE + data_offset, output)
     } else {
         try link_elf.pad_to(output, text_size)
     }
     // __LINKEDIT, on the page after everything else: the chained-fixups blob dyld insists
-    // on (no imports, no starts), an empty symbol table, then the signature, whose hash
-    // covers all before it.
+    // on, an empty symbol table, then the signature, whose hash covers all before it.
     let linkedit_offset = data_end
-    let starts_size = 4usize + 4usize * segment_count
-    let imports_offset = 32usize + starts_size
-    let fixups_size = link_elf.align_up_to(imports_offset + 1usize, 8usize)
-    let strings_offset = linkedit_offset + fixups_size
+    let data_index = 2usize
+    let fixups_bytes = fixups_size(builder, segment_count, data_end - data_offset, imports)
+    let strings_offset = linkedit_offset + fixups_bytes
     let signature_offset = link_elf.align_up_to(strings_offset + 8usize, 16usize)
     let directory = directory_size(signature_offset)
     let signature_size = 20usize + directory
     let linkedit_size = signature_offset - linkedit_offset + signature_size
-    try emit_x64.little_u32(output, 0usize)
-    try emit_x64.little_u32(output, 32usize)
-    try emit_x64.little_u32(output, imports_offset)
-    try emit_x64.little_u32(output, imports_offset)
-    try emit_x64.little_u32(output, 0usize)
-    try emit_x64.little_u32(output, 1usize)
-    try emit_x64.little_u32(output, 0usize)
-    try link_elf.pad_to(output, linkedit_offset + 32usize)
-    try emit_x64.little_u32(output, segment_count)
-    try link_elf.pad_to(output, linkedit_offset + fixups_size)
+    try append_fixups(builder, output, linkedit_offset, segment_count, data_index, data_offset, data_end - data_offset, imports)
+    try link_elf.pad_to(output, linkedit_offset + fixups_bytes)
     try emit_x64.byte(output, 32usize)
     try link_elf.pad_to(output, signature_offset)
     let end = output.count
@@ -285,26 +498,26 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 0usize)
     try segment(output, "__PAGEZERO", 0usize, MACHO_BASE, 0usize, 0usize, 0usize)
     try segment(output, "__TEXT", MACHO_BASE, text_size, 0usize, text_size, 5usize)
-    if has_globals { try segment(output, "__DATA", MACHO_BASE + data_offset, data_end - data_offset, data_offset, data_end - data_offset, 3usize) }
+    if has_data { try segment(output, "__DATA", MACHO_BASE + data_offset, data_end - data_offset, data_offset, data_end - data_offset, 3usize) }
     try segment(output, "__LINKEDIT", MACHO_BASE + linkedit_offset, link_elf.align_up_to(linkedit_size, MACHO_PAGE), linkedit_offset, linkedit_size, 1usize)
     // LC_MAIN: the runtime's entry, as a file offset into __TEXT, called as main(argc, argv).
     try emit_x64.little_u32(output, 2147483688usize)
     try emit_x64.little_u32(output, 24usize)
     try emit_x64.little_u64(output, entry_address - MACHO_BASE)
     try emit_x64.little_u64(output, 0usize)
-    // LC_LOAD_DYLINKER and LC_LOAD_DYLIB for libSystem: dyld loads the image, and the kernel
-    // refuses an arm64 executable that has neither.
+    // LC_LOAD_DYLINKER, then the dylibs: dyld loads the image, and the kernel refuses an
+    // arm64 executable with neither it nor libSystem.
     try emit_x64.little_u32(output, 14usize)
     try emit_x64.little_u32(output, 32usize)
     try emit_x64.little_u32(output, 12usize)
     try padded_name(output, "/usr/lib/dyld", 20usize)
-    try emit_x64.little_u32(output, 12usize)
-    try emit_x64.little_u32(output, 56usize)
-    try emit_x64.little_u32(output, 24usize)
-    try emit_x64.little_u32(output, 2usize)
-    try emit_x64.little_u32(output, 65536usize)
-    try emit_x64.little_u32(output, 65536usize)
-    try padded_name(output, "/usr/lib/libSystem.B.dylib", 32usize)
+    try dylib_command(output, "c")
+    var library_at = 0usize
+    while library_at < nir.import_library_count(builder) {
+        let library_name = nir.import_library_name(builder, library_at)
+        if !is_system(library_name) { try dylib_command(output, library_name) }
+        library_at += 1usize
+    }
     // LC_SYMTAB with no symbols and a string table of one space, LC_DYSYMTAB all zero.
     try emit_x64.little_u32(output, 2usize)
     try emit_x64.little_u32(output, 24usize)
@@ -323,7 +536,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 2147483700usize)
     try emit_x64.little_u32(output, 16usize)
     try emit_x64.little_u32(output, linkedit_offset)
-    try emit_x64.little_u32(output, fixups_size)
+    try emit_x64.little_u32(output, fixups_bytes)
     // LC_BUILD_VERSION: macOS, minimum and SDK 11.0, no tools.
     try emit_x64.little_u32(output, 50usize)
     try emit_x64.little_u32(output, 24usize)

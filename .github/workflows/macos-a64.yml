@@ -8,18 +8,19 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Run the Neper-emitted aarch64-macos binary
+      - name: Run the Neper-emitted aarch64-macos binaries
         run: |
           sw_vers; uname -m
-          cp tests/macos/hello /tmp/hello && chmod +x /tmp/hello && cd /tmp
-          file hello
-          codesign -d -vvv hello 2>&1 || true
-          codesign --verify --verbose=4 hello 2>&1 || true
-          set +e
-          ./hello; code=$?
-          echo "exit=$code"
-          if [ "$code" -ne 0 ]; then
-            lldb -b -o run -o quit ./hello 2>&1 | tail -15
-            log show --last 2m --style compact --predicate 'process == "kernel" OR process == "amfid" OR sender == "AppleMobileFileIntegrity"' 2>&1 | tail -30
-          fi
-          exit $code
+          status=0
+          for name in hello imp; do
+            cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
+            echo "== $name"; codesign --verify --verbose=4 /tmp/$name 2>&1 || true
+            set +e; /tmp/$name; code=$?; set -e
+            echo "exit=$code"
+            if [ "$code" -ne 0 ]; then
+              status=$code
+              lldb -b -o run -o quit /tmp/$name 2>&1 | tail -15
+              log show --last 2m --style compact --predicate 'process == "kernel" OR process == "amfid" OR sender == "AppleMobileFileIntegrity" OR process == "dyld"' 2>&1 | tail -30
+            fi
+          done
+          exit $status
