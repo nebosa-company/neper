@@ -1,7 +1,9 @@
-// The aarch64 macOS static image: a Mach-O executable with no dyld and no libSystem, the
-// runtime (runtime_macos_a64.s) reaching the kernel by BSD system call. The header page
-// holds the load commands -- __PAGEZERO, __TEXT, __DATA when there are globals, __LINKEDIT,
-// LC_UNIXTHREAD naming the runtime's entry, LC_BUILD_VERSION and LC_CODE_SIGNATURE -- the
+// The aarch64 macOS image: a Mach-O executable dyld loads, with libSystem linked and no
+// imports used, the runtime (runtime_macos_a64.s) reaching the kernel by BSD system call.
+// The kernel kills an arm64 executable with no dyld (D5166). The header page holds the
+// load commands -- __PAGEZERO, __TEXT, __DATA when there are globals, __LINKEDIT, LC_MAIN
+// naming the runtime's entry, the dylinker and libSystem, empty symbol tables and chained
+// fixups, LC_BUILD_VERSION and LC_CODE_SIGNATURE -- the
 // code follows on the next 16 KB page, then the globals on one of their own, then the ad-hoc
 // signature (a SHA-256 CodeDirectory over every page before it) Apple Silicon refuses to run
 // an executable without. Nothing needs the SDK or Apple's linker, so any host writes it.
@@ -25,9 +27,6 @@ error MissingRuntime
 const MACHO_BASE: usize = 4294967296usize
 const MACHO_PAGE: usize = 16384usize
 const MACHO_HASH_PAGE: usize = 4096usize
-// The load commands: three segments of 72 bytes, __DATA's 72 more, the thread state, the
-// build version and the signature.
-const MACHO_THREAD_SIZE: usize = 288usize
 
 fn big_u32(output: *emit_x64.Buffer, value: usize) -> err {
     try emit_x64.byte(output, (value >> 24usize) & 255usize)
@@ -37,8 +36,12 @@ fn big_u32(output: *emit_x64.Buffer, value: usize) -> err {
 }
 
 fn name16(output: *emit_x64.Buffer, name: str) -> err {
+    ret padded_name(output, name, 16usize)
+}
+
+fn padded_name(output: *emit_x64.Buffer, name: str, size: usize) -> err {
     var at = 0usize
-    while at < 16usize {
+    while at < size {
         if at < name.len { try emit_x64.byte(output, usize(name[at])) } else { try emit_x64.byte(output, 0usize) }
         at += 1usize
     }
@@ -217,12 +220,13 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     if nir.import_library_count(builder) != 0usize { ret NeedsLoader }
     codegen_x64.mark_live_globals(builder, relocations, relocation_count)
     let has_globals = nir.live_global_count(builder) != 0usize
-    var command_count = 6usize
-    var commands_size = 72usize * 3usize + MACHO_THREAD_SIZE + 24usize + 16usize
-    if has_globals {
-        command_count = 7usize
-        commands_size += 72usize
-    }
+    // __PAGEZERO, __TEXT, __LINKEDIT and __DATA's when there are globals, then LC_MAIN,
+    // LC_LOAD_DYLINKER, LC_LOAD_DYLIB, LC_SYMTAB, LC_DYSYMTAB, the chained fixups,
+    // LC_BUILD_VERSION and LC_CODE_SIGNATURE.
+    var segment_count = 3usize
+    if has_globals { segment_count = 4usize }
+    let command_count = segment_count + 8usize
+    let commands_size = 72usize * segment_count + 272usize
     // The header and its commands fill the first page; the code starts on the second.
     let code_offset = MACHO_PAGE
     var entry_address = 0usize
@@ -244,11 +248,30 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     } else {
         try link_elf.pad_to(output, text_size)
     }
-    // The signature on the page after everything else; its hash covers all before it.
-    let signature_offset = data_end
+    // __LINKEDIT, on the page after everything else: the chained-fixups blob dyld insists
+    // on (no imports, no starts), an empty symbol table, then the signature, whose hash
+    // covers all before it.
+    let linkedit_offset = data_end
+    let starts_size = 4usize + 4usize * segment_count
+    let imports_offset = 32usize + starts_size
+    let fixups_size = link_elf.align_up_to(imports_offset + 1usize, 8usize)
+    let strings_offset = linkedit_offset + fixups_size
+    let signature_offset = link_elf.align_up_to(strings_offset + 8usize, 16usize)
     let directory = directory_size(signature_offset)
     let signature_size = 20usize + directory
-    let linkedit_size = link_elf.align_up_to(signature_size, MACHO_PAGE)
+    let linkedit_size = signature_offset - linkedit_offset + signature_size
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, 32usize)
+    try emit_x64.little_u32(output, imports_offset)
+    try emit_x64.little_u32(output, imports_offset)
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, 1usize)
+    try emit_x64.little_u32(output, 0usize)
+    try link_elf.pad_to(output, linkedit_offset + 32usize)
+    try emit_x64.little_u32(output, segment_count)
+    try link_elf.pad_to(output, linkedit_offset + fixups_size)
+    try emit_x64.byte(output, 32usize)
+    try link_elf.pad_to(output, signature_offset)
     let end = output.count
     output.count = 0usize
     try emit_x64.little_u32(output, 4277009103usize)
@@ -257,24 +280,50 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 2usize)
     try emit_x64.little_u32(output, command_count)
     try emit_x64.little_u32(output, commands_size)
-    try emit_x64.little_u32(output, 1usize)
+    // MH_NOUNDEFS | MH_DYLDLINK | MH_TWOLEVEL | MH_PIE.
+    try emit_x64.little_u32(output, 2097285usize)
     try emit_x64.little_u32(output, 0usize)
     try segment(output, "__PAGEZERO", 0usize, MACHO_BASE, 0usize, 0usize, 0usize)
     try segment(output, "__TEXT", MACHO_BASE, text_size, 0usize, text_size, 5usize)
     if has_globals { try segment(output, "__DATA", MACHO_BASE + data_offset, data_end - data_offset, data_offset, data_end - data_offset, 3usize) }
-    try segment(output, "__LINKEDIT", MACHO_BASE + signature_offset, linkedit_size, signature_offset, signature_size, 1usize)
-    // LC_UNIXTHREAD: ARM_THREAD_STATE64, 68 words, the pc the 33rd register.
-    try emit_x64.little_u32(output, 5usize)
-    try emit_x64.little_u32(output, MACHO_THREAD_SIZE)
-    try emit_x64.little_u32(output, 6usize)
-    try emit_x64.little_u32(output, 68usize)
-    var register = 0usize
-    while register < 32usize {
-        try emit_x64.little_u64(output, 0usize)
-        register += 1usize
-    }
-    try emit_x64.little_u64(output, entry_address)
+    try segment(output, "__LINKEDIT", MACHO_BASE + linkedit_offset, link_elf.align_up_to(linkedit_size, MACHO_PAGE), linkedit_offset, linkedit_size, 1usize)
+    // LC_MAIN: the runtime's entry, as a file offset into __TEXT, called as main(argc, argv).
+    try emit_x64.little_u32(output, 2147483688usize)
+    try emit_x64.little_u32(output, 24usize)
+    try emit_x64.little_u64(output, entry_address - MACHO_BASE)
     try emit_x64.little_u64(output, 0usize)
+    // LC_LOAD_DYLINKER and LC_LOAD_DYLIB for libSystem: dyld loads the image, and the kernel
+    // refuses an arm64 executable that has neither.
+    try emit_x64.little_u32(output, 14usize)
+    try emit_x64.little_u32(output, 32usize)
+    try emit_x64.little_u32(output, 12usize)
+    try padded_name(output, "/usr/lib/dyld", 20usize)
+    try emit_x64.little_u32(output, 12usize)
+    try emit_x64.little_u32(output, 56usize)
+    try emit_x64.little_u32(output, 24usize)
+    try emit_x64.little_u32(output, 2usize)
+    try emit_x64.little_u32(output, 65536usize)
+    try emit_x64.little_u32(output, 65536usize)
+    try padded_name(output, "/usr/lib/libSystem.B.dylib", 32usize)
+    // LC_SYMTAB with no symbols and a string table of one space, LC_DYSYMTAB all zero.
+    try emit_x64.little_u32(output, 2usize)
+    try emit_x64.little_u32(output, 24usize)
+    try emit_x64.little_u32(output, strings_offset)
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, strings_offset)
+    try emit_x64.little_u32(output, 8usize)
+    try emit_x64.little_u32(output, 11usize)
+    try emit_x64.little_u32(output, 80usize)
+    var dysymtab_word = 0usize
+    while dysymtab_word < 18usize {
+        try emit_x64.little_u32(output, 0usize)
+        dysymtab_word += 1usize
+    }
+    // LC_DYLD_CHAINED_FIXUPS.
+    try emit_x64.little_u32(output, 2147483700usize)
+    try emit_x64.little_u32(output, 16usize)
+    try emit_x64.little_u32(output, linkedit_offset)
+    try emit_x64.little_u32(output, fixups_size)
     // LC_BUILD_VERSION: macOS, minimum and SDK 11.0, no tools.
     try emit_x64.little_u32(output, 50usize)
     try emit_x64.little_u32(output, 24usize)

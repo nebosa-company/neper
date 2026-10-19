@@ -29,7 +29,10 @@
 // arena could not be had. x29 is zero in main's caller: the end of the frame chain.
 .global neper_start
 neper_start:
-    mov x19, sp
+    // dyld calls LC_MAIN's entry as main(argc, argv): x19 is made to stand where the
+    // kernel's initial stack would have put the count, the vector 8 bytes after it.
+    mov x22, x0
+    sub x19, x1, #8
     ldr x20, .Lstart_arena
     mov x0, #0
     mov x1, x20
@@ -40,7 +43,6 @@ neper_start:
     sys 197
     tbnz x0, #63, .Lstart_fail
     mov x21, x0
-    ldr x22, [x19]
     lsl x23, x22, #4
     cmp x23, x20
     b.hi .Lstart_fail
