@@ -2724,6 +2724,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                     let second_level = (248.0 - ramp * 9.0) / 255.0
                     soft.background = paint.Brush { Solid: paint.rgba(second_level, second_level, second_level, 1.0) }
                     if c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { soft.background = paint.Brush { Solid: gl.rgb(0xFAFAFAu32) } }
+                    // looks33: the bottom grids' indicator line is the themed line at 8.6 % over the row (#FCFCFC on white, #EEEEEE on grey), not an opaque pixel
+                    if c == 0usize && t.tokens.profile == .Windows && !look.top_fit && look.foot_set == false && look.soft_a0 > 0.0 && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { soft.background = paint.Brush { Solid: paint.rgba(0.8627, 0.8627, 0.8627, 0.0865) } }
                     if look.top_fit && c == 0usize && t.tokens.profile == .Windows && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { soft.background = paint.Brush { Solid: paint.rgba(soft_base(t) + 0.043, soft_base(t) + 0.043, soft_base(t) + 0.043, 0.125) } }
                     if soft_cover > 0.0 { soft.background = paint.Brush { Solid: paint.rgba(soft_base(t), soft_base(t), soft_base(t), soft_cover) } }
                     if style.windows_dark_on() { soft.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
