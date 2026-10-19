@@ -1559,9 +1559,12 @@ fn write_own_value(it: *Interp, o: *Obj, key: Key, val: Value) -> (bool, err) {
             ret (true, ok)
         }
         if o.class == C_ARRAY && !is_symbol_key(key) && str.eq(key.name, "length") {
+            // ArraySetLength reads the value twice: ToUint32, then ToNumber.
+            let (n1, ne1) = to_number(it, val)
+            if ne1 != ok { ret (false, ne1) }
             let (n, ne) = to_number(it, val)
             if ne != ok { ret (false, ne) }
-            let len = to_uint32_bits(n)
+            let len = to_uint32_bits(n1)
             if f64(len) != n { ret (false, throw_range(it, "Invalid array length")) }
             if o.text.len == 1usize { ret (false, ok) }
             let full = array_set_length(it, o, f64(len))
@@ -1891,18 +1894,22 @@ fn define_own_ordinary(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err) {
     }
     // Array exotics: `length` and index growth.
     if o.class == C_ARRAY && !is_symbol_key(key) && str.eq(key.name, "length") {
+        // ArraySetLength reads the value twice (ToUint32, then ToNumber) and rejects a bad length before validating the rest.
+        var new_len = 0u32
+        if d.has_value {
+            let (n1, ne1) = to_number(it, d.value)
+            if ne1 != ok { ret (false, ne1) }
+            let (n, ne) = to_number(it, d.value)
+            if ne != ok { ret (false, ne) }
+            new_len = to_uint32_bits(n1)
+            if f64(new_len) != n { ret (false, throw_range(it, "Invalid array length")) }
+        }
         if d.has_get || d.has_set { ret (false, ok) }
         if d.has_configurable && d.configurable { ret (false, ok) }
         if d.has_enumerable && d.enumerable { ret (false, ok) }
         var blocked = false
         if d.has_value {
-            // ArraySetLength: ToUint32 and ToNumber both read the value.
-            let (n1, ne1) = to_number(it, d.value)
-            if ne1 != ok { ret (false, ne1) }
-            let (n, ne) = to_number(it, d.value)
-            if ne != ok { ret (false, ne) }
-            let len = to_uint32_bits(n1)
-            if f64(len) != n { ret (false, throw_range(it, "Invalid array length")) }
+            let len = new_len
             let old_len = array_length(o)
             if o.text.len == 1usize {
                 if f64(len) != old_len { ret (false, ok) }
