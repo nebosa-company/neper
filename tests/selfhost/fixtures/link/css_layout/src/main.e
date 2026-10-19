@@ -410,5 +410,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (p71, ok71) = build(a, "<div id=w><div id=a style=\"height:10px\"/><div id=b style=\"height:20px\"></div></div>", "")
     html.set_xml_syntax(false)
     if !ok71 || !is_rect(rect_of(p71, "b"), 0.0f64, 10.0f64, 800.0f64, 20.0f64) { os.exit(108) }
+    // 72. In a column flex container `justify-content: right` is the start of the block axis.
+    let (p72, ok72) = build(a, "<div style=\"display:flex;flex-direction:column;height:100px;justify-content:right\"><div id=a style=\"height:10px\"></div></div>", "")
+    if !ok72 || !near(rect_of(p72, "a").y, 0.0f64) { os.exit(109) }
     ret ok
 }

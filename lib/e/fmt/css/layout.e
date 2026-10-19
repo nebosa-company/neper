@@ -5074,7 +5074,7 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         } else {
             let jc = cs.justify_content
             let cnt = to3 - from3
-            if jc == .FlexEnd || jc == .End || jc == .Right {
+            if jc == .FlexEnd || jc == .End || (jc == .Right && row) {
                 start_off = free2
             } else if jc == .Center {
                 start_off = free2 / 2.0f64
