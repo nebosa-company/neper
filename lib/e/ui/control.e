@@ -18927,8 +18927,24 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
             let (tile, tile_error) = wintile.tile_node(a, 16usize, 16usize, atlas[art * 256usize..art * 256usize + 256usize])
             if tile_error != ok { ret (zero, tile_error) }
             row_parts[0usize] = tile
+            // looks33: the pictures stand at y 36 of the live Statistics captures, 2 px above the tab line box's middle
+            if true {
+                let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+                if lifted_error != ok { ret (zero, TooLarge) }
+                lifted[0usize] = tile
+                var lift = style.defaults()
+                lift.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+                row_parts[0usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 4.0, lift, lifted[0usize..1usize])
+            }
         }
         row_parts[1usize] = said
+        if chosen && !win_dark(t) {
+            // the chosen tab's caption stands a pixel higher than the others' (live captures)
+            let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
+            if said_held_error != ok { ret (zero, TooLarge) }
+            said_held[0usize] = said
+            row_parts[1usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), said_held[0usize..1usize])
+        }
         count = 2usize
         h = 22.0
         w += 22.0
@@ -18944,6 +18960,8 @@ fn win3_ultra_tab(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, c
     var left: f32 = 2.5
     if has_icon { left = 4.0 }
     if chosen { left = 4.0 }
+    // looks33: the chosen tab of the live Statistics captures holds its picture and caption a pixel further right
+    if chosen && has_icon && !win_dark(t) { left = 5.0 }
     var below: f32 = 2.0
     if has_icon { below = 0.0 }
     line.padding = edges(left, 2.0, 0.0, below)
