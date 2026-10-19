@@ -402,6 +402,8 @@ fn vm_grid_x(h: *Hinter) -> bool {
     ret h.cleartype && !(h.gs.proj_x == 0i64 && h.gs.proj_y == 16384i64)
 }
 
+fn vm_ct_x(h: *Hinter) -> bool { ret vm_is_x(h) && h.gs.proj_x == 16384i64 }
+
 fn vm_project(h: *Hinter, dx: i64, dy: i64) -> i64 {
     if h.gs.proj_x == 16384i64 { ret dx }
     if h.gs.proj_y == 16384i64 { ret dy }
@@ -845,6 +847,10 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, kind: i64) {
         z.tags[p] = z.tags[p] & (0i64 - 129i64)
         ret
     }
+    if kind == 0i64 && !vm_ct_x(h) && z.mp[p] == 0i64 && !z.ipd[p] {
+        z.tags[p] = z.tags[p] | 2048i64
+        ret
+    }
     // The first point a point is set against is the one it follows; a later instruction setting it against another changes nothing, but one
     // that would make its reference follow it in turn (a circle) tells GDI to fit the whole glyph by another rule (ct_cycles).
     if !is_pair && r < npt {
@@ -966,6 +972,75 @@ fn ct_cycles(h: *Hinter) {
     }
 }
 
+// A point only a diagonal measure moved along x (the projection not along x) is fitted like a point nobody touched: by the shifts of the
+// nearest points on its contour that were placed along x, interpolated by where the unhinted point lies between them.
+fn ct_soft(h: *Hinter) {
+    let z = &h.zone[1usize]
+    let npt = z.n - 4usize
+    var p = 0usize
+    while p < npt {
+        if (z.tags[p] & 2048i64) != 0i64 && z.mp[p] == 0i64 && !z.ipd[p] {
+            var first = 0usize
+            var last = npt - 1usize
+            var c = 0usize
+            while c < z.nends {
+                if p <= z.ends[c] {
+                    last = z.ends[c]
+                    break
+                }
+                first = z.ends[c] + 1usize
+                c += 1usize
+            }
+            var span = last - first + 1usize
+            var q = p
+            var back = 0usize
+            var r1 = npt
+            while back < span {
+                if q == first { q = last } else { q = q - 1usize }
+                back += 1usize
+                if (z.tags[q] & 8i64) != 0i64 && (z.tags[q] & 2048i64) == 0i64 {
+                    r1 = q
+                    break
+                }
+            }
+            q = p
+            var fwd = 0usize
+            var r2 = npt
+            while fwd < span {
+                if q == last { q = first } else { q = q + 1usize }
+                fwd += 1usize
+                if (z.tags[q] & 8i64) != 0i64 && (z.tags[q] & 2048i64) == 0i64 {
+                    r2 = q
+                    break
+                }
+            }
+            if r1 < npt && r2 < npt {
+                var o1 = z.org[2usize * r1]
+                var o2 = z.org[2usize * r2]
+                var s1 = z.sh[r1]
+                var s2 = z.sh[r2]
+                if o1 > o2 {
+                    let to = o1
+                    o1 = o2
+                    o2 = to
+                    let ts = s1
+                    s1 = s2
+                    s2 = ts
+                }
+                let op = z.org[2usize * p]
+                if op <= o1 {
+                    z.sh[p] = s1
+                } else if op >= o2 {
+                    z.sh[p] = s2
+                } else {
+                    z.sh[p] = (s1 * (o2 - op) + s2 * (op - o1)) / (o2 - o1)
+                }
+            }
+        }
+        p += 1usize
+    }
+}
+
 // What IUP[x] of a ClearType glyph does first: the shifts settle and the points that carry one move.
 fn ct_scale(h: *Hinter) {
     let z = &h.zone[1usize]
@@ -1013,6 +1088,7 @@ fn ct_scale(h: *Hinter) {
         }
         pass += 1usize
     }
+    ct_soft(h)
     ct_cycles(h)
     if trace_on {
         let e5 = io.printf["ct_scale ip {} n {} A {} X {} off {} part {}: "](h.ip, z.n, h.ctA, h.ctX, h.ctOff, h.ct_part)
