@@ -2793,4 +2793,8 @@ D5157	707	Forms are written in JavaScript on slot state, with validity computed 
 D5158	710	Shadow trees and custom elements are written in JavaScript over the same table (browser 6.16)
 D5159	1136	Vertical writing modes are laid out in a transposed frame and mapped back (browser 1.13i, 9.2)
 D5160	1058	Collapsed table borders are resolved per grid line and painted over the cells (browser 1.14, 9.2)
-D5161	1142	Windows looks draw text as hinted ClearType, greyscale stays the default elsewhere (looks 19)
+D5161	767	Script memory is bounded by structure, not collection (browser 5.14, 6.x)
+D5162	867	Resource scopes live in the frame; the newer built-ins are written in JavaScript (browser 5.14)
+D5163	1157	Windows looks draw text as hinted ClearType, greyscale stays the default elsewhere (looks 19)
+D5164	1041	Temporal is JavaScript in the main realm, ISO calendar with UTC and fixed-offset zones (browser 5.14)
+D5165	1299	aarch64-macos: a static Mach-O over raw BSD system calls, ad-hoc signed by the linker
