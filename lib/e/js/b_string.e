@@ -7,6 +7,7 @@ use e.js.interp as js
 use e.mem
 use e.str
 use e.text.normalize as norm
+use e.js.casing_data as cdata
 use e.text.unicode as unicode
 
 fn arg(args: []const js.Value, i: usize) -> js.Value {
@@ -391,6 +392,42 @@ fn string_substr(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     ret (js.str_value(js.substring_units(it.a, s, usize(start), usize(start + count))), ok)
 }
 
+fn is_cased(cp: u32) -> bool {
+    let c = unicode.category(cp)
+    ret c == unicode.Category.Lu || c == unicode.Category.Ll || c == unicode.Category.Lt
+}
+
+fn is_case_ignorable(cp: u32) -> bool {
+    let c = unicode.category(cp)
+    if c == unicode.Category.Mn || c == unicode.Category.Me || c == unicode.Category.Cf || c == unicode.Category.Lm || c == unicode.Category.Sk { ret true }
+    ret cp == 39u32 || cp == 46u32 || cp == 58u32 || cp == 94u32 || cp == 96u32 || cp == 168u32 || cp == 173u32 || cp == 175u32 || cp == 180u32 || cp == 183u32 || cp == 184u32 || cp == 8216u32 || cp == 8217u32 || cp == 8228u32 || cp == 8231u32
+}
+
+// Whether the sigma at [start, end) is a final sigma (Unicode SpecialCasing, Final_Sigma): a cased letter before it and none after,
+// with case-ignorable characters skipped on both sides.
+fn sigma_is_final(s: str, start: usize, end: usize) -> bool {
+    var before = false
+    var i = start
+    while i > 0usize {
+        var j = i - 1usize
+        while j > 0usize && (s[j] & 192u8) == 128u8 { j -= 1usize }
+        let (cp, l) = js.decode_at(s, j)
+        i = j
+        if is_case_ignorable(cp) { continue }
+        before = is_cased(cp)
+        break
+    }
+    if !before { ret false }
+    var k = end
+    while k < s.len {
+        let (cp2, l2) = js.decode_at(s, k)
+        k += l2
+        if is_case_ignorable(cp2) { continue }
+        ret !is_cased(cp2)
+    }
+    ret true
+}
+
 fn map_case(it: *js.Interp, s: str, upper: bool) -> str {
     let (b, be) = str.builder(it.a, s.len * 2usize + 4usize)
     if be != ok { ret s }
@@ -400,18 +437,18 @@ fn map_case(it: *js.Interp, s: str, upper: bool) -> str {
         let (cp, l) = js.decode_at(s, i)
         i += l
         if upper {
-            if cp == 223u32 {
-                js.put_cp(&out, 83u32)
-                js.put_cp(&out, 83u32)
+            let (u1, u2, u3, un) = cdata.upper_special(cp)
+            if un > 0usize {
+                js.put_cp(&out, u1)
+                if un > 1usize { js.put_cp(&out, u2) }
+                if un > 2usize { js.put_cp(&out, u3) }
             } else {
                 js.put_cp(&out, unicode.to_upper_simple(cp))
             }
         } else {
             if cp == 931u32 {
-                // Final sigma: a sigma at the end of a word (preceded by a letter, not followed by one) lowers to U+03C2.
-                var final = false
-                if i >= s.len || i < s.len && false { final = true }
-                if final && i - l > 0usize { js.put_cp(&out, 962u32) } else { js.put_cp(&out, 963u32) }
+                // Final sigma: preceded by a cased letter and not followed by one, skipping case-ignorable characters.
+                if sigma_is_final(s, i - l, i) { js.put_cp(&out, 962u32) } else { js.put_cp(&out, 963u32) }
             } else if cp == 304u32 {
                 js.put_cp(&out, 105u32)
                 js.put_cp(&out, 775u32)
@@ -605,7 +642,16 @@ fn string_locale_compare(it: *js.Interp, this_val: js.Value, args: []const js.Va
     if se != ok { ret (js.undefv(), se) }
     let (t, te) = js.to_string(it, arg(args, 0usize))
     if te != ok { ret (js.undefv(), te) }
-    let c = js.compare_utf16(s, t)
+    // Canonically equivalent strings compare equal: both are compared in decomposed form.
+    var sa = s
+    var ta = t
+    let (sn, sne) = norm.normalize(it.a, s, norm.Form.Nfd)
+    let (tn, tne) = norm.normalize(it.a, t, norm.Form.Nfd)
+    if sne == ok && tne == ok {
+        sa = sn
+        ta = tn
+    }
+    let c = js.compare_utf16(sa, ta)
     if c < 0i32 { ret (js.num_value(-1.0f64), ok) }
     if c > 0i32 { ret (js.num_value(1.0f64), ok) }
     ret (js.num_value(0.0f64), ok)
