@@ -2382,4 +2382,5 @@ D5099	980	G012: Statistics Probability, Mana Slots and Start Hand tabs, and the 
 D5165	1300	aarch64-macos: a static Mach-O over raw BSD system calls, ad-hoc signed by the linker
 D5166	777	aarch64-macos is dyld-loaded, because the kernel kills a static arm64 image
 D5167	915	macOS grows an os.syscall, the path surface and x86-64 through one Mach-O writer
-D5168	1242	macOS gets Dir, env and spawn: a seeded env_block, posix_spawn, and a parent-side stdio swap
+D5168	1243	macOS gets Dir, env and spawn: a seeded env_block, posix_spawn, and a parent-side stdio swap
+D5169	986	macOS threads are libSystem's pthreads, bound through slots the linker adds for the runtime
