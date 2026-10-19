@@ -149,6 +149,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         ai += 1usize
     }
+    ttglyph.set_end_fit(false)
     let ppem = number(args[2usize])
     let (buf, buf_error) = mem.alloc[u8](a, 4000000usize)
     if buf_error != ok { ret buf_error }

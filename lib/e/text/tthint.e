@@ -733,6 +733,13 @@ fn ct_pp2(h: *Hinter, z: *Zone) -> i64 {
     ret fdiv(2i64 * own * (h.ctA - h.ctX) + h.ctX, 2i64 * h.ctX)
 }
 
+// A stem's shift: its centre times (A - X) / X, rounded with a tie going down (found with the ties in the oracle).
+fn ct_centre_hd(h: *Hinter, c2: i64) -> i64 {
+    let num = c2 * (h.ctA - h.ctX)
+    let den = 2i64 * h.ctX
+    ret 0i64 - fdiv(den - 2i64 * num, 2i64 * den)
+}
+
 fn ct_centre(h: *Hinter, c2: i64) -> i64 {
     let num = c2 * (h.ctA - h.ctX)
     let den = 2i64 * h.ctX
@@ -874,13 +881,14 @@ fn ct_derive(h: *Hinter, p: usize, r: usize, kind: i64) {
         if ct_live(z, r) { z.sh[p] = z.sh[r] }
         ret
     }
+    if z.ipd[p] && z.ipd[r] { z.ipd[p] = false }
     z.mp[p] = 0i64 - (i64(r) + 1i64)
     z.lp[r] = i64(p) + 1i64
     if z.ipd[r] || z.mp[r] < 0i64 {
         z.sh[p] = z.sh[r]
         ret
     }
-    let d = ct_centre(h, z.cur[2usize * r] + z.cur[2usize * p])
+    let d = ct_centre_hd(h, z.cur[2usize * r] + z.cur[2usize * p])
     z.sh[p] = d
     z.sh[r] = d
     z.tags[r] = z.tags[r] | 128i64
@@ -946,7 +954,7 @@ fn ct_resolve(h: *Hinter, p: usize, depth: usize) {
         if (z.tags[r] & 64i64) != 0i64 { z.tags[p] = z.tags[p] | 64i64 }
         ret
     }
-    let d = ct_centre(h, z.cur[2usize * r] + z.cur[2usize * p])
+    let d = ct_centre_hd(h, z.cur[2usize * r] + z.cur[2usize * p])
     z.sh[p] = d
     z.sh[r] = d
     z.tags[p] = z.tags[p] | 64i64
@@ -992,13 +1000,19 @@ fn ct_soft(h: *Hinter) {
                 c += 1usize
             }
             var span = last - first + 1usize
+            var plain = false
+            var w0 = first
+            while w0 <= last {
+                if (z.tags[w0] & 8i64) != 0i64 && (z.tags[w0] & 2048i64) == 0i64 && !z.ipd[w0] { plain = true }
+                w0 += 1usize
+            }
             var q = p
             var back = 0usize
             var r1 = npt
             while back < span {
                 if q == first { q = last } else { q = q - 1usize }
                 back += 1usize
-                if (z.tags[q] & 8i64) != 0i64 && (z.tags[q] & 2048i64) == 0i64 {
+                if (z.tags[q] & 8i64) != 0i64 && (z.tags[q] & 2048i64) == 0i64 && !(plain && z.ipd[q]) {
                     r1 = q
                     break
                 }
@@ -1009,7 +1023,7 @@ fn ct_soft(h: *Hinter) {
             while fwd < span {
                 if q == last { q = first } else { q = q + 1usize }
                 fwd += 1usize
-                if (z.tags[q] & 8i64) != 0i64 && (z.tags[q] & 2048i64) == 0i64 {
+                if (z.tags[q] & 8i64) != 0i64 && (z.tags[q] & 2048i64) == 0i64 && !(plain && z.ipd[q]) {
                     r2 = q
                     break
                 }
@@ -1056,7 +1070,7 @@ fn ct_scale(h: *Hinter) {
         p += 1usize
     }
     var again = 0usize
-    while again < 2usize {
+    while again < 4usize {
         p = 0usize
         while p < npt {
             if z.ipd[p] {
@@ -1080,6 +1094,13 @@ fn ct_scale(h: *Hinter) {
     // point has when it is visited, and a pair whose second point has the higher index changes its first point's shift after that.
     var pass = 0usize
     while pass < 4usize {
+        p = 0usize
+        while p < npt {
+            if z.ipd[p] {
+                z.sh[p] = ct_ip_shift(h, usize(z.ipr[p] / 65536i64 - 1i64), usize(z.ipr[p] % 65536i64 - 1i64), p, true)
+            }
+            p += 1usize
+        }
         p = 0usize
         while p < npt {
             let m = z.mp[p]

@@ -21,6 +21,11 @@ fn set_trace_glyph(gid: i64) { trace_gid = gid }
 
 fn set_skip_programs(on: bool) { skip_programs = on }
 
+// Whether a glyph whose program never reaches IUP[x] is still fitted to its advance when it is drawn: GDI draws it so, while the points its
+// programs leave, which the tap fonts read, are not fitted (tools/ctdump and the oracle's point comparison turn this off).
+var end_fit: bool = true
+fn set_end_fit(on: bool) { end_fit = on }
+
 fn set_cut(n: i64) { tthint.set_cut(n) }
 
 fn set_cut_iup(b: bool) { tthint.set_cut_iup(b) }
@@ -243,7 +248,7 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.ct_part = top_gid != gid
     tthint.set_cut_here(top_gid == gid)
     let run_error = tthint.vm_run(h, lo, hi)
-    if top_gid != gid && h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
+    if (top_gid != gid || end_fit) && h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
     tthint.set_trace(false)
     ret ok
 }

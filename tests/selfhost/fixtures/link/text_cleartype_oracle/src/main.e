@@ -752,6 +752,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let col = idx % 16usize
             let row = idx / 16usize
             if trace_code.len > 0usize && usize(code) == trace_code_number(trace_code) { ttglyph.set_trace_glyph(-2i64) } else { ttglyph.set_trace_glyph(-1i64) }
+            ttglyph.set_end_fit(true)
             let (ct, ct_error) = ttglyph.hint_glyph(hinters[fi], ha, at.px, gid, true)
             if !cleartype.begin(sc, 0i64, 0i64, at.cw, at.ch) { ret tthint.NoRoom }
             if ct_error == ok {
@@ -765,15 +766,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let (bwo, bwo_error) = ttglyph.hint_glyph(hinters[fi], ha, at.px, gid, false)
                 if bwo_error == ok { bw_len = outline_line(bw_buf, bw_len, code, &bwo) }
             }
+            ttglyph.set_end_fit(false)
+            let (ctp, ctp_error) = ttglyph.hint_glyph(hinters[fi], ha, at.px, gid, true)
+            ttglyph.set_end_fit(true)
             // GDI's hinted points against ours (body points and the left and right phantom points, x and y)
             var hint_exact = false
-            if has_hinted && hd_at[code] < hd.len && ct_error == ok && usize(hd[hd_at[code] + 1usize]) == ct.n + 4usize {
+            if has_hinted && hd_at[code] < hd.len && ctp_error == ok && usize(hd[hd_at[code] + 1usize]) == ctp.n + 4usize {
                 line_hint += 1usize
                 hint_exact = true
                 var pi = 0usize
-                while pi < ct.n + 2usize {
+                while pi < ctp.n + 2usize {
                     line_hint_points += 1usize
-                    if ct.cur[2usize * pi] == hd[hd_at[code] + 2usize + 2usize * pi] && ct.cur[2usize * pi + 1usize] == hd[hd_at[code] + 3usize + 2usize * pi] {
+                    if ctp.cur[2usize * pi] == hd[hd_at[code] + 2usize + 2usize * pi] && ctp.cur[2usize * pi + 1usize] == hd[hd_at[code] + 3usize + 2usize * pi] {
                         line_hint_points_ok += 1usize
                     } else {
                         hint_exact = false
