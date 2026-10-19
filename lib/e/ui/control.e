@@ -2978,6 +2978,20 @@ fn windows_label(a: *mem.Arena, t: *const Theme, value: str, size: f32, weight: 
     ret (node, node_error)
 }
 
+// The native Windows 11 dark disabled static (label-disabled): DrawState sets the text as a monochrome bitmap, #A0A0A0 (COLOR_3DSHADOW)
+// over a #FFFFFF copy (COLOR_3DHILIGHT) one pixel right and down.
+fn windows_label_engraved(a: *mem.Arena, t: *const Theme, value: str, size: f32, face: u32) -> (widget.Node, err) {
+    let (shadow, shadow_error) = windows_label_faced(a, t, value, size, 400u32, scene.mono_text(style.hex_raw(0xFFFFFFu32)), false, 0.0, face, 0.0, 0.0, false)
+    if shadow_error != ok { ret (zero, shadow_error) }
+    let (top, top_error) = windows_label_faced(a, t, value, size, 400u32, scene.mono_text(style.hex_raw(0xA0A0A0u32)), false, 0.0, face, 0.0, 0.0, false)
+    if top_error != ok { ret (zero, top_error) }
+    let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+    if pair_error != ok { ret (zero, TooLarge) }
+    pair[0usize] = widget.positioned(0u64, 1.0, 1.0, style.defaults(), mem_one_node(a, shadow))
+    pair[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, top))
+    ret (widget.stack(0u64, sized_style(150.0, 20.0), pair[0usize..2usize]), ok)
+}
+
 // looks4: the same label in another face. A TcxLabel with ParentFont = False and no Style.Font of its own (v3's Deck
 // Properties file name, Missing Set Cards description) draws DevExpress's default font, Segoe UI 9 pt = 12 px (face 7);
 // the ones that inherit the form font or set Style.Font are Tahoma (face 8).

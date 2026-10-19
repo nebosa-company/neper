@@ -299,7 +299,17 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     // labels: label-rest and label-disabled (native static text, white Segoe UI 9 pt; the disabled capture is white too: the app colours it)
     var l = 0usize
     while l < 2usize {
-        let (word, word_error) = control.windows_label_faced(a, t, "Static text label", 12.0, 400u32, style.hex_raw(0xFFFFFFu32), false, 0.0, 7u32, 0.0, 0.0, false)
+        var word: widget.Node = zero
+        var word_error: err = ok
+        if l == 0usize {
+            let (plain, plain_error) = control.windows_label_faced(a, t, "Static text label", 12.0, 400u32, style.hex_raw(0xFFFFFFu32), false, 0.0, 7u32, 0.0, 0.0, false)
+            word = plain
+            word_error = plain_error
+        } else {
+            let (engraved, engraved_error) = control.windows_label_engraved(a, t, "Static text label", 12.0, 7u32)
+            word = engraved
+            word_error = engraved_error
+        }
         if word_error != ok { ret (0usize, word_error) }
         let (boxed, boxed_error) = placed(a, word, 40.0, 39.0)
         if boxed_error != ok { ret (0usize, boxed_error) }
