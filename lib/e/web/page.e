@@ -517,9 +517,19 @@ fn svg_entry(p: *Page, node: html.NodeId) -> *ImageEntry {
     let (text, te) = dom.outer_html(p.pa, &p.tree, node)
     if te == ok {
         e.state = 1u8
-        e.svg = text
         e.width = u32(attr_number(p, node, "width", 300.0f64))
         e.height = u32(attr_number(p, node, "height", 150.0f64))
+        // The renderer sizes the picture from the root's width and height; an absent one gets the default used for the box.
+        var markup = text
+        if str.starts_with(markup, "<svg") {
+            let (wv, has_w) = dom.get_attribute(&p.tree, node, "width")
+            let (hv, has_h) = dom.get_attribute(&p.tree, node, "height")
+            var extra = ""
+            if !has_w { extra = concat_str(p.pa, concat_str(p.pa, " width=\"", decimal_text(p.pa, u64(e.width))), "\"") }
+            if !has_h { extra = concat_str(p.pa, extra, concat_str(p.pa, concat_str(p.pa, " height=\"", decimal_text(p.pa, u64(e.height))), "\"")) }
+            if extra.len > 0usize { markup = concat_str(p.pa, concat_str(p.pa, "<svg", extra), markup[4usize..]) }
+        }
+        e.svg = markup
     }
     let pushed = list.push[ImageEntry](&p.images, e)
     ret &p.images.items[p.images.len - 1usize]
