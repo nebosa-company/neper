@@ -445,5 +445,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 82. With left and right both given, right wins in a right-to-left container.
     let (p82, ok82) = build(a, "<div style=\"direction:rtl;width:200px\"><div id=a style=\"position:relative;left:30px;right:10px;width:50px;height:10px\"></div></div>", "")
     if !ok82 || !near(rect_of(p82, "a").x, 140.0f64) { os.exit(119) }
+    // 83. A fixed-layout table takes its column widths from <col> elements inside a <colgroup>.
+    let (p83, ok83) = build(a, "<table style=\"table-layout:fixed;width:200px;border-spacing:0\"><colgroup><col style=\"width:150px\"><col style=\"width:50px\"></colgroup><tr><td id=a>x</td><td id=b>y</td></tr></table>", "td { padding: 0 }")
+    if !ok83 || !near(rect_of(p83, "a").w, 150.0f64) || !near(rect_of(p83, "b").w, 50.0f64) { os.exit(120) }
+    // 84. A table's height applies to its grid; the caption adds to it.
+    let (p84, ok84) = build(a, "<table id=a style=\"height:100px;border-spacing:0\"><caption style=\"height:20px\"></caption><tr><td></td></tr></table>", "td { padding: 0 }")
+    if !ok84 || !near(rect_of(p84, "a").h, 120.0f64) { os.exit(121) }
     ret ok
 }

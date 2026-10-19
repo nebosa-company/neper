@@ -3369,6 +3369,17 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     }
     var ch_used = auto_h
     if spec_h >= 0.0f64 { ch_used = spec_h }
+    if cb4.inner == .Table && spec_h >= 0.0f64 {
+        // A table's height is the height of its grid; the captions come on top of it.
+        var caps = 0.0f64
+        var ck = cb4.first
+        while ck != NONE {
+            let cbx = &l.boxes.items[usize(ck)]
+            if cbx.inner == .Caption { caps += cbx.h + cbx.margin[0usize] + cbx.margin[2usize] }
+            ck = cbx.next
+        }
+        ch_used = maxf(spec_h, auto_h - caps) + caps
+    }
     // A ratio-derived height is a preferred size: the content (min-height: auto) can make it larger.
     if ratio_h >= 0.0f64 && (s.overflow_x == .Visible && s.overflow_y == .Visible) { ch_used = maxf(ratio_h, auto_h) }
     ch_used = maxf(0.0f64, clamp_height_auto(l, c, ch_used, ch, auto_h))
@@ -3818,6 +3829,37 @@ fn build_table(l: *Layout, t: u32) -> u32 {
                 q += 1usize
             }
             cursor += span
+        } else if kb.inner == .ColumnGroup {
+            // The <col> children of a <colgroup>; a group without any stands for `span` columns itself.
+            var gkid = kb.first
+            var had_cols = false
+            while gkid != NONE {
+                let gk = &l.boxes.items[usize(gkid)]
+                if gk.inner == .Column {
+                    had_cols = true
+                    let gspan = span_attr(l, gk.node, "span")
+                    let gws = st(l, gk.style)
+                    let (gwv, ghas) = resolve_len(gws.width, -1.0f64)
+                    var gq = 0usize
+                    while gq < gspan && cursor + gq < ncols {
+                        if gws.width.kind == .Px && ghas { cspec[cursor + gq] = gwv }
+                        gq += 1usize
+                    }
+                    cursor += gspan
+                }
+                gkid = gk.next
+            }
+            if !had_cols {
+                let gspan2 = span_attr(l, kb.node, "span")
+                let gws2 = st(l, kb.style)
+                let (gwv2, ghas2) = resolve_len(gws2.width, -1.0f64)
+                var gq2 = 0usize
+                while gq2 < gspan2 && cursor + gq2 < ncols {
+                    if gws2.width.kind == .Px && ghas2 { cspec[cursor + gq2] = gwv2 }
+                    gq2 += 1usize
+                }
+                cursor += gspan2
+            }
         }
         kid = kb.next
     }
