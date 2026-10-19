@@ -436,6 +436,11 @@ fn setup_main(m: *Main, windows: bool) -> err {
     m.pool_grid.position = 0usize
     let (cs, cs_error) = coll_specs(a)
     if cs_error != ok { ret cs_error }
+    // Windows light: v3's footer fills the 12 px column beyond Sell at (it has a sum, too narrow to draw)
+    if windows && m.light {
+        cs[8usize].summary = 2
+        cs[8usize].summary_kind = grp.SummaryKind.Sum
+    }
     var events = dg.no_events()
     events.custom_cell = coll_cell
     let (g2, g2_error) = dg.create(a, &m.coll, &m.coll_group, cs, events, 20000u64)

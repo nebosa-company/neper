@@ -9645,6 +9645,8 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let (shown, shown_error) = summary_text(a, s, grp.footer_summary(grid.g, usize(s.summary)))
             if shown_error != ok { ret (zero, shown_error) }
             text = shown
+            // v3 draws no amount in a footer cell too narrow for it; the cell keeps its fill
+            if footer_edged_on(grid) && grid.theme.tokens.palette != .Dark && grid.columns[at].width < 16.0 { text = " " }
         }
         var inner: widget.Node = zero
         let node_error = text_node(a, grid, text, !grid.look.group_flat, .Text, &inner)
@@ -9686,9 +9688,13 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             let (trio, trio_error) = mem.alloc[widget.Node](a, 3usize)
             if trio_error != ok { ret (zero, control.TooLarge) }
             trio[0usize] = cells[at]
-            // round 13: in the yellow band (the pool grid) the picture column's two edge pixels are white
+            // round 13: in the yellow band (the pool grid) the picture column's two edge pixels are the band's own yellow (data_grid_main, v3)
             var trio_a: u32 = 0xFFFFFFu32
             var trio_b: u32 = 0xFFFFFFu32
+            if grid.theme.tokens.palette != .Dark {
+                trio_a = 0xFFFFDDu32
+                trio_b = 0xFFFFDDu32
+            }
             if grid.look.footer_band.red < grid.look.footer_band.green - 0.05 {
                 trio_a = 0xEBEEF2u32
                 trio_b = 0xC7E0C8u32
