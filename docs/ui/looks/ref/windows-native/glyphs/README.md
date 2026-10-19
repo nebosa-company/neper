@@ -48,20 +48,34 @@ Model the Neper pipeline fits to these atlases (`lib/e/text/tthint.e`, `ttglyph.
   function is recognised by its signature), `GETINFO` answers the ClearType and symmetric smoothing bits, the freedom vector says which
   direction is x. Storage 22 and 24 bypass the legacy Talk functions.
 - Advance fit: GDI's ClearType pen advance is the `hdmx` advance A (the rounded scaled advance); the scaled advance X is rounded to 1/16.
-  At `IUP[x]` the points that x instructions touched move by the difference spread over the glyph: a stem (MIRP or MSIRP pair) by
-  round(centre * (A - X) / X), IP by the interpolated shifts of its two references (settled after the whole program, so a reference that a
-  later MIRP pairs counts with its final shift), a point that MDRP, ALIGNRP or SHP set against another with that one's shift, the right
-  phantom never moved by x moves. A composite component is fitted to the device advance of the top glyph (its offset rounds to 1/16 in x).
+  At `IUP[x]` (or, for a glyph whose program never reaches it, when the glyph is drawn: the tap fonts then read it unfitted) the points
+  that x instructions touched move by the difference spread over the glyph:
+  - a stem (a MIRP or MSIRP pair that is not a height) by round(centre * (A - X) / X), ties down, both points the same; IP by the shifts
+    of its two references interpolated by the unhinted x and cut towards zero; the right phantom point never moves by x moves;
+  - a point that MDRP, ALIGNRP or SHP sets against another takes that one's shift, and the first point it was set against is the one it
+    keeps (a later instruction, or an IP after one of these, changes nothing);
+  - a diagonal measure (an MDRP along x whose projection is not along x) leaves its point out of the following: it gets the shift of
+    the nearest points on its contour that were placed by something other than IP (all the IP'd ones when there are none), interpolated by
+    the unscaled x;
+  - an instruction that moves, along a projection that is not y, a point that already has followers (the diagonal MIRP of `< > 4`, or an
+    ALIGNRP that would make a reference follow its follower) switches the glyph to the other rule: every point that follows another moves
+    by round(x * (A - X) / X) at its own x, and the points nothing was set against keep 0.
+  - A composite component is fitted to the device advance of the top glyph (its offset rounds to 1/16 in x); its right phantom point
+    carries round(own advance * (A - X) / X) and IP interpolates over the component's own span.
+- Distances along any projection but y round, limit (cut-in) and keep their minimum on the 1/16 pixel grid, not only along x.
 - The hinted points are checked against `GetGlyphOutline` in black and white (the whole-pixel machine) and against the ClearType machine
   through the tap fonts in `scripts/winnative/tap*.py`: copies of the font whose programs write the `GC` reading of every point into
   storage and show it as bits, cut after K instructions or after `IUP[x]`.
-- Status at the end of round 23 (non-probe atlases, 189 ink glyphs each): pixel-identical for Segoe UI regular 11 to 18 px 91.5 to 97.9 %
-  (24 px 72.5 %), Segoe UI bold 86 to 95 % (24 px 75.7 %), Tahoma regular 78 to 88 % (21 px 79.4 %), Tahoma bold 77 to 86 % (21 px
-  84.7 %); 86.9 % over the 28 atlases, 4601 of 5292. ClearType points equal GDI's for 10566 of 12082 glyphs; the black-and-white outline
-  and advance already match for 99 %. Fed GDI's own hinted points, the rasteriser alone reproduces 97.5 % of the glyphs at 11 to 18 px
-  and 76 % at 24 and 21 px, so the first cap is the hinter.
-- What blocks 95 %: (1) the x fit of single touched points. A point that MDAP rounds alone shifts by 0, but a point that ALIGNRP, SHP or
-  MDRP sets against it sometimes shifts in proportion to its own position (`<`, `>`: 15 of A - X = 17 at x = 480) and sometimes with the
-  group of its reference (`#`: both bars 17 and 0), and the instruction order in the programs does not tell which; the stem-centre rule
-  fits `H`, `o`, `A` and most letters but not `# $ 4 6 Z z { }`. (2) The six by five path at Segoe UI 24 and Tahoma 21: a pure function of
-  the five line levels leaves 0.17 % of the cells wrong, so one glyph in four has a cell off. (3) Accented composites of Segoe UI bold.
+- Status (non-probe atlases, 190 ink glyphs each, `text_cleartype_oracle --report`): pixel-identical within 2 levels for 5043 of 5320
+  glyphs, 94.8 %. Per atlas: 95 to 99.5 % for 20 of 28; below 95 %: Segoe UI Bold 14 px 93.7 %, Tahoma regular 11, 13 and 16 px 94.7,
+  93.7 and 94.2 %, Tahoma Bold 14 px 93.7 %, and the large sizes, Segoe UI 24 px 75.3 % (Bold 85.8 %) and Tahoma 21 px 86.8 %. The
+  ClearType points equal GDI's tap-font points for 5238 of 5285 glyphs (99.1 %); the black-and-white outline and advance match for 99 %.
+- What is left: (1) 47 glyphs whose hinted points differ, in a dozen programs: `$ f x` of Tahoma (a pair taking its shift from a
+  follower of an IP'd point; `f`, whose top arc is fitted by rules not found), Segoe UI Bold `A` at 14, 18 and 24 px and its accents
+  (the interpolation of a diagonally measured point is off by one at those sizes), `#`, `s`, `m`. (2) About 240 glyphs whose points
+  are right and whose pixels differ by one sample at the extreme of a bowl: GDI's crossing of a near-horizontal arc differs from the
+  exact quadratic by 0.3 to 1.2 of 1/64 sample (a y error of a tenth of 1/64 px there), too fine for any flattening or quantising
+  model tried (uniform and adaptive chords, FreeType 1's halving with integer midpoints at steps 1 to 32, vertex rounding, a crossing
+  bias, tie rules, row and column offsets: each loses 40 to 2000 glyphs). (3) The six by five path at Segoe UI 24 and Tahoma 21: the
+  same edge noise on five times as many sample rows, one glyph in four with a cell off; the 0.17 % of cells that are wrong lie within
+  two samples of a level boundary, so they are single samples again.
