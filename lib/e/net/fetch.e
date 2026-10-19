@@ -9,7 +9,8 @@
 // says, and `Authorization` is dropped when the origin changes) up to `max_redirects`; decodes `Content-Encoding` in
 // reverse order with a cap on the decoded size.
 //
-// What it does not do yet: connection reuse (every request is `Connection: close`), HTTP/2, caching, CORS or CSP (those are
+// What it does not do yet: connection reuse (every request is `Connection: close`), HTTP/2 multiplexing (each request has its own
+// h2 connection, chosen by ALPN; a server that does not offer h2 is remembered and spoken to over HTTP/1.1), caching, CORS or CSP (those are
 // the request pipeline above it, `e.web`), proxies and authentication challenges.
 //
 // Memory: everything the response holds lives in the client's arena.
@@ -24,6 +25,7 @@ use e.io
 use e.mem
 use e.net
 use e.net.cookie as cookie
+use e.net.h2client as h2client
 use e.net.http as http
 use e.net.tls
 use e.os
@@ -59,7 +61,7 @@ type Config = struct {
     body_limit: usize, max_redirects: usize, allow_file: bool
 }
 
-type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar }
+type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize }
 
 fn default_config(roots: []const u8) -> Config {
     ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize, allow_file: false }
@@ -71,7 +73,7 @@ fn client(a: *mem.Arena, cfg: Config, max_cookies: usize) -> (Client, err) {
     if ce != ok { ret (zero, ce) }
     let (text, te) = mem.alloc[u8](a, max_cookies * 256usize)
     if te != ok { ret (zero, te) }
-    ret (Client { a: a, cfg: cfg, jar: cookie.jar_new(cookies, text) }, ok)
+    ret (Client { a: a, cfg: cfg, jar: cookie.jar_new(cookies, text), h1_hosts: zero, h1_count: 0usize }, ok)
 }
 
 fn unix_seconds() -> i64 {
@@ -404,6 +406,22 @@ fn same_origin(a: *mem.Arena, x: *const url.Url, y: *const url.Url) -> bool {
     ret str.eq(url.origin(a, x), url.origin(a, y))
 }
 
+fn known_h1(c: *Client, host: str) -> bool {
+    var i = 0usize
+    while i < c.h1_count {
+        if str.eq(c.h1_hosts[i], host) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn remember_h1(c: *Client, host: str) {
+    if c.h1_count < 16usize {
+        c.h1_hosts[c.h1_count] = host
+        c.h1_count += 1usize
+    }
+}
+
 // One exchange with the server for `u` (no redirects): the raw response.
 fn exchange(c: *Client, u: *const url.Url, method: http.Method, headers: []const http.Header, body: []const u8) -> (http.Response, err) {
     var port = u.port
@@ -428,6 +446,18 @@ fn exchange(c: *Client, u: *const url.Url, method: http.Method, headers: []const
             if te != ok { ret (zero, te) }
             let (none, me) = mem.alloc[str](c.a, 1usize)
             if me != ok { ret (zero, me) }
+            var try_h2 = !known_h1(c, bare)
+            if try_h2 {
+                let (protos, pre) = mem.alloc[str](c.a, 2usize)
+                if pre != ok { ret (zero, pre) }
+                protos[0usize] = "h2"
+                protos[1usize] = "http/1.1"
+                let cfg2 = tls.ClientConfig { server_name: bare, trust_roots: c.cfg.roots, alpn: protos[0usize..2usize], entropy: entropy, now: now }
+                let (resp2, re2) = h2client.request(c.a, eps[i], cfg2, http.method_text(method), host_header(c.a, u), path_and_query(c.a, u), headers, body, c.cfg.body_limit)
+                if re2 == ok { ret (resp2, ok) }
+                if re2 == h2client.NotH2 { remember_h1(c, bare) }
+                try_h2 = false
+            }
             let cfg = tls.ClientConfig { server_name: bare, trust_roots: c.cfg.roots, alpn: none[0usize..0usize], entropy: entropy, now: now }
             let (resp, re) = http.request_tls(c.a, eps[i], cfg, &req, limits)
             if re == ok { ret (resp, ok) }

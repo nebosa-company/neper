@@ -1332,6 +1332,12 @@ fn stream_flush(ctx: *void) -> err {
     ret io.flush(&state.sink)
 }
 
+// The application protocol the handshake agreed on (empty when none was offered or chosen).
+fn negotiated_protocol(stream: *Stream) -> str {
+    let state = mem.cast[*State](stream.state)
+    ret state.selected_alpn
+}
+
 fn reader(stream: *Stream) -> io.Reader {
     ret io.Reader { ctx: stream.state, read: stream_read }
 }
