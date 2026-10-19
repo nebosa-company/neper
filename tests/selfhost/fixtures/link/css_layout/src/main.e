@@ -422,5 +422,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 75. An escaped identifier in a value is decoded (`\31 00px` is `100px`).
     let (p75, ok75) = build(a, "<div id=a></div>", "#a { width: \\31 00px; height: 10px; }")
     if !ok75 || !near(rect_of(p75, "a").w, 100.0f64) { os.exit(112) }
+    // 76. A block-level image with an auto height takes its intrinsic height.
+    let (p76, ok76) = build(a, "<div><img id=a width=15 height=12 style=\"display:block\"></div>", "")
+    if !ok76 || !is_rect(rect_of(p76, "a"), 0.0f64, 0.0f64, 15.0f64, 12.0f64) { os.exit(113) }
     ret ok
 }

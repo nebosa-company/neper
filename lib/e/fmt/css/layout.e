@@ -3340,6 +3340,11 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
             spec_h = rh
         }
     }
+    if spec_h < 0.0f64 && cb4.inner == .Replaced {
+        // A block-level replaced element with an auto height takes the height its intrinsic size and ratio give.
+        let (rw2, rh2) = used_replaced_size(l, c, content_w, ch)
+        spec_h = rh2
+    }
     var auto_h = 0.0f64
     var out_margin = no_margin()
     if orth {
