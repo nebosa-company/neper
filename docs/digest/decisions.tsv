@@ -2798,4 +2798,5 @@ D5162	867	Resource scopes live in the frame; the newer built-ins are written in 
 D5163	1157	Windows looks draw text as hinted ClearType, greyscale stays the default elsewhere (looks 19)
 D5164	1041	Temporal is JavaScript in the main realm, ISO calendar with UTC and fixed-offset zones (browser 5.14)
 D5165	1300	aarch64-macos: a static Mach-O over raw BSD system calls, ad-hoc signed by the linker
-D5166	776	aarch64-macos is dyld-loaded, because the kernel kills a static arm64 image
+D5166	777	aarch64-macos is dyld-loaded, because the kernel kills a static arm64 image
+D5167	914	macOS grows an os.syscall, the path surface and x86-64 through one Mach-O writer
