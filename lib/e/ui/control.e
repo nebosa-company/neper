@@ -19524,7 +19524,9 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     let (message_held, message_held_error) = mem.alloc[widget.Node](a, 1usize)
     if message_held_error != ok { ret (zero, TooLarge) }
     message_held[0usize] = message
-    var grown = widget.padded(0u64, 0.0, 14.0, 0.0, 14.0, style.defaults(), message_held[0usize..1usize])
+    // A browser breaks a line at its advance width, the text layout here at its ink extent (a little less): 4 dp of margin keep the
+    // same words on each line as md-snackbar's.
+    var grown = widget.padded(0u64, 0.0, 14.0, 4.0, 14.0, style.defaults(), message_held[0usize..1usize])
     grown.style.width = style.Length { Flex: 1.0 }
     parts[0usize] = grown
     var at = 1usize
@@ -19549,7 +19551,7 @@ fn material_snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, text_value
     sheet.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, sheet, parts[0usize..at])
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, sheet, parts[0usize..at])
     var sem: widget.Semantics = zero
     sem.role = 26u8
     sem.label = text_value
