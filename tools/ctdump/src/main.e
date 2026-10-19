@@ -120,6 +120,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             only_code = usize(number(args[ai][6usize..args[ai].len]))
             ttglyph.set_trace_glyph(-2i64)
         }
+        if str.eq(args[ai], "feat") { tthint.set_feat(true) }
+        if args[ai].len > 4usize && str.eq(args[ai][0usize..4usize], "cyc=") { tthint.set_ct_mode(number(args[ai][4usize..args[ai].len])) }
         if args[ai].len > 4usize && str.eq(args[ai][0usize..4usize], "cut=") {
             let (cut_text, cut_error) = fs.read_file(a, args[ai][4usize..args[ai].len], 1000000usize)
             if cut_error != ok { ret cut_error }
@@ -158,6 +160,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             continue
         }
         let gid = shape.glyph_of(bytes, sub, u32(code))
+        tthint.set_feat_code(i64(code))
         ttglyph.set_cut(cuts[code])
         ttglyph.set_cut_iup(cuts[code] > 0i64)
         let (o, o_error) = ttglyph.hint_glyph(hn, a, ppem, gid, cleartype)

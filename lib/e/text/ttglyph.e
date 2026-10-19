@@ -201,6 +201,9 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.ctX = 0i64
     h.ct_stop = false
     h.ct_cyc = false
+    h.ct_att = false
+    h.sd_a = -1i64
+    h.sd_b = -1i64
     if s.cleartype && !composite && bw_adv > 0i64 {
         h.ctX = z.org[2usize * (n - 3usize)] - z.org[2usize * (n - 4usize)]
         if top_gid != gid {
@@ -240,7 +243,7 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.ct_part = top_gid != gid
     tthint.set_cut_here(top_gid == gid)
     let run_error = tthint.vm_run(h, lo, hi)
-    if h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
+    if top_gid != gid && h.ctA != 0i64 && !h.ct_done && h.zone[1usize].n > 4usize { tthint.ct_scale(h) }
     tthint.set_trace(false)
     ret ok
 }
