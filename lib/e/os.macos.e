@@ -762,24 +762,70 @@ type Watch = resource(watch_close) struct { state: *void }
 type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
 type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
 
+const SYS_MMAP: usize = 197usize
+const SYS_MUNMAP: usize = 73usize
+const SYS_MSYNC: usize = 65usize
+const PROT_READ: usize = 1usize
+const PROT_WRITE: usize = 2usize
+const MAP_SHARED: usize = 1usize
+const MAP_FIXED: usize = 16usize
+const MS_SYNC: usize = 16usize
+const MAPPING_READ_ONLY: usize = 0usize
+const MAPPING_WRITABLE: usize = 1usize
+
+// A file mapped shared over address space `reserve` set aside; `offset` must be a multiple of the page
+// size (16 KB on Apple Silicon). `raw` records whether it may be written.
 fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err) {
-    var none: Mapping = zero
-    ret (none, Unsupported)
+    var mapping: Mapping = zero
+    if len == 0usize { ret (mapping, Failed) }
+    var protection = PROT_READ
+    if writable { protection = PROT_READ | PROT_WRITE }
+    let (address, reserve_error) = reserve(len)
+    if reserve_error != ok { ret (mapping, reserve_error) }
+    let placed = syscall(SYS_MMAP, mem.address_of(address), len, protection, MAP_SHARED | MAP_FIXED, f.raw, usize(offset))
+    if placed < 0isize {
+        let unused = syscall(SYS_MUNMAP, mem.address_of(address), len, 0usize, 0usize, 0usize, 0usize)
+        ret (mapping, from_errno(placed))
+    }
+    mapping.raw = MAPPING_READ_ONLY
+    if writable { mapping.raw = MAPPING_WRITABLE }
+    mapping.address = address
+    mapping.len = len
+    ret (mapping, ok)
 }
-fn mapping_bytes(m: Mapping) -> []const u8 {
-    var none: []const u8 = zero
-    ret none
+
+// The other half of `reserve`: the pages given back.
+fn release(p: *u8, n: usize) -> err {
+    ret from_errno(syscall(SYS_MUNMAP, mem.address_of(p), n, 0usize, 0usize, 0usize, 0usize))
 }
-fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
-    var none: []u8 = zero
-    ret (none, Unsupported)
-}
+
 fn mapping_region(m: Mapping) -> []u8 {
-    var none: []u8 = zero
-    ret none
+    var region: mem.Arena = zero
+    region.base = m.address
+    region.cap = m.len
+    region.off = 0usize
+    ret mem.view(&region, 0usize, m.len)
 }
-fn mapping_flush(m: Mapping) -> err { ret Unsupported }
-fn mapping_close(m: own Mapping) -> err { ret ok }
+
+fn mapping_bytes(m: Mapping) -> []const u8 {
+    ret mapping_region(m)
+}
+
+// A mapping opened for reading refuses rather than handing back a slice whose first write
+// would fault.
+fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    if m.raw != MAPPING_WRITABLE { ret (nothing, Unsupported) }
+    ret (mapping_region(m), ok)
+}
+
+fn mapping_flush(m: Mapping) -> err {
+    ret from_errno(syscall(SYS_MSYNC, mem.address_of(m.address), m.len, MS_SYNC, 0usize, 0usize, 0usize))
+}
+
+fn mapping_close(m: own Mapping) -> err {
+    ret from_errno(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
+}
 
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     var none: Watch = zero
