@@ -22885,7 +22885,7 @@ fn raw_pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
 // Measured on ref/windows-native/dark/edit-multiline-explorer: a 17 wide #171717 column (x 149 of the 168 wide edit, rows 2 to 87), the
 // thumb 2 wide at x 157 (#959595, its end rows #858585); its length is the track (the column less two 17 px arrow rows) times the
 // visible lines over all lines (33 rows for 5 of 8), its top the track times the first line over all lines.
-type WinDarkBar = struct { first: u32, rows: u32, lines: u32 }
+type WinDarkBar = struct { first: u32, rows: u32, lines: u32, classic: bool }
 
 fn win_dark_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let m = mem.cast[*WinDarkBar](ctx)
