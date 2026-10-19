@@ -165,17 +165,32 @@ fn finally_step(it: *js.Interp, this_val: js.Value, args: []const js.Value, reje
     if cve != ok { ret (js.undefv(), cve) }
     let (result, re) = js.call_function(it, onf, js.undefv(), js.zero_args())
     if re != ok { ret (js.undefv(), re) }
-    let (cap, cape) = js.new_promise_capability(it, cv)
-    if cape != ok { ret (js.undefv(), cape) }
-    let (rr0, rre0) = js.call_function(it, cap.resolve, js.undefv(), js.one_arg(it, result))
-    let (rp, rpe) = js.get_value(it, cap.promise, js.key_of("then"))
+    // PromiseResolve(C, result): a promise already made by C is used as it is, so its `then` is the one observed.
+    var chained = js.undefv()
+    var reuse = false
+    if js.is_object(result) && js.as_object(result).class == js.C_PROMISE {
+        let (rc, rce) = js.get_prop(it, js.as_object(result), js.key_of("constructor"), result)
+        if rce != ok { ret (js.undefv(), rce) }
+        if js.strict_equals(rc, cv) {
+            chained = result
+            reuse = true
+        }
+    }
+    if !reuse {
+        let (cap, cape) = js.new_promise_capability(it, cv)
+        if cape != ok { ret (js.undefv(), cape) }
+        let (rr0, rre0) = js.call_function(it, cap.resolve, js.undefv(), js.one_arg(it, result))
+        if rre0 != ok { ret (js.undefv(), rre0) }
+        chained = cap.promise
+    }
+    let (rp, rpe) = js.get_value(it, chained, js.key_of("then"))
     if rpe != ok { ret (js.undefv(), rpe) }
     let vh = js.new_plain(it)
     let e1 = js.set_named(it, vh, "v", arg(args, 0usize))
     var fn_obj = js.make_native(it, "", 0u32, then_finally_value)
     if rejecting { fn_obj = js.make_native(it, "", 0u32, then_finally_thrower) }
     fn_obj.aux = vh
-    let (r2, re2) = js.call_function(it, rp, cap.promise, js.one_arg(it, js.obj_value(fn_obj)))
+    let (r2, re2) = js.call_function(it, rp, chained, js.one_arg(it, js.obj_value(fn_obj)))
     ret (r2, re2)
 }
 
