@@ -54,7 +54,7 @@ type Hinter = struct {
     hdmx_at: usize, hdmx_records: usize, hdmx_record_size: usize,
     gasp_at: usize, gasp_ranges: usize,
     max_storage: usize, max_twilight: usize, max_fdefs: usize, max_stack: usize,
-    fdef_lo: []usize, fdef_hi: []usize, fdef_delta: []bool, fdef_bypass: []i64, in_delta: bool, bypass: i64, fpgm_done: bool,
+    fdef_lo: []usize, fdef_hi: []usize, fdef_delta: []bool, fdef_bypass: []i64, in_delta: bool, iup_y: bool, bypass: i64, fpgm_done: bool,
     sizes: [24]Size, size_count: usize,
     zsets: [14]Zone, level: usize,
     stack: []i64, sp: usize, fail: bool,
@@ -384,7 +384,7 @@ fn vm_is_x(h: *Hinter) -> bool {
     // The programs that set the size up (`fpgm`, `prep`) have no glyph zone and run as the black-and-white machine does: GDI's control
     // values come out of `prep` the same in ClearType (all 1297 of Segoe UI at 12 px), which they do not if x rounds to 1/16 pixel there.
     if h.zone[1usize].n == 0usize { ret false }
-    ret h.cleartype && h.gs.proj_x == 16384i64 && h.gs.proj_y == 0i64
+    ret h.cleartype && h.gs.free_x == 16384i64 && h.gs.free_y == 0i64
 }
 
 fn vm_project(h: *Hinter, dx: i64, dy: i64) -> i64 {
@@ -838,6 +838,7 @@ fn ct_scale(h: *Hinter) {
 }
 
 fn vm_iup(h: *Hinter, x_axis: bool) {
+    if !x_axis { h.iup_y = true }
     var ax = 1usize
     var mask = 16i64
     if x_axis {
@@ -1120,6 +1121,7 @@ fn vm_delta_skipped(h: *Hinter, zi: usize, p: usize) -> bool {
     if !h.cleartype || h.zone[1usize].n == 0usize { ret false }
     if h.gs.free_x != 0i64 && h.gs.free_y == 0i64 { ret true }
     if h.composite { ret false }
+    if h.iup_y { ret true }
     ret (h.zone[zi].tags[p] & 16i64) == 0i64
 }
 

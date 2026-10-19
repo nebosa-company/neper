@@ -210,6 +210,7 @@ fn gl_run(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, z: *tthint.Zo
     h.gs = s.gs
     h.sp = 0usize
     h.ran = true
+    h.iup_y = false
     var k = 0usize
     while k < h.cvt_count {
         h.cvt_work[k] = s.cvt[k]
