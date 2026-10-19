@@ -160,7 +160,6 @@ fn setup(m: *Bottom) -> err {
     look.footer_band = gl.rgb(0xC0DCC0u32)
     look.footer_edges = true
     look.plain_col = 4usize
-    if !m.light { look.ring_marks = "0 1 79 868a92;0 80 1 8a8f96;0 81 161 90949c;1 2 192 eff0f1;1 194 1 ecedf0;1 195 21 e6e9ee;1 216 1 d2d4d8;1 217 1 c1c1c2;1 218 23 e2e3e4" }
     look.soft_a0 = 0.75
     look.soft_x0 = 183.0
     look.soft_slope = 0.0 - 0.0005
@@ -169,8 +168,7 @@ fn setup(m: *Bottom) -> err {
     look.ring_left_o = gl.rgb(0x878B93u32)
     look.ring_left_i = gl.rgb(0xEFF0F1u32)
     look.ring_bottom = gl.rgb(0xCACCCFu32)
-    if !m.light { look.bar_marks = bottom_marks(k) }
-    if m.windows && m.light {
+    if m.windows {
         look.ring_model = 1u8
         look.ring_gy = 221.0
         look.ring_w = 576.0
@@ -269,14 +267,3 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let sheet = looks.Sheet { name: name, cells: seed.count, columns: 2usize, cell_w: 576.0, cell_h: 242.0, ctx: mem.cast[*void](&bottoms[0usize]), build: build }
     ret looks.run_all(a, &sheet)
 }
-
-// BEGIN GENERATED (scripts/looks_dialog_marks.py)
-fn bottom_marks(k: usize) -> str {
-    if k == 0usize { ret "202 0 1 9b9ea2;203 0 1 919498 172;375 0 1 acaeb3;1 1 1 b7babf;12 1 1 b4b7bb;13 1 1 bdc0c5;33 1 1 b4b7bb;34 1 1 bdc0c4;183 1 1 b5b8bc;184 1 1 bcbfc3;253 1 1 b6b8bd;254 1 1 bcbec3;303 1 1 b6b9bd;304 1 1 bbbec2;353 1 1 b7b9be;354 1 1 bbbdc2;418 1 1 b7babe;419 1 1 babdc1;483 1 1 b8babf;484 1 1 babcc1;563 1 1 b8bbbf;564 1 1 b9bcc0;1 20 1 eff0f1;2 20 1 ffffff 10;12 20 1 e8e8e8;13 20 1 f5f5f5;33 20 1 e4e4e4;34 20 1 f4f4f4;183 20 1 e6e6e6;184 20 1 f2f2f2;253 20 1 e7e7e7;254 20 1 f1f1f1;303 20 1 e8e8e8;304 20 1 f0f0f0;353 20 1 e8e8e8;354 20 1 f0f0f0;418 20 1 e9e9e9;419 20 1 efefef;483 20 1 eaeaea;484 20 1 eeeeee;563 20 1 ebebeb;564 20 1 ededed;1 217 1 c1c1c2;2 217 1 cacaca 65;67 217 1 cecece;107 217 1 cbcbcb;108 217 1 cacaca 105;213 217 1 cecece;1 241 1 c1c3c7;67 241 1 d2d4d7;68 241 1 d4d6d9 39;107 241 1 ccced1" }
-    if k == 1usize { ret "202 0 1 9b9ea2;203 0 1 919498 172;375 0 1 acaeb3;1 1 1 b7babf;12 1 1 b4b7bb;13 1 1 bdc0c5;33 1 1 b4b7bb;34 1 1 bdc0c4;183 1 1 b5b8bc;184 1 1 bcbfc3;253 1 1 b6b8bd;254 1 1 bcbec3;303 1 1 b6b9bd;304 1 1 bbbec2;353 1 1 b7b9be;354 1 1 bbbdc2;418 1 1 b7babe;419 1 1 babdc1;483 1 1 b8babf;484 1 1 babcc1;563 1 1 b8bbbf;564 1 1 b9bcc0;1 20 1 eff0f1;2 20 1 ffffff 10;12 20 1 e8e8e8;13 20 1 f5f5f5;33 20 1 e4e4e4;34 20 1 f4f4f4;183 20 1 e6e6e6;184 20 1 f2f2f2;253 20 1 e7e7e7;254 20 1 f1f1f1;303 20 1 e8e8e8;304 20 1 f0f0f0;353 20 1 e8e8e8;354 20 1 f0f0f0;418 20 1 e9e9e9;419 20 1 efefef;483 20 1 eaeaea;484 20 1 eeeeee;563 20 1 ebebeb;564 20 1 ededed;1 217 1 c1c1c2;2 217 1 cacaca 65;67 217 1 cecece;107 217 1 cbcbcb;108 217 1 cacaca 105;213 217 1 cecece;1 241 1 c1c3c7;67 241 1 d2d4d7;68 241 1 d4d6d9 39;107 241 1 ccced1" }
-    if k == 2usize { ret "202 0 1 9b9ea2;203 0 1 919498 172;375 0 1 acaeb3;1 1 1 b7babf;12 1 1 b4b7bb;13 1 1 bdc0c5;33 1 1 b4b7bb;34 1 1 adb7c2;35 1 1 acb8c3 149;184 1 1 bbbfc6;253 1 1 b6b8bd;254 1 1 bcbec3;303 1 1 b6b9bd;304 1 1 bbbec2;353 1 1 b7b9be;354 1 1 bbbdc2;418 1 1 b7babe;419 1 1 babdc1;483 1 1 b8babf;484 1 1 babcc1;563 1 1 b8bbbf;564 1 1 b9bcc0;1 20 1 eff0f1;2 20 1 ffffff 10;12 20 1 e8e8e8;13 20 1 f5f5f5;33 20 1 e4e4e4;34 20 1 e3ebf1;35 20 1 e3edf4 148;183 20 1 dde6ed;184 20 1 f1f3f5;253 20 1 e7e7e7;254 20 1 f1f1f1;303 20 1 e8e8e8;304 20 1 f0f0f0;353 20 1 e8e8e8;354 20 1 f0f0f0;418 20 1 e9e9e9;419 20 1 efefef;483 20 1 eaeaea;484 20 1 eeeeee;563 20 1 ebebeb;564 20 1 ededed;1 217 1 c1c1c2;2 217 1 cacaca 65;67 217 1 cecece;107 217 1 cbcbcb;108 217 1 cacaca 105;213 217 1 cecece;1 241 1 c1c3c7;67 241 1 d2d4d7;68 241 1 d4d6d9 39;107 241 1 ccced1" }
-    if k == 3usize { ret "202 0 1 9b9ea2;203 0 1 919498 172;375 0 1 acaeb3;1 1 1 b7babf;12 1 1 b4b7bb;13 1 1 bdc0c5;33 1 1 b4b7bb;34 1 1 bdc0c4;183 1 1 b5b8bc;184 1 1 bcbfc3;253 1 1 b6b8bd;254 1 1 bcbec3;303 1 1 b6b9bd;304 1 1 bbbec2;353 1 1 b7b9be;354 1 1 bbbdc2;418 1 1 b7babe;419 1 1 babdc1;483 1 1 b8babf;484 1 1 babcc1;563 1 1 b8bbbf;564 1 1 b9bcc0;1 20 1 eff0f1;2 20 1 ffffff 10;12 20 1 e8e8e8;13 20 1 f5f5f5;33 20 1 e4e4e4;34 20 1 f4f4f4;183 20 1 e6e6e6;184 20 1 f2f2f2;253 20 1 e7e7e7;254 20 1 f1f1f1;303 20 1 e8e8e8;304 20 1 f0f0f0;353 20 1 e8e8e8;354 20 1 f0f0f0;418 20 1 e9e9e9;419 20 1 efefef;483 20 1 eaeaea;484 20 1 eeeeee;563 20 1 ebebeb;564 20 1 ededed;1 217 1 c1c1c2;2 217 1 cacaca 65;67 217 1 cecece;107 217 1 cbcbcb;108 217 1 cacaca 105;213 217 1 cecece;1 241 1 c1c3c7;67 241 1 d2d4d7;68 241 1 d4d6d9 39;107 241 1 ccced1" }
-    if k == 4usize { ret "202 0 1 9b9ea2;203 0 1 919498 172;375 0 1 acaeb3;1 1 1 b7babf;12 1 1 b4b7bb;13 1 1 bdc0c5;33 1 1 b4b7bb;34 1 1 bdc0c4;183 1 1 b5b8bc;184 1 1 bcbfc3;253 1 1 b6b8bd;254 1 1 bcbec3;303 1 1 b6b9bd;304 1 1 bbbec2;353 1 1 b7b9be;354 1 1 bbbdc2;418 1 1 b7babe;419 1 1 babdc1;483 1 1 b8babf;484 1 1 babcc1;563 1 1 b8bbbf;564 1 1 b9bcc0;1 20 1 eff0f1;2 20 1 ffffff 10;12 20 1 e8e8e8;13 20 1 f5f5f5;33 20 1 e4e4e4;34 20 1 f4f4f4;183 20 1 e6e6e6;184 20 1 f2f2f2;253 20 1 e7e7e7;254 20 1 f1f1f1;303 20 1 e8e8e8;304 20 1 f0f0f0;353 20 1 e8e8e8;354 20 1 f0f0f0;418 20 1 e9e9e9;419 20 1 efefef;483 20 1 eaeaea;484 20 1 eeeeee;563 20 1 ebebeb;564 20 1 ededed;1 217 1 c1c1c2;2 217 1 cacaca 65;67 217 1 cecece;107 217 1 cbcbcb;108 217 1 cacaca 105;213 217 1 cecece;1 241 1 c1c3c7;67 241 1 d2d4d7;68 241 1 d4d6d9 39;107 241 1 ccced1" }
-    ret ""
-}
-// END GENERATED

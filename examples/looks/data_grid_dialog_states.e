@@ -284,7 +284,7 @@ fn arrange(app: *App, k: usize) {
         look.ring_left_i = gl.rgb(0xECEDEEu32)
         look.ring_right = gl.rgb(0xBBBDC1u32)
         look.ring_bottom = gl.rgb(0xCED0D4u32)
-        look.ring_marks = dialog_marks(app.name, k)
+        if app.light { look.ring_marks = dialog_marks(app.name, k) }
     } else {
         look.frame_none = true
         look.dialog_lines = true
@@ -294,9 +294,9 @@ fn arrange(app: *App, k: usize) {
         look.foot_w1 = gl.rgb(0xE8E8E8u32)
         look.foot_w2 = gl.rgb(0xE9E9E9u32)
         if app.family == 2usize { look.row_height = 18.0 }
-        look.ring_marks = dialog_marks(app.name, k)
+        if app.light { look.ring_marks = dialog_marks(app.name, k) }
         // round 13: the Missing list's bar track keeps its white first column while the rows fit (live capture)
-        if app.family == 2usize { look.bar_marks = "216 2 253 ffffff" }
+        if app.family == 2usize && app.light { look.bar_marks = "216 2 253 ffffff" }
     }
     // round 18: the live capture's leftover pixels (docs/ui/looks/marks/data_grid_dialog_states.txt, scripts/looks_marks_diff.py), Windows light only
     if app.light {

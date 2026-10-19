@@ -32,6 +32,9 @@ def run(capture, sheet, rect):
         ref = ref[y0:y1, x0:x1]
     s = ldn.load(os.path.join(ldn.OURS, sheet + ".png"))
     h, w = ref.shape[:2]
+    if s.shape[0] < h or s.shape[1] < w:
+        print("%-28s %-22s sheet smaller than the capture" % (capture, sheet))
+        return 0, 0
     r = cv2.matchTemplate(s.astype(np.float32), ref.astype(np.float32), cv2.TM_SQDIFF)
     best = None
     for _ in range(4):
