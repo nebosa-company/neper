@@ -320,7 +320,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots, GroupRect, ChipRing, TreeFocus, FocusInvert }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots, GroupRect, ChipRing, TreeFocus, FocusInvert, PixelsA, TreeLines }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape, pix: str, cols: usize, skip: usize }
 
@@ -385,7 +385,8 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var side = area.width
     if area.height < side { side = area.height }
     if m.shape == Shape.TreePlus || m.shape == Shape.TreeMinus || m.shape == Shape.TreeBox { ret tree_mark_paint(m, b, area) }
-    if m.shape == Shape.Pixels { ret pixels_paint(m, b, area) }
+    if m.shape == Shape.Pixels || m.shape == Shape.PixelsA { ret pixels_paint(m, b, area) }
+    if m.shape == Shape.TreeLines { ret tree_lines_paint(m, b, area) }
     if m.shape == Shape.DotsSoft || m.shape == Shape.DotsSoftLeft { ret dots_soft_paint(m, b, area) }
     if m.shape == Shape.SelDots { ret sel_dots_paint(m, b, area) }
     if m.shape == Shape.TreeFocus { ret tree_focus_paint(m, b, area) }
@@ -1025,16 +1026,19 @@ fn pix_digit(c: u8) -> f32 {
 fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
     var at = 0usize
     var n = 0usize
+    // round 45: the RGBA form, eight digits a pixel (RRGGBBAA) for bitmaps with soft edges (the tree list's check boxes); the six digit form stays
+    var step = 6usize
+    if m.shape == Shape.PixelsA { step = 8usize }
     // looks13-r2: runs of equal pixels in a row are one rectangle (the same pixels, far fewer commands: v3's bitmaps are mostly flat)
-    while at + 6usize <= m.pix.len {
+    while at + step <= m.pix.len {
         let col = n % m.cols
         var run = 1usize
         if col >= m.skip {
-            while col + run < m.cols && at + (run + 1usize) * 6usize <= m.pix.len {
+            while col + run < m.cols && at + (run + 1usize) * step <= m.pix.len {
                 var same = true
                 var d = 0usize
-                while d < 6usize {
-                    if m.pix[at + d] != m.pix[at + run * 6usize + d] { same = false }
+                while d < step {
+                    if m.pix[at + d] != m.pix[at + run * step + d] { same = false }
                     d += 1usize
                 }
                 if !same { break }
@@ -1048,11 +1052,15 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         var shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
         // Neper dark: a dark glyph pixel of the bitmap (the row arrow, the star's outline) is drawn in light ink so that it reads on the dark tile
         if style.neperdark_active() && (ri + gi + bi) / 3u32 < 110u32 { shown = style.hex_raw((225u32 - ri / 2u32) * 65536u32 + (226u32 - gi / 2u32) * 256u32 + (233u32 - bi / 2u32)) }
+        if m.shape == Shape.PixelsA {
+            let ai = u32(pix_digit(m.pix[at + 6usize]) * 16.0 + pix_digit(m.pix[at + 7usize]))
+            shown.alpha = f32(ai) / 255.0
+        }
         let px = f32(col) - f32(m.skip)
         let py = f32(n / m.cols)
         // round 18: 'ZZZZZZ' is a transparent pixel
-        if col >= m.skip && m.pix[at] != 90u8 { try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, f32(run), 1.0, shown) }
-        at += 6usize * run
+        if col >= m.skip && m.pix[at] != 90u8 && shown.alpha > 0.0 { try winpx.fill(b, f32(i64(area.x + 0.5)) + px, f32(i64(area.y + 0.5)) + py, f32(run), 1.0, shown) }
+        at += step * run
         n += run
     }
     ret ok
@@ -1062,7 +1070,9 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
 fn pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
     let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
     if marks_error != ok { ret (zero, marks_error) }
-    marks[0usize] = Mark { arena: a, color: rgb(0u32), inner: rgb(0u32), shape: Shape.Pixels, pix: pix, cols: usize(w), skip: 0usize }
+    var shape = Shape.Pixels
+    if pix.len == usize(w) * usize(h) * 8usize { shape = Shape.PixelsA }
+    marks[0usize] = Mark { arena: a, color: rgb(0u32), inner: rgb(0u32), shape: shape, pix: pix, cols: usize(w), skip: 0usize }
     var size = style.defaults()
     size.width = style.Length { Px: w }
     size.height = style.Length { Px: h }
@@ -1417,20 +1427,31 @@ fn tree_focus(a: *mem.Arena, blue: bool, width: f32, height: f32) -> (widget.Nod
 // the ones whose x + y is odd in the picture, is the inverse of the fill under it. `m.color` is that inverse (#592D00 over the selection's
 // #A6D2FF, black over white).
 fn focus_invert_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
-    let x0 = i64(area.x + 0.5)
-    let y0 = i64(area.y + 0.5)
+    var x0 = i64(area.x + 0.5)
+    var y0 = i64(area.y + 0.5)
     let w = i64(area.width + 0.5)
     let h = i64(area.height + 0.5)
+    // round 45: `skip` > 0 counts the parity from the rectangle's own corner (the tree's rows: the capture's dots are the odd pixels of its
+    // window, which this sheet's cells do not share) instead of the picture's: `skip - 1` is the number to add to x + y there
+    let from_corner = i64(m.skip)
+    var shift = 0i64
+    if from_corner > 0i64 {
+        shift = from_corner - 1i64
+        x0 = 0i64
+        y0 = 0i64
+    }
+    let ox = i64(area.x + 0.5)
+    let oy = i64(area.y + 0.5)
     var dx: i64 = 0i64
     while dx < w {
-        if (x0 + dx + y0) % 2i64 == 1i64 { try winpx.fill(b, f32(x0 + dx), f32(y0), 1.0, 1.0, m.color) }
-        if (x0 + dx + y0 + h - 1i64) % 2i64 == 1i64 { try winpx.fill(b, f32(x0 + dx), f32(y0 + h - 1i64), 1.0, 1.0, m.color) }
+        if (x0 + dx + y0 + shift) % 2i64 == 1i64 { try winpx.fill(b, f32(ox + dx), f32(oy), 1.0, 1.0, m.color) }
+        if (x0 + dx + y0 + h - 1i64 + shift) % 2i64 == 1i64 { try winpx.fill(b, f32(ox + dx), f32(oy + h - 1i64), 1.0, 1.0, m.color) }
         dx += 1i64
     }
     var dy: i64 = 1i64
     while dy < h - 1i64 {
-        if (x0 + y0 + dy) % 2i64 == 1i64 { try winpx.fill(b, f32(x0), f32(y0 + dy), 1.0, 1.0, m.color) }
-        if (x0 + w - 1i64 + y0 + dy) % 2i64 == 1i64 { try winpx.fill(b, f32(x0 + w - 1i64), f32(y0 + dy), 1.0, 1.0, m.color) }
+        if (x0 + y0 + dy + shift) % 2i64 == 1i64 { try winpx.fill(b, f32(ox), f32(oy + dy), 1.0, 1.0, m.color) }
+        if (x0 + w - 1i64 + y0 + dy + shift) % 2i64 == 1i64 { try winpx.fill(b, f32(ox + w - 1i64), f32(oy + dy), 1.0, 1.0, m.color) }
         dy += 1i64
     }
     ret ok
@@ -1438,9 +1459,16 @@ fn focus_invert_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
 
 // A `width` x `height` focus rectangle whose dots are `ink` (the inverse of the fill it lies on).
 fn focus_invert(a: *mem.Arena, width: f32, height: f32, ink: paint.Color) -> (widget.Node, err) {
+    let (node, node_error) = focus_invert_local(a, width, height, ink, 0usize)
+    ret (node, node_error)
+}
+
+// The same with its dots counted from its own corner: a dot stands where dx + dy + `phase` is odd (`phase` 0 is not this form; pass 1 or more:
+// the number added is `phase - 1`).
+fn focus_invert_local(a: *mem.Arena, width: f32, height: f32, ink: paint.Color, phase: usize) -> (widget.Node, err) {
     let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
     if marks_error != ok { ret (zero, marks_error) }
-    marks[0usize] = Mark { arena: a, color: ink, inner: ink, shape: Shape.FocusInvert, pix: "", cols: 0usize, skip: 0usize }
+    marks[0usize] = Mark { arena: a, color: ink, inner: ink, shape: Shape.FocusInvert, pix: "", cols: 0usize, skip: phase }
     var size = style.defaults()
     size.width = style.Length { Px: width }
     size.height = style.Length { Px: height }
@@ -1483,6 +1511,85 @@ fn gx_tree_minus() -> str { ret "D1D2D2B6B6B6B6B6B6B6B6B6B6B6B6B6B6B6B6B6B6B6B6B
 fn gx_tree_minus_w() -> f32 { ret 9.0 }
 fn gx_tree_minus_h() -> f32 { ret 10.0 }
 fn gx_tree_check() -> str { ret "FFFFFFCACACA9D9D9D9696969696969696969696969696969696969696969D9D9DC4C4C4FFFFFFC4C4C4A1A1A1C0C0C0C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3BABABA9D9D9DCBCBCB7F7F7FC9C9C9F0F0F0F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3EDEDEDCFCFCF838383656565EDEDEDF3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F0F0F0656565626262F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3626262626262F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3626262626262F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3626262626262F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3626262626262F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3626262626262F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3626262696969EDEDEDF3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3E7E7E76969699A9A9AB3B3B3E7E7E7F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3EDEDEDB0B0B0939393E5E5E5A2A2A2929292929292929292929292929292929292929292929292959595A8A8A8E1E1E1FFFFFFE2E2E2CECECECBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCECECEE5E5E5FFFFFF" }
+// round 45: the 1:1 capture's tree list check boxes as RGBA bitmaps (13 x 14, a clear top row, soft corners; the checked box's mark is white over #005FB8, the empty box a #626262 frame round #F3F3F3), solved from the same box over white and over #EFEFEF rows so they sit on either
+fn gx_tree_check_a() -> str { ret "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000061616180626262EF626262FF626262FF626262FF626262FF626262FF626262FF626262FF626262EF6363638F000000006161618F999999FFEAEAEAFFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFE1E1E1FF989898FF63636380626262EFE1E1E1FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFEAEAEAFF626262EF626262FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FF626262FF626262FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FF626262FF626262FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FF626262FF626262FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FF626262FF626262FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FF626262FF626262FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FF626262FF626262FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FF626262FF626262EFEAEAEAFFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFE1E1E1FF626262EF63636380989898FFE1E1E1FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFF3F3F3FFEAEAEAFF989898FF6161618F000000006363638F616161EF626262FF626262FF626262FF626262FF626262FF626262FF626262FF616161EF6161618000000000" }
+fn gx_tree_check_on_a() -> str { ret "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005FB780005FB9EF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB9EF0161BA8F00000000005FB88F005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF0161B980005FB9EF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8EF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF5F9BD3FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FFA0C3E5FF5F9BD2FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF5091CEFF005FB8FF005FB8FF005FB8FFA0C3E5FF5F9BD2FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF609BD3FF9FC3E4FF005FB8FFA0C3E5FF5F9BD2FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF609BD3FFDFEBF6FF5F9BD2FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF1069BCFF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB9EF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8EF0161B980005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF015FB88F00000000015FBA8F005FB9EF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB8FF005FB9EF015FB98000000000" }
+// round 45: the 1:1 capture's expanded tree box, 9 x 9 (the collapsed one is gx_expander_c)
+fn gx_expander_m() -> str { ret "BABBBC919191919191919191919191919191919191919191BABBBC919191FAFBFBFAFBFBFAFBFBFAFBFBFAFBFBFAFBFBFAFBFB919191919191FAFBFBFAFBFBFAFBFBFAFBFBFAFBFBFAFBFBFAFBFB919191919191FAFBFBFAFBFBFAFBFBFAFBFBFAFBFBFAFBFBFAFBFB919191919191EDEDEC4B63A74B63A74B63A74B63A74B63A7EDEDEC919191919191EDEDECEDEDECEDEDECEDEDECEDEDECEDEDECEDEDEC919191919191E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3919191919191E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3E3919191BABBBC919191919191919191919191919191919191919191BABBBC" }
+
+// round 45: the Windows light tree list's dotted lines (v3 TcxTreeList), a #DCDCDC dot on every other pixel, drawn behind the boxes from the
+// twisty's left edge. A dot stands where x + y + the row's index is even (x from the twisty's edge, y from the row's top): the capture's dots
+// are the odd pixels of the tree's own grid and its rows are 17 high. `cols` is the node's depth and `skip` its flags: bits 0 to 7 the
+// ancestor levels whose line goes on past this row, bit 8 this node is its parent's last child, bit 9 it is the first root, bit 10 it has an
+// expander box, bit 11 it is open (its children's line starts under its check box), bit 12 the row's parity. The capture's levels are 15 px
+// apart while the sheet's rows indent 14 (the first column is narrower than its content and shrinks), hence 5 + 15 * level - 14 * depth.
+const TREE_LINE_MID: i64 = 7
+
+fn tree_line_x(level: i64, depth: i64) -> i64 { ret 5i64 + 15i64 * level - 14i64 * depth }
+
+fn tree_lines_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
+    let ox = i64(area.x + 0.5)
+    let oy = i64(area.y + 0.5)
+    let tall = i64(area.height + 0.5)
+    let depth = i64(m.cols)
+    let flags = m.skip
+    let row = i64((flags >> 12usize) & 1usize)
+    var level = 0i64
+    while level < depth && level < 8i64 {
+        if ((flags >> usize(level)) & 1usize) == 1usize { try tree_vline(m, b, ox, oy, tree_line_x(level, depth), 0i64, tall - 1i64, row) }
+        level += 1i64
+    }
+    let own = tree_line_x(depth, depth)
+    let last = ((flags >> 8usize) & 1usize) == 1usize
+    let first_root = ((flags >> 9usize) & 1usize) == 1usize
+    let branch = ((flags >> 10usize) & 1usize) == 1usize
+    var top = 0i64
+    if first_root {
+        top = 13i64
+        if !branch { top = TREE_LINE_MID }
+    }
+    var bottom = tall - 1i64
+    if last { bottom = TREE_LINE_MID }
+    try tree_vline(m, b, ox, oy, own, top, bottom, row)
+    var from = own + 1i64
+    if depth == 0i64 && branch { from = own + 5i64 }
+    var x = from
+    while x <= own + 7i64 {
+        try tree_dot(m, b, ox, oy, x, TREE_LINE_MID, row)
+        x += 1i64
+    }
+    if ((flags >> 11usize) & 1usize) == 1usize { try tree_vline(m, b, ox, oy, tree_line_x(depth + 1i64, depth), 15i64, tall - 1i64, row) }
+    ret ok
+}
+
+fn tree_dot(m: *Mark, b: *scene.Builder, ox: i64, oy: i64, x: i64, y: i64, row: i64) -> err {
+    if ((x + y + row) & 1i64) != 0i64 { ret ok }
+    ret winpx.fill(b, f32(ox + x), f32(oy + y), 1.0, 1.0, m.color)
+}
+
+fn tree_vline(m: *Mark, b: *scene.Builder, ox: i64, oy: i64, x: i64, top: i64, bottom: i64, row: i64) -> err {
+    var y = top
+    while y <= bottom {
+        try tree_dot(m, b, ox, oy, x, y, row)
+        y += 1i64
+    }
+    ret ok
+}
+
+// The dotted lines of one tree row, `w` x `h` (see tree_lines_paint for `depth` and `flags`).
+fn tree_lines(a: *mem.Arena, depth: usize, flags: usize, w: f32, h: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
+    if marks_error != ok { ret (zero, marks_error) }
+    marks[0usize] = Mark { arena: a, color: rgb(0xDCDCDCu32), inner: rgb(0u32), shape: Shape.TreeLines, pix: "", cols: depth, skip: flags }
+    var size = style.defaults()
+    size.width = style.Length { Px: w }
+    size.height = style.Length { Px: h }
+    size.min_width = style.Length { Px: w }
+    size.min_height = style.Length { Px: h }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: size, children: none }, ok)
+}
+
 fn gx_tree_check_w() -> f32 { ret 13.0 }
 fn gx_tree_check_h() -> f32 { ret 14.0 }
 fn gx_tree_check_on() -> str { ret "FFFFFFA9CAE75F9BD35594D05594D05594D05594D05594D05594D05594D05F9BD39FC4E5FFFFFF9FC3E42A7AC40562BA005FB8005FB8005FB8005FB8005FB8005FB8005FB80562BA2577C3AACAE8307DC6005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB83581C70562BA005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB80562B9005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB83F87CA005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB86BA2D65F9BD2005FB8005FB8005FB8005FB8005FB8005FB83580C7005FB8005FB8005FB86BA2D675A8D82073C1005FB8005FB8005FB8005FB8005FB8005FB85B98D16AA2D5005FB86BA2D675A8D82073C1005FB8005FB8005FB8005FB8005FB8005FB8005FB82073C175A8D995BDE175A8D82073C1005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB82073C15594CF2073C1005FB8005FB8005FB8005FB8005FB8005FB80B66BB005FB8005FB8005FB8005FB80562B9005FB8005FB8005FB8005FB8005FB8005FB80B66BB5B98D2005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB8005FB85091CED5E5F34B8ECD0B66BB005FB8005FB8005FB8005FB8005FB8005FB8005FB80B66BB5594D0D0E1F2FFFFFFD0E1F2B0CDE9AACAE7AACAE7AACAE7AACAE7AACAE7AACAE7AACAE7B0CDE9D5E4F3FFFFFF" }
