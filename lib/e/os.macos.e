@@ -831,8 +831,8 @@ fn mapping_close(m: own Mapping) -> err {
 // wake is a rescan and a diff against it: a new name is Added, a missing one Removed, a changed
 // size or time Modified. Every entry, and the directory, is registered for vnode events so a
 // change to a file's contents wakes the wait too, not only a change to the listing.
-// ponytail: one level only (recursive is refused, as on Linux) and at most WATCH_ENTRIES
-// entries are tracked; a larger directory is watched for its first ones.
+// ponytail: at most WATCH_ENTRIES (and 64 directories to descend into) are tracked; a larger
+// tree is watched for its first ones, breadth first.
 const SYS_KQUEUE: usize = 362usize
 const SYS_KEVENT: usize = 363usize
 const EVFILT_VNODE: i16 = -4i16
@@ -846,8 +846,8 @@ const WATCH_NAME: usize = 256usize
 // `struct kevent`, 32 bytes: the identifier (a descriptor), the filter, the flags, the filter's
 // flags, its data, and the caller's word.
 type Kevent = struct { ident: u64, filter: i16, flags: u16, fflags: u32, data: i64, udata: u64 }
-type Snapshot = struct { name: [256]u8, name_length: usize, inode: u64, size: u64, modified_ns: i64, descriptor: isize, live: bool }
-type WatchState = struct { queue: usize, directory: usize, base: str, entries: [256]Snapshot, found: [256]bool }
+type Snapshot = struct { name: [256]u8, name_length: usize, inode: u64, size: u64, modified_ns: i64, descriptor: isize, live: bool, directory: bool }
+type WatchState = struct { queue: usize, directory: usize, base: str, recursive: bool, entries: [256]Snapshot, found: [256]bool }
 
 fn snapshot_has(entry: *const Snapshot, name: str) -> bool {
     if !entry.live || entry.name_length != name.len { ret false }
@@ -923,9 +923,58 @@ fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
     ret (bytes[0usize..at + name.len], ok)
 }
 
+// The entries to watch, each by its path relative to the watched directory: its direct children,
+// and with `recursive` the children of every directory found, breadth first, up to WATCH_ENTRIES
+// entries and WATCH_QUEUE directories. A directory that goes away between being found and
+// being read is skipped; the top one failing is the caller's error.
+const WATCH_QUEUE: usize = 64usize
+
+fn watch_collect(a: *mem.Arena, base: str, recursive: bool) -> ([]DirEntry, err) {
+    var none: []DirEntry = zero
+    let (out, out_error) = mem.alloc[DirEntry](a, WATCH_ENTRIES)
+    if out_error != ok { ret (none, OutOfMemory) }
+    let (queue, queue_error) = mem.alloc[str](a, WATCH_QUEUE)
+    if queue_error != ok { ret (none, OutOfMemory) }
+    queue[0usize] = ""
+    var head = 0usize
+    var tail = 1usize
+    var count = 0usize
+    while head < tail && count < WATCH_ENTRIES {
+        let relative = queue[head]
+        head += 1usize
+        var directory = base
+        if relative.len != 0usize {
+            let (joined, join_error) = watch_path(a, base, relative)
+            if join_error != ok { ret (none, join_error) }
+            directory = joined
+        }
+        let (listing, listing_error) = readdir(a, directory)
+        if listing_error != ok {
+            if head == 1usize { ret (none, listing_error) }
+            continue
+        }
+        var at = 0usize
+        while at < listing.len && count < WATCH_ENTRIES {
+            var name = listing[at].name
+            if relative.len != 0usize {
+                let (nested, nested_error) = watch_path(a, relative, name)
+                if nested_error != ok { ret (none, nested_error) }
+                name = nested
+            }
+            out[count] = DirEntry { name: name, kind: listing[at].kind }
+            count += 1usize
+            if recursive && listing[at].kind == .Dir && tail < WATCH_QUEUE {
+                queue[tail] = name
+                tail += 1usize
+            }
+            at += 1usize
+        }
+    }
+    ret (out[0usize..count], ok)
+}
+
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     var watch: Watch = zero
-    if recursive { ret (watch, Unsupported) }
     let queue = syscall(SYS_KQUEUE, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
     if queue < 0isize { ret (watch, from_errno(queue)) }
     let (holder, holder_error) = mem.alloc[WatchState](a, 1usize)
@@ -945,6 +994,7 @@ fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     }
     state.queue = usize(queue)
     state.base = path
+    state.recursive = recursive
     // The directory itself, so a name added or removed wakes the wait.
     let directory = watch_register(a, state, path)
     if directory < 0isize {
@@ -953,7 +1003,7 @@ fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     }
     state.directory = usize(directory)
     // The first snapshot: what is there now is not news.
-    let (listing, listing_error) = readdir(a, path)
+    let (listing, listing_error) = watch_collect(a, path, recursive)
     if listing_error != ok {
         let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
         let closed_directory = syscall(SYS_CLOSE, usize(directory), 0usize, 0usize, 0usize, 0usize, 0usize)
@@ -979,6 +1029,7 @@ fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
                     entry.inode = info.file_id
                     entry.size = info.size
                     entry.modified_ns = info.modified_ns
+                    entry.directory = info.kind == .Dir
                     entry.descriptor = watch_register(a, state, full)
                     entry.live = true
                 }
@@ -998,7 +1049,7 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
     if events.len == 0usize { ret (0usize, ok) }
     while true {
         let checkpoint = mem.mark(a)
-        let (listing, listing_error) = readdir(a, state.base)
+        let (listing, listing_error) = watch_collect(a, state.base, state.recursive)
         if listing_error != ok {
             mem.reset(a, checkpoint)
             ret (0usize, listing_error)
@@ -1033,6 +1084,7 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
                 entry.inode = info.file_id
                 entry.size = info.size
                 entry.modified_ns = info.modified_ns
+                entry.directory = info.kind == .Dir
                 entry.descriptor = watch_register(a, state, full)
                 entry.live = true
                 state.found[usize(free)] = true
@@ -1048,11 +1100,15 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
                     entry.inode = info.file_id
                     entry.size = info.size
                     entry.modified_ns = info.modified_ns
-                    var changed: WatchEvent = zero
-                    changed.action = .Modified
-                    changed.path = full
-                    events[produced] = changed
-                    produced += 1usize
+                    // A directory's own time moves with its listing, which is reported as the
+                    // names that came and went and not as the directory changing.
+                    if !entry.directory {
+                        var changed: WatchEvent = zero
+                        changed.action = .Modified
+                        changed.path = full
+                        events[produced] = changed
+                        produced += 1usize
+                    }
                 }
             }
         }
