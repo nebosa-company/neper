@@ -109,8 +109,6 @@ DOCUMENTS = [
      "about": "The security audit, its findings and the defensive-tooling plan."},
     {"title": "Roadmap", "paths": ["docs/roadmap.md"],
      "about": "Milestones and what is planned."},
-    {"title": "Decisions", "paths": ["docs/decisions.md", "DECISIONS.md"],
-     "about": "Every design decision, in order."},
 ]
 
 PAGE_SIZE = A4
@@ -862,7 +860,6 @@ def build_library(entry, renderer, styles, md, text_tool):
 # -- controls --
 
 COMPONENTS = "docs/ux/components"
-BROWSER_SOURCE = "lib/e/web/shell.e"
 
 
 def control_names():
@@ -876,35 +873,26 @@ def control_readme(name):
 
 
 def controls_inputs():
-    return ([control_readme(n) for n in control_names()
-             if control_readme(n).exists()] + [REPO_ROOT / BROWSER_SOURCE])
+    return [control_readme(n) for n in control_names()
+            if control_readme(n).exists()]
 
 
 def build_controls(entry, renderer, styles, md, text_tool):
     names = control_names()
     readmes = {n: control_readme(n).read_text(encoding="utf-8", errors="replace")
                for n in names if control_readme(n).exists()}
-    browser = read_repo(BROWSER_SOURCE)
-    browser_text = leading_comment(browser, 1200)
     rows = [[str(i + 1), n, first_sentence(readmes[n]) if n in readmes
-             else "No written specification yet; a preview only."]
+             else "No written specification yet."]
             for i, n in enumerate(names)]
-    rows.append([str(len(names) + 1), "Browser",
-                 first_sentence(browser_text) or browser_text])
     rows = [[text_tool.sanitize(c) for c in r] for r in rows]
     flows = [renderer.heading_flowable("Index", "Index", 1, "h1"),
-             Paragraph(esc("%d controls (%d with a written specification), "
-                           "plus the browser control (%s). The specifications "
-                           "follow in the same order."
-                           % (len(names), len(readmes), BROWSER_SOURCE)),
-                       styles["body"])]
+             Paragraph(esc("%d controls, the browser control included. The "
+                           "specifications follow in the same order."
+                           % len(names)), styles["body"])]
     flows.extend(table_flows(renderer, ["#", "Control", "What it is"], rows))
     for n in names:
         if n in readmes:
             flows.extend(render_markdown(readmes[n], renderer, md, text_tool))
-    flows.append(renderer.heading_flowable("Browser", "Browser", 1, "h1"))
-    flows.append(Paragraph(esc(text_tool.sanitize(browser_text)),
-                           styles["body"]))
     return flows
 
 

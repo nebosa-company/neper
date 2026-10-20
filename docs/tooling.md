@@ -655,16 +655,23 @@ An `edit` inside a range any loaded module's source map marks `"edit": "generato
 and the byte where the edited text begins in it -- since the generated file is
 regenerated from that input and an edit made in it would be undone; `apply-plan`
 refuses such a plan with `E-TOOL-0003`, nothing applied. The other edits of the
-plan are plain, so a harness edits the original and re-plans.
+plan are plain, so a harness edits the original and re-plans. A crash mid-apply (D1519)
+leaves the journal and the lock, and the next apply refuses; `neper apply-plan --recover
+--root DIR` goes through the journal: a file holding its new digest gets its original
+back, a file holding its original is left alone, and any other file was edited after the
+crash, so recovery stops, names it and keeps the lock.
 
-`neper compare-manifests A B [--json]` (D482) holds two build manifests against
+`neper compare-manifests A B [--cross-host] [--json]` (D482) holds two build manifests against
 each other by what identifies a build -- `target`, `mode`, `root_module`,
 `tool_version`, `options.checks`, `options.cpu`, every input by path and hash, every dependency
 by module and both hashes, every artifact by kind, target and hash but not its
 path -- and prints one line per difference and `manifests agree` (exit 0) or
 `manifests differ (N)` (exit 1); with `--json`, a `difference` record each
 (`kind`, `name`, `left`, `right`, a side with no such entry `null`) and the
-result's `same` and `differences`, exit 0 either way.
+result's `same` and `differences`, exit 0 either way. `--cross-host` (D4304) compares a
+build made on one host with the same program built on another: only the architecture of
+`target` must agree, per-target variant files and the modules they stand for, libraries
+and artifacts are left out, and the `--json` result carries `cross_host`.
 `scripts/apply_plan.py` (D376) did the same in Python and is retired. What
 `uses-file` does not see (comments, strings, generated registrations) the plan does
 not edit.

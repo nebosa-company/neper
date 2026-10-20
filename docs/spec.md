@@ -4248,6 +4248,10 @@ x64-v4 --cpu sm_80`; a family given no level keeps its default, and a level whos
 family the build does not target — `sm_80` under `--gpu spv`, `aarch64-v8.2` on an
 x64 build — is an error.
 
+`--triple` is a synonym of `--target`. `--perturb` hands the modules to the workers
+smallest first and round-robin instead of in the usual order, so a harness can require
+that the image does not depend on the schedule (§15).
+
 `-o PATH` names the executable for a program root. For `--target spv|ptx` it names
 the one root device `.em`; dependencies remain in `.neper/<mode>`. For a non-root
 host module it must name an existing directory, into which that module's `.em` is
