@@ -1420,7 +1420,7 @@ extern fn raw_dlsym(handle: usize, symbol: usize) -> usize
 @import("c", "dlclose")
 extern fn raw_dlclose(handle: usize) -> i32
 
-@import("c", "NSGetExecutablePath")
+@import("c", "_NSGetExecutablePath")
 extern fn raw_executable_path(buffer: usize, size: usize) -> i32
 
 @import("c", "sigaction")
