@@ -291,6 +291,8 @@ fn set_look(rig: *Rig, look: Look) {
     scene.set_cff_text(rig.tokens.profile == .Linux)
     // The Windows profile draws text as ClearType (hinted, per-subpixel coverage); every other look keeps the greyscale fill.
     // NEPER_TEXT_AA=grayscale draws the Windows looks that way too, NEPER_TEXT_AA=cleartype draws every look in ClearType.
+    // It sets the default only: text marked `scene.gray_text` or `mono_text` (the Dev Express lists, disabled statics) ignores it, and the
+    // sheet captions are greyscale already, so the light check_list_box_dialog sheet is byte for byte the same under both.
     var text_aa = scene.TextAa.Grayscale
     if rig.tokens.profile == .Windows { text_aa = scene.TextAa.ClearType }
     let (aa_text, aa_error) = os.env(rig.a, "NEPER_TEXT_AA")
