@@ -9136,6 +9136,15 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             thumb_kids = one(a, nav_thumb(a, hthumb_width(grid) + 4.0))
             if grid.look.hthumb_flat { thumb_kids = one(a, nav_thumb_flat(a, hthumb_width(grid) + 4.0)) }
         }
+        if live_row && grid.look.crisp && !style.windows_dark_on() && win_look(grid) && !hot_thumb_now(grid) {
+            // round 44: the 1:1 capture's thumb is a plain #858585 bar, 9 tall, with a #929292 first and a #939393 last column
+            let crisp_w = f32(i64(hthumb_width(grid))) + 1.0
+            thumb = control.sized_style(crisp_w, 9.0)
+            thumb.background = paint.Brush { Solid: gl.rgb(0x858585u32) }
+            thumb_kids = one(a, nav_thumb_crisp(a, crisp_w))
+            thumb_start = thumb_start - 0.5
+            thumb_top = 0.0
+        }
         thumb.margin = style.EdgeLengths { left: style.Length { Px: thumb_start + left }, top: style.Length { Px: thumb_top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         cells[8usize] = widget.region(navigator_key(grid) + 9u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](grid), invoke: on_hthumb }, gestures: 39u8, enabled: true, focusable: false }, thumb, thumb_kids)
         shown = 9usize
@@ -9640,6 +9649,17 @@ fn nav_line_under(a: *mem.Arena, row: widget.Node, grid: *const Grid) -> widget.
     if green { line_value = 0xFAFAFAu32 }
     parts[0usize] = footer_px(a, 0.0, 0.0, 4000.0, 1.0, line_value)
     var n = 1usize
+    if win_look(grid) && grid.look.crisp && !style.windows_dark_on() && grid.nav_pos_w > 0.0 && grid.look.ring_w > 0.0 && !grid.footer_visible {
+        // round 44: the 1:1 capture's first row of the navigator is white where there is no button (the position box, the run to the bar)
+        // and the panel colour over the buttons
+        var tail: f32 = 88.0
+        if grid.immediate_edit { tail = 106.0 }
+        parts[0usize] = footer_px(a, 0.0, 0.0, 4000.0, 1.0, 0xFFFFFFu32)
+        parts[n] = footer_px(a, 0.0, 0.0, grid.nav_pos_x, 1.0, 0xF0F0F0u32)
+        parts[n + 1usize] = footer_px(a, grid.nav_pos_x + grid.nav_pos_w - 2.0, 0.0, tail, 1.0, 0xF0F0F0u32)
+        parts[n + 2usize] = footer_px(a, grid.look.ring_w - 19.0, 0.0, 17.0, 1.0, 0xF0F0F0u32)
+        n += 3usize
+    }
     if win_look(grid) && grid.theme.tokens.palette != .Dark && grid.nav_pos_w > 0.0 && footer_edged_on(grid) && grid.footer_visible {
         // round 40: the footer's bottom rule is darker over the buttons than over the position box and beyond (v3 draws the
         // navigator's buttons with a halo one row up): #D2 over #DA in the pool's yellow footer, #CA over #CF in the collection's
@@ -9689,6 +9709,15 @@ fn nav_thumb_flat(a: *mem.Arena, w: f32) -> widget.Node {
     parts[13usize] = footer_px(a, w - 1.0, 9.0, 1.0, 1.0, 0xDFDFDFu32)
     var s = control.sized_style(w, 10.0)
     ret widget.stack(0u64, s, parts[0usize..14usize])
+}
+
+fn nav_thumb_crisp(a: *mem.Arena, w: f32) -> widget.Node {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret widget.spacer(0u64, 0.0) }
+    parts[0usize] = footer_px(a, 0.0, 0.0, w, 9.0, 0x858585u32)
+    parts[1usize] = footer_px(a, 0.0, 0.0, 1.0, 9.0, 0x929292u32)
+    parts[2usize] = footer_px(a, w - 1.0, 0.0, 1.0, 9.0, 0x939393u32)
+    ret widget.stack(0u64, control.sized_style(w, 9.0), parts[0usize..3usize])
 }
 
 fn nav_thumb(a: *mem.Arena, w: f32) -> widget.Node {
@@ -10765,6 +10794,8 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             rule.height = style.Length { Px: 2.0 }
             if nav_rule_on(grid) { rule.height = style.Length { Px: 1.0 } }
             rule.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
+            // round 44: in the 1:1 capture this row is the pool's own #EFEFEF under the card art strip
+            if nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() { rule.background = paint.Brush { Solid: gl.rgb(0xEFEFEFu32) } }
             parts[at] = widget.box(0u64, rule, zero)
         } else {
             parts[at] = widget.box(0u64, style.defaults(), zero)
