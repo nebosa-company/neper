@@ -19,6 +19,7 @@ use nir
 use runtime_macos_a64
 use runtime_macos_x64
 use e.crypto.hash as crypto_hash
+use e.os
 
 error InvalidImage
 // The program reaches an `@import`, which needs dyld and libSystem.
@@ -219,7 +220,13 @@ fn place_code(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, funct
                         continue
                     }
                     let (runtime_offset, found_runtime) = runtime_symbol(x64, builder.function_refs[relocation.function_ref].name)
-                    if !found_runtime { ret MissingRuntime }
+                    if !found_runtime {
+                        // The error carries no text, so the function is named here.
+                        let (named, named_error) = os.write(os.stderr(), "missing macOS runtime function: ")
+                        let (listed, listed_error) = os.write(os.stderr(), builder.function_refs[relocation.function_ref].name)
+                        let (ended, ended_error) = os.write(os.stderr(), "\n")
+                        ret MissingRuntime
+                    }
                     try patch_branch(x64, output, site, runtime_start + runtime_offset)
                     relocations[relocation_at].resolved = true
                 }
