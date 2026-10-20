@@ -322,6 +322,11 @@ fn setup(app: *App) -> err {
         }
         // round 43: the light grid is drawn as the true 1:1 captures of v3 have it
         if app.windows && app.light { look.crisp = true }
+        // round 44: the grouped sheet's first grid (the group box still empty) has no focus: v3's pale #D5E4EE row in a solid #2A1B11 frame
+        if app.windows && app.light && k == 26usize {
+            look.idle_on = true
+            look.idle_edge = gl.rgb(0x2A1B11u32)
+        }
         dg.set_look(&app.grids[k], look)
         if k >= 25usize && k < 31usize { dg.show_group_box(&app.grids[k], true) }
         dg.set_row_ink(&app.grids[k], zero, ink)
@@ -354,7 +359,7 @@ fn setup(app: *App) -> err {
             }
         }
         // focused: the cells 0 to 5 (the capture's grid had the focus: dotted row rectangle); the last one is not
-        dg.set_forced_focus(&app.grids[k], k != 6usize)
+        dg.set_forced_focus(&app.grids[k], k != 6usize && !(app.light && k == 26usize))
         // round 12: the live header marks the picture column (outlined down triangle) and, grouped, the Edition column; Name is not marked
         if grouped(k) { dg.show_sort(&app.grids[k], 4usize, false) } else if app.windows { dg.show_sort(&app.grids[k], 10usize, false) } else { dg.show_sort(&app.grids[k], 3usize, false) }
         if app.windows {
