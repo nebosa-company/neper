@@ -168,6 +168,11 @@ fn setup(m: *Bottom) -> err {
     look.ring_left_o = gl.rgb(0x878B93u32)
     look.ring_left_i = gl.rgb(0xEFF0F1u32)
     look.ring_bottom = gl.rgb(0xCACCCFu32)
+    if m.windows && m.light {
+        // round 40: the capture's horizontal thumb starts 2 px further right and is 1 px longer than the main window's
+        look.hthumb_dx = 2.0
+        look.hthumb_adj = 1.0
+    }
     if m.windows {
         look.ring_model = 1u8
         look.ring_gy = 221.0

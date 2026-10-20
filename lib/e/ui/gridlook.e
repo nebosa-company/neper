@@ -95,6 +95,9 @@ type Look = struct {
     // looks9-w1: the live footer's cells carry their own edge pixels (the green collection footer)
     footer_edges: bool,
     nav_rule: bool,
+    // round 40: the pale edge pixels of the footer's first picture column and the indicator rule as the main window capture has them
+    // (#BF, #E8EBEF, #C9E1CB; the grid capture of data_grid_bottom has #BC, #EBEEF2, #C7E0C8)
+    foot_pale: bool,
     // looks9-w1: the column (1-based) whose cells never take the selection's fill (the collection grid's Edition column)
     plain_col: usize,
     // looks9-w1: the column lines are a 1 px DCDCDC line at a fractional place: coverage soft_a0 at x = soft_x0 of the row, falling soft_slope per px (0 = the old ramp)
@@ -204,6 +207,7 @@ fn v3() -> Look {
         ring_right: rgb(0xB5B8BDu32),
         footer_edges: false,
         nav_rule: false,
+        foot_pale: false,
         plain_col: 0usize,
         soft_a0: 0.0,
         soft_x0: 0.0,

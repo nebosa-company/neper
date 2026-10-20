@@ -394,6 +394,7 @@ fn setup_main(m: *Main, windows: bool) -> err {
     var pool_look = gl.v3()
     // looks9-w1 (Windows only, in the grid): the live footer cells' edge pixels and the frame ring's colours along the left side
     pool_look.footer_edges = true
+    pool_look.foot_pale = true
     pool_look.group_rect = true
     if windows {
         // round 13: the live pool grid's bar starts over the group box and its thumb is 88 px; the navigator thumb is 91 px of body
@@ -455,6 +456,7 @@ fn setup_main(m: *Main, windows: bool) -> err {
     look.ring_left_i = gl.rgb(0xEAEAECu32)
     look.ring_bottom = gl.rgb(0xCACCCFu32)
     look.footer_edges = true
+    look.foot_pale = true
     if windows { look.hthumb_adj = 0.0 - 1.0 }
     look.soft_a0 = 0.75
     look.soft_x0 = 183.0
