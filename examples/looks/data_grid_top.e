@@ -348,6 +348,8 @@ fn setup(app: *App) -> err {
             if app.windows {
                 app.grids[k].position = grp.visible_len(&app.groups[k]) - 1usize
                 dg.set_tail_gap(&app.grids[k], 4.0)
+                // round 44: the crisp grouped grid shows its last group row whole: 126 px of rows, the foot rule on the last row
+                if app.light { dg.set_tail_gap(&app.grids[k], 3.0) }
                 app.grids[k].offset = dg.entry_top(&app.grids[k], grp.visible_len(&app.groups[k]) - 7usize) + 2.0
             }
         }

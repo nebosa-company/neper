@@ -7798,6 +7798,7 @@ fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: 
         if grid.look.group_flat { label_top = 3.0 }
         // round 43: the light grid's frame is one pixel, so the row's contents stand one pixel further in than the two pixel fit had them
         if grid.has_cell_theme { label_left += 1.0 }
+        if grid.has_cell_theme && grid.look.crisp && !style.windows_dark_on() { label_top = 1.0 }
         pair[1usize] = widget.padded(0u64, label_left, label_top, 0.0, 0.0, style.defaults(), one(a, label))
         *out = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
         ret ok
