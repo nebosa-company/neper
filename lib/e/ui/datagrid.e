@@ -378,7 +378,10 @@ cust_rgb: u32,
     filter_lens: []usize,
     filter_ops: []u8,
     filter_pop: usize,
-    theme: *const control.Theme
+    theme: *const control.Theme,
+    // round 43: the theme of the cells' text where it is not the grid's (the light Windows grid draws its cells in Segoe UI, its header in Tahoma)
+    cell_theme: *const control.Theme,
+    has_cell_theme: bool
 }
 
 error TooManyColumns
@@ -7492,6 +7495,25 @@ fn skin(grid: *const Grid, value: u32) -> paint.Color {
 
 // A data cell's text: in the row's own ink when the application gave one (`set_row_ink`), else
 // in `role`.
+// the theme of a cell's text: the grid's own unless the Windows light grid names another
+fn cells_theme(grid: *const Grid) -> *const control.Theme {
+    if grid.has_cell_theme { ret grid.cell_theme }
+    ret grid.theme
+}
+
+// round 43: v3 centres a caption in its cell (the column less the line) by whole pixels, rounding down, from the GDI advance of the text; ours
+// rounds half up from a measured width one pixel off, so the light grid places a centred caption itself: `node` set in from the left.
+fn crisp_centre(a: *mem.Arena, grid: *const Grid, column: usize, text: str, node: widget.Node) -> (widget.Node, err) {
+    if !grid.has_cell_theme || column >= grid.origin.len || grid.aligns[grid.origin[column]] != 2u8 { ret (node, ok) }
+    let tail = control.segoe11_width(text)
+    if tail == 0.0 { ret (node, ok) }
+    // (the capture: Edition 'MBC' starts 22 in of 69, Color 'N' 25 of 59, Rarity 'U' 20 of 49)
+    var left = grid.columns[column].width - 1.0 - tail
+    left = f32(i64(left) / 2i64) - grid.look.pad
+    if left < 0.0 { left = 0.0 }
+    ret (widget.padded(0u64, left, 0.0, 0.0, 0.0, style.defaults(), one(a, node)), ok)
+}
+
 fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: style.ColorRole, row: usize, out: *widget.Node) -> err {
     // v3 marks the typed prefix in the current row's search cell (white on #0078D7)
     if grid.look.on && grid.has_search && grid.search_len > 0usize && grid.has_selection && grid.selected_row == row && search_matches(grid, row) {
@@ -7509,7 +7531,7 @@ fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role:
                 var options = control.text_options()
                 options.wrap = .None
                 options.size = grid.look.text_size
-                let (head, head_error) = control.colored_text(a, 0u64, text[0usize..n], grid.theme, options, gl.rgb(0xFFFFFFu32))
+                let (head, head_error) = control.colored_text(a, 0u64, text[0usize..n], cells_theme(grid), options, gl.rgb(0xFFFFFFu32))
                 if head_error != ok { ret head_error }
                 var tail_options = options
                 tail_options.color = role
@@ -7521,13 +7543,13 @@ fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role:
                     let (tail_ink, has_row_ink) = grid.ink_of(grid.ink_ctx, row)
                     if has_row_ink {
                         has_tail_ink = true
-                        let (colored, colored_error) = control.colored_text(a, 0u64, text[n..], grid.theme, tail_options, tail_ink)
+                        let (colored, colored_error) = control.colored_text(a, 0u64, text[n..], cells_theme(grid), tail_options, tail_ink)
                         tail = colored
                         tail_error = colored_error
                     }
                 }
                 if !has_tail_ink {
-                    let (plain_tail, plain_tail_error) = control.text(a, 0u64, text[n..], grid.theme, tail_options)
+                    let (plain_tail, plain_tail_error) = control.text(a, 0u64, text[n..], cells_theme(grid), tail_options)
                     tail = plain_tail
                     tail_error = plain_tail_error
                 }
@@ -7553,7 +7575,7 @@ fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role:
             var white = control.text_options()
             white.wrap = .None
             if bold { white.weight = 700u32 }
-            let (lit, lit_error) = control.colored_text(a, 0u64, text, grid.theme, white, style.hex(0xFFFFFFu32))
+            let (lit, lit_error) = control.colored_text(a, 0u64, text, cells_theme(grid), white, style.hex(0xFFFFFFu32))
             if lit_error != ok { ret lit_error }
             *out = lit
             ret ok
@@ -7566,7 +7588,7 @@ fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role:
             options.wrap = .None
             if grid.look.on { options.size = grid.look.text_size }
             if bold { options.weight = 700u32 }
-            let (coloured, coloured_error) = control.colored_text(a, 0u64, text, grid.theme, options, ink)
+            let (coloured, coloured_error) = control.colored_text(a, 0u64, text, cells_theme(grid), options, ink)
             if coloured_error != ok { ret coloured_error }
             *out = coloured
             ret ok
@@ -7581,7 +7603,7 @@ fn text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: styl
     options.color = role
     if grid.look.on { options.size = grid.look.text_size }
     if bold { options.weight = 700u32 }
-    let (node, node_error) = control.text(a, 0u64, text, grid.theme, options)
+    let (node, node_error) = control.text(a, 0u64, text, cells_theme(grid), options)
     if node_error != ok { ret node_error }
     *out = node
     ret ok
@@ -8137,6 +8159,9 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     if !grid.has_rules {
         var plain_node: widget.Node = zero
         try cell_text_node(a, grid, text, false, role, row, &plain_node)
+        let (centred_plain, centred_plain_error) = crisp_centre(a, grid, column, text, plain_node)
+        if centred_plain_error != ok { ret centred_plain_error }
+        plain_node = centred_plain
         let (decorated_plain, decorate_plain_error) = decorate_editors(a, grid, column, row, plain_node)
         if decorate_plain_error != ok { ret decorate_plain_error }
         *out = decorated_plain
@@ -8158,6 +8183,9 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     }
     var node: widget.Node = zero
     try cell_text_node(a, grid, shown, look.bold, role, row, &node)
+    let (centred_node, centred_error) = crisp_centre(a, grid, column, shown, node)
+    if centred_error != ok { ret centred_error }
+    node = centred_node
     let (decorated_node, decorate_error) = decorate_editors(a, grid, column, row, node)
     if decorate_error != ok { ret decorate_error }
     node = decorated_node
@@ -8860,6 +8888,8 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
         if win_look(grid) { live_pix = gl.gx_nav_win(slot, enabled) }
         // round 13: the top grid's buttons (cut from the live main window by scripts/looks_nav_top.py) differ by a few levels from the collection grid's
         if nav_rule_on(grid) && gl.gx_nav_top(slot, enabled).len != 0usize { live_pix = gl.gx_nav_top(slot, enabled) }
+        // round 43: the light grid's crisp cut of the same bitmaps
+        if nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_top_c(slot, enabled).len != 0usize { live_pix = gl.gx_nav_top_c(slot, enabled) }
         var live_hot = false
         if enabled && (slot == 3usize || slot == 4usize) && mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, key, true, false).hovered {
             live_pix = gl.gx_nav_hot(slot)
@@ -9014,6 +9044,7 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var funnel_pix = gl.gx_nav(7usize, true)
         if win_look(grid) { funnel_pix = gl.gx_nav_win(7usize, true) }
         if nav_rule_on(grid) && gl.gx_nav_top(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_top(7usize, true) }
+        if nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_top_c(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_top_c(7usize, true) }
         if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered { funnel_pix = gl.gx_nav_hot(7usize) }
         let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_win_w_if(win_look(grid), 7usize), gl.gx_nav_h())
         if live_funnel_error != ok { ret (zero, live_funnel_error) }
@@ -9127,8 +9158,16 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var live_style = style.defaults()
         live_style.padding = style.EdgeLengths { left: style.Length { Px: nav_left(grid) }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
         let live_flex = widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: live_gap }, live_style, cells[0usize..shown])
-        if footer_edged_on(grid) || nav_rule_on(grid) { ret (nav_line_under(a, live_flex, grid), ok) }
-        ret (live_flex, ok)
+        var live_shown = live_flex
+        if win_look(grid) && grid.look.crisp && !style.windows_dark_on() {
+            // round 43: the 1:1 capture's buttons stand one row lower in the 24 px of the navigator
+            var nav_box = style.defaults()
+            nav_box.width = style.Length { Percent: 100.0 }
+            nav_box.height = style.Length { Px: 24.0 }
+            live_shown = widget.stack(0u64, nav_box, one(a, widget.positioned(0u64, 0.0, 1.0, style.defaults(), one(a, live_flex))))
+        }
+        if footer_edged_on(grid) || nav_rule_on(grid) { ret (nav_line_under(a, live_shown, grid), ok) }
+        ret (live_shown, ok)
     }
     ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), cells[0usize..shown]), ok)
 }
@@ -9499,6 +9538,8 @@ fn footer_edged_on(grid: *const Grid) -> bool { ret grid.look.footer_edges && wi
 fn nav_rule_on(grid: *const Grid) -> bool { ret grid.look.nav_rule && win_look(grid) }
 
 fn nav_left(grid: *const Grid) -> f32 {
+    // round 43: the 1:1 capture's navigator starts one pixel in (its frame is one pixel, not the fitted two)
+    if win_look(grid) && grid.look.crisp && !style.windows_dark_on() { ret 1.0 }
     if win_look(grid) { ret 0.0 }
     ret 1.0
 }
@@ -10353,6 +10394,16 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
         held_theme[0usize] = tahoma
         drawn_with = &held_theme[0usize]
     }
+    grid.has_cell_theme = false
+    if theme.tokens.profile == .Windows && grid.look.on && grid.look.crisp && !style.windows_dark_on() {
+        let (segoe, segoe_error) = control.windows_segoe_theme(a, theme, 11.0)
+        if segoe_error != ok { ret (zero, segoe_error) }
+        let (held_cells, held_cells_error) = mem.alloc[control.Theme](a, 1usize)
+        if held_cells_error != ok { ret (zero, held_cells_error) }
+        held_cells[0usize] = segoe
+        grid.cell_theme = &held_cells[0usize]
+        grid.has_cell_theme = true
+    }
     let (inner, inner_error) = build_parts(a, grid, drawn_with, height)
     if inner_error != ok { ret (zero, inner_error) }
     var (menus, menus_error) = with_menus(a, grid, inner)
@@ -10525,6 +10576,17 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         }
         table_options.numeric = grid.right_flags[0usize..grid.specs.len]
         table_options.centered = grid.center_flags[0usize..grid.specs.len]
+        if grid.has_cell_theme {
+            // round 43: the light grid's cells place a centred caption themselves (`crisp_centre`)
+            let (rows_centred, rows_centred_error) = mem.alloc[bool](a, grid.specs.len + 1usize)
+            if rows_centred_error != ok { ret (zero, rows_centred_error) }
+            var flag_at = 0usize
+            while flag_at < rows_centred.len {
+                rows_centred[flag_at] = false
+                flag_at += 1usize
+            }
+            table_options.centered = rows_centred[0usize..grid.specs.len]
+        }
         // the name of a hidden column being dragged out of the chooser follows the pointer
         var drag_label: str = ""
         if mem.address_of(theme.runtime) != 0usize {
@@ -10555,7 +10617,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             if made_filter_error != ok { ret (zero, made_filter_error) }
             v3_filter = made_filter
         }
-        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines, foot_set: grid.look.foot_set, foot_drift: grid.look.foot_drift, foot_g1: grid.look.foot_g1, foot_g2: grid.look.foot_g2, foot_w1: grid.look.foot_w1, foot_w2: grid.look.foot_w2, top_edge_on: grid.look.idle_on, top_edge: lk.idle_top, plain_col: grid.look.plain_col, soft_a0: grid.look.soft_a0, soft_x0: grid.look.soft_x0, soft_slope: grid.look.soft_slope, top_fit: grid.look.nav_rule, head_press: chip_pressed_column(grid), group_current: current_group_entry(grid), group_solid: grid.look.group_solid, thumb_len: grid.look.thumb_len, thumb_top: grid.look.thumb_top }
+        table_options.look = collection.TableLook { on: true, has_head_extra: grid.filter_visible, head_extra: v3_filter, head_extra_height: 26.0, bar_margin: bar_margin_of(grid), header_height: lk.header_height, pad: lk.pad, text_size: lk.text_size, header: lk.header, header_hover: lk.header_hover, header_line: header_rule_of(grid), even: lk.odd, odd: lk.even, selected: selected_fill, selected_line: selected_edge, line: lk.line, group: lk.group_row, kind_ctx: me, kind: row_kind, glyph: header_glyph, track: lk.track, thumb: lk.thumb, scroll_width: lk.scroll_width, focus_on: grid.multi && grid.has_selection, focus_key: row_key(grid, grid.selected_row), drag_label: drag_label, center_head: grid.center_flags[0usize..grid.specs.len], footer_fill: lk.footer_band, footer_extra: footer_extra(), also_sorted: grid.also_marks[0usize..grid.specs.len], detail_height: preview_detail_height(grid), head_text: grid.base_look.text_size, row_drag: true, row_drop: widget.Change[u64] { ctx: me, invoke: on_row_drop }, has_row_drop: grid.has_row_drop, header_hidden: grid.header_off, vertical_off: grid.lines == GridLines.Horizontal || grid.lines == GridLines.None, horizontal_on: grid.lines == GridLines.Both || grid.lines == GridLines.Horizontal, soft_lines: grid.look.group_flat, bar_top: bar_top_of(grid), dotted_focus: dotted_focus, focus_aware: false, selected_focus: lk.selected, tree_dots: false, cell_select: grid.cell_select, dialog_lines: grid.look.dialog_lines, foot_set: grid.look.foot_set, foot_drift: grid.look.foot_drift, foot_g1: grid.look.foot_g1, foot_g2: grid.look.foot_g2, foot_w1: grid.look.foot_w1, foot_w2: grid.look.foot_w2, top_edge_on: grid.look.idle_on, top_edge: lk.idle_top, plain_col: grid.look.plain_col, soft_a0: grid.look.soft_a0, soft_x0: grid.look.soft_x0, soft_slope: grid.look.soft_slope, top_fit: grid.look.nav_rule, head_press: chip_pressed_column(grid), group_current: current_group_entry(grid), group_solid: grid.look.group_solid, thumb_len: grid.look.thumb_len, thumb_top: grid.look.thumb_top, crisp: grid.look.crisp }
     }
     // group footers are taller: the list of the entries that are
     if has_extras(grid) && grid.look.on {
@@ -10694,7 +10756,11 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     var inner_style = style.defaults()
     if grid.look.on && !grid.look.frame_none { inner_style.background = paint.Brush { Solid: skin(grid, 0xF0F0F0u32) } }
     var stacked = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, inner_style, parts[0usize..part_count])
-    if grid.look.on && !grid.look.frame_none && grid.look.ring {
+    if grid.look.on && !grid.look.frame_none && grid.look.crisp && win_look(grid) && !style.windows_dark_on() {
+        // round 43: the 1:1 capture's frame is one #828790 pixel on every side, the parts inside it touch
+        frame.border = style.Border { width: 1.0, color: gl.rgb(0x828790u32) }
+        stacked = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, frame, one(a, stacked))
+    } else if grid.look.on && !grid.look.frame_none && grid.look.ring {
         let (ringed, ring_error) = ring_wrap(a, grid, stacked)
         if ring_error != ok { ret (zero, ring_error) }
         stacked = ringed
