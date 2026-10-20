@@ -49,6 +49,7 @@ for file in "$dir"/*; do
   else
     fail=$((fail+1)); echo "FAIL $name $code ${seconds}s"
     head -c 300 "$scratch/.err" | head -3 | sed 's/^/    | /'
+    head -c 700 "$scratch/.out" | head -6 | sed 's/^/    > /'
   fi
   rm -rf "$scratch"
 done
