@@ -919,7 +919,7 @@ neper_os_wait:
 .global neper_runtime_imports
 neper_runtime_imports:
 .Lruntime_imports:
-    .quad 0, 0, 0, 0
+    .quad 0, 0, 0, 0, 0, 0, 0
 
 // x9 = 8 * the index of the pthread function: its address, in x9. Clobbers x10, x11.
 np_pthread:
@@ -931,23 +931,48 @@ np_pthread:
     ret
 
 // os.thread_create: the result {Thread, err} at x0, the entry at x1, its context at x2, the
-// stack size at x3. The pthread's own default stack is used; the size is not honoured.
-// ponytail: pthread_attr_setstacksize would need two more imports.
+// stack size at x3. The thread gets that stack through a pthread attribute block (64 bytes at
+// sp+48), rounded up to the 16 KB page and at least 64 KB as on Linux; a size the library
+// refuses leaves the default.
 .global neper_os_thread_create
 neper_os_thread_create:
-    stp x29, x30, [sp, #-32]!
+    stp x29, x30, [sp, #-128]!
     mov x29, sp
-    str x19, [sp, #16]
+    stp x19, x20, [sp, #16]
+    stp x21, x22, [sp, #32]
     mov x19, x0
-    mov x3, x2
-    mov x2, x1
-    mov x1, #0
-    add x0, sp, #24
-    mov x9, #0
+    mov x20, x1
+    mov x21, x2
+    mov x22, x3
+    add x0, sp, #48
+    mov x9, #32
     bl np_pthread
     blr x9
     cbnz w0, .Lthread_create_failed
-    ldr x9, [sp, #24]
+    mov x9, #65536
+    cmp x22, x9
+    csel x22, x9, x22, lo
+    add x22, x22, #16383
+    and x22, x22, #-16384
+    add x0, sp, #48
+    mov x1, x22
+    mov x9, #40
+    bl np_pthread
+    blr x9
+    add x0, sp, #112
+    add x1, sp, #48
+    mov x2, x20
+    mov x3, x21
+    mov x9, #0
+    bl np_pthread
+    blr x9
+    mov w22, w0
+    add x0, sp, #48
+    mov x9, #48
+    bl np_pthread
+    blr x9
+    cbnz w22, .Lthread_create_failed
+    ldr x9, [sp, #112]
     str x9, [x19]
     str wzr, [x19, #8]
     b .Lthread_create_out
@@ -957,8 +982,9 @@ neper_os_thread_create:
     movk w9, #0x6f77, lsl #16
     str w9, [x19, #8]
 .Lthread_create_out:
-    ldr x19, [sp, #16]
-    ldp x29, x30, [sp], #32
+    ldp x21, x22, [sp, #32]
+    ldp x19, x20, [sp, #16]
+    ldp x29, x30, [sp], #128
     ret
 
 // os.thread_join(thread: *Thread) -> err.
