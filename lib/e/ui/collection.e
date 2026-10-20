@@ -2836,9 +2836,9 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         soft_group = true
         row_style.height = style.Length { Px: extent - 1.0 }
         // looks5-e: directly under the header (no filter row) the first group row has no two-pixel top and is 16 tall (live capture)
-        if index == 0usize && !look.has_head_extra { row_style.height = style.Length { Px: extent - 3.0 } }
+        if index == 0usize && !look.has_head_extra && !crisp_on { row_style.height = style.Length { Px: extent - 3.0 } }
         // round 12: the current group row has the pixel under it that its focus rectangle's foot line uses
-        if look.group_current == index + 1usize && look.top_fit { row_style.height = style.Length { Px: extent } }
+        if look.group_current == index + 1usize && look.top_fit && !crisp_on { row_style.height = style.Length { Px: extent } }
     }
     row_style.background = paint.Brush { Solid: fill }
     let tree_selected = look.on && selected && look.tree_dots
@@ -3074,7 +3074,42 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         with_dots[1usize] = widget.positioned(0u64, 0.0, dotted_y, style.defaults(), one_node(a, dotted))
         lined[0usize] = widget.stack(0u64, style.defaults(), with_dots[0usize..2usize])
     }
-    if soft_group && !(index == 0usize && !look.has_head_extra) {
+    if soft_group && crisp_on {
+        // round 43: the 1:1 capture's group row is its #F0F0F0 fill over one #DCDCDC pixel at its foot, from the end of the indicator column, and the
+        // current one carries the inverting focus rectangle (solid in the pointer states) over its 17 rows
+        var group_x: f32 = 0.0
+        if columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { group_x = columns[0usize].width }
+        var group_foot = control.sized_style(4000.0, 1.0)
+        group_foot.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) }
+        let (with_foot, with_foot_error) = mem.alloc[widget.Node](a, 3usize)
+        if with_foot_error != ok { ret (zero, TooLarge) }
+        with_foot[0usize] = lined[0usize]
+        with_foot[1usize] = widget.positioned(0u64, group_x, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, group_foot, zero)))
+        var foot_count = 2usize
+        if look.group_current == index + 1usize && group_x > 0.0 {
+            var group_total: f32 = 0.0
+            var group_at = 0usize
+            while group_at < columns.len {
+                group_total += columns[group_at].width
+                group_at += 1usize
+            }
+            if group_total > 700.0 { group_total = 700.0 }
+            var group_rect_node: widget.Node = zero
+            if look.group_solid {
+                var solid = control.sized_style(group_total - group_x, extent - 1.0)
+                solid.border = style.Border { width: 1.0, color: gl.rgb(0x0F0F0Fu32) }
+                group_rect_node = widget.box(0u64, solid, zero)
+            } else {
+                let (dots, dots_error) = gl.focus_invert(a, group_total - group_x, extent - 1.0, gl.rgb(0x0F0F0Fu32))
+                if dots_error != ok { ret (zero, dots_error) }
+                group_rect_node = dots
+            }
+            with_foot[2usize] = widget.positioned(0u64, group_x, 0.0, style.defaults(), one_node(a, group_rect_node))
+            foot_count = 3usize
+        }
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_foot[0usize..foot_count])
+    }
+    if soft_group && !crisp_on && !(index == 0usize && !look.has_head_extra) {
         // two pixels at the top of a group row (measured: #E5E5E5 then #E7E7E7), the cells below them
         let (with_top, with_top_error) = mem.alloc[widget.Node](a, 3usize)
         if with_top_error != ok { ret (zero, TooLarge) }

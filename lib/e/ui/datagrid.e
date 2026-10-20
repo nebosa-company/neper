@@ -1132,6 +1132,10 @@ fn extra_of(grid: *const Grid, at: usize) -> f32 {
     if grid.g.group_footers && grp.visible_is_footer(grid.g, at) { ret footer_extra() }
     // looks4-e: a group row is 18 px tall in the live capture, a data row 19
     if grid.look.on && grid.look.group_flat && grp.visible_is_group(grid.g, at) && !grp.visible_is_footer(grid.g, at) {
+        // round 43: in the 1:1 capture every group row is 18 tall, the first and the current one too
+        if grid.look.crisp && !style.windows_dark_on() {
+            ret -1.0
+        }
         // looks5-e: directly under the header (no filter row) the first group row is 16 tall (live capture)
         if at == 0usize && !grid.filter_visible { ret -3.0 }
         // round 12: the current group row of the Windows top grid keeps the pixel its focus rectangle's foot line uses
@@ -7745,7 +7749,7 @@ fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: 
         }
         var label: widget.Node = zero
         var label_error = text_node(a, grid, str.done(&sb), !grid.look.on, .Text, &label)
-        if gdi_group_text(grid) {
+        if gdi_group_text(grid) && !grid.has_cell_theme {
             // round 13: the group row's text in GDI's Tahoma 11 px whole pixel advances (3 px wider than the outline advances over a row)
             var row_words = control.text_options()
             row_words.wrap = .None
@@ -7792,6 +7796,8 @@ fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: 
         if grid.look.group_flat { label_left = 18.0 }
         if grid.look.group_flat && grid.look.group_counts && win_look(grid) { label_left = 17.0 }
         if grid.look.group_flat { label_top = 3.0 }
+        // round 43: the light grid's frame is one pixel, so the row's contents stand one pixel further in than the two pixel fit had them
+        if grid.has_cell_theme { label_left += 1.0 }
         pair[1usize] = widget.padded(0u64, label_left, label_top, 0.0, 0.0, style.defaults(), one(a, label))
         *out = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
         ret ok
