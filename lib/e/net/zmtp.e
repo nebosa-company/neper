@@ -27,7 +27,10 @@ type SocketType = enum u8 { Pair, Pub, Sub, Req, Rep, Dealer, Router, Pull, Push
 type Frame = struct { more: bool, command: bool, body: []const u8 }
 type Greeting = struct { major: u8, minor: u8, as_server: bool, identity_hint: u8 }
 type Ready = struct { socket_type: SocketType, identity: []const u8, has_identity: bool }
-type Subscriptions = struct { prefixes: []str, count: usize, everything: bool }
+// Each prefix is copied into its own fixed slot of `store`: a frame body is only valid until the next
+// read, so a borrowed prefix would be overwritten when the receive buffer compacts.
+const PREFIX_MAX: usize = 64usize
+type Subscriptions = struct { prefixes: []str, store: []u8, count: usize, everything: bool }
 type Conn = struct { sock: net.Socket, buf: []u8, filled: usize, consumed: usize, local: SocketType, remote: SocketType, local_identity: []const u8, remote_id: [256]u8, remote_id_len: usize, ready: bool }
 error Malformed
 error NeedMore
@@ -329,6 +332,9 @@ fn subscriptions(a: *mem.Arena, capacity: usize) -> (Subscriptions, err) {
     let (p, e) = mem.alloc[str](a, capacity)
     if e != ok { ret (s, e) }
     s.prefixes = p
+    let (st, se) = mem.alloc[u8](a, capacity * PREFIX_MAX)
+    if se != ok { ret (s, se) }
+    s.store = st
     ret (s, ok)
 }
 
@@ -343,7 +349,14 @@ fn add_prefix(s: *Subscriptions, prefix: []const u8) -> err {
         i += 1usize
     }
     if s.count >= s.prefixes.len { ret TooLarge }
-    s.prefixes[s.count] = prefix
+    if prefix.len > PREFIX_MAX { ret TooLarge }
+    let slot = s.store[s.count * PREFIX_MAX..s.count * PREFIX_MAX + prefix.len]
+    var k = 0usize
+    while k < prefix.len {
+        slot[k] = prefix[k]
+        k += 1usize
+    }
+    s.prefixes[s.count] = slot
     s.count += 1usize
     ret ok
 }
@@ -356,7 +369,14 @@ fn remove_prefix(s: *Subscriptions, prefix: []const u8) {
     var i = 0usize
     while i < s.count {
         if same(s.prefixes[i], prefix) {
-            s.prefixes[i] = s.prefixes[s.count - 1usize]
+            let last = s.prefixes[s.count - 1usize]
+            let slot = s.store[i * PREFIX_MAX..i * PREFIX_MAX + last.len]
+            var k = 0usize
+            while k < last.len {
+                slot[k] = last[k]
+                k += 1usize
+            }
+            s.prefixes[i] = slot
             s.count -= 1usize
             ret
         }

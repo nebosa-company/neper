@@ -521,6 +521,7 @@ fn patterns(a: *mem.Arena) -> u32 {
     var parts: [4][]const u8 = zero
     var got: [4][]const u8 = zero
     var set_storage: [4]str = zero
+    var set_bytes: [256]u8 = zero
     var empty_subs: zmtp.Subscriptions = zero
     // PUSH -> PULL, a multipart message, a long frame, an empty message
     if true {
@@ -566,6 +567,7 @@ fn patterns(a: *mem.Arena) -> u32 {
         if zmtp.send_command(&sub, frame[0usize..n_c]) != ok { ret 124u32 }
         var subs: zmtp.Subscriptions = zero
         subs.prefixes = set_storage[0usize..4usize]
+        subs.store = set_bytes[0usize..256usize]
         // the PUB reads the three commands (recv_message applies them and then needs a message to stop on)
         var seen = 0usize
         while seen < 3usize {
