@@ -77,7 +77,7 @@ Computer-use control of MTG Studio was denied; use only: PrintWindow of a launch
 
 ## 9. Suggested next steps for the new session
 
-1. `git -C D:\repos\neper log --oneline -10`; check whether branch `looks43-rt` has commits not on master; if so review, merge, regenerate the page, and run an independent audit (audit 21) that re-measures the grid rows against `ref/windows-1to1/` with its own comparer and checks the 19 matched Windows Light controls still hold.
+1. `git -C D:\repos\neper log --oneline -10`; check whether branch `looks44-gr` has commits not on master; if so review, merge, regenerate the page, and run an independent audit (audit 21) that re-measures the grid rows against `ref/windows-1to1/` with its own comparer and checks the 19 matched Windows Light controls still hold.
 2. Fix the `data_grid_main` x 498 column and re-render the stale `data_grid_dialogs_sort`.
 3. Ask the user for the missing references, in this order of value: v3 under Windows dark mode (unblocks Windows Dark), any macOS/iOS captures, one real Android screenshot (decides the Android text default). Without them the remaining rows stay at review.
 4. Keep the memory note `neper-ui-looks.md` current (project state, browser decision, priority order).
