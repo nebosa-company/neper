@@ -478,5 +478,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 92. An inline flex container's baseline is its first item's, not its last.
     let (p92, ok92) = build(a, "<div style=\"font-size:10px;line-height:10px\">a<div id=f style=\"display:inline-flex\"><div style=\"font-size:10px;line-height:10px\">b</div><div style=\"font-size:20px;line-height:20px\">c</div></div></div>", "")
     if !ok92 || !near(rect_of(p92, "f").h, 20.0f64) || !near(rect_of(p92, "f").y, 0.0f64) { os.exit(133) }
+    // 93. An inline box with vertical-align: top does not move the line's baseline.
+    let (p93, ok93) = build(a, "<div style=\"font-size:10px;line-height:10px\"><span id=b>b</span><span id=c style=\"font-size:20px;line-height:20px;vertical-align:top\">c</span></div>", "")
+    if !ok93 || !near(rect_of(p93, "b").y, 0.0f64) || !near(rect_of(p93, "c").y, 0.0f64) { os.exit(134) }
     ret ok
 }

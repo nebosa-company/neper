@@ -2238,8 +2238,16 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             let (ta, td) = font_ad(l, bstyle(l, p.box))
             var sh = 0.0f64
             if sim > 0usize { sh = sshift[sim - 1usize] }
-            top = minf(top, sh - ta)
-            bottom = maxf(bottom, sh + td)
+            let va_owner = va_edge_owner(l, p.box, x.cont)
+            if va_owner != NONE && tb_n < 16usize {
+                let (sa, sd) = subtree_ad(l, va_owner)
+                tb_h[tb_n] = sa + sd
+                tb_top[tb_n] = bstyle(l, va_owner).vertical_align == .Top
+                tb_n += 1usize
+            } else {
+                top = minf(top, sh - ta)
+                bottom = maxf(bottom, sh + td)
+            }
         } else if p.kind == .Atomic {
             any_content = true
             let ab = &l.boxes.items[usize(p.box)]
@@ -2331,6 +2339,11 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             }
             var cur_shift = 0.0f64
             if sp > 0usize { cur_shift = sshift[sp - 1usize] }
+            let va_owner = va_edge_owner(l, p.box, x.cont)
+            if va_owner != NONE {
+                let (sa, sd) = subtree_ad(l, va_owner)
+                if bstyle(l, va_owner).vertical_align == .Top { cur_shift = sa - baseline } else { cur_shift = line_h - sd - baseline }
+            }
             let proc = l.boxes.items[usize(p.box)].proc
             var this_to = p.start + p.text.len
             var this_w = p.w
@@ -2902,6 +2915,43 @@ fn peek_top(l: *Layout, c: u32, cbw: f64, floats: bool) -> Margin {
         ret collapse(m, peek_top(l, kid, cbw, seen_float))
     }
     ret m
+}
+
+// The nearest ancestor-or-self inline box of the text box `b` aligned to a line edge (`NONE` when there is none).
+fn va_edge_owner(l: *const Layout, b: u32, cont: u32) -> u32 {
+    var owner = b
+    if l.boxes.items[usize(b)].inner == .Text { owner = l.boxes.items[usize(b)].parent }
+    while owner != NONE && owner != cont {
+        let va = bstyle(l, owner).vertical_align
+        if va == .Top || va == .Bottom { ret owner }
+        owner = l.boxes.items[usize(owner)].parent
+    }
+    ret NONE
+}
+
+// The largest ascent and descent of the text in the subtree of inline box `o`, leaving out the sub-subtrees aligned to an edge themselves.
+fn subtree_ad(l: *const Layout, o: u32) -> (f64, f64) {
+    var ta = -1000000.0f64
+    var td = -1000000.0f64
+    var kid = l.boxes.items[usize(o)].first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        if kb.inner == .Text {
+            let (a, d) = font_ad(l, bstyle(l, kid))
+            ta = maxf(ta, a)
+            td = maxf(td, d)
+        } else if kb.inline_level && kb.inner != .Break {
+            let va = bstyle(l, kid).vertical_align
+            if va != .Top && va != .Bottom {
+                let (a2, d2) = subtree_ad(l, kid)
+                ta = maxf(ta, a2)
+                td = maxf(td, d2)
+            }
+        }
+        kid = kb.next
+    }
+    if ta < -999999.0f64 { ret (0.0f64, 0.0f64) }
+    ret (ta, td)
 }
 
 // --- Baselines.
