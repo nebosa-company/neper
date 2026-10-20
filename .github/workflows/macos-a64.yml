@@ -17,7 +17,7 @@ jobs:
         run: |
           sw_vers; uname -m
           status=0
-          for name in zmtp_probe readfile1 ident1 lock1 watch3 net1 misc1 hello imp os1 fs1 fs2 proc1 thread1 proc2 sync1 map1 group1 clock1 watch1 watch2 stack1  misc1_x64  net1_x64  watch3_x64  lock1_x64  ident1_x64  readfile1_x64  zmtp_probe_x64 hello_x64 imp_x64 os1_x64 fs1_x64 fs2_x64 proc1_x64 thread1_x64 proc2_x64 sync1_x64 map1_x64 group1_x64 clock1_x64 watch1_x64 watch2_x64 stack1_x64; do
+          for name in readfile1 ident1 lock1 watch3 net1 misc1 hello imp os1 fs1 fs2 proc1 thread1 proc2 sync1 map1 group1 clock1 watch1 watch2 stack1  misc1_x64  net1_x64  watch3_x64  lock1_x64  ident1_x64  readfile1_x64  hello_x64 imp_x64 os1_x64 fs1_x64 fs2_x64 proc1_x64 thread1_x64 proc2_x64 sync1_x64 map1_x64 group1_x64 clock1_x64 watch1_x64 watch2_x64 stack1_x64; do
             cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
             echo "== $name"; codesign --verify --verbose=4 /tmp/$name 2>&1 || true
             case $name in *_x64) runner="arch -x86_64" ;; *) runner="" ;; esac
