@@ -1341,6 +1341,8 @@ neper_os_thread_create:
     mov eax, 40
     call np_pthread
     call rax
+    test eax, eax
+    jne .Lthread_create_failed
     lea rdi, [rsp+64]
     mov rsi, rsp
     mov rdx, r12

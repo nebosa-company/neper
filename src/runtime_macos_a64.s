@@ -960,6 +960,7 @@ neper_os_thread_create:
     mov x9, #40
     bl np_pthread
     blr x9
+    cbnz w0, .Lthread_create_failed
     add x0, sp, #112
     add x1, sp, #48
     mov x2, x20
