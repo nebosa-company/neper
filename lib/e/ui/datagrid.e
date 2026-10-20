@@ -8903,6 +8903,14 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
         if nav_rule_on(grid) && gl.gx_nav_top(slot, enabled).len != 0usize { live_pix = gl.gx_nav_top(slot, enabled) }
         // round 43: the light grid's crisp cut of the same bitmaps
         if nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_top_c(slot, enabled).len != 0usize { live_pix = gl.gx_nav_top_c(slot, enabled) }
+        // round 44: the collection grid's buttons cut from the crisp capture (the disabled forward buttons from the pool's)
+        if win_look(grid) && !nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() {
+            if gl.gx_nav_bot_c(slot, enabled).len != 0usize {
+                live_pix = gl.gx_nav_bot_c(slot, enabled)
+            } else if gl.gx_nav_top_c(slot, enabled).len != 0usize {
+                live_pix = gl.gx_nav_top_c(slot, enabled)
+            }
+        }
         var live_hot = false
         if enabled && (slot == 3usize || slot == 4usize) && mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, key, true, false).hovered {
             live_pix = gl.gx_nav_hot(slot)
@@ -9046,6 +9054,7 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if box_parts_error != ok { ret (zero, control.TooLarge) }
         box_parts[0usize] = info
         box_parts[1usize] = footer_px(a, 0.0, 0.0, 1.0, 23.0, 0xFCFCFCu32)
+        if win_look(grid) && grid.look.crisp && !style.windows_dark_on() { box_parts[1usize] = footer_px(a, 0.0, 0.0, 1.0, 23.0, 0xFFFFFFu32) }
         info = widget.stack(0u64, style.defaults(), box_parts[0usize..2usize])
     }
     cells[3usize] = info
@@ -9058,6 +9067,7 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if win_look(grid) { funnel_pix = gl.gx_nav_win(7usize, true) }
         if nav_rule_on(grid) && gl.gx_nav_top(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_top(7usize, true) }
         if nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_top_c(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_top_c(7usize, true) }
+        if win_look(grid) && !nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_bot_c(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_bot_c(7usize, true) }
         if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered { funnel_pix = gl.gx_nav_hot(7usize) }
         let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_win_w_if(win_look(grid), 7usize), gl.gx_nav_h())
         if live_funnel_error != ok { ret (zero, live_funnel_error) }
@@ -9162,6 +9172,7 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                 if copy_at == 7usize {
                     var undo_pix = gl.gx_nav(6usize, true)
                     if win_look(grid) { undo_pix = gl.gx_nav_win(6usize, true) }
+                    if win_look(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_bot_c(6usize, true).len != 0usize { undo_pix = gl.gx_nav_bot_c(6usize, true) }
                     let (undo_pic, undo_error) = gl.pixels(a, undo_pix, gl.gx_nav_win_w_if(win_look(grid), 6usize), gl.gx_nav_h())
                     if undo_error != ok { ret (zero, undo_error) }
                     with_undo[out_at] = undo_pic
@@ -9173,7 +9184,22 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             }
             var undo_style = style.defaults()
             undo_style.padding = style.EdgeLengths { left: style.Length { Px: nav_left(grid) }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-            let undone = widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, undo_style, with_undo[0usize..shown + 1usize])
+            var undone = widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, undo_style, with_undo[0usize..shown + 1usize])
+            if win_look(grid) && grid.look.crisp && !style.windows_dark_on() {
+                // round 44: the 1:1 capture's navigator is 24 rows, the bitmaps start at the first
+                var undo_box = style.defaults()
+                undo_box.width = style.Length { Percent: 100.0 }
+                undo_box.height = style.Length { Px: 24.0 }
+                let (undo_rows, undo_rows_error) = mem.alloc[widget.Node](a, 2usize)
+                if undo_rows_error != ok { ret (zero, control.TooLarge) }
+                undo_rows[0usize] = undone
+                let (last_parts, last_parts_error) = mem.alloc[widget.Node](a, 2usize)
+                if last_parts_error != ok { ret (zero, control.TooLarge) }
+                last_parts[0usize] = footer_px(a, 0.0, 0.0, 4000.0, 1.0, 0xF0F0F0u32)
+                last_parts[1usize] = footer_px(a, grid.nav_pos_x, 0.0, grid.nav_pos_w - 2.0, 1.0, 0xFFFFFFu32)
+                undo_rows[1usize] = widget.positioned(0u64, 0.0, 23.0, style.defaults(), one(a, widget.stack(0u64, control.sized_style(4000.0, 1.0), last_parts[0usize..2usize])))
+                undone = widget.stack(0u64, undo_box, undo_rows[0usize..2usize])
+            }
             if footer_edged_on(grid) || nav_rule_on(grid) { ret (nav_line_under(a, undone, grid), ok) }
             ret (undone, ok)
         }
@@ -9556,6 +9582,12 @@ fn win_look(grid: *const Grid) -> bool { ret grid.look.on && grid.theme.tokens.p
 
 fn footer_edged_on(grid: *const Grid) -> bool { ret grid.look.footer_edges && win_look(grid) }
 
+// round 44: the light grid's footer as the 1:1 capture draws it (green band only so far)
+fn footer_crisp_on(grid: *const Grid) -> bool {
+    if !footer_edged_on(grid) || !grid.look.crisp || style.windows_dark_on() { ret false }
+    ret grid.look.footer_band.red < grid.look.footer_band.green - 0.05
+}
+
 // looks11-g1: the top grid's navigator has a two-pixel #F7F7F7 rule whose second row the buttons overlap: one pixel box, then the navigator's own first row
 fn nav_rule_on(grid: *const Grid) -> bool { ret grid.look.nav_rule && win_look(grid) }
 
@@ -9640,6 +9672,21 @@ fn hot_thumb_now(grid: *const Grid) -> bool {
     ret hot_state.hovered || hot_state.pressed
 }
 
+// round 44: a row of the 1:1 capture's navigator panel: white where no button stands (the position box, the run to the bar), the panel
+// colour over the buttons
+fn nav_runs_row(a: *mem.Arena, grid: *const Grid) -> widget.Node {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret widget.spacer(0u64, 0.0) }
+    var tail: f32 = 88.0
+    if grid.immediate_edit { tail = 106.0 }
+    parts[0usize] = footer_px(a, 0.0, 0.0, 4000.0, 1.0, 0xFFFFFFu32)
+    parts[1usize] = footer_px(a, 0.0, 0.0, grid.nav_pos_x, 1.0, 0xF0F0F0u32)
+    parts[2usize] = footer_px(a, grid.nav_pos_x + grid.nav_pos_w - 2.0, 0.0, tail, 1.0, 0xF0F0F0u32)
+    parts[3usize] = footer_px(a, 0.0, 0.0, 0.0, 1.0, 0xFFFFFFu32)
+    if grid.bar_on { parts[3usize] = footer_px(a, grid.look.ring_w - 19.0, 0.0, 17.0, 1.0, 0xF0F0F0u32) }
+    ret widget.stack(0u64, control.sized_style(4000.0, 1.0), parts[0usize..4usize])
+}
+
 // looks9-w1: v3's navigator has a #FAFAFA row on top (the buttons stand over it)
 fn nav_line_under(a: *mem.Arena, row: widget.Node, grid: *const Grid) -> widget.Node {
     let green = grid.look.footer_band.red < grid.look.footer_band.green - 0.05
@@ -9649,7 +9696,7 @@ fn nav_line_under(a: *mem.Arena, row: widget.Node, grid: *const Grid) -> widget.
     if green { line_value = 0xFAFAFAu32 }
     parts[0usize] = footer_px(a, 0.0, 0.0, 4000.0, 1.0, line_value)
     var n = 1usize
-    if win_look(grid) && grid.look.crisp && !style.windows_dark_on() && grid.nav_pos_w > 0.0 && grid.look.ring_w > 0.0 && !grid.footer_visible {
+    if win_look(grid) && grid.look.crisp && !style.windows_dark_on() && grid.nav_pos_w > 0.0 && grid.look.ring_w > 0.0 {
         // round 44: the 1:1 capture's first row of the navigator is white where there is no button (the position box, the run to the bar)
         // and the panel colour over the buttons
         var tail: f32 = 88.0
@@ -9658,9 +9705,10 @@ fn nav_line_under(a: *mem.Arena, row: widget.Node, grid: *const Grid) -> widget.
         parts[n] = footer_px(a, 0.0, 0.0, grid.nav_pos_x, 1.0, 0xF0F0F0u32)
         parts[n + 1usize] = footer_px(a, grid.nav_pos_x + grid.nav_pos_w - 2.0, 0.0, tail, 1.0, 0xF0F0F0u32)
         parts[n + 2usize] = footer_px(a, grid.look.ring_w - 19.0, 0.0, 17.0, 1.0, 0xF0F0F0u32)
+        if !grid.bar_on { parts[n + 2usize] = footer_px(a, 0.0, 0.0, 0.0, 1.0, 0xFFFFFFu32) }
         n += 3usize
     }
-    if win_look(grid) && grid.theme.tokens.palette != .Dark && grid.nav_pos_w > 0.0 && footer_edged_on(grid) && grid.footer_visible {
+    if win_look(grid) && grid.theme.tokens.palette != .Dark && grid.nav_pos_w > 0.0 && footer_edged_on(grid) && grid.footer_visible && !(grid.look.crisp && !style.windows_dark_on()) {
         // round 40: the footer's bottom rule is darker over the buttons than over the position box and beyond (v3 draws the
         // navigator's buttons with a halo one row up): #D2 over #DA in the pool's yellow footer, #CA over #CF in the collection's
         // green one; the two pixels where a run starts or ends are in between
@@ -9788,6 +9836,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if live_footer && s.kind == CellKind.Indicator { cell_style.background = paint.Brush { Solid: skin(grid, 0xF0F0F0u32) } }
         // looks9-w1: the indicator's footer cell is 11 wide in the live capture (its last column a #BCBCBC line)
         if live_footer && footer_edged_on(grid) && s.kind == CellKind.Indicator { cell_style.width = style.Length { Px: grid.columns[at].width - 1.0 } }
+        if footer_crisp_on(grid) && text.len != 0usize { cell_style.width = style.Length { Px: grid.columns[at].width - 1.0 } }
         if grid.look.on && text.len != 0usize {
             // v3 (FR-footer recording): the count sits at the left of its cell, a whole number is
             // centred, an amount stands at the right
@@ -9797,9 +9846,19 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             cell_style.height = style.Length { Px: grid.look.row_height + 4.0 }
             if live_footer { cell_style.height = style.Length { Px: 18.0 } }
             if at == count_at {
-                cells[at] = widget.padded(0u64, 4.0, 3.0, 0.0, 0.0, cell_style, held[0usize..1usize])
+                if footer_crisp_on(grid) {
+                    cells[at] = widget.padded(0u64, 3.0, 2.0, 0.0, 0.0, cell_style, held[0usize..1usize])
+                } else {
+                    cells[at] = widget.padded(0u64, 4.0, 3.0, 0.0, 0.0, cell_style, held[0usize..1usize])
+                }
             } else if s.kind == CellKind.Currency || s.kind == CellKind.Real {
+                if footer_crisp_on(grid) { cell_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } } }
                 cells[at] = widget.aligned(0u64, .End, .Center, cell_style, held[0usize..1usize])
+            } else if footer_crisp_on(grid) && control.segoe11_width(text) > 0.0 {
+                // round 44: v3 centres by whole pixels, rounding down (as a centred data cell does, `crisp_centre`)
+                let crisp_left = f32(i64(grid.columns[at].width - 1.0 - control.segoe11_width(text)) / 2i64)
+                cell_style.padding = style.EdgeLengths { left: style.Length { Px: crisp_left }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+                cells[at] = widget.aligned(0u64, .Start, .Center, cell_style, held[0usize..1usize])
             } else {
                 cells[at] = widget.aligned(0u64, .Center, .Center, cell_style, held[0usize..1usize])
             }
@@ -9824,9 +9883,36 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                 edge_pal[10usize] = shifted_px(edge_pal[10usize], 0.0065 * shift, 0.0055 * shift, 0.0065 * shift)
                 edge_pal[11usize] = shifted_px(edge_pal[11usize], 0.010 * shift, 0.0 - 0.003 * shift, 0.010 * shift)
             }
-            cells[at] = footer_edged(a, cells[at], grid.columns[at].width, edge_pal)
+            if !footer_crisp_on(grid) { cells[at] = footer_edged(a, cells[at], grid.columns[at].width, edge_pal) }
+            if footer_crisp_on(grid) {
+                // round 44: in the 1:1 capture a summary cell is a 19 row box (a #D6D6D6 line round #E7EAEA) one row below the band's top
+                let (crisp_cell, crisp_cell_error) = mem.alloc[widget.Node](a, 3usize)
+                if crisp_cell_error != ok { ret (zero, control.TooLarge) }
+                var crisp_line = control.sized_style(grid.columns[at].width - 1.0, 19.0)
+                crisp_line.border = style.Border { width: 1.0, color: gl.rgb(0xD6D6D6u32) }
+                var crisp_fill = control.sized_style(grid.columns[at].width - 1.0, 19.0)
+                crisp_fill.background = paint.Brush { Solid: grid.look.footer_cell }
+                crisp_cell[0usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), one(a, widget.box(0u64, crisp_fill, zero)))
+                crisp_cell[1usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), one(a, cells[at]))
+                crisp_cell[2usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), one(a, widget.box(0u64, crisp_line, zero)))
+                cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width, 21.0), crisp_cell[0usize..3usize])
+            }
         }
-        if live_footer && footer_edged_on(grid) && text.len == 0usize && s.kind == CellKind.Indicator {
+        if footer_crisp_on(grid) && text.len == 0usize && s.kind == CellKind.Indicator {
+            // round 44: #F4F7FC first column, ten panel columns, a #B4B4B4 line, over the band's 21 rows
+            let (crisp_ind, crisp_ind_error) = mem.alloc[widget.Node](a, 3usize)
+            if crisp_ind_error != ok { ret (zero, control.TooLarge) }
+            crisp_ind[0usize] = footer_px(a, 0.0, 0.0, grid.columns[at].width, 21.0, 0xF0F0F0u32)
+            crisp_ind[1usize] = footer_px(a, 0.0, 0.0, 1.0, 21.0, 0xF4F7FCu32)
+            crisp_ind[2usize] = footer_px(a, grid.columns[at].width - 1.0, 0.0, 1.0, 21.0, 0xB4B4B4u32)
+            cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width, 21.0), crisp_ind[0usize..3usize])
+        } else if footer_crisp_on(grid) && text.len == 0usize && s.kind == CellKind.Picture {
+            let (crisp_pic, crisp_pic_error) = mem.alloc[widget.Node](a, 2usize)
+            if crisp_pic_error != ok { ret (zero, control.TooLarge) }
+            crisp_pic[0usize] = cells[at]
+            crisp_pic[1usize] = footer_px(a, 0.0, 0.0, 1.0, 21.0, 0xF4F7FCu32)
+            cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width, 21.0), crisp_pic[0usize..2usize])
+        } else if live_footer && footer_edged_on(grid) && text.len == 0usize && s.kind == CellKind.Indicator {
             let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
             if pair_error != ok { ret (zero, control.TooLarge) }
             pair[0usize] = cells[at]
@@ -9835,7 +9921,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             pair[1usize] = footer_px(a, grid.columns[at].width - 2.0, 0.0, 1.0, 20.0, edge_rule)
             cells[at] = widget.stack(0u64, control.sized_style(grid.columns[at].width - 1.0, 20.0), pair[0usize..2usize])
         }
-        if live_footer && footer_edged_on(grid) && text.len == 0usize && s.kind == CellKind.Picture {
+        if !footer_crisp_on(grid) && live_footer && footer_edged_on(grid) && text.len == 0usize && s.kind == CellKind.Picture {
             let (trio, trio_error) = mem.alloc[widget.Node](a, 3usize)
             if trio_error != ok { ret (zero, control.TooLarge) }
             trio[0usize] = cells[at]
@@ -9869,6 +9955,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         // looks4-e: v3's footer is 24 px: two light lines, a 20 px band, two darker lines (measured on the live
         // capture; the yellow band's and the green band's lines differ)
         band_style.height = style.Length { Px: 20.0 }
+        if footer_crisp_on(grid) { band_style.height = style.Length { Px: 21.0 } }
         var green = grid.look.footer_band.red < grid.look.footer_band.green - 0.05
         var top_one = gl.rgb(0xF2F4F6u32)
         var top_two = gl.rgb(0xFAFBECu32)
@@ -9896,6 +9983,20 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         rows[2usize] = widget.flex(footer_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, band_style, cells[0usize..grid.specs.len])
         rows[3usize] = widget.box(0u64, l2, zero)
         rows[4usize] = widget.box(0u64, l3, zero)
+        if footer_crisp_on(grid) {
+            // round 44: the capture's footer: the art's edge, a #F4F7FC row (its #B4B4B4 pixel is the indicator line), 21 band rows, one #B4B4B4 rule
+            l1.background = paint.Brush { Solid: gl.rgb(0xF4F7FCu32) }
+            l2.background = paint.Brush { Solid: gl.rgb(0xB4B4B4u32) }
+            let (top_two_parts, top_two_error) = mem.alloc[widget.Node](a, 2usize)
+            if top_two_error != ok { ret (zero, control.TooLarge) }
+            top_two_parts[0usize] = widget.box(0u64, l1, zero)
+            var line_x: f32 = 0.0
+            if grid.specs.len > 0usize && grid.specs[0usize].kind == CellKind.Indicator { line_x = grid.columns[0usize].width - 1.0 }
+            top_two_parts[1usize] = footer_px(a, line_x, 0.0, 1.0, 1.0, 0xB4B4B4u32)
+            rows[1usize] = widget.stack(0u64, control.sized_style(4000.0, 1.0), top_two_parts[0usize..2usize])
+            rows[3usize] = widget.box(0u64, l2, zero)
+            ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..4usize]), ok)
+        }
         ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..5usize]), ok)
     }
     ret (widget.flex(footer_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, band_style, cells[0usize..grid.specs.len]), ok)

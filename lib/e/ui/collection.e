@@ -2177,7 +2177,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if win_glyphs && (sorted || win_hot) {
                 head_style.padding = style.EdgeLengths { left: crisp_left, top: style.Length { Px: 2.0 }, right: sides, bottom: flat }
             } else {
-                head_style.padding = style.EdgeLengths { left: crisp_left, top: flat, right: sides, bottom: style.Length { Px: 2.0 } }
+                // round 44: the capture's caption stands six rows below the header's top in the 22 and the 19 pixel headers alike
+                var crisp_down: f32 = 2.0
+                if height < 20.0 { crisp_down = 0.0 }
+                head_style.padding = style.EdgeLengths { left: crisp_left, top: flat, right: sides, bottom: style.Length { Px: crisp_down } }
             }
         }
         if look.on && look.dialog_lines { head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 2.0 } } }
