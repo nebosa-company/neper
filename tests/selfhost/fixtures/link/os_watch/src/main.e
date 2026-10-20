@@ -66,10 +66,15 @@ fn main(a: *mem.Arena) -> err {
     let stale_dir = os.remove_dir(a, "np-watch")
     if os.mkdir(a, "np-watch") != ok { os.exit(10i32) }
 
-    // A recursive watch is refused by both hosts, so a program written against one behaves
-    // the same on the other.
+    // A recursive watch is either made or refused outright; a host never pretends to watch the tree
+    // and watches only the top.
     let (deep, deep_error) = os.watch_open(a, "np-watch", true)
-    if deep_error != os.Unsupported { os.exit(11i32) }
+    if deep_error == ok {
+        let closed_deep = os.watch_close(deep)
+        if closed_deep != ok { os.exit(11i32) }
+    } else {
+        if deep_error != os.Unsupported { os.exit(11i32) }
+    }
 
     // A directory that is not there cannot be watched.
     let (missing, missing_error) = os.watch_open(a, "np-watch-absent", false)

@@ -75,6 +75,8 @@ type StatBuffer = struct { device: i32, mode: u16, link_count: u16, inode: u64, 
 // is a wrong diagnostic, never a wrong answer.
 // ponytail: no per-thread slots as on Linux; add them when a macOS build runs threads.
 var last_code: i32 = 0i32
+// Whether `last_code` has not been read yet by `last_error_detail`.
+var last_unread: bool = false
 
 // The kernel's errno comes back negated by the runtime's `sys` shim.
 fn error_of_result(result: isize) -> err {
@@ -93,6 +95,8 @@ fn error_of_result(result: isize) -> err {
     if result == -78isize { ret Unsupported }
     // ELOOP: a symlink refused or a cycle.
     if result == -62isize { ret Denied }
+    // ENOTCAPABLE: a path that left the directory under O_RESOLVE_BENEATH.
+    if result == -93isize { ret Denied }
     ret Failed
 }
 
@@ -125,6 +129,19 @@ fn kind_of_error(e: err) -> ErrorKind {
 fn from_errno(result: isize) -> err {
     if result >= 0isize { ret ok }
     last_code = i32(0isize - result)
+    last_unread = true
+    ret error_of_result(result)
+}
+
+// A cleanup's failure -- a close after the real work -- is classified the same but recorded only
+// over no unread primary failure, so closing a handle cannot overwrite the detail of the call
+// that failed first and has not yet been asked about.
+fn from_errno_cleanup(result: isize) -> err {
+    if result >= 0isize { ret ok }
+    if !last_unread {
+        last_code = i32(0isize - result)
+        last_unread = true
+    }
     ret error_of_result(result)
 }
 
@@ -133,6 +150,7 @@ fn detail_from_code(code: i32, operation: str, subject: str) -> ErrorDetail {
 }
 
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
+    last_unread = false
     ret detail_from_code(last_code, operation, subject)
 }
 
@@ -573,6 +591,7 @@ const O_WRONLY: usize = 1usize
 const O_TRUNC: usize = 1024usize
 const O_APPEND: usize = 8usize
 const O_NOFOLLOW_ANY: usize = 536870912usize
+const O_RESOLVE_BENEATH: usize = 4096usize
 const RENAME_EXCL: usize = 4usize
 const FILE_MODE: usize = 438usize
 
@@ -620,7 +639,7 @@ fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
 
 fn dir_close(dir: own Dir) -> err {
     let result = syscall(SYS_CLOSE, dir.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
-    ret from_errno(result)
+    ret from_errno_cleanup(result)
 }
 
 fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err) {
@@ -642,6 +661,9 @@ fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy
         ret (file, path_error)
     }
     var bits = open_bits(flags)
+    // The kernel enforces the policy as it walks: nothing may resolve outside the directory, and under
+    // NoSymlinks no link at all may be followed.
+    bits = bits | O_RESOLVE_BENEATH
     if policy == .NoSymlinks { bits = bits | O_NOFOLLOW_ANY }
     var mode = 0usize
     if flags.create { mode = FILE_MODE }
@@ -823,7 +845,7 @@ fn mapping_flush(m: Mapping) -> err {
 }
 
 fn mapping_close(m: own Mapping) -> err {
-    ret from_errno(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
 }
 
 // Change watches are kqueue's. A vnode event wakes the wait but names nothing, so a watch keeps
@@ -1153,7 +1175,7 @@ fn watch_close(w: own Watch) -> err {
         at += 1usize
     }
     let closed_directory = syscall(SYS_CLOSE, state.directory, 0usize, 0usize, 0usize, 0usize, 0usize)
-    ret from_errno(syscall(SYS_CLOSE, state.queue, 0usize, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_CLOSE, state.queue, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
 
 // ---------------------------------------------------------------- environment and processes
@@ -1775,7 +1797,7 @@ fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
 }
 
 fn socket_close(s: own Socket) -> err {
-    ret from_errno(syscall(SYS_CLOSE, s.raw, 0usize, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_CLOSE, s.raw, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
 
 fn socket_handle(s: Socket) -> Handle {
@@ -2078,7 +2100,7 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
 
 fn poller_close(p: own Poller) -> err {
     let state = mem.cast[*PollerState](p.state)
-    ret from_errno(syscall(SYS_CLOSE, state.queue, 0usize, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_CLOSE, state.queue, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
 
 // The calling thread's identifier, the system's own (thread_selfid), for the code that keys a
@@ -2162,7 +2184,15 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
         // EWOULDBLOCK is someone else holding it; anything else is the caller's answer.
         if result != -35isize { ret (lock, from_errno(result)) }
         if remaining <= 0i64 {
-            if timeout_ns == 0i64 { ret (lock, WouldBlock) }
+            // The contention is a primary failure with an errno of its own: EWOULDBLOCK for the one
+            // attempt, ETIMEDOUT for a deadline that ran out.
+            if timeout_ns == 0i64 {
+                last_code = 35i32
+                last_unread = true
+                ret (lock, WouldBlock)
+            }
+            last_code = 60i32
+            last_unread = true
             ret (lock, Timeout)
         }
         var slice = LOCK_POLL_NS
@@ -2174,7 +2204,7 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
 }
 
 fn file_unlock(lock: own FileLock) -> err {
-    ret from_errno(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
 }
 
 // What a process gives up for the rest of its life. Darwin's sandbox_init is a private,

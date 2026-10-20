@@ -1,25 +1,53 @@
 #!/bin/bash
 # usage: run-corpus.sh DIR [runner...]
-# Runs every executable in DIR, each from its own scratch directory and bounded at sixty seconds, and
-# prints one line per program: PASS or FAIL, its exit status and its seconds, then the first lines it
-# wrote to stderr when it failed. A pass is exit 0.
+# Runs every executable in DIR from CORPUS_CWD (default: a scratch directory), each bounded at sixty
+# seconds, and prints one line per program: PASS, FAIL or INFO, its exit status and its seconds, then
+# the first lines it wrote to stderr when it failed. A pass is the exit status the fixture is built
+# to give: 0 unless it is listed below.
 dir=$1; shift
 runner=("$@")
-pass=0; fail=0
+
+# Fixtures that end in a trap by design (134), and those whose exit status is the answer they
+# compute (the real suite compares it; here it is reported, not judged).
+declare -A expect=(
+  [gpu_barrier_helper_occurrence]=134 [gpu_barrier_occurrence]=134 [gpu_divergence]=134
+  [release_build]=134 [trap_backtrace]=134
+  [layout_attributes]=any [incremental]=any [incremental_deleted]=any [incremental_fallback]=any
+  [incremental_layout]=any [incremental_value]=any [inline_nested]=any [when_target]=any
+)
+
+# Fixtures that take arguments, as the real suite passes them.
+extra_args() {
+  case "$1" in
+    os_seek) echo "/tmp/neper-corpus-seek.txt" ;;
+    os_dup) echo "/tmp/neper-corpus-dup.txt" ;;
+    main_args) echo "one|two words" ;;
+    differential) printf 'alpha\nbeta\n' > /tmp/neper-corpus-diff.txt; echo "/tmp/neper-corpus-diff.txt" ;;
+  esac
+}
+
+pass=0; fail=0; info=0
 for file in "$dir"/*; do
   name=$(basename "$file")
   chmod +x "$file"
   scratch=$(mktemp -d)
+  where=${CORPUS_CWD:-$scratch}
+  args=()
+  extra=$(extra_args "$name")
+  if [ -n "$extra" ]; then IFS='|' read -ra args <<< "$extra"; fi
   start=$(date +%s)
-  ( cd "$scratch" && perl -e 'alarm 60; exec @ARGV' "${runner[@]}" "$file" >"$scratch/.out" 2>"$scratch/.err" )
+  ( cd "$where" && perl -e 'alarm 60; exec @ARGV' "${runner[@]}" "$file" "${args[@]}" >"$scratch/.out" 2>"$scratch/.err" )
   code=$?
   seconds=$(( $(date +%s) - start ))
-  if [ "$code" -eq 0 ]; then
-    pass=$((pass+1)); echo "PASS $name 0 ${seconds}s"
+  want=${expect[$name]:-0}
+  if [ "$want" = "any" ]; then
+    info=$((info+1)); echo "INFO $name $code ${seconds}s"
+  elif [ "$code" -eq "$want" ]; then
+    pass=$((pass+1)); echo "PASS $name $code ${seconds}s"
   else
     fail=$((fail+1)); echo "FAIL $name $code ${seconds}s"
     head -c 300 "$scratch/.err" | head -3 | sed 's/^/    | /'
   fi
   rm -rf "$scratch"
 done
-echo "TOTAL pass=$pass fail=$fail"
+echo "TOTAL pass=$pass fail=$fail info=$info"

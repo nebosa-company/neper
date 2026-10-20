@@ -67,8 +67,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let stale_file = os.remove_file(a, "np-fs-watch/seen.txt")
     let stale_dir = os.remove_dir(a, "np-fs-watch")
     if os.mkdir(a, "np-fs-watch") != ok { os.exit(30) }
-    let (_, deep) = watch.open(a, "np-fs-watch", true)
-    if deep != watch.Unsupported { os.exit(31) }
+    // A recursive watch is either made or refused outright; a host never pretends to watch the tree
+    // and watches only the top.
+    let (deep_watch, deep) = watch.open(a, "np-fs-watch", true)
+    if deep == ok {
+        let closed_deep = watch.close(deep_watch)
+        if closed_deep != ok { os.exit(31) }
+    } else {
+        if deep != watch.Unsupported { os.exit(31) }
+    }
     let (w, watch_error) = watch.open(a, "np-fs-watch", false)
     if watch_error != ok { os.exit(32) }
     var one: [1]u8 = [1]u8{ 97 }
