@@ -95,6 +95,9 @@ type Look = struct {
     // looks9-w1: the live footer's cells carry their own edge pixels (the green collection footer)
     footer_edges: bool,
     nav_rule: bool,
+    // round 40: the pale edge pixels of the footer's first picture column and the indicator rule as the main window capture has them
+    // (#BF, #E8EBEF, #C9E1CB; the grid capture of data_grid_bottom has #BC, #EBEEF2, #C7E0C8)
+    foot_pale: bool,
     // looks9-w1: the column (1-based) whose cells never take the selection's fill (the collection grid's Edition column)
     plain_col: usize,
     // looks9-w1: the column lines are a 1 px DCDCDC line at a fractional place: coverage soft_a0 at x = soft_x0 of the row, falling soft_slope per px (0 = the old ramp)
@@ -204,6 +207,7 @@ fn v3() -> Look {
         ring_right: rgb(0xB5B8BDu32),
         footer_edges: false,
         nav_rule: false,
+        foot_pale: false,
         plain_col: 0usize,
         soft_a0: 0.0,
         soft_x0: 0.0,
@@ -1244,7 +1248,43 @@ fn dot_px(b: *scene.Builder, x: f32, y: f32, c: u32) -> err {
 
 // looks4-e: the focus rectangle of a selected row, measured on the live capture (states/grid-row-selected-focused-main):
 // two dotted lines along the top and the bottom and along the left edge `cols` px in, 1 px dots alternating dark and light.
+// round 40: the dialog grids' focus rectangle (live Sort dialog): grey dots over the white and grey rows, tinted ones over the blue
+// selection from column `skip - 1` on; dark dots on the even columns of the top rows and the odd ones of the bottom rows, a lighter
+// pair of rows under the rectangle, the sides alternate by row
+fn sel_dots_dialog_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
+    let x0 = f32(i64(area.x + 0.5))
+    let y0 = f32(i64(area.y + 0.5))
+    let h = f32(i64(area.height + 0.5))
+    let last = i64(area.width + 0.5) - 1i64
+    let split = i64(m.skip) - 1i64
+    var dx: i64 = 0i64
+    while dx <= last {
+        let blue = dx >= split
+        let even = dx % 2i64 == 0i64
+        let fx = x0 + f32(dx)
+        if even {
+            if blue { try dot_px(b, fx, y0, 0x846749u32) } else { try dot_px(b, fx, y0, 0x545454u32) }
+            if blue { try dot_px(b, fx, y0 + 1.0, 0x8C9BAAu32) } else { try dot_px(b, fx, y0 + 1.0, 0xA5A5A5u32) }
+            if blue { try dot_px(b, fx, y0 + h - 1.0, 0xCAD9E8u32) } else { try dot_px(b, fx, y0 + h - 1.0, 0xE2E2E2u32) }
+        } else {
+            if blue { try dot_px(b, fx, y0, 0xB8D5F3u32) } else { try dot_px(b, fx, y0, 0xE9E9E9u32) }
+            if blue { try dot_px(b, fx, y0 + h - 2.0, 0x736455u32) } else { try dot_px(b, fx, y0 + h - 2.0, 0x5A5A5Au32) }
+            if blue { try dot_px(b, fx, y0 + h - 1.0, 0xB1A293u32) } else { try dot_px(b, fx, y0 + h - 1.0, 0x989898u32) }
+        }
+        dx += 1i64
+    }
+    var dy: f32 = 2.0
+    while dy < h - 1.0 {
+        let odd = i64(dy) % 2i64 == 1i64
+        if odd { try dot_px(b, x0, y0 + dy, 0xA5A5A5u32) } else { try dot_px(b, x0, y0 + dy, 0x5A5A5Au32) }
+        if odd { try dot_px(b, x0 + f32(last), y0 + dy, 0x8C9BAAu32) } else { try dot_px(b, x0 + f32(last), y0 + dy, 0x736455u32) }
+        dy += 1.0
+    }
+    ret ok
+}
+
 fn sel_dots_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
+    if m.skip > 0usize { ret sel_dots_dialog_paint(m, b, area) }
     let x0 = f32(i64(area.x + 0.5)) + f32(m.cols)
     let y0 = f32(i64(area.y + 0.5))
     let h = f32(i64(area.height + 0.5))
@@ -1362,9 +1402,15 @@ fn tree_focus(a: *mem.Arena, blue: bool, width: f32, height: f32) -> (widget.Nod
 
 // A selected row's focus rectangle: `width` x `height`, its left edge `left` px in.
 fn sel_dots(a: *mem.Arena, width: f32, height: f32, left: usize) -> (widget.Node, err) {
+    let (plain, plain_error) = sel_dots_split(a, width, height, left, 0usize)
+    ret (plain, plain_error)
+}
+
+// `blue_from` > 0: the dialog grids' rectangle, the selection's blue starting `blue_from - 1` columns in
+fn sel_dots_split(a: *mem.Arena, width: f32, height: f32, left: usize, blue_from: usize) -> (widget.Node, err) {
     let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
     if marks_error != ok { ret (zero, marks_error) }
-    marks[0usize] = Mark { arena: a, color: rgb(0u32), inner: rgb(0u32), shape: Shape.SelDots, pix: "", cols: left, skip: 0usize }
+    marks[0usize] = Mark { arena: a, color: rgb(0u32), inner: rgb(0u32), shape: Shape.SelDots, pix: "", cols: left, skip: blue_from }
     var size = style.defaults()
     size.width = style.Length { Px: width }
     size.height = style.Length { Px: height }
