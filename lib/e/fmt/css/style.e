@@ -451,6 +451,11 @@ fn last_word(a: *mem.Arena, v: str) -> str {
 
 fn parse_align(ap: *const Ap, v: str, fallback: Align) -> Align {
     let t = last_word(ap.a, v)
+    if str.eq(t, "baseline") {
+        let parts = cv.split_top_level_spaces(ap.a, v)
+        if parts.len == 2usize && str.eq(parts[0usize], "last") { ret .LastBaseline }
+        if parts.len == 2usize && str.eq(parts[0usize], "first") { ret .FirstBaseline }
+    }
     let set = ",normal,start,end,flex-start,flex-end,center,stretch,space-between,space-around,space-evenly,baseline,first-baseline,last-baseline,self-start,self-end,left,right,safe,unsafe,auto,"
     ret kw[Align](t, set, fallback)
 }

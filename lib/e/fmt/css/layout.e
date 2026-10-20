@@ -7527,7 +7527,11 @@ fn layout_abs(l: *Layout, b: u32) {
     } else if rect_w >= 0.0f64 {
         var ja = s.justify_self
         if ja == .Auto { ja = bstyle(l, bb.parent).justify_items }
-        left += static_align_offset(ja, rect_w - bb.w - ml - mr, true)
+        let ja_room = rect_w - bb.w - ml - mr
+        var ja_off = static_align_offset(ja, ja_room, true)
+        // In a right-to-left container the start edge is the right one; `left` and `right` stay physical.
+        if bstyle(l, bb.parent).direction == .Rtl && swap_code == 0u8 && ja != .Left && ja != .Right { ja_off = ja_room - ja_off }
+        left += ja_off
     } else if swap_code == 0u8 && !grid_cb && (bb.aux == 0u32 || bb.aux == 3u32) && bstyle(l, bb.parent).direction == .Rtl && (pb.inner == .Flow || pb.inner == .FlowRoot) && !bb.inline_level {
         // In a right-to-left container the static position is the right edge: the box ends there.
         let room = pb.w - pb.border[1usize] - pb.border[3usize] - pb.padding[1usize] - pb.padding[3usize]
@@ -7617,7 +7621,7 @@ fn layout_abs(l: *Layout, b: u32) {
 // How far an absolutely positioned box moves inside its static-position rectangle for alignment `a`, `room` being the free space.
 fn static_align_offset(a: style.Align, room: f64, inline_axis: bool) -> f64 {
     if a == .Center { ret room / 2.0f64 }
-    if a == .End || a == .FlexEnd || a == .SelfEnd { ret room }
+    if a == .End || a == .FlexEnd || a == .SelfEnd || a == .LastBaseline { ret room }
     if a == .Right && inline_axis { ret room }
     ret 0.0f64
 }

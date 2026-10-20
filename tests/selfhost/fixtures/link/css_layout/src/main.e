@@ -487,5 +487,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 95. align-self: self-end follows the item's own writing mode and direction, not the container's.
     let (p95, ok95) = build(a, "<div style=\"display:flex;height:100px;width:100px\"><div id=i style=\"width:20px;height:10px;align-self:self-end;writing-mode:vertical-lr;direction:rtl\"></div></div>", "")
     if !ok95 || !near(rect_of(p95, "i").y, 0.0f64) { os.exit(136) }
+    // 96. The static position of an absolutely positioned grid child starts at the right edge of its area in a right-to-left grid.
+    let (p96, ok96) = build(a, "<div style=\"display:grid;direction:rtl;position:relative;width:100px;height:50px;grid-template-columns:100px\"><div id=a style=\"position:absolute;grid-area:1/1;width:20px;height:10px\"></div></div>", "")
+    if !ok96 || !near(rect_of(p96, "a").x, 80.0f64) { os.exit(137) }
     ret ok
 }
