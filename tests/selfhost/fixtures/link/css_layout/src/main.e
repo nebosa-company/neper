@@ -511,5 +511,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 103. Atomic inlines in a right-to-left line run right to left, the first one rightmost.
     let (p103, ok103) = build(a, "<div style=\"direction:rtl;width:100px\"><span id=a style=\"display:inline-block;width:10px;height:10px\"></span><span id=b style=\"display:inline-block;width:20px;height:10px\"></span></div>", "")
     if !ok103 || !near(rect_of(p103, "a").x, 90.0f64) || !near(rect_of(p103, "b").x, 70.0f64) { os.exit(144) }
+    // 104. An absolutely positioned inline box follows the content before it, which sits at the right edge of a right-to-left line.
+    let (p104, ok104) = build(a, "<div style=\"direction:rtl;width:100px;font-size:10px\">ab<span id=s style=\"position:absolute;width:5px;height:5px\"></span></div>", "")
+    if !ok104 { os.exit(145) }
+    if near(rect_of(p104, "s").x, 55.0f64) { os.exit(155) }
+    if near(rect_of(p104, "s").x, 27.0f64) { os.exit(152) }
+    if near(rect_of(p104, "s").x, 7.0f64) { os.exit(153) }
+    if near(rect_of(p104, "s").x, 87.0f64) { os.exit(154) }
+    if near(rect_of(p104, "s").x, 20.0f64) { os.exit(170 + i32(p104.lay.boxes.items[usize(box_of(p104, "s"))].aux)) }
+    if near(rect_of(p104, "s").x, 0.0f64) { os.exit(147) }
+    if near(rect_of(p104, "s").x, 100.0f64) { os.exit(148) }
+    if near(rect_of(p104, "s").x, 60.0f64) { os.exit(149) }
+    if near(rect_of(p104, "s").x, 95.0f64) { os.exit(150) }
+    if !near(rect_of(p104, "s").x, 80.0f64) { os.exit(151) }
     ret ok
 }
