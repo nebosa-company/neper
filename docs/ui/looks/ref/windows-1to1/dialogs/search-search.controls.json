@@ -1,0 +1,99 @@
+{
+  "name": "search-search",
+  "how": "Search menu, item at popup y=221",
+  "class": "TSearchForm",
+  "title": "Search for Card",
+  "width": 325,
+  "height": 257,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TcxComboBox",
+      "text": "",
+      "visible": true,
+      "x": 20,
+      "y": 70,
+      "w": 289,
+      "h": 21,
+      "id": 11408684,
+      "hwnd": 11408684
+    },
+    {
+      "class": "TcxCustomComboBoxInnerEdit",
+      "text": "",
+      "visible": true,
+      "x": 23,
+      "y": 73,
+      "w": 268,
+      "h": 13,
+      "id": 3670080,
+      "hwnd": 3670080
+    },
+    {
+      "class": "TcxRadioGroup",
+      "text": "Search in ",
+      "visible": true,
+      "x": 20,
+      "y": 102,
+      "w": 289,
+      "h": 105,
+      "id": 398652,
+      "hwnd": 398652
+    },
+    {
+      "class": "TcxCustomRadioGroupButton",
+      "text": "Collection",
+      "visible": true,
+      "x": 28,
+      "y": 162,
+      "w": 279,
+      "h": 42,
+      "id": 398654,
+      "hwnd": 398654
+    },
+    {
+      "class": "TcxCustomRadioGroupButton",
+      "text": "Cards",
+      "visible": true,
+      "x": 28,
+      "y": 120,
+      "w": 279,
+      "h": 42,
+      "id": 2823036,
+      "hwnd": 2823036
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Card:",
+      "visible": true,
+      "x": 20,
+      "y": 47,
+      "w": 289,
+      "h": 17,
+      "id": 2823472,
+      "hwnd": 2823472
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 167,
+      "y": 215,
+      "w": 75,
+      "h": 23,
+      "id": 464178,
+      "hwnd": 464178
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 83,
+      "y": 215,
+      "w": 75,
+      "h": 23,
+      "id": 1250606,
+      "hwnd": 1250606
+    }
+  ]
+}

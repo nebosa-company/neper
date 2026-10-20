@@ -1,0 +1,176 @@
+{
+  "name": "reports-edition-availability",
+  "how": "Reports menu, item at popup y=143",
+  "class": "TfrxPreviewForm",
+  "title": "Edition Availability",
+  "width": 1296,
+  "height": 768,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TfrxPreview",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 62,
+      "w": 1280,
+      "h": 679,
+      "id": 2100424,
+      "hwnd": 2100424
+    },
+    {
+      "class": "TfrxPreviewWorkspace",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 62,
+      "w": 1280,
+      "h": 679,
+      "id": 1248260,
+      "hwnd": 1248260
+    },
+    {
+      "class": "TfrxPreviewWorkspace",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 120,
+      "h": 0,
+      "id": 922842,
+      "hwnd": 922842
+    },
+    {
+      "class": "TfrxTreePanel",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 120,
+      "h": 533,
+      "id": 2887420,
+      "hwnd": 2887420
+    },
+    {
+      "class": "TfrxTreeView",
+      "text": "",
+      "visible": false,
+      "x": 11,
+      "y": 89,
+      "w": 114,
+      "h": 503,
+      "id": 1511284,
+      "hwnd": 1511284
+    },
+    {
+      "class": "TTabControl",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 289,
+      "h": 22,
+      "id": 922932,
+      "hwnd": 922932
+    },
+    {
+      "class": "TStatusBar",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 741,
+      "w": 1280,
+      "h": 19,
+      "id": 2166606,
+      "hwnd": 2166606
+    },
+    {
+      "class": "TToolBar",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 1280,
+      "h": 31,
+      "id": 1119542,
+      "hwnd": 1119542
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 524,
+      "y": 35,
+      "w": 554,
+      "h": 23,
+      "id": 4195980,
+      "hwnd": 4195980
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 421,
+      "y": 35,
+      "w": 35,
+      "h": 23,
+      "id": 922844,
+      "hwnd": 922844
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 298,
+      "y": 35,
+      "w": 77,
+      "h": 23,
+      "id": 1053922,
+      "hwnd": 1053922
+    },
+    {
+      "class": "TEdit",
+      "text": "0",
+      "visible": true,
+      "x": 302,
+      "y": 39,
+      "w": 37,
+      "h": 15,
+      "id": 23860552,
+      "hwnd": 23860552
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 112,
+      "y": 35,
+      "w": 55,
+      "h": 23,
+      "id": 1709358,
+      "hwnd": 1709358
+    },
+    {
+      "class": "TfrxComboBox",
+      "text": "",
+      "visible": true,
+      "x": 116,
+      "y": 37,
+      "w": 49,
+      "h": 19,
+      "id": 2035460,
+      "hwnd": 2035460
+    },
+    {
+      "class": "Edit",
+      "text": "",
+      "visible": true,
+      "x": 119,
+      "y": 40,
+      "w": 30,
+      "h": 13,
+      "id": 1001,
+      "hwnd": 857298
+    }
+  ]
+}

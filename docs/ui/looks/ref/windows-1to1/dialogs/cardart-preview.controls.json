@@ -1,0 +1,22 @@
+{
+  "name": "cardart-preview",
+  "how": "Card Art menu, item at popup y=33",
+  "class": "TPreviewForm",
+  "title": "Preview",
+  "width": 1280,
+  "height": 800,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TGDIPCanvas",
+      "text": "",
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 800,
+      "id": 529724,
+      "hwnd": 529724
+    }
+  ]
+}

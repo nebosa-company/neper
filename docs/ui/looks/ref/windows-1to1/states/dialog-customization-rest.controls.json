@@ -1,0 +1,109 @@
+{
+  "name": "dialog-customization-rest",
+  "control": "dialog (Customization)",
+  "state": "rest",
+  "how": "dialog just opened (View > Show Columns...)",
+  "class": "TcxGridBandedTableCustomizationForm",
+  "title": "Customization",
+  "width": 180,
+  "height": 300,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TcxPageControl",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 10,
+      "y": 33,
+      "w": 160,
+      "h": 257,
+      "id": 464342,
+      "hwnd": 464342
+    },
+    {
+      "class": "TcxTabSheet",
+      "text": "Columns",
+      "visible": true,
+      "enabled": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 464362,
+      "hwnd": 464362
+    },
+    {
+      "class": "TcxGridTableColumnsListBox",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 464364,
+      "hwnd": 464364
+    },
+    {
+      "class": "TcxControlScrollBar",
+      "text": "",
+      "visible": false,
+      "enabled": true,
+      "x": 117,
+      "y": 58,
+      "w": 17,
+      "h": 95,
+      "id": 595420,
+      "hwnd": 595420
+    },
+    {
+      "class": "TcxCustomGridItemsInnerListBox",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 595430,
+      "hwnd": 595430
+    },
+    {
+      "class": "TcxTabSheet",
+      "text": "Bands",
+      "visible": false,
+      "enabled": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 333294,
+      "hwnd": 333294
+    },
+    {
+      "class": "TcxGridBandedTableBandsListBox",
+      "text": "",
+      "visible": false,
+      "enabled": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 398832,
+      "hwnd": 398832
+    },
+    {
+      "class": "TcxCustomGridItemsInnerListBox",
+      "text": "",
+      "visible": false,
+      "enabled": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 333300,
+      "hwnd": 333300
+    }
+  ]
+}

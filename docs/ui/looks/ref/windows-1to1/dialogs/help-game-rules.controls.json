@@ -1,0 +1,176 @@
+{
+  "name": "help-game-rules",
+  "how": "Help menu, item at popup y=53",
+  "class": "TfrxPreviewForm",
+  "title": "Comprehensive Rules",
+  "width": 1296,
+  "height": 768,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TfrxPreview",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 62,
+      "w": 1280,
+      "h": 679,
+      "id": 1053966,
+      "hwnd": 1053966
+    },
+    {
+      "class": "TfrxPreviewWorkspace",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 62,
+      "w": 1280,
+      "h": 679,
+      "id": 12915962,
+      "hwnd": 12915962
+    },
+    {
+      "class": "TfrxPreviewWorkspace",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 120,
+      "h": 0,
+      "id": 726412,
+      "hwnd": 726412
+    },
+    {
+      "class": "TfrxTreePanel",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 120,
+      "h": 533,
+      "id": 1709282,
+      "hwnd": 1709282
+    },
+    {
+      "class": "TfrxTreeView",
+      "text": "",
+      "visible": false,
+      "x": 11,
+      "y": 89,
+      "w": 114,
+      "h": 503,
+      "id": 660860,
+      "hwnd": 660860
+    },
+    {
+      "class": "TTabControl",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 289,
+      "h": 22,
+      "id": 726398,
+      "hwnd": 726398
+    },
+    {
+      "class": "TStatusBar",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 741,
+      "w": 1280,
+      "h": 19,
+      "id": 82709082,
+      "hwnd": 82709082
+    },
+    {
+      "class": "TToolBar",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 1280,
+      "h": 31,
+      "id": 857442,
+      "hwnd": 857442
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 524,
+      "y": 35,
+      "w": 554,
+      "h": 23,
+      "id": 1381594,
+      "hwnd": 1381594
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 421,
+      "y": 35,
+      "w": 35,
+      "h": 23,
+      "id": 2625284,
+      "hwnd": 2625284
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 298,
+      "y": 35,
+      "w": 77,
+      "h": 23,
+      "id": 1119600,
+      "hwnd": 1119600
+    },
+    {
+      "class": "TEdit",
+      "text": "0",
+      "visible": true,
+      "x": 302,
+      "y": 39,
+      "w": 37,
+      "h": 15,
+      "id": 39325430,
+      "hwnd": 39325430
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 112,
+      "y": 35,
+      "w": 55,
+      "h": 23,
+      "id": 857452,
+      "hwnd": 857452
+    },
+    {
+      "class": "TfrxComboBox",
+      "text": "",
+      "visible": true,
+      "x": 116,
+      "y": 37,
+      "w": 49,
+      "h": 19,
+      "id": 23860114,
+      "hwnd": 23860114
+    },
+    {
+      "class": "Edit",
+      "text": "",
+      "visible": true,
+      "x": 119,
+      "y": 40,
+      "w": 30,
+      "h": 13,
+      "id": 1001,
+      "hwnd": 13309340
+    }
+  ]
+}

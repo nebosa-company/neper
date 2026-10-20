@@ -1,0 +1,33 @@
+{
+  "name": "view-legality",
+  "how": "View menu, item at popup y=263",
+  "class": "#32770",
+  "title": "Error",
+  "width": 297,
+  "height": 140,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "Button",
+      "text": "OK",
+      "visible": true,
+      "x": 199,
+      "y": 99,
+      "w": 75,
+      "h": 23,
+      "id": 2,
+      "hwnd": 855044
+    },
+    {
+      "class": "Static",
+      "text": "The specified file was not found. \"update.exe\".",
+      "visible": true,
+      "x": 19,
+      "y": 54,
+      "w": 240,
+      "h": 15,
+      "id": 65535,
+      "hwnd": 1707208
+    }
+  ]
+}

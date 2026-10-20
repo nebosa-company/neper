@@ -1,0 +1,165 @@
+{
+  "name": "options-07-prices",
+  "how": "Tools menu, item at popup y=153, then click page 7 in the left category list",
+  "class": "TOptionsForm",
+  "title": "Options",
+  "width": 728,
+  "height": 494,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TCategoryButtons",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 197,
+      "h": 416,
+      "id": 12784890,
+      "hwnd": 12784890
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 205,
+      "y": 31,
+      "w": 515,
+      "h": 416,
+      "id": 3346172,
+      "hwnd": 3346172
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 33,
+      "w": 511,
+      "h": 30,
+      "id": 1250522,
+      "hwnd": 1250522
+    },
+    {
+      "class": "TcxLabel",
+      "text": "General",
+      "visible": true,
+      "x": 536,
+      "y": 39,
+      "w": 153,
+      "h": 17,
+      "id": 922894,
+      "hwnd": 922894
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Prices (F8)",
+      "visible": true,
+      "x": 213,
+      "y": 39,
+      "w": 64,
+      "h": 17,
+      "id": 82578010,
+      "hwnd": 82578010
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2494212,
+      "hwnd": 2494212
+    },
+    {
+      "class": "TPricesForm",
+      "text": "Prices",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 12719516,
+      "hwnd": 12719516
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Online prices to display in the Prices panel:",
+      "visible": true,
+      "x": 215,
+      "y": 71,
+      "w": 495,
+      "h": 17,
+      "id": 3215196,
+      "hwnd": 3215196
+    },
+    {
+      "class": "TcxCheckListBox",
+      "text": "",
+      "visible": true,
+      "x": 215,
+      "y": 94,
+      "w": 495,
+      "h": 343,
+      "id": 1447090,
+      "hwnd": 1447090
+    },
+    {
+      "class": "TcxCustomInnerCheckListBox",
+      "text": "",
+      "visible": true,
+      "x": 217,
+      "y": 96,
+      "w": 491,
+      "h": 339,
+      "id": 38735606,
+      "hwnd": 38735606
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 447,
+      "w": 712,
+      "h": 39,
+      "id": 1575940,
+      "hwnd": 1575940
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 636,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 1316060,
+      "hwnd": 1316060
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 468,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2102574,
+      "hwnd": 2102574
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 552,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 19273164,
+      "hwnd": 19273164
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "name": "options-06-rules",
+  "how": "Tools menu, item at popup y=153, then click page 6 in the left category list",
+  "class": "TOptionsForm",
+  "title": "Options",
+  "width": 728,
+  "height": 494,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TCategoryButtons",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 197,
+      "h": 416,
+      "id": 12784890,
+      "hwnd": 12784890
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 205,
+      "y": 31,
+      "w": 515,
+      "h": 416,
+      "id": 3346172,
+      "hwnd": 3346172
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 33,
+      "w": 511,
+      "h": 30,
+      "id": 1250522,
+      "hwnd": 1250522
+    },
+    {
+      "class": "TcxLabel",
+      "text": "General",
+      "visible": true,
+      "x": 536,
+      "y": 39,
+      "w": 153,
+      "h": 17,
+      "id": 922894,
+      "hwnd": 922894
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Rules (F7)",
+      "visible": true,
+      "x": 213,
+      "y": 39,
+      "w": 61,
+      "h": 17,
+      "id": 82578010,
+      "hwnd": 82578010
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2494212,
+      "hwnd": 2494212
+    },
+    {
+      "class": "TRulesOptionsForm",
+      "text": "Rules",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 12588444,
+      "hwnd": 12588444
+    },
+    {
+      "class": "TcxLabel",
+      "text": "&Card details to display in Rules panel:",
+      "visible": true,
+      "x": 215,
+      "y": 71,
+      "w": 495,
+      "h": 17,
+      "id": 857368,
+      "hwnd": 857368
+    },
+    {
+      "class": "TcxCheckListBox",
+      "text": "",
+      "visible": true,
+      "x": 215,
+      "y": 94,
+      "w": 495,
+      "h": 343,
+      "id": 38604534,
+      "hwnd": 38604534
+    },
+    {
+      "class": "TcxControlScrollBar",
+      "text": "",
+      "visible": false,
+      "x": 742,
+      "y": 96,
+      "w": 17,
+      "h": 258,
+      "id": 3149660,
+      "hwnd": 3149660
+    },
+    {
+      "class": "TcxCustomInnerCheckListBox",
+      "text": "",
+      "visible": true,
+      "x": 217,
+      "y": 96,
+      "w": 491,
+      "h": 339,
+      "id": 1250482,
+      "hwnd": 1250482
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 447,
+      "w": 712,
+      "h": 39,
+      "id": 1575940,
+      "hwnd": 1575940
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 636,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 1316060,
+      "hwnd": 1316060
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 468,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2102574,
+      "hwnd": 2102574
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 552,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 19273164,
+      "hwnd": 19273164
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "menu-CardArt",
+  "how": "click 'Card Art' on the Main Menu bar",
+  "class": "TdxBarSubMenuControl",
+  "title": "",
+  "width": 189,
+  "height": 332,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": []
+}

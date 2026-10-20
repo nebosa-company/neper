@@ -1,0 +1,7 @@
+"Control","State","Why"
+"menu Reports","open","popup did not appear"
+"toolbar button","hot / pressed / checked","dxBar toolbars ignore posted mouse messages (a posted down+up on the Search-toolbar binoculars neither pressed nor opened the dialog); hit-test uses the real pointer"
+"any control","hover (mouse over)","DevExpress reads the real pointer with GetCursorPos / its own mouse hook; a posted WM_MOUSEMOVE changes nothing visible (tried toolbar, menu popup, cxButton, grid header and rows, with and without app activation, with CM_MOUSEENTER and WM_MOUSEHOVER)"
+"combo box (Search for Card, Card combo (history; may be empty))","open drop-down list","no popup window appeared after a posted click on the drop button"
+"vertical grid combo","open list","no popup after clicking the editor drop button"
+"date edit","any state","no v3 dialog reached with posted messages contains a date edit: Deck Registration Sheets and Deck Availability would print/generate documents, so they were not opened"

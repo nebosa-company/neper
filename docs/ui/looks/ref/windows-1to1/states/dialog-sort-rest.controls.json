@@ -1,0 +1,85 @@
+{
+  "name": "dialog-sort-rest",
+  "control": "dialog (Sort)",
+  "state": "rest",
+  "how": "dialog just opened (View > Sort...)",
+  "class": "TSortColumnsForm",
+  "title": "Sort [Card Pool]",
+  "width": 367,
+  "height": 347,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TcxGrid",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 18,
+      "y": 41,
+      "w": 331,
+      "h": 259,
+      "id": 529884,
+      "hwnd": 529884
+    },
+    {
+      "class": "TcxGridSite",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 19,
+      "y": 42,
+      "w": 329,
+      "h": 257,
+      "id": 202226,
+      "hwnd": 202226
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 8,
+      "y": 300,
+      "w": 351,
+      "h": 39,
+      "id": 398822,
+      "hwnd": 398822
+    },
+    {
+      "class": "TcxButton",
+      "text": "Clear",
+      "visible": true,
+      "enabled": true,
+      "x": 18,
+      "y": 310,
+      "w": 75,
+      "h": 23,
+      "id": 202228,
+      "hwnd": 202228
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "enabled": true,
+      "x": 193,
+      "y": 310,
+      "w": 75,
+      "h": 23,
+      "id": 267760,
+      "hwnd": 267760
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "enabled": true,
+      "x": 274,
+      "y": 310,
+      "w": 75,
+      "h": 23,
+      "id": 202222,
+      "hwnd": 202222
+    }
+  ]
+}

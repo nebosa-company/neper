@@ -14,10 +14,11 @@
 #>
 param(
   [string]$Exe = 'D:\Temp\claude\v3run\mtgstudio.exe',   # a COPY with its own mtgstudio.db3
-  [string]$Out = 'D:\repos\neper\docs\ui\looks\ref\windows\dialogs',
+  [string]$Out = (Join-Path $PSScriptRoot '..\docs\ui\looks\ref\windows-1to1\dialogs'),
   [int]$OpenTimeoutSec = 20
 )
 $ErrorActionPreference = 'Continue'
+. (Join-Path $PSScriptRoot 'v3_grab11.ps1')
 Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;
@@ -64,7 +65,7 @@ function Start-V3($exe) { Start-Process -FilePath $exe -WorkingDirectory (Split-
 function Top($p) { @([W]::ForPid($p.Id) | % { [pscustomobject]@{H=$_; C=[W]::Cls($_); T=[W]::Text($_); R=([W]::Rect($_) -join ',') } }) }
 function Wait-Main($p, $sec=40) { for($i=0;$i -lt $sec*2;$i++){ Start-Sleep -Milliseconds 500; $m = Top $p | ? {$_.C -eq 'TMainForm'}; if($m){ Start-Sleep 3; return $m.H } } }
 $script:MenuX=[ordered]@{File=25;Cards=60;Search=105;View=149;'Card Art'=197;Online=249;Reports=299;Tools=347;Admin=390;Help=431}
-function Grab($h,$f){ $r=[W]::Rect($h); $bmp=New-Object System.Drawing.Bitmap ([int]$r[2]),([int]$r[3]); $g=[System.Drawing.Graphics]::FromImage($bmp); $dc=$g.GetHdc(); [void][W]::PrintWindow($h,$dc,2); $g.ReleaseHdc($dc); $g.Dispose(); New-Item -ItemType Directory -Force (Split-Path $f) | Out-Null; $bmp.Save($f); $bmp.Dispose() }
+function Grab($h,$f){ Grab11 $h $f }
 function Click($h,$x,$y){ $l=[IntPtr](($y -shl 16) -bor ($x -band 0xFFFF)); [void][W]::PostMessage($h,0x200,[IntPtr]0,$l); [void][W]::PostMessage($h,0x201,[IntPtr]1,$l); [void][W]::PostMessage($h,0x202,[IntPtr]0,$l) }
 function Esc($h){ [void][W]::PostMessage($h,0x100,[IntPtr]0x1B,[IntPtr]0); [void][W]::PostMessage($h,0x101,[IntPtr]0x1B,[IntPtr]0xC0000001) }
 function Popups($p){ Top $p | ?{$_.C -like 'TdxBar*Sub*'} }
@@ -113,7 +114,7 @@ $Skipped = [ordered]@{
  'Help > Check for Update' = 'goes online'
 }
 function Start-App { $script:p = Start-Process -FilePath $Exe -WorkingDirectory (Split-Path $Exe) -PassThru
-  for($i=0;$i -lt 80;$i++){ Start-Sleep -Milliseconds 500; if((Top $script:p|?{$_.C -eq 'TMainForm'})){ Start-Sleep 3; return } }; throw 'main window did not appear' }
+  for($i=0;$i -lt 240;$i++){ Start-Sleep -Milliseconds 500; if((Top $script:p|?{$_.C -eq 'TMainForm'})){ Start-Sleep 3; return } }; throw 'main window did not appear' }
 function Ensure-App { if($script:p.HasExited -or -not [W]::Alive((MainH $script:p))){ "  app dead/hung, restarting"; try{$script:p.Kill()}catch{}; Start-App } }
 function Save-Win($h,$name,$how,$extra=@{}){
   Grab $h (Join-Path $Out "$name@1x.png")
@@ -167,6 +168,8 @@ foreach($t in $DeckTargets){ Do-Target $t }
 # 3. back to rest: main grab at the end for comparison
 Ensure-App
 [void]$Manifest.Add((Save-Win (MainH $script:p) 'main-window-end' 'after all dialogs closed'))
+# leave the copy in its normal mode (File > Mode > Collection from Card Pool, y=337): the mode is persisted and Deck mode would make the next launch start in it
+Close-Popups $script:p; $pop = Open-Menu $script:p 'File'; Click $pop 60 337; Start-Sleep 3
 try{$script:p.Kill()}catch{}
 $Manifest | Export-Csv (Join-Path $Out 'manifest.csv') -NoTypeInformation
 $Skipped.GetEnumerator() | %{ "SKIPPED: $($_.Key) -- $($_.Value)" }

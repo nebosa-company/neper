@@ -1,0 +1,143 @@
+{
+  "name": "view-conditional-formatting",
+  "how": "View menu, item at popup y=483",
+  "class": "TfrmDataControllerConditionalFormattingRulesManagerDialog",
+  "title": "Conditional Formatting Rules Manager",
+  "width": 700,
+  "height": 421,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TdxLayoutControl",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 684,
+      "h": 382,
+      "id": 1381142,
+      "hwnd": 1381142
+    },
+    {
+      "class": "TcxButton",
+      "text": "",
+      "visible": true,
+      "x": 652,
+      "y": 84,
+      "w": 30,
+      "h": 25,
+      "id": 1184644,
+      "hwnd": 1184644
+    },
+    {
+      "class": "TcxButton",
+      "text": "",
+      "visible": true,
+      "x": 616,
+      "y": 84,
+      "w": 30,
+      "h": 25,
+      "id": 857314,
+      "hwnd": 857314
+    },
+    {
+      "class": "TcxTreeList",
+      "text": "",
+      "visible": true,
+      "x": 18,
+      "y": 115,
+      "w": 664,
+      "h": 257,
+      "id": 660690,
+      "hwnd": 660690
+    },
+    {
+      "class": "TcxButton",
+      "text": "&New Rule...",
+      "visible": true,
+      "x": 18,
+      "y": 84,
+      "w": 125,
+      "h": 25,
+      "id": 660788,
+      "hwnd": 660788
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Delete Rule",
+      "visible": true,
+      "x": 280,
+      "y": 84,
+      "w": 125,
+      "h": 25,
+      "id": 986116,
+      "hwnd": 986116
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Edit Rule...",
+      "visible": true,
+      "x": 149,
+      "y": 84,
+      "w": 125,
+      "h": 25,
+      "id": 1838280,
+      "hwnd": 1838280
+    },
+    {
+      "class": "TcxComboBox",
+      "text": "",
+      "visible": true,
+      "x": 149,
+      "y": 41,
+      "w": 143,
+      "h": 21,
+      "id": 1707780,
+      "hwnd": 1707780
+    },
+    {
+      "class": "TcxCustomComboBoxInnerEdit",
+      "text": "",
+      "visible": true,
+      "x": 152,
+      "y": 44,
+      "w": 122,
+      "h": 13,
+      "id": 1904462,
+      "hwnd": 1904462
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 597,
+      "y": 378,
+      "w": 85,
+      "h": 25,
+      "id": 1381678,
+      "hwnd": 1381678
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 415,
+      "y": 378,
+      "w": 85,
+      "h": 25,
+      "id": 23532872,
+      "hwnd": 23532872
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 506,
+      "y": 378,
+      "w": 85,
+      "h": 25,
+      "id": 791862,
+      "hwnd": 791862
+    }
+  ]
+}

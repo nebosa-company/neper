@@ -1,0 +1,109 @@
+{
+  "name": "dialog-search-rest",
+  "control": "dialog (Search for Card)",
+  "state": "rest",
+  "how": "dialog just opened (Search > Search)",
+  "class": "TSearchForm",
+  "title": "Search for Card",
+  "width": 325,
+  "height": 257,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TcxComboBox",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 20,
+      "y": 70,
+      "w": 289,
+      "h": 21,
+      "id": 136684,
+      "hwnd": 136684
+    },
+    {
+      "class": "TcxCustomComboBoxInnerEdit",
+      "text": "",
+      "visible": true,
+      "enabled": true,
+      "x": 23,
+      "y": 73,
+      "w": 268,
+      "h": 13,
+      "id": 71150,
+      "hwnd": 71150
+    },
+    {
+      "class": "TcxRadioGroup",
+      "text": "Search in ",
+      "visible": true,
+      "enabled": true,
+      "x": 20,
+      "y": 102,
+      "w": 289,
+      "h": 105,
+      "id": 136682,
+      "hwnd": 136682
+    },
+    {
+      "class": "TcxCustomRadioGroupButton",
+      "text": "Collection",
+      "visible": true,
+      "enabled": true,
+      "x": 28,
+      "y": 162,
+      "w": 279,
+      "h": 42,
+      "id": 136678,
+      "hwnd": 136678
+    },
+    {
+      "class": "TcxCustomRadioGroupButton",
+      "text": "Cards",
+      "visible": true,
+      "enabled": true,
+      "x": 28,
+      "y": 120,
+      "w": 279,
+      "h": 42,
+      "id": 136680,
+      "hwnd": 136680
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Card:",
+      "visible": true,
+      "enabled": true,
+      "x": 20,
+      "y": 47,
+      "w": 289,
+      "h": 17,
+      "id": 202198,
+      "hwnd": 202198
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "enabled": true,
+      "x": 167,
+      "y": 215,
+      "w": 75,
+      "h": 23,
+      "id": 136676,
+      "hwnd": 136676
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "enabled": true,
+      "x": 83,
+      "y": 215,
+      "w": 75,
+      "h": 23,
+      "id": 136674,
+      "hwnd": 136674
+    }
+  ]
+}

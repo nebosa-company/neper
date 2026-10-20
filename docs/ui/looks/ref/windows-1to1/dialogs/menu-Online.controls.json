@@ -1,0 +1,10 @@
+{
+  "name": "menu-Online",
+  "how": "click 'Online' on the Main Menu bar",
+  "class": "TdxBarSubMenuControl",
+  "title": "",
+  "width": 162,
+  "height": 86,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": []
+}

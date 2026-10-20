@@ -1,0 +1,176 @@
+{
+  "name": "options-09-defaults",
+  "how": "Tools menu, item at popup y=153, then click page 9 in the left category list",
+  "class": "TOptionsForm",
+  "title": "Options",
+  "width": 728,
+  "height": 494,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TCategoryButtons",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 197,
+      "h": 416,
+      "id": 12784890,
+      "hwnd": 12784890
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 205,
+      "y": 31,
+      "w": 515,
+      "h": 416,
+      "id": 3346172,
+      "hwnd": 3346172
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 33,
+      "w": 511,
+      "h": 30,
+      "id": 1250522,
+      "hwnd": 1250522
+    },
+    {
+      "class": "TcxLabel",
+      "text": "General",
+      "visible": true,
+      "x": 536,
+      "y": 39,
+      "w": 153,
+      "h": 17,
+      "id": 922894,
+      "hwnd": 922894
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Defaults (F10)",
+      "visible": true,
+      "x": 213,
+      "y": 39,
+      "w": 84,
+      "h": 17,
+      "id": 82578010,
+      "hwnd": 82578010
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2494212,
+      "hwnd": 2494212
+    },
+    {
+      "class": "TCollectionDefaultsForm",
+      "text": "Collection Defaults",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 595322,
+      "hwnd": 595322
+    },
+    {
+      "class": "TcxLabel",
+      "text": "&Condition",
+      "visible": true,
+      "x": 215,
+      "y": 101,
+      "w": 137,
+      "h": 17,
+      "id": 464252,
+      "hwnd": 464252
+    },
+    {
+      "class": "TcxImageComboBox",
+      "text": "",
+      "visible": true,
+      "x": 371,
+      "y": 99,
+      "w": 335,
+      "h": 21,
+      "id": 529772,
+      "hwnd": 529772
+    },
+    {
+      "class": "TcxCustomComboBoxInnerEdit",
+      "text": "",
+      "visible": true,
+      "x": 374,
+      "y": 102,
+      "w": 314,
+      "h": 13,
+      "id": 1512674,
+      "hwnd": 1512674
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Define default values for cards added to collection.",
+      "visible": true,
+      "x": 215,
+      "y": 71,
+      "w": 491,
+      "h": 17,
+      "id": 23532434,
+      "hwnd": 23532434
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 447,
+      "w": 712,
+      "h": 39,
+      "id": 1575940,
+      "hwnd": 1575940
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 636,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 1316060,
+      "hwnd": 1316060
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 468,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2102574,
+      "hwnd": 2102574
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 552,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 19273164,
+      "hwnd": 19273164
+    }
+  ]
+}

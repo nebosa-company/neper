@@ -1,0 +1,187 @@
+{
+  "name": "help-about",
+  "how": "Help menu, item at popup y=203",
+  "class": "TAboutForm",
+  "title": "About MTG Studio",
+  "width": 452,
+  "height": 372,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TcxPageControl",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 436,
+      "h": 294,
+      "id": 464322,
+      "hwnd": 464322
+    },
+    {
+      "class": "TcxTabSheet",
+      "text": "&MTG Studio",
+      "visible": true,
+      "x": 8,
+      "y": 55,
+      "w": 436,
+      "h": 270,
+      "id": 7147194,
+      "hwnd": 7147194
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 55,
+      "w": 436,
+      "h": 270,
+      "id": 398064,
+      "hwnd": 398064
+    },
+    {
+      "class": "TdxPanel",
+      "text": "",
+      "visible": true,
+      "x": 242,
+      "y": 55,
+      "w": 202,
+      "h": 270,
+      "id": 267692,
+      "hwnd": 267692
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Send email to Support",
+      "visible": true,
+      "x": 16,
+      "y": 271,
+      "w": 205,
+      "h": 17,
+      "id": 398780,
+      "hwnd": 398780
+    },
+    {
+      "class": "TcxLabel",
+      "text": "https://mtg.studio",
+      "visible": true,
+      "x": 19,
+      "y": 294,
+      "w": 202,
+      "h": 17,
+      "id": 1512894,
+      "hwnd": 1512894
+    },
+    {
+      "class": "TcxLabel",
+      "text": "version 3.235.0",
+      "visible": true,
+      "x": 19,
+      "y": 89,
+      "w": 202,
+      "h": 22,
+      "id": 1707444,
+      "hwnd": 1707444
+    },
+    {
+      "class": "TcxLabel",
+      "text": "MTG Studio",
+      "visible": true,
+      "x": 19,
+      "y": 63,
+      "w": 202,
+      "h": 30,
+      "id": 1053964,
+      "hwnd": 1053964
+    },
+    {
+      "class": "TcxTabSheet",
+      "text": "D&etails",
+      "visible": false,
+      "x": 8,
+      "y": 55,
+      "w": 436,
+      "h": 270,
+      "id": 1578204,
+      "hwnd": 1578204
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 55,
+      "w": 436,
+      "h": 270,
+      "id": 1905956,
+      "hwnd": 1905956
+    },
+    {
+      "class": "TChromium",
+      "text": "",
+      "visible": false,
+      "x": 9,
+      "y": 56,
+      "w": 434,
+      "h": 268,
+      "id": 19666380,
+      "hwnd": 19666380
+    },
+    {
+      "class": "CefBrowserWindow",
+      "text": "",
+      "visible": false,
+      "x": 9,
+      "y": 56,
+      "w": 434,
+      "h": 268,
+      "id": 0,
+      "hwnd": 1250746
+    },
+    {
+      "class": "WebViewHost",
+      "text": "",
+      "visible": false,
+      "x": 9,
+      "y": 56,
+      "w": 434,
+      "h": 268,
+      "id": 0,
+      "hwnd": 333236
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 325,
+      "w": 436,
+      "h": 39,
+      "id": 267698,
+      "hwnd": 267698
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 360,
+      "y": 334,
+      "w": 75,
+      "h": 23,
+      "id": 398762,
+      "hwnd": 398762
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 131,
+      "y": 43,
+      "w": 304,
+      "h": 279,
+      "id": 267696,
+      "hwnd": 267696
+    }
+  ]
+}

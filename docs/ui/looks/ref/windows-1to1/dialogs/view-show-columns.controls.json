@@ -1,0 +1,99 @@
+{
+  "name": "view-show-columns",
+  "how": "View menu, item at popup y=303",
+  "class": "TcxGridBandedTableCustomizationForm",
+  "title": "Customization",
+  "width": 180,
+  "height": 300,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TcxPageControl",
+      "text": "",
+      "visible": true,
+      "x": 10,
+      "y": 33,
+      "w": 160,
+      "h": 257,
+      "id": 1315606,
+      "hwnd": 1315606
+    },
+    {
+      "class": "TcxTabSheet",
+      "text": "Columns",
+      "visible": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 1772744,
+      "hwnd": 1772744
+    },
+    {
+      "class": "TcxGridTableColumnsListBox",
+      "text": "",
+      "visible": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 920580,
+      "hwnd": 920580
+    },
+    {
+      "class": "TcxControlScrollBar",
+      "text": "",
+      "visible": false,
+      "x": 117,
+      "y": 58,
+      "w": 17,
+      "h": 95,
+      "id": 1119108,
+      "hwnd": 1119108
+    },
+    {
+      "class": "TcxCustomGridItemsInnerListBox",
+      "text": "",
+      "visible": true,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 791778,
+      "hwnd": 791778
+    },
+    {
+      "class": "TcxTabSheet",
+      "text": "Bands",
+      "visible": false,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 1642244,
+      "hwnd": 1642244
+    },
+    {
+      "class": "TcxGridBandedTableBandsListBox",
+      "text": "",
+      "visible": false,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 1838926,
+      "hwnd": 1838926
+    },
+    {
+      "class": "TcxCustomGridItemsInnerListBox",
+      "text": "",
+      "visible": false,
+      "x": 14,
+      "y": 57,
+      "w": 152,
+      "h": 229,
+      "id": 595252,
+      "hwnd": 595252
+    }
+  ]
+}

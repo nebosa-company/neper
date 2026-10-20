@@ -1,0 +1,198 @@
+{
+  "name": "options-02-decks",
+  "how": "Tools menu, item at popup y=153, then click page 2 in the left category list",
+  "class": "TOptionsForm",
+  "title": "Options",
+  "width": 728,
+  "height": 494,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TCategoryButtons",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 197,
+      "h": 416,
+      "id": 12784890,
+      "hwnd": 12784890
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 205,
+      "y": 31,
+      "w": 515,
+      "h": 416,
+      "id": 3346172,
+      "hwnd": 3346172
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 33,
+      "w": 511,
+      "h": 30,
+      "id": 1250522,
+      "hwnd": 1250522
+    },
+    {
+      "class": "TcxLabel",
+      "text": "General",
+      "visible": true,
+      "x": 536,
+      "y": 39,
+      "w": 153,
+      "h": 17,
+      "id": 922894,
+      "hwnd": 922894
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Decks (F3)",
+      "visible": true,
+      "x": 213,
+      "y": 39,
+      "w": 64,
+      "h": 17,
+      "id": 82578010,
+      "hwnd": 82578010
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2494212,
+      "hwnd": 2494212
+    },
+    {
+      "class": "TDecksForm",
+      "text": "Decks",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2690908,
+      "hwnd": 2690908
+    },
+    {
+      "class": "TcxSpinEdit",
+      "text": "",
+      "visible": true,
+      "x": 215,
+      "y": 159,
+      "w": 121,
+      "h": 21,
+      "id": 529688,
+      "hwnd": 529688
+    },
+    {
+      "class": "TcxCustomInnerTextEdit",
+      "text": "",
+      "visible": true,
+      "x": 218,
+      "y": 162,
+      "w": 70,
+      "h": 13,
+      "id": 398718,
+      "hwnd": 398718
+    },
+    {
+      "class": "TcxLabel",
+      "text": "&Max Same Cards in Deck:",
+      "visible": true,
+      "x": 215,
+      "y": 136,
+      "w": 330,
+      "h": 17,
+      "id": 595302,
+      "hwnd": 595302
+    },
+    {
+      "class": "TcxLabel",
+      "text": "&Path to deck files:",
+      "visible": true,
+      "x": 215,
+      "y": 71,
+      "w": 326,
+      "h": 17,
+      "id": 791730,
+      "hwnd": 791730
+    },
+    {
+      "class": "TcxButtonEdit",
+      "text": "",
+      "visible": true,
+      "x": 215,
+      "y": 94,
+      "w": 495,
+      "h": 21,
+      "id": 1316050,
+      "hwnd": 1316050
+    },
+    {
+      "class": "TcxCustomInnerTextEdit",
+      "text": "",
+      "visible": true,
+      "x": 218,
+      "y": 97,
+      "w": 474,
+      "h": 13,
+      "id": 12129692,
+      "hwnd": 12129692
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 447,
+      "w": 712,
+      "h": 39,
+      "id": 1575940,
+      "hwnd": 1575940
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 636,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 1316060,
+      "hwnd": 1316060
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 468,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2102574,
+      "hwnd": 2102574
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 552,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 19273164,
+      "hwnd": 19273164
+    }
+  ]
+}

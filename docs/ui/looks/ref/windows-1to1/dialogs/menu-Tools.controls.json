@@ -1,0 +1,10 @@
+{
+  "name": "menu-Tools",
+  "how": "click 'Tools' on the Main Menu bar",
+  "class": "TdxBarSubMenuControl",
+  "title": "",
+  "width": 255,
+  "height": 166,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": []
+}

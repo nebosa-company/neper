@@ -2,6 +2,7 @@
 # Dot-source it:  . scripts\v3_states_lib.ps1   (used by grab_v3_states.ps1; also handy for interactive probing).
 # The process is DPI unaware on purpose, like v3: every rect and pixel is 100 %.
 $ErrorActionPreference = 'Continue'
+. (Join-Path $PSScriptRoot 'v3_grab11.ps1')
 Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
 using System;
@@ -84,7 +85,7 @@ function Make-PatchedCopy($src='D:\Temp\claude\v3run\mtgstudio.exe',$dst='D:\Tem
   if($hit -ne 1){ throw "expected 1 mutex string, found $hit" }
   [IO.File]::WriteAllBytes($dst,$b) }
 Make-PatchedCopy
-$script:Out = 'D:\repos\neper\docs\ui\looks\ref\windows\states'
+$script:Out = Join-Path $PSScriptRoot '..\docs\ui\looks\ref\windows-1to1\states'
 $script:p = $null
 $script:Rows = New-Object System.Collections.ArrayList
 $script:MenuX=[ordered]@{File=25;Cards=60;Search=105;View=149;'Card Art'=197;Online=249;Reports=299;Tools=347;Admin=390;Help=431}
@@ -94,7 +95,7 @@ function MainH { (Top $script:p | ?{$_.C -eq 'TMainForm'}).H }
 function Start-App($deck=$null) {
   if($deck){ $script:p = Start-Process -FilePath $script:Exe -ArgumentList ('"'+$deck+'"') -WorkingDirectory (Split-Path $script:Exe) -PassThru }
   else { $script:p = Start-Process -FilePath $script:Exe -WorkingDirectory (Split-Path $script:Exe) -PassThru }
-  for($i=0;$i -lt 80;$i++){ Start-Sleep -Milliseconds 500; if((Top $script:p|?{$_.C -eq 'TMainForm'})){ Start-Sleep 3; return } }
+  for($i=0;$i -lt 240;$i++){ Start-Sleep -Milliseconds 500; if((Top $script:p|?{$_.C -eq 'TMainForm'})){ Start-Sleep 3; if(-not $deck){ Ensure-CollectionMode }; return } }
   throw 'main window did not appear' }
 function Attach-App { # attach to the running COPY (never the repo's instance)
   $q = Get-Process mtgstudio_s -ErrorAction SilentlyContinue | select -first 1
@@ -125,7 +126,7 @@ function Esc($h){ Key $h 0x1B }
 function CloseWin($h){ Msg $h 0x10 }
 function Focus($h){ [void][W]::FocusOn($h) }
 
-function Grab($h,$f){ $r=[W]::Rect($h); $bmp=New-Object System.Drawing.Bitmap ([int]$r[2]),([int]$r[3]); $g=[System.Drawing.Graphics]::FromImage($bmp); $dc=$g.GetHdc(); [void][W]::PrintWindow($h,$dc,2); $g.ReleaseHdc($dc); $g.Dispose(); New-Item -ItemType Directory -Force (Split-Path $f) | Out-Null; $bmp.Save($f); $bmp.Dispose() }
+function Grab($h,$f){ Grab11 $h $f }
 function Controls($h){ $r=[W]::Rect($h); $o=@(); foreach($c in [W]::Children($h)){ $cr=[W]::Rect($c); $o+=[pscustomobject]@{class=[W]::Cls($c);text=[W]::Text($c);visible=[W]::IsWindowVisible($c);enabled=[W]::IsWindowEnabled($c);x=$cr[0]-$r[0];y=$cr[1]-$r[1];w=$cr[2];h=$cr[3];id=[W]::GetDlgCtrlID($c);hwnd=$c.ToInt64()} }; $o }
 function Popups { Top $script:p | ?{$_.C -like 'TdxBar*Sub*' -or $_.C -like 'Tcx*Popup*' -or $_.C -like '*DropDown*' -or $_.C -like 'TdxHint*' -or $_.C -like 'TcxHint*' -or $_.C -like 'TdxScreenTip*'} }
 function Others { Top $script:p | ?{ $_.C -notin 'TMainForm','TApplication' -and $_.C -notlike 'TdxBar*Sub*' } }
@@ -145,6 +146,8 @@ function Close-Win($h){ CloseWin $h; for($i=0;$i -lt 8;$i++){ Start-Sleep -Milli
   Msg $h 0x111 2 0; Start-Sleep 1; if(-not [W]::IsWindow($h) -or -not [W]::IsWindowVisible($h)){return $true}; Esc $h; Start-Sleep 1; (-not [W]::IsWindow($h)) -or (-not [W]::IsWindowVisible($h)) }
 function Close-Popups { for($i=0;$i -lt 4;$i++){ $pp=Popups; if(-not $pp){return}; foreach($x in $pp){Esc $x.H}; Start-Sleep -Milliseconds 600 } }
 function MenuBar { [W]::Children((MainH)) | ? {[W]::Cls($_) -eq 'TdxBarControl' -and [W]::Text($_) -eq 'Main Menu'} | select -first 1 }
+# the mode is persisted by the copy: a run that ended in Deck mode must not make the next launch start there (File > Mode > Collection from Card Pool, popup y=337)
+function Ensure-CollectionMode { if([W]::Text((MainH)) -like '*- Deck*'){ $pp=Open-Menu 'File'; if($pp){ ClickC $pp 60 337; Start-Sleep 3 }; Close-Popups } }
 function Open-Menu($title){ Close-Popups; ClickC (MenuBar) $script:MenuX[$title] 13; for($i=0;$i -lt 10;$i++){ Start-Sleep -Milliseconds 300; $pp=Popups; if($pp){ return $pp[0].H } }; $null }
 function Open-Dialog($menu,$y,$timeout=20){ Close-Popups; $pop=Open-Menu $menu; if(-not $pop){ return $null }; ClickC $pop 60 $y
   for($i=0;$i -lt $timeout*2;$i++){ Start-Sleep -Milliseconds 500; $w = Others | select -first 1; if($w){ Start-Sleep 1.5; return $w.H } }; $null }
@@ -167,7 +170,8 @@ function Poll-New($known,$ms=1500){ for($i=0;$i -lt $ms/50;$i++){ $n=Top $script
 # Give it a COPY of the maintainer's collection, and a COPY of a deck file to open from the command line (read only; the Desktop original is never opened).
 function Prepare-Data {
   $dir = Join-Path $env:APPDATA 'MTG Studio'
-  try { Copy-Item (Join-Path $dir 'mtgstudio.collection') (Join-Path $dir 'mtgstudio_s.collection') -Force } catch { "  collection copy failed: $_" }
+  $cc = if($env:V3_COLLECTION){ $env:V3_COLLECTION } else { Join-Path $dir 'mtgstudio.collection' }   # a collection of the schema the copy knows (3.235 = 366); the maintainer's may be newer and then v3 refuses to start
+  try { Copy-Item $cc (Join-Path $dir 'mtgstudio_s.collection') -Force } catch { "  collection copy failed: $_" }
   $src = Join-Path $env:USERPROFILE 'Desktop\New Deck.deck'
   if(Test-Path $src){ Copy-Item $src 'D:\Temp\claude\v3run\Probe Deck.deck' -Force }
 }

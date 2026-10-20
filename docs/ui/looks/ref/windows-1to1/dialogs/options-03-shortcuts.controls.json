@@ -1,0 +1,187 @@
+{
+  "name": "options-03-shortcuts",
+  "how": "Tools menu, item at popup y=153, then click page 3 in the left category list",
+  "class": "TOptionsForm",
+  "title": "Options",
+  "width": 728,
+  "height": 494,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TCategoryButtons",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 197,
+      "h": 416,
+      "id": 12784890,
+      "hwnd": 12784890
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 205,
+      "y": 31,
+      "w": 515,
+      "h": 416,
+      "id": 3346172,
+      "hwnd": 3346172
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 33,
+      "w": 511,
+      "h": 30,
+      "id": 1250522,
+      "hwnd": 1250522
+    },
+    {
+      "class": "TcxLabel",
+      "text": "General",
+      "visible": true,
+      "x": 536,
+      "y": 39,
+      "w": 153,
+      "h": 17,
+      "id": 922894,
+      "hwnd": 922894
+    },
+    {
+      "class": "TcxLabel",
+      "text": "Shortcuts (F4)",
+      "visible": true,
+      "x": 213,
+      "y": 39,
+      "w": 85,
+      "h": 17,
+      "id": 82578010,
+      "hwnd": 82578010
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2494212,
+      "hwnd": 2494212
+    },
+    {
+      "class": "TShortcutsForm",
+      "text": "Shortcuts",
+      "visible": true,
+      "x": 207,
+      "y": 63,
+      "w": 511,
+      "h": 382,
+      "id": 2821980,
+      "hwnd": 2821980
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Set",
+      "visible": true,
+      "x": 550,
+      "y": 412,
+      "w": 75,
+      "h": 23,
+      "id": 595224,
+      "hwnd": 595224
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Reset",
+      "visible": true,
+      "x": 634,
+      "y": 412,
+      "w": 75,
+      "h": 23,
+      "id": 660838,
+      "hwnd": 660838
+    },
+    {
+      "class": "THotKey",
+      "text": "",
+      "visible": true,
+      "x": 215,
+      "y": 414,
+      "w": 324,
+      "h": 21,
+      "id": 857266,
+      "hwnd": 857266
+    },
+    {
+      "class": "TcxGrid",
+      "text": "",
+      "visible": true,
+      "x": 214,
+      "y": 71,
+      "w": 496,
+      "h": 334,
+      "id": 1447122,
+      "hwnd": 1447122
+    },
+    {
+      "class": "TcxGridSite",
+      "text": "",
+      "visible": true,
+      "x": 215,
+      "y": 72,
+      "w": 494,
+      "h": 332,
+      "id": 12195228,
+      "hwnd": 12195228
+    },
+    {
+      "class": "TPanel",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 447,
+      "w": 712,
+      "h": 39,
+      "id": 1575940,
+      "hwnd": 1575940
+    },
+    {
+      "class": "TcxButton",
+      "text": "&Apply",
+      "visible": true,
+      "x": 636,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 1316060,
+      "hwnd": 1316060
+    },
+    {
+      "class": "TcxButton",
+      "text": "OK",
+      "visible": true,
+      "x": 468,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 2102574,
+      "hwnd": 2102574
+    },
+    {
+      "class": "TcxButton",
+      "text": "Cancel",
+      "visible": true,
+      "x": 552,
+      "y": 456,
+      "w": 75,
+      "h": 23,
+      "id": 19273164,
+      "hwnd": 19273164
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "name": "reports-scorepad",
+  "how": "Reports menu, item at popup y=193",
+  "class": "TfrxPreviewForm",
+  "title": "Scorepad",
+  "width": 1296,
+  "height": 768,
+  "dpi": "100 % (v3 is DPI unaware)",
+  "controls": [
+    {
+      "class": "TfrxPreview",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 62,
+      "w": 1280,
+      "h": 679,
+      "id": 1185076,
+      "hwnd": 1185076
+    },
+    {
+      "class": "TfrxPreviewWorkspace",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 62,
+      "w": 1280,
+      "h": 679,
+      "id": 3149564,
+      "hwnd": 3149564
+    },
+    {
+      "class": "TfrxPreviewWorkspace",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 120,
+      "h": 0,
+      "id": 4458124,
+      "hwnd": 4458124
+    },
+    {
+      "class": "TfrxTreePanel",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 120,
+      "h": 533,
+      "id": 24057160,
+      "hwnd": 24057160
+    },
+    {
+      "class": "TfrxTreeView",
+      "text": "",
+      "visible": false,
+      "x": 11,
+      "y": 89,
+      "w": 114,
+      "h": 503,
+      "id": 1053906,
+      "hwnd": 1053906
+    },
+    {
+      "class": "TTabControl",
+      "text": "",
+      "visible": false,
+      "x": 8,
+      "y": 62,
+      "w": 289,
+      "h": 22,
+      "id": 1773428,
+      "hwnd": 1773428
+    },
+    {
+      "class": "TStatusBar",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 741,
+      "w": 1280,
+      "h": 19,
+      "id": 2362568,
+      "hwnd": 2362568
+    },
+    {
+      "class": "TToolBar",
+      "text": "",
+      "visible": true,
+      "x": 8,
+      "y": 31,
+      "w": 1280,
+      "h": 31,
+      "id": 1381686,
+      "hwnd": 1381686
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 518,
+      "y": 35,
+      "w": 554,
+      "h": 23,
+      "id": 2428750,
+      "hwnd": 2428750
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 415,
+      "y": 35,
+      "w": 35,
+      "h": 23,
+      "id": 1184988,
+      "hwnd": 1184988
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 298,
+      "y": 35,
+      "w": 71,
+      "h": 23,
+      "id": 1444868,
+      "hwnd": 1444868
+    },
+    {
+      "class": "TEdit",
+      "text": "0",
+      "visible": true,
+      "x": 302,
+      "y": 39,
+      "w": 37,
+      "h": 15,
+      "id": 1971502,
+      "hwnd": 1971502
+    },
+    {
+      "class": "TfrxTBPanel",
+      "text": "",
+      "visible": true,
+      "x": 112,
+      "y": 35,
+      "w": 55,
+      "h": 23,
+      "id": 2297604,
+      "hwnd": 2297604
+    },
+    {
+      "class": "TfrxComboBox",
+      "text": "",
+      "visible": true,
+      "x": 116,
+      "y": 37,
+      "w": 49,
+      "h": 19,
+      "id": 2428764,
+      "hwnd": 2428764
+    },
+    {
+      "class": "Edit",
+      "text": "",
+      "visible": true,
+      "x": 119,
+      "y": 40,
+      "w": 30,
+      "h": 13,
+      "id": 1001,
+      "hwnd": 1119450
+    }
+  ]
+}
