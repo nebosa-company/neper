@@ -1139,7 +1139,7 @@ neper_os_syscall:
 .global neper_runtime_imports
 neper_runtime_imports:
 .Lruntime_imports:
-    .quad 0, 0, 0, 0
+    .quad 0, 0, 0, 0, 0, 0, 0
 
 # rax = 8 * the index of the pthread function: its address, in rax. Clobbers r10.
 np_pthread:
@@ -1311,22 +1311,51 @@ neper_os_wait:
     ret
 
 # os.thread_create: rdi = the result {Thread, err}, rsi = the entry, rdx = its context, rcx =
-# the stack size. The pthread's own default stack is used; the size is not honoured.
+# the stack size. The thread gets that stack through a pthread attribute block (64 bytes at
+# rsp), rounded up to the 16 KB page and at least 64 KB as on Linux; a size the library
+# refuses leaves the default.
 .global neper_os_thread_create
 neper_os_thread_create:
     push rbx
-    sub rsp, 16
+    push r12
+    push r13
+    push r14
+    sub rsp, 88
     mov rbx, rdi
-    mov rcx, rdx
-    mov rdx, rsi
-    xor esi, esi
+    mov r12, rsi
+    mov r13, rdx
+    mov r14, rcx
     mov rdi, rsp
-    xor eax, eax
+    mov eax, 32
     call np_pthread
     call rax
     test eax, eax
     jne .Lthread_create_failed
-    mov rax, QWORD PTR [rsp]
+    mov rax, 65536
+    cmp r14, rax
+    cmovb r14, rax
+    add r14, 16383
+    and r14, -16384
+    mov rdi, rsp
+    mov rsi, r14
+    mov eax, 40
+    call np_pthread
+    call rax
+    lea rdi, [rsp+64]
+    mov rsi, rsp
+    mov rdx, r12
+    mov rcx, r13
+    xor eax, eax
+    call np_pthread
+    call rax
+    mov r14d, eax
+    mov rdi, rsp
+    mov eax, 48
+    call np_pthread
+    call rax
+    test r14d, r14d
+    jne .Lthread_create_failed
+    mov rax, QWORD PTR [rsp+64]
     mov QWORD PTR [rbx], rax
     mov DWORD PTR [rbx+8], 0
     jmp .Lthread_create_out
@@ -1334,10 +1363,12 @@ neper_os_thread_create:
     mov QWORD PTR [rbx], 0
     mov DWORD PTR [rbx+8], 0x6f777ebf
 .Lthread_create_out:
-    add rsp, 16
+    add rsp, 88
+    pop r14
+    pop r13
+    pop r12
     pop rbx
     ret
-
 # os.thread_join(thread: *Thread) -> err.
 .global neper_os_thread_join
 neper_os_thread_join:
