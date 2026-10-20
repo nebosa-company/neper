@@ -21,11 +21,11 @@ jobs:
             cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
             echo "== $name"; codesign --verify --verbose=4 /tmp/$name 2>&1 || true
             case $name in *_x64) runner="arch -x86_64" ;; *) runner="" ;; esac
-            set +e; $runner /tmp/$name; code=$?; set -e
+            set +e; perl -e 'alarm 30; exec @ARGV' $runner /tmp/$name; code=$?; set -e
             echo "exit=$code"
             if [ "$code" -ne 0 ]; then
               status=1
-              lldb -b -o run -o quit /tmp/$name 2>&1 | tail -15
+              case $name in *_x64) ;; *) lldb -b -o run -o quit /tmp/$name 2>&1 | tail -15 ;; esac
               log show --last 2m --style compact --predicate 'process == "kernel" OR process == "amfid" OR sender == "AppleMobileFileIntegrity" OR process == "dyld"' 2>&1 | tail -30
             fi
           done
