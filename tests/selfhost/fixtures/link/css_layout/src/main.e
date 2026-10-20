@@ -508,5 +508,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 102. A vertical line is as thick as the widest thing on it: text is centred on the central baseline, not set on the alphabetic one.
     let (p102, ok102) = build(a, "<div id=d style=\"writing-mode:vertical-lr;font-size:16px\"><span style=\"display:inline-block;width:40px;height:10px\"></span>a</div>", "")
     if !ok102 || !near(rect_of(p102, "d").w, 40.0f64) { os.exit(143) }
+    // 103. Atomic inlines in a right-to-left line run right to left, the first one rightmost.
+    let (p103, ok103) = build(a, "<div style=\"direction:rtl;width:100px\"><span id=a style=\"display:inline-block;width:10px;height:10px\"></span><span id=b style=\"display:inline-block;width:20px;height:10px\"></span></div>", "")
+    if !ok103 || !near(rect_of(p103, "a").x, 90.0f64) || !near(rect_of(p103, "b").x, 70.0f64) { os.exit(144) }
     ret ok
 }

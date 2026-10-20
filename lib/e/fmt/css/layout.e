@@ -2120,8 +2120,8 @@ fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
     var j = lead
     while j < tail {
         let p = x.bd.pieces.items[j]
-        if p.kind != .Text { ret false }
-        bytes += p.text.len
+        if p.kind != .Text && p.kind != .Atomic { ret false }
+        if p.text.len > 0usize { bytes += p.text.len } else { bytes += 1usize }
         j += 1usize
     }
     if bytes == 0usize { ret false }
@@ -2135,6 +2135,11 @@ fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
         let t = x.bd.pieces.items[lead + j].text
         first[j] = total
         var at = 0usize
+        if x.bd.pieces.items[lead + j].kind == .Atomic {
+            // An atomic inline is an object replacement character to the algorithm.
+            text32[total] = 65532u32
+            total += 1usize
+        }
         while at < t.len {
             let (cp, w) = unicode.read_utf8(t, at)
             text32[total] = cp
@@ -2168,8 +2173,10 @@ fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
     if oe != ok { ret false }
     // The last word of the line loses its trailing space, wherever it ends up.
     let lastp = &x.bd.pieces.items[tail - 1usize]
-    lastp.text = lastp.text[..lastp.clen]
-    lastp.trail = 0.0f64
+    if lastp.kind == .Text {
+        lastp.text = lastp.text[..lastp.clen]
+        lastp.trail = 0.0f64
+    }
     j = 0usize
     while j < n {
         tmp[j] = x.bd.pieces.items[lead + order[j]]
@@ -3055,7 +3062,7 @@ fn set_baseline(l: *Layout, b: u32) {
     bb.has_baseline = false
     if bb.inner == .Replaced { ret }
     if s.overflow_x != .Visible || s.overflow_y != .Visible { ret }
-    if bb.inner == .Flex || bb.inner == .Grid {
+    if bb.inner == .Flex || (bb.inner == .Grid && !s.lanes) {
         let (ff, fy) = flex_baseline(l, b)
         bb.baseline = fy
         bb.has_baseline = ff
