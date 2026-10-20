@@ -251,6 +251,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
         var drive: looks.Drive = .None
         // the pointer over the Name header, the next button, the funnel (cell coordinates)
+        // round 45: the first capture has the pointer over the Used header (hot, with its funnel)
+        if k == 0usize && m.windows && m.light {
+            drive = .Hover
+            looks.aim(0usize, 310.0 - 288.0, 10.0 - 121.0)
+        }
         if k >= 2usize {
             drive = .Hover
             var px: f32 = 109.0
