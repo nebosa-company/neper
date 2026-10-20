@@ -10126,6 +10126,23 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             layers[0usize] = ring_node
             layers[1usize] = body
             padded_chip = widget.stack(0u64, control.sized_style(wrap_w, 20.0), layers[0usize..2usize])
+            if grid.look.crisp && !style.windows_dark_on() && !chip_state.hovered && !chip_state.pressed {
+                // round 44: the 1:1 capture's resting chip is a flat white 65 x 19 box with a #E5E5E5 line on its right; its word and the hollow
+                // triangle stand at fixed places (the pixel ring of the older cut is not there)
+                var chip_box = control.sized_style(65.0, 19.0)
+                chip_box.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+                var chip_edge = control.sized_style(1.0, 19.0)
+                chip_edge.background = paint.Brush { Solid: gl.rgb(0xE5E5E5u32) }
+                let (crisp_tri, crisp_tri_error) = gl.pixels(a, gl.gx_chip_tri_c(), 7.0, 8.0)
+                if crisp_tri_error != ok { ret (zero, crisp_tri_error) }
+                let (crisp_parts, crisp_parts_error) = mem.alloc[widget.Node](a, 4usize)
+                if crisp_parts_error != ok { ret (zero, control.TooLarge) }
+                crisp_parts[0usize] = widget.box(0u64, chip_box, zero)
+                crisp_parts[1usize] = widget.positioned(0u64, 65.0, 0.0, style.defaults(), one(a, widget.box(0u64, chip_edge, zero)))
+                crisp_parts[2usize] = widget.positioned(0u64, 8.0, 3.0, style.defaults(), one(a, bare_title))
+                crisp_parts[3usize] = widget.positioned(0u64, 52.0, 5.0, style.defaults(), one(a, crisp_tri))
+                padded_chip = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, style.defaults(), one(a, widget.stack(0u64, control.sized_style(66.0, 19.0), crisp_parts[0usize..4usize])))
+            }
         }
         chips[i] = widget.region(grid.key + GROUP_BOX_KEY + 16u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&chip_taps[0usize]), invoke: on_chip_gesture }, gestures: 1u8 | 2u8 | 8u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_chip))
         i += 1usize
@@ -10166,7 +10183,9 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             panel_top = 7.0
         }
     }
-    let padded_panel = widget.padded(0u64, panel_left, panel_top, 6.7, 7.3, panel, one(a, content))
+    var panel_bottom: f32 = 7.3
+    if grid.look.crisp && !style.windows_dark_on() && win_look(grid) && gdi_group_text(grid) { panel_bottom = 7.0 }
+    let padded_panel = widget.padded(0u64, panel_left, panel_top, 6.7, panel_bottom, panel, one(a, content))
     let (zone, zone_error) = mem.alloc[widget.Node](a, 1usize)
     if zone_error != ok { ret (zero, control.TooLarge) }
     zone[0usize] = padded_panel
@@ -10178,12 +10197,14 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         // looks4-e: a faint line (#F9F9F9) closes the box, the 35th pixel
         var closing = control.sized_style(4000.0, 1.0)
         closing.background = paint.Brush { Solid: gl.rgb(0xF9F9F9u32) }
+        // round 44: the 1:1 capture has no lighter closing line, the box ends on its own colour
+        if grid.look.crisp && !style.windows_dark_on() { closing.background = paint.Brush { Solid: grid.look.group_row } }
         let (zone_and_line, zone_and_line_error) = mem.alloc[widget.Node](a, 2usize)
         if zone_and_line_error != ok { ret (zero, control.TooLarge) }
         zone_and_line[0usize] = raw_zone
         zone_and_line[1usize] = widget.box(0u64, closing, zero)
         // round 12: over a hot or pressed header the line takes the header's tint (live hover and pressed grabs)
-        if win_look(grid) && grid.look.group_counts && mem.address_of(grid.theme.runtime) != 0usize {
+        if win_look(grid) && grid.look.group_counts && mem.address_of(grid.theme.runtime) != 0usize && !(grid.look.crisp && !style.windows_dark_on()) {
             var hot_x: f32 = 0.0
             var scan = 0usize
             while scan < grid.specs.len {

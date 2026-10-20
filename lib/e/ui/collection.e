@@ -5203,6 +5203,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             // the main window's bar: its first pixel is #F7F7F7 (live capture), then the track
             var edge_strip = control.sized_style(1.0, track_h)
             edge_strip.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
+            // round 44: the 1:1 capture's bar has no lighter first pixel; its track starts at once and the rows end in one white pixel
+            if lk.crisp && t.tokens.profile == .Windows && !style.windows_dark_on() { edge_strip.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
             let (edged, edged_error) = mem.alloc[widget.Node](a, 2usize)
             if edged_error != ok { ret (zero, TooLarge) }
             edged[0usize] = widget.box(0u64, edge_strip, zero)
@@ -5222,6 +5224,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if lk.top_fit && t.tokens.profile == .Windows && lk.soft_lines {
                 var pre_strip = control.sized_style(1.0, track_h - head_height)
                 pre_strip.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.55) }
+                if lk.crisp && !style.windows_dark_on() { pre_strip.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
                 let (with_pre, with_pre_error) = mem.alloc[widget.Node](a, 3usize)
                 if with_pre_error != ok { ret (zero, TooLarge) }
                 with_pre[0usize] = bar_parts[0usize]
