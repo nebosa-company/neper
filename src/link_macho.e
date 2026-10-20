@@ -151,7 +151,11 @@ fn place_code(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, funct
         try link_elf.pad_to(output, link_elf.align_up_to(output.count, 8usize))
         table_file = output.count
         try emit_x64.append_bytes(output, machine.bytes[table_at..machine.count])
-        try codegen_x64.rebase_symbol_table(output, table_file, MACHO_BASE + machine_start)
+        // The entries are addresses relative to the table, as two's complement: the image slides
+        // as a whole at run time (PIE), so the trap walk subtracts the table's own address from a
+        // return address and compares the two, and the slide cancels. The code precedes the
+        // table, so every entry is "negative" and they sort as the walk expects.
+        try codegen_x64.rebase_symbol_table(output, table_file, machine_start -% table_file)
     }
     let (entry, has_entry) = runtime_symbol(x64, "neper_start")
     let (main_call, has_main_call) = runtime_symbol(x64, "neper_start_main")

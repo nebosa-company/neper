@@ -30,3 +30,19 @@ jobs:
             fi
           done
           exit $status
+      - name: Trap backtraces under the PIE slide
+        if: always()
+        run: |
+          # A failed check must end with 134 and name its frames, run directly so the kernel's
+          # address randomisation applies (a debugger turns it off).
+          for name in trap1 trap1_x64; do
+            cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
+            case $name in *_x64) runner="arch -x86_64" ;; *) runner="" ;; esac
+            set +e; out=$($runner /tmp/$name 2>&1); code=$?; set -e
+            echo "== $name exit=$code"; echo "$out"
+            [ "$code" -eq 134 ] || exit 1
+            for frame in trap1.inner trap1.outer trap1.main; do
+              echo "$out" | grep -q "at $frame" || { echo "missing frame $frame"; exit 1; }
+            done
+          done
+          echo "trap ok"

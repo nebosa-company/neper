@@ -491,6 +491,9 @@ neper_trap:
 .Ltrap_frame:
     cbz x27, .Ltrap_exit
     sub x27, x27, #1
+    // The table's entries are relative to the table (the image slides), so the address looked
+    // up is too.
+    sub x26, x26, x23
     mov x9, #0
     ldr w10, [x23, #8]
 .Ltrap_search:
