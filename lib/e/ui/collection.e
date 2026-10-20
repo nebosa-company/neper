@@ -1887,7 +1887,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if header_keys_error != ok { ret (zero, TooLarge) }
     let grip: f32 = 8.0
     // round 43: the 1:1 capture's header has no rule under it, so its `height` is all content (see `crisp_head` below)
-    let crisp_head = look.on && look.crisp && t.tokens.profile == .Windows && !style.windows_dark_on() && !look.dialog_lines
+    let crisp_head = look.on && look.crisp && !look.tree_dots && t.tokens.profile == .Windows && !style.windows_dark_on() && !look.dialog_lines
     var inner = height - t.tokens.sizes.divider
     if crisp_head { inner = height }
     let inset = control.if_else(height <= 40.0, 8.0, 12.0)
@@ -2614,7 +2614,7 @@ const ROW_LOADING: u32 = 2u32
 // focusable so its words can be read, and Disabled in the tree.
 fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool, conditions: u32, look: TableLook) -> (widget.Node, err) {
     // round 43: the light grid as the true 1:1 capture draws it (one pixel rules; see gridlook.Look.crisp)
-    let crisp_on = look.on && look.crisp && t.tokens.profile == .Windows && !style.windows_dark_on() && !look.dialog_lines
+    let crisp_on = look.on && look.crisp && !look.tree_dots && t.tokens.profile == .Windows && !style.windows_dark_on() && !look.dialog_lines
     let disabled = (conditions & ROW_DISABLED) != 0u32
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 3usize * columns.len + 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
@@ -2947,7 +2947,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             lined[0usize] = widget.stack(0u64, style.defaults(), over[0usize..columns.len + 1usize])
         }
     }
-    if look.on && !selected && look.tree_dots {
+    if look.on && !selected && look.tree_dots && !look.crisp {
         // looks5-e: one pixel at the foot of a tree row, #FAFAFA under a grey one and #F4F4F4 under a white one (live captures)
         var foot_px = gl.rgb(0xF4F4F4u32)
         if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
@@ -2997,6 +2997,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
         var foot_box = control.sized_style(32.0, 1.0)
         foot_box.background = paint.Brush { Solid: foot_px }
+        if look.crisp { foot_box.background = paint.Brush { Solid: fill } }
         with_band[3usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero)))
         lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..4usize])
     }
@@ -3242,8 +3243,12 @@ fn windows_table_look() -> TableLook {
     var lk = gl.v3()
     if style.windows_dark_on() { lk = gl.v3_dark() }
     look.on = true
+    // round 43: the light tree is drawn as the 1:1 capture has it: flat 17 px rows, no foot pixels
+    look.crisp = !style.windows_dark_on()
     // looks5-e: 20 rows with the #F4F4F4 line last (live captures of the Filter dialog's list)
     look.header_height = 20.0
+    // the 1:1 capture's header is 19 rows with no rule under it
+    if look.crisp { look.header_height = 19.0 }
     look.pad = 2.0
     look.text_size = lk.text_size
     look.header = lk.header
@@ -5800,7 +5805,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         win_look = windows_table_look()
     }
     // looks5-e: a list with rows has the #F4F4F4 line under its header, an empty one none (live captures)
-    if win && count > 0usize { win_look.header_line = gl.rgb(0xF4F4F4u32) }
+    if win && count > 0usize && !win_look.crisp { win_look.header_line = gl.rgb(0xF4F4F4u32) }
     // (D1372) Moving: the row a drag carries, and the gestures a row takes.
     let moving = widget.change_set[TreeMove](options.move.invoke)
     let (lifted_row, has_lifted_row) = tree_lifted(t, count)
@@ -6505,7 +6510,7 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         style.windows_dark_enter(t.tokens)
         head_look = windows_table_look()
         // looks5-e: the #F4F4F4 line under the header of a list with rows (live captures); an empty list has none
-        if source.count(source.ctx, 0u64) > 0usize { head_look.header_line = gl.rgb(0xF4F4F4u32) }
+        if source.count(source.ctx, 0u64) > 0usize && !head_look.crisp { head_look.header_line = gl.rgb(0xF4F4F4u32) }
         head_height = head_look.header_height
         head_pad = head_look.pad
         if !(row_height_of > 0.0) { row_height_of = gl.v3().row_height }
