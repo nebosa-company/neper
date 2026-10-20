@@ -30,7 +30,7 @@ jobs:
         run: |
           runner=()
           if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
-          bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt | grep -E "^(FAIL|TOTAL)|^    \|" | head -2000
+          CORPUS_CWD="$GITHUB_WORKSPACE" bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt | grep -E "^(FAIL|TOTAL)|^    \|" | head -2000
       - uses: actions/upload-artifact@v4
         if: always()
         with:
