@@ -22,7 +22,7 @@ OURS_DIR = os.environ.get("LOOKS_OURS_DIR", "")  # a folder of ours PNGs to comp
 
 
 def run(name, look="windows", verbose=False, masks=(), save=None):
-    ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % name).convert("RGB"))
+    ref = np.array(Image.open(looks_cells.refpath(name)).convert("RGB"))
     ours_path = os.path.join(OURS_DIR, name + ".png") if OURS_DIR else ROOT + "%s/%s.png" % (look, name)
     ours = np.array(Image.open(ours_path).convert("RGB"))
     if ref.shape != ours.shape:

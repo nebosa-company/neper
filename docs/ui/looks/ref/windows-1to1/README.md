@@ -43,3 +43,11 @@ The piece of our sheet is placed by correlation in the captures of each set, ref
 | tree_list_expanded (233,772) | 123,871 / 8.52 | 129,060 / 9.08 |
 
 Reading: the new captures are crisp (about 35 to 40 % more edge energy), and our renders, which were fitted to the resampled references, are 10 to 50 % farther from them in counted pixels. Re-targeting the text and the row marks at the crisp captures is what is left to do; the references are the easier thing to match now (integer stems, hinted Tahoma 8).
+
+## Sheet composites (round 43)
+
+`<sheet>.png` here are the reference sheets of the data grid, tree list, vertical grid and check list box families rebuilt from these captures: `python -I scripts/looks_ref1to1.py <sheet> ...` locates every cell of `../windows/<sheet>.png` exactly in the old captures and replaces it by the same rectangle of the same capture here (the Deck Properties dialog stands in for the 1:1 `dialogs/deck-properties`, which fell back to a flat grab, with `states/dialog-deck-properties-rest`). `looks.run_all` writes `<sheet>-vs-ref.png` against this composite when it exists, else the old one; `LOOKS_REF=windows-1to1` makes `looks_cells.py`, `looks_strict.py`, `looks_cells2.py` and `looks_marks_diff.py` read it, and `scripts/looks_1to1_eval.py`, `looks_1to1_where.py`, `looks_1to1_mask.py`, `looks_shift.py` and `looks_1to1_grid.py` measure against it (counted, text zone, chrome, per region).
+
+- `data_grid_main` has no usable composite: the maintainer's desk layout drifted (see above), so its cells stay the old ones.
+- The top grid sheets show the pool grid with row 1 selected; ours has row 4 current in `data_grid_top`/`2..5`, a state difference the counts carry.
+- The grid's cell text is Segoe UI 11 px (pixel for pixel the oracle's `Segoe_UI-400-11` atlas, GDI ClearType), its header captions Tahoma 11 px; the old fits used Tahoma for both because the resampled captures could not tell them apart.

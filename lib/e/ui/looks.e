@@ -2,7 +2,7 @@
 // every state (`Cell`s) and hands them to `run_all`, which renders the sheet offscreen on the
 // CPU backend, once per look (Neper, Windows) and per scale (1.0, 1.5), into
 // docs/ui/looks/<look>/<name>[@1.5x].png, and, when the v3 reference capture
-// docs/ui/looks/ref/windows/<name>[@1.5x].png exists, a side-by-side
+// docs/ui/looks/ref/windows-1to1/<name>[@1.5x].png (or, failing that, ref/windows/) exists, a side-by-side
 // docs/ui/looks/windows/<name>-vs-ref[@1.5x].png (reference left, ours right).
 //
 // No window, mouse or keyboard is involved. The interaction states (hover, pressed, focused) are
@@ -709,9 +709,17 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
             let (ours, render_error) = render_sheet(rig, s, path)
             if render_error != ok { ret render_error }
             if look == .Windows {
-                let (reference_path, reference_path_error) = path_of(ra, "ref/windows", s.name, "", scale, ".png")
-                if reference_path_error != ok { ret reference_path_error }
-                let (reference, has_reference) = load_reference(ra, reference_path)
+                // the true 1:1 capture composite (ref/windows-1to1) when the sheet has one, else the old resampled one
+                let (crisp_path, crisp_path_error) = path_of(ra, "ref/windows-1to1", s.name, "", scale, ".png")
+                if crisp_path_error != ok { ret crisp_path_error }
+                var (reference, has_reference) = load_reference(ra, crisp_path)
+                if !has_reference {
+                    let (reference_path, reference_path_error) = path_of(ra, "ref/windows", s.name, "", scale, ".png")
+                    if reference_path_error != ok { ret reference_path_error }
+                    let (old_reference, has_old) = load_reference(ra, reference_path)
+                    reference = old_reference
+                    has_reference = has_old
+                }
                 if has_reference {
                     let (pair_path, pair_error) = path_of(ra, "windows", s.name, "-vs-ref", scale, ".png")
                     if pair_error != ok { ret pair_error }

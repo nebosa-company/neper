@@ -60,7 +60,7 @@ COUNTS = []
 
 
 def marks_for(sheet, boxes, look="windows", masks=(), at=(0, 0)):
-    ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % sheet).convert("RGB"))
+    ref = np.array(Image.open(lc.refpath(sheet)).convert("RGB"))
     ours = np.array(Image.open(ROOT + "%s/%s.png" % (look, sheet)).convert("RGB"))
     # `at`: where the reference's origin sits in our sheet (a sheet with margins and captions of its own)
     ours = ours[at[1]:at[1] + ref.shape[0], at[0]:at[0] + ref.shape[1]]

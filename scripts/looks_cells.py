@@ -21,6 +21,14 @@ import looks_struct  # noqa: E402
 ROOT = os.path.join(HERE, "..", "docs", "ui", "looks") + os.sep
 
 
+def refpath(name):
+    """The reference sheet of `name`: ref/windows-1to1/<name>.png (true 1:1 captures) when LOOKS_REF=windows-1to1 is set and the
+    sheet exists there, else ref/windows/<name>.png (the old, resampled set, still the default)."""
+    want = os.environ.get("LOOKS_REF", "windows")
+    p = ROOT + "ref/%s/%s.png" % (want, name)
+    return p if os.path.exists(p) else ROOT + "ref/windows/%s.png" % name
+
+
 LUM = False  # --lum: ink boxes on the Rec.601 luminance, so ClearType colour fringes (a text artefact) do not count as ink
 
 
@@ -79,7 +87,7 @@ MASKS = []  # --mask x0,y0,x1,y1 (repeatable): v3 artwork (toolbar icons, neighb
 
 
 def audit(name, look="windows", verbose=False, refname=None):
-    ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % (refname or name)).convert("RGB"))
+    ref = np.array(Image.open(refpath(refname or name)).convert("RGB"))
     if not os.path.exists(ROOT + "%s/%s.png" % (look, name)):
         print("%s: no render of ours" % name)
         return
