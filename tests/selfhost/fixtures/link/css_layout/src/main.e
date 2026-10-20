@@ -481,5 +481,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 93. An inline box with vertical-align: top does not move the line's baseline.
     let (p93, ok93) = build(a, "<div style=\"font-size:10px;line-height:10px\"><span id=b>b</span><span id=c style=\"font-size:20px;line-height:20px;vertical-align:top\">c</span></div>", "")
     if !ok93 || !near(rect_of(p93, "b").y, 0.0f64) || !near(rect_of(p93, "c").y, 0.0f64) { os.exit(134) }
+    // 94. A relatively positioned float is shifted by its offsets.
+    let (p94, ok94) = build(a, "<div style=\"width:100px\"><div id=f style=\"float:left;width:20px;height:10px;position:relative;left:5px;top:7px\"></div></div>", "")
+    if !ok94 || !is_rect(rect_of(p94, "f"), 5.0f64, 7.0f64, 20.0f64, 10.0f64) { os.exit(135) }
+    // 95. align-self: self-end follows the item's own writing mode and direction, not the container's.
+    let (p95, ok95) = build(a, "<div style=\"display:flex;height:100px;width:100px\"><div id=i style=\"width:20px;height:10px;align-self:self-end;writing-mode:vertical-lr;direction:rtl\"></div></div>", "")
+    if !ok95 || !near(rect_of(p95, "i").y, 0.0f64) { os.exit(136) }
     ret ok
 }

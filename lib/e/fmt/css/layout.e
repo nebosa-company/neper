@@ -1799,6 +1799,7 @@ fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, pa
     fb.x = x + fb.margin[3usize] - fc.ox + pb.border[3usize] + pb.padding[3usize]
     fb.y = y + fb.margin[0usize] - fc.oy + pb.border[0usize] + pb.padding[0usize]
     fb.aux = 1u32
+    apply_relative(l, f, cbw, -1.0f64)
 }
 
 
@@ -4852,6 +4853,19 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             }
         }
         items[i].align = flex_item_align(cs, ks)
+        if l.vmode == 0u8 && (items[i].align == .SelfStart || items[i].align == .SelfEnd) {
+            // The item's own start and end edges on the cross axis, against the container's.
+            var cross_end_far = cs.flex_wrap != .WrapReverse
+            var item_end_far = true
+            if row {
+                if mode_code(ks) != 0u8 { item_end_far = ks.direction != .Rtl }
+            } else {
+                cross_end_far = cs.direction != .Rtl
+                if mode_code(ks) == 0u8 { item_end_far = ks.direction != .Rtl } else { item_end_far = mode_code(ks) == 2u8 }
+            }
+            let end_side = item_end_far == cross_end_far
+            if (items[i].align == .SelfEnd) == end_side { items[i].align = .FlexEnd } else { items[i].align = .FlexStart }
+        }
         // Content-box main size: the flex basis, else the main size property, else the content.
         var basis = -1.0f64
         var content_min = 0.0f64
