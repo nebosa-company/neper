@@ -3091,6 +3091,10 @@ fn layout_atomic(l: *Layout, b: u32, cbw: f64, cbh: f64) {
         bb.line_count = 0u32
         ret
     }
+    if bb.inline_level && (l.tr1.len != 0usize || l.tr2.len != 0usize) && (mode_code(s) != 0u8) != (l.vmode != 0u8) {
+        layout_orthogonal(l, b, cbw, cbh, -1.0f64, -1.0f64)
+        ret
+    }
     var cw = 0.0f64
     let (wv, has_w) = resolve_len(s.width, base)
     var from_ratio = false

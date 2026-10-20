@@ -502,5 +502,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 100. A vertical grid item with the default alignment is stretched to its area both ways.
     let (p100, ok100) = build(a, "<div style=\"display:grid;grid-template:60px/60px;width:60px\"><div id=i style=\"writing-mode:vertical-lr\"></div></div>", "")
     if !ok100 || !is_rect(rect_of(p100, "i"), 0.0f64, 0.0f64, 60.0f64, 60.0f64) { os.exit(141) }
+    // 101. A vertical inline-block is as wide as its lines are tall and as tall as its text is long.
+    let (p101, ok101) = build(a, "<span id=i style=\"display:inline-block;writing-mode:vertical-rl\">ab</span>", "")
+    if !ok101 || !near(rect_of(p101, "i").w, 16.0f64) || !near(rect_of(p101, "i").h, 32.0f64) { os.exit(142) }
     ret ok
 }
