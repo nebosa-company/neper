@@ -4860,8 +4860,9 @@ fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let y = area.y
     let w = area.width
     let h = area.height
-    // round 13: the native dark list view has one #828790 line round its #202020 face (checklist-*)
-    if style.windark_active() {
+    // round 13: the native dark list view has one #828790 line round its #202020 face (checklist-*); round 43: the 1:1 capture of the light list has the
+    // same line round its white face, not the eight soft ones fitted to the resampled capture
+    if true {
         let line = style.hex_raw(0x828790u32)
         try winpx.fill(b, x, y, w, 1.0, line)
         try winpx.fill(b, x, y + h - 1.0, w, 1.0, line)
@@ -4943,8 +4944,8 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if current { ink = style.hex_raw(16777215u32) }
-    // v3's Dev Express list draws its text without ClearType (the pages' lists, which pass their window position as mark_y).
-    if t.tokens.palette != .Dark && mark_y >= 0.0 { ink = scene.gray_text(ink) }
+    // round 43: the 1:1 capture shows the pages' lists in ClearType text like everything else (the resampled one hid its fringes).
+
     let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
@@ -4955,7 +4956,9 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     // the whole-pixel ideal (16 or 34 from the row's left, 15 or 18 tall, the row's right edge at its width less 1) moved by
     // 0.0007 of their window position, which gives the capture's soft 62 % top, 82 % left and 49 % right edges and the
     // spill of 0.38 at the bottom (0.38 to 0.41 further down the list).
-    let grow: f32 = 0.00073
+    var grow: f32 = 0.00073
+    // the 1:1 capture's highlight is whole pixels: no spill, no soft edges
+    if t.tokens.palette != .Dark && mark_y >= 0.0 { grow = 0.0 }
     var light_x: f32 = 16.0
     var light_h: f32 = 15.0
     if art {
@@ -5035,7 +5038,9 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         n += 1usize
         var line = style.defaults()
         line.height = style.Length { Px: 15.0 }
-        parts[n] = widget.positioned(0u64, 17.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
+        var words_x: f32 = 17.0
+        if mark_y >= 0.0 && t.tokens.palette != .Dark { words_x = 18.0 }
+        parts[n] = widget.positioned(0u64, words_x, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
         n += 1usize
     }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
