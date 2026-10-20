@@ -24,6 +24,7 @@ extra_args() {
     os_seek) echo "/tmp/neper-corpus-seek.txt" ;;
     os_dup) echo "/tmp/neper-corpus-dup.txt" ;;
     main_args) echo "one|two words" ;;
+    gfx_chart_labels|gfx_chart_composition|gfx_chart_clipped_annotation|gfx_chart_shared_guides) echo "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf" ;;
     differential) printf 'alpha\nbeta\n' > /tmp/neper-corpus-diff.txt; echo "/tmp/neper-corpus-diff.txt" ;;
   esac
 }
