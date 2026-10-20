@@ -7345,7 +7345,7 @@ fn layout_abs(l: *Layout, b: u32) {
     // Beside inline content in a block container the box has no flow position yet: use the content edge.
     var rect_w = -1.0f64
     var rect_h = -1.0f64
-    if bb.aux == 0u32 && bb.x == 0.0f64 && bb.y == 0.0f64 && (pb.inner == .Flow || pb.inner == .Grid) && !pb.inline_level {
+    if bb.aux == 0u32 && bb.x == 0.0f64 && bb.y == 0.0f64 && (pb.inner == .Flow || pb.inner == .Grid || pb.inner == .Flex) && !pb.inline_level {
         static_x += pb.border[3usize] + pb.padding[3usize]
         static_y += pb.border[0usize] + pb.padding[0usize]
         if pb.inner == .Grid && !grid_cb && swap_code == 0u8 {
