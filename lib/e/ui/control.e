@@ -4447,6 +4447,25 @@ fn choices_advances() -> [95]u8 {
     ret [95]u8{ 3u8, 4u8, 4u8, 8u8, 6u8, 11u8, 7u8, 2u8, 4u8, 4u8, 6u8, 8u8, 4u8, 4u8, 4u8, 4u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 4u8, 4u8, 8u8, 8u8, 8u8, 5u8, 10u8, 7u8, 6u8, 7u8, 7u8, 6u8, 6u8, 7u8, 7u8, 4u8, 5u8, 6u8, 5u8, 8u8, 7u8, 8u8, 6u8, 8u8, 7u8, 6u8, 6u8, 7u8, 6u8, 10u8, 6u8, 6u8, 6u8, 4u8, 4u8, 4u8, 8u8, 6u8, 6u8, 6u8, 6u8, 5u8, 6u8, 6u8, 4u8, 6u8, 6u8, 2u8, 3u8, 5u8, 2u8, 8u8, 6u8, 6u8, 6u8, 6u8, 4u8, 5u8, 4u8, 6u8, 6u8, 8u8, 6u8, 6u8, 5u8, 5u8, 4u8, 5u8, 8u8 }
 }
 
+// round 43: Segoe UI 11 px, the face of the light grid's cells: the hinted GDI advances of bytes 32 to 126 (the oracle's
+// docs/ui/looks/ref/windows-native/glyphs/Segoe_UI-400-11-q5.outline.gz) and the width of `value` in them; 0 when a byte is not printable ASCII.
+fn segoe11_advances() -> [95]u8 {
+    ret [95]u8{ 3u8, 3u8, 4u8, 7u8, 6u8, 9u8, 9u8, 3u8, 3u8, 3u8, 5u8, 8u8, 3u8, 4u8, 3u8, 4u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 3u8, 3u8, 8u8, 8u8, 8u8, 5u8, 11u8, 7u8, 7u8, 7u8, 8u8, 6u8, 6u8, 8u8, 8u8, 3u8, 4u8, 6u8, 5u8, 10u8, 8u8, 9u8, 6u8, 8u8, 7u8, 6u8, 5u8, 8u8, 7u8, 11u8, 6u8, 5u8, 6u8, 3u8, 4u8, 3u8, 8u8, 5u8, 3u8, 6u8, 7u8, 5u8, 7u8, 6u8, 4u8, 7u8, 7u8, 3u8, 3u8, 6u8, 3u8, 9u8, 7u8, 7u8, 7u8, 7u8, 4u8, 5u8, 4u8, 7u8, 5u8, 9u8, 5u8, 5u8, 5u8, 3u8, 3u8, 3u8, 8u8 }
+}
+
+fn segoe11_width(value: str) -> f32 {
+    let table = segoe11_advances()
+    var total: f32 = 0.0
+    var i = 0usize
+    while i < value.len {
+        let c = value[i]
+        if c < 32u8 || c > 126u8 { ret 0.0 }
+        total += f32(table[usize(c - 32u8)])
+        i += 1usize
+    }
+    ret total
+}
+
 // The width of `value` in Tahoma 11 px as GDI lays it out; 0 when a byte is not printable ASCII.
 fn choices_hinted_width(value: str) -> f32 {
     let table = choices_advances()
@@ -4841,8 +4860,9 @@ fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let y = area.y
     let w = area.width
     let h = area.height
-    // round 13: the native dark list view has one #828790 line round its #202020 face (checklist-*)
-    if style.windark_active() {
+    // round 13: the native dark list view has one #828790 line round its #202020 face (checklist-*); round 43: the 1:1 capture of the light list has the
+    // same line round its white face, not the eight soft ones fitted to the resampled capture
+    if true {
         let line = style.hex_raw(0x828790u32)
         try winpx.fill(b, x, y, w, 1.0, line)
         try winpx.fill(b, x, y + h - 1.0, w, 1.0, line)
@@ -4924,8 +4944,8 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     caption.size = 11.0
     var ink = style.color(t.tokens, .Text)
     if current { ink = style.hex_raw(16777215u32) }
-    // v3's Dev Express list draws its text without ClearType (the pages' lists, which pass their window position as mark_y).
-    if t.tokens.palette != .Dark && mark_y >= 0.0 { ink = scene.gray_text(ink) }
+    // round 43: the 1:1 capture shows the pages' lists in ClearType text like everything else (the resampled one hid its fringes).
+
     let (words, words_width, words_error) = choices_words(a, dialog_t, caption, ink, label)
     if words_error != ok { ret (zero, words_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
@@ -4936,7 +4956,9 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     // the whole-pixel ideal (16 or 34 from the row's left, 15 or 18 tall, the row's right edge at its width less 1) moved by
     // 0.0007 of their window position, which gives the capture's soft 62 % top, 82 % left and 49 % right edges and the
     // spill of 0.38 at the bottom (0.38 to 0.41 further down the list).
-    let grow: f32 = 0.00073
+    var grow: f32 = 0.00073
+    // the 1:1 capture's highlight is whole pixels: no spill, no soft edges
+    if t.tokens.palette != .Dark && mark_y >= 0.0 { grow = 0.0 }
     var light_x: f32 = 16.0
     var light_h: f32 = 15.0
     if art {
@@ -5016,7 +5038,9 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         n += 1usize
         var line = style.defaults()
         line.height = style.Length { Px: 15.0 }
-        parts[n] = widget.positioned(0u64, 17.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
+        var words_x: f32 = 17.0
+        if mark_y >= 0.0 && t.tokens.palette != .Dark { words_x = 18.0 }
+        parts[n] = widget.positioned(0u64, words_x, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, widget_one_of(a, words))))
         n += 1usize
     }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
@@ -18171,6 +18195,22 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
 // v3's dialogs and grids draw Tahoma 8 pt (11 px, 13 px lines); ink widths of the live captures
 // match Tahoma, not Segoe UI. The rig registers Tahoma as the second font, so the theme this
 // returns leads with it (as windows_bar_theme does) at `px` for every body role.
+// round 43: the 1:1 captures of v3 draw a grid's cell text in Segoe UI 11 px (GDI ClearType, pixel for pixel the oracle's Segoe UI 11 atlas), while
+// its header captions and the dialogs' text stay Tahoma 11: the same body roles at `px`, the fonts left in the rig's order (Segoe first).
+fn windows_segoe_theme(a: *mem.Arena, t: *const Theme, px: f32) -> (Theme, err) {
+    let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copies_error != ok { ret (*t, TooLarge) }
+    copies[0usize] = *t.tokens
+    let small = style.TextStyle { size: px, line_height: px + 2.0, weight: 400u16, italic: false }
+    copies[0usize].text[0usize] = small
+    copies[0usize].text[1usize] = small
+    copies[0usize].text[4usize] = small
+    copies[0usize].text[17usize] = small
+    copies[0usize].text[18usize] = small
+    copies[0usize].text[19usize] = small
+    ret (Theme { tokens: &copies[0usize], fonts: t.fonts, language: t.language, runtime: t.runtime }, ok)
+}
+
 fn windows_tahoma_theme(a: *mem.Arena, t: *const Theme, px: f32) -> (Theme, err) {
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }

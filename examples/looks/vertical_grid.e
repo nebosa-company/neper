@@ -156,7 +156,7 @@ fn tag(a: *mem.Arena, t: *const control.Theme, letter: str, color: u32) -> (widg
 // The cells of the Computed rows as the capture shows them; the pictures (the Land, Crea and Spell icons, the colour discs) are
 // artwork and stand in as plain discs.
 fn computed_editor(a: *mem.Arena, t: *const control.Theme, index: usize, out: *widget.Node) -> err {
-    let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
+    let (tahoma, tahoma_error) = value_face(a, t)
     if tahoma_error != ok { ret tahoma_error }
     let (copies, copies_error) = mem.alloc[control.Theme](a, 1usize)
     if copies_error != ok { ret copies_error }
@@ -227,6 +227,16 @@ fn computed_editor(a: *mem.Arena, t: *const control.Theme, index: usize, out: *w
     ret ok
 }
 
+// round 43: the face of a value cell under the Windows look: Segoe UI 11 as the 1:1 capture draws it, Tahoma in the dark look
+fn value_face(a: *mem.Arena, t: *const control.Theme) -> (control.Theme, err) {
+    if style.windows_dark_on() {
+        let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
+        ret (tahoma, tahoma_error)
+    }
+    let (segoe, segoe_error) = control.windows_segoe_theme(a, t, 11.0)
+    ret (segoe, segoe_error)
+}
+
 // The idle cell: plain text, in Tahoma under the Windows look (v3 draws an editor only in the
 // focused row).
 fn editor_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err {
@@ -235,11 +245,12 @@ fn editor_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err 
     var made: widget.Node = zero
     var made_error: err = ok
     if t.tokens.profile == .Windows {
-        let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
-        if tahoma_error != ok { ret tahoma_error }
+        // round 43: the 1:1 capture draws the value cells in Segoe UI 11 (its labels stay Tahoma), the dark look keeps its Tahoma
+        let (face, face_error) = value_face(a, t)
+        if face_error != ok { ret face_error }
         let (copies, copies_error) = mem.alloc[control.Theme](a, 1usize)
         if copies_error != ok { ret copies_error }
-        copies[0usize] = tahoma
+        copies[0usize] = face
         let (node, node_error) = control.text(a, 0u64, values(index), &copies[0usize], control.text_options())
         made = node
         made_error = node_error
@@ -265,7 +276,8 @@ fn grid(a: *mem.Arena, t: *const control.Theme, key: widget.Key, collapsed: []co
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     shapes(t.tokens.profile == .Windows)
-    desktop = t.tokens.profile == .Windows
+    // round 43: the 1:1 set has one Deck Properties grab (the Probe Deck under D:\Temp), which stands for the first sheet's too
+    desktop = t.tokens.profile == .Windows && style.windows_dark_on()
     let (shut, shut_error) = mem.alloc[widget.Key](a, 2usize)
     if shut_error != ok { ret (0usize, shut_error) }
     shut[0usize] = collection.property_group_key("General")
@@ -296,11 +308,11 @@ fn state_editor(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> e
     if c.t.tokens.profile != .Windows { ret ok }
     if c.mode == 0usize && index == 0usize {
         // the text selected: #0078D7 under white text, 2 in and 2 down
-        let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, c.t, 11.0)
-        if tahoma_error != ok { ret tahoma_error }
+        let (face, face_error) = value_face(a, c.t)
+        if face_error != ok { ret face_error }
         let (copies, copies_error) = mem.alloc[control.Theme](a, 1usize)
         if copies_error != ok { ret copies_error }
-        copies[0usize] = tahoma
+        copies[0usize] = face
         let (white, white_error) = control.colored_text(a, 0u64, values(0usize), &copies[0usize], control.text_options(), gl.raw(0xFFFFFFu32))
         if white_error != ok { ret white_error }
         var mark = style.defaults()
@@ -315,6 +327,12 @@ fn state_editor(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> e
         if marked_error != ok { ret marked_error }
         marked[0usize] = widget.padded(0u64, 2.0, 0.0, 1.0, 0.0, mark, held[0usize..1usize])
         *out = widget.padded(0u64, 0.0, 0.76, 0.0, 0.0, style.defaults(), marked[0usize..1usize])
+        if !style.windark_active() {
+            // round 43: the 1:1 capture's selection is 52 x 13, flush with the cell's text origin, three rows down
+            mark.width = style.Length { Px: 52.0 }
+            marked[0usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 0.0, mark, held[0usize..1usize])
+            *out = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), marked[0usize..1usize])
+        }
     }
     if c.mode == 2usize && index == 6usize {
         let (button, button_error) = gl.pixels(a, gl.gx_ellipsis_button(), gl.gx_ellipsis_button_w(), gl.gx_ellipsis_button_h())

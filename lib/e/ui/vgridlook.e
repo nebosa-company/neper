@@ -99,8 +99,95 @@ fn dotted(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, value: u32) -> err 
     ret ok
 }
 
+// A focus rectangle as Windows draws it (DrawFocusRect, PatBlt with DSTINVERT): every second pixel of the border is the inverse of what
+// is under it, the pixels with an odd x + y counted from the grid's corner; `ink` is that inverse (black over white).
+fn odd(v: f32) -> bool {
+    ret u32(v + 0.5) % 2u32 == 1u32
+}
+
+fn focus_dots(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, parity: f32, ink: u32) -> err {
+    var dx: f32 = 0.0
+    while dx < w {
+        if odd(dx + parity) { try fill(b, x + dx, y, 1.0, 1.0, ink) }
+        if odd(dx + h - 1.0 + parity) { try fill(b, x + dx, y + h - 1.0, 1.0, 1.0, ink) }
+        dx += 1.0
+    }
+    var dy: f32 = 1.0
+    while dy < h - 1.0 {
+        if odd(dy + parity) { try fill(b, x, y + dy, 1.0, 1.0, ink) }
+        if odd(dy + w - 1.0 + parity) { try fill(b, x + w - 1.0, y + dy, 1.0, 1.0, ink) }
+        dy += 1.0
+    }
+    ret ok
+}
+
+// The light grid as the true 1:1 capture of v3 (windows-1to1) has it: a 1 px #828790 frame, category bands of 21 gradient rows over one
+// #A0A0A4 rule, rows of 18 pixels under a 1 px #A0A0A4 rule, a #F0F0F0 gutter, a 1 px rule between the header and the value cell.
+// Everything is a whole pixel line; the double hairlines and their drift of the dark look (and of the old resampled references) are gone.
+fn frame_paint_light(f: *Frame, b: *scene.Builder, area: geometry.Rect) -> err {
+    let x = area.x
+    let y = area.y
+    let w = area.width
+    let h = area.height
+    let value_x = f.name_width + 1.0
+    let rule = 0xA0A0A4u32
+    try fill(b, x, y, w, h, 0xFFFFFFu32)
+    var r = 0usize
+    while r < f.rows.len {
+        let top = y + f.rows[r]
+        var rh: f32 = 17.0
+        if r < f.heights.len { rh = f.heights[r] }
+        let span = rh + 1.0
+        // the gutter and its rule; the rule row under the group's last row runs through the gutter too
+        try fill(b, x + 1.0, top - 1.0, 13.0, span + 1.0, 0xF0F0F0u32)
+        try fill(b, x + 14.0, top - 1.0, 1.0, span + 1.0, rule)
+        try fill(b, x + value_x, top - 1.0, 1.0, span, rule)
+        if r < f.hs1.len && f.hs1[r] > 0.0 { try fill(b, x + f.hs1[r], top - 1.0, 1.0, span, rule) }
+        if r < f.hs2.len && f.hs2[r] > 0.0 { try fill(b, x + f.hs2[r], top - 1.0, 1.0, span, rule) }
+        if r < f.vs1.len && f.vs1[r] > 0.0 { try fill(b, x + f.vs1[r], top - 1.0, 1.0, span, rule) }
+        if r < f.vs2.len && f.vs2[r] > 0.0 { try fill(b, x + f.vs2[r], top - 1.0, 1.0, span, rule) }
+        try fill(b, x + 15.0, top + rh, w - 16.0, 1.0, rule)
+        if f.lasts[r] { try fill(b, x + 1.0, top + rh, 14.0, 1.0, rule) }
+        if f.selected[r] { try fill(b, x + 15.0, top - 1.0, value_x - 15.0, span, 0x0078D7u32) }
+        r += 1usize
+    }
+    // the frame
+    try fill(b, x, y, w, 1.0, 0x828790u32)
+    try fill(b, x, y + h - 1.0, w, 1.0, 0x828790u32)
+    try fill(b, x, y, 1.0, h, 0x828790u32)
+    try fill(b, x + w - 1.0, y, 1.0, h, 0x828790u32)
+    var i = 0usize
+    while i < f.bands.len {
+        let top = y + f.bands[i]
+        try across(b, x + 1.0, top, w - 2.0, 21.0, 328.0, f.stops)
+        // the band's four corner pixels are cut: the gutter's colour in the corner, the band's own next to it
+        try fill(b, x + 1.0, top, 1.0, 1.0, 0xF0F0F0u32)
+        try fill(b, x + 2.0, top, 1.0, 1.0, 0xD9D9D9u32)
+        try fill(b, x + 1.0, top + 1.0, 1.0, 1.0, 0xD9D9D9u32)
+        try fill(b, x + w - 2.0, top, 1.0, 1.0, 0xF0F0F0u32)
+        try fill(b, x + w - 3.0, top, 1.0, 1.0, 0xC5C5C5u32)
+        try fill(b, x + w - 2.0, top + 1.0, 1.0, 1.0, 0xC5C5C5u32)
+        try fill(b, x + 1.0, top + 21.0, 13.0, 1.0, 0xF0F0F0u32)
+        try fill(b, x + 14.0, top + 21.0, w - 15.0, 1.0, rule)
+        try chevron(b, x + 312.0, top + 5.0, !f.opens[i])
+        i += 1usize
+    }
+    // the focus rectangle of the selected row round its value cell: black dots over white
+    r = 0usize
+    while r < f.rows.len {
+        if f.selected[r] {
+            var rh: f32 = 17.0
+            if r < f.heights.len { rh = f.heights[r] }
+            try focus_dots(b, x + value_x + 1.0, y + f.rows[r] - 1.0, w - value_x - 2.0, rh + 1.0, f.rows[r] - 1.0 + value_x + 1.0, 0x000000u32)
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
 fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let f = mem.cast[*Frame](ctx)
+    if !style.windark_active() { ret frame_paint_light(f, b, area) }
     let x = area.x
     let y = area.y
     let w = area.width
@@ -253,15 +340,29 @@ fn frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 fn node(a: *mem.Arena, f: Frame) -> (widget.Node, err) {
     let (held, held_error) = mem.alloc[Frame](a, 1usize)
     if held_error != ok { ret (zero, held_error) }
-    let (ramp, ramp_error) = mem.alloc[paint.Stop](a, 4usize)
+    let (ramp, ramp_error) = mem.alloc[paint.Stop](a, 8usize)
     if ramp_error != ok { ret (zero, ramp_error) }
-    // the band's gradient: constant to x 230, down to #B7B7B7 at 318, constant after (of 328)
-    ramp[0usize] = stop(0.0, 0xD2D2D2u32)
-    ramp[1usize] = stop(100.0 / 328.0, 0xD1D1D1u32)
-    ramp[2usize] = stop(230.0 / 328.0, 0xD0D0D0u32)
-    ramp[3usize] = stop(318.0 / 328.0, 0xB7B7B7u32)
+    if style.windark_active() {
+        // the band's gradient: constant to x 230, down to #B7B7B7 at 318, constant after (of 328)
+        ramp[0usize] = stop(0.0, 0xD2D2D2u32)
+        ramp[1usize] = stop(100.0 / 328.0, 0xD1D1D1u32)
+        ramp[2usize] = stop(230.0 / 328.0, 0xD0D0D0u32)
+        ramp[3usize] = stop(318.0 / 328.0, 0xB7B7B7u32)
+    } else {
+        // the band's gradient as the 1:1 capture has it (x from the grid's left edge + 1, of 328): #D2 to 9, #D1 to 158, #D0 to 235, then a
+        // straight fall to #B7 at 313 (a level every 3.2 px), constant after
+        ramp[0usize] = stop(0.0, 0xD2D2D2u32)
+        ramp[1usize] = stop(9.0 / 328.0, 0xD2D2D2u32)
+        ramp[2usize] = stop(10.0 / 328.0, 0xD1D1D1u32)
+        ramp[3usize] = stop(158.0 / 328.0, 0xD1D1D1u32)
+        ramp[4usize] = stop(159.0 / 328.0, 0xD0D0D0u32)
+        ramp[5usize] = stop(235.0 / 328.0, 0xD0D0D0u32)
+        ramp[6usize] = stop(313.0 / 328.0, 0xB7B7B7u32)
+        ramp[7usize] = ramp[6usize]
+    }
     held[0usize] = f
-    held[0usize].stops = ramp[0usize..4usize]
+    held[0usize].stops = ramp[0usize..8usize]
+    if style.windark_active() { held[0usize].stops = ramp[0usize..4usize] }
     var s = style.defaults()
     s.width = style.Length { Px: f.width }
     s.height = style.Length { Px: f.height }

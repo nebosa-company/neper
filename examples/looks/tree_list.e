@@ -180,7 +180,9 @@ fn build_row(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> 
     // an edition: the checked box, then its abbreviation
     let (checked, checked_error) = gl.pixels(a, gl.gx_tree_check_on(), gl.gx_tree_check_on_w(), gl.gx_tree_check_h())
     if checked_error != ok { ret checked_error }
-    let (label, label_error) = control.text(a, 0u64, child_abbr(usize(node - 200u64)), t, control.text_options())
+    let (cell_t, cell_t_error) = cell_face(a, t)
+    if cell_t_error != ok { ret cell_t_error }
+    let (label, label_error) = control.text(a, 0u64, child_abbr(usize(node - 200u64)), cell_t, control.text_options())
     if label_error != ok { ret label_error }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret parts_error }
@@ -201,8 +203,23 @@ fn one_of(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
     ret nodes[0usize..1usize]
 }
 
+// round 43: the cells' text of the 1:1 capture is Segoe UI 11 (the header captions stay Tahoma); the dark look keeps Tahoma. The sheet's own
+// Windows theme (Tahoma first) is the cells' context, so the Segoe one is made from the original theme in `filter_list` and kept here.
+var segoe_face: *const control.Theme = zero
+var has_segoe_face: bool = false
+
+fn cell_face(a: *mem.Arena, t: *const control.Theme) -> (*const control.Theme, err) {
+    if has_segoe_face && t.tokens.profile == .Windows && !style.windows_dark_on() { ret (segoe_face, ok) }
+    ret (t, ok)
+}
+
 fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *widget.Node) -> err {
-    let t = mem.cast[*const control.Theme](ctx)
+    let t0 = mem.cast[*const control.Theme](ctx)
+    let (t, t_error) = cell_face(a, t0)
+    if t_error != ok { ret t_error }
+    // the Segoe UI cells stand one pixel higher than the Tahoma ones did: two pixels more room under them
+    var face_up: f32 = 0.0
+    if has_segoe_face && t0.tokens.profile == .Windows && !style.windows_dark_on() { face_up = 2.0 }
     if node >= 200u64 && column == 3usize {
         var date_options = control.text_options()
         // round 15: the live capture's dates sit 3 px further right, on one line (a word wrap would break them at a hyphen)
@@ -213,7 +230,7 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
         }
         let (date, date_error) = control.text(a, 0u64, child_date(usize(node - 200u64)), t, date_options)
         if date_error != ok { ret date_error }
-        *out = widget.padded(0u64, date_pad, 0.0, 0.0, 0.0, style.defaults(), one_of(a, date))
+        *out = widget.padded(0u64, date_pad, 0.0, 0.0, face_up, style.defaults(), one_of(a, date))
         ret ok
     }
     // v3's edition pictures sit in the ES column of the Windows light list (e.ui.wintreeicon)
@@ -235,9 +252,9 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
     if made_error != ok { ret made_error }
     *out = made
     // round 15: an edition's name starts 2 px further right in the live capture
-    if node >= 200u64 && t.tokens.profile == .Windows { *out = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), one_of(a, made)) }
+    if node >= 200u64 && t.tokens.profile == .Windows { *out = widget.padded(0u64, 2.0, 0.0, 0.0, face_up, style.defaults(), one_of(a, made)) }
     // the capture's names start 2 px further right on the top-level rows
-    if node < 200u64 && t.tokens.profile == .Windows { *out = widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), one_of(a, made)) }
+    if node < 200u64 && t.tokens.profile == .Windows { *out = widget.padded(0u64, 2.0, 0.0, 0.0, face_up, style.defaults(), one_of(a, made)) }
     ret ok
 }
 
@@ -247,6 +264,13 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_tw
     let (copies, copies_error) = mem.alloc[control.Theme](a, 1usize)
     if copies_error != ok { ret (zero, copies_error) }
     copies[0usize] = tahoma
+    let (segoe, segoe_error) = control.windows_segoe_theme(a, t, 11.0)
+    if segoe_error != ok { ret (zero, segoe_error) }
+    let (segoe_held, segoe_held_error) = mem.alloc[control.Theme](a, 1usize)
+    if segoe_held_error != ok { ret (zero, segoe_held_error) }
+    segoe_held[0usize] = segoe
+    segoe_face = &segoe_held[0usize]
+    has_segoe_face = true
     let (columns, columns_error) = mem.alloc[collection.Column](a, 4usize)
     if columns_error != ok { ret (zero, columns_error) }
     columns[0usize] = collection.Column { title: "        Abbr.", width: 85.0 }

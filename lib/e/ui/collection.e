@@ -1886,7 +1886,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     let (header_keys, header_keys_error) = mem.alloc[widget.Shortcut](a, 8usize * columns.len)
     if header_keys_error != ok { ret (zero, TooLarge) }
     let grip: f32 = 8.0
-    let inner = height - t.tokens.sizes.divider
+    // round 43: the 1:1 capture's header has no rule under it, so its `height` is all content (see `crisp_head` below)
+    let crisp_head = look.on && look.crisp && !look.tree_dots && t.tokens.profile == .Windows && !style.windows_dark_on() && !look.dialog_lines
+    var inner = height - t.tokens.sizes.divider
+    if crisp_head { inner = height }
     let inset = control.if_else(height <= 40.0, 8.0, 12.0)
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let strong = style.color(t.tokens, .OnSurface)
@@ -1960,7 +1963,9 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 1u8 {
             glyph_header = true
             // a column marked with the favourite star shows it in place of a title
-            let (star, star_error) = gl.pixels(a, gl.gx_star(), gl.gx_star_w(), gl.gx_star_h())
+            var star_pix = gl.gx_star()
+            if crisp_head { star_pix = gl.gx_star_c() }
+            let (star, star_error) = gl.pixels(a, star_pix, gl.gx_star_w(), gl.gx_star_h())
             if star_error != ok { ret (zero, star_error) }
             // looks4-e: the live capture's faint star, 2 px below the top of the header row
             body[0usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one_node(a, star))
@@ -1968,7 +1973,9 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 {
             glyph_header = true
             // the customization glyph of the row indicator
-            let (glyph_node, glyph_error) = gl.pixels(a, gl.gx_list(), gl.gx_list_w(), gl.gx_list_h())
+            var list_pix = gl.gx_list()
+            if crisp_head { list_pix = gl.gx_list_c() }
+            let (glyph_node, glyph_error) = gl.pixels(a, list_pix, gl.gx_list_w(), gl.gx_list_h())
             if glyph_error != ok { ret (zero, glyph_error) }
             body[0usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one_node(a, glyph_node))
         }
@@ -2063,11 +2070,16 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var win_hot = state.hovered || state.pressed
         // round 15: the Shortcuts grid's hot header has no filter button
         if look.top_edge_on { win_hot = false }
+        // round 43: a centred caption of the 1:1 grid is placed from the left (see the padding below), not centred by the flex
+        let crisp_text = control.choices_hinted_width(columns[i].title)
+        let crisp_centred = crisp_head && numeric_column(look.center_head, i) && !glyph_header && !(win_glyphs && (sorted || win_hot)) && crisp_text > 0.0
         if win_glyphs {
             if b == 2usize { b = 1usize }
             if (sorted || win_hot) && numeric_column(look.center_head, i) {
                 line_main = .Center
                 line_style.width = style.Length { Px: columns[i].width - 23.0 }
+            } else if crisp_centred {
+                line_main = .Start
             } else if numeric_column(look.center_head, i) {
                 line_main = .Center
                 line_style.width = style.Length { Percent: 100.0 }
@@ -2115,10 +2127,13 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var grip_here = grip
         // round 12: the Windows grid's header fills its whole column up to the two-pixel line (hot and pressed colours reach it)
         if look.on && look.soft_lines && t.tokens.profile == .Windows { grip_here = 2.0 }
+        // round 43: the 1:1 capture's header column line is one pixel, the cell fills the rest of its column
+        if crisp_head { grip_here = 1.0 }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 {
             grip_here = 0.0
             // looks4-e: the indicator's header still ends in the two-pixel line
             if look.soft_lines { grip_here = 2.0 }
+            if crisp_head { grip_here = 1.0 }
         }
         var head_style = control.sized_style(control.max_zero(columns[i].width - grip_here), inner)
         head_style.background = paint.Brush { Solid: control.with_alpha(strong, control.state_opacity(t, state)) }
@@ -2153,6 +2168,18 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: flat }
         // looks4-e: the live capture's header captions stand a pixel lower
         if look.on && look.soft_lines && !look.dialog_lines { head_style.padding = style.EdgeLengths { left: sides, top: style.Length { Px: 2.0 }, right: sides, bottom: flat } }
+        // a hot or sorted header's caption sits in a stack, whose first line the padding moves by the whole; a plain one is centred, which
+        // takes half: the capture has them on one line, one pixel above the centre
+        if crisp_head {
+            // the capture's captions start 3 in (pad and the line's pixel); a centred one, in Tahoma's GDI advances, floor((column - 2 - width) / 2) in
+            var crisp_left = style.Length { Px: pad + 1.0 }
+            if crisp_centred { crisp_left = style.Length { Px: f32(i64(columns[i].width - 2.0 - crisp_text) / 2i64) + 1.0 } }
+            if win_glyphs && (sorted || win_hot) {
+                head_style.padding = style.EdgeLengths { left: crisp_left, top: style.Length { Px: 2.0 }, right: sides, bottom: flat }
+            } else {
+                head_style.padding = style.EdgeLengths { left: crisp_left, top: flat, right: sides, bottom: style.Length { Px: 2.0 } }
+            }
+        }
         if look.on && look.dialog_lines { head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 2.0 } } }
         if glyph_header { head_style.padding = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat } }
         head_style.overflow = .Clip
@@ -2238,7 +2265,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             mark = control.sized_style(1.0, inner)
             mark.background = paint.Brush { Solid: look.line }
             mark.margin = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: flat, right: flat, bottom: flat }
-            if look.soft_lines { mark.margin = style.EdgeLengths { left: style.Length { Px: grip_here - 2.0 }, top: flat, right: flat, bottom: flat } }
+            if look.soft_lines && !crisp_head { mark.margin = style.EdgeLengths { left: style.Length { Px: grip_here - 2.0 }, top: flat, right: flat, bottom: flat } }
+            if crisp_head { mark.margin = style.EdgeLengths { left: flat, top: flat, right: flat, bottom: flat } }
             // looks13-r2: the tree list's last column has no line at its right edge (live capture)
             if look.tree_dots && i + 1usize == columns.len { mark.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
         }
@@ -2265,6 +2293,13 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if look.dialog_lines { first_line.background = paint.Brush { Solid: dk(t, 0xFFFFFFu32) } }
             var second_line = control.sized_style(1.0, inner)
             second_line.background = paint.Brush { Solid: dk(t, 0xFAFAFAu32) }
+            // round 43: one #E5E5E5 pixel (the hot or pressed header's own colour runs through it), nothing beside it
+            if crisp_head {
+                first_line.background = paint.Brush { Solid: gl.rgb(0xE5E5E5u32) }
+                second_line = control.sized_style(0.0, inner)
+                if state.hovered { first_line.background = paint.Brush { Solid: look.header_hover } }
+                if state.pressed { first_line.background = paint.Brush { Solid: gl.rgb(0xBCDCF4u32) } }
+            }
             // round 15: a dialog grid's header line (live Sort dialog): #E5E5E5 after a white pixel, none at the last column, and the hot
             // or pressed header's colour runs through both
             if look.dialog_lines && t.tokens.profile == .Windows {
@@ -2278,7 +2313,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 }
             }
             // looks9-w1: the live header's two line pixels drift together along the row (#E8 #FC at the first line to #F1 #F3 at x = 563)
-            if look.soft_a0 > 0.0 && !look.dialog_lines && t.tokens.profile == .Windows {
+            if look.soft_a0 > 0.0 && !look.dialog_lines && !crisp_head && t.tokens.profile == .Windows {
                 var line_sum: f32 = 0.0
                 var upto = 0usize
                 while upto <= i {
@@ -2383,9 +2418,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     rule.height = style.Length { Px: t.tokens.sizes.divider }
     rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
     if look.on { rule.background = paint.Brush { Solid: look.header_line } }
+    // round 43: the 1:1 capture has no rule under the header: its 22 rows are the header and the first data row follows
+    if crisp_head { rule.height = style.Length { Px: 0.0 } }
     parts[1usize] = widget.box(0u64, rule, zero)
     // round 17: the live grid's rule under the header stops short of the row indicator's header cell (it stays white there)
-    if look.on && look.soft_lines && t.tokens.profile == .Windows && t.tokens.palette != .Dark && columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 && columns[0usize].width > 2.0 {
+    if !crisp_head && look.on && look.soft_lines && t.tokens.profile == .Windows && t.tokens.palette != .Dark && columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 && columns[0usize].width > 2.0 {
         let (white_rule, white_rule_error) = mem.alloc[widget.Node](a, 2usize)
         if white_rule_error != ok { ret (zero, TooLarge) }
         var white_cell = control.sized_style(columns[0usize].width - 2.0, t.tokens.sizes.divider)
@@ -2397,7 +2434,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         parts[1usize] = widget.stack(0u64, style.defaults(), white_rule[0usize..2usize])
     }
     // round 12: under a hot or pressed header the rule takes its tint over that column (live hover and pressed grabs)
-    if hot_has {
+    if hot_has && !crisp_head {
         var from_x = lead
         var before = 0usize
         while before < hot_at {
@@ -2576,6 +2613,8 @@ const ROW_LOADING: u32 = 2u32
 // (and its selection cell) at 38%, under no state layer, taking no pick, still
 // focusable so its words can be read, and Disabled in the tree.
 fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool, conditions: u32, look: TableLook) -> (widget.Node, err) {
+    // round 43: the light grid as the true 1:1 capture draws it (one pixel rules; see gridlook.Look.crisp)
+    let crisp_on = look.on && look.crisp && !look.tree_dots && t.tokens.profile == .Windows && !style.windows_dark_on() && !look.dialog_lines
     let disabled = (conditions & ROW_DISABLED) != 0u32
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 3usize * columns.len + 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
@@ -2615,7 +2654,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         let is_group_row = look.on && mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8
         if (grid || look.on) && !(look.soft_lines && is_group_row) { width -= t.tokens.sizes.divider }
         // looks4-e: v3 draws its grid lines two pixels wide: a line and a lighter one beside it
-        if look.on && look.soft_lines && !look.vertical_off && !is_group_row && !look.dialog_lines { width -= 1.0 }
+        if look.on && look.soft_lines && !look.vertical_off && !is_group_row && !look.dialog_lines && !crisp_on { width -= 1.0 }
         // round 12: the top grid's group rows (ref/windows/data_grid_group*): the indicator column is 11 wide with its #E8E8E8 line
         // as the last pixel, the group fill starts right after it
         var group_edge = false
@@ -2631,6 +2670,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         var group_top = flat
         if group_row && look.soft_lines { group_top = style.Length { Px: 2.0 } }
         cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: flat }
+        // round 43: Segoe UI 11 in the 18 px rows, ink from the sixth line (the 1:1 capture): two pixels above the centre of the line box
+        if crisp_on && !group_row { cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 4.0 } } }
         // looks5-e: a dialog grid's captions stand a pixel higher than the centre (measured, Sort dialog)
         if look.on && look.dialog_lines { cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: style.Length { Px: 2.0 } } }
         // a picture column's cells have no side padding
@@ -2715,9 +2756,15 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             }
             // round 17: the Windows dark look draws the native list view's one #414141 column line, not the light ramp
             if look.on && look.soft_lines && !look.dialog_lines && style.windows_dark_on() { line.background = paint.Brush { Solid: look.line } }
+            // round 43: the 1:1 capture's column line is one #DCDCDC pixel (the indicator column's #E5E5E5), with no second pixel beside it
+            let crisp_lines = crisp_on
+            if crisp_lines {
+                line.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) }
+                if c == 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { line.background = paint.Brush { Solid: gl.rgb(0xE5E5E5u32) } }
+            }
             boxed[n] = widget.box(0u64, line, zero)
             n += 1usize
-            if look.on && look.soft_lines && !look.dialog_lines {
+            if look.on && look.soft_lines && !look.dialog_lines && !crisp_lines {
                 var soft = control.sized_style(1.0, extent)
                 soft.background = paint.Brush { Solid: dk(t, 0xF8F8F8u32) }
                 if !(t.tokens.profile == .Neper && t.tokens.palette == .Dark) {
@@ -2789,9 +2836,9 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         soft_group = true
         row_style.height = style.Length { Px: extent - 1.0 }
         // looks5-e: directly under the header (no filter row) the first group row has no two-pixel top and is 16 tall (live capture)
-        if index == 0usize && !look.has_head_extra { row_style.height = style.Length { Px: extent - 3.0 } }
+        if index == 0usize && !look.has_head_extra && !crisp_on { row_style.height = style.Length { Px: extent - 3.0 } }
         // round 12: the current group row has the pixel under it that its focus rectangle's foot line uses
-        if look.group_current == index + 1usize && look.top_fit { row_style.height = style.Length { Px: extent } }
+        if look.group_current == index + 1usize && look.top_fit && !crisp_on { row_style.height = style.Length { Px: extent } }
     }
     row_style.background = paint.Brush { Solid: fill }
     let tree_selected = look.on && selected && look.tree_dots
@@ -2812,6 +2859,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     var content_look = style.defaults()
     if disabled { content_look.opacity = t.tokens.states.disabled_content }
     lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, content_look, boxed[0usize..n])
+    var crisp_rows = false
     if look.on && look.horizontal_on && !(mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8) {
         // v3's horizontal grid lines: a 1 px line along the bottom of the row
         let (with_line, with_line_error) = mem.alloc[widget.Node](a, 3usize)
@@ -2871,9 +2919,16 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             pair[1usize] = widget.positioned(0u64, pair_x, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, two_style, zero)))
             with_line[1usize] = pair[0usize]
             with_line[2usize] = pair[1usize]
+            // round 43: the 1:1 capture has one #DCDCDC pixel at the foot of every row, from the end of the indicator column
+            if crisp_on {
+                var crisp_foot = control.sized_style(4000.0, 1.0)
+                crisp_foot.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) }
+                with_line[1usize] = widget.positioned(0u64, pair_x, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, crisp_foot, zero)))
+                crisp_rows = true
+            }
         }
         var stacked_count = 2usize
-        if look.soft_lines { stacked_count = 3usize }
+        if look.soft_lines && !crisp_rows { stacked_count = 3usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
         if look.dialog_lines && look.soft_lines && !look.vertical_off && !style.windows_dark_on() {
             // round 31: a dialog grid's column lines run through the two foot pixels of a row (live Sort dialog), not under them
@@ -2892,7 +2947,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             lined[0usize] = widget.stack(0u64, style.defaults(), over[0usize..columns.len + 1usize])
         }
     }
-    if look.on && !selected && look.tree_dots {
+    if look.on && !selected && look.tree_dots && !look.crisp {
         // looks5-e: one pixel at the foot of a tree row, #FAFAFA under a grey one and #F4F4F4 under a white one (live captures)
         var foot_px = gl.rgb(0xF4F4F4u32)
         if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
@@ -2942,10 +2997,42 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
         var foot_box = control.sized_style(32.0, 1.0)
         foot_box.background = paint.Brush { Solid: foot_px }
+        if look.crisp { foot_box.background = paint.Brush { Solid: fill } }
         with_band[3usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero)))
         lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..4usize])
     }
-    if dotted_row {
+    let crisp_sel = crisp_on
+    if dotted_row && crisp_sel {
+        // round 43: the 1:1 capture's focus rectangle: the row's 18 content rows from the end of the indicator column to the last
+        // pixel of the row, every second border pixel inverted (#592D00 over the selection's #A6D2FF)
+        var dots_left: f32 = 0.0
+        if columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { dots_left = columns[0usize].width }
+        var dots_total: f32 = 0.0
+        var dots_at = 0usize
+        while dots_at < columns.len {
+            dots_total += columns[dots_at].width
+            dots_at += 1usize
+        }
+        if look.cell_select != 0usize && look.cell_select <= columns.len {
+            var dots_before: f32 = 0.0
+            var dots_scan = 0usize
+            while dots_scan + 1usize < look.cell_select {
+                dots_before += columns[dots_scan].width
+                dots_scan += 1usize
+            }
+            dots_left = dots_before
+            dots_total = dots_before + columns[look.cell_select - 1usize].width
+        }
+        if dots_total > 700.0 { dots_total = 700.0 }
+        let (invert, invert_error) = gl.focus_invert(a, dots_total - dots_left, extent - 1.0, paint.rgba(1.0 - fill.red, 1.0 - fill.green, 1.0 - fill.blue, 1.0))
+        if invert_error != ok { ret (zero, invert_error) }
+        let (with_invert, with_invert_error) = mem.alloc[widget.Node](a, 2usize)
+        if with_invert_error != ok { ret (zero, TooLarge) }
+        with_invert[0usize] = lined[0usize]
+        with_invert[1usize] = widget.positioned(0u64, dots_left, 0.0, style.defaults(), one_node(a, invert))
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_invert[0usize..2usize])
+    }
+    if dotted_row && !crisp_sel {
         // looks4-e: a focused selected row carries v3's dotted focus rectangle, not a line
         var edge_left: usize = 0usize
         if columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { edge_left = usize(columns[0usize].width - 1.0) }
@@ -2988,7 +3075,42 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         with_dots[1usize] = widget.positioned(0u64, 0.0, dotted_y, style.defaults(), one_node(a, dotted))
         lined[0usize] = widget.stack(0u64, style.defaults(), with_dots[0usize..2usize])
     }
-    if soft_group && !(index == 0usize && !look.has_head_extra) {
+    if soft_group && crisp_on {
+        // round 43: the 1:1 capture's group row is its #F0F0F0 fill over one #DCDCDC pixel at its foot, from the end of the indicator column, and the
+        // current one carries the inverting focus rectangle (solid in the pointer states) over its 17 rows
+        var group_x: f32 = 0.0
+        if columns.len > 0usize && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, 0usize) == 3u8 { group_x = columns[0usize].width }
+        var group_foot = control.sized_style(4000.0, 1.0)
+        group_foot.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) }
+        let (with_foot, with_foot_error) = mem.alloc[widget.Node](a, 3usize)
+        if with_foot_error != ok { ret (zero, TooLarge) }
+        with_foot[0usize] = lined[0usize]
+        with_foot[1usize] = widget.positioned(0u64, group_x, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, group_foot, zero)))
+        var foot_count = 2usize
+        if look.group_current == index + 1usize && group_x > 0.0 {
+            var group_total: f32 = 0.0
+            var group_at = 0usize
+            while group_at < columns.len {
+                group_total += columns[group_at].width
+                group_at += 1usize
+            }
+            if group_total > 700.0 { group_total = 700.0 }
+            var group_rect_node: widget.Node = zero
+            if look.group_solid {
+                var solid = control.sized_style(group_total - group_x, extent - 1.0)
+                solid.border = style.Border { width: 1.0, color: gl.rgb(0x0F0F0Fu32) }
+                group_rect_node = widget.box(0u64, solid, zero)
+            } else {
+                let (dots, dots_error) = gl.focus_invert(a, group_total - group_x, extent - 1.0, gl.rgb(0x0F0F0Fu32))
+                if dots_error != ok { ret (zero, dots_error) }
+                group_rect_node = dots
+            }
+            with_foot[2usize] = widget.positioned(0u64, group_x, 0.0, style.defaults(), one_node(a, group_rect_node))
+            foot_count = 3usize
+        }
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_foot[0usize..foot_count])
+    }
+    if soft_group && !crisp_on && !(index == 0usize && !look.has_head_extra) {
         // two pixels at the top of a group row (measured: #E5E5E5 then #E7E7E7), the cells below them
         let (with_top, with_top_error) = mem.alloc[widget.Node](a, 3usize)
         if with_top_error != ok { ret (zero, TooLarge) }
@@ -3121,8 +3243,12 @@ fn windows_table_look() -> TableLook {
     var lk = gl.v3()
     if style.windows_dark_on() { lk = gl.v3_dark() }
     look.on = true
+    // round 43: the light tree is drawn as the 1:1 capture has it: flat 17 px rows, no foot pixels
+    look.crisp = !style.windows_dark_on()
     // looks5-e: 20 rows with the #F4F4F4 line last (live captures of the Filter dialog's list)
     look.header_height = 20.0
+    // the 1:1 capture's header is 19 rows with no rule under it
+    if look.crisp { look.header_height = 19.0 }
     look.pad = 2.0
     look.text_size = lk.text_size
     look.header = lk.header
@@ -3167,7 +3293,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32 }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32, crisp: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -5679,7 +5805,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
         win_look = windows_table_look()
     }
     // looks5-e: a list with rows has the #F4F4F4 line under its header, an empty one none (live captures)
-    if win && count > 0usize { win_look.header_line = gl.rgb(0xF4F4F4u32) }
+    if win && count > 0usize && !win_look.crisp { win_look.header_line = gl.rgb(0xF4F4F4u32) }
     // (D1372) Moving: the row a drag carries, and the gestures a row takes.
     let moving = widget.change_set[TreeMove](options.move.invoke)
     let (lifted_row, has_lifted_row) = tree_lifted(t, count)
@@ -6384,7 +6510,7 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         style.windows_dark_enter(t.tokens)
         head_look = windows_table_look()
         // looks5-e: the #F4F4F4 line under the header of a list with rows (live captures); an empty list has none
-        if source.count(source.ctx, 0u64) > 0usize { head_look.header_line = gl.rgb(0xF4F4F4u32) }
+        if source.count(source.ctx, 0u64) > 0usize && !head_look.crisp { head_look.header_line = gl.rgb(0xF4F4F4u32) }
         head_height = head_look.header_height
         head_pad = head_look.pad
         if !(row_height_of > 0.0) { row_height_of = gl.v3().row_height }
@@ -11512,6 +11638,8 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     style.windows_dark_enter(t.tokens)
     let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
     if tahoma_error != ok { ret (zero, tahoma_error) }
+    let (segoe, segoe_error) = control.windows_segoe_theme(a, t, 11.0)
+    if segoe_error != ok { ret (zero, segoe_error) }
     let needle = options.filter[0usize..options.filter_len]
     let (band_y, band_y_error) = mem.alloc[f32](a, total + 1usize)
     let (band_first, band_first_error) = mem.alloc[bool](a, total + 1usize)
@@ -11585,12 +11713,19 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             caption.wrap = .None
             var band_ink = style.hex(0x6D6D6Du32)
             if style.windark_active() { band_ink = style.hex_raw(0xE0E0E0u32) }
-            let (said, said_error) = control.colored_text(a, 0u64, head.group, &tahoma, caption, band_ink)
+            var band_face = &tahoma
+            // round 43: the 1:1 capture's category captions are Segoe UI 11 (#6D6D6D), pixel for pixel
+            if !style.windark_active() { band_face = &segoe }
+            let (said, said_error) = control.colored_text(a, 0u64, head.group, band_face, caption, band_ink)
             if said_error != ok { ret (zero, said_error) }
             let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
             if said_held_error != ok { ret (zero, TooLarge) }
             said_held[0usize] = said
-            parts[n] = widget.positioned(0u64, 19.0, cursor + 4.0, control.sized_style(280.0, 15.0), said_held[0usize..1usize])
+            var said_y = cursor + 4.0
+            var band_x: f32 = 19.0
+            if !style.windark_active() { band_x = 18.0 }
+            if !style.windark_active() { said_y = cursor + 3.0 }
+            parts[n] = widget.positioned(0u64, band_x, said_y, control.sized_style(280.0, 15.0), said_held[0usize..1usize])
             n += 1usize
             bands += 1usize
             cursor += 22.0
@@ -11635,7 +11770,10 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     line.wrap = .None
                     line.max_lines = 1u32
                     line.ellipsis = "…"
-                    let (name_node, name_error) = control.colored_text(a, 0u64, p.name, &tahoma, line, ink)
+                    // round 43: the focused row's caption is Segoe UI 11 in the 1:1 capture, the others' Tahoma
+                    var name_face = &tahoma
+                    if chosen && !style.windark_active() { name_face = &segoe }
+                    let (name_node, name_error) = control.colored_text(a, 0u64, p.name, name_face, line, ink)
                     if name_error != ok { ret (zero, name_error) }
                     let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
                     if named_error != ok { ret (zero, TooLarge) }
@@ -11653,7 +11791,13 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     let (name_holder, name_holder_error) = mem.alloc[widget.Node](a, 1usize)
                     if name_holder_error != ok { ret (zero, TooLarge) }
                     name_holder[0usize] = widget.semantics(0u64, name_sem, style.defaults(), name_flex[0usize..1usize])
-                    parts[n] = widget.positioned(0u64, 31.0 + nudge, cursor + nudge, style.defaults(), name_holder[0usize..1usize])
+                    // the light grid's captions sit one pixel higher than the rows' fill: the 1:1 capture has them in the row's 18 px, ink from its second line
+                    var name_y = cursor + nudge
+                    if !style.windark_active() { name_y -= 1.0 }
+                    let name_x = 31.0 + nudge
+                    // the focused row's Segoe caption stands one pixel higher than the Tahoma ones
+                    if chosen && !style.windark_active() { name_y -= 1.0 }
+                    parts[n] = widget.positioned(0u64, name_x, name_y, style.defaults(), name_holder[0usize..1usize])
                     n += 1usize
                     var editor: widget.Node = zero
                     let editor_error = source.editor(source.ctx, a, k, &editor)
@@ -11675,7 +11819,14 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     let (value_holder, value_holder_error) = mem.alloc[widget.Node](a, 1usize)
                     if value_holder_error != ok { ret (zero, TooLarge) }
                     value_holder[0usize] = widget.semantics(0u64, value_sem, style.defaults(), value_flex[0usize..1usize])
-                    parts[n] = widget.positioned(0u64, value_x + 2.0, cursor - 1.0, style.defaults(), value_holder[0usize..1usize])
+                    // round 43: the light grid's Segoe UI 11 value starts at the cell's second pixel and one line higher (the 1:1 capture)
+                    var value_at_x = value_x + 2.0
+                    var value_at_y = cursor - 1.0
+                    if !style.windark_active() {
+                        value_at_x = value_x + 1.0
+                        value_at_y = cursor - 2.0
+                    }
+                    parts[n] = widget.positioned(0u64, value_at_x, value_at_y, style.defaults(), value_holder[0usize..1usize])
                     n += 1usize
                     // the captions of the header cells, each centred between the lines
                     var seg_from: f32 = 15.0

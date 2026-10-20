@@ -77,7 +77,7 @@ def place(a, ours):
 
 
 def audit_placed(name, look, masks, only, cols=None):
-    ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % name).convert("RGB"))
+    ref = np.array(Image.open(lc.refpath(name)).convert("RGB"))
     ours = np.array(Image.open(ROOT + "%s/%s.png" % (look, name)).convert("RGB"))
     smask = looks_struct.struct_mask(ref)
     npass = 0
@@ -126,7 +126,7 @@ def audit_placed(name, look, masks, only, cols=None):
 
 
 def audit(name, look="windows", masks=(), only=None, cols=None):
-    ref = np.array(Image.open(ROOT + "ref/windows/%s.png" % name).convert("RGB"))
+    ref = np.array(Image.open(lc.refpath(name)).convert("RGB"))
     if not os.path.exists(ROOT + "%s/%s.png" % (look, name)):
         print("%s: no render of ours" % name)
         return (0, 0)

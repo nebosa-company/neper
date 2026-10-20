@@ -1,7 +1,7 @@
 """Round 13: `python -I scripts/looks_nav_top.py` cuts the navigator button bitmaps of the live main window's top grid from the reference sheets
 (data_grid_top: a current record, every button on; data_grid_hover: record 0, First / Previous page / Previous off) at the places our own render
 puts the collection grid's bitmaps (gridlook.gx_nav_win, found by exact match in docs/ui/looks/windows/data_grid_top.png) and rewrites the generated
-block `gx_nav_top` of lib/e/ui/gridlook.e. The two grids' bitmaps differ by a few levels (the top grid's panel is one pixel line lighter)."""
+block `gx_nav_top_c` (the crisp cut; run it with LOOKS_REF=windows-1to1) of lib/e/ui/gridlook.e. The two grids' bitmaps differ by a few levels (the top grid's panel is one pixel line lighter)."""
 import os
 import re
 import numpy as np
@@ -51,7 +51,7 @@ def main():
     # (reference sheet, our render of it, which (slot, enabled) to cut from it)
     sources = [("data_grid_top", [(s, True) for s in range(6)] + [(7, True)]), ("data_grid_hover", [(s, False) for s in range(3)])]
     for sheet, wanted in sources:
-        ref = np.array(Image.open(LOOKS + "ref/windows/%s.png" % sheet).convert("RGB")).astype(int)
+        ref = np.array(Image.open(LOOKS + "ref/%s/%s.png" % (os.environ.get("LOOKS_REF", "windows"), sheet)).convert("RGB")).astype(int)
         ours = np.array(Image.open(LOOKS + "windows/%s.png" % sheet).convert("RGB")).astype(int)
         for key in wanted:
             if key not in old:
@@ -60,14 +60,14 @@ def main():
             bmp = arr(old[key], w)
             d, x, y = find(ours, bmp, 12, 300, 205, 255)
             cuts[key] = (hexs(ref[y:y + 23, x:x + w]), d, x, y)
-    lines = ["// BEGIN GENERATED (scripts/looks_nav_top.py)", "fn gx_nav_top(slot: usize, enabled: bool) -> str {"]
+    lines = ["// BEGIN GENERATED_C (scripts/looks_nav_top.py)", "fn gx_nav_top_c(slot: usize, enabled: bool) -> str {"]
     for (slot, en), (hx, d, x, y) in sorted(cuts.items()):
         lines.append("    if slot == %dusize && %senabled { ret \"%s\" }" % (slot, "" if en else "!", hx))
-    lines += ['    ret ""', "}", "// END GENERATED"]
+    lines += ['    ret ""', "}", "// END GENERATED_C"]
     block = "\n".join(lines)
     text = open(GL, encoding="utf8").read()
-    if "// BEGIN GENERATED" in text:
-        text = re.sub(r"// BEGIN GENERATED.*?// END GENERATED", lambda m: block, text, flags=re.S)
+    if "// BEGIN GENERATED_C" in text:
+        text = re.sub(r"// BEGIN GENERATED_C.*?// END GENERATED_C", lambda m: block, text, flags=re.S)
     else:
         text = text.rstrip("\n") + "\n\n" + block + "\n"
     open(GL, "w", encoding="utf8", newline="").write(text)

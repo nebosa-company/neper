@@ -418,6 +418,7 @@ fn setup_main(m: *Main, windows: bool) -> err {
         pool_look.ring_bar = 2u8
         pool_look.ring_thumb = 2u8
     }
+    if windows && m.light { pool_look.crisp = true }
     dg.set_look(&m.pool_grid, pool_look)
     dg.show_filter_row(&m.pool_grid, true)
     dg.show_group_box(&m.pool_grid, true)
@@ -470,6 +471,8 @@ fn setup_main(m: *Main, windows: bool) -> err {
         look.ring_foot = true
         look.ring_rows = true
     }
+    // round 43: the light grid is drawn as the true 1:1 captures of v3 have it
+    if windows && m.light { look.crisp = true }
     dg.set_look(&m.coll_grid, look)
     dg.set_row_ink(&m.coll_grid, mem.cast[*void](m), coll_ink)
     dg.set_footer_label(&m.coll_grid, "Rows")
