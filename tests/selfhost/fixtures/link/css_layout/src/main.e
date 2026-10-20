@@ -490,5 +490,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 96. The static position of an absolutely positioned grid child starts at the right edge of its area in a right-to-left grid.
     let (p96, ok96) = build(a, "<div style=\"display:grid;direction:rtl;position:relative;width:100px;height:50px;grid-template-columns:100px\"><div id=a style=\"position:absolute;grid-area:1/1;width:20px;height:10px\"></div></div>", "")
     if !ok96 || !near(rect_of(p96, "a").x, 80.0f64) { os.exit(137) }
+    // 97. A vertical grid item in a horizontal grid is as wide as its lines are tall and as tall as its text is long.
+    let (p97, ok97) = build(a, "<div style=\"display:grid;place-items:start;width:200px\"><div id=i style=\"writing-mode:vertical-lr\">ab</div></div>", "")
+    if !ok97 || !is_rect(rect_of(p97, "i"), 0.0f64, 0.0f64, 16.0f64, 32.0f64) { os.exit(138) }
+    // 98. A vertical item in a column flex container is stretched to the container's width.
+    let (p98, ok98) = build(a, "<div style=\"display:flex;flex-direction:column;width:100px\"><div id=i style=\"writing-mode:vertical-lr;height:20px\"></div></div>", "")
+    if !ok98 || !is_rect(rect_of(p98, "i"), 0.0f64, 0.0f64, 100.0f64, 20.0f64) { os.exit(139) }
+    // 99. A vertical item in a row flex container takes its flexed main size as its width, not its specified width.
+    let (p99, ok99) = build(a, "<div style=\"display:flex;height:100px\"><div id=i style=\"writing-mode:vertical-lr;width:500px;flex:0 0 100px\"></div></div>", "")
+    if !ok99 || !is_rect(rect_of(p99, "i"), 0.0f64, 0.0f64, 100.0f64, 100.0f64) { os.exit(140) }
+    // 100. A vertical grid item with the default alignment is stretched to its area both ways.
+    let (p100, ok100) = build(a, "<div style=\"display:grid;grid-template:60px/60px;width:60px\"><div id=i style=\"writing-mode:vertical-lr\"></div></div>", "")
+    if !ok100 || !is_rect(rect_of(p100, "i"), 0.0f64, 0.0f64, 60.0f64, 60.0f64) { os.exit(141) }
     ret ok
 }

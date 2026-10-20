@@ -74,7 +74,7 @@ type Layout = struct {
     root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64,
     floats: list.List[FloatRec], tables: list.List[TableData],
     counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
-    vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule]
+    orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule]
 }
 
 // A column rule: a filled rectangle in the border box of multicol container `box` (see `layout_multicol`).
@@ -3427,7 +3427,7 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     if orth {
         spec_h = -1.0f64
         ratio_h = -1.0f64
-        layout_orthogonal(l, c, cw, ch)
+        layout_orthogonal(l, c, cw, ch, -1.0f64, -1.0f64)
         let ob = bx(l, c)
         auto_h = maxf(0.0f64, ob.h - vertical_extras(ob))
         // The root of a vertical-rl document starts at the right edge.
@@ -4725,6 +4725,15 @@ fn flex_place_item(l: *Layout, id: u32, w: f64, hspec: f64) {
         rb.has_baseline = false
         ret
     }
+    if is_orthogonal(l, id) {
+        // Its block size runs across the container: the item takes the size its own content gives it.
+        let stretched = l.orth_fb
+        l.orth_fb = -1.0f64
+        layout_orthogonal(l, id, w, -1.0f64, hspec, stretched)
+        set_baseline(l, id)
+        ret
+    }
+    l.orth_fb = -1.0f64
     bb.w = w + ex_h
     // An automatic height follows the aspect ratio from the width the item was given.
     var spec = hspec
@@ -4925,6 +4934,7 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             // A column item's content height depends on its width.
             let stretch = items[i].align == .Stretch
             let w = flex_cross_width(l, id, cw, stretch)
+            if stretch { l.orth_fb = w }
             if basis < 0.0f64 || spec_main < 0.0f64 || (ks.min_height.kind == .Auto && !is_scroll_container(ks)) {
                 flex_place_item(l, id, w, -1.0f64)
                 let auto_h = bx(l, id).h - vertical_extras(bx(l, id))
@@ -5105,10 +5115,12 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
                 var hspec = -1.0f64
                 let (hv, has_h) = resolve_len(ks.height, cross_def)
                 if ks.height.kind == .Px && has_h { hspec = to_content_h(l, id, hv) }
+                l.orth_fb = items[i].target
                 flex_place_item(l, id, items[i].target, hspec)
                 items[i].cross = bx(l, id).h + items[i].cs + items[i].ce
             } else {
                 let w = flex_cross_width(l, id, cw, items[i].align == .Stretch)
+                if items[i].align == .Stretch { l.orth_fb = w }
                 flex_place_item(l, id, w, items[i].target)
                 items[i].cross = bx(l, id).w + items[i].cs + items[i].ce
             }
@@ -5195,10 +5207,12 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
                 if row {
                     let ib = bx(l, id)
                     let hs = ib.h - vertical_extras(ib) + room
+                    l.orth_fb = items[i].target
                     flex_place_item(l, id, items[i].target, hs)
                 } else {
                     let ib2 = bx(l, id)
                     let ws = ib2.w - horizontal_extras(ib2) + room
+                    l.orth_fb = ws
                     flex_place_item(l, id, ws, items[i].target)
                 }
                 items[i].cross += room
@@ -6566,6 +6580,9 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         } else if (align == .Normal || align == .Stretch) && is.height.kind == .Auto && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced {
             hspec = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
         }
+        var just0 = is.justify_self
+        if just0 == .Auto { just0 = cs.justify_items }
+        if (just0 == .Normal || just0 == .Stretch) && is.width.kind == .Auto && is.margin[3usize].kind != .Auto && is.margin[1usize].kind != .Auto { l.orth_fb = w }
         flex_place_item(l, id, w, hspec)
         let pb = bx(l, id)
         // Auto margins and the alignment offsets.
@@ -7845,7 +7862,8 @@ fn clear_widths(l: *Layout, b: u32) {
 // Lays out block `c`, which is orthogonal to the current frame, as a formatting context root. Its edges (resolved in the
 // frame of the container) are kept; the result is its border box in that frame with every descendant mapped into it.
 // `pbase` is the percentage base and `pch` the definite height of the container (negative: none).
-fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64) {
+// `fi` and `fb` (negative: none) force the inline size (physical height) and block size (physical width) of the content box.
+fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64, fi: f64, fb: f64) {
     let old = l.vmode
     let code = mode_code(bstyle(l, c))
     let bb = bx(l, c)
@@ -7865,7 +7883,9 @@ fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64) {
     let ext_b = vertical_extras(bb2)
     var inline = 0.0f64
     let (wv, has_w) = resolve_len(s.width, pbase)
-    if s.width.kind == .Px && has_w {
+    if fi >= 0.0f64 {
+        inline = fi
+    } else if s.width.kind == .Px && has_w {
         inline = to_content_w(l, c, wv)
     } else {
         // Automatic inline size of an orthogonal flow: shrink-to-fit against the container's block space (Writing Modes 3 7.3).
@@ -7875,7 +7895,11 @@ fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64) {
     }
     inline = maxf(0.0f64, clamp_width(l, c, inline, pbase))
     var spec_b = -1.0f64
-    if s.height.kind == .Px && s.height.pct == 0.0f64 { spec_b = to_content_h(l, c, s.height.px) }
+    if fb >= 0.0f64 {
+        spec_b = fb
+    } else if s.height.kind == .Px && s.height.pct == 0.0f64 {
+        spec_b = to_content_h(l, c, s.height.px)
+    }
     let auto_b = layout_in_new_bfc(l, c, inline, spec_b)
     var block = auto_b
     if spec_b >= 0.0f64 { block = spec_b }
@@ -7955,7 +7979,7 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (grids, e8) = list.init[GridGeom](a, 4usize)
     let (rules_made, e9r) = list.init[ColRule](a, 8usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9r != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))
