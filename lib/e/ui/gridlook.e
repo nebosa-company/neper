@@ -121,7 +121,11 @@ type Look = struct {
     ring_rows: bool,
     // round 43: the light grid as the true 1:1 capture of v3 draws it (one pixel rules, an inverting focus rectangle, no soft pairs); the
     // fits of the older knobs were made to the resampled captures and are not used when this is set
-    crisp: bool
+    crisp: bool,
+    // round 46: pixels the crisp cell text stands lower (v3's dialog grids)
+    cell_down: f32,
+    // round 46: v3's dialog grid under the 1:1 look (the dialog bar with a white first pixel)
+    dialog_grid: bool
 }
 
 // A colour from 0xRRGGBB; under the Windows dark map (`style.set_windark`) the dark counterpart of a light literal.
@@ -225,7 +229,9 @@ fn v3() -> Look {
         ring_bar: 0u8,
         ring_thumb: 0u8,
         ring_rows: false,
-        crisp: false
+        crisp: false,
+        cell_down: 0.0,
+        dialog_grid: false
     }
 }
 

@@ -1959,7 +1959,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var glyph_header = false
         // a picture column (2) has no side padding; a star column (1) shows the star as its title
         // round 15: a dialog grid's picture column (the Sort dialog's Sort Order) keeps its left aligned title
-        if look.on && !look.dialog_lines && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
+        if look.on && !look.dialog_lines && !look.dialog_grid && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 1u8 {
             glyph_header = true
             // a column marked with the favourite star shows it in place of a title
@@ -2303,6 +2303,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 second_line = control.sized_style(0.0, inner)
                 if state.hovered { first_line.background = paint.Brush { Solid: look.header_hover } }
                 if state.pressed { first_line.background = paint.Brush { Solid: gl.rgb(0xBCDCF4u32) } }
+                // round 46: the dialog grids' last header runs on into the bar with no line
+                if look.dialog_grid && i + 1usize == columns.len && !state.hovered && !state.pressed { first_line.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
             }
             // round 15: a dialog grid's header line (live Sort dialog): #E5E5E5 after a white pixel, none at the last column, and the hot
             // or pressed header's colour runs through both
@@ -2679,7 +2681,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if group_row && look.soft_lines { group_top = style.Length { Px: 2.0 } }
         cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: flat }
         // round 43: Segoe UI 11 in the 18 px rows, ink from the sixth line (the 1:1 capture): two pixels above the centre of the line box
-        if crisp_on && !group_row { cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 4.0 } } }
+        if crisp_on && !group_row { cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 4.0 - look.cell_down } } }
         // looks5-e: a dialog grid's captions stand a pixel higher than the centre (measured, Sort dialog)
         if look.on && look.dialog_lines { cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: style.Length { Px: 2.0 } } }
         // a picture column's cells have no side padding
@@ -2860,7 +2862,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     // the current row carries the line (with several rows selected it is the one with the focus)
     var lined_row = selected
     if look.focus_on { lined_row = row_key == look.focus_key }
-    let dotted_row = look.on && lined_row && look.soft_lines && look.dotted_focus
+    let dotted_row = look.on && lined_row && (look.soft_lines || (look.crisp && look.dialog_grid)) && look.dotted_focus
     // looks5-e: the idle selected row has no frame: its top edge is the line above it and its foot pair the edge colour and #F1F1F1
     if look.on && lined_row && !dotted_row && !look.top_edge_on && !look.tree_dots { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
@@ -3048,13 +3050,31 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             dots_total = dots_before + columns[look.cell_select - 1usize].width
         }
         if dots_total > 700.0 { dots_total = 700.0 }
-        let (invert, invert_error) = gl.focus_invert(a, dots_total - dots_left, extent - 1.0, paint.rgba(1.0 - fill.red, 1.0 - fill.green, 1.0 - fill.blue, 1.0))
+        var dots_fill = fill
+        var dots_phase = 0usize
+        // round 46: the dialog grids' rectangle counts its dots from its own corner, over the selected cell's colour
+        if look.dialog_grid {
+            dots_phase = 2usize
+            if look.cell_select != 0usize { dots_fill = look.selected }
+        }
+        let (invert, invert_error) = gl.focus_invert_local(a, dots_total - dots_left, extent - 1.0, paint.rgba(1.0 - dots_fill.red, 1.0 - dots_fill.green, 1.0 - dots_fill.blue, 1.0), dots_phase)
         if invert_error != ok { ret (zero, invert_error) }
-        let (with_invert, with_invert_error) = mem.alloc[widget.Node](a, 2usize)
+        let (with_invert, with_invert_error) = mem.alloc[widget.Node](a, 3usize)
         if with_invert_error != ok { ret (zero, TooLarge) }
         with_invert[0usize] = lined[0usize]
         with_invert[1usize] = widget.positioned(0u64, dots_left, 0.0, style.defaults(), one_node(a, invert))
-        lined[0usize] = widget.stack(0u64, style.defaults(), with_invert[0usize..2usize])
+        var invert_n = 2usize
+        // round 46: a dialog grid that selects one cell holds the focus rectangle on the whole row: the cells before it carry their own
+        // dots, the inverse of the row's plain fill
+        if look.dialog_grid && look.cell_select > 1usize && dots_left > 0.0 {
+            var plain_fill = look.even
+            if index % 2usize == 1usize { plain_fill = look.odd }
+            let (before_dots, before_error) = gl.focus_invert_local(a, dots_left, extent - 1.0, paint.rgba(1.0 - plain_fill.red, 1.0 - plain_fill.green, 1.0 - plain_fill.blue, 1.0), 2usize)
+            if before_error != ok { ret (zero, before_error) }
+            with_invert[2usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, before_dots))
+            invert_n = 3usize
+        }
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_invert[0usize..invert_n])
     }
     if dotted_row && !crisp_sel {
         // looks4-e: a focused selected row carries v3's dotted focus rectangle, not a line
@@ -3317,7 +3337,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32, crisp: bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32, crisp: bool, cell_down: f32, dialog_grid: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -5156,7 +5176,9 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             track_w = lk.scroll_width - 1.0
             thumb_left -= 1.0
         }
-        if lk.dialog_lines {
+        // round 46: the 1:1 dialog grids (`cell_down`) keep the dialog bar: a white first pixel and the crisp 2 px thumb
+        let dialog_bar = lk.dialog_lines || (lk.crisp && lk.dialog_grid)
+        if dialog_bar {
             // pressed or under the pointer: a 6 px pill (live captures, Sort and Shortcuts)
             let widened = thumb_w > 5.0
             thumb_w = 2.0
@@ -5166,6 +5188,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 thumb_w = 6.0
                 thumb_left = 5.0
             }
+            // round 46: the 1:1 capture's thumb stands one pixel further left
+            if lk.dialog_grid { thumb_left -= 1.0 }
         }
         var thumb_style = control.sized_style(thumb_w, thumb_h)
         thumb_style.background = paint.Brush { Solid: lk.thumb }
@@ -5255,7 +5279,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             } else {
                 column_node[0usize] = widget.stack(0u64, over_style, bar_parts[0usize..2usize])
             }
-        } else if lk.dialog_lines {
+        } else if dialog_bar {
             var strip = control.sized_style(1.0, track_h)
             strip.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
             bar_parts[2usize] = bar_parts[1usize]
