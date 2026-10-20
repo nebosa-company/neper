@@ -467,7 +467,6 @@ fn random(buffer: []u8) -> err {
     ret ok
 }
 
-fn executable_path(a: *mem.Arena) -> (str, err) { ret ("", Unsupported) }
 
 // Every entry but `.` and `..`, its name copied into the arena and its kind from d_type,
 // read a block at a time with getdirentries64: d_ino, d_seekoff, d_reclen, d_namlen, d_type,
@@ -1405,3 +1404,202 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
 
 // A group identifier is not a handle here, so there is nothing to give back.
 fn proc_group_close(group: own ProcGroup) -> err { ret ok }
+
+// ---------------------------------------------------------------- libraries, signals, the executable
+
+// libSystem's loader. The name is passed as it was given, as `@import` takes one: nothing is
+// added to it, so "libvulkan.dylib" and "/usr/lib/libz.dylib" both work.
+type Lib = resource(dlclose) struct { raw: usize }
+
+@import("c", "dlopen")
+extern fn raw_dlopen(name: usize, flags: i32) -> usize
+
+@import("c", "dlsym")
+extern fn raw_dlsym(handle: usize, symbol: usize) -> usize
+
+@import("c", "dlclose")
+extern fn raw_dlclose(handle: usize) -> i32
+
+@import("c", "NSGetExecutablePath")
+extern fn raw_executable_path(buffer: usize, size: usize) -> i32
+
+@import("c", "sigaction")
+extern fn raw_sigaction(number: i32, action: usize, previous: usize) -> i32
+
+const RTLD_NOW: i32 = 2i32
+
+fn c_string_bytes(a: *mem.Arena, text: str) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    let (buffer, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
+    if allocation_error != ok { ret (nothing, OutOfMemory) }
+    var at = 0usize
+    while at < text.len {
+        buffer[at] = text[at]
+        at += 1usize
+    }
+    buffer[text.len] = 0u8
+    ret (buffer, ok)
+}
+
+fn dlopen(a: *mem.Arena, name: str) -> (Lib, err) {
+    var library: Lib = zero
+    if name.len == 0usize { ret (library, NotFound) }
+    let (bytes, bytes_error) = c_string_bytes(a, name)
+    if bytes_error != ok { ret (library, bytes_error) }
+    let handle = raw_dlopen(mem.address_of(&bytes[0usize]), RTLD_NOW)
+    // `dlerror` says why, and there is nowhere to keep it: a name that will not load is
+    // reported as one that was not found.
+    if handle == 0usize { ret (library, NotFound) }
+    library.raw = handle
+    ret (library, ok)
+}
+
+fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) {
+    if sym.len == 0usize { ret (0usize, NotFound) }
+    let (bytes, bytes_error) = c_string_bytes(a, sym)
+    if bytes_error != ok { ret (0usize, bytes_error) }
+    let address = raw_dlsym(l.raw, mem.address_of(&bytes[0usize]))
+    if address == 0usize { ret (0usize, NotFound) }
+    ret (address, ok)
+}
+
+fn dlclose(l: own Lib) -> err {
+    if raw_dlclose(l.raw) != 0i32 { ret Failed }
+    ret ok
+}
+
+// The path of the running image, from dyld, made canonical: `_NSGetExecutablePath` answers
+// the path the process was started by, which may be relative or run through a link.
+fn executable_path(a: *mem.Arena) -> (str, err) {
+    var capacity = 1024usize
+    while capacity <= 65536usize {
+        let (buffer, allocation_error) = mem.alloc[u8](a, capacity)
+        if allocation_error != ok { ret ("", OutOfMemory) }
+        var size = u32(capacity)
+        let answer = raw_executable_path(mem.address_of(&buffer[0usize]), mem.address_of(&size))
+        if answer == 0i32 {
+            var length = 0usize
+            while length < capacity && buffer[length] != 0u8 { length += 1usize }
+            let (resolved, resolve_error) = canonical(a, buffer[0usize..length])
+            ret (resolved, resolve_error)
+        }
+        // A negative answer is the size it needed.
+        capacity = capacity * 2usize
+    }
+    ret ("", Failed)
+}
+
+// The six signals the fence names, handled through libSystem's sigaction (which brings its own
+// return trampoline, unlike the raw call). The numbers are the same on Darwin as on Linux for
+// these six.
+type Signal = enum u8 { Interrupt, Terminate, Abort, SegmentFault, FloatingPoint, Illegal }
+
+// The caller's handler as bits, which is the only way to keep one in a table: a slot is a
+// `usize` and a function is not.
+type SignalHandler = union { function: fn(Signal), bits: usize }
+type SignalEntry = union { function: fn(i32, usize, usize), bits: usize }
+
+// `struct sigaction` on Darwin: the handler, the mask (32 bits) and the flags.
+type DarwinSigAction = struct { handler: usize, mask: u32, flags: i32 }
+
+const SA_SIGINFO: i32 = 64i32
+const SIGINT: usize = 2usize
+const SIGILL: usize = 4usize
+const SIGABRT: usize = 6usize
+const SIGFPE: usize = 8usize
+const SIGSEGV: usize = 11usize
+const SYS_GETPID: usize = 20usize
+
+var signal_slot: [6]usize
+
+fn signal_number(which: Signal) -> usize {
+    if which == .Interrupt { ret SIGINT }
+    if which == .Terminate { ret SIGTERM }
+    if which == .Abort { ret SIGABRT }
+    if which == .SegmentFault { ret SIGSEGV }
+    if which == .FloatingPoint { ret SIGFPE }
+    ret SIGILL
+}
+
+fn signal_index(which: Signal) -> usize {
+    if which == .Interrupt { ret 0usize }
+    if which == .Terminate { ret 1usize }
+    if which == .Abort { ret 2usize }
+    if which == .SegmentFault { ret 3usize }
+    if which == .FloatingPoint { ret 4usize }
+    ret 5usize
+}
+
+fn signal_of_number(number: i32) -> (Signal, bool) {
+    var which: Signal = .Interrupt
+    if number == 2i32 { ret (which, true) }
+    which = .Terminate
+    if number == 15i32 { ret (which, true) }
+    which = .Abort
+    if number == 6i32 { ret (which, true) }
+    which = .SegmentFault
+    if number == 11i32 { ret (which, true) }
+    which = .FloatingPoint
+    if number == 8i32 { ret (which, true) }
+    which = .Illegal
+    if number == 4i32 { ret (which, true) }
+    ret (which, false)
+}
+
+fn signal_dispatch(which: Signal) {
+    let bits = signal_slot[signal_index(which)]
+    if bits == 0usize { ret }
+    var entry: SignalHandler = zero
+    entry.bits = bits
+    entry.function(which)
+}
+
+// What the system enters, in the C convention it calls with; SA_SIGINFO makes it three
+// arguments, of which only the number is read.
+@cc(c)
+fn signal_entry(number: i32, information: usize, context: usize) {
+    let (which, known) = signal_of_number(number)
+    if !known { ret }
+    signal_dispatch(which)
+}
+
+fn signal_install(which: Signal, handler: usize, flags: i32) -> err {
+    var action: DarwinSigAction = zero
+    action.handler = handler
+    action.mask = 0u32
+    action.flags = flags
+    if raw_sigaction(i32(signal_number(which)), mem.address_of(&action), 0usize) != 0i32 { ret Failed }
+    ret ok
+}
+
+// The slot is written before the system is told, so a signal that arrives between the two
+// finds a handler rather than a zero; a failed install takes it back.
+fn signal(which: Signal, handler: fn(Signal)) -> err {
+    var entry: SignalHandler = zero
+    entry.function = handler
+    if entry.bits == 0usize { ret Failed }
+    var trampoline: SignalEntry = zero
+    trampoline.function = signal_entry
+    let slot = signal_index(which)
+    let previous = signal_slot[slot]
+    signal_slot[slot] = entry.bits
+    let install_error = signal_install(which, trampoline.bits, SA_SIGINFO)
+    if install_error != ok {
+        signal_slot[slot] = previous
+        ret install_error
+    }
+    ret ok
+}
+
+// SIG_DFL is a handler of zero.
+fn signal_default(which: Signal) -> err {
+    signal_slot[signal_index(which)] = 0usize
+    ret signal_install(which, 0usize, 0i32)
+}
+
+// A real signal to this process, so it takes the same path as one the system decided to send.
+fn signal_raise(which: Signal) -> err {
+    let identity = syscall(SYS_GETPID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if identity < 0isize { ret from_errno(identity) }
+    ret from_errno(syscall(SYS_KILL, usize(identity), signal_number(which), 0usize, 0usize, 0usize, 0usize))
+}
