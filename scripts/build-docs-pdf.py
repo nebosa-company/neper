@@ -694,7 +694,7 @@ def git_description():
 
 # ---- generated sections ----------------------------------------------------
 # Each generator reads the repository, so the section cannot drift from it. A
-# generator has "inputs" (the files it reads, listed in the source manifest) and
+# generator has "inputs" (the files it reads, counted on the cover) and
 # "build" (the flowables, after the part heading).
 
 def read_repo(rel):
@@ -1267,32 +1267,6 @@ def document_flowables(entry, renderer, styles, md, text_tool):
     return flows
 
 
-def manifest_flowables(entries, renderer, styles, text_tool):
-    flows = []
-    part = Paragraph("Source manifest", styles["part"])
-    part._toc_level = 0
-    part._toc_text = "Source manifest"
-    part._toc_key = "manifest"
-    flows.append(part)
-    flows.append(Paragraph(
-        esc("Every file rendered above, with its size and SHA-256. "
-            "Re-running scripts/build-docs-pdf.py over the same inputs "
-            "reproduces the same content."), styles["body"]))
-    rows = [["Path", "Bytes", "SHA-256"]]
-    plains = [["Path", "Bytes", "SHA-256"]]
-    for entry in entries:
-        for path in source_files(entry):
-            rel = path.relative_to(REPO_ROOT).as_posix()
-            size = str(path.stat().st_size)
-            digest = sha256_of(path)
-            cell = ('<font face="%s" size="6.8">%s</font>'
-                    % (renderer.mono["regular"], digest))
-            rows.append([esc(rel), size, cell])
-            plains.append([rel, size, digest])
-    flows.extend(renderer.build_table(rows, plains, 1, 0.0))
-    return flows
-
-
 def build_story(entries, renderer, styles, md, text_tool, generated_at, revision):
     if LOGO.exists():
         pixel_w, pixel_h = ImageReader(str(LOGO)).getSize()
@@ -1339,7 +1313,8 @@ def build_story(entries, renderer, styles, md, text_tool, generated_at, revision
 
     for entry in entries:
         story.extend(document_flowables(entry, renderer, styles, md, text_tool))
-    story.extend(manifest_flowables(entries, renderer, styles, text_tool))
+    if isinstance(story[-1], PageBreak):
+        story.pop()
     return story
 
 
