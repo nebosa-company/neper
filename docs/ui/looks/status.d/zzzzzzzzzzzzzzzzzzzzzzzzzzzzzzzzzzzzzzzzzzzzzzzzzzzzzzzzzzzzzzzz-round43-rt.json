@@ -1,0 +1,61 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "ROUND 43 (true 1:1 captures, ref/windows-1to1; counted = more than 2 levels off, glyphs included; left grid of the sheet): data_grid_top 32853 to 2909, data_grid_hover 32582 to 2547, data_grid_group2 26098 to 17861 (group rows one pixel high), data_grid_bottom 41172 to 19187, main window collection part 35765 to 19715. The grid is drawn crisp (Look.crisp): 1 px #DCDCDC rules, 1 px #828790 frame, inverting focus rectangle, Segoe UI 11 cells (oracle atlas, pixel exact), header Tahoma. Left: v3 artwork, open editors of the bottom capture, footer and scroll bar bitmaps, grouped sheets' row stack; footer constants of rounds 38/40 not re-derived. Not matched. ",
+    "gaps": [
+     "The last data row's foot pixels at y 220 of the top and hover sheets (F0 / F7 stripes, about 130 px per crop) and the translucent footer top line over v3's card art strip (the art is not drawn, 90 px per bottom crop, 57 in main) are not drawn",
+     "Shortcuts list icon column (v3 artwork, grey top edge 9 px per crop) and the Sort header's hot filter button bitmap are not drawn",
+     "v3 coloured artwork is not drawn in the collection grid (orange circle icons, card art strip, two card-art glyphs) nor in the Shortcuts list's icon column; excluded as rectangles",
+     "Text: ClearType fringes and hinting not reproduced from the resampled 150 % capture; looks_strict ink-box agreement at the 100 and 150 level still fails in the large cells (text_off 5 to 190 px per crop)",
+     "No capture: edit mode, disabled, filter row popups, 150 %"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_expanded.png",
+    "notes": "ROUND 43 (1:1 captures): tree_list 15207 to 5315, tree_list_expanded 52012 to 14216 (chrome 17722 to 6824), hover 45591 to 15913. Cells are Segoe UI 11 (exact), flat 17 px rows, header 19 rows without a rule. Left: check, expander and edition pictures (old cuts), dotted tree lines, header caption x. Not matched. ",
+    "gaps": [
+     "Check box and expander tiles are opaque pictures cut from one row colour: the capture blends their rings over the row face (white corners where the row is grey)",
+     "v3's coloured edition icons are not drawn (excluded as rectangles)",
+     "tree_list_focus and tree_list_check: 2 px at the crop's last row (thumb colour) outside looks_strict's cell",
+     "Text: ClearType fringes and hinting not reproduced; ink-box agreement fails for the tree_list crop (2 of 12 lines)",
+     "No capture: disabled, tree-hover-expander and -classic-lines"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "ROUND 43 (1:1 capture): vertical_grid 23867 to 5489, hover 118955 to 27445, states 108762 to 28178 counted. Crisp #A0A0A4 rules, #828790 frame, band gradient and focus dots from the capture; values, the focused caption and category captions are Segoe UI 11, other captions Tahoma. Left: v3 artwork of the Computed rows and their captions. Not matched. ",
+    "gaps": [
+     "vertical_grid_states, Archetype crop: 3 px of a glyph row 1 px off (20 levels)",
+     "Uncaptured: other editors, disabled",
+     "The Legality letters are v3's own bitmap pixels (artwork copied from the capture)"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_dialog.png",
+    "notes": "ROUND 43 (1:1 capture): check_list_box_dialog 30486 to 13036, hover 25764 to 12283, states 36064 to 16171 counted. ClearType text (was greyscale), 1 px frame, whole pixel highlight. Left: the check tiles (old cut from the resampled grabs, shared with the matched check box) and word placement. Not matched. ",
+    "gaps": [
+     "Ours draws an orange 1 px line the capture does not have (check_list_box_dialog x 32, y 55 on); 12 of 15 crops above 5 px with glyphs counted",
+     "Uncaptured: disabled, multi-select"
+    ]
+   }
+  }
+ }
+}
