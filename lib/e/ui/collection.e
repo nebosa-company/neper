@@ -1887,7 +1887,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if header_keys_error != ok { ret (zero, TooLarge) }
     let grip: f32 = 8.0
     // round 43: the 1:1 capture's header has no rule under it, so its `height` is all content (see `crisp_head` below)
-    let crisp_head = look.on && look.crisp && !look.tree_dots && t.tokens.profile == .Windows && !style.windows_dark_on() && !look.dialog_lines
+    let crisp_head = look.on && look.crisp && t.tokens.profile == .Windows && !style.windows_dark_on() && !look.dialog_lines
     var inner = height - t.tokens.sizes.divider
     if crisp_head { inner = height }
     let inset = control.if_else(height <= 40.0, 8.0, 12.0)
@@ -2173,11 +2173,15 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if crisp_head {
             // the capture's captions start 3 in (pad and the line's pixel); a centred one, in Tahoma's GDI advances, floor((column - 2 - width) / 2) in
             var crisp_left = style.Length { Px: pad + 1.0 }
-            if crisp_centred { crisp_left = style.Length { Px: f32(i64(columns[i].width - 2.0 - crisp_text) / 2i64) + 1.0 } }
+            // (a tree's header has no filter glyphs: its flex centres the caption itself)
+            if crisp_centred && win_glyphs { crisp_left = style.Length { Px: f32(i64(columns[i].width - 2.0 - crisp_text) / 2i64) + 1.0 } }
             if win_glyphs && (sorted || win_hot) {
                 head_style.padding = style.EdgeLengths { left: crisp_left, top: style.Length { Px: 2.0 }, right: sides, bottom: flat }
             } else {
-                head_style.padding = style.EdgeLengths { left: crisp_left, top: flat, right: sides, bottom: style.Length { Px: 2.0 } }
+                // round 44: the capture's caption stands six rows below the header's top in the 22 and the 19 pixel headers alike
+                var crisp_down: f32 = 2.0
+                if height < 20.0 { crisp_down = 0.0 }
+                head_style.padding = style.EdgeLengths { left: crisp_left, top: flat, right: sides, bottom: style.Length { Px: crisp_down } }
             }
         }
         if look.on && look.dialog_lines { head_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 2.0 } } }
@@ -2655,12 +2659,16 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if (grid || look.on) && !(look.soft_lines && is_group_row) { width -= t.tokens.sizes.divider }
         // looks4-e: v3 draws its grid lines two pixels wide: a line and a lighter one beside it
         if look.on && look.soft_lines && !look.vertical_off && !is_group_row && !look.dialog_lines && !crisp_on { width -= 1.0 }
+        // round 45: a tree list draws no column lines, so its cells (each one pixel short above) end at the table's edge: the last takes what the others gave up
+        if look.on && look.vertical_off && look.crisp && !style.windows_dark_on() && c + 1usize == columns.len && columns.len > 1usize { width += f32(columns.len) * t.tokens.sizes.divider }
         // round 12: the top grid's group rows (ref/windows/data_grid_group*): the indicator column is 11 wide with its #E8E8E8 line
         // as the last pixel, the group fill starts right after it
         var group_edge = false
         if is_group_row && c == 0usize && look.top_fit && t.tokens.profile == .Windows && look.kind(look.kind_ctx, index) == 1u8 && look.glyph(look.kind_ctx, 0usize) == 3u8 {
             group_edge = true
             width = columns[0usize].width - 1.0
+            // round 44: the 1:1 capture's indicator column keeps its width and its #E5E5E5 line is the column's last pixel
+            if crisp_on { width = columns[0usize].width }
         }
         var cell_style = control.sized_style(control.max_zero(width), extent)
         cell_style.overflow = .Clip
@@ -2707,6 +2715,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             if edged_error != ok { ret (zero, TooLarge) }
             var edge_line = control.sized_style(1.0, extent)
             edge_line.background = paint.Brush { Solid: gl.rgb(0xE8E8E8u32) }
+            if crisp_on { edge_line.background = paint.Brush { Solid: gl.rgb(0xE5E5E5u32) } }
             edged[0usize] = framed[0usize]
             edged[1usize] = widget.positioned(0u64, width - 1.0, 0.0, style.defaults(), one_node(a, widget.box(0u64, edge_line, zero)))
             framed[0usize] = widget.stack(0u64, style.defaults(), edged[0usize..2usize])
@@ -2982,7 +2991,18 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         }
         var tree_wide = tree_total - 32.0
         if tree_wide < 8.0 || tree_wide > 4000.0 { tree_wide = 4000.0 }
-        let (tree_dots, tree_dots_error) = gl.tree_focus(a, blue_focus, tree_wide, 18.0)
+        var tree_dots: widget.Node = zero
+        var tree_dots_error: err = ok
+        // round 45: the 1:1 capture's focus rectangle: the row's own 17 rows, every second rim pixel inverted, counted from the tree
+        if look.crisp {
+            let (crisp_dots, crisp_dots_error) = gl.focus_invert_local(a, tree_wide, extent, paint.rgba(1.0 - fill.red, 1.0 - fill.green, 1.0 - fill.blue, 1.0), 32usize + index)
+            tree_dots = crisp_dots
+            tree_dots_error = crisp_dots_error
+        } else {
+            let (old_dots, old_dots_error) = gl.tree_focus(a, blue_focus, tree_wide, 18.0)
+            tree_dots = old_dots
+            tree_dots_error = old_dots_error
+        }
         if tree_dots_error != ok { ret (zero, tree_dots_error) }
         // the selection's fill starts at x = 32, under the cells; the cells before it stay white
         var band = control.sized_style(4000.0, extent)
@@ -2991,15 +3011,19 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if with_band_error != ok { ret (zero, TooLarge) }
         with_band[0usize] = widget.positioned(0u64, 32.0, 0.0, style.defaults(), one_node(a, widget.box(0u64, band, zero)))
         with_band[1usize] = lined[0usize]
-        with_band[2usize] = widget.positioned(0u64, 32.0, 0.0 - 1.0, style.defaults(), one_node(a, tree_dots))
+        var tree_dots_y: f32 = 0.0 - 1.0
+        if look.crisp { tree_dots_y = 0.0 }
+        with_band[2usize] = widget.positioned(0u64, 32.0, tree_dots_y, style.defaults(), one_node(a, tree_dots))
         // looks13-r2: the row's foot pixel under the cells before the selection (live capture: #F4F4F4 under a white row, #FAFAFA under a grey one)
         var foot_px = gl.rgb(0xF4F4F4u32)
         if index % 2usize == 0usize { foot_px = gl.rgb(0xFAFAFAu32) }
         var foot_box = control.sized_style(32.0, 1.0)
         foot_box.background = paint.Brush { Solid: foot_px }
-        if look.crisp { foot_box.background = paint.Brush { Solid: fill } }
-        with_band[3usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero)))
-        lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..4usize])
+        // the 1:1 capture has no foot pixel: the cells before the selection stay the row's own
+        var band_parts = 4usize
+        if look.crisp { band_parts = 3usize }
+        if !look.crisp { with_band[3usize] = widget.positioned(0u64, 0.0, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, foot_box, zero))) }
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_band[0usize..band_parts])
     }
     let crisp_sel = crisp_on
     if dotted_row && crisp_sel {
@@ -3097,11 +3121,11 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             if group_total > 700.0 { group_total = 700.0 }
             var group_rect_node: widget.Node = zero
             if look.group_solid {
-                var solid = control.sized_style(group_total - group_x, extent - 1.0)
+                var solid = control.sized_style(group_total - group_x, extent - 2.0)
                 solid.border = style.Border { width: 1.0, color: gl.rgb(0x0F0F0Fu32) }
                 group_rect_node = widget.box(0u64, solid, zero)
             } else {
-                let (dots, dots_error) = gl.focus_invert(a, group_total - group_x, extent - 1.0, gl.rgb(0x0F0F0Fu32))
+                let (dots, dots_error) = gl.focus_invert(a, group_total - group_x, extent - 2.0, gl.rgb(0x0F0F0Fu32))
                 if dots_error != ok { ret (zero, dots_error) }
                 group_rect_node = dots
             }
@@ -5200,6 +5224,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             // the main window's bar: its first pixel is #F7F7F7 (live capture), then the track
             var edge_strip = control.sized_style(1.0, track_h)
             edge_strip.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
+            // round 44: the 1:1 capture's bar has no lighter first pixel; its track starts at once and the rows end in one white pixel
+            if lk.crisp && t.tokens.profile == .Windows && !style.windows_dark_on() { edge_strip.background = paint.Brush { Solid: gl.rgb(0xF0F0F0u32) } }
             let (edged, edged_error) = mem.alloc[widget.Node](a, 2usize)
             if edged_error != ok { ret (zero, TooLarge) }
             edged[0usize] = widget.box(0u64, edge_strip, zero)
@@ -5219,6 +5245,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             if lk.top_fit && t.tokens.profile == .Windows && lk.soft_lines {
                 var pre_strip = control.sized_style(1.0, track_h - head_height)
                 pre_strip.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 0.55) }
+                if lk.crisp && !style.windows_dark_on() { pre_strip.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
                 let (with_pre, with_pre_error) = mem.alloc[widget.Node](a, 3usize)
                 if with_pre_error != ok { ret (zero, TooLarge) }
                 with_pre[0usize] = bar_parts[0usize]
@@ -5506,7 +5533,7 @@ fn tree_expand_siblings(ctx: *void) -> err {
 // (D1538) An outline with `has_filter` stands a filter field over its rows
 // (`filter`, `filter_len`, reported through `filtering`) that narrows them by
 // `sort_text` (column 0).
-type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, bar_view: f32, bar_scale: f32 }
+type TreeOptions = struct { disabled: []const widget.Key, loading: []const widget.Key, rename: widget.Change[widget.Key], renaming: widget.Key, name: []u8, name_len: usize, typed: widget.Change[str], commit: widget.Submit, cancel: widget.Submit, move: widget.Change[TreeMove], height: f32, offset: f32, scrolled: widget.Change[f32], sorts: bool, sort_ctx: *void, sort_text: fn(*void, widget.Key, usize) -> str, folders_first: bool, footer: bool, numbered: bool, filter: []u8, filter_len: usize, filtering: widget.Change[str], has_filter: bool, bar_view: f32, bar_scale: f32, centered: []const bool }
 
 // (D1534) Row `at`'s section number into `out`: its place among its siblings,
 // then its parent's, up to the root, written root first ("2.1.3").
@@ -5879,7 +5906,15 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             // looks4-e: v3's own plus and minus boxes, cut from the live capture
             var box_pic = gl.gx_tree_plus()
             if open { box_pic = gl.gx_tree_minus() }
-            let (box, box_error) = gl.pixels(a, box_pic, gl.gx_tree_plus_w(), gl.gx_tree_plus_h())
+            var box_w = gl.gx_tree_plus_w()
+            var box_h = gl.gx_tree_plus_h()
+            // round 45: the light look's boxes are the 1:1 capture's 9 x 9 ones
+            if !style.windows_dark_on() {
+                box_pic = gl.gx_expander_c()
+                if open { box_pic = gl.gx_expander_m() }
+                box_h = 9.0
+            }
+            let (box, box_error) = gl.pixels(a, box_pic, box_w, box_h)
             let _ = box_shape
             if box_error != ok { ret (none, box_error) }
             let (box_held, box_held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -5887,6 +5922,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             box_held[0usize] = box
             var hit = control.sized_style(14.0, tall)
             hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 2.0 }, right: flat, bottom: flat }
+            if !style.windows_dark_on() { hit.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 4.0 }, right: flat, bottom: flat } }
             twisty = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, hit, box_held[0usize..1usize])
         }
         if entry.branch && !win && !lin {
@@ -5941,6 +5977,30 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
                 l += 1usize
             }
             indent = widget.stack(0u64, control.sized_style(indent_width, tall), lines[0usize..entry.depth])
+        }
+        // round 45: the Windows light tree's dotted lines (gridlook.tree_lines), behind the twisty
+        if win && !style.windows_dark_on() {
+            var flags = (i & 1usize) << 12usize
+            if entry.index + 1usize == entry.siblings { flags = flags | 256usize }
+            if entry.depth == 0usize && entry.index == 0usize { flags = flags | 512usize }
+            if entry.branch { flags = flags | 1024usize }
+            if entry.open { flags = flags | 2048usize }
+            var up = i
+            var level = entry.depth
+            while level > 0usize && up > 0usize {
+                up -= 1usize
+                if visible[up].depth + 1usize == level {
+                    level -= 1usize
+                    if visible[up].index + 1usize < visible[up].siblings && level < 8usize { flags = flags | (1usize << level) }
+                }
+            }
+            let (dots, dots_error) = gl.tree_lines(a, entry.depth, flags, 14.0, tall)
+            if dots_error != ok { ret (none, dots_error) }
+            let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+            if layers_error != ok { ret (none, TooLarge) }
+            layers[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, dots))
+            layers[1usize] = twisty
+            twisty = widget.stack(0u64, control.sized_style(14.0, tall), layers[0usize..2usize])
         }
         let (lead, lead_error) = mem.alloc[widget.Node](a, 5usize)
         if lead_error != ok { ret (none, TooLarge) }
@@ -6509,6 +6569,8 @@ fn tree_table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     if t.tokens.profile == .Windows {
         style.windows_dark_enter(t.tokens)
         head_look = windows_table_look()
+        // round 45: captions the capture centres (`TreeOptions.centered`)
+        head_look.center_head = options.centered
         // looks5-e: the #F4F4F4 line under the header of a list with rows (live captures); an empty list has none
         if source.count(source.ctx, 0u64) > 0usize && !head_look.crisp { head_look.header_line = gl.rgb(0xF4F4F4u32) }
         head_height = head_look.header_height

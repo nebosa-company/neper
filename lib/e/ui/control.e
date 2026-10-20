@@ -4852,18 +4852,25 @@ fn windows_check_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
 
 // The list's two unit edge, measured on the 100 % captures: an outer line (top #ACAFB4, left
 // #93979F, right #B7BABE, bottom #AAAEB3) and an inner one (#D0D2D5, #ECEDEE, #C2C5C9, #D1D3D6).
-type ListEdge = struct { art: bool }
+type ListEdge = struct { art: bool, ring: bool }
 
 fn list_edge_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let e = mem.cast[*ListEdge](ctx)
     let x = area.x
     let y = area.y
-    let w = area.width
-    let h = area.height
+    var w = area.width
+    var h = area.height
+    // round 45: the 1:1 capture's frame is the control's own rectangle (the old resampled one bled a pixel right and down)
+    if e.ring {
+        w -= 1.0
+        h -= 1.0
+    }
     // round 13: the native dark list view has one #828790 line round its #202020 face (checklist-*); round 43: the 1:1 capture of the light list has the
     // same line round its white face, not the eight soft ones fitted to the resampled capture
     if true {
         let line = style.hex_raw(0x828790u32)
+        // round 45: the capture's face reaches the line (the view stands one pixel further in): a white ring between them
+        if e.ring { try winpx.fill(b, x + 1.0, y + 1.0, w - 2.0, h - 2.0, style.hex_raw(0xFFFFFFu32)) }
         try winpx.fill(b, x, y, w, 1.0, line)
         try winpx.fill(b, x, y + h - 1.0, w, 1.0, line)
         try winpx.fill(b, x, y + 1.0, 1.0, h - 2.0, line)
@@ -4938,6 +4945,12 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         if tile_error != ok { ret (zero, tile_error) }
         mark_node = widget.stack(0u64, sized_style(15.0, 15.0), widget_one_of(a, widget.positioned(0u64, 0.0, 1.0, style.defaults(), widget_one_of(a, tile))))
     }
+    // round 45: the light list's checked box is the 1:1 capture's bitmap (soft corners, a clear top row), the same as the tree list's
+    if chosen && !art && t.tokens.palette != .Dark && t.tokens.profile == .Windows {
+        let (picture, picture_error) = gl.pixels(a, gl.gx_tree_check_on_a(), gl.gx_tree_check_on_w(), gl.gx_tree_check_on_h())
+        if picture_error != ok { ret (zero, picture_error) }
+        mark_node = widget.stack(0u64, sized_style(15.0, 15.0), widget_one_of(a, widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, picture))))
+    }
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
@@ -4966,7 +4979,9 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         light_h = 18.0
     }
     let light_left = light_x + grow * (row_x + light_x)
-    let light_top = 0.3125 + grow * (row_y + 0.3125)
+    var light_top = 0.3125 + grow * (row_y + 0.3125)
+    // the 1:1 capture's highlight starts on the row's own top line
+    if t.tokens.palette != .Dark && mark_y >= 0.0 { light_top = 0.0 }
     let light_right = (width - 1.0) + grow * (row_x + width - 1.0)
     let light_w = light_right - light_left
     let light_tall = light_h * (1.0 + grow)
@@ -4976,7 +4991,7 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
     if art {
         // The image's placeholder (v3's own bitmaps are artwork: a folder, a hand): a flat tile.
         row_h = 18.0
-        let (art_pic, art_pic_error) = gl.pixels(a, check_art_icon(label.len > 2usize && label[0usize] == 67u8 && label[1usize] == 58u8), 16.0, 16.0)
+        let (art_pic, art_pic_error) = gl.pixels(a, art_icon_pic(t, label.len > 2usize && label[0usize] == 67u8 && label[1usize] == 58u8), 16.0, 16.0)
         if art_pic_error != ok { ret (zero, art_pic_error) }
         parts[n] = widget.positioned(0u64, 3.0, 2.0, style.defaults(), widget_one_of(a, art_pic))
         n += 1usize
@@ -4994,13 +5009,22 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
             parts[n] = widget.positioned(0u64, light_left, 0.0, tail, zero)
             n += 1usize
         }
-        let (art_mark, art_mark_error) = windows_mark(a, t, state, chosen, false, false, 18.0, Phase { context: 8u32, x: 0.0 - 1.0, y: mark_y })
+        var (art_mark, art_mark_error) = windows_mark(a, t, state, chosen, false, false, 18.0, Phase { context: 8u32, x: 0.0 - 1.0, y: mark_y })
         if art_mark_error != ok { ret (zero, art_mark_error) }
+        // round 45: the light list's checked box is the 1:1 capture's bitmap here too
+        if chosen && t.tokens.palette != .Dark && t.tokens.profile == .Windows {
+            let (art_picture, art_picture_error) = gl.pixels(a, gl.gx_tree_check_on_a(), gl.gx_tree_check_on_w(), gl.gx_tree_check_on_h())
+            if art_picture_error != ok { ret (zero, art_picture_error) }
+            art_mark = widget.stack(0u64, sized_style(18.0, 18.0), widget_one_of(a, widget.positioned(0u64, 0.0, 1.0, style.defaults(), widget_one_of(a, art_picture))))
+        }
         parts[n] = widget.positioned(0u64, 19.0, 0.0, style.defaults(), widget_one_of(a, art_mark))
         n += 1usize
         var art_line = style.defaults()
         art_line.height = style.Length { Px: 18.0 }
-        parts[n] = widget.positioned(0u64, 36.0, 0.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, art_line, widget_one_of(a, words))))
+        // round 45: the 1:1 capture's art labels stand a pixel higher
+        var art_words_y: f32 = 0.0
+        if t.tokens.palette != .Dark && t.tokens.profile == .Windows && mark_y >= 0.0 { art_words_y = 0.0 - 1.0 }
+        parts[n] = widget.positioned(0u64, 36.0, art_words_y, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, art_line, widget_one_of(a, words))))
         n += 1usize
     }
     if current && !art {
@@ -5113,7 +5137,7 @@ fn windows_check_list_rows(a: *mem.Arena, key: widget.Key, t: *const Theme, labe
     if view_error != ok { ret (zero, TooLarge) }
     let (marks, marks_error) = mem.alloc[ListEdge](a, 1usize)
     if marks_error != ok { ret (zero, TooLarge) }
-    marks[0usize] = ListEdge { art: art }
+    marks[0usize] = ListEdge { art: art, ring: t.tokens.palette != .Dark }
     let (edge, edge_error) = mem.alloc[widget.Node](a, 1usize)
     if edge_error != ok { ret (zero, TooLarge) }
     var fill = style.defaults()
@@ -23105,6 +23129,15 @@ fn win_explorer_frame(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
 }
 
 // ---- round 15, w2: the Card Art check list's two v3 icons (a folder, a hand), the live capture's 16 x 16 pixels as RRGGBB --------
+// round 45: the same two pictures cut from the 1:1 capture (the light list; the dark one keeps the first)
+fn art_icon_pic(t: *const Theme, first: bool) -> str {
+    if t.tokens.palette != .Dark && t.tokens.profile == .Windows { ret check_art_icon_c(first) }
+    ret check_art_icon(first)
+}
+fn check_art_icon_c(first: bool) -> str {
+    if first { ret "FFFFFFEBD19DE4C17CE4C17CE4C17CE4C17CE4C17CE6C686F4F8F8E0ECEC41C9FE2EB6F4E4C17CEBD19DFFFFFFFFFFFFFFFFFFE2BF7AFFF3AEFEF0ABFEF0ABFEF0ABF7E8A3E1BF7BF7E5A1FEF0ABFEF0ABFEF0ABFFF3AEE2BF7AFFFFFFFFFFFFFFFFFFE0BD77FDEDA8FBE7A2FBE7A2FBE7A2FCEAA5F6E5A0DEBC78DEBC78DEBC78DEBC78DEBC78E0BD77FFFFFFFFFFFFFFFFFFDDBA74F3DD98EBCF8BEDD28DF2DA94F7E19BFAE6A0FAE9A3FAE9A3FAE9A3FAE9A3FBECA6DDBA74FFFFFFFFFFFFFFFEFEDAB871DFBF7BF2D58FF8DD97F8DD97F7DC96F5DC96F6DF98F6DF98F6DF98F6DF98F9E59FDAB871FFFFFFFFFFFFF2E7D0DDB870F3D58FCCAB65AD8B46AD8B47CAAA64F2D790F2D890F3DA92F3DA92F3DA92F6E099D7B46DFFFFFFFFFFFFDFC48EF0CD86D2B069BCAF8EDFE5E8DFE6E8BCAF8ECEAD66F2D68EEED38BF0D58DF0D58DF4DB94D4B16AFFFFFFFFFFFFD3B16EFCDA96C4A059C5D4E1C1D6EBC1D6EBCBD8E3C39F59F3D48CE6C880EDD087EDD087F2D78FD1AD66FFFFFFFFFFFFCFAE6AFCD996D0AC64CBD8E4E1EBF6E1EBF6D4DEE8CFAC63F1D189DDBD76EBCC82EBCC82F0D38ACDA962FFFFFFFFFFFFD6BB85ECC982E5C277DCCBA6EBEEF0EBF0F1DFCDA7E2BE74E5C57DD7B66FE8C87DE8C87DEECF86C8A45DFFFFFFFFFFFFDCCAA7DAB66EFAD892E9C47BE2BF78E2BF79E7C278ECCA83C2A05BDFBE76EDCB82EDCB82F0CF86B9964FFFFFFFFFFFFFC8A55EFFDD99D2AE69E1BF7BF9D793F9D793E1BF7BB6934EAA8742AA8742AA8742AA8742AA8742C1A672FFFFFFFFFFFFFFDD99C5A15BD3C2A0B89E6BA68646A68646B89E6BE1D6C0FFFEFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC29E5AD4CAB7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFB8AB90D7D7D7DCDCDCE1E1E1E6E6E6ECECECF1F1F1F6F6F6FAFAFAFDFDFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" }
+    ret "FFFFFFFFFFFFFFFFFFFFFFFFB5A584392108FFFFFF947B52392910FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF6B5A39522908FFFFFF847331393118FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF392110FFFFFFFFFFFFA5844A734210FFFFFFAD8C395A3908393110FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7B6B526B5229FFFFFFFFFFFF735A29AD7331291808948439845210FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF6352217B6321423110FFFFFF735A29A57B293921007B6B319C6B21423910FFFFFFFFFFFF292118FFFFFFFFFFFFFFFFFFFFFFFFC69C423118006B3918521008AD84295A39087363318C5A10423910FFFFFFFFFFFF523918635239FFFFFFFFFFFFFFFFFF7B7329844A18632910734210F7D64AA58410AD8C397B4A10524210FFFFFF9C7B31633908FFFFFFFFFFFFFFFFFFFFFFFF636318C6944A4A2900AD73315A4208B584396342087B4A104A42184A4218946318291800FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFAD8C429C7321B58C397B5210AD7B316342109463216B4A10A56B29734A10392908FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF736329D6AD4A8439108C6321A57B294A31088C5A187B5210946318312908FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE7B563845210B58442A57B294A3108AD73215A3908523108393110FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8C7329C69442AD7B398463185A3908734A10523908392908FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7B8429DEAD528C5A21946B186B4208734A10523908312108FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF736318BD8C4AA57B297B4A10734A084A3108312108FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5A5208D69C529C6B29734A104A2908392100292108FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+}
 fn check_art_icon(first: bool) -> str {
     if first { ret "FFFFFFF4E6CAEFD9AFEED8ACEED8ACEED8ACEDD7A9E8CB91EDE0C1E4DEC58DCACE72BDCAD7CCA2F1DFBAFDFAF5FFFFFFFFFFFFE9CF9AF3DC98F5DF9AF4DF9AF4DF9AF1DA95E5C583F3E5B6F3EEC3C2E4C8B3DCC6EAE0A3E8CA8AFBF5EBFFFFFFFFFFFFE5C88DF9E7A2FCEBA6FCEAA5FCEAA5FAE9A4F0DA95E8CD89E9CE8AEACF8BEACF8BEAD08CE2C17BFAF4E8FFFFFFFFFFFFE3C68BF3DD97F2DA95F2D995F5DE98F8E39EF9E5A0F1DB95F0D893F0D893F0D893F0DA95E1C07AF9F4E8FFFFFFFFFEFEE1C488E5C783EED18CF3D892F5DB95F7DE98F7DF99F7E29CF7E39CF7E39CF7E39CF9E7A1E0C07AF9F3E7FFFFFFF8F2E6E0C182E9CA84DDBD78CBAC66C9A964D8B973EFD48EF3DA93F4DC94F4DC94F4DC94F7E19ADDBD76F8F3E7FFFFFFEAD8B4E8C784E0BF78C6B07ECBC0A5CCC4ACC3B186D7BA77EED28BF0D68EF1D78FF1D78FF4DC95DAB972F8F2E6FFFFFFDEC38FF3D18DD0AD67C3C1B2CAD8E4CCDCEAC7CCCAC7AA6EEBCD85EBCD85EDD188EED289F2D790D7B56EF7F1E6FFFFFFD8BC83F5D38FD3AF68C9CFCED3E1F0D5E3F2D1DDE8CCB075EBCB83E3C47CEACB82ECCD84F0D38BD4B16AF7F1E5FFFFFFDAC290EDCB87E0BD74D7CCB1E4E8EAE7EEF3DDD8C7DBBC7BE7C67EDCBB74E7C77DE9C97FEECF86D0AD66F6F0E4FFFFFFE0CEAAE0BE7BEFCD85E6C88AE5CFA0E5D1A5E4C88EE8C67FD3B26BDAB971E9C77EEBCA80EFCE85C7A45CF4EEE2FFFFFFD4BA87ECCA87E3C07BE3C07BEECC87F0CE89E5C27CCEAB66B7944FBC9A54C29F59C3A05AC4A15BBFA063F4EFE5FFFFFFE6C582DDBA75D4BA87C9AD75C5A565C5A463C7A96FCFBA8FDDCEB2DFD2B8DFD2B8DFD2B8DFD2B8E6DCC7FBF9F6FFFFFFDBB874D0BA8FE9E1D0E6DDCBDFD3BCDED2BAE3D9C5F1ECE2FDFCFBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBDA677D2CBBFE6E6E4ECECECEFEFEFF3F3F3F6F6F6F9F9F9FBFBFBFDFDFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE3DDD1EEEDECF2F2F2F3F3F3F5F5F5F8F8F8F9F9F9FBFBFBFDFDFDFEFEFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" }
     ret "FFFFFFFFFFFFFFFFFFFFFFFFA4967D867765EBE9E683745B807563EBE9E7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF9A8C71533314E2DCD79D8C5C463A1CDFDDD9FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF978B82ECE9E8FFFFFFA18A626D4216E7DFD8AD96565B43157B735BEBEAE7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBAB1A4654F32E5E1DCFFFFFF9982569462277F6D5B9883407B5314A9A08CF3F2F0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF837554745C27877A60ECEBE789744BA0732C462C0A77672C90651F8C7F5EECEBE7FFFFFF918C88E9E9E8FFFFFFFFFFFFCDC7B7AD8F4849310E92755F6A3A239E73265C3D0B705D2A8E611B4F3F11E0DFD8FFFFFF61523E908473EFEDEAFFFFFFFFFFFFA896536C4314663012662F0EC8A13695741594792F855716554110E2DFD8CCBB956D4C21B2A798F5F4F2FFFFFFFFFFFF838142A3753362360E8C5720967622AB822887641D7C4D12554314847E6196712F4E3008E0DBD6FFFFFFFFFFFFFFFFFFCDCDB4B9975486601CA97B31795514A6762E6F4C13845618664A147C58208055163F2B07DEDBD6FFFFFFFFFFFFFFFFFFFFFFFF9C8953B791399D6324885C1BA3762961421085571979511294621C573E0EA29988F3F2EFFFFFFFFFFFFFFFFFFFFFFFFFD1CCB9DDB56793591CA0702FA57A2B593D0D92601A70490E6B440E3F320DDEDDD7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBC9F5EAD7D31B07E3A966F235E3F0C8154145E3E0A462E08A09A89F2F2F0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF96924BC79D46A2703090681B6B450B71480F573C09392808DEDBD6FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD4D7B9A48C43A87A38A075267B4E1073490B533809362408DDDBD6FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7D7335BC8C45A7772F7D50145E3909442A042F2207DCDBD6FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC9C6AEE7D4B7DCC8AECBBAA3BBAE9FB3A99CACA89EF1F1EFFFFFFFFFFFFFFFFFFFFFFFFF"

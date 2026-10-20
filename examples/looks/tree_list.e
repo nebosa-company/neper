@@ -20,6 +20,7 @@ use e.ui.looks
 use e.ui.widget
 use e.ui.wintile
 use e.ui.wintreeicon
+use e.ui.wintreeicon1
 
 type Flags = struct { checked: bool, expanded: bool, part: usize }
 var flags: Flags = zero
@@ -157,7 +158,13 @@ fn build_row(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> 
     // v3's check box, cut from the live capture (the Windows look; the others keep the drawn box); node 2 is checked in the check sheet
     let t = mem.cast[*const control.Theme](ctx)
     var pic = gl.gx_tree_check()
-    if node == 2u64 && checked_two() { pic = gl.gx_tree_check_on() }
+    var pic_on = gl.gx_tree_check_on()
+    // round 45: the Windows light look's boxes are the capture's RGBA bitmaps (soft corners over any row colour)
+    if t.tokens.profile == .Windows && !style.windows_dark_on() {
+        pic = gl.gx_tree_check_a()
+        pic_on = gl.gx_tree_check_on_a()
+    }
+    if node == 2u64 && checked_two() { pic = pic_on }
     let (box, box_error) = gl.pixels(a, pic, gl.gx_tree_check_w(), gl.gx_tree_check_h())
     if box_error != ok { ret box_error }
     var shown = box
@@ -178,7 +185,7 @@ fn build_row(ctx: *void, a: *mem.Arena, node: widget.Key, out: *widget.Node) -> 
         ret ok
     }
     // an edition: the checked box, then its abbreviation
-    let (checked, checked_error) = gl.pixels(a, gl.gx_tree_check_on(), gl.gx_tree_check_on_w(), gl.gx_tree_check_h())
+    let (checked, checked_error) = gl.pixels(a, pic_on, gl.gx_tree_check_on_w(), gl.gx_tree_check_h())
     if checked_error != ok { ret checked_error }
     let (cell_t, cell_t_error) = cell_face(a, t)
     if cell_t_error != ok { ret cell_t_error }
@@ -236,8 +243,20 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
     // v3's edition pictures sit in the ES column of the Windows light list (e.ui.wintreeicon)
     if node >= 200u64 && column == 1usize && t.tokens.profile == .Windows && usize(node - 200u64) < wintreeicon.count() {
         let k = usize(node - 200u64)
-        let atlas = wintreeicon.atlas()
-        let (tile, tile_error) = wintile.tile_node(a, wintreeicon.w(), wintreeicon.h(), atlas[k * 352usize..k * 352usize + 352usize])
+        var tile: widget.Node = zero
+        var tile_error: err = ok
+        if light_windows(t) {
+            // round 45: the light look's pictures are cut from the 1:1 capture
+            let crisp_atlas = wintreeicon1.atlas()
+            let (crisp_tile, crisp_error) = wintile.tile_node(a, wintreeicon1.w(), wintreeicon1.h(), crisp_atlas[k * 352usize..k * 352usize + 352usize])
+            tile = crisp_tile
+            tile_error = crisp_error
+        } else {
+            let atlas = wintreeicon.atlas()
+            let (old_tile, old_error) = wintile.tile_node(a, wintreeicon.w(), wintreeicon.h(), atlas[k * 352usize..k * 352usize + 352usize])
+            tile = old_tile
+            tile_error = old_error
+        }
         if tile_error != ok { ret tile_error }
         var held = style.defaults()
         held.margin = style.EdgeLengths { left: style.Length { Px: -2.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
@@ -258,6 +277,16 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
     ret ok
 }
 
+fn light_windows(t: *const control.Theme) -> bool { ret t.tokens.profile == .Windows && !style.windows_dark_on() }
+fn abbr_title(t: *const control.Theme) -> str {
+    if light_windows(t) { ret "Abbr." }
+    ret "        Abbr."
+}
+fn released_title(t: *const control.Theme) -> str {
+    if light_windows(t) { ret "Released" }
+    ret "  Released"
+}
+
 fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_two: bool) -> (widget.Node, err) {
     let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
     if tahoma_error != ok { ret (zero, tahoma_error) }
@@ -273,10 +302,10 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_tw
     has_segoe_face = true
     let (columns, columns_error) = mem.alloc[collection.Column](a, 4usize)
     if columns_error != ok { ret (zero, columns_error) }
-    columns[0usize] = collection.Column { title: "        Abbr.", width: 85.0 }
+    columns[0usize] = collection.Column { title: abbr_title(t), width: 85.0 }
     columns[1usize] = collection.Column { title: "ES", width: 20.0 }
     columns[2usize] = collection.Column { title: "Block/Edition", width: 119.0 }
-    columns[3usize] = collection.Column { title: "  Released", width: 64.0 }
+    columns[3usize] = collection.Column { title: released_title(t), width: 64.0 }
     let (picked, picked_error) = mem.alloc[widget.Key](a, 1usize)
     if picked_error != ok { ret (zero, picked_error) }
     picked[0usize] = 1u64
@@ -295,6 +324,16 @@ fn filter_list(a: *mem.Arena, t: *const control.Theme, key: widget.Key, focus_tw
     }
     var options: collection.TreeOptions = zero
     options.height = 300.0
+    // the Windows light capture centres the Abbr., ES and Released captions (the other looks keep their blank-padded ones)
+    if light_windows(t) {
+        let (centred, centred_error) = mem.alloc[bool](a, 4usize)
+        if centred_error != ok { ret (zero, centred_error) }
+        centred[0usize] = true
+        centred[1usize] = true
+        centred[2usize] = false
+        centred[3usize] = true
+        options.centered = centred[0usize..4usize]
+    }
     if focus_two { options.height = 71.0 }
     if focus_two { options.bar_view = 300.0 }
     if flags.expanded && !focus_two { options.bar_scale = 1.0233 }

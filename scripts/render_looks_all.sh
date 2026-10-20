@@ -3,8 +3,7 @@
 # Usage (Git Bash, from anywhere): scripts/render_looks_all.sh [name ...]   (no names = all)
 # An app's main renders only its default sheet(s); every other sheet is reached by an argument, so the
 # apps in scripts/looks_scale_sheets.json run once per listed argument (a plain run of them leaves e.g. the
-# combo_box_open_* sheets at whatever an earlier round committed). data_grid's own states sheets (Neper)
-# run first because data_grid_top's (Windows) write the same file names and must win.
+# combo_box_open_* sheets at whatever an earlier round committed).
 set -u
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -24,8 +23,6 @@ for app, args in t.values():
     by.setdefault(app, []).extend(args or [""])
 for f in sorted(glob.glob("examples/looks/*.e")):
     a = os.path.basename(f)[:-2]
-    if a == "data_grid":
-        print(a, "data_grid"); print(a, "pressed")
     for x in sorted(set(by.get(a, [""]))):
         print(a, x)
 PY

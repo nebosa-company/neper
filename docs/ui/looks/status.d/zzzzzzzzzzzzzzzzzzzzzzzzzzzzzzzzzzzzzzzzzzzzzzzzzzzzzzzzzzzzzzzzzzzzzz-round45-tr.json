@@ -1,0 +1,54 @@
+{
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_list_expanded.png",
+    "notes": "ROUND 45 (1:1 captures, counted = >2 levels, glyphs included): tree_list_expanded 14216 to 2082 (chrome 6824 to 106), tree_list 5315 to 434, tree_list_check 2679 to 36, tree_list_hover 15913 to 1270, tree_list_hover2 10598 to 836, tree_list_rules 4682 to 3876. Check boxes are RGBA bitmaps solved from white and grey rows, 9 px expander boxes, the #DCDCDC dotted lines, the inverting one pixel focus rectangle, the crisp header with its centred captions and the edition pictures are drawn or cut from the crisp capture. What is left is ClearType glyph pixels. Not matched: the rules list still has 1994 chrome pixels and the dark look is untouched.",
+    "gaps": [
+     "Rules list (tree_list_rules) header and empty body still 1994 chrome pixels",
+     "Dot parity is calibrated on the Filter list capture; another capture's window position could flip it"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/check_list_box_dialog.png",
+    "notes": "ROUND 45: check_list_box_dialog 13036 to 284, check_list_box_states 16171 to 269, check_list_box_hover 12283 to 197 (counted, glyphs included). The checked box is the tree list's RGBA bitmap, the highlight is whole pixels, the frame is the control's own rectangle with a white ring, the Card Art pictures are cut from the capture. Unchecked, disabled and pressed boxes have no capture, so the row stays review.",
+    "gaps": [
+     "Unchecked, disabled and pressed boxes are not captured"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid_states.png",
+    "notes": "ROUND 45: vertical_grid 5489 to 1845 (chrome 1318 to 0), vertical_grid_states 28178 to 9490, vertical_grid_hover 27445 to 9225: pictures of the Computed rows and the editor button cut from the capture, the selected text on whole rows, shape row captions where the capture has them. What is left is ClearType glyph pixels (and the pressed state, which has no pictures).",
+    "gaps": [
+     "Row captions and values are Tahoma/Segoe glyph pixels, not chrome",
+     "Pressed state of the legality foot not re-cut"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "ROUND 45: the committed Neper and dark data_grid_states PNGs only came out right when data_grid_top ran second (data_grid.exe wrote the same file names); the dead sheets are removed, every render is byte-identical. data_grid_bottom 29498 to 28870 (hot Used header). data_grid_bottom's remaining 15.7k of the left cell: about 9.7k the card art strip above the footer (v3 artwork, not drawn), about 2.5k the art thumbnails of the first column, about 0.9k was the hot Used header (now drawn, the caption stands a pixel low), about 1.7k the current row (ink colours of the selected row and the spin editors of Qty and Used), the rest ClearType. The yellow pool footer has no usable 1:1 capture (the pool part drifted) and was not re-derived. Not matched.",
+    "gaps": [
+     "Card art strip (about 9.7k) and thumbnails (about 2.5k) are v3 artwork",
+     "Selected row keeps per-cell ink colours and has spin editors in the capture; the grid has a per row ink only",
+     "Yellow pool footer not re-derived: no comparable 1:1 capture"
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_main.png",
+    "notes": "ROUND 44 (1:1 captures, counted = >2 levels, glyphs included, eval left cell): data_grid_group2 17861 to 2343, data_grid_group 14285 to 1643, data_grid_top 2909 to 1212, data_grid_hover 2547 to about 890, data_grid_bottom 25382 to 15677, data_grid_main collection part (compare.py) 19715 to 11889. Group rows are now 18 px on the capture's rows with their foot rule, crisp expander tile, chip, indicator line; footer, navigator, thumb and header captions re-derived from the crisp pixels (green footer only). Measured main-window parts: the collection grid only; the pool part drifted and is not comparable. Not matched.",
+    "gaps": [
+     "Card art strip above the footer (about 9.7k px in the bottom crop) and v3 icons are not drawn",
+     "Bottom crop: hot Name/Used header state, spin editors of the open row, yellow pool footer not re-derived",
+     "tree_list, check_list_box and vertical_grid not retuned this round"
+    ]
+   }
+  }
+ }
+}
