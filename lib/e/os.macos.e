@@ -1603,3 +1603,424 @@ fn signal_raise(which: Signal) -> err {
     if identity < 0isize { ret from_errno(identity) }
     ret from_errno(syscall(SYS_KILL, usize(identity), signal_number(which), 0usize, 0usize, 0usize, 0usize))
 }
+
+// ---------------------------------------------------------------- sockets and pollers
+
+type Socket = resource(socket_close) struct { raw: usize }
+type SocketFamily = enum u8 { Ip4, Ip6 }
+type SocketKind = enum u8 { Stream, Datagram }
+type SocketShutdown = enum u8 { Read, Write, Both }
+type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, port: u16 }
+type Poller = resource(poller_close) struct { state: *void }
+type PollInterest = struct { readable: bool, writable: bool }
+type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
+
+// Darwin's sockaddr_in and sockaddr_in6 lead with a length byte and then the family byte;
+// the port is big-endian on the wire. One buffer holds either and the length passed beside it
+// says which, written by index so the byte order of each field stays visible.
+type RawAddress = struct { bytes: [28]u8 }
+
+const SYS_SOCKET: usize = 97usize
+const SYS_BIND: usize = 104usize
+const SYS_LISTEN: usize = 106usize
+const SYS_ACCEPT: usize = 30usize
+const SYS_CONNECT: usize = 98usize
+const SYS_SENDTO: usize = 133usize
+const SYS_RECVFROM: usize = 29usize
+const SYS_SHUTDOWN: usize = 134usize
+const SYS_GETSOCKNAME: usize = 32usize
+const SYS_SETSOCKOPT: usize = 105usize
+const SYS_SENDFILE: usize = 337usize
+const AF_INET: usize = 2usize
+const AF_INET6: usize = 30usize
+const SOCK_STREAM: usize = 1usize
+const SOCK_DGRAM: usize = 2usize
+const SOL_SOCKET: usize = 65535usize
+const SO_NOSIGPIPE: usize = 4130usize
+const F_GETFL: usize = 3usize
+const F_SETFL: usize = 4usize
+const F_SETFD: usize = 2usize
+const O_NONBLOCK: usize = 4usize
+const RAW_IP4_SIZE: usize = 16usize
+const RAW_IP6_SIZE: usize = 28usize
+const RESOLVE_ADDRESS_MAX: usize = 8usize
+
+fn family_value(family: SocketFamily) -> usize {
+    if family == .Ip6 { ret AF_INET6 }
+    ret AF_INET
+}
+
+fn encode_address(address: SocketAddress) -> (RawAddress, usize) {
+    var raw: RawAddress = zero
+    raw.bytes[1usize] = u8(family_value(address.family))
+    raw.bytes[2usize] = u8(usize(address.port) / 256usize)
+    raw.bytes[3usize] = u8(usize(address.port) % 256usize)
+    if address.family == .Ip6 {
+        raw.bytes[0usize] = u8(RAW_IP6_SIZE)
+        var at = 0usize
+        while at < 16usize {
+            raw.bytes[8usize + at] = address.bytes[at]
+            at += 1usize
+        }
+        raw.bytes[24usize] = u8(address.scope % 256u32)
+        raw.bytes[25usize] = u8(address.scope / 256u32 % 256u32)
+        raw.bytes[26usize] = u8(address.scope / 65536u32 % 256u32)
+        raw.bytes[27usize] = u8(address.scope / 16777216u32)
+        ret (raw, RAW_IP6_SIZE)
+    }
+    raw.bytes[0usize] = u8(RAW_IP4_SIZE)
+    var at = 0usize
+    while at < 4usize {
+        raw.bytes[4usize + at] = address.bytes[at]
+        at += 1usize
+    }
+    ret (raw, RAW_IP4_SIZE)
+}
+
+fn decode_address(raw: RawAddress) -> SocketAddress {
+    var address: SocketAddress = zero
+    address.port = u16(usize(raw.bytes[2usize]) * 256usize + usize(raw.bytes[3usize]))
+    if usize(raw.bytes[1usize]) == AF_INET6 {
+        address.family = .Ip6
+        var at = 0usize
+        while at < 16usize {
+            address.bytes[at] = raw.bytes[8usize + at]
+            at += 1usize
+        }
+        address.scope = u32(raw.bytes[24usize]) + u32(raw.bytes[25usize]) * 256u32 + u32(raw.bytes[26usize]) * 65536u32 + u32(raw.bytes[27usize]) * 16777216u32
+        ret address
+    }
+    address.family = .Ip4
+    var at = 0usize
+    while at < 4usize {
+        address.bytes[at] = raw.bytes[4usize + at]
+        at += 1usize
+    }
+    ret address
+}
+
+// A descriptor that is close-on-exec and never raises SIGPIPE: Darwin's socket and accept take
+// no flags for either, so both are set after the fact.
+fn socket_prepare(descriptor: usize) {
+    let marked = syscall(SYS_FCNTL, descriptor, F_SETFD, 1usize, 0usize, 0usize, 0usize)
+    var on: i32 = 1i32
+    let quiet = syscall(SYS_SETSOCKOPT, descriptor, SOL_SOCKET, SO_NOSIGPIPE, mem.address_of(&on), 4usize, 0usize)
+}
+
+fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
+    var socket: Socket = zero
+    var type_bits = SOCK_STREAM
+    if kind == .Datagram { type_bits = SOCK_DGRAM }
+    let descriptor = syscall(SYS_SOCKET, family_value(family), type_bits, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret (socket, from_errno(descriptor)) }
+    socket_prepare(usize(descriptor))
+    socket.raw = usize(descriptor)
+    ret (socket, ok)
+}
+
+fn socket_close(s: own Socket) -> err {
+    ret from_errno(syscall(SYS_CLOSE, s.raw, 0usize, 0usize, 0usize, 0usize, 0usize))
+}
+
+fn socket_handle(s: Socket) -> Handle {
+    var handle: Handle = zero
+    handle.raw = s.raw
+    ret handle
+}
+
+fn file_handle(f: File) -> Handle {
+    var handle: Handle = zero
+    handle.raw = f.raw
+    ret handle
+}
+
+// Read the flags before changing them: setting the whole word would drop whatever else the
+// descriptor carries.
+fn socket_set_nonblocking(s: Socket, enabled: bool) -> err {
+    let current = syscall(SYS_FCNTL, s.raw, F_GETFL, 0usize, 0usize, 0usize, 0usize)
+    if current < 0isize { ret from_errno(current) }
+    var wanted = usize(current) | O_NONBLOCK
+    if !enabled {
+        wanted = usize(current)
+        if usize(current) & O_NONBLOCK != 0usize { wanted = usize(current) - O_NONBLOCK }
+    }
+    ret from_errno(syscall(SYS_FCNTL, s.raw, F_SETFL, wanted, 0usize, 0usize, 0usize))
+}
+
+fn socket_bind(s: Socket, address: SocketAddress) -> err {
+    var (raw, length) = encode_address(address)
+    ret from_errno(syscall(SYS_BIND, s.raw, mem.address_of(&raw), length, 0usize, 0usize, 0usize))
+}
+
+fn socket_local_address(s: Socket) -> (SocketAddress, err) {
+    var address: SocketAddress = zero
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let result = syscall(SYS_GETSOCKNAME, s.raw, mem.address_of(&raw), mem.address_of(&length), 0usize, 0usize, 0usize)
+    if result < 0isize { ret (address, from_errno(result)) }
+    ret (decode_address(raw), ok)
+}
+
+fn socket_listen(s: Socket, backlog: u32) -> err {
+    ret from_errno(syscall(SYS_LISTEN, s.raw, usize(backlog), 0usize, 0usize, 0usize, 0usize))
+}
+
+fn socket_connect(s: Socket, address: SocketAddress) -> err {
+    var (raw, length) = encode_address(address)
+    let result = syscall(SYS_CONNECT, s.raw, mem.address_of(&raw), length, 0usize, 0usize, 0usize)
+    // EINPROGRESS on a socket made non-blocking is the connect having started, which is what
+    // `WouldBlock` means for every other call here.
+    if result == -36isize { ret WouldBlock }
+    ret from_errno(result)
+}
+
+fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
+    var accepted: Socket = zero
+    var peer: SocketAddress = zero
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let descriptor = syscall(SYS_ACCEPT, s.raw, mem.address_of(&raw), mem.address_of(&length), 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret (accepted, peer, from_errno(descriptor)) }
+    socket_prepare(usize(descriptor))
+    accepted.raw = usize(descriptor)
+    ret (accepted, decode_address(raw), ok)
+}
+
+fn socket_send(s: Socket, src: []const u8) -> (usize, err) {
+    if src.len == 0usize { ret (0usize, ok) }
+    let sent = syscall(SYS_SENDTO, s.raw, mem.address_of(&src[0usize]), src.len, 0usize, 0usize, 0usize)
+    if sent < 0isize { ret (0usize, from_errno(sent)) }
+    ret (usize(sent), ok)
+}
+
+fn socket_receive(s: Socket, dst: []u8) -> (usize, err) {
+    if dst.len == 0usize { ret (0usize, ok) }
+    let taken = syscall(SYS_RECVFROM, s.raw, mem.address_of(&dst[0usize]), dst.len, 0usize, 0usize, 0usize)
+    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    ret (usize(taken), ok)
+}
+
+fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) {
+    var (raw, length) = encode_address(dst)
+    var source_address = 0usize
+    if src.len != 0usize { source_address = mem.address_of(&src[0usize]) }
+    let sent = syscall(SYS_SENDTO, s.raw, source_address, src.len, 0usize, mem.address_of(&raw), length)
+    if sent < 0isize { ret (0usize, from_errno(sent)) }
+    ret (usize(sent), ok)
+}
+
+fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
+    var peer: SocketAddress = zero
+    if dst.len == 0usize { ret (0usize, peer, ok) }
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let taken = syscall(SYS_RECVFROM, s.raw, mem.address_of(&dst[0usize]), dst.len, 0usize, mem.address_of(&raw), mem.address_of(&length))
+    if taken < 0isize { ret (0usize, peer, from_errno(taken)) }
+    ret (usize(taken), decode_address(raw), ok)
+}
+
+fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {
+    var value = 2usize
+    if how == .Read { value = 0usize }
+    if how == .Write { value = 1usize }
+    ret from_errno(syscall(SYS_SHUTDOWN, s.raw, value, 0usize, 0usize, 0usize, 0usize))
+}
+
+// sendfile(2) on Darwin takes the file first, the socket second and the count by address, where
+// it answers with the bytes moved -- also when it stops short with EAGAIN on a non-blocking
+// socket, which is progress and not a failure.
+fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) {
+    if count == 0usize { ret (0usize, ok) }
+    var moved = mem.bitcast[i64](u64(count))
+    let result = syscall(SYS_SENDFILE, source.raw, destination.raw, usize(offset), mem.address_of(&moved), 0usize, 0usize)
+    if result < 0isize && result != -35isize { ret (0usize, from_errno(result)) }
+    ret (usize(moved), ok)
+}
+
+// ---------------------------------------------------------------- name resolution
+
+// getaddrinfo's `struct addrinfo` on Darwin: four ints, the address length, the canonical name,
+// the address and the next entry. The answer is a list libSystem owns until freeaddrinfo.
+type AddrInfo = struct { flags: i32, family: i32, socktype: i32, protocol: i32, length: u32, padding: u32, canonical: usize, address: usize, next: usize }
+
+@import("c", "getaddrinfo")
+extern fn raw_getaddrinfo(node: usize, service: usize, hints: usize, result: usize) -> i32
+
+@import("c", "freeaddrinfo")
+extern fn raw_freeaddrinfo(info: usize)
+
+// C memory cannot be read through a pointer made from an address, so what libSystem hands back
+// is copied out with its own memcpy.
+@import("c", "memcpy")
+extern fn raw_memcpy(destination: usize, source: usize, length: usize) -> usize
+
+// A literal address needs no lookup and a name goes to the system's resolver, which is what
+// getaddrinfo is; at most RESOLVE_ADDRESS_MAX answers are kept, in the order given.
+fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
+    var nothing: []SocketAddress = zero
+    if host.len == 0usize { ret (nothing, NotFound) }
+    let (results, results_error) = mem.alloc[SocketAddress](a, RESOLVE_ADDRESS_MAX)
+    if results_error != ok { ret (nothing, OutOfMemory) }
+    let (name, name_error) = c_string_bytes(a, host)
+    if name_error != ok { ret (nothing, name_error) }
+    var hints: AddrInfo = zero
+    hints.family = i32(family_value(family))
+    hints.socktype = i32(SOCK_STREAM)
+    var list: usize = 0usize
+    let answer = raw_getaddrinfo(mem.address_of(&name[0usize]), 0usize, mem.address_of(&hints), mem.address_of(&list))
+    if answer != 0i32 || list == 0usize { ret (nothing, NotFound) }
+    var count = 0usize
+    var cursor = list
+    while cursor != 0usize && count < RESOLVE_ADDRESS_MAX {
+        var entry: AddrInfo = zero
+        let copied = raw_memcpy(mem.address_of(&entry), cursor, 48usize)
+        if entry.address != 0usize && (entry.length == u32(RAW_IP4_SIZE) || entry.length == u32(RAW_IP6_SIZE)) {
+            var source: RawAddress = zero
+            let copied_address = raw_memcpy(mem.address_of(&source), entry.address, usize(entry.length))
+            var found = decode_address(source)
+            found.port = port
+            results[count] = found
+            count += 1usize
+        }
+        cursor = entry.next
+    }
+    raw_freeaddrinfo(list)
+    if count == 0usize { ret (nothing, NotFound) }
+    ret (results[0usize..count], ok)
+}
+
+// ---------------------------------------------------------------- the poller (kqueue)
+
+const EVFILT_READ: i16 = -1i16
+const EVFILT_WRITE: i16 = -2i16
+const EVFILT_USER: i16 = -10i16
+const EV_ADD: u16 = 1u16
+const EV_DELETE: u16 = 2u16
+const EV_CLEAR: u16 = 32u16
+const EV_ERROR: u16 = 16384u16
+const EV_EOF: u16 = 32768u16
+const NOTE_TRIGGER: u32 = 16777216u32
+const WAKE_IDENT: u64 = 1u64
+const POLL_BATCH: usize = 64usize
+
+type PollerState = struct { queue: usize }
+
+// One change to the queue; an error from a delete (the filter was never added) is the caller's
+// to ignore, so the result is returned as it came.
+fn poller_change(queue: usize, ident: u64, filter: i16, flags: u16, fflags: u32, token: usize) -> isize {
+    var change: Kevent = zero
+    change.ident = ident
+    change.filter = filter
+    change.flags = flags
+    change.fflags = fflags
+    change.udata = u64(token)
+    ret syscall(SYS_KEVENT, queue, mem.address_of(&change), 1usize, 0usize, 0usize, 0usize)
+}
+
+fn poller_open(a: *mem.Arena) -> (Poller, err) {
+    var poller: Poller = zero
+    let queue = syscall(SYS_KQUEUE, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if queue < 0isize { ret (poller, from_errno(queue)) }
+    let (holder, holder_error) = mem.alloc[PollerState](a, 1usize)
+    if holder_error != ok {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, OutOfMemory)
+    }
+    holder[0usize].queue = usize(queue)
+    // The wake is a user event, cleared as it is delivered.
+    let added = poller_change(usize(queue), WAKE_IDENT, EVFILT_USER, EV_ADD | EV_CLEAR, 0u32, 0usize)
+    if added < 0isize {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, from_errno(added))
+    }
+    poller.state = mem.cast[*void](&holder[0usize])
+    ret (poller, ok)
+}
+
+fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    // Level-triggered, as epoll is without EPOLLET: no EV_CLEAR.
+    if interest.readable {
+        let added = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_ADD, 0u32, token)
+        if added < 0isize { ret from_errno(added) }
+    }
+    if interest.writable {
+        let added = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_ADD, 0u32, token)
+        if added < 0isize { ret from_errno(added) }
+    }
+    ret ok
+}
+
+fn poller_unregister(p: Poller, handle: Handle) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    // Either filter may never have been added, so ENOENT from one is not a failure; both gone
+    // is what the caller asked for.
+    let read_removed = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_DELETE, 0u32, 0usize)
+    let write_removed = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_DELETE, 0u32, 0usize)
+    if read_removed < 0isize && write_removed < 0isize { ret from_errno(read_removed) }
+    ret ok
+}
+
+fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    let ignored = poller_unregister(p, handle)
+    ret poller_register(p, handle, token, interest)
+}
+
+fn poller_wake(p: Poller) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    let triggered = poller_change(state.queue, WAKE_IDENT, EVFILT_USER, 0u16, NOTE_TRIGGER, 0usize)
+    if triggered < 0isize { ret from_errno(triggered) }
+    ret ok
+}
+
+// A negative timeout waits for ever; a positive one shorter than a nanosecond tick is still
+// a wait. One descriptor ready for both reading and writing arrives as two kernel events and
+// is reported as one.
+fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) {
+    let state = mem.cast[*PollerState](p.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    var capacity = events.len
+    if capacity > POLL_BATCH { capacity = POLL_BATCH }
+    var raw: [64]Kevent = zero
+    var limit: [2]i64 = zero
+    var limit_address = 0usize
+    if timeout_ns >= 0i64 {
+        limit[0usize] = timeout_ns / 1000000000i64
+        limit[1usize] = timeout_ns % 1000000000i64
+        limit_address = mem.address_of(&limit[0usize])
+    }
+    let ready = syscall(SYS_KEVENT, state.queue, 0usize, 0usize, mem.address_of(&raw[0usize]), capacity, limit_address)
+    if ready < 0isize {
+        if ready == -4isize { ret (0usize, ok) }
+        ret (0usize, from_errno(ready))
+    }
+    var produced = 0usize
+    var at = 0usize
+    while at < usize(ready) {
+        if raw[at].filter == EVFILT_USER {
+            at += 1usize
+            continue
+        }
+        let token = usize(raw[at].udata)
+        var slot = produced
+        if produced != 0usize && events[produced - 1usize].token == token { slot = produced - 1usize } else {
+            events[slot].token = token
+            events[slot].readable = false
+            events[slot].writable = false
+            events[slot].closed = false
+            events[slot].failed = false
+            produced += 1usize
+        }
+        if raw[at].filter == EVFILT_READ { events[slot].readable = true }
+        if raw[at].filter == EVFILT_WRITE { events[slot].writable = true }
+        if raw[at].flags & EV_EOF != 0u16 { events[slot].closed = true }
+        if raw[at].flags & EV_ERROR != 0u16 { events[slot].failed = true }
+        at += 1usize
+    }
+    ret (produced, ok)
+}
+
+fn poller_close(p: own Poller) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    ret from_errno(syscall(SYS_CLOSE, state.queue, 0usize, 0usize, 0usize, 0usize, 0usize))
+}
