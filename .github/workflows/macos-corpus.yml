@@ -1,0 +1,38 @@
+name: macos-corpus
+# Runs the compiled link fixtures (tests/selfhost/fixtures/link) on a real Mac. The binaries are a
+# pre-release's assets, named in tests/macos/corpus-tag.txt, so a push that changes that file starts a run.
+on:
+  push:
+    branches: [macos-dir]
+    paths: [tests/macos/corpus-tag.txt]
+jobs:
+  corpus:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, x64]
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rosetta
+        if: matrix.arch == 'x64'
+        run: softwareupdate --install-rosetta --agree-to-license 2>&1 | tail -2 || true
+      - name: Fetch the fixtures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(cat tests/macos/corpus-tag.txt)
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "corpus-${{ matrix.arch }}.tar.gz" --dir /tmp
+          mkdir -p /tmp/corpus && tar -xzf "/tmp/corpus-${{ matrix.arch }}.tar.gz" -C /tmp/corpus
+          ls /tmp/corpus | wc -l
+      - name: Run
+        run: |
+          runner=()
+          if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
+          bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt | grep -E "^(FAIL|TOTAL)|^    \|" | head -2000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: corpus-results-${{ matrix.arch }}
+          path: /tmp/corpus-results.txt
