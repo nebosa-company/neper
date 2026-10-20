@@ -475,5 +475,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 91. An absolutely positioned child of a flex container sits at the container's content edge, not its border edge.
     let (p91, ok91) = build(a, "<div style=\"display:flex;position:relative;padding:4px 6px;border:2px solid\"><div id=a style=\"position:absolute;width:5px;height:5px\"></div><div style=\"width:20px;height:10px\"></div></div>", "")
     if !ok91 || !is_rect(rect_of(p91, "a"), 8.0f64, 6.0f64, 5.0f64, 5.0f64) { os.exit(132) }
+    // 92. An inline flex container's baseline is its first item's, not its last.
+    let (p92, ok92) = build(a, "<div style=\"font-size:10px;line-height:10px\">a<div id=f style=\"display:inline-flex\"><div style=\"font-size:10px;line-height:10px\">b</div><div style=\"font-size:20px;line-height:20px\">c</div></div></div>", "")
+    if !ok92 || !near(rect_of(p92, "f").h, 20.0f64) || !near(rect_of(p92, "f").y, 0.0f64) { os.exit(133) }
     ret ok
 }

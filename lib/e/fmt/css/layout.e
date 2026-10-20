@@ -2992,11 +2992,32 @@ fn set_baseline(l: *Layout, b: u32) {
     bb.has_baseline = false
     if bb.inner == .Replaced { ret }
     if s.overflow_x != .Visible || s.overflow_y != .Visible { ret }
+    if bb.inner == .Flex {
+        let (ff, fy) = flex_baseline(l, b)
+        bb.baseline = fy
+        bb.has_baseline = ff
+        ret
+    }
     let (found, y) = last_baseline(l, b)
     if found {
         bb.baseline = y
         bb.has_baseline = true
     }
+}
+
+// The baseline of a flex container: that of its first in-flow item (synthesized from the item's border box when it has none).
+fn flex_baseline(l: *const Layout, b: u32) -> (bool, f64) {
+    var kid = l.boxes.items[usize(b)].first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        if kb.inner != .Marker && !is_out_of_flow(st(l, kb.style)) && kb.inner != .Text && kb.inner != .Break {
+            let (found, y) = first_baseline(l, kid)
+            if found { ret (true, kb.y + y) }
+            ret (true, kb.y + kb.h)
+        }
+        kid = kb.next
+    }
+    ret (false, 0.0f64)
 }
 
 // Lays out `b` on its own: an inline-level atomic, a float, an absolutely positioned or replaced box. `cbw` is the
