@@ -11512,6 +11512,8 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     style.windows_dark_enter(t.tokens)
     let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
     if tahoma_error != ok { ret (zero, tahoma_error) }
+    let (segoe, segoe_error) = control.windows_segoe_theme(a, t, 11.0)
+    if segoe_error != ok { ret (zero, segoe_error) }
     let needle = options.filter[0usize..options.filter_len]
     let (band_y, band_y_error) = mem.alloc[f32](a, total + 1usize)
     let (band_first, band_first_error) = mem.alloc[bool](a, total + 1usize)
@@ -11585,12 +11587,19 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             caption.wrap = .None
             var band_ink = style.hex(0x6D6D6Du32)
             if style.windark_active() { band_ink = style.hex_raw(0xE0E0E0u32) }
-            let (said, said_error) = control.colored_text(a, 0u64, head.group, &tahoma, caption, band_ink)
+            var band_face = &tahoma
+            // round 43: the 1:1 capture's category captions are Segoe UI 11 (#6D6D6D), pixel for pixel
+            if !style.windark_active() { band_face = &segoe }
+            let (said, said_error) = control.colored_text(a, 0u64, head.group, band_face, caption, band_ink)
             if said_error != ok { ret (zero, said_error) }
             let (said_held, said_held_error) = mem.alloc[widget.Node](a, 1usize)
             if said_held_error != ok { ret (zero, TooLarge) }
             said_held[0usize] = said
-            parts[n] = widget.positioned(0u64, 19.0, cursor + 4.0, control.sized_style(280.0, 15.0), said_held[0usize..1usize])
+            var said_y = cursor + 4.0
+            var band_x: f32 = 19.0
+            if !style.windark_active() { band_x = 18.0 }
+            if !style.windark_active() { said_y = cursor + 3.0 }
+            parts[n] = widget.positioned(0u64, band_x, said_y, control.sized_style(280.0, 15.0), said_held[0usize..1usize])
             n += 1usize
             bands += 1usize
             cursor += 22.0
@@ -11635,7 +11644,10 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     line.wrap = .None
                     line.max_lines = 1u32
                     line.ellipsis = "…"
-                    let (name_node, name_error) = control.colored_text(a, 0u64, p.name, &tahoma, line, ink)
+                    // round 43: the focused row's caption is Segoe UI 11 in the 1:1 capture, the others' Tahoma
+                    var name_face = &tahoma
+                    if chosen && !style.windark_active() { name_face = &segoe }
+                    let (name_node, name_error) = control.colored_text(a, 0u64, p.name, name_face, line, ink)
                     if name_error != ok { ret (zero, name_error) }
                     let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
                     if named_error != ok { ret (zero, TooLarge) }
@@ -11653,7 +11665,13 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     let (name_holder, name_holder_error) = mem.alloc[widget.Node](a, 1usize)
                     if name_holder_error != ok { ret (zero, TooLarge) }
                     name_holder[0usize] = widget.semantics(0u64, name_sem, style.defaults(), name_flex[0usize..1usize])
-                    parts[n] = widget.positioned(0u64, 31.0 + nudge, cursor + nudge, style.defaults(), name_holder[0usize..1usize])
+                    // the light grid's captions sit one pixel higher than the rows' fill: the 1:1 capture has them in the row's 18 px, ink from its second line
+                    var name_y = cursor + nudge
+                    if !style.windark_active() { name_y -= 1.0 }
+                    let name_x = 31.0 + nudge
+                    // the focused row's Segoe caption stands one pixel higher than the Tahoma ones
+                    if chosen && !style.windark_active() { name_y -= 1.0 }
+                    parts[n] = widget.positioned(0u64, name_x, name_y, style.defaults(), name_holder[0usize..1usize])
                     n += 1usize
                     var editor: widget.Node = zero
                     let editor_error = source.editor(source.ctx, a, k, &editor)
@@ -11675,7 +11693,14 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
                     let (value_holder, value_holder_error) = mem.alloc[widget.Node](a, 1usize)
                     if value_holder_error != ok { ret (zero, TooLarge) }
                     value_holder[0usize] = widget.semantics(0u64, value_sem, style.defaults(), value_flex[0usize..1usize])
-                    parts[n] = widget.positioned(0u64, value_x + 2.0, cursor - 1.0, style.defaults(), value_holder[0usize..1usize])
+                    // round 43: the light grid's Segoe UI 11 value starts at the cell's second pixel and one line higher (the 1:1 capture)
+                    var value_at_x = value_x + 2.0
+                    var value_at_y = cursor - 1.0
+                    if !style.windark_active() {
+                        value_at_x = value_x + 1.0
+                        value_at_y = cursor - 2.0
+                    }
+                    parts[n] = widget.positioned(0u64, value_at_x, value_at_y, style.defaults(), value_holder[0usize..1usize])
                     n += 1usize
                     // the captions of the header cells, each centred between the lines
                     var seg_from: f32 = 15.0

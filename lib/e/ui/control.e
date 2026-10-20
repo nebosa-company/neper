@@ -4447,6 +4447,25 @@ fn choices_advances() -> [95]u8 {
     ret [95]u8{ 3u8, 4u8, 4u8, 8u8, 6u8, 11u8, 7u8, 2u8, 4u8, 4u8, 6u8, 8u8, 4u8, 4u8, 4u8, 4u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 4u8, 4u8, 8u8, 8u8, 8u8, 5u8, 10u8, 7u8, 6u8, 7u8, 7u8, 6u8, 6u8, 7u8, 7u8, 4u8, 5u8, 6u8, 5u8, 8u8, 7u8, 8u8, 6u8, 8u8, 7u8, 6u8, 6u8, 7u8, 6u8, 10u8, 6u8, 6u8, 6u8, 4u8, 4u8, 4u8, 8u8, 6u8, 6u8, 6u8, 6u8, 5u8, 6u8, 6u8, 4u8, 6u8, 6u8, 2u8, 3u8, 5u8, 2u8, 8u8, 6u8, 6u8, 6u8, 6u8, 4u8, 5u8, 4u8, 6u8, 6u8, 8u8, 6u8, 6u8, 5u8, 5u8, 4u8, 5u8, 8u8 }
 }
 
+// round 43: Segoe UI 11 px, the face of the light grid's cells: the hinted GDI advances of bytes 32 to 126 (the oracle's
+// docs/ui/looks/ref/windows-native/glyphs/Segoe_UI-400-11-q5.outline.gz) and the width of `value` in them; 0 when a byte is not printable ASCII.
+fn segoe11_advances() -> [95]u8 {
+    ret [95]u8{ 3u8, 3u8, 4u8, 7u8, 6u8, 9u8, 9u8, 3u8, 3u8, 3u8, 5u8, 8u8, 3u8, 4u8, 3u8, 4u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 6u8, 3u8, 3u8, 8u8, 8u8, 8u8, 5u8, 11u8, 7u8, 7u8, 7u8, 8u8, 6u8, 6u8, 8u8, 8u8, 3u8, 4u8, 6u8, 5u8, 10u8, 8u8, 9u8, 6u8, 8u8, 7u8, 6u8, 5u8, 8u8, 7u8, 11u8, 6u8, 5u8, 6u8, 3u8, 4u8, 3u8, 8u8, 5u8, 3u8, 6u8, 7u8, 5u8, 7u8, 6u8, 4u8, 7u8, 7u8, 3u8, 3u8, 6u8, 3u8, 9u8, 7u8, 7u8, 7u8, 7u8, 4u8, 5u8, 4u8, 7u8, 5u8, 9u8, 5u8, 5u8, 5u8, 3u8, 3u8, 3u8, 8u8 }
+}
+
+fn segoe11_width(value: str) -> f32 {
+    let table = segoe11_advances()
+    var total: f32 = 0.0
+    var i = 0usize
+    while i < value.len {
+        let c = value[i]
+        if c < 32u8 || c > 126u8 { ret 0.0 }
+        total += f32(table[usize(c - 32u8)])
+        i += 1usize
+    }
+    ret total
+}
+
 // The width of `value` in Tahoma 11 px as GDI lays it out; 0 when a byte is not printable ASCII.
 fn choices_hinted_width(value: str) -> f32 {
     let table = choices_advances()
@@ -18171,6 +18190,22 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
 // v3's dialogs and grids draw Tahoma 8 pt (11 px, 13 px lines); ink widths of the live captures
 // match Tahoma, not Segoe UI. The rig registers Tahoma as the second font, so the theme this
 // returns leads with it (as windows_bar_theme does) at `px` for every body role.
+// round 43: the 1:1 captures of v3 draw a grid's cell text in Segoe UI 11 px (GDI ClearType, pixel for pixel the oracle's Segoe UI 11 atlas), while
+// its header captions and the dialogs' text stay Tahoma 11: the same body roles at `px`, the fonts left in the rig's order (Segoe first).
+fn windows_segoe_theme(a: *mem.Arena, t: *const Theme, px: f32) -> (Theme, err) {
+    let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copies_error != ok { ret (*t, TooLarge) }
+    copies[0usize] = *t.tokens
+    let small = style.TextStyle { size: px, line_height: px + 2.0, weight: 400u16, italic: false }
+    copies[0usize].text[0usize] = small
+    copies[0usize].text[1usize] = small
+    copies[0usize].text[4usize] = small
+    copies[0usize].text[17usize] = small
+    copies[0usize].text[18usize] = small
+    copies[0usize].text[19usize] = small
+    ret (Theme { tokens: &copies[0usize], fonts: t.fonts, language: t.language, runtime: t.runtime }, ok)
+}
+
 fn windows_tahoma_theme(a: *mem.Arena, t: *const Theme, px: f32) -> (Theme, err) {
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }
