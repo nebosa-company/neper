@@ -71,12 +71,36 @@ const PATH_MAX: usize = 1024usize
 // The kernel's `struct stat` with 64-bit inodes, field for field: stat64 writes 144 bytes.
 type StatBuffer = struct { device: i32, mode: u16, link_count: u16, inode: u64, user: u32, group: u32, represented_device: i32, padding: i32, accessed: i64, accessed_ns: i64, modified: i64, modified_ns: i64, changed: i64, changed_ns: i64, born: i64, born_ns: i64, size: i64, blocks: i64, block_size: i32, flags: u32, generation: u32, spare: i32, reserved0: i64, reserved1: i64 }
 
-// The last failed call's errno. One slot for the process: a detail another thread overwrote
-// is a wrong diagnostic, never a wrong answer.
-// ponytail: no per-thread slots as on Linux; add them when a macOS build runs threads.
-var last_code: i32 = 0i32
-// Whether `last_code` has not been read yet by `last_error_detail`.
-var last_unread: bool = false
+// The last failed call's errno, a slot per thread keyed by the thread's own identifier. Without
+// atomics two threads whose identifiers land on the same slot overwrite each other, which is why a
+// read requires the identifier to match exactly and answers `Other` with no code when it does not:
+// a missing detail costs a diagnostic, another thread's would cost the truth.
+// ponytail: sixty-four slots, no eviction; real thread-local storage would replace the whole of it.
+const ERROR_SLOTS: usize = 64usize
+var error_slot_thread: [64]usize
+var error_slot_code: [64]i32
+var error_slot_used: [64]u8
+// Set when a failure was recorded and not yet read: a failing cleanup then leaves the slot alone,
+// so the primary failure's detail is what `last_error_detail` finds after the cleanup.
+var error_slot_fresh: [64]u8
+
+// The code is written first and the identifier last, so a reader that sees its own identifier is
+// looking at a slot whose code was already stored.
+fn record_error_detail(code: i32) {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    error_slot_code[slot] = code
+    error_slot_used[slot] = 1u8
+    error_slot_thread[slot] = thread
+    error_slot_fresh[slot] = 1u8
+}
+
+fn record_cleanup_error_detail(code: i32) {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread { ret }
+    record_error_detail(code)
+}
 
 // The kernel's errno comes back negated by the runtime's `sys` shim.
 fn error_of_result(result: isize) -> err {
@@ -128,8 +152,7 @@ fn kind_of_error(e: err) -> ErrorKind {
 // and not at each call site.
 fn from_errno(result: isize) -> err {
     if result >= 0isize { ret ok }
-    last_code = i32(0isize - result)
-    last_unread = true
+    record_error_detail(i32(0isize - result))
     ret error_of_result(result)
 }
 
@@ -138,10 +161,7 @@ fn from_errno(result: isize) -> err {
 // that failed first and has not yet been asked about.
 fn from_errno_cleanup(result: isize) -> err {
     if result >= 0isize { ret ok }
-    if !last_unread {
-        last_code = i32(0isize - result)
-        last_unread = true
-    }
+    record_cleanup_error_detail(i32(0isize - result))
     ret error_of_result(result)
 }
 
@@ -150,8 +170,17 @@ fn detail_from_code(code: i32, operation: str, subject: str) -> ErrorDetail {
 }
 
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
-    last_unread = false
-    ret detail_from_code(last_code, operation, subject)
+    var detail: ErrorDetail = zero
+    detail.kind = .Other
+    detail.operation = operation
+    detail.subject = subject
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    // Another thread's slot, or one nothing has written, is no detail at all.
+    if error_slot_used[slot] == 0u8 { ret detail }
+    if error_slot_thread[slot] != thread { ret detail }
+    error_slot_fresh[slot] = 0u8
+    ret detail_from_code(error_slot_code[slot], operation, subject)
 }
 
 // The runtime's primitives answer an `err`, not the errno, so their detail names only the kind.
@@ -159,24 +188,46 @@ fn failed_detail(e: err, operation: str, subject: str) -> ErrorDetail {
     ret ErrorDetail { kind: kind_of_error(e), native_code: 0i32, operation: operation, subject: subject }
 }
 
+// A read, write or open whose failure carries its errno: the runtime primitives answer an `err`
+// and lose it, so these make the call themselves.
 fn read_detail(f: File, buffer: []u8, detail: *ErrorDetail) -> (usize, err) {
-    let (count, read_error) = read(f, buffer)
-    if read_error != ok { *detail = failed_detail(read_error, "read", "") }
-    ret (count, read_error)
+    if buffer.len == 0usize { ret (0usize, ok) }
+    let taken = syscall(3usize, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if taken < 0isize {
+        let failure = from_errno(taken)
+        *detail = detail_from_code(i32(0isize - taken), "read", "")
+        ret (0usize, failure)
+    }
+    ret (usize(taken), ok)
 }
 
 fn write_detail(f: File, buffer: []const u8, detail: *ErrorDetail) -> (usize, err) {
-    let (count, write_error) = write(f, buffer)
-    if write_error != ok { *detail = failed_detail(write_error, "write", "") }
-    ret (count, write_error)
+    if buffer.len == 0usize { ret (0usize, ok) }
+    let sent = syscall(4usize, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if sent < 0isize {
+        let failure = from_errno(sent)
+        *detail = detail_from_code(i32(0isize - sent), "write", "")
+        ret (0usize, failure)
+    }
+    ret (usize(sent), ok)
 }
 
 fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err) {
-    let (file, open_error) = open(a, path, flags)
-    if open_error != ok {
-        *detail = failed_detail(open_error, "open", path)
-        ret (file, open_error)
+    var file: File = zero
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (file, path_error)
     }
+    let descriptor = syscall(SYS_OPEN, path_address, open_bits(flags), FILE_MODE, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize {
+        let failure = from_errno(descriptor)
+        *detail = detail_from_code(i32(0isize - descriptor), "open", path)
+        ret (file, failure)
+    }
+    file.raw = usize(descriptor)
     ret (file, ok)
 }
 
@@ -275,13 +326,13 @@ fn mkdir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
 
 fn remove_file_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
     let failure = remove_file(a, path)
-    if failure != ok { *detail = last_error_detail("remove", path) }
+    if failure != ok { *detail = last_error_detail("remove_file", path) }
     ret failure
 }
 
 fn remove_dir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
     let failure = remove_dir(a, path)
-    if failure != ok { *detail = last_error_detail("rmdir", path) }
+    if failure != ok { *detail = last_error_detail("remove_dir", path) }
     ret failure
 }
 
@@ -364,7 +415,7 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err) {
 
 fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
     let (link_target, link_error) = read_link(a, path)
-    if link_error != ok { *detail = last_error_detail("readlink", path) }
+    if link_error != ok { *detail = last_error_detail("read_link", path) }
     ret (link_target, link_error)
 }
 
@@ -466,7 +517,7 @@ fn create_new(a: *mem.Arena, path: str) -> (File, err) {
 fn create_new_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (File, err) {
     let (file, create_error) = create_new(a, path)
     if create_error != ok {
-        *detail = last_error_detail("create", path)
+        *detail = last_error_detail("create_new", path)
         ret (file, create_error)
     }
     ret (file, ok)
@@ -591,7 +642,6 @@ const O_WRONLY: usize = 1usize
 const O_TRUNC: usize = 1024usize
 const O_APPEND: usize = 8usize
 const O_NOFOLLOW_ANY: usize = 536870912usize
-const O_RESOLVE_BENEATH: usize = 4096usize
 const RENAME_EXCL: usize = 4usize
 const FILE_MODE: usize = 438usize
 
@@ -661,10 +711,11 @@ fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy
         ret (file, path_error)
     }
     var bits = open_bits(flags)
-    // The kernel enforces the policy as it walks: nothing may resolve outside the directory, and under
-    // NoSymlinks no link at all may be followed.
-    bits = bits | O_RESOLVE_BENEATH
-    if policy == .NoSymlinks { bits = bits | O_NOFOLLOW_ANY }
+    // Nothing may resolve outside the directory. Darwin has no kernel walk that allows a link only
+    // while it stays beneath, so both policies refuse every link: a link that leaves the directory
+    // is refused, as `Beneath` requires, and so is one that would have stayed.
+    // ponytail: an in-tree link cannot be opened through `open_at`; a manual resolver would allow it.
+    bits = bits | O_NOFOLLOW_ANY
     var mode = 0usize
     if flags.create { mode = FILE_MODE }
     let descriptor = syscall(SYS_OPENAT, dir.raw, path_address, bits, mode, 0usize, 0usize)
@@ -1013,6 +1064,12 @@ fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
         state.entries[clear].descriptor = -1isize
         state.found[clear] = false
         clear += 1usize
+    }
+    // A directory that is not there, or is not one, is the caller's answer and not a failed registration.
+    let (probe, probe_error) = readdir(a, path)
+    if probe_error != ok {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (watch, probe_error)
     }
     state.queue = usize(queue)
     state.base = path
@@ -2187,12 +2244,10 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
             // The contention is a primary failure with an errno of its own: EWOULDBLOCK for the one
             // attempt, ETIMEDOUT for a deadline that ran out.
             if timeout_ns == 0i64 {
-                last_code = 35i32
-                last_unread = true
+                record_error_detail(35i32)
                 ret (lock, WouldBlock)
             }
-            last_code = 60i32
-            last_unread = true
+            record_error_detail(60i32)
             ret (lock, Timeout)
         }
         var slice = LOCK_POLL_NS
