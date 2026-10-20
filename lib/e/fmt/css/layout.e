@@ -1895,6 +1895,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             let owner = &l.boxes.items[usize(x.cont)]
             if ab.aux == 2u32 {
                 j += 1usize
+                out.end = j
                 continue
             }
             if ab.inline_level || st(l, ab.style).was_inline {
@@ -1909,6 +1910,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             }
             ab.aux = 2u32
             j += 1usize
+            out.end = j
             continue
         }
         if p.kind == .Hard {
@@ -2321,6 +2323,26 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
     let line_align = line_align_of(l, cs, end_line)
     let justify_last = end_line && line_align == .Justify
     let ax = line_align_x(cs, line_align, end_line, justify_last, scan.avail, used_w, scan.line_x)
+    // Where an inline-level absolutely positioned box sat on the line: after the content before it, which in a right-to-left line is to its right.
+    var abs_off = 0.0f64
+    k = lead
+    while k < end {
+        let ap = x.bd.pieces.items[k]
+        if ap.kind == .Abs {
+            let ab = &l.boxes.items[usize(ap.box)]
+            if (ab.inline_level || st(l, ab.style).was_inline) && ab.aux == 2u32 {
+                let owner = &l.boxes.items[usize(x.cont)]
+                var nx = ax + abs_off
+                if cs.direction == .Rtl { nx = ax + used_w - abs_off }
+                if owner.inner == .Flow || owner.inner == .FlowRoot { nx += owner.border[3usize] + owner.padding[3usize] }
+                ab.x = nx
+            }
+        } else if k < trim_end {
+            abs_off += ap.w
+            if k + 1usize < trim_end || (tail_keep && ap.trail > 0.0f64) { abs_off += ap.trail }
+        }
+        k += 1usize
+    }
     var spread = 0.0f64
     if line_align == .Justify && scan.avail > used_w {
         var gaps = 0usize
@@ -7572,6 +7594,9 @@ fn layout_abs(l: *Layout, b: u32) {
         // In a right-to-left container the start edge is the right one; `left` and `right` stay physical.
         if bstyle(l, bb.parent).direction == .Rtl && swap_code == 0u8 && ja != .Left && ja != .Right { ja_off = ja_room - ja_off }
         left += ja_off
+    } else if bb.aux == 2u32 && (bb.inline_level || bstyle(l, b).was_inline) && !grid_cb && bstyle(l, bb.parent).direction == .Rtl && mode_code(bstyle(l, bb.parent)) == swap_code && (pb.inner == .Flow || pb.inner == .FlowRoot) {
+        // Inline-level in a right-to-left line: the static position is where the content before it starts, and the box ends there.
+        left = static_x - bb.w - ml - mr
     } else if swap_code == 0u8 && !grid_cb && (bb.aux == 0u32 || bb.aux == 3u32) && bstyle(l, bb.parent).direction == .Rtl && (pb.inner == .Flow || pb.inner == .FlowRoot) && !bb.inline_level {
         // In a right-to-left container the static position is the right edge: the box ends there.
         let room = pb.w - pb.border[1usize] - pb.border[3usize] - pb.padding[1usize] - pb.padding[3usize]
