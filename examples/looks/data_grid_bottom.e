@@ -181,6 +181,8 @@ fn setup(m: *Bottom) -> err {
         look.ring_foot = true
         look.ring_rows = true
     }
+    // round 43: the light grid is drawn as the true 1:1 captures of v3 have it
+    if m.windows && m.light { look.crisp = true }
     dg.set_look(&m.grids[k], look)
     dg.set_row_ink(&m.grids[k], mem.cast[*void](m), coll_ink)
     dg.set_footer_label(&m.grids[k], "Rows")
