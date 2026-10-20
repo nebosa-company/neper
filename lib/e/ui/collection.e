@@ -2661,6 +2661,8 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if is_group_row && c == 0usize && look.top_fit && t.tokens.profile == .Windows && look.kind(look.kind_ctx, index) == 1u8 && look.glyph(look.kind_ctx, 0usize) == 3u8 {
             group_edge = true
             width = columns[0usize].width - 1.0
+            // round 44: the 1:1 capture's indicator column keeps its width and its #E5E5E5 line is the column's last pixel
+            if crisp_on { width = columns[0usize].width }
         }
         var cell_style = control.sized_style(control.max_zero(width), extent)
         cell_style.overflow = .Clip
@@ -2707,6 +2709,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             if edged_error != ok { ret (zero, TooLarge) }
             var edge_line = control.sized_style(1.0, extent)
             edge_line.background = paint.Brush { Solid: gl.rgb(0xE8E8E8u32) }
+            if crisp_on { edge_line.background = paint.Brush { Solid: gl.rgb(0xE5E5E5u32) } }
             edged[0usize] = framed[0usize]
             edged[1usize] = widget.positioned(0u64, width - 1.0, 0.0, style.defaults(), one_node(a, widget.box(0u64, edge_line, zero)))
             framed[0usize] = widget.stack(0u64, style.defaults(), edged[0usize..2usize])
@@ -3097,11 +3100,11 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             if group_total > 700.0 { group_total = 700.0 }
             var group_rect_node: widget.Node = zero
             if look.group_solid {
-                var solid = control.sized_style(group_total - group_x, extent - 1.0)
+                var solid = control.sized_style(group_total - group_x, extent - 2.0)
                 solid.border = style.Border { width: 1.0, color: gl.rgb(0x0F0F0Fu32) }
                 group_rect_node = widget.box(0u64, solid, zero)
             } else {
-                let (dots, dots_error) = gl.focus_invert(a, group_total - group_x, extent - 1.0, gl.rgb(0x0F0F0Fu32))
+                let (dots, dots_error) = gl.focus_invert(a, group_total - group_x, extent - 2.0, gl.rgb(0x0F0F0Fu32))
                 if dots_error != ok { ret (zero, dots_error) }
                 group_rect_node = dots
             }

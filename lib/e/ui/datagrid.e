@@ -7774,6 +7774,12 @@ fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: 
             var box_left: f32 = 4.0
             if grid.look.group_counts && win_look(grid) { box_left = 3.0 }
             box = widget.padded(0u64, box_left, 5.0, 0.0, 0.0, style.defaults(), one(a, picture))
+            if grid.has_cell_theme && grid.look.crisp && !style.windows_dark_on() {
+                // round 44: the 1:1 capture's 9 x 9 tile, one pixel higher
+                let (crisp_picture, crisp_picture_error) = gl.pixels(a, gl.gx_expander_c(), 9.0, 9.0)
+                box_error = crisp_picture_error
+                box = widget.padded(0u64, box_left, 4.0, 0.0, 0.0, style.defaults(), one(a, crisp_picture))
+            }
         } else {
             let (drawn, drawn_error) = gl.mark(a, box_shape, gl.rgb(0x919191u32), gl.rgb(0xFFFFFFu32), 11.0, 11.0)
             box_error = drawn_error
@@ -7797,7 +7803,7 @@ fn group_cell_plain(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: 
         if grid.look.group_flat && grid.look.group_counts && win_look(grid) { label_left = 17.0 }
         if grid.look.group_flat { label_top = 3.0 }
         // round 43: the light grid's frame is one pixel, so the row's contents stand one pixel further in than the two pixel fit had them
-        if grid.has_cell_theme { label_left += 1.0 }
+        if grid.has_cell_theme && !(grid.look.crisp && !style.windows_dark_on()) { label_left += 1.0 }
         if grid.has_cell_theme && grid.look.crisp && !style.windows_dark_on() { label_top = 1.0 }
         pair[1usize] = widget.padded(0u64, label_left, label_top, 0.0, 0.0, style.defaults(), one(a, label))
         *out = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
