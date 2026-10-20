@@ -1,0 +1,236 @@
+{
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_states.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 84 of 84 crops with a 1:1 twin (button, _states, _hover, _kinds, _shift, _arrows) fail on the border: the capture draws a 1 px line, ours is the old resampled capture's two row blur (button_states first crop, row 0: capture 0, ours 80; row 1: 253 against 169; the bottom edge the same; about 11.3k flat chrome px over the 84 crops, 0 at the audit 15 tolerance only because the reference was blurred). Ours equals the old reference to the level at those rows, so the old matched count was fitted to the blur. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Round 15 (own comparer, reference flat pixel off when ours differs by more than 2 levels, offsets searched within 2 px): all 84 crops of button, button_hover, button_kinds, button_shift, button_states and button_arrows are 0 flat px off. Text ink boxes at the 60, 100 and 150 level agree within 1 px (60 and one of the others) in every crop once the v3 icon bitmaps are left out. Excluded, v3 artwork only (sheet pixels, 16 x 16 bitmap plus a 2 px halo): button_kinds (38,41)-(56,60) New Rule, (181,41)-(202,60) Delete Rule, and the whole arrow button (493,110)-(521,134); button_hover (467,321)-(485,340) and (38,391)-(56,410); button_states (324,251)-(342,270); button_arrows: the (3,4)-(22,24) interior of each of the four buttons at (23,43), (78,43), (133,43), (188,43). Scale 1.25, 1.5, 2.0: all pass.",
+    "gaps": [
+     "Button border, corner and shadow rows are the resampled capture's blur, not the 1 px lines of the 1:1 capture",
+     "Unverified: toggle, split, loading and plain kinds (no capture); disabled has one capture",
+     "Scale: 1.5x ring tile is uneven (informational)",
+     "Edit Rule and New Rule pictures are v3 bitmap artwork (decided: not text), drawn as a placeholder glyph and excluded",
+     "Round 12: toggle, split, loading and plain kinds still have no capture",
+     "Round 15: the glyph pixels are grayscale against the captures' ClearType; ink boxes agree, glyph pixels do not within 2 levels (excluded within 2 px of ink)",
+     "Round 15: the Edit Rule, New Rule, Delete Rule and arrow pictures are v3 bitmaps drawn as a placeholder glyph (excluded as listed in the notes)"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_states-vs-ref.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 22 of 23 crops with a 1:1 twin hold (radio_states, radio_hover, radio_group_states: 0 to 3 flat px); the Search dialog crop of radio_dialog fails: the three circles stand 1 px to the right of the capture, 649 flat px (the old comparer's 2 px offset search hid it). The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 19/19 crops, 0 flat px off. The hover over Search Cards: its grab differs from the Search Collection rest grab only by the caret column (23, 73 to 86) of the Search edit, so the radio is identical to rest (checked on the grabs). Round 15 recheck: radio_states, radio_hover and radio_dialog 23 crops 0 flat px off.",
+    "gaps": [
+     "radio_dialog: circles 1 px right of the 1:1 capture",
+     "Audit 5 unverified (no capture): disabled",
+     "Captured but identical to rest: 9 hover grabs and 1 pressed grab show no distinct look",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 100 %; 1.5 87.2 % of runs hold (informational)",
+     "Disabled: native light capture only (the dot and ring tile exact); the native light radio-checked-pressed capture is blank, so pressed stays v3's",
+     "Round 12: disabled has the native light capture only"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/radio_group_states-vs-ref.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 16 of 19 crops with a 1:1 twin hold (the states sheet), the 3 Options and Search dialog crops of radio_group_dialog fail on the group frame: edge rows and columns of the whole frame differ (rows 4, 5, 101, 102; columns 0 to 2 and 485 to 486), 1133 to 1556 flat px each; the frame was fitted to the resampled capture. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 18/18 crops, 0 flat px off.",
+    "gaps": [
+     "Group frame lines in the dialogs are blurred copies of the old reference",
+     "Audit 5 unverified (no capture): disabled",
+     "The radio buttons inside the group are judged under radio (the standalone radio cells fail on the selected ring)",
+     "Not compared (antialiasing): text is grayscale against ClearType captures",
+     "Disabled: radios from the native light capture (windows-native/light/radio-*-disabled); the native group box has no distinct disabled look (groupbox-disabled is pixel-identical to rest), so the frame and caption dimming stay a guess",
+     "Audit 4 uncaptured: disabled (native has no distinct look, frame dimming is a guess)"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/group_box_dialog-vs-ref.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 16 of 16 crops with a 1:1 twin fail (group_box_dialog): the Deck Legality frame and its 12 buttons (every button border row and column is 1 px off the capture, 63 to 74 flat px each) and the three Options header bars (358 to 383 flat px each); about 9.6k flat px in the sheet. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Round 15: scripts/looks_strict.py --lum over the 16 crops of group_box_dialog (the Deck Legality frame, the six Options title bars with their icon art, the three header bars): chrome px off 0 and text px off 0 in all 16 (the icon from x 436 of the third header is v3 artwork). The ink-box test at the 100 and 150 levels still fails on the bold Tahoma captions of the header bars (ends 82, 60, 58 against 83, 61, 59 at the 60 level): ClearType fringes against greyscale, no flat pixel is involved.",
+    "gaps": [
+     "Frame, title bar and button borders are fitted to the resampled capture",
+     "Disabled: native has no distinct look; the dimmed caption is a guess",
+     "Focus has no capture",
+     "The header bars' bold captions end 1 px short at the 60 level and 5 to 6 px at the 100 level (ClearType text, no chrome)"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/token_edit_dialog-vs-ref.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 3 of 3 crops with a 1:1 twin fail: the edit's bottom edge is one row #838383 (131) in the capture, ours is the old blur 172 over 210 on two rows (3708 flat px over the three crops); the sides agree. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Round 17 (w3): unchanged, 3 of 3 crops at 0 px (audit 5 and 7); only the empty rest state is captured. | Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 3/3 exact crops, 0 px off.",
+    "gaps": [
+     "Bottom edge of the frame: one capture row, two blurred rows in ours",
+     "Audit 5 unverified (no capture): focus, hover, disabled, tokens present",
+     "Unverified: focus, hover, disabled, tokens present (only the empty rest state is captured)",
+     "Dark twin stands on a #272727 face (unmeasured)",
+     "Audit 4 uncaptured: focus, hover, disabled, tokens present"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_open_condition.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 18 of 20 crops with a 1:1 twin fail on the frame (rows 0, 1, 20, 21 and columns 0 to 2 and the right edge of every closed edit and every list head, 109 to 6113 flat px per crop); only the Art list crops are close (29 to 177 flat px). The open drop lists and their rows are separate windows the 1:1 grab cannot reach, so those crops still compare with the resampled capture. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 29/29 crops, 0 chrome px (audit 4 pixel fixed; the Art 2 head now shows Stretch like the grab); rows credited as in audit 4 (references unchanged).",
+    "gaps": [
+     "Edit and list head frames are fitted to the resampled capture; drop list captures are still blurred",
+     "Audit 5 unverified (no capture): disabled, row hover",
+     "Composite references: each open sheet joins an exact head crop and an exact popup crop (no single capture holds both windows)",
+     "Pictures are v3's coloured bitmaps drawn as placeholders where the sheet has them (artwork excluded)",
+     "Scale (looks_scale_check): 2.0 94.9 % of runs hold",
+     "Round 12: pictures are v3's bitmaps drawn as placeholders (artwork, excluded); the Sort list's 2 residual px are glyph shapes",
+     "Unverified: disabled, row hover"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/list_box_dialog.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 3 of 3 crops with a 1:1 twin fail on the frame (list_box_dialog 3083 flat px, _focus 280, _blur 301): the full width edge rows and the right edge columns differ from the capture. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Unchanged by round 15; re-measured with the round 15 comparer: list_box_dialog, _focus and _blur, 0 flat px off and 0 chrome px off.",
+    "gaps": [
+     "Frame of the list is the resampled capture's blur",
+     "Uncaptured: disabled, multi-select"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 19 of 19 crops with a 1:1 twin fail: rows 1, 24 and 25 across the whole bar (the top highlight and the bottom edge and shadow) differ from the capture, about 1.5k to 1.8k flat px per bar crop; the open popups (menu_bar_open_*, menu-*) are not 1:1 at all: 33 of the 493 1:1 files, all menus and combo lists, came back as the old flag 2 grab. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 21/21 crops; the hot_view reference stops at x 793 inside the Reports item, so x 768 on is masked and unverified.",
+    "gaps": [
+     "Bar edge rows are blurred copies; popup menu references are still the resampled grabs",
+     "Audit 5 unverified (no capture): disabled item, Alt-key focus, the Reports to Admin titles of the hot_view grab",
+     "Unverified: disabled item, Alt-key focus",
+     "ClearType text edges not compared",
+     "Audit 4 uncaptured: disabled item, Alt-key focus"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/status_bar.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): The rest crop holds (0 flat px, 1 of 1) but the hover grabs fail (4 of 4: rows 0, 1, 17 and 18 across the bar, 877 to 1650 flat px each) and 6 of the 7 report crops sit above 25 flat px. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 8/8 crops, 0 px off.",
+    "gaps": [
+     "Hover and report crops fail on the bar's edge rows",
+     "Audit 5 unverified (no capture): disabled panels, pressed panel",
+     "Unverified: disabled panels, pressed panel",
+     "Not compared (antialiasing): panel text is grayscale against ClearType captures; ink boxes within 1 px",
+     "Audit 4 uncaptured: disabled panels, pressed panel"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toolbar_button_row.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): 1 of 1 crop with a 1:1 twin fails (toolbar_button): rows 0, 24 and 25 and the separator columns differ from the capture, 894 flat px; the hot and row sheets have no exact twin in the old captures, so they still compare with the resampled ones. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: ROUND 22 (Windows light): v3's real toolbar bitmaps are drawn (25 pictures cut from the capture by scripts/gen_wintoolicon.py into e.ui.wintoolicon, plus the two Cards pictures that are enabled in the hot grabs; light look only, the dark look keeps its glyph). Flat px off with glyphs counted, my comparer (audit 9 metric): toolbar_button 39 to 0 (1 crop), toolbar_button_hot 336 to 0 (9 crops, 39 to 0 each), toolbar_button_row 57 to 0 (1 crop). The bar row at y 36 was the top row of the pictures, as round 20 found. Scale check 1.25, 1.5, 2.0 passes on the three sheets. | ROUND 20 (Windows light): checked: the 'bar row at y 36' (57 px in toolbar_button_row, 39 in toolbar_button) is NOT chrome. v3 draws no line there; the rows are the top rows of the disabled greyscale v3 bitmaps (page, folder, disk icons; the 10 px runs at y 36, 40 and 52 are their edges). They differ because ours still draws a placeholder glyph. No text is involved (greyscale text changes nothing here). Counts unchanged: 57, 39, 336 over 9 crops of toolbar_button_hot. | AUDIT 9 (matched to review): independent recompute: 11 of 11 crops above 20 flat px off (toolbar_button_row 57, toolbar_button and toolbar_button_hot 39 each), one row at y 36 of the toolbar strip (capture 231 to 233, ours 240) that is not coloured artwork; audits 7 and 8 counted such rows as bar artwork, this audit does not. | Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 11/11 crops, 0 flat px off outside the v3 icon bitmaps (groups up to 20 x 20 masked in both images; toolbar_button_hot no longer traps at HEAD).",
+    "gaps": [
+     "Strip edge rows and separators are blurred copies",
+     "The 25 pictures are baked per button position (disabled greyscale ones, the Cards pair enabled in the hot grabs, the coloured Search and Help ones); a picture for a button outside this strip would need its own tile",
+     "Audit 5 unverified (no capture): checked, focus, dropdown, disabled",
+     "Reference edit: last row of the three toolbar ref crops (foreign grid border) replaced",
+     "Unverified: checked, focus, dropdown, disabled (hover grabs identical to rest)",
+     "Audit 4: the last row (y 25, x 288 on) of the 3 toolbar reference crops is an edited row, not a capture; the v3 icon bitmaps (groups up to 20 x 20 px) are excluded from both images",
+     "Audit 4 uncaptured: checked, focus, dropdown, disabled"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): The edits_dialog, edits_hover and edits_states composites (37 crops with a 1:1 twin, shared by the spin, mask, button and text edits) all fail on the edit frame: row 1 and rows 19 to 21 across the edit, columns 1 and 493 to 495 at its sides, 360 to 1388 flat px per crop (about 24k in the three sheets). The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 19/19 crops, 0 chrome px (text-edge px at most 4 levels).",
+    "gaps": [
+     "Edit frame rows and columns are fitted to the resampled capture",
+     "Audit 5 unverified (no capture): disabled, read-only",
+     "Pressed arrows auto-repeat in the v3 grabs (the number changes 5, 1, 11): compared outside the number",
+     "edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 94.7 %; 1.5 94.4 % of runs hold",
+     "Disabled: native light capture only (face #F0F0F0, text #838383, arrows dimmed from the rest tile); read-only unverified",
+     "Audit 4: the chrome tiles and the y-drift model are fitted to these same captures (held-out checks in audit 2)",
+     "Audit 4 uncaptured: disabled, read-only, limit-greyed arrows"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): Same crops as spin_edit (edits_dialog, edits_hover, edits_states; shared edit frame): 37 of 37 fail on the frame rows and columns. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): edit crops 0 chrome px (shared with the text edit; the TcxMaskEdit password fields are in edits_dialog).",
+    "gaps": [
+     "Edit frame rows and columns are fitted to the resampled capture",
+     "Audit 5 unverified (no capture): typed text, invalid, disabled, read-only",
+     "Baked edit chrome: the captures are the only reference; 1.0 is exact",
+     "edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Scale (looks_scale_check, 1.0 vs 2.0 / 1.5 renders): 2.0 92.0 % (below the 93 % threshold, clean on view); 1.5 92.8 % of runs hold",
+     "Read-only: face #F0F0F0 from the native light edit capture",
+     "Unverified: text (non-password) content, invalid mask, disabled (v3 shows white face and #A0A0A0 text)",
+     "Audit 4 uncaptured: typed text, invalid, disabled, read-only"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/button_edit.png",
+    "notes": "AUDIT 21 (downgrade, matched to review; independent comparer, the true 1:1 v3 captures (ref/windows-1to1, composites rebuilt with scripts/looks_ref1to1.py, ours placed by the cell's old-reference match): a reference flat pixel is off when ours differs by more than 2 levels): Same crops as spin_edit (edits_dialog, edits_hover, edits_states; shared edit frame): 37 of 37 fail on the frame rows and columns. The old matched claim was measured against the resampled references (ref/windows), which blurred every one pixel edge. | Earlier notes: Audit 5 (independent recompute from the fresh renders, see docs/ui/looks/audit.md): 9/9 crops, 0 chrome px.",
+    "gaps": [
+     "Edit frame rows and columns are fitted to the resampled capture",
+     "Audit 5 unverified (no capture): read-only, invalid",
+     "Unverified: read-only (native light #F0F0F0 face, no v3 capture), invalid (red outline guess), placeholder, long text",
+     "The ellipsis button geometry in hover over the button is v3's (captured); the pressed look of the dark twin is a guess (see windows_dark)",
+     "edits_hover cell layout differs from the ref composite (ours 994 px tall against 924: the numbers come from looks_edits_hover_eval.py per cell)",
+     "Text: ClearType colour fringes not reproduced (grayscale), ink boxes within 1 px",
+     "Scale (looks_scale_check): 2.0 96.6 % of runs hold; edits_hover renders nothing at 2.0 (e.mem.Exhausted with the 4g arena)",
+     "Audit 4 uncaptured: read-only, invalid, long text"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/check_list_box_dialog.png",
+    "notes": "AUDIT 21 (upgrade, review to matched; independent comparer, counted = more than 2 levels off, glyphs included): check_list_box_dialog 284 (190, 28, 66 over its three cells), check_list_box_states 269, check_list_box_hover 197 against the 1:1 composites; 0 flat chrome px in every cell (frame, white ring, row highlight, check tiles, Card Art pictures); the largest remaining difference is a one column ClearType fringe at x 19 of each label's first glyph (about 8 px per row, ours has a faint left fringe the capture lacks). Every captured state (rest, hover on checkbox, row and empty area, selected focused and unfocused, pressed grab) is covered; the unchecked, disabled and pressed-box looks have no capture and are listed as unverified. | Earlier notes: ROUND 45: check_list_box_dialog 13036 to 284, check_list_box_states 16171 to 269, check_list_box_hover 12283 to 197 (counted, glyphs included). The checked box is the tree list's RGBA bitmap, the highlight is whole pixels, the frame is the control's own rectangle with a white ring, the Card Art pictures are cut from the capture. Unchecked, disabled and pressed boxes have no capture, so the row stays review.",
+    "gaps": [
+     "Unchecked, disabled and pressed boxes are not captured (unverified)",
+     "ClearType: the first glyph of each label has a faint 1 px left fringe the capture lacks"
+    ]
+   }
+  }
+ }
+}
