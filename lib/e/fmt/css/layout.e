@@ -1422,7 +1422,14 @@ fn font_ad(l: *const Layout, s: *const style.Style) -> (f64, f64) {
     if s.line_height.kind == .Number { lh = s.line_height.px * s.font_size }
     if s.line_height.kind == .Px { lh = s.line_height.px }
     let half = (lh - content) / 2.0f64
-    ret (fm.ascent + half, lh - (fm.ascent + half))
+    let asc = text_ascent(s, fm)
+    ret (asc + half, lh - (asc + half))
+}
+
+// The ascent text is placed with: vertical (non-sideways) text sits on the central baseline, so its glyph box is centred on it.
+fn text_ascent(s: *const style.Style, fm: FontMetrics) -> f64 {
+    if s.writing_mode == .VerticalRl || s.writing_mode == .VerticalLr { ret (fm.ascent + fm.descent) / 2.0f64 }
+    ret fm.ascent
 }
 
 type Flow = struct { base: usize, ox: f64, oy: f64 }
@@ -1732,8 +1739,9 @@ fn valign_shift(l: *const Layout, s: *const style.Style, ps: *const style.Style,
     if s.vertical_align == .Baseline || s.vertical_align == .Top || s.vertical_align == .Bottom { ret 0.0f64 }
     if s.vertical_align == .Sub { ret 0.2f64 * ps.font_size }
     if s.vertical_align == .Super { ret -0.33f64 * ps.font_size }
-    if s.vertical_align == .TextTop { ret a - pfm.ascent }
-    if s.vertical_align == .TextBottom { ret pfm.descent - d }
+    let pasc = text_ascent(ps, pfm)
+    if s.vertical_align == .TextTop { ret a - pasc }
+    if s.vertical_align == .TextBottom { ret (pfm.ascent + pfm.descent - pasc) - d }
     if s.vertical_align == .Middle { ret -pfm.x_height / 2.0f64 + (a - d) / 2.0f64 }
     // A length or percentage.
     let l2 = s.vertical_align_length
@@ -1987,7 +1995,7 @@ fn flush_text_frag(l: *Layout, bxid: u32, x: f64, text: str, w: f64, shift: f64,
             shown_w = w
         }
     }
-    let pushed = list.push[Frag](&l.frags, Frag { kind: .Text, box: bxid, x: x, y: baseline + shift - fm.ascent, w: shown_w, h: fm.ascent + fm.descent, text: shown, first: true, last: true })
+    let pushed = list.push[Frag](&l.frags, Frag { kind: .Text, box: bxid, x: x, y: baseline + shift - text_ascent(bstyle(l, bxid), fm), w: shown_w, h: fm.ascent + fm.descent, text: shown, first: true, last: true })
 }
 
 fn emit_segment(l: *Layout, ob: u32, x0: f64, x1: f64, baseline: f64, shift: f64, first: bool, last: bool) {
@@ -1995,7 +2003,7 @@ fn emit_segment(l: *Layout, ob: u32, x0: f64, x1: f64, baseline: f64, shift: f64
     let fm = l.measure.metrics(l.measure.ctx, bstyle(l, ob))
     var top_edge = obm.padding[0usize] + obm.border[0usize]
     var bottom_edge = obm.padding[2usize] + obm.border[2usize]
-    let pushed = list.push[Frag](&l.frags, Frag { kind: .Segment, box: ob, x: x0, y: baseline + shift - fm.ascent - top_edge, w: x1 - x0, h: fm.ascent + fm.descent + top_edge + bottom_edge, text: "", first: first, last: last })
+    let pushed = list.push[Frag](&l.frags, Frag { kind: .Segment, box: ob, x: x0, y: baseline + shift - text_ascent(bstyle(l, ob), fm) - top_edge, w: x1 - x0, h: fm.ascent + fm.descent + top_edge + bottom_edge, text: "", first: first, last: last })
 }
 
 // Lays out the pieces of an inline formatting context into lines of `cont`. Returns the content height.
@@ -2256,6 +2264,8 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             let margin_h = ab.h + ab.margin[0usize] + ab.margin[2usize]
             var ba = ab.margin[0usize] + ab.h
             if ab.has_baseline { ba = ab.margin[0usize] + ab.baseline }
+            let cws = bstyle(l, x.cont).writing_mode
+            if cws == .VerticalRl || cws == .VerticalLr { ba = (ab.h + ab.margin[0usize] + ab.margin[2usize]) / 2.0f64 }
             var sh = 0.0f64
             if sim > 0usize { sh = sshift[sim - 1usize] }
             if asty.vertical_align == .Top || asty.vertical_align == .Bottom {
@@ -2412,6 +2422,8 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             let margin_h = ab.h + ab.margin[0usize] + ab.margin[2usize]
             var ba = ab.margin[0usize] + ab.h
             if ab.has_baseline { ba = ab.margin[0usize] + ab.baseline }
+            let cws = bstyle(l, x.cont).writing_mode
+            if cws == .VerticalRl || cws == .VerticalLr { ba = (ab.h + ab.margin[0usize] + ab.margin[2usize]) / 2.0f64 }
             var sh = 0.0f64
             if sp > 0usize { sh = sshift[sp - 1usize] }
             var margin_top_y = baseline + sh - ba
@@ -3043,7 +3055,7 @@ fn set_baseline(l: *Layout, b: u32) {
     bb.has_baseline = false
     if bb.inner == .Replaced { ret }
     if s.overflow_x != .Visible || s.overflow_y != .Visible { ret }
-    if bb.inner == .Flex {
+    if bb.inner == .Flex || bb.inner == .Grid {
         let (ff, fy) = flex_baseline(l, b)
         bb.baseline = fy
         bb.has_baseline = ff

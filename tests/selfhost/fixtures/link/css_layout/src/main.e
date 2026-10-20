@@ -505,5 +505,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 101. A vertical inline-block is as wide as its lines are tall and as tall as its text is long.
     let (p101, ok101) = build(a, "<span id=i style=\"display:inline-block;writing-mode:vertical-rl\">ab</span>", "")
     if !ok101 || !near(rect_of(p101, "i").w, 16.0f64) || !near(rect_of(p101, "i").h, 32.0f64) { os.exit(142) }
+    // 102. A vertical line is as thick as the widest thing on it: text is centred on the central baseline, not set on the alphabetic one.
+    let (p102, ok102) = build(a, "<div id=d style=\"writing-mode:vertical-lr;font-size:16px\"><span style=\"display:inline-block;width:40px;height:10px\"></span>a</div>", "")
+    if !ok102 || !near(rect_of(p102, "d").w, 40.0f64) { os.exit(143) }
     ret ok
 }
