@@ -2967,12 +2967,25 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             dotted_width = before + columns[look.cell_select - 1usize].width
         }
         if dotted_width > 700.0 { dotted_width = 700.0 }
-        let (dotted, dotted_error) = gl.sel_dots(a, dotted_width, extent, edge_left)
+        var dotted: widget.Node = zero
+        var dotted_error: err = ok
+        var dotted_y: f32 = 0.0
+        if look.dialog_lines && t.tokens.profile == .Windows && t.tokens.palette != .Dark && columns.len > 1usize {
+            // round 40: the dialog grids' own rectangle, one row higher, its blue part from the second column
+            let (dialog_dots, dialog_dots_error) = gl.sel_dots_split(a, dotted_width, extent + 1.0, 0usize, usize(columns[0usize].width) + 1usize)
+            dotted = dialog_dots
+            dotted_error = dialog_dots_error
+            dotted_y = 0.0 - 1.0
+        } else {
+            let (plain_dots, plain_dots_error) = gl.sel_dots(a, dotted_width, extent, edge_left)
+            dotted = plain_dots
+            dotted_error = plain_dots_error
+        }
         if dotted_error != ok { ret (zero, dotted_error) }
         let (with_dots, with_dots_error) = mem.alloc[widget.Node](a, 2usize)
         if with_dots_error != ok { ret (zero, TooLarge) }
         with_dots[0usize] = lined[0usize]
-        with_dots[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, dotted))
+        with_dots[1usize] = widget.positioned(0u64, 0.0, dotted_y, style.defaults(), one_node(a, dotted))
         lined[0usize] = widget.stack(0u64, style.defaults(), with_dots[0usize..2usize])
     }
     if soft_group && !(index == 0usize && !look.has_head_extra) {

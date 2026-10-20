@@ -287,6 +287,11 @@ fn setup(app: *App) -> err {
             look.soft_slope = 0.0 - 0.00055
             look.header_line = gl.rgb(0xF5F5F5u32)
             look.nav_rule = true
+            // round 40: the navigator's thumb is one pixel shorter in the captures, four in the grouped ones
+            if app.light {
+                look.hthumb_adj = 0.0 - 1.0
+                if grouped(k) { look.hthumb_adj = 0.0 - 4.0 }
+            }
             // round 13: the grouped sheets' thumb is the 17 px minimum at the top of the track (live captures)
             if k >= 25usize && k < 31usize {
                 look.thumb_len = 17.0

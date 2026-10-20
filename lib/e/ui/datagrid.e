@@ -10918,6 +10918,33 @@ fn ring_model_over(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (wid
             row_y += 38.0
         }
     }
+    if win_look(grid) && grid.theme.tokens.palette != .Dark && !grid.group_box_visible && !grid.filter_visible && mem.address_of(grid.theme.runtime) != 0usize {
+        // round 40: a hot or pressed header tints the frame's inner top row over its width (hover #B8C5D1, pressed #A6BCCE, the line
+        // pixel at each end and the second pixel in between)
+        var head_x: f32 = 0.0
+        var head_at = 0usize
+        while head_at < grid.columns.len {
+            let head_state = control.control_state(grid.theme, grid.key + 1u64 + 2u64 * u64(head_at), true, false)
+            if head_state.hovered || head_state.pressed {
+                var tint = 0xB8C5D1u32
+                var tint_edge = 0xB9C5CFu32
+                var tint_right = 0xCACED4u32
+                if head_state.pressed {
+                    tint = 0xA6BCCEu32
+                    tint_edge = 0xAABDCDu32
+                    tint_right = 0xC5CCD3u32
+                }
+                let head_w = grid.columns[head_at].width
+                parts[n] = footer_px(a, head_x, 1.0, 1.0, 1.0, 0xC2C4C7u32)
+                parts[n + 1usize] = footer_px(a, head_x + 1.0, 1.0, 1.0, 1.0, tint_edge)
+                parts[n + 2usize] = footer_px(a, head_x + 2.0, 1.0, head_w - 1.0, 1.0, tint)
+                parts[n + 3usize] = footer_px(a, head_x + head_w + 1.0, 1.0, 1.0, 1.0, tint_right)
+                n += 4usize
+            }
+            head_x += grid.columns[head_at].width
+            head_at += 1usize
+        }
+    }
     parts[n] = footer_px(a, 0.0, h - 1.0, 1.0, 1.0, left_end)
     parts[n + 1usize] = footer_px(a, 1.0, h - 1.0, 1.0, 1.0, foot_second)
     parts[n + 2usize] = footer_px(a, 2.0, h - 1.0, w - 3.0, 1.0, foot_base)
