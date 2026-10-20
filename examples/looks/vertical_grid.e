@@ -37,8 +37,13 @@ fn shapes(on: bool) {
     if !on { ret }
     collection.property_row_shape(9usize, 17.0, 96.0, 0.0, 247.0, 0.0, "Deck", "Sideboard", "")
     collection.property_row_shape(10usize, 17.0, 73.0, 119.0, 220.0, 275.0, "Land", "Crea", "Spell")
-    collection.property_row_text_x(9usize, 49.0, 0.0, 0.0)
-    collection.property_row_text_x(10usize, 45.0, 91.0, 137.0)
+    if style.windows_dark_on() {
+        collection.property_row_text_x(9usize, 49.0, 0.0, 0.0)
+        collection.property_row_text_x(10usize, 45.0, 91.0, 137.0)
+    } else {
+        collection.property_row_text_x(9usize, 49.0, 0.0, 0.0)
+        collection.property_row_text_x(10usize, 47.0, 93.0, 139.0)
+    }
     if style.windows_dark_on() {
         collection.property_row_pics(10usize, 28.0, vg_land(), 74.0, vg_crea(), 120.0, vg_spell(), 17.0, 17.0)
     } else {
@@ -196,7 +201,10 @@ fn computed_editor(a: *mem.Arena, t: *const control.Theme, index: usize, out: *w
         while at < count {
             let (num, num_error) = centred(a, tt, texts[at], 40.0, 17.0)
             if num_error != ok { ret num_error }
-            kids[n] = widget.positioned(0u64, centres[at] - 169.0 - 20.0, 0.0, style.defaults(), mem_one_node(a, num))
+            // (the 1:1 capture's numbers stand a pixel further right)
+            var nudge: f32 = 0.0
+            if t.tokens.profile == .Windows && !style.windows_dark_on() { nudge = 1.0 }
+            kids[n] = widget.positioned(0u64, centres[at] - 169.0 - 20.0 + nudge, 0.0, style.defaults(), mem_one_node(a, num))
             n += 1usize
             at += 1usize
         }
