@@ -53,9 +53,9 @@ fn padded_name(output: *emit_x64.Buffer, name: str, size: usize) -> err {
     ret ok
 }
 
-fn segment(output: *emit_x64.Buffer, name: str, address: usize, size: usize, file_offset: usize, file_size: usize, protection: usize) -> err {
+fn segment(output: *emit_x64.Buffer, name: str, address: usize, size: usize, file_offset: usize, file_size: usize, protection: usize, sections: usize) -> err {
     try emit_x64.little_u32(output, 25usize)
-    try emit_x64.little_u32(output, 72usize)
+    try emit_x64.little_u32(output, 72usize + 80usize * sections)
     try name16(output, name)
     try emit_x64.little_u64(output, address)
     try emit_x64.little_u64(output, size)
@@ -63,6 +63,23 @@ fn segment(output: *emit_x64.Buffer, name: str, address: usize, size: usize, fil
     try emit_x64.little_u64(output, file_size)
     try emit_x64.little_u32(output, protection)
     try emit_x64.little_u32(output, protection)
+    try emit_x64.little_u32(output, sections)
+    ret emit_x64.little_u32(output, 0usize)
+}
+
+// A `section_64` of the __DWARF segment: a debug section, which is data and not code
+// (S_ATTR_DEBUG), starting at file offset `offset`, mapped at the same distance from the base.
+fn debug_section(output: *emit_x64.Buffer, name: str, offset: usize, size: usize) -> err {
+    try name16(output, name)
+    try name16(output, "__DWARF")
+    try emit_x64.little_u64(output, MACHO_BASE + offset)
+    try emit_x64.little_u64(output, size)
+    try emit_x64.little_u32(output, offset)
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, 33554432usize)
+    try emit_x64.little_u32(output, 0usize)
     try emit_x64.little_u32(output, 0usize)
     ret emit_x64.little_u32(output, 0usize)
 }
@@ -546,10 +563,10 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
     // __PAGEZERO, __TEXT, __DATA when there are slots or globals, __LINKEDIT, then LC_MAIN,
     // LC_LOAD_DYLINKER, LC_LOAD_DYLIB for libSystem and for each other library, LC_SYMTAB,
     // LC_DYSYMTAB, the chained fixups, LC_BUILD_VERSION and LC_CODE_SIGNATURE.
-    var segment_count = 3usize
-    if has_data { segment_count = 4usize }
+    // __PAGEZERO, __TEXT, __DATA, __DWARF (five debug sections) and __LINKEDIT.
+    let segment_count = 5usize
     let command_count = segment_count + 8usize + extra_library_count(builder)
-    let commands_size = 72usize * segment_count + 272usize + extra_libraries_size(builder)
+    let commands_size = 72usize * segment_count + 80usize * 5usize + 272usize + extra_libraries_size(builder)
     // The header and its commands fill the first page; the code starts on the second.
     let code_offset = MACHO_PAGE
     var entry_address = 0usize
@@ -587,9 +604,19 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
     } else {
         try link_elf.pad_to(output, text_size)
     }
+    // __DWARF: the line program, the unit and its entries, location lists and frame description
+    // `write_dwarf` builds for both linkers, mapped read-only on pages of its own so a debugger
+    // finds them in the image itself, as with a Go binary; no dSYM is needed.
+    let dwarf_offset = data_end
+    let (main_index, main_error) = link_elf.find_main(builder)
+    if main_error != ok { ret main_error }
+    var dwarf: link_elf.DwarfSections = zero
+    try link_elf.write_dwarf(builder, output, function_offsets, lines, table_at, MACHO_BASE + code_offset, main_index, 1usize, !x64, &dwarf)
+    let dwarf_size = link_elf.align_up_to(output.count - dwarf_offset, MACHO_PAGE)
+    try link_elf.pad_to(output, dwarf_offset + dwarf_size)
     // __LINKEDIT, on the page after everything else: the chained-fixups blob dyld insists
     // on, an empty symbol table, then the signature, whose hash covers all before it.
-    let linkedit_offset = data_end
+    let linkedit_offset = dwarf_offset + dwarf_size
     let data_index = 2usize
     let fixups_bytes = fixups_size(builder, segment_count, data_end - data_offset, slots)
     let strings_offset = linkedit_offset + fixups_bytes
@@ -598,6 +625,7 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
     let signature_size = 20usize + directory
     let linkedit_size = signature_offset - linkedit_offset + signature_size
     try append_fixups(builder, output, linkedit_offset, segment_count, data_index, data_offset, data_end - data_offset, slots)
+
     try link_elf.pad_to(output, linkedit_offset + fixups_bytes)
     try emit_x64.byte(output, 32usize)
     try link_elf.pad_to(output, signature_offset)
@@ -618,10 +646,16 @@ fn write(x64: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, function_o
     // MH_NOUNDEFS | MH_DYLDLINK | MH_TWOLEVEL | MH_PIE.
     try emit_x64.little_u32(output, 2097285usize)
     try emit_x64.little_u32(output, 0usize)
-    try segment(output, "__PAGEZERO", 0usize, MACHO_BASE, 0usize, 0usize, 0usize)
-    try segment(output, "__TEXT", MACHO_BASE, text_size, 0usize, text_size, 5usize)
-    if has_data { try segment(output, "__DATA", MACHO_BASE + data_offset, data_end - data_offset, data_offset, data_end - data_offset, 3usize) }
-    try segment(output, "__LINKEDIT", MACHO_BASE + linkedit_offset, link_elf.align_up_to(linkedit_size, MACHO_PAGE), linkedit_offset, linkedit_size, 1usize)
+    try segment(output, "__PAGEZERO", 0usize, MACHO_BASE, 0usize, 0usize, 0usize, 0usize)
+    try segment(output, "__TEXT", MACHO_BASE, text_size, 0usize, text_size, 5usize, 0usize)
+    if has_data { try segment(output, "__DATA", MACHO_BASE + data_offset, data_end - data_offset, data_offset, data_end - data_offset, 3usize, 0usize) }
+    try segment(output, "__DWARF", MACHO_BASE + dwarf_offset, dwarf_size, dwarf_offset, dwarf_size, 1usize, 5usize)
+    try debug_section(output, "__debug_abbrev", dwarf.abbrev, dwarf.abbrev_end - dwarf.abbrev)
+    try debug_section(output, "__debug_info", dwarf.info, dwarf.info_end - dwarf.info)
+    try debug_section(output, "__debug_line", dwarf.line, dwarf.line_end - dwarf.line)
+    try debug_section(output, "__debug_loc", dwarf.loc, dwarf.loc_end - dwarf.loc)
+    try debug_section(output, "__debug_frame", dwarf.frame, dwarf.frame_end - dwarf.frame)
+    try segment(output, "__LINKEDIT", MACHO_BASE + linkedit_offset, link_elf.align_up_to(linkedit_size, MACHO_PAGE), linkedit_offset, linkedit_size, 1usize, 0usize)
     // LC_MAIN: the runtime's entry, as a file offset into __TEXT, called as main(argc, argv).
     try emit_x64.little_u32(output, 2147483688usize)
     try emit_x64.little_u32(output, 24usize)
