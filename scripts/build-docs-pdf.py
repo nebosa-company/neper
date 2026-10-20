@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -46,21 +48,69 @@ LOGO_DIR = REPO_ROOT / "docs" / "gtm" / "logo"
 LOGO = LOGO_DIR / "neper-lockup.png"
 HEADER_MARK = LOGO_DIR / "neper-mark-small.png"   # the small cut, for 9 pt
 
-# Each entry lists candidate paths; the first one that exists is used.
+# The order is the reading order: the language, then the toolchain and what it
+# targets, then the library, then the UI, then how it is verified, then history.
+# Each entry lists candidate paths; the first one that exists is used. An entry
+# with a "kind" is generated from the repository instead of read from one file
+# (see GENERATORS); its inputs are the files the generator read.
 DOCUMENTS = [
-    {"title": "Language specification", "paths": ["docs/spec.md"]},
-    {"title": "Module architecture", "paths": ["docs/modules.md"]},
-    {"title": "Module API catalogue", "paths": ["docs/module-apis.md"]},
-    {"title": "Roadmap", "paths": ["docs/roadmap.md"]},
-    {"title": "Decisions", "paths": ["docs/decisions.md", "DECISIONS.md"]},
+    {"title": "Language specification", "paths": ["docs/spec.md"],
+     "about": "Syntax, types, memory, errors, GPU profile; section 13 holds "
+              "every compiler command and flag."},
+    {"title": "Grammar", "paths": ["docs/grammar.ebnf", "grammar.ebnf"],
+     "about": "The formal grammar."},
+    {"title": "Diagnostic codes", "paths": ["docs/diagnostics.md"],
+     "about": "The registry of stable diagnostic codes."},
+    {"title": "Tooling protocol", "paths": ["docs/tooling.md"],
+     "about": "Machine-readable output of every compiler command."},
+    {"title": "Supported targets", "kind": "targets",
+     "about": "Architectures, operating systems, GPU targets and CPU levels."},
+    {"title": "GPU contracts", "paths": ["docs/m25-gpu-contracts.md"],
+     "about": "How host and device work compose; frozen before the GPU profile."},
+    {"title": "NeperOS", "kind": "neperos",
+     "about": "The microkernel, its servers and apps, the e.os surface, the "
+              "app kit and the open work."},
+    {"title": "pacman package manager", "paths": ["docs/pacman.md"],
+     "about": "Packages and the project layout."},
+    {"title": "Module architecture", "paths": ["docs/modules.md"],
+     "about": "How the standard library is layered and delivered."},
+    {"title": "Standard-library hardening",
+     "paths": ["docs/stdlib-hardening.md"],
+     "about": "Composition rules and acceptance for the library."},
+    {"title": "Module API catalogue", "paths": ["docs/module-apis.md"],
+     "about": "The designed public surface of each e.* module."},
+    {"title": "Library reference", "kind": "library",
+     "about": "Every e.* and x.* module in lib/ with every function signature, "
+              "read from source."},
+    {"title": "Algorithm map", "paths": ["docs/algos.md"],
+     "about": "Algorithms and the e.* functions that implement them."},
+    {"title": "UI framework", "paths": ["docs/ui-framework.md"],
+     "about": "The e.ui architecture."},
+    {"title": "Design language",
+     "files": ["docs/ux/README.md", "docs/ux/platforms.md",
+               "docs/ux/accessibility-bridge.md", "docs/ui/looks-plan.md",
+               "docs/ui/looks-howto.md", "docs/ux/tokens.json"],
+     "about": "Tokens, platform rules, accessibility and the platform looks."},
+    {"title": "Controls", "kind": "controls",
+     "about": "Every UI control and its specification."},
+    {"title": "Data grid", "paths": ["docs/grid.md"],
+     "about": "Requirements and design proposal for the data grid."},
+    {"title": "Charts", "kind": "charts",
+     "about": "The chart gallery: every chart the engine renders."},
     {"title": "Diagnostic fixtures",
-     "paths": ["tests/selfhost/fixtures/diagnostics"]},
+     "paths": ["tests/selfhost/fixtures/diagnostics"],
+     "about": "Source of every compiler diagnostic."},
     {"title": "General-purpose verification",
-     "paths": ["docs/general-purpose-verification.md"]},
-    {"title": "Grammar", "paths": ["docs/grammar.ebnf", "grammar.ebnf"]},
-    {"title": "pacman package manager", "paths": ["docs/pacman.md"]},
-    {"title": "Tooling protocol", "paths": ["docs/tooling.md"]},
-    {"title": "UI framework", "paths": ["docs/ui-framework.md"]},
+     "paths": ["docs/general-purpose-verification.md"],
+     "about": "How general-purpose behaviour is verified."},
+    {"title": "Security",
+     "files": ["docs/security-audit-2026-09-24.md", "docs/security-findings.md",
+               "docs/ethical-hacking.md"],
+     "about": "The security audit, its findings and the defensive-tooling plan."},
+    {"title": "Roadmap", "paths": ["docs/roadmap.md"],
+     "about": "Milestones and what is planned."},
+    {"title": "Decisions", "paths": ["docs/decisions.md", "DECISIONS.md"],
+     "about": "Every design decision, in order."},
 ]
 
 PAGE_SIZE = A4
@@ -89,7 +139,12 @@ SUBSTITUTIONS = {
     "\u2026": "...", "\u2192": "->", "\u2190": "<-", "\u2194": "<->",
     "\u21d2": "=>", "\u00a7": "S", "\u00d7": "x", "\u00b1": "+/-",
     "\u00b2": "^2", "\u00b3": "^3", "\u2264": "<=", "\u2265": ">=",
-    "\u2022": "-", "\u00b7": "-",
+    "\u2022": "-", "\u00b7": "-", "\u2081": "1", "\u2318": "Cmd",
+    "\u21e7": "Shift", "\u2303": "Ctrl", "\u2325": "Alt", "\u232b": "Bksp",
+    "\u25b8": ">", "\u25c2": "<", "\u2082": "2", "\u2208": "in",
+    "\u2217": "*", "\u2225": "||", "\u2227": "and", "\u226a": "<<",
+    "\u226b": ">>", "\u2295": "(+)", "\u22c5": ".", "\u25b6": ">",
+    "\u25c0": "<", "\u2605": "*", "\u2713": "ok",
 }
 
 
@@ -239,6 +294,11 @@ def build_styles(sans, mono):
                     leading=13, spaceBefore=9, spaceAfter=3),
         "body": style("body", spaceAfter=6),
         "tight": style("tight", spaceAfter=2),
+        "mod_meta": style("mod_meta", fontName=mono["regular"], fontSize=7.2,
+                          leading=10, textColor=MUTED, spaceAfter=3),
+        "mod_desc": style("mod_desc", fontName=sans["italic"], fontSize=8.4,
+                          leading=11.5, spaceAfter=7),
+        "thumb": style("thumb", fontSize=7, leading=9, spaceAfter=0),
         "code": ParagraphStyle("code", fontName=mono["regular"],
                                fontSize=CODE_SIZE, leading=CODE_SIZE * 1.34,
                                textColor=CODE_INK, backColor=CODE_BG,
@@ -634,9 +694,510 @@ def git_description():
     return "commit %s%s" % (commit, dirty)
 
 
+# ---- generated sections ----------------------------------------------------
+# Each generator reads the repository, so the section cannot drift from it. A
+# generator has "inputs" (the files it reads, listed in the source manifest) and
+# "build" (the flowables, after the part heading).
+
+def read_repo(rel):
+    return (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")
+
+
+def rel_posix(path):
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+def leading_comment(text, limit=260):
+    """The `//` block that opens a source file, as one line."""
+    lines = []
+    for line in text.replace("\r\n", "\n").split("\n"):
+        if line.startswith("//"):
+            lines.append(line[2:].strip())
+        elif lines or line.strip():
+            break
+    words = " ".join(" ".join(lines).split())
+    if len(words) > limit:
+        words = words[:limit].rsplit(" ", 1)[0] + "..."
+    return words
+
+
+def first_sentence(markdown):
+    for para in re.split(r"\n\s*\n", markdown):
+        para = para.strip()
+        if not para or para.startswith("#"):
+            continue
+        para = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", para)
+        para = " ".join(re.sub(r"[`*_]", "", para).split())
+        found = re.match(r"(.+?[.!?])(\s|$)", para)
+        return found.group(1) if found else para
+    return ""
+
+
+def render_markdown(markdown, renderer, md, text_tool):
+    tokens = md.parse(text_tool.sanitize(markdown))
+    flows, _ = renderer.blocks(tokens, 0, None)
+    return flows
+
+
+def section_between(text, start, end):
+    first = text.find(start)
+    last = text.find(end, first + 1) if first >= 0 else -1
+    if first < 0 or last < 0:
+        raise SystemExit("error: cannot find %r .. %r" % (start, end))
+    return text[first:last]
+
+
+def table_flows(renderer, header, rows):
+    return renderer.build_table(
+        [[esc(c) for c in header]] + [[esc(c) for c in r] for r in rows],
+        [list(header)] + [list(r) for r in rows], 1, 0.0)
+
+
+# -- library --
+
+LIB_ROOTS = ("lib/e", "lib/x")
+FN_LINE = re.compile(r"^(?:extern\s+)?fn\s")
+
+
+def library_inputs():
+    files = []
+    for root in LIB_ROOTS:
+        files.extend((REPO_ROOT / root).rglob("*.e"))
+    return sorted(files, key=lambda p: rel_posix(p))
+
+
+def library_module(path):
+    return rel_posix(path)[len("lib/"):-2].replace("/", ".")
+
+
+def library_group(name):
+    parts = name.split(".")
+    return ".".join(parts[:2]) if len(parts) > 2 else parts[0]
+
+
+def cut_signature(sig):
+    start = sig.find("(")
+    if start < 0:
+        return " ".join(sig.split())
+    depth, end = 0, start
+    for at in range(start, len(sig)):
+        if sig[at] == "(":
+            depth += 1
+        elif sig[at] == ")":
+            depth -= 1
+            if depth == 0:
+                end = at
+                break
+    tail = re.split(r"\s*\{", sig[end + 1:], 1)[0].split("//")[0].rstrip()
+    return " ".join((sig[:end + 1] + tail).split())
+
+
+def library_declarations(text):
+    lines = text.replace("\r\n", "\n").split("\n")
+    functions, types, errors, constants = [], [], 0, 0
+    at = 0
+    while at < len(lines):
+        line = lines[at]
+        if FN_LINE.match(line):
+            sig = line
+            depth = sig.count("(") - sig.count(")")
+            while depth > 0 and at + 1 < len(lines):
+                at += 1
+                sig += " " + lines[at].strip()
+                depth += lines[at].count("(") - lines[at].count(")")
+            functions.append(cut_signature(sig))
+        elif line.startswith("type "):
+            types.append(" ".join(re.split(r"\s*\{", line, 1)[0]
+                                  .split("//")[0].split()))
+        elif line.startswith("error "):
+            errors += 1
+        elif line.startswith("const "):
+            constants += 1
+        at += 1
+    return functions, types, errors, constants
+
+
+def build_library(entry, renderer, styles, md, text_tool):
+    modules = []
+    for path in entry["inputs"]:
+        name = library_module(path)
+        text = path.read_text(encoding="utf-8", errors="replace")
+        modules.append((library_group(name), name, path, text,
+                        library_declarations(text)))
+    modules.sort(key=lambda m: (m[0], m[1]))
+    total_fn = sum(len(m[4][0]) for m in modules)
+    total_ty = sum(len(m[4][1]) for m in modules)
+    flows = [Paragraph(esc(text_tool.sanitize(
+        "%d modules, %d functions, %d types, read from the source files in "
+        "lib/e and lib/x. Each module lists every top-level function and type "
+        "exactly as written, whether or not docs/modules.json fences it as "
+        "public; a per-target variant (os.linux, os.windows, ...) is its own "
+        "entry. The designed surface is in the Module API catalogue."
+        % (len(modules), total_fn, total_ty))), styles["body"])]
+    group = None
+    for grp, name, path, text, decls in modules:
+        functions, types, errors, constants = decls
+        if grp != group:
+            group = grp
+            title = grp + " (top level)" if "." not in grp else grp
+            flows.append(renderer.heading_flowable(esc(title), title, 1, "h1"))
+        flows.append(renderer.heading_flowable(esc(name), name, 2, "h2"))
+        meta = "%s | %d functions | %d types | %d errors | %d constants" % (
+            rel_posix(path), len(functions), len(types), errors, constants)
+        flows.append(Paragraph(esc(text_tool.sanitize(meta)),
+                               styles["mod_meta"]))
+        desc = leading_comment(text)
+        if desc:
+            flows.append(Paragraph(esc(text_tool.sanitize(desc)),
+                                   styles["mod_desc"]))
+        listing = types + functions
+        if listing:
+            flows.extend(renderer.code_block(
+                text_tool.sanitize("\n".join(listing))))
+        else:
+            flows.append(Spacer(1, 4))
+    return flows
+
+
+# -- controls --
+
+COMPONENTS = "docs/ux/components"
+BROWSER_SOURCE = "lib/e/web/shell.e"
+
+
+def control_names():
+    root = REPO_ROOT / COMPONENTS
+    return sorted((d.name for d in root.iterdir() if d.is_dir()),
+                  key=str.lower)
+
+
+def control_readme(name):
+    return REPO_ROOT / COMPONENTS / name / "README.md"
+
+
+def controls_inputs():
+    return ([control_readme(n) for n in control_names()
+             if control_readme(n).exists()] + [REPO_ROOT / BROWSER_SOURCE])
+
+
+def build_controls(entry, renderer, styles, md, text_tool):
+    names = control_names()
+    readmes = {n: control_readme(n).read_text(encoding="utf-8", errors="replace")
+               for n in names if control_readme(n).exists()}
+    browser = read_repo(BROWSER_SOURCE)
+    browser_text = leading_comment(browser, 1200)
+    rows = [[str(i + 1), n, first_sentence(readmes[n]) if n in readmes
+             else "No written specification yet; a preview only."]
+            for i, n in enumerate(names)]
+    rows.append([str(len(names) + 1), "Browser",
+                 first_sentence(browser_text) or browser_text])
+    rows = [[text_tool.sanitize(c) for c in r] for r in rows]
+    flows = [renderer.heading_flowable("Index", "Index", 1, "h1"),
+             Paragraph(esc("%d controls (%d with a written specification), "
+                           "plus the browser control (%s). The specifications "
+                           "follow in the same order."
+                           % (len(names), len(readmes), BROWSER_SOURCE)),
+                       styles["body"])]
+    flows.extend(table_flows(renderer, ["#", "Control", "What it is"], rows))
+    for n in names:
+        if n in readmes:
+            flows.extend(render_markdown(readmes[n], renderer, md, text_tool))
+    flows.append(renderer.heading_flowable("Browser", "Browser", 1, "h1"))
+    flows.append(Paragraph(esc(text_tool.sanitize(browser_text)),
+                           styles["body"]))
+    return flows
+
+
+# -- charts --
+
+CHARTS_DOC = "docs/charts.md"
+CHART_DIR = "docs/chart-previews"
+THUMB_PX = 240
+THUMB_COLUMNS = 4
+
+
+def chart_list():
+    rows = re.findall(
+        r"^\| (.+?) \| !\[[^\]]*\]\(chart-previews/([A-Za-z0-9_]+)\.png\)",
+        read_repo(CHARTS_DOC), re.M)
+    return [(name, REPO_ROOT / CHART_DIR / (slug + ".png")) for name, slug in rows]
+
+
+def charts_inputs():
+    return [REPO_ROOT / CHARTS_DOC] + [p for _, p in chart_list()]
+
+
+def thumbnail(path):
+    from PIL import Image as PilImage
+    with PilImage.open(path) as image:
+        if "A" in image.getbands():
+            flat = PilImage.new("RGB", image.size, "white")
+            flat.paste(image, mask=image.getchannel("A"))
+            image = flat
+        image = image.convert("RGB")
+        image.thumbnail((THUMB_PX, THUMB_PX))
+        buf = io.BytesIO()
+        image.save(buf, "JPEG", quality=72)
+        buf.seek(0)
+        return buf, image.size
+
+
+def build_charts(entry, renderer, styles, md, text_tool):
+    charts = chart_list()
+    cell_w = FRAME_W / THUMB_COLUMNS - 8
+    cells = []
+    for number, (name, path) in enumerate(charts, 1):
+        label = Paragraph(esc(text_tool.sanitize("%d. %s" % (number, name))),
+                          styles["thumb"])
+        if path.exists():
+            buf, (w, h) = thumbnail(path)
+            cells.append([Image(buf, width=cell_w, height=cell_w * h / w), label])
+        else:
+            cells.append([label])
+    while len(cells) % THUMB_COLUMNS:
+        cells.append("")
+    grid = [cells[i:i + THUMB_COLUMNS] for i in range(0, len(cells), THUMB_COLUMNS)]
+    table = Table(grid, colWidths=[FRAME_W / THUMB_COLUMNS] * THUMB_COLUMNS,
+                  hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    flows = [renderer.heading_flowable("Gallery", "Gallery", 1, "h1"),
+             Paragraph(esc("%d charts and diagrams, each rendered by the Neper "
+                           "charting engine; every chart also exists as an SVG "
+                           "in %s." % (len(charts), CHART_DIR)), styles["body"]),
+             table]
+    notes = section_between(read_repo(CHARTS_DOC),
+                            "## Charting-engine delivery evidence",
+                            "## Neper charting engine plan")
+    flows.extend(render_markdown(notes, renderer, md, text_tool))
+    return flows
+
+
+# -- targets --
+
+TARGET_DOCS = ("macos", "ios", "android", "freebsd")
+OS_FORMAT = {"windows": "PE", "linux": "ELF", "macos": "Mach-O"}
+
+
+def targets_inputs():
+    return [REPO_ROOT / "docs/spec.md", REPO_ROOT / "src/project.e"] + [
+        REPO_ROOT / ("docs/%s-cross-compilation.md" % n) for n in TARGET_DOCS]
+
+
+def build_targets(entry, renderer, styles, md, text_tool):
+    spec, project = read_repo("docs/spec.md"), read_repo("src/project.e")
+    sentence = re.search(r"A host target is (.+?); unsupported", spec, re.S).group(1)
+    hosts = re.findall(r"`([a-z0-9]+-[a-z0-9]+)`", sentence)
+
+    def accepted(fn, var):
+        body = re.search(r"fn %s\(.*?\n}\n" % fn, project, re.S).group(0)
+        return re.findall(r'same\(%s, "(\w+)"\)' % var, body)
+
+    arches, systems = accepted("valid_arch", "arch"), accepted("valid_os", "value")
+    kernel = re.search(r"// (aarch64-none is [^\n]*)", project).group(1)
+    neperos = re.search(r"// (aarch64-neperos is [^\n]*)", project).group(1)
+    levels = []
+    block = section_between(spec, "### Target CPU levels", "**`x64-v3` is the default")
+    in_table = False
+    for line in block.splitlines():
+        if line.startswith("|"):
+            levels.append(line)
+            in_table = True
+        elif in_table:
+            levels.append("")
+            in_table = False
+    out = ["# Host targets", "",
+           "A host target builds an executable for one architecture and "
+           "operating system. `--target ARCH-OS` selects it; the operating "
+           "system is never inferred from the build machine, so any host "
+           "target can be built from any build host.", "",
+           "| Target | Architecture | Operating system | Executable format |",
+           "|---|---|---|---|"]
+    for host in hosts:
+        arch, system = host.split("-", 1)
+        out.append("| `%s` | %s | %s | %s |"
+                   % (host, arch, system, OS_FORMAT.get(system, "?")))
+    out += ["", "# Freestanding and NeperOS targets", "",
+            "- `aarch64-none`: " + kernel.split(" is ", 1)[1],
+            "- `aarch64-neperos`: " + neperos.split(" is ", 1)[1], "",
+            "# GPU device targets", "",
+            "`spv` (SPIR-V) and `ptx` (NVIDIA PTX) build device modules only, "
+            "for inspection with `neper dis`; they produce no executable. A "
+            "host build embeds them with `--gpu spv,ptx|none` (default `spv`).",
+            "", "# Instruction levels (`--cpu`)", ""]
+    out += levels
+    out += ["", "# Accepted names", "",
+            "The compiler accepts these architectures: " + ", ".join(
+                "`%s`" % a for a in arches) + ".", "",
+            "It accepts these operating systems: " + ", ".join(
+                "`%s`" % s for s in systems) + ".", "",
+            "A combination outside the host, freestanding and device lists "
+            "above is an option error.", "", "# Platform status", ""]
+    for name in TARGET_DOCS:
+        text = read_repo("docs/%s-cross-compilation.md" % name)
+        status = re.search(r"^Status:(.*?)(?:\n\n|\Z)", text, re.S | re.M)
+        out.append("- **%s**: %s" % (
+            name, " ".join(status.group(1).split()) if status else "no status"))
+    return render_markdown("\n".join(out), renderer, md, text_tool)
+
+
+# -- NeperOS --
+
+NEPEROS_SRC = "neperos/src"
+NEPEROS_DOCS = ("docs/appkit-api.md", "docs/neperos-display-research.md")
+NEPEROS_SURFACE = ("lib/e/os.neperos.e", "src/runtime_neperos_a64.e")
+# The files whose opening comment says how the system is put together.
+NEPEROS_OVERVIEW = ("main", "mmu", "vm", "init", "fs_server", "input_server",
+                    "net_server", "settings_server", "shell", "launcher",
+                    "package", "vault")
+
+
+def neperos_sources():
+    return sorted((REPO_ROOT / NEPEROS_SRC).glob("*.e"))
+
+
+def neperos_tasks():
+    return sorted((REPO_ROOT / "docs/tasks/compiler").glob("C*-neperos-*.md"))
+
+
+def neperos_scripts():
+    return sorted((REPO_ROOT / "scripts").glob("neperos*.py"))
+
+
+def neperos_inputs():
+    return (neperos_sources() + neperos_tasks() + neperos_scripts()
+            + [REPO_ROOT / f for f in NEPEROS_SURFACE + NEPEROS_DOCS])
+
+
+def script_summary(text, limit=300):
+    lines = text.replace("\r\n", "\n").split("\n")
+    if lines and lines[0].startswith("#!"):
+        lines = lines[1:]
+    joined = "\n".join(lines).lstrip()
+    if joined.startswith('"""'):
+        body = joined[3:].split('"""', 1)[0]
+        summary = " ".join(body.split())
+    else:
+        block = []
+        for line in lines:
+            if line.startswith("#"):
+                block.append(line[1:].strip())
+            elif block:
+                break
+        summary = " ".join(" ".join(block).split())
+    return summary if len(summary) <= limit else (
+        summary[:limit].rsplit(" ", 1)[0] + "...")
+
+
+def build_neperos(entry, renderer, styles, md, text_tool):
+    sources = neperos_sources()
+    tasks = neperos_tasks()
+    scripts = neperos_scripts()
+    san = text_tool.sanitize
+
+    def para(text, style="body"):
+        return Paragraph(esc(san(text).replace("`", "")), styles[style])
+
+    def h1(title):
+        return renderer.heading_flowable(esc(title), title, 1, "h1")
+
+    flows = [para("NeperOS is Neper's own operating system: an aarch64 "
+                  "microkernel whose drivers, filesystem, network, settings and "
+                  "input run as EL0 servers that apps reach over capability-gated "
+                  "IPC. Apps are ordinary Neper programs built with "
+                  "`--target aarch64-neperos`. Everything below is read from "
+                  "the repository: %d source files in %s, %d open work items, "
+                  "and the documents it keeps." % (len(sources), NEPEROS_SRC,
+                                                   len(tasks)))]
+
+    flows.append(h1("How it is put together"))
+    by_name = {p.stem: p for p in sources}
+    for name in NEPEROS_OVERVIEW:
+        if name in by_name:
+            flows.append(para("%s/%s.e: %s" % (
+                NEPEROS_SRC, name, leading_comment(
+                    by_name[name].read_text(encoding="utf-8", errors="replace"),
+                    700)), "tight"))
+            flows.append(Spacer(1, 4))
+
+    flows.append(h1("Platform surface"))
+    for rel in NEPEROS_SURFACE:
+        text = read_repo(rel)
+        flows.append(para("%s: %s" % (rel, leading_comment(text, 1500)), "tight"))
+        flows.append(Spacer(1, 4))
+    flows.append(para("The functions of the e.os surface on NeperOS are listed in "
+                      "the Library reference under e.os.neperos."))
+
+    flows.append(h1("Source inventory"))
+    rows = [[p.name, leading_comment(
+        p.read_text(encoding="utf-8", errors="replace"), 220) or "-"]
+        for p in sources]
+    flows.extend(table_flows(renderer, ["File in %s" % NEPEROS_SRC,
+                                        "What it is"],
+                             [[san(c) for c in r] for r in rows]))
+
+    for rel in NEPEROS_DOCS:
+        flows.extend(render_markdown(read_repo(rel), renderer, md, text_tool))
+
+    flows.append(h1("Open work"))
+    flows.append(para("Every NeperOS item still on the work queue. A delivered "
+                      "item leaves the queue; its regression test is its "
+                      "specification."))
+    rows = []
+    for path in tasks:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        title = re.match(r"# (C\d+)\s+\S+\s+(.*)", text)
+        score = re.search(r"\|\s*score\s*\|\s*([\d.]+) of 1", text)
+        rows.append([title.group(1) if title else path.stem[:4],
+                     title.group(2).strip() if title else path.stem,
+                     score.group(1) if score else "?"])
+    flows.extend(table_flows(renderer, ["Item", "Title", "Score"],
+                             [[san(c) for c in r] for r in rows]))
+
+    flows.append(h1("Verification tooling"))
+    rows = [[rel_posix(p), script_summary(
+        p.read_text(encoding="utf-8", errors="replace"))] for p in scripts]
+    flows.extend(table_flows(renderer, ["Script", "What it does"],
+                             [[san(c) for c in r] for r in rows]))
+    return flows
+
+
+GENERATORS = {
+    "neperos": {"inputs": neperos_inputs, "build": build_neperos},
+    "targets": {"inputs": targets_inputs, "build": build_targets},
+    "library": {"inputs": library_inputs, "build": build_library},
+    "controls": {"inputs": controls_inputs, "build": build_controls},
+    "charts": {"inputs": charts_inputs, "build": build_charts},
+}
+
+
 def resolve_documents():
     resolved, missing = [], []
     for index, entry in enumerate(DOCUMENTS):
+        if entry.get("kind"):
+            resolved.append({
+                "title": entry["title"], "path": None, "kind": entry["kind"],
+                "rel": "generated:" + entry["kind"],
+                "anchor": "doc%d" % index, "names": [], "about": entry["about"],
+                "inputs": GENERATORS[entry["kind"]]["inputs"](),
+            })
+            continue
+        if entry.get("files"):
+            inputs = [REPO_ROOT / f for f in entry["files"]]
+            absent = [rel_posix(p) for p in inputs if not p.exists()]
+            if absent:
+                missing.extend(absent)
+                continue
+            resolved.append({
+                "title": entry["title"], "path": None, "kind": None,
+                "rel": entry["files"][0], "anchor": "doc%d" % index,
+                "names": [Path(f).name for f in entry["files"]],
+                "about": entry["about"], "inputs": inputs,
+            })
+            continue
         found = None
         for candidate in entry["paths"]:
             path = REPO_ROOT / candidate
@@ -652,11 +1213,14 @@ def resolve_documents():
             "rel": found.relative_to(REPO_ROOT).as_posix(),
             "anchor": "doc%d" % index,
             "names": [Path(c).name for c in entry["paths"]],
+            "about": entry["about"],
         })
     return resolved, missing
 
 
 def source_files(entry):
+    if entry.get("inputs") is not None:
+        return entry["inputs"]
     path = entry["path"]
     if path.is_dir():
         return sorted(p for p in path.rglob("*") if p.is_file())
@@ -684,7 +1248,14 @@ def document_flowables(entry, renderer, styles, md, text_tool):
     flows.append(part)
 
     files = source_files(entry)
-    if entry["path"].is_dir():
+    if entry.get("kind"):
+        meta = "generated by scripts/build-docs-pdf.py from %d files" % len(files)
+        flows.append(Paragraph(esc(meta), styles["part_meta"]))
+        flows.extend(GENERATORS[entry["kind"]]["build"](
+            entry, renderer, styles, md, text_tool))
+        flows.append(PageBreak())
+        return flows
+    if entry["path"] is None or entry["path"].is_dir():
         meta = "%s | %d files" % (entry["rel"], len(files))
     else:
         meta = "%s | %d bytes | sha256 %s" % (
@@ -745,8 +1316,9 @@ def build_story(entries, renderer, styles, md, text_tool, generated_at, revision
         title = Paragraph("neper", styles["cover_title"])
     story = [Spacer(1, 62 * mm), title, Spacer(1, 14),
              Paragraph(esc(text_tool.sanitize(
-                 "Language specification, module plan, roadmap, verification "
-                 "and tooling contracts")), styles["cover_sub"]),
+                 "Language, toolchain and targets, library reference, UI "
+                 "controls, charts, verification and decisions")),
+                 styles["cover_sub"]),
              HRFlowable(width="100%", thickness=0.8, color=RULE),
              Spacer(1, 12)]
     total_files = sum(len(source_files(e)) for e in entries)
@@ -767,6 +1339,14 @@ def build_story(entries, renderer, styles, md, text_tool, generated_at, revision
     story.append(Paragraph("Contents", styles["h1"]))
     story.append(Spacer(1, 6))
     story.append(toc)
+    story.append(PageBreak())
+
+    story.append(Paragraph("Reading guide", styles["h1"]))
+    story.append(Spacer(1, 6))
+    story.extend(table_flows(
+        renderer, ["Part", "What it holds"],
+        [["%d. %s" % (i, text_tool.sanitize(e["title"])),
+          text_tool.sanitize(e["about"])] for i, e in enumerate(entries, 1)]))
     story.append(PageBreak())
 
     for entry in entries:
