@@ -952,7 +952,8 @@ neper_os_thread_create:
     mov x9, #65536
     cmp x22, x9
     csel x22, x9, x22, lo
-    add x22, x22, #16383
+    mov x9, #16383
+    add x22, x22, x9
     and x22, x22, #-16384
     add x0, sp, #48
     mov x1, x22
