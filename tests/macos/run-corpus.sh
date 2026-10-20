@@ -9,12 +9,14 @@ runner=("$@")
 
 # Fixtures that end in a trap by design (134), and those whose exit status is the answer they
 # compute (the real suite compares it; here it is reported, not judged).
-declare -A expect=(
-  [gpu_barrier_helper_occurrence]=134 [gpu_barrier_occurrence]=134 [gpu_divergence]=134
-  [release_build]=134 [trap_backtrace]=134
-  [layout_attributes]=any [incremental]=any [incremental_deleted]=any [incremental_fallback]=any
-  [incremental_layout]=any [incremental_value]=any [inline_nested]=any [when_target]=any
-)
+# (A case, not an associative array: the Mac's /bin/bash is 3.2.)
+expected() {
+  case "$1" in
+    gpu_barrier_helper_occurrence|gpu_barrier_occurrence|gpu_divergence|release_build|trap_backtrace) echo 134 ;;
+    layout_attributes|incremental|incremental_deleted|incremental_fallback|incremental_layout|incremental_value|inline_nested|when_target) echo any ;;
+    *) echo 0 ;;
+  esac
+}
 
 # Fixtures that take arguments, as the real suite passes them.
 extra_args() {
@@ -39,7 +41,7 @@ for file in "$dir"/*; do
   ( cd "$where" && perl -e 'alarm 60; exec @ARGV' "${runner[@]}" "$file" "${args[@]}" >"$scratch/.out" 2>"$scratch/.err" )
   code=$?
   seconds=$(( $(date +%s) - start ))
-  want=${expect[$name]:-0}
+  want=$(expected "$name")
   if [ "$want" = "any" ]; then
     info=$((info+1)); echo "INFO $name $code ${seconds}s"
   elif [ "$code" -eq "$want" ]; then
