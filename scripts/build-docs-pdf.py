@@ -249,7 +249,7 @@ class Text:
             replacement = SUBSTITUTIONS.get(ch)
             if replacement is None:
                 self.unmapped.add(ch)
-                replacement = "?"
+                replacement = "[U+%04X]" % code
             out.append(replacement)
         return "".join(out)
 
@@ -1418,7 +1418,7 @@ def main(argv=None):
 
     if text_tool.unmapped:
         codes = ", ".join(sorted("U+%04X" % ord(c) for c in text_tool.unmapped))
-        sys.stderr.write("warning: characters replaced with '?': %s\n" % codes)
+        sys.stderr.write("warning: characters printed as [U+XXXX]: %s\n" % codes)
 
     if not args.quiet:
         print("wrote %s (%d pages, %.1f MiB)"
