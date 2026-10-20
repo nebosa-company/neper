@@ -815,6 +815,9 @@ neper_trap:
     jz .Ltrap_exit
     dec r14d
     mov rbx,QWORD PTR [rsp+40]
+    # The table's entries are relative to the table (the image slides), so the address looked
+    # up is too.
+    sub r12,rbx
     xor r8d,r8d
     mov r9d,DWORD PTR [rbx+8]
 .Ltrap_search:

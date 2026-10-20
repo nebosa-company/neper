@@ -1793,7 +1793,7 @@ fn rebase_symbol_table(output: *emit_x64.Buffer, table: usize, code_address: usi
                 byte_at = byte_at - 1usize
                 value = value * 256usize + usize(output.bytes[at + byte_at])
             }
-            value = value + code_address
+            value = value +% code_address
             byte_at = 0usize
             while byte_at < 8usize {
                 output.bytes[at + byte_at] = u8(value % 256usize)
