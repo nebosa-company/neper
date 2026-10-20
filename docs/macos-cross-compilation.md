@@ -1,6 +1,6 @@
 # macOS cross-compilation
 
-Status: `aarch64-macos` emits an ad-hoc-signed, dyld-loaded Mach-O whose runtime makes raw BSD system calls (D5166) for programs that need no import or file open; not yet run on a Mac. `x64-macos`, `libSystem` imports and `os.macos.e` are planned.
+Status: `aarch64-macos` and `x64-macos` emit ad-hoc-signed, dyld-loaded Mach-O images with DWARF, a raw-syscall runtime over libSystem imports, and an `os.macos.e` covering files, directories, mappings, watches, processes, threads, futexes, sockets, signals, libraries and the clock (D5165-D5179), verified on a `macos-14` runner, x64 under Rosetta. Not done: notarization, bundles, a dSYM, GUI and GPU.
 
 Neper must be able to build a macOS executable on Windows or Linux. The build
 host does not determine the output format: `--target` selects the source

@@ -2808,4 +2808,7 @@ D5172	990	macOS process groups are made by posix_spawn, not by setpgid afterward
 D5173	993	the x64 macOS monotonic clock is clock_gettime_nsec_np(CLOCK_UPTIME_RAW), through the runtime's import table
 D5174	1334	macOS change watches are kqueue wake-ups over a directory snapshot
 D5175	1028	macOS trap backtraces survive the PIE slide: the symbol table is relative to itself
-D5176	1339	macOS thread stack sizes go through pthread attributes
+D5176	1340	macOS thread stack sizes go through pthread attributes
+D5177	1357	macOS libraries, signals, sockets and the executable's path go through libSystem imports
+D5178	578	macOS recursive watches walk the tree into the same snapshot
+D5179	823	a macOS image carries its DWARF in a `__DWARF` segment
