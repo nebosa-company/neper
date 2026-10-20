@@ -46,3 +46,18 @@ jobs:
             done
           done
           echo "trap ok"
+      - name: DWARF in the image
+        if: always()
+        run: |
+          set +e
+          for name in trap1 trap1_x64; do
+            cp tests/macos/$name /tmp/$name
+            echo "== $name"
+            dwarfdump --verify /tmp/$name 2>&1 | tail -8
+            echo "-- units and functions"
+            dwarfdump --debug-info /tmp/$name 2>&1 | grep -E "DW_TAG_compile_unit|DW_AT_name" | head -12
+            echo "-- line table files"
+            dwarfdump --debug-line /tmp/$name 2>&1 | grep -E "trap1.e" | head -3
+            echo "-- address to line"
+            case $name in *_x64) ;; *) lldb -b -o "image lookup -v -n inner" /tmp/$name 2>&1 | grep -E "Summary|LineEntry|trap1" | head -6 ;; esac
+          done
