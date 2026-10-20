@@ -1115,3 +1115,154 @@ neper_os_commit:
     movz w0, #0x7ebf
     movk w0, #0x6f77, lsl #16
     ret
+
+
+// Spec section 9 rule 4: the supplied `hash` is xxHash64 with seed 0 over a value's
+// canonical little-endian bytes; this agrees bit for bit with algo.hash.xxhash64, with
+// the x86-64 runtime and with bootstrap/runtime.c. x0 = the bytes, x1 = their length.
+.global neper_hash_bytes
+neper_hash_bytes:
+    ldr x11, .Lhash_p1
+    ldr x12, .Lhash_p2
+    ldr x13, .Lhash_p3
+    ldr x14, .Lhash_p4
+    ldr x15, .Lhash_p5
+    mov x9, x0
+    mov x10, x1
+    mov x3, #0
+    cmp x10, #32
+    b.lo .Lhash_small
+    add x5, x11, x12
+    mov x6, x12
+    mov x7, #0
+    neg x8, x11
+    sub x2, x10, #32
+.Lhash_block:
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    add x5, x5, x4
+    ror x5, x5, #33
+    mul x5, x5, x11
+    add x3, x3, #8
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    add x6, x6, x4
+    ror x6, x6, #33
+    mul x6, x6, x11
+    add x3, x3, #8
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    add x7, x7, x4
+    ror x7, x7, #33
+    mul x7, x7, x11
+    add x3, x3, #8
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    add x8, x8, x4
+    ror x8, x8, #33
+    mul x8, x8, x11
+    add x3, x3, #8
+    cmp x3, x2
+    b.ls .Lhash_block
+    ror x16, x5, #63
+    ror x4, x6, #57
+    add x16, x16, x4
+    ror x4, x7, #52
+    add x16, x16, x4
+    ror x4, x8, #46
+    add x16, x16, x4
+    mul x4, x5, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    madd x16, x16, x11, x14
+    mul x4, x6, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    madd x16, x16, x11, x14
+    mul x4, x7, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    madd x16, x16, x11, x14
+    mul x4, x8, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    madd x16, x16, x11, x14
+    b .Lhash_sized
+.Lhash_small:
+    mov x16, x15
+.Lhash_sized:
+    add x16, x16, x10
+.Lhash_tail8:
+    add x4, x3, #8
+    cmp x4, x10
+    b.hi .Lhash_tail4
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    ror x16, x16, #37
+    madd x16, x16, x11, x14
+    add x3, x3, #8
+    b .Lhash_tail8
+.Lhash_tail4:
+    add x4, x3, #4
+    cmp x4, x10
+    b.hi .Lhash_tail1
+    ldr w4, [x9, x3]
+    mul x4, x4, x11
+    eor x16, x16, x4
+    ror x16, x16, #41
+    madd x16, x16, x12, x13
+    add x3, x3, #4
+.Lhash_tail1:
+    cmp x3, x10
+    b.hs .Lhash_final
+    ldrb w4, [x9, x3]
+    mul x4, x4, x15
+    eor x16, x16, x4
+    ror x16, x16, #53
+    mul x16, x16, x11
+    add x3, x3, #1
+    b .Lhash_tail1
+.Lhash_final:
+    eor x16, x16, x16, lsr #33
+    mul x16, x16, x12
+    eor x16, x16, x16, lsr #29
+    mul x16, x16, x13
+    eor x0, x16, x16, lsr #32
+    ret
+    .p2align 3
+.Lhash_p1:
+    .quad 11400714785074694791
+.Lhash_p2:
+    .quad 14029467366897019727
+.Lhash_p3:
+    .quad 1609587929392839161
+.Lhash_p4:
+    .quad 9650029242287828579
+.Lhash_p5:
+    .quad 2870177450012600261
+
+// os.aes_ctr and os.ghash_blocks (C098): the answer is none -- there is no AES-NI here, so the
+// caller keeps its portable path. (ARMv8 AES and PMULL would be the same two functions.)
+.global neper_os_aes_ctr
+neper_os_aes_ctr:
+    mov x0, #0
+    ret
+.global neper_os_ghash_blocks
+neper_os_ghash_blocks:
+    mov x0, #0
+    ret
+.global neper_os_cpu_features
+neper_os_cpu_features:
+    mov x0, #0
+    ret
+.global neper_os_aes_expand_key
+neper_os_aes_expand_key:
+    mov x0, #0
+    ret

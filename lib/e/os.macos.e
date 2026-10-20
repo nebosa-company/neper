@@ -2080,3 +2080,105 @@ fn poller_close(p: own Poller) -> err {
     let state = mem.cast[*PollerState](p.state)
     ret from_errno(syscall(SYS_CLOSE, state.queue, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
+
+// The calling thread's identifier, the system's own (thread_selfid), for the code that keys a
+// table by thread.
+const SYS_THREAD_SELFID: usize = 372usize
+
+fn current_thread_id() -> usize {
+    let answer = syscall(SYS_THREAD_SELFID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if answer < 0isize { ret 0usize }
+    ret usize(answer)
+}
+
+// ---------------------------------------------------------------- small members
+
+@import("c", "getpagesize")
+extern fn raw_getpagesize() -> i32
+
+@import("c", "strerror")
+extern fn raw_strerror(code: i32) -> *u8
+
+@import("c", "usleep")
+extern fn raw_usleep(microseconds: u32) -> i32
+
+// 16 KB on Apple Silicon and 4 KB on Intel, which only the system knows.
+fn page_size() -> usize { ret usize(raw_getpagesize()) }
+
+const MESSAGE_MAX: usize = 512usize
+
+// The system's own wording for an errno, which is the one thing a table here could not keep in
+// step with.
+fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) {
+    let text = raw_strerror(detail.native_code)
+    if mem.address_of(text) == 0usize { ret ("", Failed) }
+    var region: mem.Arena = zero
+    region.base = text
+    region.cap = MESSAGE_MAX
+    region.off = 0usize
+    let bytes = mem.view(&region, 0usize, MESSAGE_MAX)
+    var length = 0usize
+    while length < MESSAGE_MAX && bytes[length] != 0u8 { length += 1usize }
+    if length == 0usize { ret ("", NotFound) }
+    let (copy, copy_error) = mem.alloc[u8](a, length)
+    if copy_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < length {
+        copy[at] = bytes[at]
+        at += 1usize
+    }
+    ret (copy[0usize..length], ok)
+}
+
+// flock(2): a whole-file advisory lock, shared or exclusive. A negative timeout waits; zero is
+// one attempt, answered `WouldBlock`; a positive one polls every few milliseconds until it runs
+// out, answered `Timeout`.
+type FileLock = resource(file_unlock) struct { raw: usize }
+
+const SYS_FLOCK: usize = 131usize
+const LOCK_SH: usize = 1usize
+const LOCK_EX: usize = 2usize
+const LOCK_NB: usize = 4usize
+const LOCK_UN: usize = 8usize
+const LOCK_POLL_NS: i64 = 5000000i64
+
+fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
+    var lock: FileLock = zero
+    var operation = LOCK_SH
+    if exclusive { operation = LOCK_EX }
+    if timeout_ns < 0i64 {
+        let waited = syscall(SYS_FLOCK, file.raw, operation, 0usize, 0usize, 0usize, 0usize)
+        if waited < 0isize { ret (lock, from_errno(waited)) }
+        lock.raw = file.raw
+        ret (lock, ok)
+    }
+    var remaining = timeout_ns
+    while true {
+        let result = syscall(SYS_FLOCK, file.raw, operation | LOCK_NB, 0usize, 0usize, 0usize, 0usize)
+        if result >= 0isize {
+            lock.raw = file.raw
+            ret (lock, ok)
+        }
+        // EWOULDBLOCK is someone else holding it; anything else is the caller's answer.
+        if result != -35isize { ret (lock, from_errno(result)) }
+        if remaining <= 0i64 {
+            if timeout_ns == 0i64 { ret (lock, WouldBlock) }
+            ret (lock, Timeout)
+        }
+        var slice = LOCK_POLL_NS
+        if remaining < slice { slice = remaining }
+        let slept = raw_usleep(u32(slice / 1000i64))
+        remaining = remaining - slice
+    }
+    ret (lock, Failed)
+}
+
+fn file_unlock(lock: own FileLock) -> err {
+    ret from_errno(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
+}
+
+// What a process gives up for the rest of its life. Darwin's sandbox_init is a private,
+// deprecated interface, so this answers `Unsupported`.
+type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes: bool, deny_dynamic_code: bool, kill_on_violation: bool }
+
+fn sandbox(policy: *const SandboxPolicy) -> err { ret Unsupported }
