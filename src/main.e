@@ -14581,7 +14581,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 // program and not the twenty of a large one.
                 let table_at = code.machine.count
                 try codegen_x64.append_symbol_table(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count, same(args[4usize], "aarch64"))
-                let executable_capacity = code.machine.count + 1048576usize + link_elf.debug_bound(&builder, code.lines[..code.line_count])
+                let executable_capacity = code.machine.count + 1048576usize + nir.global_area_size(&builder) + link_elf.debug_bound(&builder, code.lines[..code.line_count])
                 let (executable_storage, executable_storage_error) = mem.alloc[u8](a, executable_capacity)
                 if executable_storage_error != ok { ret executable_storage_error }
                 report.build.pools[stats.POOL_IMAGE] = executable_storage.len

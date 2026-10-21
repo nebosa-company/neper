@@ -371,9 +371,9 @@ fn rasterize(scratch: []u8, cur: []const i64, tags: []const i64, ends: []const u
 // A8 mask through its pre-blend table with Android's constants (`lut_build_android`). Validated against freetype-py in
 // scripts/material/ftprobe.py (docs/ui/looks/android-text.md).
 
-const FT_ACC_CELLS: usize = 262144usize
+const FT_ACC_CELLS: usize = 65536usize
 
-var ft_acc: [262144]f64 = zero
+var ft_acc: [65536]f64 = zero
 
 // The table a text colour selects on A8: `SkComputeLuminance` of the raw colour (A8 cannot keep three channels), the top three bits.
 fn lut_key_android(red: f32, green: f32, blue: f32) -> usize {

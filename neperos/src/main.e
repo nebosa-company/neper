@@ -1072,7 +1072,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         driver_pool_bytes = 4194304usize
         // A large arena when the program asks for it (`-append gpu bigarena`), for the e.gpu/e.ui
         // stack; the plain test pattern and gfx.paint scenes keep the small in-window arena.
-        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 33554432usize }
         let (gpu_bar, gpu_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "gpu")
         if gpu_error != ok { ret gpu_error }
         driver_arena_bytes = 0usize

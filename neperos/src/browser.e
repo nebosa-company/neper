@@ -378,7 +378,7 @@ fn style_rules(a: *mem.Arena, doc: *const html.Document) -> []const cascade.Rule
                                         var q = 0usize
                                         while q < chosen.len {
                                             if !chosen[q].has_pseudo {
-                                                let pushed = list.push[cascade.Rule](&out, cascade.Rule { selector: chosen[q].selector, declarations: decls[0usize..parsed.len], source: order, has_layer: false, layer: 0i64, containers: zero, scopes: zero })
+                                                let pushed = list.push[cascade.Rule](&out, cascade.Rule { selector: chosen[q].selector, declarations: decls[0usize..parsed.len], source: order, has_layer: false, layer: 0i64, containers: zero, scopes: zero, pseudo: -1i64 })
                                                 order += 1i64
                                             }
                                             q += 1usize
@@ -439,7 +439,7 @@ fn walk(a: *mem.Arena, s: *State, st: *Styler, doc: *const html.Document, id: ht
     }
     let (size_text, has_size) = winner_value(winners, "font-size")
     if has_size {
-        let bases = cssvalue.Bases { has_em: true, em: 16.0f64, has_rem: true, rem: 16.0f64, has_percent: true, percent: 16.0f64, has_viewport_width: false, viewport_width: 0.0f64, has_viewport_height: false, viewport_height: 0.0f64 }
+        let bases = cssvalue.Bases { has_em: true, em: 16.0f64, has_rem: true, rem: 16.0f64, has_percent: true, percent: 16.0f64, has_viewport_width: false, viewport_width: 0.0f64, has_viewport_height: false, viewport_height: 0.0f64, ch: 0.5f64, ex: 0.5f64 }
         let (length, length_ok) = cssvalue.parse_length(a, size_text, bases)
         if length_ok {
             let (px, px_ok) = cssvalue.to_px(length, bases)
