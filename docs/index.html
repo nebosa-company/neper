@@ -286,11 +286,12 @@
     <main id="top">
       <div class="hero">
         <div>
-          <div class="eyebrow">&gt; first of its kind_</div>
+          <div class="eyebrow">&gt; open source, measured in public_</div>
           <h1>The first general-purpose programming language <span>optimized end to end for LLM-generated software.</span></h1>
           <p class="lede">Build deterministic native software for Windows, Linux, macOS, CPU, and GPU. Neper is MIT open source, designed for AI coding agents, and 100% self-hosted—from compiler and linker to its ultra-rich standard library.</p>
           <div class="actions">
-            <a class="button nu-btn lg" href="https://github.com/nebosa-company/neper">View on GitHub →</a>
+            <a class="button nu-btn lg" href="#start">Run your first program →</a>
+            <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper">⭐ Star on GitHub</a>
             <a class="button secondary nu-btn tonal lg" href="#llm">See every LLM feature</a>
             <a class="button secondary nu-btn tonal lg" href="https://youtu.be/iZI3FmttYn4" data-trailer>▶ Watch the 30-second trailer</a>
           </div>
@@ -322,6 +323,23 @@ Hello, Neper</code></pre>
         <div class="metric"><strong>Self-verifying</strong><span>byte-identical compiler fixed point</span></div>
       </div>
 
+      <section id="start">
+        <div class="eyebrow">&gt; your first program_</div>
+        <h2>Run one in a minute.</h2>
+        <p class="section-intro">Three small steps. Each one is yours to take, and none needs an account.</p>
+        <div class="terminal">
+          <div class="terminal-bar">first run</div>
+          <pre><code><span class="prompt">$</span> git clone https://github.com/nebosa-company/neper
+<span class="prompt">$</span> <span class="str"># save the hello.e example above as hello.e</span>
+<span class="prompt">$</span> neper run hello.e
+Hello, Neper</code></pre>
+        </div>
+        <div class="actions">
+          <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper#readme">Setup notes in the README</a>
+          <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper/discussions/new?category=show-and-tell">Tell us what you'll build</a>
+        </div>
+      </section>
+
       <section id="demo">
         <div class="eyebrow">00 // watch it work</div>
         <h2>From prompt to native binary.</h2>
@@ -337,7 +355,7 @@ Hello, Neper</code></pre>
           <article class="benefit">
             <b>[ ultra fast ]</b>
             <h3>One million lines. Under one second.</h3>
-            <p>A direct emitter, declaration-level incremental work, and no LLVM make 1M+ lines/sec/core the baseline design target—not a stretch goal.</p>
+            <p>A direct emitter, declaration-level incremental work, and no LLVM make 1M+ lines/sec/core the baseline design target. It is a target we measure and publish, including where we miss it—see the blog.</p>
           </article>
           <article class="benefit">
             <b>[ ultra small ]</b>
@@ -362,8 +380,8 @@ Hello, Neper</code></pre>
         <h2>An ultra-rich standard library.</h2>
         <p class="section-intro">One coherent library surface replaces dependency archaeology. Every module is fenced, fixture-driven, and available to the compiler, the agent, and the reviewer under the same version.</p>
         <div class="catalog-stats" aria-label="Neper library and user interface catalog totals">
-          <div class="catalog-stat"><strong>344</strong><span>standard-library modules</span><button class="catalog-explore" type="button" data-catalog="module-catalog">Explore →</button></div>
-          <div class="catalog-stat"><strong>1,232</strong><span>standard-library algorithms</span><button class="catalog-explore" type="button" data-catalog="algorithm-catalog">Explore →</button></div>
+          <div class="catalog-stat"><strong>603</strong><span>standard-library modules</span><button class="catalog-explore" type="button" data-catalog="module-catalog">Explore →</button></div>
+          <div class="catalog-stat"><strong>1,248</strong><span>standard-library algorithms</span><button class="catalog-explore" type="button" data-catalog="algorithm-catalog">Explore →</button></div>
           <div class="catalog-stat"><strong>112</strong><span>native UI controls</span><button class="catalog-explore" type="button" data-catalog="control-catalog">Explore →</button></div>
         </div>
         <div class="library-grid">
@@ -570,6 +588,8 @@ Hello, Neper</code></pre>
         <h2>One language.<br>Every machine.<br>Built for models.</h2>
         <div class="actions">
           <a class="button nu-btn lg" href="https://github.com/nebosa-company/neper">Fork the MIT source →</a>
+          <a class="button secondary nu-btn tonal lg" href="https://discord.gg/AdRneEsbCu">Join the Discord</a>
+          <a class="button secondary nu-btn tonal lg" href="ux/showcase.html">See what's built with Neper</a>
           <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper#readme">Read the README</a>
         </div>
       </section>
@@ -591,7 +611,7 @@ Hello, Neper</code></pre>
   <dialog class="catalog-dialog" id="module-catalog" aria-labelledby="module-catalog-title">
     <div class="catalog-dialog-frame">
       <header class="catalog-dialog-header">
-        <div><div class="eyebrow">e.* // standard library</div><h2 id="module-catalog-title">344 modules</h2></div>
+        <div><div class="eyebrow">e.* // standard library</div><h2 id="module-catalog-title">603 modules</h2></div>
         <form method="dialog"><button class="catalog-dialog-close" aria-label="Close module catalog"><span aria-hidden="true">×</span></button></form>
       </header>
       <div class="catalog-dialog-body">
@@ -603,7 +623,7 @@ Hello, Neper</code></pre>
   <dialog class="catalog-dialog" id="algorithm-catalog" aria-labelledby="algorithm-catalog-title">
     <div class="catalog-dialog-frame">
       <header class="catalog-dialog-header">
-        <div><div class="eyebrow">e.* // standard library</div><h2 id="algorithm-catalog-title">1,232 algorithms</h2></div>
+        <div><div class="eyebrow">e.* // standard library</div><h2 id="algorithm-catalog-title">1,248 algorithms</h2></div>
         <form method="dialog"><button class="catalog-dialog-close" aria-label="Close algorithm catalog"><span aria-hidden="true">×</span></button></form>
       </header>
       <div class="catalog-dialog-body">
@@ -638,7 +658,7 @@ Hello, Neper</code></pre>
       ["Media and refresh", "Carousel PullToRefresh".split(" ")]
     ])
 
-    function renderCatalog(dialog, groups, expected) {
+    function renderCatalog(dialog, groups) {
       const output = dialog.querySelector(".catalog-dialog-groups")
       const fragment = document.createDocumentFragment()
       let count = 0
@@ -684,7 +704,8 @@ Hello, Neper</code></pre>
         group.append(heading, grid)
         fragment.append(group)
       }
-      if (count !== expected) throw new Error(`expected ${expected} catalog entries, got ${count}`)
+      if (!count) throw new Error("catalog is empty")
+      if (dialog.id !== "control-catalog") dialog.querySelector("h2").textContent = `${count.toLocaleString("en-US")} ${dialog.id === "module-catalog" ? "modules" : "algorithms"}`
       output.replaceChildren(fragment)
       dialog.querySelector(".catalog-dialog-status").hidden = true
       dialog.dataset.loaded = "true"
@@ -913,7 +934,7 @@ Hello, Neper</code></pre>
         if (!groups.has(namespace)) groups.set(namespace, [])
         groups.get(namespace).push({name, description: describeModule(name)})
       }
-      renderCatalog(dialog, groups, 344)
+      renderCatalog(dialog, groups)
     }
 
     async function loadAlgorithms(dialog) {
@@ -929,12 +950,12 @@ Hello, Neper</code></pre>
         if (!groups.has(category)) groups.set(category, [])
         groups.get(category).push({name: entry[1], detail: entry[2]})
       }
-      renderCatalog(dialog, groups, 1232)
+      renderCatalog(dialog, groups)
     }
 
     function loadControls(dialog) {
       const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, preview: name, href: `ux/components/${name}/preview.html`}))]))
-      renderCatalog(dialog, groups, 112)
+      renderCatalog(dialog, groups)
     }
 
     for (const trigger of document.querySelectorAll("[data-catalog]")) {
