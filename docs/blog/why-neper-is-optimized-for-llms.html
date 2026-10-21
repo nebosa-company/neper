@@ -118,15 +118,20 @@
       footer { flex-direction: column; }
     }
 
-    .table-scroll { overflow: visible; }
+    .table-scroll { overflow: clip; border-radius: var(--radius-md); }
+    .table-scroll thead th { border-radius: 0; }
     table { table-layout: auto; }
     th, td { white-space: normal; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
     td code, th code { font-size: .92em; overflow-wrap: anywhere; }
+    td.nw, th.nw { white-space: nowrap; }
+    .try-cta .button { display: inline-flex; align-items: center; justify-content: center; text-align: center; }
     td.num, th.num { text-align: right; white-space: nowrap; }
     figure video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
     .win-note { color: var(--on-surface-variant); font-size: 14px; }
     pre.term { margin: 0 0 var(--space-6); }
     pre.term code { white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre .k { color: #8e3fb8; } pre .t { color: #145db2; } pre .n { color: #b3541e; } pre .c { color: #6b7280; font-style: italic; } pre .s { color: #1e7a3c; } pre .l { color: var(--on-surface-variant); user-select: none; }
+    @media (prefers-color-scheme: dark) { pre .k { color: #d7a6f5; } pre .t { color: #9cc0ff; } pre .n { color: #ffb08a; } pre .c { color: #8d93a8; } pre .s { color: #a5e3a0; } }
     .bad { color: #c0392b; } .good { color: #1e8e3e; }
     @media (prefers-color-scheme: dark) { .bad { color: #ff7b86; } .good { color: #7ddf9a; } }
     @media (max-width: 599px) { th, td { padding: var(--space-2) var(--space-2); font-size: 13px; } }
@@ -174,20 +179,20 @@
       <p>Section 14 of the specification lists invariants that are rules, not style advice. They exist so that a search, a glob or an anchored edit is <em>reliable</em> rather than probabilistic.</p>
       <div class="table-scroll"><table><thead><tr><th>Rule</th><th>What it guarantees</th><th>Why a model benefits</th></tr></thead><tbody><tr><td>One definition per name, no overloading</td><td>A search for <code>^fn dot</code> returns exactly one line in the defining module</td><td>One search resolves a name; no overload resolution to simulate</td></tr><tr><td>Declarations start at column 0 with a keyword</td><td>A search for <code>^fn</code> lists functions; an unclosed bracket cannot cross a declaration keyword</td><td>Exact navigation; a dropped bracket is reported where it opened, not 200 lines later</td></tr><tr><td>File path is the module name</td><td>A glob finds a module without opening it</td><td>Locating code costs no file reads</td></tr><tr><td>Every cross-module reference is qualified</td><td>A call site names its module, as in <code>mem.alloc</code></td><td>The definition is one search away and the type is in the name</td></tr><tr><td>No macros, no preprocessor, no textual generation</td><td>What you read is what compiles</td><td>No hidden expansion to predict</td></tr><tr><td>No implicit conversions</td><td>Every cast is written down and greppable</td><td>Numeric-width bugs are visible on the line</td></tr><tr><td>Order-independent module scope</td><td>An insertion can go anywhere; no forward declarations</td><td>Edits need no global ordering knowledge</td></tr><tr><td>One canonical layout</td><td>Enforced by <code>neper fmt --check</code></td><td>Minimal diffs; edits land where expected</td></tr><tr><td>Index as data</td><td><code>neper index</code> emits versioned JSONL of every definition and reference with byte-precise spans</td><td>Tools never parse source or re-implement name lookup</td></tr><tr><td>Enforced casing</td><td><code>snake_case</code> values, <code>PascalCase</code> types, <code>SCREAMING_SNAKE</code> constants</td><td>A name's kind is legible without a lookup</td></tr><tr><td>Tokens and syntax are public data</td><td><code>neper tokens</code> and <code>neper parse</code> give lossless, versioned output</td><td>A harness needs no private compiler API</td></tr><tr><td>Generated code keeps provenance</td><td>An optional <code>.e.map.json</code> maps generated spans to their inputs</td><td>Generated code stays traceable without a preprocessor</td></tr></tbody></table></div>
       <p>Run against a program, the first rule is a one-liner. The listing below is the real output for the demo file used throughout this post:</p>
-      <pre class="term"><code><span class="prompt">$</span> grep -n &quot;^fn&quot; main.e
-4:fn clamp(value: i64, low: i64, high: i64) -&gt; i64 {
-10:fn fill(a: *mem.Arena, count: usize) -&gt; err {
-16:fn main(a: *mem.Arena, args: []str) -&gt; err {</code></pre>
+      <pre class="term"><code><span class="prompt">$</span> grep -n "^fn" main.e
+<span class="l">4:</span><span class="k">fn</span> clamp(value: <span class="t">i64</span>, low: <span class="t">i64</span>, high: <span class="t">i64</span>) -&gt; <span class="t">i64</span> {
+<span class="l">10:</span><span class="k">fn</span> fill(a: *mem.Arena, count: <span class="t">usize</span>) -&gt; <span class="t">err</span> {
+<span class="l">16:</span><span class="k">fn</span> main(a: *mem.Arena, args: []<span class="t">str</span>) -&gt; <span class="t">err</span> {</code></pre>
       <p>Three functions, three lines, one definition each. No tool is needed to answer "where is <code>clamp</code> defined".</p>
 
       <h2>Hidden context, removed: the no-shadowing rule</h2>
       <p>Beyond the section 14 list, a local may not reuse a reserved word, a module-scope function, a <code>use</code> qualifier or a builtin. That looks fussy. It is the reason a name means one thing within a file, and it was a leading cause of failed builds in our transcripts. Here is the mistake a model makes, using a builtin name for a local:</p>
-      <pre class="term"><code>use e.mem
+      <pre class="term"><code><span class="k">use</span> e.mem
 
-fn fill(a: *mem.Arena, count: usize) -&gt; err {
-    let target = count
-    if target &gt; 4usize { ret mem.Exhausted }
-    ret ok
+<span class="k">fn</span> fill(a: *mem.Arena, count: <span class="t">usize</span>) -&gt; <span class="t">err</span> {
+    <span class="k">let</span> target = count
+    <span class="k">if</span> target &gt; <span class="n">4usize</span> { <span class="k">ret</span> mem.Exhausted }
+    <span class="k">ret</span> <span class="k">ok</span>
 }</code></pre>
       <p>The compiler refuses it with a stable code and, importantly, tells the model exactly how to repair it:</p>
       <pre class="term"><code><span class="prompt">$</span> neper check-file main.e . x64 windows --json
@@ -274,8 +279,8 @@ postcondition: check-file passes; uses-file --symbol main.clamp_percent reports 
       </ul>
 
       <h2>The adopted requirement set</h2>
-      <p>The post-M2 review distilled sixteen requirements. P0 items block any claim that the language is “optimized for LLM processing”.</p>
-      <div class="table-scroll"><table><thead><tr><th></th><th>Requirement</th><th>Priority</th></tr></thead><tbody><tr><td>R01</td><td>Compiler-enforced ownership and lifetime; a first-class unsafe boundary; checks kept in optimized builds unless proved away</td><td>P0</td></tr><tr><td>R02</td><td>Semantic context query with provenance on every fact</td><td>P0</td></tr><tr><td>R03</td><td>Token-cost measurement steers syntax</td><td>P0</td></tr><tr><td>R04</td><td>Transactional multi-file repair and refactor with preconditions</td><td>P1</td></tr><tr><td>R05</td><td>Executable, retrievable API catalogue; planned APIs never returned as callable</td><td>P1</td></tr><tr><td>R06</td><td>Edit-loop latency: reuse, snapshots, lifetimes</td><td>P1</td></tr><tr><td>R07</td><td>Held-out two-family evidence gate</td><td>P1</td></tr><tr><td>R08</td><td>Tokenizer grounding as a design input</td><td>P2</td></tr><tr><td>R09</td><td>Unsafe and escape-hatch enumeration as a review surface</td><td>P2</td></tr><tr><td>R10</td><td>LLM cards compiled from the grammar</td><td>P2</td></tr><tr><td>R11</td><td>Structured, AST-level edits over raw spans</td><td>P2</td></tr><tr><td>R12</td><td>Tiered, snapshot-correct fast checks</td><td>P0</td></tr><tr><td>R13</td><td>Causal diagnostics with recoverable compact views</td><td>P0</td></tr><tr><td>R14</td><td>Structured test selection, evidence and summaries</td><td>P0</td></tr><tr><td>R15</td><td>Source and protocol token-pressure budgets</td><td>P0</td></tr><tr><td>R16</td><td>One coherent agent workflow and a verified stop state</td><td>P0</td></tr></tbody></table></div>
+      <p>The post-M2 review distilled sixteen requirements. The ones that gate the claim that the language is “optimized for LLM processing” are R01, R02, R03 and R12–R16.</p>
+      <div class="table-scroll"><table><thead><tr><th class="nw"></th><th>Requirement</th></tr></thead><tbody><tr><td class="nw">R01</td><td>Compiler-enforced ownership and lifetime; a first-class unsafe boundary; checks kept in optimized builds unless proved away</td></tr><tr><td class="nw">R02</td><td>Semantic context query with provenance on every fact</td></tr><tr><td class="nw">R03</td><td>Token-cost measurement steers syntax</td></tr><tr><td class="nw">R04</td><td>Transactional multi-file repair and refactor with preconditions</td></tr><tr><td class="nw">R05</td><td>Executable, retrievable API catalogue; planned APIs never returned as callable</td></tr><tr><td class="nw">R06</td><td>Edit-loop latency: reuse, snapshots, lifetimes</td></tr><tr><td class="nw">R07</td><td>Held-out two-family evidence gate</td></tr><tr><td class="nw">R08</td><td>Tokenizer grounding as a design input</td></tr><tr><td class="nw">R09</td><td>Unsafe and escape-hatch enumeration as a review surface</td></tr><tr><td class="nw">R10</td><td>LLM cards compiled from the grammar</td></tr><tr><td class="nw">R11</td><td>Structured, AST-level edits over raw spans</td></tr><tr><td class="nw">R12</td><td>Tiered, snapshot-correct fast checks</td></tr><tr><td class="nw">R13</td><td>Causal diagnostics with recoverable compact views</td></tr><tr><td class="nw">R14</td><td>Structured test selection, evidence and summaries</td></tr><tr><td class="nw">R15</td><td>Source and protocol token-pressure budgets</td></tr><tr><td class="nw">R16</td><td>One coherent agent workflow and a verified stop state</td></tr></tbody></table></div>
       <p>Several of these already show up as shipped, verified commands: the context query, the plans and transactional apply, test impact and the generated card. The compiler-enforced ownership subset, the full unsafe enumeration and the evidence gate are adopted requirements with their own delivery tracks.</p>
 
       <div class="callout">
