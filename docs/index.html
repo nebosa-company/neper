@@ -954,7 +954,7 @@ Hello, Neper</code></pre>
     }
 
     function loadControls(dialog) {
-      const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, preview: name, href: `ux/components/${name}/preview.html`}))]))
+      const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, preview: name, href: `ux/control-preview.html?name=${name}`}))]))
       renderCatalog(dialog, groups)
     }
 
