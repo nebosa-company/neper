@@ -1,0 +1,24 @@
+<!-- @dsCard group="Inputs" height=300 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<style>
+.pv-e{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--space-5) var(--space-8);padding:var(--space-4);color:var(--on-surface);font:14px/20px var(--font-sans)}
+.pv-e label{display:block;margin-bottom:4px;color:var(--on-surface-variant);font-size:12px}
+.pv-e .f{display:flex;align-items:center;height:40px;border:1px solid var(--outline);border-radius:var(--radius-xs);background:var(--surface)}
+.pv-e .f.focus{border:2px solid var(--primary)}
+.pv-e .f.err{border-color:#ffb4ab}
+.pv-e .f.off{opacity:.45}
+.pv-e .t{flex:1;padding:0 12px}
+.pv-e .b{align-self:stretch;display:grid;place-items:center;min-width:32px;padding:0 10px;border-left:1px solid var(--outline-variant);color:var(--primary);font-weight:600}
+.pv-e .s{margin-top:4px;color:var(--on-surface-variant);font-size:12px}
+</style>
+<div class="nu-page"><div class="pv-e">
+  <div><label>Output folder</label><div class="f"><span class="t">D:\builds\neper</span><span class="b" role="button">Browse…</span></div><div class="s">Type a path or browse.</div></div>
+  <div><label>Accent colour</label><div class="f focus"><span class="t">#1B3A6B</span><span class="b" role="button" aria-label="Pick colour">◐</span></div><div class="s">Focused: Alt+Down opens the picker.</div></div>
+  <div><label>Source file</label><div class="f err"><span class="t">missing.e</span><span class="b" role="button">Browse…</span></div><div class="s" style="color:#ffb4ab">Choose a file that exists.</div></div>
+  <div><label>Cache folder</label><div class="f off"><span class="t">D:\cache</span><span class="b" aria-disabled="true">Browse…</span></div><div class="s">Disabled by the active profile.</div></div>
+</div></div>
+</body>
+</html>

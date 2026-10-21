@@ -2,6 +2,8 @@
 
 The browser control is a web browser in a window: a tab strip, back, forward and reload, an omnibox, a bookmark toggle and the page, over the Neper engine (`e.web.page`) and its shell model (`e.web.shell`). It is the one control that hosts other documents.
 
+![The Neper browser window](browser.png)
+
 ## Anatomy
 1. Tab strip: one tab per open page, each with its title and a close button, and a new-tab button. Each tab owns an arena and its own session history.
 2. Navigation buttons: back, forward and reload (back and forward are disabled when the history has no entry in that direction).
