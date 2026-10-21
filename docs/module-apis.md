@@ -20188,7 +20188,7 @@ fn is_name_start(c: i32) -> bool
 fn is_name(c: i32) -> bool
 fn hex_value(c: i32) -> i32
 
-type Scan = struct { a: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token] }
+type Scan = struct { a: *mem.Arena, keep: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token] }
 
 fn cp(s: *const Scan, at: usize) -> i32
 fn peek(s: *const Scan, offset: usize) -> i32
@@ -20234,6 +20234,8 @@ fn parse_rules(a: *mem.Arena, tokens: []const Token, top_level: bool) -> ([]cons
 fn parse_one_declaration(g: *Grammar, toks: []const Token) -> (Declaration, bool)
 fn parse_declarations(a: *mem.Arena, tokens: []const Token) -> ([]const Declaration, err)
 fn raw_text(source: str, tokens: []const Token) -> str
+fn decoded_text(a: *mem.Arena, source: str, tokens: []const Token) -> str
+fn tokenize_with(a: *mem.Arena, keep: *mem.Arena, input: str) -> ([]const Token, err)
 ```
 
 A CSS Syntax Level 3 tokenizer and rule grammar (L038), after Vaper's `css_tokenizer.dart` and `css_syntax.dart`: `tokenize` turns text into tokens with byte offsets and never fails (malformed text becomes `BadString`, `BadUrl` and `Delim` recovery tokens), `parse_rules` builds qualified rules, at-rules and simple blocks, `parse_declarations` reads a block's declarations with `!important`, and `raw_text` slices the source for a token range byte-faithfully. Unbalanced blocks end at the end of input, a bad declaration is skipped to the next `;` and a rule with no block is dropped. Checked against Vaper's own Dart code over 420 random inputs of well-formed and malformed CSS on both hosts (D2340).
@@ -20309,10 +20311,10 @@ Animation interpolation kernels (L039), after Vaper's `vaper_css_values/lib/src/
 ### `e.gfx.cssvalue`
 
 ```neper
-type LengthUnit = enum u8 { Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax }
+type LengthUnit = enum u8 { Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax, Ch }
 type LengthOp = enum u8 { None, Min, Max, Clamp, Abs, Hypot, Mod, Rem, RoundNearest, RoundUp, RoundDown, RoundToZero }
 type CssLength = struct { value: f64, unit: LengthUnit, px_offset: f64, op: LengthOp, terms: []const CssLength }
-type Bases = struct { has_em: bool, em: f64, has_rem: bool, rem: f64, has_percent: bool, percent: f64, has_viewport_width: bool, viewport_width: f64, has_viewport_height: bool, viewport_height: f64 }
+type Bases = struct { has_em: bool, em: f64, has_rem: bool, rem: f64, has_percent: bool, percent: f64, has_viewport_width: bool, viewport_width: f64, has_viewport_height: bool, viewport_height: f64, ch: f64, ex: f64 }
 
 fn no_bases() -> Bases
 fn pi() -> f64
@@ -20584,6 +20586,16 @@ fn email_ok(value: str) -> bool
 fn url_ok(value: str) -> bool
 fn control_invalid(m: *const Matcher, el: html.NodeId) -> bool
 fn matches_pseudo_class(m: *const Matcher, pseudo: str, el: html.NodeId) -> bool
+const F_CHECKED: u32 = 2u32
+const F_CHECKED_AUTH: u32 = 1u32
+const F_DEFINED: u32 = 16u32
+const F_FOCUS: u32 = 32u32
+const F_FOCUS_WITHIN: u32 = 64u32
+const F_INDETERMINATE: u32 = 4u32
+const F_MODAL: u32 = 128u32
+const F_POPOVER_OPEN: u32 = 8u32
+fn looks_custom(name: str) -> bool
+fn matches_lang(m: *const Matcher, el: html.NodeId, argument: str) -> bool
 ```
 
 Selector matching over an HTML document (L040), after Vaper's `css/selector_matcher.dart`: a parsed selector from `e.fmt.css.selector` tested against an element of an `e.fmt.html` document by walking its combinators right to left from the key compound, with the simple selectors, the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` and its relative lookahead, `:nth-*()` with An+B and `of S`, the attribute operators with the `i` flag, and the state and form pseudo-classes (`:hover`, `:focus`, `:checked`, `:disabled`, `:required`, `:in-range`, `:valid`, `:invalid`, ...) over a `State` the host installs. Checked against Vaper's own matcher over 560 random documents and selector lists on both hosts (D2343).
@@ -20602,13 +20614,12 @@ type Rule = struct { selector: selector.Selector, declarations: []const Declarat
 type Declared = struct { declaration: Declaration, author: bool, hint: bool, specificity: i64, source: i64, has_layer: bool, layer: i64, proximity: i64 }
 type Winner = struct { property: str, value: str }
 type Bucket = enum u8 { Universal, Id, Klass, Tag }
-type Index = struct { rules: []const Rule, buckets: []Bucket, keys: []str }
+type Index = struct { rules: []const Rule, ids: map.Map[str, usize], classes: map.Map[str, usize], tags: map.Map[str, usize], head: []usize, tail: []usize, next: []usize, slots: usize, universal_head: usize, universal_tail: usize }
 fn beats(x: Declared, y: Declared) -> bool
 fn find_property(best: *const list.List[Declared], property: str) -> i64
 fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner
 fn drop_outranked_longhands(best: *list.List[Declared], shorthand: str, first: str, second: str)
-fn build_index(a: *mem.Arena, rules: []const Rule) -> Index
-fn push_bucket(out: *list.List[usize], idx: *const Index, bucket: Bucket, key: str)
+fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index
 fn is_blank_byte(c: u8) -> bool
 fn class_seen(classes: str, end: usize, name: str) -> bool
 fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []const usize
@@ -20634,6 +20645,9 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Dec
 fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration
 fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox)
 fn resolve(m: *const match.Matcher, ua: []const Rule, author: []const Rule, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> []const Winner
+const END: usize = 18446744073709551615usize
+fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize)
+fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str)
 ```
 
 ### `e.fmt.html.accessible`
@@ -24519,6 +24533,10 @@ fn walker_child(d: *const Dom, w: *Walker, from_end: bool) -> NodeId
 fn walker_sibling(d: *const Dom, w: *Walker, backwards: bool) -> NodeId
 fn walker_next(d: *const Dom, w: *Walker) -> NodeId
 fn walker_previous(d: *const Dom, w: *Walker) -> NodeId
+fn known_pseudo_class(name: str) -> bool
+fn parse_with(a: *mem.Arena, source: str, options: html.Options, spare: usize, scripting: bool) -> (Dom, err)
+fn selector_known(sel: selector.Selector) -> bool
+fn sized(options: html.Options, source: str) -> html.Options
 ```
 
 ### `e.fmt.css.expand`
@@ -24576,6 +24594,17 @@ fn is_shorthand(p: str) -> bool
 fn sample_value(p: str) -> str
 fn logical_target(a: *mem.Arena, p: str, rtl: bool) -> str
 fn expand_value(a: *mem.Arena, p: str, v: str, rtl: bool, out: *list.List[Pair]) -> bool
+fn block_dim() -> str
+fn block_end() -> str
+fn block_start() -> str
+fn expand_grid(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn expand_grid_template(a: *mem.Arena, value: str, out: *list.List[Pair])
+fn has_quote(s: str) -> bool
+fn inline_dim() -> str
+var logical_wm: u8 = 0u8
+fn replace_word(a: *mem.Arena, s: str, word: str, with: str) -> str
+fn set_logical_wm(wm: u8)
+fn split_grid_slash(s: str) -> (str, str, bool)
 ```
 
 ### `e.fmt.css.style`
@@ -24587,7 +24616,7 @@ const BOTTOM: usize = 2usize
 const LEFT: usize = 3usize
 type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Number, Normal }
 type Len = struct { kind: LenKind, px: f64, pct: f64 }
-type Display = enum u8 { Inline, Block, None, Contents, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, Table, InlineTable, TableRow, TableCell, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableColumn, TableColumnGroup, TableCaption, ListItem, FlowRoot, Ruby, RubyText, RubyBase, RubyTextContainer, RubyBaseContainer }
+type Display = enum u8 { Inline, Block, None, Contents, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, Table, InlineTable, TableRow, TableCell, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableColumn, TableColumnGroup, TableCaption, ListItem, FlowRoot, Ruby, RubyText, RubyBase, RubyTextContainer, RubyBaseContainer, RunIn }
 type Position = enum u8 { Static, Relative, Absolute, Fixed, Sticky }
 type Float = enum u8 { None, Left, Right, InlineStart, InlineEnd }
 type Clear = enum u8 { None, Left, Right, Both, InlineStart, InlineEnd }
@@ -24619,8 +24648,8 @@ const DECORATION_OVERLINE: u8 = 2u8
 const DECORATION_LINE_THROUGH: u8 = 4u8
 type Custom = struct { name: str, value: str }
 type Extra = struct { name: str, value: str }
-type Style = struct
-type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool }
+type Style = struct { display: Display, was_inline: bool, lanes: bool, position: Position, floating: Float, clear: Clear, box_sizing: BoxSizing, overflow_x: Overflow, overflow_y: Overflow, visibility: Visibility, width: Len, height: Len, min_width: Len, min_height: Len, max_width: Len, max_height: Len, inset: [4]Len, margin: [4]Len, padding: [4]Len, border_width: [4]f64, border_style: [4]BorderStyle, border_color: [4]u32, border_current: [4]bool, radius_h: [4]Len, radius_v: [4]Len, z_index_auto: bool, z_index: i64, opacity: f64, flex_direction: FlexDirection, flex_wrap: FlexWrap, flex_grow: f64, flex_shrink: f64, flex_basis: Len, order: i64, justify_content: Align, justify_items: Align, justify_self: Align, align_items: Align, align_self: Align, align_content: Align, row_gap: Len, column_gap: Len, color: u32, font_size: f64, font_weight: f64, font_style: FontStyle, font_family: str, line_height: Len, letter_spacing: f64, word_spacing: f64, text_indent: Len, text_align: TextAlign, text_transform: TextTransform, white_space: WhiteSpace, word_break: WordBreak, overflow_wrap: OverflowWrap, text_overflow: TextOverflow, direction: Direction, writing_mode: WritingMode, vertical_align: VAlign, vertical_align_length: Len, decoration_line: u8, decoration_color: u32, decoration_current: bool, decoration_style: DecorationStyle, cursor: str, tab_size: f64, list_style_type: str, list_style_position: ListPosition, list_style_image: str, background_color: u32, outline_width: f64, outline_style: BorderStyle, outline_color: u32, outline_current: bool, outline_offset: f64, border_collapse: BorderCollapse, border_spacing_h: f64, border_spacing_v: f64, table_layout: TableLayout, caption_side: CaptionSide, empty_cells: EmptyCells, custom: []const Custom, extras: []const Extra, // The styles of the element's pseudo-elements, by `selector.PseudoElement` (an address of 0: the element has none). pseudo: [8]*const Style }
+type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, ch: f64, ex: f64 }
 fn new_context(a: *mem.Arena, viewport_width: f64, viewport_height: f64) -> Context
 fn len_auto() -> Len
 fn len_px(px: f64) -> Len
@@ -24678,7 +24707,7 @@ fn try_builder(a: *mem.Arena, cap: usize) -> Text
 fn builder_byte(t: *Text, c: u8)
 fn builder_text(t: *Text, s: str)
 fn builder_done(t: *Text) -> str
-type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, author: bool, pseudo_kinds: u32 }
+type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, pindex: cascade.Index, author: bool, pseudo_kinds: u32 }
 fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet
 fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64)
 fn consider(best: *list.List[cascade.Declared], entry: cascade.Declared)
@@ -24697,6 +24726,8 @@ fn load_style_elements(l: *sheet.Loader, d: *const dom.Dom) -> err
 fn compute_document(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err
 fn compute_document_sheets(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err
 fn compute_document_with(c: *Context, d: *const dom.Dom, sheets: []const str, style_elements: bool, out: []Style) -> err
+fn declared_writing_mode(declared: []const cascade.Declared, parent: *const Style) -> u8
+fn invalid_length_value(prop: str, v: str) -> bool
 ```
 
 ### `e.fmt.css.sheet`
@@ -24751,7 +24782,7 @@ fn url_in(a: *mem.Arena, entry: str) -> (str, bool)
 fn format_in(a: *mem.Arena, entry: str, url: str) -> str
 fn select_font_src(a: *mem.Arena, value: str) -> str
 type Ctx = struct { has_layer: bool, layer: i64, path: str, containers: []const cascade.ContainerQuery, scopes: []const cascade.Scope }
-type Loader = struct
+type Loader = struct { a: *mem.Arena, env: MediaEnv, rules: list.List[cascade.Rule], fonts: list.List[FontFace], keyframes: list.List[Keyframes], properties: list.List[PropertyRule], imports: list.List[str], layers: list.List[str], order: i64, anonymous: usize, scratch: mem.Arena }
 fn new_loader(a: *mem.Arena, env: MediaEnv) -> Loader
 fn layer_index(l: *Loader, name: str) -> i64
 fn decls_of(l: *Loader, src: str, tokens: []const syntax.Token) -> []const cascade.Declaration
@@ -24793,14 +24824,14 @@ fn rules_for(a: *mem.Arena, env: sheet.MediaEnv, quirks: bool) -> (sheet.Loaded,
 ```neper
 type FontMetrics = struct { ascent: f64, descent: f64, line_gap: f64, x_height: f64 }
 type Intrinsic = struct { kind: u8, has_width: bool, width: f64, has_height: bool, height: f64, ratio: f64 }
-type Measure = struct
+type Measure = struct { ctx: *void, width: fn(*void, *const style.Style, str) -> f64, metrics: fn(*void, *const style.Style) -> FontMetrics, intrinsic: fn(*void, html.NodeId, *const style.Style) -> Intrinsic }
 type Inner = enum u8 { Flow, FlowRoot, Flex, Grid, Table, Replaced, Text, Break, Marker, RowGroup, Row, Cell, Caption, ColumnGroup, Column }
 const NONE: u32 = 4294967295u32
-type Box = struct
+type Box = struct { inner: Inner, inline_level: bool, anonymous: bool, positioned_out: bool, node: u32, style: u32, parent: u32, first: u32, last: u32, prev: u32, next: u32, x: f64, y: f64, w: f64, h: f64, margin: [4]f64, border: [4]f64, padding: [4]f64, text: str, line_first: u32, line_count: u32, baseline: f64, has_baseline: bool, overflow_w: f64, overflow_h: f64, aux: u32, aux2: u32, min_c: f64, max_c: f64, has_c: bool, in_layout: bool, proc: str, coll: bool, cbd: [4]f64 }
 type FragKind = enum u8 { Text, Segment, Atomic, Marker }
 type Frag = struct { kind: FragKind, box: u32, x: f64, y: f64, w: f64, h: f64, text: str, first: bool, last: bool }
 type Line = struct { x: f64, y: f64, w: f64, h: f64, baseline: f64, frag_first: u32, frag_count: u32, overflow_ellipsis: bool }
-type Layout = struct
+type Layout = struct { a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, boxes: list.List[Box], lines: list.List[Line], frags: list.List[Frag], anon: list.List[style.Style], root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64, floats: list.List[FloatRec], tables: list.List[TableData], counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize, orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule] }
 type FloatRec = struct { box: u32, x: f64, y: f64, w: f64, h: f64, left: bool, root: u32 }
 fn st(l: *const Layout, id: u32) -> *const style.Style
 fn bx(l: *Layout, id: u32) -> *Box
@@ -24832,7 +24863,7 @@ fn is_inline_level_display(d: style.Display) -> bool
 fn is_out_of_flow(s: *const style.Style) -> bool
 fn gen_children(l: *Layout, node: u32, parent_box: u32)
 fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32)
-fn list_ordinal(l: *Layout, node: u32) -> u32
+fn list_ordinal(l: *Layout, node: u32) -> i64
 fn has_start_attr(l: *Layout, parent: u32) -> bool
 fn is_ws_only(s: str) -> bool
 fn is_block_container(l: *const Layout, b: u32) -> bool
@@ -24841,7 +24872,7 @@ fn promote_inline_with_blocks(l: *Layout, b: u32)
 fn flush_run(l: *Layout, parent: u32, first: u32, last: u32)
 fn collapses(l: *const Layout, b: u32) -> bool
 fn wrap_flex_items(l: *Layout, b: u32)
-type Flag = struct { v: bool }
+type Flag = struct { v: bool, cleared: bool }
 fn resolve_len(len: style.Len, basis: f64) -> (f64, bool)
 fn resolve_or(len: style.Len, basis: f64, fallback: f64) -> f64
 fn maxf(x: f64, y: f64) -> f64
@@ -24869,7 +24900,7 @@ fn next_float_end(l: *const Layout, base: usize, y: f64) -> f64
 fn float_top_floor(l: *const Layout, base: usize, floor: f64) -> f64
 type PieceKind = enum u8 { Text, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
 type Piece = struct { kind: PieceKind, box: u32, text: str, w: f64, trail: f64, soft: bool, ink: bool, start: usize, clen: usize }
-type Builder = struct { l: *Layout, pieces: list.List[Piece], last_space: bool, ws_pending: bool, cbw: f64 }
+type Builder = struct { l: *Layout, pieces: list.List[Piece], last_space: bool, ws_pending: bool, cbw: f64, cbh: f64 }
 fn push_piece(bd: *Builder, p: Piece)
 fn is_space_byte(c: u8) -> bool
 fn spacing_extra(s: *const style.Style, text: str) -> f64
@@ -24891,15 +24922,15 @@ fn text_take(t: *TextBuf) -> str
 fn marker_string(l: *const Layout, b: u32) -> str
 type Open = struct { box: u32, shift: f64, start: f64 }
 fn valign_shift(l: *const Layout, s: *const style.Style, ps: *const style.Style, a: f64, d: f64, lh: f64) -> f64
-fn line_align_x(s: *const style.Style, last_line: bool, avail: f64, width: f64, left: f64) -> f64
+fn line_align_x(s: *const style.Style, base: style.TextAlign, last_line: bool, explicit_justify: bool, avail: f64, width: f64, left: f64) -> f64
 fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, parent: u32)
-type Ifc = struct
+type Ifc = struct { l: *Layout, bd: Builder, cont: u32, cs: *const style.Style, cbw: f64, fc: *Flow, y: f64, first_line: bool, open: [64]u32, open_count: usize, sa: f64, sd: f64, own: list.List[u32] }
 type Scan = struct { restart: bool, end: usize, lead: usize, forced: bool, line_x: f64, avail: f64 }
 fn split_piece(x: *Ifc, j: usize, max_w: f64) -> bool
 fn scan_line(x: *Ifc, i: usize) -> Scan
 fn flush_text_frag(l: *Layout, bxid: u32, x: f64, text: str, w: f64, shift: f64, baseline: f64)
 fn emit_segment(l: *Layout, ob: u32, x0: f64, x1: f64, baseline: f64, shift: f64, first: bool, last: bool)
-fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, fc: *Flow) -> f64
+fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -> f64
 fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64
 fn replaced_intrinsic(l: *Layout, b: u32) -> Intrinsic
 fn default_replaced(i: Intrinsic) -> (f64, f64)
@@ -24915,12 +24946,12 @@ fn used_width_block(l: *Layout, c: u32, cbw: f64, avail: f64)
 fn used_margins_vertical(l: *Layout, c: u32, cbw: f64)
 fn in_flow_block(l: *const Layout, c: u32) -> bool
 fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool
-fn peek_top(l: *Layout, c: u32, cbw: f64) -> Margin
+fn peek_top(l: *Layout, c: u32, cbw: f64, floats: bool) -> Margin
 fn last_baseline(l: *const Layout, b: u32) -> (bool, f64)
 fn first_baseline(l: *const Layout, b: u32) -> (bool, f64)
 fn layout_in_new_bfc(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
 fn set_baseline(l: *Layout, b: u32)
-fn layout_atomic(l: *Layout, b: u32, cbw: f64)
+fn layout_atomic(l: *Layout, b: u32, cbw: f64, cbh: f64)
 fn layout_contents_height(l: *Layout, b: u32, cw: f64, cbh: f64)
 fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top: bool) -> (f64, Margin)
 fn position_markers(l: *Layout, b: u32)
@@ -24929,7 +24960,7 @@ fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64)
 fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64)
 fn block_widths(l: *Layout, b: u32) -> (f64, f64)
 type CellInfo = struct { box: u32, row: usize, col: usize, rs: usize, cs: usize, min: f64, max: f64, spec: f64, pct: f64 }
-type TableData = struct
+type TableData = struct { cols: usize, rows: usize, cells: list.List[CellInfo], col_min: []f64, col_max: []f64, col_w: []f64, col_pct: []f64, col_spec: []f64, row_h: []f64, row_y: []f64, row_box: []u32, row_above: []f64, row_below: []f64, sh: f64, sv: f64, sum_min: f64, sum_max: f64, collapsed: bool, hedge: []Edge, vedge: []Edge, cap_t: f64, cap_b: f64 }
 fn is_ws_text(l: *const Layout, k: u32) -> bool
 fn wrap_table_run(l: *Layout, parent: u32, first: u32, last: u32, inner: Inner, display: style.Display)
 fn fix_table_like(l: *Layout, b: u32)
@@ -24942,7 +24973,7 @@ fn table_min_width(l: *Layout, t: u32) -> f64
 fn distribute_columns(l: *Layout, ti: u32, tw: f64, fixed_layout: bool)
 fn is_baseline_valign(v: style.VAlign) -> bool
 fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64
-type FlexItem = struct
+type FlexItem = struct { box: u32, order: i64, grow: f64, shrink: f64, basis: f64, hyp: f64, target: f64, min_main: f64, max_main: f64, frozen: bool, ms: f64, me: f64, cs: f64, ce: f64, ams: bool, ame: bool, acs: bool, ace: bool, main_ex: f64, cross_ex: f64, cross: f64, up: f64, align: style.Align, pos_main: f64, pos_cross: f64 }
 fn flex_is_row(s: *const style.Style) -> bool
 fn flex_gap(len: style.Len, basis: f64) -> f64
 fn flex_item_align(cs: *const style.Style, is: *const style.Style) -> style.Align
@@ -24954,12 +24985,12 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
 fn if_factor(grow_mode: bool, grow: f64, shrink: f64) -> f64
 fn inf() -> f64
 type SizeFn = struct { kind: u8, v: f64 }
-type GTrack = struct { min: SizeFn, max: SizeFn, base: f64, limit: f64, pos: f64 }
+type GTrack = struct { min: SizeFn, max: SizeFn, base: f64, limit: f64, pos: f64, collapsed: bool, fit: bool }
 type GName = struct { name: str, line: i32 }
 type GArea = struct { name: str, r0: i32, r1: i32, c0: i32, c1: i32 }
 type LineSpec = struct { kind: u8, n: i32, name: str, span_name: bool }
-type GItem = struct
-type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64 }
+type GItem = struct { box: u32, order: i64, rs: i32, rn: i32, cs: i32, cn: i32, cmin: f64, cmax: f64, rmin: f64, rmax: f64 }
+type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64 }
 fn extra_text(s: *const style.Style, name: str) -> (str, bool)
 fn push_name(names: *list.List[GName], name: str, line: i32)
 fn grid_split(a: *mem.Arena, s: str) -> []const str
@@ -24973,7 +25004,7 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
 fn resolve_axis(names: *const list.List[GName], explicit: i32, s: LineSpec, e: LineSpec, a: *mem.Arena) -> (i32, i32)
 fn split_slash(text: str) -> (str, str, bool)
 fn item_axis_specs(a: *mem.Arena, s: *const style.Style, col: bool) -> (LineSpec, LineSpec)
-type Grid = struct
+type Grid = struct { cols: []GTrack, rows: []GTrack, nc: usize, nr: usize, items: []GItem, n: usize, gap_c: f64, gap_r: f64, cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32 }
 fn occ_free(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize) -> bool
 fn occ_mark(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize)
 fn grid_autoplace(a: *mem.Arena, items: []GItem, n: usize, ec: i32, er: i32, dense: bool) -> bool
@@ -25005,6 +25036,72 @@ fn positioned_pass(l: *Layout, b: u32)
 fn extent_pass(l: *Layout, b: u32, ox: f64, oy: f64)
 fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, viewport_width: f64, viewport_height: f64) -> (Layout, err)
 error TooBig
+type ClampScan = struct { seen: usize, n: usize, tail: bool }
+type ColRule = struct { box: u32, x: f64, y: f64, w: f64, h: f64, color: u32 }
+type Counter = struct { n: usize }
+type Edge = struct { w: f64, bs: style.BorderStyle, color: u32, prio: u8, set: bool }
+type GridGeom = struct { box: u32, nc: usize, nr: usize, cpos: []f64, csz: []f64, rpos: []f64, rsz: []f64, cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32 }
+fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool
+fn box_ratio(l: *const Layout, b: u32) -> (f64, bool)
+fn build_transposed(l: *Layout)
+fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64
+fn clamp_height_auto(l: *const Layout, b: u32, h: f64, cbh: f64, auto_h: f64) -> f64
+fn clamp_hide(l: *Layout, b: u32)
+fn clamp_scan(l: *Layout, b: u32, sc: *ClampScan)
+fn clamp_walk(l: *Layout, b: u32, ctr: *Counter) -> f64
+fn clear_widths(l: *Layout, b: u32)
+fn colify_run(l: *Layout, first: u32, stop: u32, origin: f64, base: f64, colh: f64, stride: f64, apply: bool, shift: f64) -> usize
+fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: []const u32, nrows: usize, ncols: usize) -> ([]Edge, []Edge)
+fn column_rule_of(l: *Layout, s: *const style.Style) -> (f64, u32, bool)
+fn edge_of(l: *const Layout, b: u32, side: usize, prio: u8) -> Edge
+fn edge_wins(a: Edge, b: Edge) -> bool
+fn flex_baseline(l: *const Layout, b: u32) -> (bool, f64)
+fn frame_side(code: u8, i: usize) -> usize
+fn gaps_of(tr: []GTrack, n: usize, gap: f64) -> f64
+fn gen_run_in(l: *Layout, rnode: u32, target_box: u32)
+fn grid_abs_area(l: *Layout, gb: u32, child: u32, pw: f64, ph: f64, ox: f64, oy: f64) -> (bool, f64, f64, f64, f64)
+fn has_box_ratio(l: *const Layout, b: u32) -> bool
+fn is_abs_positioned(s: *const style.Style) -> bool
+fn is_flow_sibling(l: *const Layout, k: u32) -> bool
+fn is_orthogonal(l: *const Layout, b: u32) -> bool
+fn is_scroll_container(s: *const style.Style) -> bool
+fn is_spanner(l: *const Layout, c: u32) -> bool
+fn is_table_part(inner: Inner) -> bool
+fn lanes_dense(cs: *const style.Style) -> bool
+fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64
+fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64
+fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64
+fn layout_multicol_spans(l: *Layout, b: u32, cw: f64, cols: Cols, fc: *Flow) -> f64
+fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64, fi: f64, fb: f64)
+fn line_align_of(l: *Layout, s: *const style.Style, last_line: bool) -> style.TextAlign
+fn line_clamp_count(s: *const style.Style) -> usize
+fn mode_code(s: *const style.Style) -> u8
+fn order_items(l: *Layout, b: u32)
+fn orphan_display(l: *const Layout, parent: u32) -> style.Display
+fn overflow_propagated(l: *const Layout, b: u32) -> bool
+fn put_edge(arr: []Edge, at: usize, e: Edge)
+fn ratio_height(l: *const Layout, b: u32, cw: f64) -> (f64, bool)
+fn ratio_width(l: *const Layout, b: u32, ch: f64) -> (f64, bool)
+fn record_rules(l: *Layout, b: u32, cols: Cols, used: usize, y: f64, colh: f64)
+fn relative_chain(l: *const Layout, b: u32, stop: u32, cbw: f64) -> (f64, f64)
+fn relative_offset(s: *const style.Style, cbw: f64, cbh: f64) -> (f64, f64)
+fn relative_table_parts(l: *Layout, b: u32, w: f64)
+fn remap_children(l: *Layout, p: u32, sw: f64, sh: f64, from: u8, to: u8)
+fn remap_edges(from: u8, to: u8, e: [4]f64) -> [4]f64
+fn remap_rect(from: u8, to: u8, sw: f64, sh: f64, x: f64, y: f64, w: f64, h: f64) -> (f64, f64, f64, f64)
+fn run_in_before(l: *Layout, node: u32) -> u32
+fn run_in_target(l: *Layout, node: u32) -> u32
+fn shy_hyphen_w(l: *Layout, p: Piece) -> f64
+fn static_align_offset(a: style.Align, room: f64, inline_axis: bool) -> f64
+fn style_rank(b: style.BorderStyle) -> u8
+fn style_value(l: *const Layout, k: usize) -> style.Style
+fn subtree_ad(l: *const Layout, o: u32) -> (f64, f64)
+fn text_ascent(s: *const style.Style, fm: FontMetrics) -> f64
+fn transpose_style(s: style.Style, code: u8) -> style.Style
+fn trim_flags(l: *Layout, p: u32) -> u8
+fn va_edge_owner(l: *const Layout, b: u32, cont: u32) -> u32
+fn visible_tracks(tr: []GTrack, from: usize, to: usize) -> usize
+fn wrap_orphan_table_parts(l: *Layout, b: u32)
 ```
 
 ### `e.fmt.css.geom`
@@ -25036,10 +25133,10 @@ fn hit_test(a: *mem.Arena, l: *const layout.Layout, b: u32, x: f64, y: f64) -> u
 ### `e.fmt.css.paint`
 
 ```neper
-type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32 }
-type PaintEnv = struct
+type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32, svg: str }
+type PaintEnv = struct { ctx: *void, text: fn(*void, *const style.Style, str) -> *const tl.Layout, image: fn(*void, html.NodeId) -> ImageRef, url_image: fn(*void, str) -> ImageRef }
 type Entry = struct { box: u32, z: i64, real: bool }
-type Painter = struct
+type Painter = struct { l: *const layout.Layout, a: *mem.Arena, env: PaintEnv, b: *scene.Builder, vx: f64, vy: f64, vw: f64, vh: f64, scroll_x: f64, scroll_y: f64, ext: []f64, status: err, moved: usize }
 fn emit(p: *Painter, c: scene.Command)
 fn color_of(c: u32) -> pt.Color
 fn alpha_of(c: u32) -> u32
@@ -25117,12 +25214,26 @@ fn bg_pos_component(p: *Painter, s: *const style.Style, tok: str, free: f64, hor
 fn is_edge_word(t: str) -> bool
 fn bg_position(p: *Painter, s: *const style.Style, text: str, free_w: f64, free_h: f64) -> (f64, f64)
 fn paint_layers(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
+fn clip_rect_of(p: *Painter, s: *const style.Style, x: f64, y: f64, w: f64, h: f64) -> ([4]f64, bool)
+fn column_range(p: *Painter, t: u32, want: u32) -> (usize, usize)
+fn draw_ref(p: *Painter, img: ImageRef, dx: f64, dy: f64, dw: f64, dh: f64)
+fn edge_visible(e: layout.Edge) -> bool
+fn edge_width_at(arr: []const layout.Edge, at: usize) -> f64
+fn floor_f(v: f64) -> f64
+fn has_mask(p: *Painter, s: *const style.Style) -> bool
+fn paint_collapsed(p: *Painter, t: u32, x: f64, y: f64)
+fn paint_column_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64)
+fn paint_edge_band(p: *Painter, e: layout.Edge, x: f64, y: f64, len: f64, horizontal: bool)
+fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64)
+fn paint_row_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
+fn paint_spaced(p: *Painter, ts: *const style.Style, text: str, x: f64, y: f64)
+fn snap(v: f64) -> f64
 ```
 
 ### `e.text.fontset`
 
 ```neper
-type Face = struct
+type Face = struct { family: str, weight: u32, italic: bool, font: shape.Font, ascent: f64, descent: f64, line_gap: f64, x_height: f64 }
 type Generics = struct { serif: str, sans: str, mono: str, cursive: str, fantasy: str, ui: str }
 type Set = struct { a: *mem.Arena, faces: list.List[Face], generics: Generics }
 type Metrics = struct { ascent: f64, descent: f64, line_gap: f64, x_height: f64 }
@@ -25147,7 +25258,7 @@ fn layout_run(s: *Set, a: *mem.Arena, families: str, weight: f64, italic: bool, 
 ### `e.fmt.css.measure`
 
 ```neper
-type Host = struct
+type Host = struct { fonts: *fontset.Set, arena: *mem.Arena, ctx: *void, intrinsic: fn(*void, html.NodeId, *const style.Style) -> layout.Intrinsic, image: fn(*void, html.NodeId) -> paint.ImageRef, url_image: fn(*void, str) -> paint.ImageRef }
 fn is_italic(s: *const style.Style) -> bool
 fn text_width(ctx: *void, s: *const style.Style, text: str) -> f64
 fn font_metrics(ctx: *void, s: *const style.Style) -> layout.FontMetrics
@@ -25162,8 +25273,8 @@ fn paint_env_of(h: *Host) -> paint.PaintEnv
 ### `e.ui.html_view`
 
 ```neper
-type Images = struct
-type View = struct
+type Images = struct { ctx: *void, intrinsic: fn(*void, html.NodeId, *const style.Style) -> layout.Intrinsic, image: fn(*void, html.NodeId) -> css_paint.ImageRef, url_image: fn(*void, str) -> css_paint.ImageRef }
+type View = struct { arena: *mem.Arena, fonts: *fontset.Set, source: str, sheets: []const str, complete_sheets: bool, tree: dom.Dom, styles: []style.Style, lay: layout.Layout, host: measure.Host, width: f32, height: f32, scroll_x: f32, scroll_y: f32, origin_x: f32, origin_y: f32, revision: u64, layout_mark: usize, frame_mark: usize, activated: str, has_activated: bool, hover_link: str, has_hover: bool, opened: bool }
 error EmptyFontSet
 fn none_intrinsic(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic
 fn none_image(ctx: *void, node: html.NodeId) -> css_paint.ImageRef
@@ -25186,12 +25297,13 @@ fn wheel_step() -> f32
 fn gesture_view(ctx: *void, g: widget.Gesture) -> err
 fn region(v: *View) -> widget.Region
 fn take_activated(v: *View) -> (str, bool)
+fn node_at(v: *View, x: f32, y: f32) -> html.NodeId
 ```
 
 ### `e.fmt.url`
 
 ```neper
-type Url = struct
+type Url = struct { scheme: str, username: str, password: str, host: str, has_host: bool, port: i32, path: str, opaque_path: bool, query: str, has_query: bool, fragment: str, has_fragment: bool }
 error Failure
 type State = enum u8 { SchemeStart, Scheme, NoScheme, SpecialRelativeOrAuthority, PathOrAuthority, Relative, RelativeSlash, SpecialAuthoritySlashes, SpecialAuthorityIgnoreSlashes, Authority, Host, Hostname, Port, File, FileSlash, FileHost, PathStart, Path, OpaquePath, Query, Fragment }
 type EncodeSet = enum u8 { C0, Fragment, Query, SpecialQuery, Path, Userinfo, Component }
@@ -25238,7 +25350,7 @@ fn is_normalized_drive_letter(s: str) -> bool
 fn starts_with_drive_letter(cps: []const u32, at: usize) -> bool
 fn is_single_dot(s: str) -> bool
 fn is_double_dot(s: str) -> bool
-type Parser = struct
+type Parser = struct { a: *mem.Arena, scheme: str, username: str, password: str, host: str, has_host: bool, port: i32, segs: list.List[str], opaque_path: bool, opaque_text: Buf, query: str, has_query: bool, fragment: str, has_fragment: bool }
 fn from_parser(p: *const Parser) -> Url
 fn join_path(p: *const Parser) -> str
 fn path_segments(a: *mem.Arena, path: str) -> list.List[str]
@@ -25364,7 +25476,7 @@ fn entry(t: str, i: usize) -> u32
 type Out = struct { data: []u8, len: usize }
 fn out_new(a: *mem.Arena, input_len: usize) -> (Out, err)
 fn emit(o: *Out, cp: u32)
-fn error_mark(o: *Out) { emit(o, 65533u32) }
+fn error_mark(o: *Out)
 fn is_ascii(b: u8) -> bool
 fn gb18030_range_cp(pointer: u32) -> u32
 fn decode_gb18030(a: *mem.Arena, bytes: []const u8) -> (str, err)
@@ -25427,10 +25539,10 @@ error BadEncoding
 error TooLarge
 type Credentials = enum u8 { Omit, SameOrigin, Include }
 type Redirect = enum u8 { Follow, Error, Manual }
-type Request = struct
-type Response = struct
-type Config = struct
-type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar }
+type Request = struct { url: str, method: http.Method, headers: []const http.Header, body: []const u8, redirect: Redirect, credentials: Credentials, referrer: str }
+type Response = struct { url: str, status: u16, status_text: str, headers: []const http.Header, body: []const u8, redirected: bool, redirects: usize }
+type Config = struct { roots: []const u8, user_agent: str, accept_language: str, body_limit: usize, max_redirects: usize, allow_file: bool }
+type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize }
 fn default_config(roots: []const u8) -> Config
 fn client(a: *mem.Arena, cfg: Config, max_cookies: usize) -> (Client, err)
 fn unix_seconds() -> i64
@@ -25460,6 +25572,10 @@ fn push_header(l: *HeaderList, name: str, value: str)
 fn decimal(a: *mem.Arena, n: usize) -> str
 fn mime_type(a: *mem.Arena, r: *const Response) -> str
 fn charset_param(r: *const Response) -> str
+fn file_response(c: *Client, u: *const url.Url) -> (Response, err)
+fn known_h1(c: *Client, host: str) -> bool
+fn mime_of_extension(path: str) -> str
+fn remember_h1(c: *Client, host: str)
 ```
 
 ### `e.web.page`
@@ -25467,8 +25583,8 @@ fn charset_param(r: *const Response) -> str
 ```neper
 error NotRenderable
 error LoadFailed
-type ImageEntry = struct
-type Page = struct
+type ImageEntry = struct { url: str, state: u8, width: u32, height: u32, img: image.Image, svg: str, texture: scene.TextureId, uploaded: bool }
+type Page = struct { pa: *mem.Arena, va: mem.Arena, client: *fetch.Client, fonts: *fontset.Set, url: str, status: u16, charset: str, title: str, mime: str, base: url.Url, tree: dom.Dom, sheets: []const str, images: list.List[ImageEntry], renderer: *scene.Renderer, has_renderer: bool, font_base: usize, view: *view.View, ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32, csp: csp.PolicySet, box_map: []u32, box_rev: u64, has_box_map: bool }
 fn lower_byte(c: u8) -> u8
 fn eq_fold(x: str, y: str) -> bool
 fn starts_fold(s: str, prefix: str) -> bool
@@ -25497,6 +25613,34 @@ fn find_title(p: *Page) -> str
 fn collapse_space(a: *mem.Arena, s: str) -> str
 fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str, width: f32, height: f32, view_bytes: usize) -> (*Page, err)
 fn attach_renderer(p: *Page, r: *scene.Renderer)
+fn box_of(p: *Page, node: html.NodeId) -> u32
+fn click(p: *Page, x: f32, y: f32) -> bool
+fn close(p: *Page)
+fn concat_str(a: *mem.Arena, x: str, y: str) -> str
+fn csp_hook(ctx: *void, kind: u32, nonce: str, text: str) -> bool
+fn csp_inline_ok(p: *Page, directive: str, nonce: str, text: str) -> bool
+fn csp_url_ok(p: *Page, directive: str, u: str) -> bool
+fn decimal_text(a: *mem.Arena, v: u64) -> str
+fn face_weight(w: str) -> u32
+fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool)
+fn flush_layout(p: *Page)
+fn geom_hook(ctx: *void, node: u32, what: u8, out: []f64) -> bool
+fn has_backslash(s: str) -> bool
+fn is_inline_svg(p: *Page, node: html.NodeId) -> bool
+fn load_web_fonts(p: *Page)
+fn looks_svg(b: []const u8) -> bool
+fn net_hook(ctx: *void, method: str, u: str, header_lines: str, body: []const u8, out: *script.NetResult) -> bool
+fn next_wakeup(p: *Page) -> f64
+fn refresh(p: *Page)
+fn release_fonts(p: *Page)
+var scripts_enabled: bool = true
+fn set_scripts(enabled: bool)
+fn start_scripts(p: *Page)
+fn strip_cdata(a: *mem.Arena, text: str) -> str
+fn style_hook(ctx: *void, node: u32, prop: str) -> (str, bool)
+fn svg_entry(p: *Page, node: html.NodeId) -> *ImageEntry
+fn take_navigation(p: *Page) -> (str, bool)
+fn tick(p: *Page, now_ms: f64) -> bool
 ```
 
 ### `e.js.lex`
@@ -25511,9 +25655,9 @@ const T_TEMPLATE: u8 = 5u8
 const T_REGEX: u8 = 6u8
 const T_PRIVATE: u8 = 7u8
 error SyntaxError
-type Tok = struct
+type Tok = struct { kind: u8, start: usize, end: usize, line: u32, nl: bool, text: str, flags: str, num: f64, big: bool, escaped: bool, legacy_octal: bool }
 type Template = struct { cooked: []const str, raw: []const str, valid: []const bool, exprs: []const str }
-type Lexer = struct { a: *mem.Arena, src: str, pos: usize, line: u32, template: Template, message: str }
+type Lexer = struct { a: *mem.Arena, src: str, pos: usize, line: u32, template: Template, message: str, module: bool }
 fn new_lexer(a: *mem.Arena, src: str) -> Lexer
 fn is_id_start(c: u8) -> bool
 fn is_digit(c: u8) -> bool
@@ -25536,6 +25680,13 @@ fn punct_len(src: str, at: usize) -> usize
 fn is_punct_start(c: u8) -> bool
 fn next_token(lx: *Lexer) -> (Tok, err)
 fn regex_at(lx: *Lexer, start: usize) -> (Tok, err)
+fn id_part_at(s: str, at: usize) -> bool
+fn id_part_cp(cp: u32) -> bool
+fn id_start_cp(cp: u32) -> bool
+fn newer_than_tables(cp: u32, cat: unicode.Category) -> bool
+fn regex_may_start(src: str, from: usize, at: usize) -> bool
+fn scalar_in(s: str, at: usize) -> u32
+fn uspace_len(s: str, at: usize) -> usize
 ```
 
 ### `e.js.ast`
@@ -25663,16 +25814,28 @@ const O_AND: u8 = 32u8
 const O_OR: u8 = 33u8
 const O_NULLISH: u8 = 34u8
 const O_ASSIGN: u8 = 35u8
-type Node = struct
+type Node = struct { kind: u8, op: u8, flags: u16, a: u32, b: u32, c: u32, d: u32, hoist_first: u32, hoist_count: u32, line: u32, text: str, text2: str, num: f64 }
 type TemplateStr = struct { cooked: str, raw: str, valid: bool }
-type Program = struct
+type Program = struct { nodes: []const Node, kids: []const u32, strs: []const TemplateStr, root: u32, source: str, url: str, module: *void, is_module: bool, internal: bool }
+const F_AWAIT_USING: u16 = 64u16
+const F_USING: u16 = 4u16
+const N_EXPORT: u8 = 71u8
+const N_EXPORT_SPEC: u8 = 73u8
+const N_IMPORT: u8 = 70u8
+const N_IMPORT_SPEC: u8 = 72u8
+const X_DECL: u8 = 1u8
+const X_DEFAULT_DECL: u8 = 3u8
+const X_DEFAULT_EXPR: u8 = 2u8
+const X_LIST: u8 = 4u8
+const X_STAR: u8 = 5u8
+const X_STAR_AS: u8 = 6u8
 ```
 
 ### `e.js.parser`
 
 ```neper
 error ParseError
-type Parser = struct
+type Parser = struct { a: *mem.Arena, lx: lex.Lexer, tok: lex.Tok, prev_end: usize, prev_start: usize, prev_line: u32, nodes: list.List[ast.Node], kids: list.List[u32], strs: list.List[ast.TemplateStr], vars: list.List[u32], strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool, blk: u32, module: bool, anon_default: bool, top_await: bool, sub_flag: bool, message: str, line: u32, parens: list.List[u32] }
 fn fail(p: *Parser, message: str) -> err
 fn adv(p: *Parser) -> err
 fn is_p(p: *const Parser, text: str) -> bool
@@ -25696,7 +25859,7 @@ fn assign_info(p: *const Parser) -> (u8, bool, bool)
 fn parse_expression(p: *Parser) -> (u32, err)
 fn arrow_follows_paren(p: *Parser) -> (bool, err)
 fn parse_arrow_body(p: *Parser, fid: u32, async_flag: bool) -> err
-fn finish_arrow(p: *Parser, params: *const list.List[u32], async_flag: bool) -> (u32, err)
+fn finish_arrow(p: *Parser, params: *const list.List[u32], async_flag: bool, start: usize) -> (u32, err)
 fn arity(p: *const Parser, params: *const list.List[u32]) -> usize
 fn close_hoist(p: *Parser, fid: u32, from: usize)
 fn parse_assign(p: *Parser) -> (u32, err)
@@ -25709,7 +25872,7 @@ fn parse_arguments(p: *Parser) -> (list.List[u32], err)
 fn parse_template(p: *Parser) -> (u32, err)
 fn parse_sub(p: *Parser, src: str) -> (u32, err)
 fn parse_property_key(p: *Parser) -> (u32, bool, err)
-fn parse_method(p: *Parser, name: str, flags: u16) -> (u32, err)
+fn parse_method(p: *Parser, name: str, flags: u16, start: usize) -> (u32, err)
 fn parse_object(p: *Parser) -> (u32, err)
 fn key_name(p: *const Parser, key: u32) -> str
 fn parse_array(p: *Parser) -> (u32, err)
@@ -25723,7 +25886,7 @@ fn parse_statements(p: *Parser, closing: bool, ids: *list.List[u32]) -> err
 fn parse_function_body(p: *Parser, fid: u32) -> (u32, err)
 fn parse_function_rest(p: *Parser, fid: u32) -> err
 fn parse_function(p: *Parser, decl: bool, is_async: bool) -> (u32, err)
-fn parse_class(p: *Parser, decl: bool) -> (u32, err)
+fn parse_class(p: *Parser, decl: bool, dfirst: u32, dcount: u32) -> (u32, err)
 fn consume_semi(p: *Parser) -> err
 fn parse_block(p: *Parser) -> (u32, err)
 fn parse_var(p: *Parser, for_head: bool) -> (u32, err)
@@ -25732,6 +25895,23 @@ fn parse_for(p: *Parser) -> (u32, err)
 fn parse_statement(p: *Parser) -> (u32, err)
 type Parsed = struct { program: ast.Program, message: str, line: u32 }
 fn parse_program(a: *mem.Arena, source: str) -> (Parsed, err)
+fn bigint_key_text(p: *Parser, text: str) -> (str, err)
+fn is_paren(p: *const Parser, id: u32) -> bool
+fn logical_kind(p: *Parser, id: u32) -> u8
+fn parse_decorators(p: *Parser) -> (u32, u32, err)
+fn parse_eval(a: *mem.Arena, source: str, eo: *const early.EvalOpts) -> (Parsed, err)
+fn parse_export_decl(p: *Parser) -> (u32, err)
+fn parse_goal(a: *mem.Arena, source: str, module: bool) -> (Parsed, err)
+fn parse_goal_in(a: *mem.Arena, source: str, module: bool, eo: *const early.EvalOpts) -> (Parsed, err)
+fn parse_if_body(p: *Parser) -> (u32, err)
+fn parse_import_decl(p: *Parser) -> (u32, err)
+fn parse_module(a: *mem.Arena, source: str) -> (Parsed, err)
+fn parse_module_binding(p: *Parser) -> (str, err)
+fn parse_module_name(p: *Parser) -> (str, bool, err)
+fn parse_module_source(p: *Parser) -> (str, err)
+fn parse_using(p: *Parser, kind: u8) -> (u32, err)
+fn typed_spec(a: *mem.Arena, spec: str, kind: str) -> str
+fn using_ahead(p: *Parser, for_head: bool) -> (u8, err)
 ```
 
 ### `e.js.interp`
@@ -25771,21 +25951,21 @@ const P_ACCESSOR: u8 = 8u8
 const P_DEFAULT: u8 = 7u8
 const P_HIDDEN: u8 = 5u8
 type Sym = struct { description: str, has_description: bool, id: u32, registered: bool, private: bool }
-type Value = union enum u8 { Undefined, Null, Bool: bool, Num: f64, Str: str, Sym: *Sym, Obj: *Obj }
+type Value = union enum u8 { Undefined, Null, Bool: bool, Num: f64, Str: str, Sym: *Sym, Obj: *Obj, Big: bigint.Big }
 type Key = struct { name: str, sym: *Sym, idx: i64 }
 type Prop = struct { key: Key, value: Value, getter: *Obj, setter: *Obj, flags: u8 }
 type NativeFn = fn(*Interp, Value, []const Value) -> (Value, err)
-type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool }
+type Env = struct { vars: list.List[Binding], parent: *Env, with_obj: *Obj, has_with: bool, is_var: bool, captured: bool, in_params: bool, owns_arguments: bool, argobj: *Obj }
 const B_CONST: u8 = 1u8
 const B_TDZ: u8 = 2u8
 const B_STRICT_CONST: u8 = 4u8
-type Binding = struct { name: str, value: Value, flags: u8 }
-type Obj = struct
+type Binding = struct { name: str, value: Value, flags: u8, target: *Env }
+type Obj = struct { class: u8, proto: *Obj, has_proto: bool, extensible: bool, props: list.List[Prop], index: map.Map[str, usize], indexed: bool, elems: list.List[Value], holes: bool, // functions prog: *const ast.Program, node: u32, env: *Env, native: NativeFn, has_native: bool, ctor_kind: u8, home: *Obj, has_home: bool, fields: *Obj, has_fields: bool, this_val: Value, this_cell: *Obj, bound_target: *Obj, bound_this: Value, bound_args: []const Value, // primitive wrappers, dates, internal slots prim: Value, data: *void, num: f64, text: str, aux: *Obj, id: u64, realm: *Interp, pmeths: *Obj, has_pmeths: bool, pinits: *Obj, has_pinits: bool }
 const K_NONE: u8 = 0u8
 const K_BASE: u8 = 1u8
 const K_DERIVED: u8 = 2u8
-type Protos = struct
-type Interp = struct
+type Protos = struct { object: *Obj, function: *Obj, array: *Obj, string: *Obj, number: *Obj, boolean: *Obj, symbol: *Obj, error_proto: *Obj, type_error: *Obj, range_error: *Obj, syntax_error: *Obj, reference_error: *Obj, eval_error: *Obj, uri_error: *Obj, iterator: *Obj, array_iterator: *Obj, generator: *Obj, promise: *Obj, regexp: *Obj, date: *Obj, map: *Obj, set: *Obj, bigint: *Obj, arguments: *Obj, gen_function: *Obj, async_function: *Obj, async_generator: *Obj, async_gen_function: *Obj, map_iterator: *Obj, set_iterator: *Obj, weakmap: *Obj, weakset: *Obj, regexp_string_iterator: *Obj, array_buffer: *Obj, typed_array: *Obj, data_view: *Obj, aggregate_error: *Obj }
+type Interp = struct { a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32, next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64, sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym, sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym, sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16, modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str, pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool, gens: list.List[*GenState], wasm: *void, no_eval: bool }
 fn null_interp() -> *Interp
 fn undefv() -> Value
 fn null_value() -> Value
@@ -25863,14 +26043,13 @@ fn new_array(it: *Interp) -> *Obj
 fn array_length(o: *const Obj) -> f64
 fn array_push(it: *Interp, o: *Obj, v: Value) -> err
 fn array_from(it: *Interp, items: []const Value) -> *Obj
-fn array_set_length(it: *Interp, o: *Obj, len: f64)
+fn array_set_length(it: *Interp, o: *Obj, len_in: f64) -> bool
 fn get_own(it: *Interp, o: *Obj, key: Key) -> (Prop, bool)
 fn prim_string(o: *const Obj) -> str
 fn proto_of(o: *const Obj) -> (*Obj, bool)
 fn get_prop(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err)
 fn zero_args() -> []const Value
 fn get_named(it: *Interp, o: *Obj, name: str) -> (Value, err)
-fn proxy_get(it: *Interp, p: *Obj, key: Key, receiver: Value) -> (Value, err)
 fn proto_for_primitive(it: *Interp, v: Value) -> (*Obj, bool)
 fn describe_key(it: *Interp, key: Key) -> str
 fn get_value(it: *Interp, base: Value, key: Key) -> (Value, err)
@@ -25885,7 +26064,7 @@ fn put(it: *Interp, base: Value, key: Key, val: Value, strict: bool) -> err
 fn has_own(it: *Interp, o: *Obj, key: Key) -> bool
 fn has_property(it: *Interp, o: *Obj, key: Key) -> bool
 fn delete_prop(it: *Interp, o: *Obj, key: Key) -> bool
-type Desc = struct
+type Desc = struct { value: Value, has_value: bool, getter: Value, has_get: bool, setter: Value, has_set: bool, writable: bool, has_writable: bool, enumerable: bool, has_enumerable: bool, configurable: bool, has_configurable: bool }
 fn empty_desc() -> Desc
 fn data_desc(val: Value, flags: u8) -> Desc
 fn prop_to_desc(p: Prop) -> Desc
@@ -25910,9 +26089,9 @@ fn loose_equals(it: *Interp, x: Value, y: Value) -> (bool, err)
 fn new_env(it: *Interp, parent: *Env) -> *Env
 fn null_env() -> *Env
 fn env_index(e: *const Env, name: str) -> (usize, bool)
-fn declare(it: *Interp, e: *Env, name: str, val: Value, flags: u8) -> err
+fn declare(it: *Interp, e: *Env, name: str, val: Value, flags_in: u8) -> err
 fn declare_var(it: *Interp, e: *Env, name: str) -> err
-type Frame = struct
+type Frame = struct { prog: *const ast.Program, env: *Env, this_val: Value, has_this: bool, func: *Obj, has_func: bool, new_target: Value, strict: bool, home: *Obj, has_home: bool, args: []const Value, gen: *void, has_gen: bool, this_cell: *Obj, derived_ctor: bool, disp: *list.List[DispRes], has_disp: bool, tail_ok: bool, no_tail: u32 }
 const CK_NORMAL: u8 = 0u8
 const CK_BREAK: u8 = 1u8
 const CK_CONTINUE: u8 = 2u8
@@ -25935,14 +26114,14 @@ fn is_constructor(v: Value) -> bool
 fn construct(it: *Interp, fv: Value, args: []const Value, new_target: Value) -> (Value, err)
 fn init_fields(it: *Interp, ctor: *Obj, inst: *Obj) -> err
 fn field_define(it: *Interp, inst: *Obj, key: Key, val: Value) -> err
-fn call_js(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_target: Value, constructing: bool) -> (Value, err)
+fn call_js(it: *Interp, fo0: *Obj, this0: Value, args0: []const Value, nt0: Value, constructing0: bool) -> (Value, err)
 fn bind_function(it: *Interp, f: *Frame, fo: *Obj, n: ast.Node, args: []const Value) -> err
 fn bind_name(it: *Interp, f: *Frame, name: str, val: Value, mode: u8) -> err
 fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err
 fn target_name(f: *const Frame, id: u32) -> str
 fn eval_named(it: *Interp, f: *Frame, id: u32, name: str) -> (Value, err)
 fn set_function_name(it: *Interp, v: Value, name: str)
-type Iter = struct { obj: Value, next: Value, array: *Obj, is_array: bool, pos: usize }
+type Iter = struct { obj: Value, next: Value, array: *Obj, is_array: bool, pos: usize, sync_wrapped: bool }
 fn get_iterator(it: *Interp, v: Value) -> (Iter, err)
 fn iterator_step(it: *Interp, iter: Iter) -> (Value, bool, err)
 fn iterator_close(it: *Interp, iter: Iter) -> err
@@ -25977,7 +26156,7 @@ fn zero_keys() -> []const Key
 fn key_name_for_function(it: *Interp, key: Key) -> str
 fn copy_data_properties(it: *Interp, tgt: *Obj, source: Value, excluded: []const Key) -> err
 fn eval_class(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err)
-fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env) -> (Value, err)
+fn eval_class_body(it: *Interp, f: *Frame, n: ast.Node, class_env: *Env, hint: str) -> (Value, err)
 fn default_constructor(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
 fn is_lexical_decl(f: *const Frame, id: u32) -> bool
 fn hoist_declarations(it: *Interp, f: *Frame, first: u32, count: u32) -> err
@@ -26003,7 +26182,7 @@ fn eval_source(it: *Interp, source: str) -> (Value, err)
 fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err)
 fn env_is_var_scope(it: *Interp, e: *Env) -> bool
 error GenReturn
-type GenState = struct
+type GenState = struct { it: *Interp, frame: Frame, body: u32, expr_body: bool, kind: u8, state: u8, mode: u8, send: Value, out: Value, out_raw: bool, out_err: err, ret_val: Value, gen_ev: sync.Event, caller_ev: sync.Event, started: bool, saved_depth: u32, promise: *Obj, awaiting: bool, owner: *Obj, queue: list.List[AgRequest], busy: bool, module_body: bool }
 const GS_START: u8 = 0u8
 const GS_SUSPENDED: u8 = 1u8
 const GS_RUNNING: u8 = 2u8
@@ -26045,6 +26224,212 @@ fn promise_then_raw(it: *Interp, p: *Obj, on_ful: Value, on_rej: Value) -> err
 fn promise_resolve_value(it: *Interp, v: Value) -> (*Obj, err)
 fn run_job(it: *Interp, j: Job) -> err
 fn run_jobs(it: *Interp) -> err
+type AgRequest = struct { mode: u8, val: Value, cap: Capability }
+type AgentHub = struct { lock: sync.Mutex, cond: sync.Condition, waiters: [64]Waiter, wseq: u64, live: u32, starting: u32, receivers: u32, pending: u32, shutdown: bool, gen: u64, msg: Value, msg_num: f64, reports: [64]str, rhead: usize, rtail: usize }
+type ArgMap = struct { env: *Env, names: list.List[str], mapped: list.List[bool] }
+const B_ALIAS: u8 = 8u8
+const B_LEX: u8 = 16u8
+type Buf = struct { bytes: []u8, detached: bool, store: []u8, max: usize, resizable: bool, is_shared: bool, immutable: bool }
+const C_NAMESPACE: u8 = 24u8
+const C_SHADOWREALM: u8 = 25u8
+const C_WGLOBAL: u8 = 30u8
+const C_WINSTANCE: u8 = 27u8
+const C_WMEMORY: u8 = 28u8
+const C_WMODULE: u8 = 26u8
+const C_WTABLE: u8 = 29u8
+type DispRes = struct { value: Value, method: Value, has_method: bool, is_async: bool, discard: bool }
+const K_DDA: u8 = 99u8
+type ModuleHook = fn(*Interp, u8, Value, *const ast.Program) -> (Value, err)
+type ModuleLoader = fn(*Interp, str, str) -> (*void, err)
+type NsData = struct { entries: []const NsEntry, deferred: bool, module: *void }
+type NsEntry = struct { name: str, env: *Env, binding: str, ns_value: Value, is_ns: bool }
+const PX_CALL: u8 = 12u8
+const PX_CONSTRUCT: u8 = 13u8
+const PX_DEFINE: u8 = 6u8
+const PX_DELETE: u8 = 4u8
+const PX_GET: u8 = 1u8
+const PX_GETOWN: u8 = 5u8
+const PX_GETPROTO: u8 = 8u8
+const PX_HAS: u8 = 3u8
+const PX_ISEXT: u8 = 11u8
+const PX_KEYS: u8 = 7u8
+const PX_PREVENT: u8 = 10u8
+const PX_SET: u8 = 2u8
+const PX_SETPROTO: u8 = 9u8
+type ProxyHook = fn(*Interp, u8, *Obj, Key, Value, Value) -> (Value, err)
+const RM_KILL: u8 = 3u8
+type TArr = struct { buffer: *Obj, offset: usize, length: usize, kind: u8, tracking: bool }
+type Waiter = struct { used: bool, notified: bool, buf: *Obj, byte: usize, seq: u64, is_async: bool, promise: *Obj, owner: *Interp, deadline: f64 }
+fn add_disposable(it: *Interp, f: *Frame, v: Value, is_await: bool) -> err
+fn ag_await_fulfilled(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn ag_await_rejected(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn ag_continue(it: *Interp, gs: *GenState, mode: u8, val: Value)
+fn ag_drain(it: *Interp, gs: *GenState)
+fn ag_enqueue(it: *Interp, this_val: Value, mode: u8, val: Value) -> (Value, err)
+fn ag_iter_result(it: *Interp, v: Value, done: bool) -> Value
+fn ag_resume(it: *Interp, gs: *GenState, mode: u8, val: Value)
+fn ag_return_fulfilled(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn ag_return_rejected(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn ag_settle(it: *Interp, gs: *GenState, ok_value: bool, v: Value, done: bool)
+fn agents_shutdown(it: *Interp)
+fn apply_accessor_decorators(it: *Interp, decos: *Obj, getter: Value, setter: Value, init_fn: Value, name: Value, is_static: bool, is_private: bool, key: Key, inits: *Obj, meta: *Obj) -> (Value, Value, Value, err)
+fn apply_field_decorators(it: *Interp, decos: *Obj, init_fn: Value, name: Value, is_static: bool, is_private: bool, key: Key, inits: *Obj, meta: *Obj) -> (Value, err)
+fn apply_replace_decorators(it: *Interp, decos: *Obj, start: Value, kind: str, name: Value, is_static: bool, is_private: bool, key: Key, mask: u8, inits: *Obj, meta: *Obj) -> (Value, err)
+fn arg_element_changed(it: *Interp, o: *Obj, key: Key, val: Value)
+fn arg_is_mapped(o: *Obj, key: Key) -> bool
+fn arg_map_of(o: *Obj) -> *ArgMap
+fn arg_param_changed(it: *Interp, e: *Env, name: str, val: Value)
+fn arg_store_element(it: *Interp, o: *Obj, idx: usize, val: Value)
+fn arg_unmap(o: *Obj, key: Key)
+fn args_array(it: *Interp, args: []const Value) -> (*Obj, err)
+fn async_iterator_close(it: *Interp, f: *Frame, iter: Iter) -> err
+fn async_iterator_step(it: *Interp, f: *Frame, iter: Iter) -> (Value, bool, err)
+fn auto_get(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn auto_set(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn big_error(it: *Interp, e: err) -> err
+fn big_of(v: Value) -> bigint.Big
+fn big_value(b: bigint.Big) -> Value
+fn bigint_binary(it: *Interp, op: u8, x: bigint.Big, y: bigint.Big) -> (Value, err)
+fn bind_function_decl(it: *Interp, f: *Frame, vscope: *Env, name: str, fo: *Obj) -> err
+fn buf_of(o: *Obj) -> *Buf
+fn bump_numeric(it: *Interp, old: Value, delta: f64) -> (Value, Value, err)
+fn call_decorator(it: *Interp, dec: Value, arg: Value, kind: str, name: Value, is_static: bool, is_private: bool, key: Key, mask: u8, inits: *Obj, meta: *Obj) -> (Value, err)
+fn call_js_once(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_target: Value, constructing: bool) -> (Value, err)
+fn call_or_tail(it: *Interp, fv: Value, this_val: Value, args: []const Value, tail: bool) -> (Value, err)
+fn can_declare_global_function(it: *Interp, name: str) -> bool
+fn can_declare_global_var(it: *Interp, name: str) -> bool
+fn check_import_options(it: *Interp, opts: Value) -> (str, err)
+fn collect_pattern_names(f: *const Frame, pid: u32, out: *list.List[str])
+fn compose_init(it: *Interp, orig: Value, wrapper: Value) -> Value
+fn deco_add_init(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn deco_context(it: *Interp, kind: str, name: Value, is_static: bool, is_private: bool, key: Key, mask: u8, inits: *Obj, st: *Obj, meta: *Obj) -> (*Obj, err)
+fn deco_get(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn deco_has(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn deco_init_wrap(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn deco_key(v: Value) -> Key
+fn deco_member(it: *Interp, v: Value, name: str) -> (Value, err)
+fn deco_set(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn deco_target(it: *Interp, args: []const Value) -> (*Obj, err)
+fn define_own_ordinary(it: *Interp, o: *Obj, key: Key, d: Desc) -> (bool, err)
+fn delete_prop_e(it: *Interp, o: *Obj, key: Key) -> (bool, err)
+fn desc_to_prop(key: Key, d: Desc) -> Prop
+fn dispose_scope(it: *Interp, f: *Frame, scope: *list.List[DispRes], c: Completion, e: err) -> (Completion, err)
+fn empty_value() -> Value
+fn ensure_this_cell(it: *Interp, f: *Frame)
+fn eval_call_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err)
+fn eval_decorator_list(it: *Interp, f: *Frame, n: ast.Node) -> (*Obj, err)
+fn eval_tagged_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err)
+fn exec_block_inner(it: *Interp, f: *Frame, bn: ast.Node) -> (Completion, err)
+fn exec_body_inner(it: *Interp, f: *Frame, bid: u32) -> (Completion, err)
+fn exec_for_inner(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Completion, err)
+fn exec_module_statements(it: *Interp, f: *Frame, root_id: u32) -> (Completion, err)
+fn exec_module_statements_inner(it: *Interp, f: *Frame, root_id: u32) -> (Completion, err)
+fn f16_to_f64(h: u64) -> f64
+fn f64_to_f16(n: f64) -> u64
+fn force_function_name(it: *Interp, fo: *Obj, name: str)
+fn from_descriptor(it: *Interp, d: Desc) -> Value
+fn function_realm(it: *Interp, f: *Obj) -> *Interp
+fn gen_yield_star_async(it: *Interp, f: *Frame, iterable: Value) -> (Value, err)
+fn get_async_iterator(it: *Interp, v: Value) -> (Iter, err)
+fn get_in_scope(it: *Interp, holder: *Env, name: str) -> (Value, err)
+fn get_in_scope_s(it: *Interp, holder: *Env, name: str, strict: bool) -> (Value, err)
+fn get_iterator_from(it: *Interp, v: Value, m: Value) -> (Iter, err)
+fn get_own_e(it: *Interp, o: *Obj, key: Key) -> (Prop, bool, err)
+fn global_declaration_checks(it: *Interp, f: *Frame, root: ast.Node) -> err
+fn global_function_binding(it: *Interp, name: str, fo: *Obj, configurable: bool) -> err
+fn has_lexical_global(it: *Interp, name: str) -> bool
+fn has_property_e(it: *Interp, o: *Obj, key: Key) -> (bool, err)
+fn has_restricted_global(it: *Interp, name: str) -> bool
+fn has_using(f: *const Frame, first: u32, count: u32) -> bool
+fn has_var_name(it: *Interp, name: str) -> bool
+fn hoist_declarations_in(it: *Interp, f: *Frame, first: u32, count: u32, vscope: *Env) -> err
+fn hub_of(it: *Interp) -> *AgentHub
+fn hub_peek(it: *Interp) -> (*AgentHub, bool)
+fn i64_trunc(n: f64) -> i64
+fn if_proto_value(o: *Obj) -> Value
+fn indirect_eval(it: *Interp, arg: Value) -> (Value, err)
+fn is_array_e(it: *Interp, v: Value) -> (bool, err)
+fn is_big_kind(kind: u8) -> bool
+fn is_bigint(v: Value) -> bool
+fn is_dda(o: *Obj) -> bool
+fn is_dda_value(v: Value) -> bool
+fn is_empty_value(v: Value) -> bool
+fn is_extensible(it: *Interp, o: *Obj) -> (bool, err)
+fn is_odd_integer(y: f64) -> bool
+fn is_ws_byte_or_unicode(s: str, i: usize) -> usize
+fn iterate_to_list_from(it: *Interp, v: Value, m: Value) -> (list.List[Value], err)
+fn iterator_close_for(it: *Interp, iter: Iter, e: err) -> err
+fn iterator_close_quiet(it: *Interp, iter: Iter)
+fn js_is_nan_value(n: f64) -> bool
+fn lexical_count(f: *const Frame, first: u32, count: u32) -> usize
+fn mark_captured(e: *Env)
+fn member_key_b(it: *Interp, f: *Frame, n: ast.Node, base: Value) -> (Key, err)
+fn mix_error(it: *Interp) -> err
+fn note_var_name(it: *Interp, name: str)
+fn now_ms() -> f64
+fn ns_has_export(o: *Obj, name: str) -> bool
+fn ns_read(it: *Interp, o: *Obj, name: str) -> (Value, bool, err)
+fn ns_touch(it: *Interp, o: *Obj, name: str) -> err
+fn number_to_bigint(it: *Interp, n: f64) -> (bigint.Big, err)
+fn numeric_index(it: *Interp, name: str) -> (bool, f64)
+fn parse_shared(it: *Interp, source: str) -> (*void, err)
+fn pow2_exact(e: i64) -> f64
+fn prep_target(it: *Interp, f: *Frame, tid: u32) -> (Value, Value, u8, err)
+fn presize_env(it: *Interp, e: *Env, cap: usize)
+fn prevent_extensions(it: *Interp, o: *Obj) -> (bool, err)
+fn private_get(it: *Interp, o: *Obj, key: Key, receiver: Value) -> (Value, err)
+fn private_install(it: *Interp, o: *Obj, key: Key, kind: u8, val: Value) -> err
+fn private_set(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (bool, err)
+fn proto_get(it: *Interp, o: *Obj) -> (Value, err)
+fn proto_set(it: *Interp, o: *Obj, v: Value) -> (bool, err)
+fn pump_waiters(it: *Interp) -> bool
+fn put_in_scope(it: *Interp, f: *Frame, holder: *Env, name: str, val: Value) -> err
+fn put_target(it: *Interp, f: *Frame, tid: u32, base: Value, kv: Value, val: Value) -> err
+fn px_call(it: *Interp, op: u8, p: *Obj, key: Key, a: Value, b: Value) -> (Value, err)
+fn raw_to_value(it: *Interp, kind: u8, raw: u64) -> Value
+fn read_unit(bytes: []const u8, at: usize, size: usize) -> u64
+fn realm_proto(it: *Interp, ctor: *Obj, p: *Obj) -> *Obj
+fn rejected_promise(it: *Interp, reason: Value) -> (Value, err)
+fn release_env(it: *Interp, e: *Env)
+fn reserve_elems(it: *Interp, o: *Obj, n: usize)
+fn reserve_props(it: *Interp, o: *Obj, n: usize)
+fn resolve_scope(it: *Interp, f: *Frame, name: str) -> (*Env, err)
+fn root_realm(it: *Interp) -> *Interp
+fn round_half_even(x: f64) -> f64
+fn run_initializers(it: *Interp, inits: *Obj, this_val: Value) -> err
+fn run_shared(it: *Interp, prog: *void) -> (Value, err)
+fn shutdown_generators(it: *Interp)
+fn string_to_bigint(it: *Interp, text: str) -> (bigint.Big, bool)
+fn super_key(it: *Interp, f: *Frame, tn: ast.Node, kv: Value) -> (Key, err)
+fn super_read(it: *Interp, f: *Frame, sbase: Value, key: Key) -> (Value, err)
+fn super_ref(it: *Interp, f: *Frame, tn: ast.Node) -> (Value, Value, err)
+fn super_write(it: *Interp, f: *Frame, sbase: Value, key: Key, val: Value) -> err
+fn suppress(it: *Interp, err_value: Value, suppressed: Value) -> Value
+fn ta_elem_size(kind: u8) -> usize
+fn ta_get_index(it: *Interp, o: *Obj, idx: usize) -> Value
+fn ta_immutable(o: *Obj) -> bool
+fn ta_length(o: *Obj) -> usize
+fn ta_of(o: *Obj) -> *TArr
+fn ta_out_of_bounds(o: *Obj) -> bool
+fn ta_raw_of(it: *Interp, kind: u8, v: Value) -> (u64, err)
+fn ta_raw_of_typed(kind: u8, v: Value) -> u64
+fn ta_set_raw(it: *Interp, o: *Obj, idx: usize, raw: u64)
+fn ta_valid_index(o: *Obj, n: f64) -> bool
+fn tail_eval(it: *Interp, f: *Frame, id: u32, tail: bool) -> (Value, err)
+fn take_px_err(it: *Interp) -> err
+fn this_get(f: *const Frame) -> Value
+fn this_ready(f: *const Frame) -> bool
+fn three_values(it: *Interp, a: Value, b: Value, c: Value) -> []const Value
+fn thrower_fn(it: *Interp) -> *Obj
+fn thrower_native(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn to_bigint(it: *Interp, v: Value) -> (bigint.Big, err)
+fn to_descriptor(it: *Interp, v: Value) -> (Desc, err)
+fn to_numeric(it: *Interp, v: Value) -> (Value, err)
+fn upd(c: Completion, v: Value) -> Completion
+fn value_to_raw(kind: u8, n: f64) -> u64
+fn with_has(it: *Interp, e: *Env, name: str) -> (bool, err)
+fn zero_entries() -> []const NsEntry
+fn zero_prog() -> *ast.Program
 ```
 
 ### `e.js.b_array`
@@ -26076,25 +26461,25 @@ fn array_includes(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
 fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
 fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value
 fn four_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value, w: js.Value) -> []const js.Value
-fn array_for_each(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 0u8)
-fn array_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 1u8)
-fn array_filter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 2u8)
-fn array_some(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 3u8)
-fn array_every(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 4u8)
-fn array_find(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 5u8)
-fn array_find_index(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 6u8)
-fn array_find_last(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 7u8)
-fn array_find_last_index(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 8u8)
+fn array_for_each(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_filter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_some(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_every(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_find(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_find_index(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_find_last(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_find_last_index(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn reduce_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, right: bool) -> (js.Value, err)
-fn array_reduce(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = reduce_with(it, this_val, args, false)
-fn array_reduce_right(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = reduce_with(it, this_val, args, true)
+fn array_reduce(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn array_reduce_right(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn array_fill(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn array_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn array_copy_within(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn sort_compare(it: *js.Interp, cmp: js.Value, x: js.Value, y: js.Value) -> (f64, err)
 fn merge_sort(it: *js.Interp, cmp: js.Value, items: []js.Value, tmp: []js.Value, lo: usize, hi: usize) -> err
 fn array_sort(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
-fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, mapper: js.Value, this_arg: js.Value, start: f64) -> (f64, err)
+fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, mapper: js.Value, this_arg: js.Value, start: f64, known_len: f64) -> (f64, err)
 fn array_flat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn array_flat_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn make_array_iterator(it: *js.Interp, o: *js.Obj, kind: f64) -> js.Value
@@ -26106,6 +26491,12 @@ fn array_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Valu
 fn iterator_proto_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn array_species_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_array(it: *js.Interp)
+fn array_create(it: *js.Interp, len: f64) -> (*js.Obj, err)
+fn array_target(it: *js.Interp, this_val: js.Value, with_len: bool, len: f64) -> (*js.Obj, err)
+fn create_data(it: *js.Interp, o: *js.Obj, key: js.Key, v: js.Value) -> err
+fn has_elem(it: *js.Interp, o: *js.Obj, key: js.Key) -> bool
+fn in_ta_method(it: *js.Interp) -> bool
+fn species_create(it: *js.Interp, orig: *js.Obj, len: f64) -> (*js.Obj, err)
 ```
 
 ### `e.js.b_string`
@@ -26143,8 +26534,8 @@ fn trim_end_str(s: str) -> str
 fn string_trim_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_trim_end(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn pad(it: *js.Interp, this_val: js.Value, args: []const js.Value, at_start: bool) -> (js.Value, err)
-fn string_pad_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = pad(it, this_val, args, true)
-fn string_pad_end(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = pad(it, this_val, args, false)
+fn string_pad_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_pad_end(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_repeat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_concat_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_split(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26153,16 +26544,19 @@ fn string_normalize(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 fn expand_replacement(it: *js.Interp, matched: str, s: str, position: usize, captures: []const js.Value, replacement: str) -> str
 fn replace_impl(it: *js.Interp, this_val: js.Value, args: []const js.Value, all: bool) -> (js.Value, err)
 fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value
-fn string_replace(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = replace_impl(it, this_val, args, false)
-fn string_replace_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = replace_impl(it, this_val, args, true)
+fn string_replace(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn string_replace_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn delegate(it: *js.Interp, this_val: js.Value, args: []const js.Value, sym: *js.Sym, extra_flags: str) -> (js.Value, err)
-fn string_match(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = delegate(it, this_val, args, it.sym_match, "")
+fn string_match(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_match_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
-fn string_search(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = delegate(it, this_val, args, it.sym_search, "")
+fn string_search(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_iterator(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn result_object(it: *js.Interp, v: js.Value, done: bool) -> *js.Obj
 fn install_string(it: *js.Interp)
+fn is_case_ignorable(cp: u32) -> bool
+fn is_cased(cp: u32) -> bool
+fn sigma_is_final(s: str, start: usize, end: usize) -> bool
 ```
 
 ### `e.js.b_number`
@@ -26232,25 +26626,33 @@ fn math_fround(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
 fn math_clz32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn math_imul(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_math(it: *js.Interp)
+fn math_f16round(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 ```
 
 ### `e.js.b_json`
 
 ```neper
 fn arg(args: []const js.Value, i: usize) -> js.Value
-type P = struct { s: str, i: usize }
+type P = struct { s: str, i: usize, want: bool, recs: list.List[Rec], last: usize }
 fn skip_ws(p: *P)
 fn syntax(it: *js.Interp, p: *P) -> err
 fn parse_string(it: *js.Interp, p: *P) -> (str, err)
 fn parse_value(it: *js.Interp, p: *P, depth: u32) -> (js.Value, err)
-fn revive(it: *js.Interp, holder: *js.Obj, key: js.Key, reviver: js.Value) -> (js.Value, err)
+fn revive(it: *js.Interp, p: *P, rec_in: usize, holder: *js.Obj, key: js.Key, reviver: js.Value) -> (js.Value, err)
 fn json_parse(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
-type S = struct
+type S = struct { parts: list.List[str], stack: list.List[*js.Obj], indent: str, gap_stack: list.List[str], replacer: js.Value, has_replacer: bool, allow: list.List[js.Key], has_allow: bool }
 fn quote(it: *js.Interp, s: str) -> str
 fn ser(it: *js.Interp, st: *S, holder: *js.Obj, key: js.Key, value_in: js.Value, indent: str) -> (str, bool, err)
 fn join_items(it: *js.Interp, items: list.List[str], open: str, close: str, indent: str, inner: str, step: str) -> str
 fn json_stringify(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_json(it: *js.Interp)
+const NO_REC: usize = 18446744073709551615usize
+type Rec = struct { value: js.Value, source: str, kids: list.List[usize], keys: list.List[str] }
+fn add_rec(it: *js.Interp, p: *P, v: js.Value, source: str, kids: list.List[usize], keys: list.List[str]) -> err
+fn is_raw_json(v: js.Value) -> bool
+fn json_is_raw_json(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn json_raw_json(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value
 ```
 
 ### `e.js.b_control`
@@ -26260,9 +26662,9 @@ fn arg(args: []const js.Value, i: usize) -> js.Value
 fn iter_result(it: *js.Interp, v: js.Value, done: bool) -> js.Value
 fn this_generator(it: *js.Interp, v: js.Value) -> (*js.GenState, err)
 fn generator_resume(it: *js.Interp, this_val: js.Value, args: []const js.Value, mode: u8) -> (js.Value, err)
-fn generator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = generator_resume(it, this_val, args, js.RM_NEXT)
-fn generator_return(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = generator_resume(it, this_val, args, js.RM_RETURN)
-fn generator_throw(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = generator_resume(it, this_val, args, js.RM_THROW)
+fn generator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn generator_return(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn generator_throw(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn generator_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_generators(it: *js.Interp)
 fn this_promise(it: *js.Interp, v: js.Value) -> (*js.Obj, err)
@@ -26273,8 +26675,8 @@ fn promise_catch(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
 fn then_finally_value(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn then_finally_thrower(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn finally_step(it: *js.Interp, this_val: js.Value, args: []const js.Value, rejecting: bool) -> (js.Value, err)
-fn then_finally_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = finally_step(it, this_val, args, false)
-fn catch_finally_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = finally_step(it, this_val, args, true)
+fn then_finally_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn catch_finally_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn promise_finally(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn promise_resolve_static(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn promise_reject_static(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26282,15 +26684,15 @@ fn promise_with_resolvers(it: *js.Interp, this_val: js.Value, args: []const js.V
 type Agg = struct { values: *js.Obj, remaining: f64, resolve: js.Value, reject: js.Value, done: bool }
 fn agg_of(o: *js.Obj) -> *Agg
 fn aggregate_element(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
-fn agg_fulfilled(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = aggregate_element(it, this_val, args, 0u8)
-fn agg_settled_ok(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = aggregate_element(it, this_val, args, 1u8)
-fn agg_settled_err(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = aggregate_element(it, this_val, args, 2u8)
-fn agg_rejected(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = aggregate_element(it, this_val, args, 3u8)
+fn agg_fulfilled(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agg_settled_ok(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agg_settled_err(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agg_rejected(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn combinator(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
-fn promise_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = combinator(it, this_val, args, 0u8)
-fn promise_all_settled(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = combinator(it, this_val, args, 1u8)
-fn promise_any(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = combinator(it, this_val, args, 2u8)
-fn promise_race(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = combinator(it, this_val, args, 3u8)
+fn promise_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn promise_all_settled(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn promise_any(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn promise_race(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn species_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_promise(it: *js.Interp)
 fn reflect_apply(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26310,6 +26712,10 @@ fn reflect_is_extensible(it: *js.Interp, this_val: js.Value, args: []const js.Va
 fn reflect_prevent_extensions(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn reflect_own_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_reflect(it: *js.Interp)
+fn async_gen_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn async_gen_return(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn async_gen_throw(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn this_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 ```
 
 ### `e.js.realm`
@@ -26326,8 +26732,6 @@ fn object_proto_property_is_enumerable(it: *js.Interp, this_val: js.Value, args:
 fn object_get_proto(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn object_set_proto(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn set_prototype(it: *js.Interp, o: *js.Obj, v: js.Value) -> err
-fn to_descriptor(it: *js.Interp, v: js.Value) -> (js.Desc, err)
-fn from_descriptor(it: *js.Interp, d: js.Desc) -> js.Value
 fn object_define_property(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn define_properties_from(it: *js.Interp, o: *js.Obj, props: js.Value) -> err
 fn object_define_properties(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26348,7 +26752,7 @@ fn object_freeze(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
 fn object_seal(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn object_prevent_extensions(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn object_is_extensible(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
-fn object_is_frozen_or_sealed(it: *js.Interp, v: js.Value, frozen: bool) -> bool
+fn object_is_frozen_or_sealed(it: *js.Interp, v: js.Value, frozen: bool) -> (bool, err)
 fn object_is_frozen(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn object_is_sealed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn object_from_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26370,13 +26774,13 @@ fn function_proto_noop(it: *js.Interp, this_val: js.Value, args: []const js.Valu
 fn function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_function(it: *js.Interp)
 fn error_ctor_common(it: *js.Interp, proto_default: *js.Obj, args: []const js.Value) -> (js.Value, err)
-fn error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.error_proto, args)
-fn type_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.type_error, args)
-fn range_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.range_error, args)
-fn syntax_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.syntax_error, args)
-fn reference_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.reference_error, args)
-fn eval_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.eval_error, args)
-fn uri_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = error_ctor_common(it, it.protos.uri_error, args)
+fn error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn type_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn range_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn syntax_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn reference_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn eval_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn uri_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn error_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_error_type(it: *js.Interp, name: str, proto: *js.Obj, native: js.NativeFn, parent_ctor: *js.Obj, has_parent: bool) -> *js.Obj
 fn install_errors(it: *js.Interp)
@@ -26399,6 +26803,52 @@ fn install_globals(it: *js.Interp)
 fn global_eval(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn new_realm(a: *mem.Arena) -> (*js.Interp, err)
 fn run(it: *js.Interp, source: str) -> (js.Value, err)
+type AgentCtx = struct { arena: *mem.Arena, src: str, hub: *js.AgentHub, seen: u64 }
+type ImportCtx = struct { caller: *js.Interp, export_name: str }
+type WrapData = struct { wrapped: *js.Obj, target_realm: *js.Interp, home: *js.Interp }
+fn agent_broadcast(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agent_get_report(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agent_leaving(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agent_main(c: *AgentCtx)
+fn agent_monotonic_now(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agent_object(it: *js.Interp) -> *js.Obj
+fn agent_receive_broadcast(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agent_report(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agent_sleep(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn agent_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ams_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ams_tag(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn async_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn async_generator_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ccc_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn donor_symbol(d: *js.Interp, name: str) -> *js.Sym
+fn dynamic_function(it: *js.Interp, args: []const js.Value, kind: u8) -> (js.Value, err)
+fn error_is_error(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn fn_realm_global_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn generator_function_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn global_mem(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn host_create_realm(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn host_dda_call(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn import_value_err(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn import_value_ok(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_agent(it: *js.Interp, host: *js.Obj)
+fn install_function_kinds(it: *js.Interp)
+fn install_function_symbols(it: *js.Interp)
+fn install_shadow_realm(it: *js.Interp)
+fn new_realm_with(a: *mem.Arena, donor: *js.Interp) -> (*js.Interp, err)
+fn set_integrity(it: *js.Interp, v: js.Value, frozen: bool) -> (js.Value, err)
+fn set_integrity_generic(it: *js.Interp, o: *js.Obj, frozen: bool) -> (bool, err)
+fn shadow_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shadow_evaluate(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shadow_import_value(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shadow_of(it: *js.Interp, v: js.Value, what: str) -> (*js.Interp, err)
+fn tz_database(it: *js.Interp) -> (tz.Database, bool)
+fn tz_links_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn tz_names_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn tz_offset_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn wrap_function(home: *js.Interp, from: *js.Interp, target_fn: *js.Obj) -> (js.Value, err)
+fn wrap_value(home: *js.Interp, from: *js.Interp, v: js.Value) -> (js.Value, err)
+fn wrapped_call(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 ```
 
 ### `e.js.regex`
@@ -26420,11 +26870,11 @@ const R_NWORDB: u8 = 11u8
 const R_BACKREF: u8 = 12u8
 const R_LOOK: u8 = 13u8
 const R_NAMEDREF: u8 = 14u8
-type Node = struct { kind: u8, a: u32, b: u32, c: u32, d: u32, greedy: bool, neg: bool, back: bool }
+type Node = struct { kind: u8, a: u32, b: u32, c: u32, d: u32, greedy: bool, neg: bool, back: bool, mods: u8 }
 type Range = struct { lo: u32, hi: u32 }
 type Class = struct { first: u32, count: u32, neg: bool }
-type Regex = struct
-type Parse = struct
+type Regex = struct { nodes: []const Node, kids: []const u32, ranges: []const Range, classes: []const Class, root: u32, groups: u32, names: []const str, ignore_case: bool, multiline: bool, dot_all: bool, unicode: bool, sticky: bool, global: bool, has_indices: bool, unicode_sets: bool }
+type Parse = struct { a: *mem.Arena, src: []const u16, i: usize, nodes: list.List[Node], kids: list.List[u32], ranges: list.List[Range], classes: list.List[Class], names: list.List[str], refs: list.List[str], groups: u32, unicode: bool, named: bool, message: str, ignore_case: bool, total_groups: u32, multiline: bool, dot_all: bool, mods: u8, sets: bool, path: list.List[u32], gpaths: list.List[str], dj: u32 }
 error SyntaxErr
 fn fail(p: *Parse, m: str) -> err
 fn mk(p: *Parse, kind: u8) -> (u32, err)
@@ -26457,13 +26907,13 @@ const K_GROUP_END: u8 = 2u8
 const K_REPEAT: u8 = 3u8
 const K_LOOK_END: u8 = 4u8
 type Cont = struct { kind: u8, node: u32, index: u32, count: u32, pos: i64, back: bool, next: *Cont, has_next: bool }
-type M = struct
-fn canon(m: *const M, c: u32) -> u32
+type M = struct { re: *const Regex, input: []const u16, caps: []i64, a: *mem.Arena, depth: u32, steps: u64, step_limit: u64, aborted: bool, end: i64, found: bool }
+fn canon(m: *const M, c: u32, ic: bool) -> u32
 fn is_word(c: u32) -> bool
 fn is_line_term(c: u32) -> bool
 fn char_at(m: *const M, pos: i64) -> (u32, i64)
 fn char_before(m: *const M, pos: i64) -> (u32, i64)
-fn class_has(m: *const M, cid: u32, c: u32) -> bool
+fn class_has(m: *const M, cid: u32, c: u32, ic: bool) -> bool
 fn new_cont(m: *M, kind: u8, node: u32, index: u32, count: u32, pos: i64, back: bool, next: *Cont, has_next: bool) -> *Cont
 fn call_cont(m: *M, k: *Cont, pos: i64) -> bool
 fn repeat_step(m: *M, node: u32, count: u32, pos: i64, next: *Cont, back: bool) -> bool
@@ -26480,20 +26930,59 @@ fn do_match(m: *M, root: u32, pos: i64)
 fn match_at(a: *mem.Arena, re: *const Regex, input: []const u16, pos: i64) -> Match
 fn zero_cont() -> *Cont
 fn exec(a: *mem.Arena, re: *const Regex, input: []const u16, start: usize, sticky: bool) -> Match
+type CSet = struct { ranges: list.List[Range], strs: list.List[list.List[u32]] }
+const R_BACKREF_MULTI: u8 = 15u8
+fn add_keycaps(p: *Parse, set: *CSet) -> err
+fn add_sequences(p: *Parse, set: *CSet, data: str) -> err
+fn add_to_ranges(cs: *CSet, lo: u32, hi: u32) -> err
+fn binary_prop_of(name: str) -> u32
+fn category_index(cat: unicode.Category) -> u32
+fn class_escape_ranges(p: *Parse, letter: u8) -> (list.List[Range], err)
+fn cset_add_str(p: *Parse, cs: *CSet, s: list.List[u32]) -> err
+fn cset_intersect(p: *Parse, a: *CSet, b: *const CSet) -> err
+fn cset_new(p: *Parse) -> (CSet, err)
+fn cset_subtract(p: *Parse, a: *CSet, b: *const CSet) -> err
+fn cset_union(p: *Parse, a: *CSet, b: *const CSet) -> err
+fn eff_i(m: *const M, n: *const Node) -> bool
+fn eff_m(m: *const M, n: *const Node) -> bool
+fn eff_s(m: *const M, n: *const Node) -> bool
+fn gc_mask_of(name: str) -> (u32, bool)
+fn is_set_reserved_double(c: u32) -> bool
+fn is_set_reserved_punct(c: u32) -> bool
+fn is_set_syntax(c: u32) -> bool
+fn parse_class_v(p: *Parse) -> (u32, err)
+fn parse_property(p: *Parse, negated: bool) -> (u32, u32, err)
+fn path_str(p: *Parse) -> str
+fn paths_exclusive(a: str, b: str) -> bool
+fn peek_property_name(p: *Parse) -> str
+fn property_matches(lo: u32, hi: u32, c: u32) -> bool
+fn property_ranges(p: *Parse, lo: u32, hi: u32) -> (list.List[Range], err)
+fn ranges_complement(p: *Parse, rs: *const list.List[Range]) -> (list.List[Range], err)
+fn ranges_has(rs: *const list.List[Range], c: u32) -> bool
+fn ranges_intersect(p: *Parse, x: *const list.List[Range], y: *const list.List[Range]) -> (list.List[Range], err)
+fn ranges_norm(p: *Parse, rs: *list.List[Range]) -> err
+fn str_in(list_s: *const list.List[list.List[u32]], s: *const list.List[u32]) -> bool
+fn string_property(p: *Parse, name: str) -> (CSet, bool, err)
+fn v_character(p: *Parse) -> (u32, err)
+fn v_contents(p: *Parse) -> (CSet, err)
+fn v_operand(p: *Parse) -> (CSet, bool, u32, err)
+fn v_property(p: *Parse, negated: bool) -> (CSet, err)
+fn v_set_node(p: *Parse, set: *const CSet) -> (u32, err)
+fn v_string_disjunction(p: *Parse) -> (CSet, err)
 ```
 
 ### `e.js.b_regexp`
 
 ```neper
 fn arg(args: []const js.Value, i: usize) -> js.Value
-type Compiled = struct { re: rx.Regex, source: str, flags: str }
+type Compiled = struct { re: rx.Regex, source: str, flags: str, legacy: bool, realm: *js.Interp, quiet: bool }
 fn compiled_of(o: *js.Obj) -> *Compiled
 fn is_regexp_obj(v: js.Value) -> bool
 fn zero_ptr() -> *void
 fn to_units(a: *mem.Arena, s: str) -> []const u16
 fn from_units(it: *js.Interp, units: []const u16, from: usize, to: usize) -> str
 fn escape_source(it: *js.Interp, src: str) -> str
-fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str) -> (js.Value, err)
+fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str, legacy: bool) -> (js.Value, err)
 fn regexp_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn this_regexp(it: *js.Interp, v: js.Value) -> (*Compiled, err)
 fn advance_index(s: str, units_len: usize, index: f64, unicode: bool) -> f64
@@ -26505,14 +26994,14 @@ fn regexp_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 fn regexp_source(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn regexp_flags_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn flag_getter(it: *js.Interp, this_val: js.Value, which: u8) -> (js.Value, err)
-fn fg_indices(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 0u8)
-fn fg_global(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 1u8)
-fn fg_ignore_case(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 2u8)
-fn fg_multiline(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 3u8)
-fn fg_dot_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 4u8)
-fn fg_unicode(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 5u8)
-fn fg_unicode_sets(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 6u8)
-fn fg_sticky(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = flag_getter(it, this_val, 7u8)
+fn fg_indices(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn fg_global(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn fg_ignore_case(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn fg_multiline(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn fg_dot_all(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn fg_unicode(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn fg_unicode_sets(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn fg_sticky(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn flags_of(it: *js.Interp, rx_val: js.Value) -> (str, err)
 fn set_last_index(it: *js.Interp, r: js.Value, v: f64) -> err
 fn get_last_index(it: *js.Interp, r: js.Value) -> (f64, err)
@@ -26527,6 +27016,13 @@ fn regexp_split(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
 fn regexp_compile(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn species_self(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_regexp(it: *js.Interp)
+fn first_of_name(names: []const str, k: usize) -> bool
+fn install_legacy(it: *js.Interp, ctor: *js.Obj)
+fn legacy_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn legacy_name(i: usize) -> str
+fn legacy_set_input(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn pick_named(names: []const str, k: usize, items: []js.Value, off: usize) -> js.Value
+fn subject_units(it: *js.Interp, s: str) -> []const u16
 ```
 
 ### `e.js.b_collections`
@@ -26545,10 +27041,10 @@ fn store_delete(st: *Store, key: js.Value) -> bool
 fn this_store(it: *js.Interp, v: js.Value, class: u8, name: str) -> (*Store, err)
 fn zero_ptr() -> *void
 fn construct_collection(it: *js.Interp, class: u8, proto_default: *js.Obj, weak: bool, args: []const js.Value, adder: str, pairs: bool) -> (js.Value, err)
-fn map_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = construct_collection(it, js.C_MAP, it.protos.map, false, args, "set", true)
-fn set_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = construct_collection(it, js.C_SET, it.protos.set, false, args, "add", false)
-fn weakmap_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = construct_collection(it, js.C_WEAKMAP, it.protos.weakmap, true, args, "set", true)
-fn weakset_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = construct_collection(it, js.C_WEAKSET, it.protos.weakset, true, args, "add", false)
+fn map_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn weakmap_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn weakset_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn map_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn map_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn map_has(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26561,8 +27057,8 @@ fn three(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Va
 fn make_iterator(it: *js.Interp, o: *js.Obj, kind: f64, proto: *js.Obj) -> js.Value
 fn iter_result(it: *js.Interp, v: js.Value, done: bool) -> js.Value
 fn collection_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value, class: u8) -> (js.Value, err)
-fn map_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = collection_iterator_next(it, this_val, args, js.C_MAP)
-fn set_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = collection_iterator_next(it, this_val, args, js.C_SET)
+fn map_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn map_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn map_values(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn map_entries(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26635,25 +27131,25 @@ fn date_now(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
 fn date_parse_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn date_utc(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn getter(it: *js.Interp, this_val: js.Value, kind: u8) -> (js.Value, err)
-fn get_full_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 0u8)
-fn get_month(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 1u8)
-fn get_date(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 2u8)
-fn get_day(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 3u8)
-fn get_hours(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 4u8)
-fn get_minutes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 5u8)
-fn get_seconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 6u8)
-fn get_milliseconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 7u8)
-fn get_time(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 8u8)
-fn get_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 9u8)
-fn get_timezone_offset(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = getter(it, this_val, 10u8)
+fn get_full_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_month(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_date(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_day(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_hours(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_minutes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_seconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_milliseconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_time(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn get_timezone_offset(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn setter(it: *js.Interp, this_val: js.Value, args: []const js.Value, first: u8, max_args: usize) -> (js.Value, err)
-fn set_full_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 0u8, 3usize)
-fn set_month(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 1u8, 2usize)
-fn set_date(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 2u8, 1usize)
-fn set_hours(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 3u8, 4usize)
-fn set_minutes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 4u8, 3usize)
-fn set_seconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 5u8, 2usize)
-fn set_milliseconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = setter(it, this_val, args, 6u8, 1usize)
+fn set_full_year(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_month(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_date(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_hours(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_minutes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_seconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn set_milliseconds(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn set_time(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn to_string_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn to_date_string_m(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26688,15 +27184,15 @@ fn alloc_ta(it: *js.Interp, kind: u8, proto: *js.Obj, buffer: *js.Obj, offset: u
 fn ta_default_proto(it: *js.Interp, kind: u8) -> *js.Obj
 fn create_typed(it: *js.Interp, kind: u8, proto: *js.Obj, length: usize) -> (*js.Obj, err)
 fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Value, err)
-fn ctor_int8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 1u8, args)
-fn ctor_uint8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 2u8, args)
-fn ctor_uint8c(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 3u8, args)
-fn ctor_int16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 4u8, args)
-fn ctor_uint16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 5u8, args)
-fn ctor_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 6u8, args)
-fn ctor_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 7u8, args)
-fn ctor_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 8u8, args)
-fn ctor_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = typed_ctor_common(it, 9u8, args)
+fn ctor_int8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_uint8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_uint8c(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_int16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_uint16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn abstract_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn typed_create(it: *js.Interp, ctor: js.Value, args: []const js.Value, min_len: f64) -> (*js.Obj, err)
 fn species_create(it: *js.Interp, exemplar: *js.Obj, args: []const js.Value, min_len: f64) -> (*js.Obj, err)
@@ -26742,13 +27238,69 @@ fn ta_to_locale_string(it: *js.Interp, this_val: js.Value, args: []const js.Valu
 fn ta_from(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn ta_of_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_typed_arrays(it: *js.Interp)
+type DView = struct { buffer: *js.Obj, offset: usize, length: usize, tracking: bool }
+fn buffer_resize(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn buffer_slice_immutable(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn buffer_transfer(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn buffer_transfer_common(it: *js.Interp, this_val: js.Value, args: []const js.Value, fixed: bool) -> (js.Value, err)
+fn buffer_transfer_fixed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn buffer_transfer_immutable(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_bigint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_biguint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn ctor_float16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dataview_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_buffer_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_byte_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_byte_offset_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
+fn dv_get_bigint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_biguint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_float16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_int16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_int8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_uint16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_get_uint8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_of(o: *js.Obj) -> *DView
+fn dv_set(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
+fn dv_set_bigint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_biguint64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_float16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_float32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_float64(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_int16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_int32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_int8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_uint16(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_uint32(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_set_uint8(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn dv_state(d: *DView) -> (bool, usize)
+fn immutable_copy(it: *js.Interp, b: *js.Buf, start: usize, len: usize) -> (js.Value, err)
+fn immutable_getter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn install_data_view(it: *js.Interp)
+fn install_shared_array_buffer(it: *js.Interp)
+fn max_length_option(it: *js.Interp, options: js.Value) -> (f64, bool, err)
+fn new_buffer_full(it: *js.Interp, proto: *js.Obj, len: usize, max: usize, resizable: bool, sh: bool) -> (*js.Obj, err)
+fn set_buffer_length(b: *js.Buf, n: usize)
+fn shared_buffer_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shared_byte_length(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shared_grow(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shared_growable(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shared_max_byte_length(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn shared_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn this_dv(it: *js.Interp, v: js.Value) -> (*DView, err)
+fn this_shared(it: *js.Interp, v: js.Value) -> (*js.Buf, *js.Obj, err)
+fn to_index(it: *js.Interp, v: js.Value, what: str) -> (f64, err)
 ```
 
 ### `e.js.early`
 
 ```neper
 error EarlyError
-type Ctx = struct
+type Ctx = struct { a: *mem.Arena, p: *const ast.Program, strict: bool, in_function: bool, in_async: bool, in_generator: bool, in_loop: u32, in_switch: u32, labels: list.List[str], label_loops: list.List[bool], allow_new_target: bool, allow_super_prop: bool, allow_super_call: bool, in_field_init: bool, in_static_block: bool, message: str, line: u32, privates: list.List[str], private_depth: list.List[usize], in_params: bool, lexstack: list.List[str], lex_floor: usize }
 fn fail(c: *Ctx, id: u32, m: str) -> err
 fn node(c: *const Ctx, id: u32) -> ast.Node
 fn kid(c: *const Ctx, first: u32, i: usize) -> u32
@@ -26774,7 +27326,7 @@ fn is_simple_params(c: *const Ctx, n: ast.Node) -> bool
 fn has_use_strict(c: *const Ctx, body: u32) -> bool
 fn directive_raw(c: *const Ctx, line: u32) -> bool
 fn check_function(c: *Ctx, id: u32) -> err
-type Saved = struct
+type Saved = struct { strict: bool, in_function: bool, in_async: bool, in_generator: bool, in_loop: u32, in_switch: u32, labels_len: usize, allow_new_target: bool, allow_super_prop: bool, allow_super_call: bool, in_field_init: bool, in_static_block: bool, in_params: bool, lex_len: usize, lex_floor: usize }
 fn save_ctx(c: *const Ctx) -> Saved
 fn restore_ctx(c: *Ctx, s: Saved)
 fn restore_fail(c: *Ctx, s: Saved, e: err) -> err
@@ -26789,6 +27341,12 @@ fn check_for(c: *Ctx, id: u32) -> err
 fn check_for_in_of(c: *Ctx, id: u32) -> err
 type Result = struct { message: str, line: u32 }
 fn check(a: *mem.Arena, prog: *const ast.Program) -> (Result, err)
+type EvalOpts = struct { strict: bool, new_target: bool, super_prop: bool, super_call: bool, in_field_init: bool, privates: []const str }
+fn annexb_mark(c: *Ctx, first: u32, count: u32)
+fn check_in(a: *mem.Arena, prog: *const ast.Program, eo: *const EvalOpts) -> (Result, err)
+fn lex_conflict(c: *const Ctx, name: str) -> bool
+fn push_lex(c: *Ctx, first: u32, count: u32, funcs: bool)
+fn unlabel(c: *const Ctx, sid: u32) -> u32
 ```
 
 ### `e.js.b_misc`
@@ -26814,19 +27372,19 @@ fn array_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
 fn array_to_spliced(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn object_group_by(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn html_method(it: *js.Interp, this_val: js.Value, args: []const js.Value, tag: str, attr: str) -> (js.Value, err)
-fn h_anchor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "a", "name")
-fn h_big(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "big", "")
-fn h_blink(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "blink", "")
-fn h_bold(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "b", "")
-fn h_fixed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "tt", "")
-fn h_fontcolor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "font", "color")
-fn h_fontsize(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "font", "size")
-fn h_italics(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "i", "")
-fn h_link(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "a", "href")
-fn h_small(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "small", "")
-fn h_strike(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "strike", "")
-fn h_sub(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "sub", "")
-fn h_sup(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = html_method(it, this_val, args, "sup", "")
+fn h_anchor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_big(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_blink(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_bold(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_fixed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_fontcolor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_fontsize(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_italics(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_link(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_small(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_strike(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_sub(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn h_sup(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_is_well_formed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn string_to_well_formed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn install_misc(it: *js.Interp)
@@ -26893,12 +27451,42 @@ fn part13(b: *str.Builder) -> err
 fn part14(b: *str.Builder) -> err
 fn part15(b: *str.Builder) -> err
 fn source(a: *mem.Arena) -> (str, err)
+fn part16(b: *str.Builder) -> err
+fn part17(b: *str.Builder) -> err
+fn part18(b: *str.Builder) -> err
+fn part19(b: *str.Builder) -> err
+fn part20(b: *str.Builder) -> err
+fn part21(b: *str.Builder) -> err
+fn part22(b: *str.Builder) -> err
+fn part23(b: *str.Builder) -> err
+fn part24(b: *str.Builder) -> err
+fn part25(b: *str.Builder) -> err
+fn part26(b: *str.Builder) -> err
+fn part27(b: *str.Builder) -> err
+fn part28(b: *str.Builder) -> err
+fn part29(b: *str.Builder) -> err
+fn part30(b: *str.Builder) -> err
+fn part31(b: *str.Builder) -> err
+fn part32(b: *str.Builder) -> err
+fn part33(b: *str.Builder) -> err
+fn part34(b: *str.Builder) -> err
+fn part35(b: *str.Builder) -> err
+fn part36(b: *str.Builder) -> err
+fn part37(b: *str.Builder) -> err
+fn part38(b: *str.Builder) -> err
+fn part39(b: *str.Builder) -> err
+fn part40(b: *str.Builder) -> err
+fn part41(b: *str.Builder) -> err
+fn part42(b: *str.Builder) -> err
+fn part43(b: *str.Builder) -> err
+fn part44(b: *str.Builder) -> err
+fn part45(b: *str.Builder) -> err
 ```
 
 ### `e.web.script`
 
 ```neper
-type Host = struct
+type Host = struct { d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool, fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool, view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool, net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32, csp_ctx: *void, csp_fn: CspFn, has_csp: bool, parent: *js.Interp, has_parent: bool, children: list.List[*js.Interp], dom_prog: *void, has_dom_prog: bool }
 fn host_of(it: *js.Interp) -> *Host
 fn arg(args: []const js.Value, i: usize) -> js.Value
 fn nid(v: js.Value) -> u32
@@ -26967,7 +27555,52 @@ fn run_script(it: *js.Interp, source: str, name: str) -> bool
 fn lifecycle(it: *js.Interp, name: str)
 fn pump_once(it: *js.Interp) -> f64
 fn pump(it: *js.Interp, limit_ms: f64)
-fn advance(it: *js.Interp, ms: f64) { host_of(it).now += ms }
+fn advance(it: *js.Interp, ms: f64)
+type CspFn = fn(*void, u32, str, str) -> bool
+type FetchFn = fn(*void, str, str) -> (str, u16, bool)
+type GeomFn = fn(*void, u32, u8, []f64) -> bool
+type NetFn = fn(*void, str, str, str, []const u8, *NetResult) -> bool
+type NetResult = struct { status: u16, status_text: str, url: str, headers: str, body: []const u8 }
+type StyleFn = fn(*void, u32, str) -> (str, bool)
+fn bytes_to_latin1(a: *mem.Arena, b: []const u8) -> (str, err)
+fn child_of(h: *Host, g: js.Value) -> (*js.Interp, bool)
+fn close(it: *js.Interp)
+fn decode_utf8_lossy(a: *mem.Arena, b: []const u8) -> (str, err)
+fn dispatch_mouse(it: *js.Interp, node: u32, kind: str, x: f64, y: f64) -> bool
+fn latin1_to_bytes(a: *mem.Arena, s: str) -> ([]u8, err)
+fn load_module_hook(it: *js.Interp, referrer: str, spec_in: str) -> (*void, err)
+fn module_rejected(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_caller_window(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_computed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_csp_allows(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_eval_blocked(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_fetch_text(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_flags(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_frame_count(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_frame_create(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_frame_drop(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_frame_start(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_geom(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_net(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_parent_window(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_parse_color(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_realm_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_run_jobs(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_run_module(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_set_eval_blocked(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_set_flags(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_top_window(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_utf8_decode(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_utf8_encode(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn new_context_in(a: *mem.Arena, d: *dom.Dom, base: str, donor: *js.Interp) -> (*js.Interp, err)
+fn next_due(it: *js.Interp) -> f64
+fn pump_self(it: *js.Interp) -> f64
+fn set_clock(it: *js.Interp, ms: f64)
+fn set_csp(it: *js.Interp, ctx: *void, f: CspFn, block_eval: bool)
+fn set_fetch(it: *js.Interp, ctx: *void, f: FetchFn)
+fn set_net(it: *js.Interp, ctx: *void, f: NetFn)
+fn set_view(it: *js.Interp, ctx: *void, g: GeomFn, st: StyleFn)
+fn take_navigation(it: *js.Interp) -> (str, bool)
 ```
 
 ### `e.fmt.html.template`
@@ -28587,7 +29220,7 @@ type SocketType = enum u8 { Pair, Pub, Sub, Req, Rep, Dealer, Router, Pull, Push
 type Frame = struct { more: bool, command: bool, body: []const u8 }
 type Greeting = struct { major: u8, minor: u8, as_server: bool, identity_hint: u8 }
 type Ready = struct { socket_type: SocketType, identity: []const u8, has_identity: bool }
-type Subscriptions = struct { prefixes: []str, count: usize, everything: bool }
+type Subscriptions = struct { prefixes: []str, store: []u8, count: usize, everything: bool }
 type Conn = struct { sock: net.Socket, buf: []u8, filled: usize, consumed: usize, local: SocketType, remote: SocketType, local_identity: []const u8, remote_id: [256]u8, remote_id_len: usize, ready: bool }
 error Malformed
 error NeedMore
@@ -28630,6 +29263,7 @@ fn compact_if_possible(c: *Conn) -> (bool, err)
 fn req_envelope(parts: []const []const u8, out: [][]const u8) -> (usize, err)
 fn envelope_body_start(parts: []const []const u8) -> (usize, err)
 fn router_prefix(c: *const Conn, counter: u32, auto: []u8, parts: []const []const u8, out: [][]const u8) -> (usize, err)
+const PREFIX_MAX: usize = 64usize
 ```
 
 ZeroMQ's wire protocol (ZMTP 3.x, NULL security) and the brokerless patterns on one connection, over `e.net` TCP sockets: the 64-byte greeting (`encode_greeting`/`decode_greeting`), the `READY` command with `Socket-Type` and `Identity` (`encode_ready`/`decode_ready`), frames with MORE, LONG and COMMAND flags (`encode_frame`/`decode_frame`), `SUBSCRIBE`/`CANCEL` commands, the socket-type compatibility table, and blocking `Conn` calls (`handshake`, `send_message`, `recv_frame`, `recv_message`). Patterns: a `Subscriptions` prefix set for the PUB side, `req_envelope`/`envelope_body_start` for REQ/REP, `router_prefix` (peer identity or an auto-assigned five-byte id) for ROUTER; PUSH/PULL and DEALER/PAIR are plain messages. No broker and no thread: the caller owns concurrency. Byte-compatible with libzmq 4.3 (checked against its streams). Not here: PLAIN and CURVE, ZMTP 2.0/1.0 peers, PING/PONG heartbeats, multi-peer socket objects with reconnect and queues, inproc/ipc.

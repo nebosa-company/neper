@@ -417,7 +417,8 @@
    "pending": [],
    "fixtures": [
     "fmt_gzip",
-    "net_grpccodec"
+    "net_grpccodec",
+    "text_cleartype_oracle"
    ]
   },
   {
@@ -431,18 +432,14 @@
     "css_geom",
     "css_layout",
     "css_paint",
-    "css_sheet",
     "css_style",
     "css_ua",
     "fmt_dom",
     "fmt_gaps_a",
     "fmt_html",
-    "fmt_url",
     "html_accessible",
     "text_css_cascade",
-    "text_css_match",
-    "text_encoding_std",
-    "ui_html_view"
+    "text_css_match"
    ]
   },
   {
@@ -661,7 +658,8 @@
     "fmt_png_adaptive",
     "fmt_png_quant",
     "gfx_chart_png",
-    "gfx_vision"
+    "gfx_vision",
+    "text_cleartype_oracle"
    ]
   },
   {
@@ -851,15 +849,21 @@
     "os_shell",
     "store",
     "test_snapshot",
+    "text_cleartype_oracle",
+    "text_dwmask",
     "text_math",
+    "text_tthint",
     "ui_activation",
     "ui_datagrid",
     "ui_drag_drop",
     "ui_file_access",
+    "ui_html_view",
     "ui_print",
     "ui_selection3_v2",
     "ui_shell_ops",
     "ui_taskbar",
+    "web_page_csp",
+    "web_shell",
     "x_sqlite",
     "x_tds",
     "x_tds_integrated"
@@ -1022,6 +1026,7 @@
    "delivered": 46,
    "pending": [],
    "fixtures": [
+    "css_paint",
     "gfx_chart",
     "gfx_chart_25d_reference",
     "gfx_chart_3d_reference",
@@ -1234,6 +1239,7 @@
     "ui_gallery",
     "ui_gesture",
     "ui_host",
+    "ui_html_view",
     "ui_ink",
     "ui_inputs2_v2",
     "ui_inputs3_v2",
@@ -1290,6 +1296,7 @@
     "ui_transient",
     "ui_widget",
     "ui_window",
+    "ui_windows_looks",
     "ui_workspace"
    ]
   },
@@ -1832,6 +1839,7 @@
     "gfx_paint_plan",
     "gfx_phash256",
     "gfx_scene",
+    "text_cleartype_oracle",
     "ui_actions_v2",
     "ui_asset",
     "ui_button",
@@ -2134,6 +2142,7 @@
    "delivered": 145,
    "pending": [],
    "fixtures": [
+    "css_paint",
     "gfx_chart",
     "gfx_chart_accessible_palette",
     "gfx_chart_aggregate_tree",
@@ -2327,6 +2336,7 @@
     "ui_gallery",
     "ui_gesture",
     "ui_host",
+    "ui_html_view",
     "ui_inputs2_v2",
     "ui_inputs3_v2",
     "ui_inputs_v2",
@@ -2382,6 +2392,7 @@
     "ui_transient",
     "ui_widget",
     "ui_window",
+    "ui_windows_looks",
     "ui_workspace"
    ]
   },
@@ -2508,6 +2519,7 @@
     "ui_gallery",
     "ui_gesture",
     "ui_host",
+    "ui_html_view",
     "ui_inputs2_v2",
     "ui_inputs3_v2",
     "ui_inputs_v2",
@@ -2751,6 +2763,7 @@
     "debug_report",
     "metrics_export",
     "misc_gaps",
+    "net_h2client",
     "net_http",
     "net_http_pool",
     "net_tls",
@@ -2958,6 +2971,7 @@
    "delivered": 55,
    "pending": [],
    "fixtures": [
+    "css_paint",
     "gfx_scene",
     "gfx_scene_damage",
     "text_gaps",
@@ -3027,10 +3041,13 @@
     "gfx_svg_filter",
     "gfx_svg_text",
     "gfx_svg_text_faces",
+    "text_cleartype_oracle",
+    "text_dwmask",
     "text_gaps",
     "text_layout",
     "text_math",
     "text_shape",
+    "text_tthint",
     "ui_a11y_controls",
     "ui_accessibility",
     "ui_actions",
@@ -3068,6 +3085,7 @@
     "ui_flow",
     "ui_focus_ring",
     "ui_form",
+    "ui_html_view",
     "ui_inputs2_v2",
     "ui_inputs3_v2",
     "ui_inputs_v2",
@@ -3658,6 +3676,72 @@
    ]
   },
   {
+   "module": "e.ui.looks",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 15,
+   "delivered": 15,
+   "pending": [],
+   "fixtures": [
+    "ui_windows_looks"
+   ]
+  },
+  {
+   "module": "e.ui.winbutton",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 4,
+   "delivered": 4,
+   "pending": [],
+   "fixtures": [
+    "ui_windows_looks"
+   ]
+  },
+  {
+   "module": "e.ui.winchrome",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 3,
+   "delivered": 3,
+   "pending": [],
+   "fixtures": [
+    "ui_windows_looks"
+   ]
+  },
+  {
+   "module": "e.ui.winedit",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 2,
+   "delivered": 2,
+   "pending": [],
+   "fixtures": [
+    "ui_windows_looks"
+   ]
+  },
+  {
+   "module": "e.ui.winmark",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 2,
+   "delivered": 2,
+   "pending": [],
+   "fixtures": [
+    "ui_windows_looks"
+   ]
+  },
+  {
+   "module": "e.ui.vgridlook",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 2,
+   "delivered": 2,
+   "pending": [],
+   "fixtures": [
+    "ui_windows_looks"
+   ]
+  },
+  {
    "module": "e.ui.gridrules",
    "milestone": null,
    "schedule": "later",
@@ -4003,8 +4087,8 @@
    "module": "e.ui.style",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 36,
-   "delivered": 36,
+   "catalogue": 37,
+   "delivered": 37,
    "pending": [],
    "fixtures": [
     "gfx_chart_widget",
@@ -4326,6 +4410,7 @@
     "ui_tree_adapter",
     "ui_tree_adapter_unicode",
     "ui_widget",
+    "ui_windows_looks",
     "ui_workspace"
    ]
   },
