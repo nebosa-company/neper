@@ -175,6 +175,9 @@
     .trailer-dialog { width: min(1080px, calc(100% - 32px), calc((84vh - 120px) * 16 / 9)); }
     .trailer-frame { aspect-ratio: 16 / 9; background: #000; }
     .trailer-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+    .catalog-dialog-actions { display: flex; align-items: center; gap: var(--space-4); }
+    .catalog-dialog-actions .catalog-explore { margin: 0; }
+    .control-detail-frame { display: block; width: 100%; height: 70vh; border: 0; background: var(--surface-container-lowest); }
     .catalog-dialog-body { overflow: auto; padding: var(--space-6); }
     .catalog-dialog-status { margin: 0 0 var(--space-6); color: var(--muted); }
     .catalog-dialog-groups { display: grid; gap: var(--space-8); }
@@ -644,6 +647,15 @@ Hello, Neper</code></pre>
       </div>
     </div>
   </dialog>
+  <dialog class="catalog-dialog" id="control-detail" aria-labelledby="control-detail-title">
+    <div class="catalog-dialog-frame">
+      <header class="catalog-dialog-header">
+        <div><div class="eyebrow">e.ui // control</div><h2 id="control-detail-title"></h2></div>
+        <div class="catalog-dialog-actions"><a class="catalog-explore" id="control-detail-spec" target="_blank" rel="noopener">Specification ↗</a><form method="dialog"><button class="catalog-dialog-close" aria-label="Close control preview"><span aria-hidden="true">×</span></button></form></div>
+      </header>
+      <iframe class="control-detail-frame" title="Control preview"></iframe>
+    </div>
+  </dialog>
   <script>
     const controlGroups = new Map([
       ["Content and display", "Avatar Badge Canvas Card Cover Divider EmptyState Gauge Icon Image Level Placeholder ProgressBar ProgressRing RichText SelectableText Skeleton Text".split(" ")],
@@ -673,7 +685,18 @@ Hello, Neper</code></pre>
         for (const item of items) {
           const card = document.createElement(item.href ? "a" : "div")
           card.className = "catalog-entry"
-          if (item.href) card.href = item.href
+          if (item.href) {
+            card.href = item.href
+            card.addEventListener("click", event => {
+              if (event.ctrlKey || event.metaKey || event.shiftKey || event.button) return
+              event.preventDefault()
+              const detail = document.getElementById("control-detail")
+              detail.querySelector("h2").textContent = item.name
+              detail.querySelector("iframe").src = `ux/control-preview.html?name=${encodeURIComponent(item.name)}&detail`
+              detail.querySelector("#control-detail-spec").href = `https://github.com/nebosa-company/neper/blob/master/docs/ux/components/${item.name}/README.md`
+              detail.showModal()
+            })
+          }
           if (item.preview) {
             const preview = document.createElement("span")
             preview.className = "catalog-entry-preview"

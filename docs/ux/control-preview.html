@@ -34,7 +34,11 @@
     }).then(html => {
       const source = new DOMParser().parseFromString(html, "text/html")
       document.body.replaceChildren(...source.body.childNodes)
-      if (window.top === window) {
+      const detail = new URLSearchParams(location.search).has("detail")
+      if (detail) {
+        document.documentElement.style.overflow = "auto"
+        document.body.style.cssText = "overflow:auto;padding:var(--space-4)"
+      } else if (window.top === window) {
         document.title = `${name} · Neper UI`
         document.documentElement.style.overflow = "auto"
         document.body.style.cssText = "overflow:auto;max-width:1100px;margin:0 auto;padding:var(--space-6) var(--space-4);font:14px/20px var(--font-sans);color:var(--on-surface)"
