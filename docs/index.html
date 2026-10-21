@@ -172,9 +172,8 @@
     .catalog-dialog-close:hover, .catalog-dialog-close:focus-visible { border-width: 2px; border-color: var(--primary); }
     body.nu-page .catalog-dialog-close, body.nu-page .catalog-explore { cursor: pointer; }
     .catalog-dialog-close span { transform: translateY(-2px); }
-    .trailer-dialog { width: min(1080px, calc(100% - 32px), calc((84vh - 120px) * 16 / 9)); }
-    .trailer-frame { aspect-ratio: 16 / 9; background: #000; }
-    .trailer-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+    .demo-caption { scroll-margin-top: 96px; margin: var(--space-8) 0 var(--space-3); font: 600 16px/24px var(--font-sans); }
+    .demo-caption:first-of-type { margin-top: 0; }
     .catalog-dialog-actions { display: flex; align-items: center; gap: var(--space-4); }
     .catalog-dialog-actions .catalog-explore { margin: 0; }
     .control-detail-frame { display: block; width: 100%; height: 70vh; border: 0; background: var(--surface-container-lowest); }
@@ -296,7 +295,7 @@
             <a class="button nu-btn lg" href="#start">Run your first program →</a>
             <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper">⭐ Star on GitHub</a>
             <a class="button secondary nu-btn tonal lg" href="#llm">See every LLM feature</a>
-            <a class="button secondary nu-btn tonal lg" href="https://youtu.be/iZI3FmttYn4" data-trailer>▶ Watch the 30-second trailer</a>
+            <a class="button secondary nu-btn tonal lg" href="#trailer">▶ Watch the 30-second trailer</a>
           </div>
         </div>
 
@@ -347,6 +346,9 @@ Hello, Neper</code></pre>
         <div class="eyebrow">00 // watch it work</div>
         <h2>From prompt to native binary.</h2>
         <p class="section-intro">See one agent generate, check, repair, test, and compile a CPU/GPU program without leaving the deterministic Neper toolchain.</p>
+        <h3 class="demo-caption" id="trailer">Neper in 30 seconds</h3>
+        <iframe class="demo-video" src="https://www.youtube-nocookie.com/embed/iZI3FmttYn4?rel=0" title="Neper in 30 seconds" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <h3 class="demo-caption">From prompt to native binary, in full</h3>
         <iframe class="demo-video" src="https://www.youtube-nocookie.com/embed/S5dMLUpOtRg" title="Neper capabilities demonstration" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
       </section>
 
@@ -602,15 +604,6 @@ Hello, Neper</code></pre>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
     </footer>
   </div>
-  <dialog class="catalog-dialog trailer-dialog" id="trailer" aria-labelledby="trailer-title">
-    <div class="catalog-dialog-frame">
-      <header class="catalog-dialog-header">
-        <div><div class="eyebrow">00 // trailer</div><h2 id="trailer-title">Neper in 30 seconds</h2></div>
-        <form method="dialog"><button class="catalog-dialog-close" aria-label="Close trailer"><span aria-hidden="true">×</span></button></form>
-      </header>
-      <div class="trailer-frame"></div>
-    </div>
-  </dialog>
   <dialog class="catalog-dialog" id="module-catalog" aria-labelledby="module-catalog-title">
     <div class="catalog-dialog-frame">
       <header class="catalog-dialog-header">
@@ -1002,22 +995,6 @@ Hello, Neper</code></pre>
       dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close() })
     }
 
-    // The trailer's player is created on open and removed on close, so YouTube loads only on request and stops with the dialog.
-    const trailer = document.getElementById("trailer")
-    const trailerFrame = trailer.querySelector(".trailer-frame")
-    for (const link of document.querySelectorAll("[data-trailer]")) {
-      link.addEventListener("click", event => {
-        event.preventDefault()
-        const player = document.createElement("iframe")
-        player.src = "https://www.youtube-nocookie.com/embed/iZI3FmttYn4?autoplay=1&rel=0"
-        player.title = "Neper in 30 seconds"
-        player.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"
-        player.allowFullscreen = true
-        trailerFrame.replaceChildren(player)
-        trailer.showModal()
-      })
-    }
-    trailer.addEventListener("close", () => trailerFrame.replaceChildren())
   </script>
 </body>
 </html>
