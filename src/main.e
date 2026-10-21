@@ -5698,11 +5698,11 @@ fn write_bytes(file: os.File, bytes: []u8) -> err {
     ret ok
 }
 
-// An executable for `os_name`: the bytes, then mode 0755 when the target is Linux, so
+// An executable for `os_name`: the bytes, then mode 0755 when the target is Linux or macOS, so
 // the file runs where it was written (D291). A Windows host keeps its one bit as is.
 fn save_executable(a: *mem.Arena, path: str, bytes: []u8, os_name: str) -> err {
     try save_bytes(a, path, bytes)
-    if same(os_name, "linux") { try os.set_mode(a, path, 493u32) }
+    if same(os_name, "linux") || same(os_name, "macos") { try os.set_mode(a, path, 493u32) }
     ret ok
 }
 
