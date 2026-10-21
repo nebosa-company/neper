@@ -1203,7 +1203,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     if !project_form && !(project_program && no_operand) { file = args[2usize] }
     let root = own_directory(args[0usize])
     // Flags after the operand.
-    var triple = host_target(a)
+    var triple = host_target_for(a, args[0usize])
     var output = ""
     var has_output = false
     var release = false
@@ -1543,6 +1543,7 @@ fn spirv_command(a: *mem.Arena, args: []str) -> err {
     try init_cli_graph(a, &loaded)
     var host_os = "windows"
     if same(host_target(a), "x64-linux") { host_os = "linux" }
+    if same(host_target(a), "x64-macos") || same(host_target(a), "aarch64-macos") { host_os = "macos" }
     let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], "x64", host_os)
     if load_error != ok {
         if load_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
@@ -1599,9 +1600,30 @@ fn spirv_command(a: *mem.Arena, args: []str) -> err {
 }
 
 fn host_target(a: *mem.Arena) -> str {
+    ret host_target_for(a, "")
+}
+
+// `self_path` is the command line's name for the compiler (`args[0]`), which on macOS tells
+// the architecture; without it a Mac is taken for Apple silicon.
+fn host_target_for(a: *mem.Arena, self_path: str) -> str {
     let (cwd, cwd_error) = os.current_dir(a)
-    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 { ret "x64-linux" }
+    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
+        // Only macOS has this file; an OS that is neither it nor Windows is taken for Linux.
+        let (version, version_size, version_error) = source.load_prefix(a, "/System/Library/CoreServices/SystemVersion.plist", 16usize)
+        if version_error == ok && version_size != 0usize { ret macos_target(a, self_path) }
+        ret "x64-linux"
+    }
     ret "x64-windows"
+}
+
+// x64 under Rosetta or on an Intel Mac, else Apple silicon: CPU_TYPE_X86_64 is 0x01000007 at byte
+// 4 of a thin Mach-O (magic 0xFEEDFACF); anything unreadable or fat answers aarch64.
+fn macos_target(a: *mem.Arena, self_path: str) -> str {
+    if self_path.len == 0usize { ret "aarch64-macos" }
+    let (header, header_size, header_error) = source.load_prefix(a, self_path, 8usize)
+    if header_error != ok || header_size < 8usize { ret "aarch64-macos" }
+    if header[0usize] == 207u8 && header[1usize] == 250u8 && header[2usize] == 237u8 && header[3usize] == 254u8 && header[4usize] == 7u8 && header[7usize] == 1u8 { ret "x64-macos" }
+    ret "aarch64-macos"
 }
 
 fn with_suffix(a: *mem.Arena, path: str, suffix: str) -> (str, err) {
@@ -1667,7 +1689,7 @@ fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str, comman
     var argc = 1usize
     // CreateProcess reads a relative path with `/` as no path at all (D267): spell it
     // the host's way when launching on Windows.
-    if !same(host_target(a), "x64-linux") {
+    if same(host_target(a), "x64-windows") {
         let (spelled, spelled_error) = mem.alloc[u8](a, launched.len)
         if spelled_error != ok { ret (0i32, "", "", spelled_error) }
         var fix = 0usize
@@ -2053,16 +2075,19 @@ fn nptest_spawn(a: *mem.Arena, argv: []str, base: str) -> (i32, str, str, err) {
         let out_abandoned = os.close(out_file)
         ret (0i32, "", "", err_open_error)
     }
-    var streams: os.Stdio = zero
-    streams.stdout = out_file
-    streams.stderr = err_file
-    let (child, spawn_error) = os.spawn(a, argv, streams)
-    let out_stream = streams.stdout
-    let err_stream = streams.stderr
+    var spawn_options: os.SpawnOptions = zero
+    spawn_options.argv = argv
+    spawn_options.inherit_env = true
+    spawn_options.stdio.stdout = out_file
+    spawn_options.stdio.stderr = err_file
+    let (child, spawn_error) = os.spawn_with_options(a, spawn_options)
+    let out_stream = spawn_options.stdio.stdout
+    let err_stream = spawn_options.stdio.stderr
     let out_close = os.close(out_stream)
     let err_close = os.close(err_stream)
     if spawn_error != ok { ret (0i32, "", "", spawn_error) }
-    let (status, wait_error) = os.wait(child)
+    let (usage, wait_error) = os.wait_usage(child)
+    let status = usage.exit_code
     if out_close != ok { ret (0i32, "", "", out_close) }
     if err_close != ok { ret (0i32, "", "", err_close) }
     if wait_error != ok { ret (0i32, "", "", wait_error) }
@@ -5673,11 +5698,11 @@ fn write_bytes(file: os.File, bytes: []u8) -> err {
     ret ok
 }
 
-// An executable for `os_name`: the bytes, then mode 0755 when the target is Linux, so
+// An executable for `os_name`: the bytes, then mode 0755 when the target is Linux or macOS, so
 // the file runs where it was written (D291). A Windows host keeps its one bit as is.
 fn save_executable(a: *mem.Arena, path: str, bytes: []u8, os_name: str) -> err {
     try save_bytes(a, path, bytes)
-    if same(os_name, "linux") { try os.set_mode(a, path, 493u32) }
+    if same(os_name, "linux") || same(os_name, "macos") { try os.set_mode(a, path, 493u32) }
     ret ok
 }
 

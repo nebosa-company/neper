@@ -1,0 +1,63 @@
+name: macos-a64
+on:
+  push:
+    branches: [macos-a64, macos-dir, macos-ci]
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: macos-14
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rosetta, for the x86-64 binaries
+        run: |
+          softwareupdate --install-rosetta --agree-to-license 2>&1 | tail -3 || true
+          arch -x86_64 /usr/bin/true && echo "rosetta ok"
+      - name: Run the Neper-emitted macOS binaries
+        run: |
+          sw_vers; uname -m
+          status=0
+          for name in readfile1 ident1 lock1 watch3 net1 misc1 hello imp os1 fs1 fs2 proc1 thread1 proc2 sync1 map1 group1 clock1 watch1 watch2 stack1  misc1_x64  net1_x64  watch3_x64  lock1_x64  ident1_x64  readfile1_x64  hello_x64 imp_x64 os1_x64 fs1_x64 fs2_x64 proc1_x64 thread1_x64 proc2_x64 sync1_x64 map1_x64 group1_x64 clock1_x64 watch1_x64 watch2_x64 stack1_x64; do
+            cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
+            echo "== $name"; codesign --verify --verbose=4 /tmp/$name 2>&1 || true
+            case $name in *_x64) runner="arch -x86_64" ;; *) runner="" ;; esac
+            set +e; perl -e 'alarm 30; exec @ARGV' $runner /tmp/$name; code=$?; set -e
+            echo "exit=$code"
+            if [ "$code" -ne 0 ]; then
+              status=1
+              case $name in *_x64) ;; *) lldb -b -o run -o quit /tmp/$name 2>&1 | tail -15 ;; esac
+              log show --last 2m --style compact --predicate 'process == "kernel" OR process == "amfid" OR sender == "AppleMobileFileIntegrity" OR process == "dyld"' 2>&1 | tail -30
+            fi
+          done
+          exit $status
+      - name: Trap backtraces under the PIE slide
+        if: always()
+        run: |
+          # A failed check must end with 134 and name its frames, run directly so the kernel's
+          # address randomisation applies (a debugger turns it off).
+          for name in trap1 trap1_x64; do
+            cp tests/macos/$name /tmp/$name && chmod +x /tmp/$name
+            case $name in *_x64) runner="arch -x86_64" ;; *) runner="" ;; esac
+            set +e; out=$($runner /tmp/$name 2>&1); code=$?; set -e
+            echo "== $name exit=$code"; echo "$out"
+            [ "$code" -eq 134 ] || exit 1
+            for frame in trap1.inner trap1.outer trap1.main; do
+              echo "$out" | grep -q "at $frame" || { echo "missing frame $frame"; exit 1; }
+            done
+          done
+          echo "trap ok"
+      - name: DWARF in the image
+        if: always()
+        run: |
+          set +e
+          for name in trap1 trap1_x64; do
+            cp tests/macos/$name /tmp/$name
+            echo "== $name"
+            dwarfdump --verify /tmp/$name 2>&1 | tail -8
+            echo "-- units and functions"
+            dwarfdump --debug-info /tmp/$name 2>&1 | grep -E "DW_TAG_compile_unit|DW_AT_name" | head -12
+            echo "-- line table files"
+            dwarfdump --debug-line /tmp/$name 2>&1 | grep -E "trap1.e" | head -3
+            echo "-- address to line"
+            case $name in *_x64) ;; *) lldb -b -o "breakpoint set -f trap1.e -l 5" -o run -o bt -o "frame info" /tmp/$name 2>&1 | grep -v "maps to more than one" | tail -16 ;; esac
+          done
