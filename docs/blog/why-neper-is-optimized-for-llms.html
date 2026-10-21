@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Why Neper is built for the agent loop — Neper blog</title>
-  <meta name="description" content="Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics Neper uses to make each one cheap, with the claims we have not yet proved.">
+  <meta name="description" content="Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics Neper uses to make each one cheap, with real terminal output and the claims we have not yet proved.">
   <link rel="canonical" href="https://neper.dev/blog/why-neper-is-optimized-for-llms.html">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
   <meta property="og:title" content="Why Neper is built for the agent loop">
-  <meta property="og:description" content="Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics Neper uses to make each one cheap, with the claims we have not yet proved.">
+  <meta property="og:description" content="Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics Neper uses to make each one cheap, with real terminal output and the claims we have not yet proved.">
   <meta property="og:url" content="https://neper.dev/blog/why-neper-is-optimized-for-llms.html">
   <meta property="og:image" content="https://neper.dev/blog/img/why-neper-is-optimized-for-llms.svg">
   <meta property="article:published_time" content="2026-10-21">
@@ -117,6 +117,18 @@
       th, td { padding: var(--space-2) var(--space-3); }
       footer { flex-direction: column; }
     }
+
+    .table-scroll { overflow: visible; }
+    table { table-layout: auto; }
+    th, td { white-space: normal; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    td code, th code { font-size: .92em; overflow-wrap: anywhere; }
+    td.num, th.num { text-align: right; white-space: nowrap; }
+    .win-note { color: var(--on-surface-variant); font-size: 14px; }
+    pre.term { margin: 0 0 var(--space-6); }
+    pre.term code { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .bad { color: #c0392b; } .good { color: #1e8e3e; }
+    @media (prefers-color-scheme: dark) { .bad { color: #ff7b86; } .good { color: #7ddf9a; } }
+    @media (max-width: 599px) { th, td { padding: var(--space-2) var(--space-2); font-size: 13px; } }
   </style>
 </head>
 <body class="nu-page">
@@ -133,50 +145,145 @@
     <article>
       <div class="eyebrow">&gt; blog // design</div>
       <h1>Why Neper is built for the agent loop</h1>
-      <p class="meta">October 21, 2026 · design notes</p>
+      <p class="meta">October 21, 2026 · design notes · the outputs below are real runs of the compiler</p>
       <img class="banner" src="img/why-neper-is-optimized-for-llms.svg" width="1200" height="630" alt="Neper is built for the agent loop: search, generate, edit, check, repair.">
 
-      <p class="lede">A model editing code does not browse it the way you do. It sees a window of text, guesses what lies outside it, and pays for every token it reads and writes. Neper's design goal is that a model should not be able to write a line whose meaning depends on context it cannot see. This post lists the rules, commands and diagnostics that follow from that, what each one is for, and which of the claims we have not proved yet.</p>
+      <p class="lede">A model editing code does not browse it the way you do. It sees a window of text, guesses what lies outside it, and pays for every token it reads and writes. Neper's design goal is that a model should not be able to write a line whose meaning depends on context it cannot see. This post walks through the language rules, the compiler commands and the diagnostics that follow from that goal, runs each one on a small program, and says which of the claims we have not proved yet.</p>
+
+      <h2>The objective, stated once</h2>
+      <div class="callout">
+        <strong>The design rule</strong>
+        <p>Every correctness-relevant dependency must be visible in a checked contract, enforced by the compiler, or reported as an explicit unproved obligation with its origin. Tools must distinguish these cases.</p>
+      </div>
+      <p>Two limits come with it. Short source and first-pass compilation are not the measure; the measure is total cost per <em>verified</em> success: tokens, turns, retries, escaped defects and false rejections. And every comparative claim stays a hypothesis until a held-out evaluation on two model families passes. Readable syntax does not prove ownership, prevent races or make a compiler correct.</p>
 
       <h2>How agents fail on code</h2>
-      <p>The rules below came from failures in measured agent transcripts, not from taste.</p>
-      <div class="table-scroll"><table><thead><tr><th>Failure</th><th>What the model does</th><th>What it costs</th></tr></thead><tbody><tr><td>Hidden context</td><td>Edits a function without seeing the overload, macro, implicit cast or lifetime that changes its meaning</td><td>A plausible, wrong edit</td></tr><tr><td>Ambiguous search</td><td>A text search for a definition returns several hits or none</td><td>Whole-file reads; context in the hundreds of thousands of tokens</td></tr><tr><td>Hallucinated API</td><td>Calls a function that does not exist or is only planned</td><td>Repair turns</td></tr><tr><td>Unreadable diagnostic</td><td>Misreads a message that names no subject</td><td>Three or more turns instead of one or two</td></tr><tr><td>Brittle edit</td><td>Applies a text or line edit to a file that has changed</td><td>Partial application</td></tr><tr><td>Temporal bugs</td><td>Use after reset, aliasing across growth, double close</td><td>Defects that only trap at run time</td></tr></tbody></table></div>
+      <p>The rules below came from failures in measured agent transcripts, not from taste. Each row is closed by a section further down.</p>
+      <div class="table-scroll"><table><thead><tr><th>Failure</th><th>What the model does</th><th>What it costs</th></tr></thead><tbody><tr><td>Hidden context</td><td>Edits a function without seeing the overload, macro, implicit cast or lifetime that changes its meaning</td><td>A plausible, wrong edit that compiles or fails far away</td></tr><tr><td>Ambiguous search</td><td>A text search for a definition returns several hits or none</td><td>Whole-file reads; context grows to hundreds of thousands of tokens</td></tr><tr><td>Hallucinated API</td><td>Calls a function that does not exist, or one that is only planned</td><td>Repair turns, sometimes a silently wrong fallback</td></tr><tr><td>Unreadable diagnostic</td><td>Misreads a message that names no subject</td><td>Three or more turns instead of one or two</td></tr><tr><td>Brittle edit</td><td>Applies a text or line edit to a file that has since changed</td><td>Partial application, stale spans</td></tr><tr><td>Slow check</td><td>Waits seconds to minutes per compile</td><td>Fewer iterations inside the same budget</td></tr><tr><td>Temporal bugs</td><td>Use after reset, aliasing across container growth, double close</td><td>Defects that compile and only trap at run time</td></tr></tbody></table></div>
 
-      <h2>Language rules that make a search reliable</h2>
-      <p>Section 14 of the spec lists invariants that are rules, not style advice. They exist so that a search, a glob or an anchored edit is reliable rather than probabilistic.</p>
-      <ul>
-        <li><strong>One definition per name, no overloading.</strong> Searching for <code>^fn dot</code> returns exactly one line in the module that defines it.</li>
-        <li><strong>Declarations start at column 0, and the file path is the module name.</strong> Searching for <code>^fn</code> lists functions. A glob finds a module without opening it. An unclosed bracket cannot cross a declaration keyword, so a dropped <code>)</code> is reported where it opened, not 200 lines later.</li>
-        <li><strong>Every cross-module reference is qualified</strong> (<code>mem.alloc</code>), so the definition is one search away.</li>
-        <li><strong>No macros, no preprocessor, no implicit conversions.</strong> What you read is what compiles, and every cast is written down and greppable.</li>
-        <li><strong>One canonical layout</strong>, checked by <code>neper fmt --check</code>, so diffs are minimal and edits land where you expect. Casing is enforced too: a name's kind is visible without a lookup.</li>
-        <li><strong>Order-independent module scope.</strong> An insertion can go anywhere, with no forward declarations to keep in sync.</li>
-      </ul>
-      <p>Beyond that list, errors are values handled at the statement (<code>try</code>, <code>-&gt; err</code>, <code>ret ok</code>), and a local may not shadow a reserved word, a module-scope function, a <code>use</code> qualifier or a builtin. That last rule looks fussy. It is the reason a name means one thing within a file, and it was a leading cause of failed builds in our transcripts. The compiler reports it as <code>E-NAME-0003</code> with a machine-applicable rename. The grammar itself is closed: 94 token kinds and 54 syntax-node kinds.</p>
+      <h2>Twelve language rules that make a search reliable</h2>
+      <p>Section 14 of the specification lists invariants that are rules, not style advice. They exist so that a search, a glob or an anchored edit is <em>reliable</em> rather than probabilistic.</p>
+      <div class="table-scroll"><table><thead><tr><th>Rule</th><th>What it guarantees</th><th>Why a model benefits</th></tr></thead><tbody><tr><td>One definition per name, no overloading</td><td>A search for <code>^fn dot</code> returns exactly one line in the defining module</td><td>One search resolves a name; no overload resolution to simulate</td></tr><tr><td>Declarations start at column 0 with a keyword</td><td>A search for <code>^fn</code> lists functions; an unclosed bracket cannot cross a declaration keyword</td><td>Exact navigation; a dropped bracket is reported where it opened, not 200 lines later</td></tr><tr><td>File path is the module name</td><td>A glob finds a module without opening it</td><td>Locating code costs no file reads</td></tr><tr><td>Every cross-module reference is qualified</td><td>A call site names its module, as in <code>mem.alloc</code></td><td>The definition is one search away and the type is in the name</td></tr><tr><td>No macros, no preprocessor, no textual generation</td><td>What you read is what compiles</td><td>No hidden expansion to predict</td></tr><tr><td>No implicit conversions</td><td>Every cast is written down and greppable</td><td>Numeric-width bugs are visible on the line</td></tr><tr><td>Order-independent module scope</td><td>An insertion can go anywhere; no forward declarations</td><td>Edits need no global ordering knowledge</td></tr><tr><td>One canonical layout</td><td>Enforced by <code>neper fmt --check</code></td><td>Minimal diffs; edits land where expected</td></tr><tr><td>Index as data</td><td><code>neper index</code> emits versioned JSONL of every definition and reference with byte-precise spans</td><td>Tools never parse source or re-implement name lookup</td></tr><tr><td>Enforced casing</td><td><code>snake_case</code> values, <code>PascalCase</code> types, <code>SCREAMING_SNAKE</code> constants</td><td>A name's kind is legible without a lookup</td></tr><tr><td>Tokens and syntax are public data</td><td><code>neper tokens</code> and <code>neper parse</code> give lossless, versioned output</td><td>A harness needs no private compiler API</td></tr><tr><td>Generated code keeps provenance</td><td>An optional <code>.e.map.json</code> maps generated spans to their inputs</td><td>Generated code stays traceable without a preprocessor</td></tr></tbody></table></div>
+      <p>Run against a program, the first rule is a one-liner. The listing below is the real output for the demo file used throughout this post:</p>
+      <pre class="term"><code><span class="prompt">$</span> grep -n &quot;^fn&quot; main.e
+4:fn clamp(value: i64, low: i64, high: i64) -&gt; i64 {
+10:fn fill(a: *mem.Arena, count: usize) -&gt; err {
+16:fn main(a: *mem.Arena, args: []str) -&gt; err {</code></pre>
+      <p>Three functions, three lines, one definition each. No tool is needed to answer "where is <code>clamp</code> defined".</p>
 
-      <h2>Tokens are measured, not guessed</h2>
-      <p>A lexical token is not a model token. Across our corpus there are about 1.27 model tokens per lexical token, and the language card publishes the cost per terminal for two tokenizers.</p>
-      <div class="table-scroll"><table><thead><tr><th>Terminal</th><th>cl100k_base</th><th>o200k_base</th></tr></thead><tbody><tr><td><code>fn</code>, <code>let</code>, <code>ret</code></td><td>1–2</td><td>1–2</td></tr><tr><td><code>usize</code></td><td>1</td><td>1</td></tr><tr><td><code>i32</code>, <code>u8</code>, <code>f64</code></td><td>2</td><td>2</td></tr><tr><td><code>[]u8</code></td><td>3</td><td>3</td></tr><tr><td><code>[]const u8</code></td><td>4</td><td>4</td></tr><tr><td><code>-&gt;</code>, <code>==</code>, <code>+=</code></td><td>1</td><td>1</td></tr></tbody></table></div>
-      <p>So the card says to prefer <code>usize</code> where the width is free. The policy is that a spelling change must show a measured token or repair-turn improvement; a character-count argument is not accepted. The biggest lever we found is not syntax at all. A turn that reads whole files carries 400–500 K tokens of context, against 1–5 K when the model asks <code>context-file</code> for the same function.</p>
+      <h2>Hidden context, removed: the no-shadowing rule</h2>
+      <p>Beyond the section 14 list, a local may not reuse a reserved word, a module-scope function, a <code>use</code> qualifier or a builtin. That looks fussy. It is the reason a name means one thing within a file, and it was a leading cause of failed builds in our transcripts. Here is the mistake a model makes, using a builtin name for a local:</p>
+      <pre class="term"><code>use e.mem
 
-      <h2>The compiler as an API</h2>
-      <p>Every command emits versioned JSONL, and every semantic answer is bound to a snapshot of the program so a stale answer is detectable. All of the following are implemented and exercised by both self-host suites.</p>
-      <div class="table-scroll"><table><thead><tr><th>Command</th><th>What it answers</th></tr></thead><tbody><tr><td><code>index</code>, <code>uses-file</code></td><td>Every definition and resolved reference, with byte-precise spans</td></tr><tr><td><code>context-file</code></td><td>One function's signature and its contract: allocation, borrow, mutation, errors, threads. Pages with <code>--budget</code>, <code>--bytes</code>, <code>--cursor</code></td></tr><tr><td><code>plan-rename-file</code>, <code>plan-add-parameter-file</code>, <code>plan-change-signature-file</code>, <code>plan-replace-expression-file</code></td><td>A typed edit the compiler computed, with file-hash preconditions and a re-check postcondition</td></tr><tr><td><code>apply-plan</code></td><td>Applies a plan to every file or to none</td></tr><tr><td><code>test-impact-file</code>, <code>test-file --only</code></td><td>Only the tests an edit reaches</td></tr><tr><td><code>query-batch</code></td><td>Many queries over one check, with <code>--deadline</code> and an instance budget</td></tr></tbody></table></div>
-      <p>The card prescribes the loop: locate with <code>index</code> or <code>uses-file</code>, read <code>context-file</code> for what the change touches, make a plan, <code>apply-plan</code>, then <code>check-file</code>, <code>fmt --check</code>, <code>test-impact-file</code> and <code>test-file --only</code>. A stale file hash aborts the plan instead of half-applying it, so a concurrent edit cannot leave a half-migrated codebase.</p>
+fn fill(a: *mem.Arena, count: usize) -&gt; err {
+    let target = count
+    if target &gt; 4usize { ret mem.Exhausted }
+    ret ok
+}</code></pre>
+      <p>The compiler refuses it with a stable code and, importantly, tells the model exactly how to repair it:</p>
+      <pre class="term"><code><span class="prompt">$</span> neper check-file main.e . x64 windows --json
+code     E-NAME-0003
+message  target is a reserved name and cannot name a local or parameter
+span     line 11, column 9
+fix      rename the local and every use of it in its scope
+           line 11: target_value
+           line 12: target_value</code></pre>
+      <p>The code is the machine discriminator, the span is exact, and the fix lists every site to rewrite, with a file hash as a precondition. A harness can apply it without spending a model turn. Errors are values handled at the statement (<code>try</code>, <code>-&gt; err</code>, <code>ret ok</code>), the grammar is closed at 94 token kinds and 54 syntax-node kinds, and a keyword cannot name a value, type, field or module.</p>
 
       <h2>Diagnostics written for the reader that repairs</h2>
-      <p>Codes look like <code>E-TYPE-0002</code>. The code, not the message, is what a tool keys on. At the card's last render all 15 families (<code>E-SAFETY</code> alone has 25 codes) are pinned by conformance goldens or the suites, and each family has a <code>9999</code> catch-all so a gap is visible. A diagnostic carries its expected and actual types, related sites and fixes. We measured the effect of the identity: a repair prompt that carries the code, span and expected-versus-found takes a median of one to two turns, and three or more without it. The card also embeds <code>reject</code> fixtures for the common traps, so the model sees the failure before it causes it.</p>
+      <ul>
+        <li><strong>Stable codes</strong> of the form <code>E-TYPE-0002</code>. The registry records each code's standing: <em>verified</em> (a conformance golden or a suite pins it), <em>present</em> or <em>planned</em>. At the card's last render all 15 families (CLI, COMPTIME, ERROR, FORMAT, GPU, LEX, LINK, MEM, MODULE, NAME, SAFETY, SYNTAX, TEST, TOOL, TYPE) list every code as verified; <code>E-SAFETY</code> alone has 25.</li>
+        <li><strong>A catch-all per family</strong> (<code>E-NAME-9999</code>), so a missing code is visible rather than hidden.</li>
+        <li><strong>A structured payload</strong>: expected and actual types where they differ, related sites, and fixes with applicability.</li>
+        <li><strong>The identity travels with the repair prompt.</strong> We measured a median fix at one to two turns with the code, span and expected-versus-found attached, and three or more without. Repeated codes across consecutive failures mean the message was misread, and the instruction is to re-attach the subject.</li>
+        <li><strong>Reject fixtures in the card</strong> show the common failures with their expected code before the model causes them.</li>
+      </ul>
+
+      <h2>Ask the compiler, do not read the file</h2>
+      <p>The largest cost lever we found is not syntax. A turn that reads whole files carries 400–500 K tokens of context on Neper's own tree, against 1–5 K when the model asks <code>context-file</code> for the same function. Here is the answer for <code>fill</code>:</p>
+      <pre class="term"><code><span class="prompt">$</span> neper context-file main.e . x64 windows --json --symbol main.fill
+signature  declared-and-checked  fn fill(a: *e.mem.Arena, count: usize) -&gt; err
+allocation declared-and-checked  allocates from a: nothing it returns holds a pointer
+errors     declared-and-checked  fallible: returns err; the caller tests it or propagates it with try
+resources  compiler-proved       every resource this function owns is consumed on every exit; no view outlives its region or its container&#x27;s change
+dependency compiler-proved       e.os interface b8f14586ab8...
+dependency compiler-proved       e.mem interface ec5a2b162a...
+result     records 6, bytes 1521, complete true</code></pre>
+      <p>Each fact carries its provenance: <code>compiler-proved</code>, <code>declared-and-checked</code>, and in the adopted design also <code>trusted-external</code>, <code>runtime-observed</code> and <code>unknown</code>. A comment is never promoted to a fact. The whole answer is 1,521 bytes, pages with <code>--budget</code>, <code>--bytes</code> and <code>--cursor</code>, and every record is bound to a snapshot of the program so a stale answer is detectable.</p>
+
+      <h2>Every use, resolved</h2>
+      <p><code>uses-file</code> replaces a text search for call sites. The compiler returns the resolved uses, with provenance and a completeness flag:</p>
+      <pre class="term"><code><span class="prompt">$</span> neper uses-file main.e . x64 windows --json --symbol main.clamp
+relation   call
+provenance compiler-proved
+in         main.main
+at         line 17, column 17</code></pre>
+
+      <h2>Edits that apply completely or not at all</h2>
+      <p>The plan commands express an edit as a typed operation the compiler computed: rename a symbol, add a parameter and migrate callers, change a signature, replace an expression. <code>apply-plan</code> is a transaction with a precondition per file, the expected SHA-256. All files match and are applied, or none are:</p>
+      <pre class="term"><code><span class="prompt">$</span> neper plan-rename-file main.e . x64 windows --json --symbol main.clamp --to clamp_percent
+edit  declaration  line 4   clamp -&gt; clamp_percent
+edit  use          line 17  clamp -&gt; clamp_percent
+postcondition  check-file passes; main.clamp names no function
+
+# someone edits main.e, then the old plan is applied
+$ neper apply-plan plan.jsonl --root .
+error[E-TOOL-0003]: `main.e` changed since the plan was made; nothing applied
+
+# the file matches the plan again
+$ neper apply-plan plan.jsonl --root .
+applied 2 edits to main.e
+postcondition: check-file passes; uses-file --symbol main.clamp_percent reports uses at 1 sites and main.clamp names no function</code></pre>
+      <p>The refusal in the middle is the point. A concurrent change cannot leave a half-migrated codebase, and the model never has to reason about partial application.</p>
+
+      <h2>The command set</h2>
+      <p>Every command emits versioned JSONL. Standing is read from the compiler and both self-host suites when the card is rendered, and every row below is <em>verified</em>.</p>
+      <div class="table-scroll"><table><thead><tr><th>Command</th><th>What it answers</th></tr></thead><tbody><tr><td><code>index</code>, <code>tokens</code>, <code>parse</code></td><td>Every symbol and reference with byte-precise spans; lossless grammar output</td></tr><tr><td><code>fmt</code></td><td>Canonical layout; <code>--check</code> verifies without modifying</td></tr><tr><td><code>context-file</code></td><td>A function's signature and caller contract (allocation, borrow, mutation, errors, threads); a type's fields, layout and whether it is a resource; a module's catalogue</td></tr><tr><td><code>uses-file</code>, <code>explain-file</code></td><td>Every resolved use; every dispatch, instantiation and discard</td></tr><tr><td><code>plan-rename-file</code>, <code>plan-add-parameter-file</code>, <code>plan-change-signature-file</code>, <code>plan-replace-expression-file</code></td><td>A semantic edit with file-hash preconditions and a re-check postcondition</td></tr><tr><td><code>apply-plan</code></td><td>Applies a plan to every file or to none</td></tr><tr><td><code>test-impact-file</code>, <code>test-file --only</code></td><td>The tests an edit reaches, and running only those</td></tr><tr><td><code>query-batch</code></td><td>Many queries over one check; <code>--deadline MS</code> and an instance budget end a runaway request</td></tr><tr><td><code>check-file</code></td><td>Type-check a file or program</td></tr></tbody></table></div>
+      <p>The card prescribes the loop with no step left to improvisation: locate with <code>index</code> or <code>uses-file</code>, read <code>context-file</code> for what the change touches, make a plan, <code>apply-plan</code>, then <code>check-file</code>, <code>fmt --check</code>, <code>test-impact-file</code> and <code>test-file --only</code>. Every step consumes and produces structured data.</p>
+
+      <h2>Tokens are measured, not guessed</h2>
+      <p>A lexical token is not a model token; across our corpus there are about 1.27 model tokens per lexical token. The card publishes the cost per terminal under two tokenizers:</p>
+      <div class="table-scroll"><table><thead><tr><th>Terminal</th><th class="num">cl100k_base</th><th class="num">o200k_base</th></tr></thead><tbody><tr><td><code>fn</code>, <code>let</code>, <code>ret</code></td><td class="num">1–2</td><td class="num">1–2</td></tr><tr><td><code>usize</code></td><td class="num">1</td><td class="num">1</td></tr><tr><td><code>i32</code>, <code>u8</code>, <code>f64</code></td><td class="num">2</td><td class="num">2</td></tr><tr><td><code>1usize</code></td><td class="num">3</td><td class="num">3</td></tr><tr><td><code>[]u8</code></td><td class="num">3</td><td class="num">3</td></tr><tr><td><code>[]const u8</code></td><td class="num">4</td><td class="num">4</td></tr><tr><td><code>-&gt;</code>, <code>==</code>, <code>+=</code></td><td class="num">1</td><td class="num">1</td></tr></tbody></table></div>
+      <p>So the card says to prefer <code>usize</code> where the width is free. The policy is that a spelling change must show a measured token or repair-turn improvement; a character-count argument is not accepted, and where tokenizers disagree the intersection is optimized and the disagreement documented. The same discipline applies to the process: the agent instructions in the repository route every symbol question through the context query before any file read, because that is where the 400–500 K versus 1–5 K gap comes from.</p>
 
       <h2>A card that cannot drift</h2>
-      <p>The language card is rendered by script from the grammar revision and stamped with a content hash. A card whose hash is not the render of its grammar is stale. Command and diagnostic standing is read from the compiler and the suites when the card is rendered, so the model is never told a command exists because someone wrote it down. The repository's agent instructions encode the measured habits: name the queue item and acceptance list in every build prompt (bare “continue” prompts correlate with 59–72% repeat rates), read the card first, resolve symbols before opening files, and keep verify-only turns separate from build turns.</p>
+      <p>The language card is rendered by script from the grammar revision and stamped with a SHA-256 of its content. A card whose hash is not the render of its grammar is stale. Rule standing is honest: a grammar rule is marked <em>present</em> when copied from the normative grammar, and <em>verified</em> is reserved for explicit executable evidence. The card's traps section lists the failures that ended most measured builds, each with the code it is refused with, and the fix is always a rename or a rewrite, never a flag.</p>
+      <p>The repository's agent instructions encode the habits the measurements supported: name the queue item and its acceptance list in every build prompt (bare “continue” prompts correlated with a 59–72% repeat rate and six to seven turns per edit), read the card first, resolve symbols before opening files, keep verify-only turns apart from build turns, and apply multi-file edits as one transaction.</p>
+
+      <h2>Safety as a checkable contract</h2>
+      <p>The hardening plan makes the compiler, not the model, responsible for temporal correctness. The target is affine ownership of arenas and handles, lexical region validity for slices and pointers, and a first-class unsafe boundary, so that a model-generated “reset then slice” or “push then retain view” is rejected <strong>at compile time</strong> rather than trapped at run time. The unsafe surface (<code>@nocheck</code>, bare <code>union</code>, <code>mem.bitcast</code>, <code>mem.cast</code>, raw dereference, <code>extern</code>) is meant to be enumerable in one bounded query, so a reviewer audits exactly the un-proved part. The plan is explicit that an operation outside the checked subset needs an explicit unsafe boundary, and that an unproved obligation is never presented as a guarantee.</p>
+
+      <h2>Speed: the loop has to be fast to be used</h2>
+      <p>An edit loop is limited by latency, not throughput. The adopted requirement asks for declaration-level incremental reuse paired with immutable snapshots and complete cache identity, bounded request lifetimes and cancellation, and gates on p50 and p95 “no-op check” and “local edit and revert” latency, frozen from a baseline. The compiler is self-hosted and emits machine code directly. The incremental reuse and the latency budgets are requirements, not yet claimed results.</p>
+
+      <h2>Evidence, not assertion</h2>
+      <ul>
+        <li><strong>A regression test or it is not done.</strong> A behavior counts as done when a test exists that fails if the behavior breaks, written failing first. The test is the specification.</li>
+        <li><strong>A held-out, two-family, pre-registered evaluation</strong> gates every LLM-experience claim, with the baseline archived beforehand and full harness cost per verified success reported.</li>
+        <li><strong>A reproducible token-cost report</strong> on a frozen corpus feeds every decision about verbosity.</li>
+        <li><strong>Conformance goldens</strong> pin the diagnostics, which is why only a verified code is something an edit loop should rely on.</li>
+      </ul>
+
+      <h2>The adopted requirement set</h2>
+      <p>The post-M2 review distilled sixteen requirements. P0 items block any claim that the language is “optimized for LLM processing”.</p>
+      <div class="table-scroll"><table><thead><tr><th></th><th>Requirement</th><th>Priority</th></tr></thead><tbody><tr><td>R01</td><td>Compiler-enforced ownership and lifetime; a first-class unsafe boundary; checks kept in optimized builds unless proved away</td><td>P0</td></tr><tr><td>R02</td><td>Semantic context query with provenance on every fact</td><td>P0</td></tr><tr><td>R03</td><td>Token-cost measurement steers syntax</td><td>P0</td></tr><tr><td>R04</td><td>Transactional multi-file repair and refactor with preconditions</td><td>P1</td></tr><tr><td>R05</td><td>Executable, retrievable API catalogue; planned APIs never returned as callable</td><td>P1</td></tr><tr><td>R06</td><td>Edit-loop latency: reuse, snapshots, lifetimes</td><td>P1</td></tr><tr><td>R07</td><td>Held-out two-family evidence gate</td><td>P1</td></tr><tr><td>R08</td><td>Tokenizer grounding as a design input</td><td>P2</td></tr><tr><td>R09</td><td>Unsafe and escape-hatch enumeration as a review surface</td><td>P2</td></tr><tr><td>R10</td><td>LLM cards compiled from the grammar</td><td>P2</td></tr><tr><td>R11</td><td>Structured, AST-level edits over raw spans</td><td>P2</td></tr><tr><td>R12</td><td>Tiered, snapshot-correct fast checks</td><td>P0</td></tr><tr><td>R13</td><td>Causal diagnostics with recoverable compact views</td><td>P0</td></tr><tr><td>R14</td><td>Structured test selection, evidence and summaries</td><td>P0</td></tr><tr><td>R15</td><td>Source and protocol token-pressure budgets</td><td>P0</td></tr><tr><td>R16</td><td>One coherent agent workflow and a verified stop state</td><td>P0</td></tr></tbody></table></div>
+      <p>Several of these already show up as shipped, verified commands: the context query, the plans and transactional apply, test impact and the generated card. The compiler-enforced ownership subset, the full unsafe enumeration and the evidence gate are adopted requirements with their own delivery tracks.</p>
 
       <div class="callout">
         <strong>What we have not proved</strong>
-        <p>Compiler-enforced ownership and lifetime, the one-query enumeration of every unsafe site, and declaration-level incremental reuse with latency budgets are adopted requirements with delivery tracks, not shipped claims. The comparison against other languages is a hypothesis until a held-out evaluation on two model families passes; until then we do not publish “faster” or “safer” for LLMs. A checked contract is not business correctness, and a clean build from the C bootstrap is not proof, because the bootstrap is more permissive than the self-hosted compiler.</p>
+        <p>Neper is not shown to be better than other languages for LLMs. The public argument that plausible syntax can hide lookup, lifetime, ownership and concurrency dependencies is treated as an engineering hypothesis, not as evidence about any model. A checked contract is not business correctness, deadlock freedom or a proof about every schedule, and foreign implementations and raw-pointer lifetimes are not proved by exposing their contracts. Character count is not token count, and first-pass success is not the metric. A clean build from the C bootstrap is not proof either, because the bootstrap is more permissive than the self-hosted compiler.</p>
       </div>
 
-      <h2>Read more</h2>
-      <p>The full write-up with the sixteen adopted requirements, <code>docs/post-m2-llm-hardening.md</code> and <code>docs/llm-hardening-recommendations.md</code>, is in the repository. For measured numbers from real sessions, see <a href="neper-vs-dart-llm-cost.html">what it costs an LLM to write Neper and Dart</a>.</p>
+      <h2>Summary</h2>
+      <ol>
+        <li><strong>Reliable search:</strong> one definition per name, column-0 declarations, path as module, qualified references, enforced casing.</li>
+        <li><strong>No hidden context:</strong> no macros, overloads or implicit conversions; errors, ownership and unsafe boundaries are written in the source.</li>
+        <li><strong>Cheap tokens:</strong> a small closed grammar, measured cost per terminal, and a context query in place of whole-file reads.</li>
+        <li><strong>A compiler that speaks JSONL:</strong> index, context, uses, plans, atomic apply and test impact, all versioned and snapshot-bound.</li>
+        <li><strong>Repairable diagnostics:</strong> stable verified codes with expected and actual types, related sites and machine-applicable fixes.</li>
+        <li><strong>Evidence discipline:</strong> a grammar-generated card, regression-test-defined “done”, and a held-out two-family gate before any comparative claim.</li>
+      </ol>
+      <p>The full requirement text is in <code>docs/post-m2-llm-hardening.md</code> and <code>docs/llm-hardening-recommendations.md</code>. For measured numbers from real sessions, including where Neper loses, see <a href="neper-vs-dart-llm-cost.html">what it costs an LLM to write Neper and Dart</a>.</p>
       <div class="try-cta">
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
