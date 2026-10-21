@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Why Neper is built for the agent loop — Neper blog</title>
+  <meta name="description" content="Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics Neper uses to make each one cheap, with the claims we have not yet proved.">
+  <link rel="canonical" href="https://neper.dev/blog/why-neper-is-optimized-for-llms.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Why Neper is built for the agent loop">
+  <meta property="og:description" content="Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics Neper uses to make each one cheap, with the claims we have not yet proved.">
+  <meta property="og:url" content="https://neper.dev/blog/why-neper-is-optimized-for-llms.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/why-neper-is-optimized-for-llms.svg">
+  <meta property="article:published_time" content="2026-10-21">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 9 7, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // design</div>
+      <h1>Why Neper is built for the agent loop</h1>
+      <p class="meta">October 21, 2026 · design notes</p>
+      <img class="banner" src="img/why-neper-is-optimized-for-llms.svg" width="1200" height="630" alt="Neper is built for the agent loop: search, generate, edit, check, repair.">
+
+      <p class="lede">A model editing code does not browse it the way you do. It sees a window of text, guesses what lies outside it, and pays for every token it reads and writes. Neper's design goal is that a model should not be able to write a line whose meaning depends on context it cannot see. This post lists the rules, commands and diagnostics that follow from that, what each one is for, and which of the claims we have not proved yet.</p>
+
+      <h2>How agents fail on code</h2>
+      <p>The rules below came from failures in measured agent transcripts, not from taste.</p>
+      <div class="table-scroll"><table><thead><tr><th>Failure</th><th>What the model does</th><th>What it costs</th></tr></thead><tbody><tr><td>Hidden context</td><td>Edits a function without seeing the overload, macro, implicit cast or lifetime that changes its meaning</td><td>A plausible, wrong edit</td></tr><tr><td>Ambiguous search</td><td>A text search for a definition returns several hits or none</td><td>Whole-file reads; context in the hundreds of thousands of tokens</td></tr><tr><td>Hallucinated API</td><td>Calls a function that does not exist or is only planned</td><td>Repair turns</td></tr><tr><td>Unreadable diagnostic</td><td>Misreads a message that names no subject</td><td>Three or more turns instead of one or two</td></tr><tr><td>Brittle edit</td><td>Applies a text or line edit to a file that has changed</td><td>Partial application</td></tr><tr><td>Temporal bugs</td><td>Use after reset, aliasing across growth, double close</td><td>Defects that only trap at run time</td></tr></tbody></table></div>
+
+      <h2>Language rules that make a search reliable</h2>
+      <p>Section 14 of the spec lists invariants that are rules, not style advice. They exist so that a search, a glob or an anchored edit is reliable rather than probabilistic.</p>
+      <ul>
+        <li><strong>One definition per name, no overloading.</strong> Searching for <code>^fn dot</code> returns exactly one line in the module that defines it.</li>
+        <li><strong>Declarations start at column 0, and the file path is the module name.</strong> Searching for <code>^fn</code> lists functions. A glob finds a module without opening it. An unclosed bracket cannot cross a declaration keyword, so a dropped <code>)</code> is reported where it opened, not 200 lines later.</li>
+        <li><strong>Every cross-module reference is qualified</strong> (<code>mem.alloc</code>), so the definition is one search away.</li>
+        <li><strong>No macros, no preprocessor, no implicit conversions.</strong> What you read is what compiles, and every cast is written down and greppable.</li>
+        <li><strong>One canonical layout</strong>, checked by <code>neper fmt --check</code>, so diffs are minimal and edits land where you expect. Casing is enforced too: a name's kind is visible without a lookup.</li>
+        <li><strong>Order-independent module scope.</strong> An insertion can go anywhere, with no forward declarations to keep in sync.</li>
+      </ul>
+      <p>Beyond that list, errors are values handled at the statement (<code>try</code>, <code>-&gt; err</code>, <code>ret ok</code>), and a local may not shadow a reserved word, a module-scope function, a <code>use</code> qualifier or a builtin. That last rule looks fussy. It is the reason a name means one thing within a file, and it was a leading cause of failed builds in our transcripts. The compiler reports it as <code>E-NAME-0003</code> with a machine-applicable rename. The grammar itself is closed: 94 token kinds and 54 syntax-node kinds.</p>
+
+      <h2>Tokens are measured, not guessed</h2>
+      <p>A lexical token is not a model token. Across our corpus there are about 1.27 model tokens per lexical token, and the language card publishes the cost per terminal for two tokenizers.</p>
+      <div class="table-scroll"><table><thead><tr><th>Terminal</th><th>cl100k_base</th><th>o200k_base</th></tr></thead><tbody><tr><td><code>fn</code>, <code>let</code>, <code>ret</code></td><td>1–2</td><td>1–2</td></tr><tr><td><code>usize</code></td><td>1</td><td>1</td></tr><tr><td><code>i32</code>, <code>u8</code>, <code>f64</code></td><td>2</td><td>2</td></tr><tr><td><code>[]u8</code></td><td>3</td><td>3</td></tr><tr><td><code>[]const u8</code></td><td>4</td><td>4</td></tr><tr><td><code>-&gt;</code>, <code>==</code>, <code>+=</code></td><td>1</td><td>1</td></tr></tbody></table></div>
+      <p>So the card says to prefer <code>usize</code> where the width is free. The policy is that a spelling change must show a measured token or repair-turn improvement; a character-count argument is not accepted. The biggest lever we found is not syntax at all. A turn that reads whole files carries 400–500 K tokens of context, against 1–5 K when the model asks <code>context-file</code> for the same function.</p>
+
+      <h2>The compiler as an API</h2>
+      <p>Every command emits versioned JSONL, and every semantic answer is bound to a snapshot of the program so a stale answer is detectable. All of the following are implemented and exercised by both self-host suites.</p>
+      <div class="table-scroll"><table><thead><tr><th>Command</th><th>What it answers</th></tr></thead><tbody><tr><td><code>index</code>, <code>uses-file</code></td><td>Every definition and resolved reference, with byte-precise spans</td></tr><tr><td><code>context-file</code></td><td>One function's signature and its contract: allocation, borrow, mutation, errors, threads. Pages with <code>--budget</code>, <code>--bytes</code>, <code>--cursor</code></td></tr><tr><td><code>plan-rename-file</code>, <code>plan-add-parameter-file</code>, <code>plan-change-signature-file</code>, <code>plan-replace-expression-file</code></td><td>A typed edit the compiler computed, with file-hash preconditions and a re-check postcondition</td></tr><tr><td><code>apply-plan</code></td><td>Applies a plan to every file or to none</td></tr><tr><td><code>test-impact-file</code>, <code>test-file --only</code></td><td>Only the tests an edit reaches</td></tr><tr><td><code>query-batch</code></td><td>Many queries over one check, with <code>--deadline</code> and an instance budget</td></tr></tbody></table></div>
+      <p>The card prescribes the loop: locate with <code>index</code> or <code>uses-file</code>, read <code>context-file</code> for what the change touches, make a plan, <code>apply-plan</code>, then <code>check-file</code>, <code>fmt --check</code>, <code>test-impact-file</code> and <code>test-file --only</code>. A stale file hash aborts the plan instead of half-applying it, so a concurrent edit cannot leave a half-migrated codebase.</p>
+
+      <h2>Diagnostics written for the reader that repairs</h2>
+      <p>Codes look like <code>E-TYPE-0002</code>. The code, not the message, is what a tool keys on. At the card's last render all 15 families (<code>E-SAFETY</code> alone has 25 codes) are pinned by conformance goldens or the suites, and each family has a <code>9999</code> catch-all so a gap is visible. A diagnostic carries its expected and actual types, related sites and fixes. We measured the effect of the identity: a repair prompt that carries the code, span and expected-versus-found takes a median of one to two turns, and three or more without it. The card also embeds <code>reject</code> fixtures for the common traps, so the model sees the failure before it causes it.</p>
+
+      <h2>A card that cannot drift</h2>
+      <p>The language card is rendered by script from the grammar revision and stamped with a content hash. A card whose hash is not the render of its grammar is stale. Command and diagnostic standing is read from the compiler and the suites when the card is rendered, so the model is never told a command exists because someone wrote it down. The repository's agent instructions encode the measured habits: name the queue item and acceptance list in every build prompt (bare “continue” prompts correlate with 59–72% repeat rates), read the card first, resolve symbols before opening files, and keep verify-only turns separate from build turns.</p>
+
+      <div class="callout">
+        <strong>What we have not proved</strong>
+        <p>Compiler-enforced ownership and lifetime, the one-query enumeration of every unsafe site, and declaration-level incremental reuse with latency budgets are adopted requirements with delivery tracks, not shipped claims. The comparison against other languages is a hypothesis until a held-out evaluation on two model families passes; until then we do not publish “faster” or “safer” for LLMs. A checked contract is not business correctness, and a clean build from the C bootstrap is not proof, because the bootstrap is more permissive than the self-hosted compiler.</p>
+      </div>
+
+      <h2>Read more</h2>
+      <p>The full write-up with the sixteen adopted requirements, <code>docs/post-m2-llm-hardening.md</code> and <code>docs/llm-hardening-recommendations.md</code>, is in the repository. For measured numbers from real sessions, see <a href="neper-vs-dart-llm-cost.html">what it costs an LLM to write Neper and Dart</a>.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
