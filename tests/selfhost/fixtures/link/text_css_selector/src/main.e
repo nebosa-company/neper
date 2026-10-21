@@ -47,7 +47,8 @@ fn simple_value(a: *mem.Arena, s: selector.Simple) -> json.Value {
     var o = obj(a)
     put(&o, "k", json.Value{ String: selector.kind_name(s.kind) })
     put(&o, "n", json.Value{ String: s.name })
-    if s.argument.len > 0usize { put(&o, "a", json.Value{ String: s.argument }) }
+    // Vaper's Dart parser drops the argument of :lang(), which Neper keeps for matching.
+    if s.argument.len > 0usize && !str.eq(s.name, "lang") { put(&o, "a", json.Value{ String: s.argument }) }
     if s.attr_ci { put(&o, "i", json.Value{ Bool: true }) }
     if s.subs.len > 0usize { put(&o, "s", selectors_value(a, s.subs)) }
     ret ir.obj_value(&o)
@@ -107,14 +108,24 @@ fn run_one(a: *mem.Arena, src: str) -> str {
     let (out, oe) = mem.alloc[json.Value](a, rules.len + 1usize)
     if oe != ok { os.exit(89i32) }
     var at = 0usize
+    var kept = 0usize
     while at < rules.len {
         var o = obj(a)
         put(&o, "sel", selector_value(a, rules[at].selector))
+        // Vaper's Dart parser rejects the pseudo-elements Neper added after it (::placeholder, ::selection, ::backdrop), dropping that rule from the list.
+        if rules[at].has_pseudo {
+            let pseudo = selector.pseudo_element_name(rules[at].pseudo)
+            if !str.eq(pseudo, "before") && !str.eq(pseudo, "after") && !str.eq(pseudo, "marker") && !str.eq(pseudo, "firstLine") && !str.eq(pseudo, "firstLetter") {
+                at += 1usize
+                continue
+            }
+        }
         if rules[at].has_pseudo { put(&o, "p", json.Value{ String: selector.pseudo_element_name(rules[at].pseudo) }) }
-        out[at] = ir.obj_value(&o)
+        out[kept] = ir.obj_value(&o)
+        kept += 1usize
         at += 1usize
     }
-    let (text, ce) = chain.canonical_json(a, json.Value{ Array: out[0usize..rules.len] })
+    let (text, ce) = chain.canonical_json(a, json.Value{ Array: out[0usize..kept] })
     if ce != ok { os.exit(90i32) }
     ret text
 }

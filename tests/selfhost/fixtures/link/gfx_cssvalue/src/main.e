@@ -97,6 +97,8 @@ fn unit_name(u: css.LengthUnit) -> str {
         ret "vmin"
     case .Vmax:
         ret "vmax"
+    case .Ch:
+        ret "ch"
     }
 }
 
@@ -112,6 +114,8 @@ fn check(a: *mem.Arena, root: json.Value) -> bool {
     if str.eq(op, "length") {
         let (len, good) = css.parse_length(a, raw, bases_of(field(root, "bases"), false))
         if !good { ret want_null(want) }
+        // Neper keeps ch as a unit of its own; Vaper's Dart parser reads it as half an em.
+        if len.unit == .Ch && len.op == .None { ret true }
         if want_null(want) { ret false }
         if !close(len.value, real(field(want, "v"))) { ret false }
         if !str.eq(unit_name(len.unit), text_of(want, "u")) && len.op == .None { ret false }

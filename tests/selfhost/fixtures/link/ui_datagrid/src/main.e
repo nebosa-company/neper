@@ -1090,7 +1090,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (made11, grid11_error) = dg.create(a, &app.tbl, &app.grouping, look_specs[0..], events, 9900u64)
     if grid11_error != ok { os.exit(360) }
     var grid11 = made11
-    dg.set_look(&grid11, gl.v3())
+    var look11 = gl.v3()
+    look11.idle_on = true
+    look11.idle_edge = gl.rgb(0x212121u32)
+    look11.idle_top = gl.rgb(0x212121u32)
+    dg.set_look(&grid11, look11)
     grid11.offset = 0.0
     var first_look = ROWS
     var second_look = ROWS
@@ -1124,20 +1128,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !f0 || !f1 || !f2 { os.exit(365) }
     // the pitch of a row (its height with no line between rows)
     if b0.height < 18.9 || b0.height > 19.1 || b1.y - b0.y < 18.9 || b1.y - b0.y > 19.1 { os.exit(366) }
-    // inside the Cmc cell, clear of its digit: even row, selected row, odd row
-    if !is_color(shot_l, px(b0.x + 300.0, b0.y + 9.0), gl.rgb(0xFFFFFFu32)) { os.exit(367) }
+    // inside the Cmc cell, clear of its digit: first row (grey, the capture's zebra starts grey), selected row, third row
+    if !is_color(shot_l, px(b0.x + 300.0, b0.y + 9.0), gl.rgb(0xEFEFEFu32)) { os.exit(367) }
     // a selection in a grid that has not the focus is the pale #D5E4EE; focused, #A6D2FF
     if !is_color(shot_l, px(b1.x + 300.0, b1.y + 9.0), gl.rgb(0xD5E4EEu32)) { os.exit(368) }
     if !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xFFFFFFu32)) && !is_color(shot_l, px(b2.x + 300.0, b2.y + 9.0), gl.rgb(0xEFEFEFu32)) { os.exit(369) }
-    // P006: the selected row carries a 1 px dark border on its top and bottom edge (near black in a grid
-    // that has not the focus, #83878B in the focused one)
-    if !is_color(shot_l, px(b1.x + 300.0, b1.y + 0.5), gl.rgb(0x212121u32)) { os.exit(495) }
-    if !is_color(shot_l, px(b1.x + 300.0, b1.y + b1.height - 0.5), gl.rgb(0x212121u32)) { os.exit(496) }
-    // P007: an unselected body row has full-height column lines (#DEDEDE) between its cells
+    // P006: the selected row of a grid that has not the focus (idle_on) has a 1 px edge one pixel above its row
+    // (idle_top) and no line at its foot; a focused one is edged #83878B
+    if !is_color(shot_l, px(b1.x + 300.0, b1.y - 0.5), gl.rgb(0x212121u32)) { os.exit(495) }
+    if !is_color(shot_l, px(b1.x + 300.0, b1.y + b1.height - 0.5), gl.rgb(0xD5E4EEu32)) { os.exit(496) }
+    // P007: an unselected body row has full-height column lines (#E5E5E5) between its cells
     var line_seen = false
     var line_x: f32 = 0.0
     while line_x < 300.0 {
-        if is_color(shot_l, px(b0.x + line_x, b0.y + 9.0), gl.rgb(0xDEDEDEu32)) { line_seen = true }
+        if is_color(shot_l, px(b0.x + line_x, b0.y + 9.0), gl.rgb(0xE5E5E5u32)) { line_seen = true }
         line_x += 1.0
     }
     if !line_seen { os.exit(497) }

@@ -318,20 +318,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     // A feature enabled over a byte range, and the default ligature turned off.
     var requests: [1]shape.Feature = [1]shape.Feature{ shape.Feature { tag: 1936548720u32, value: 1u32, start: 0usize, end: 1usize } }
-    let ranged = shape.Options { direction: .LeftToRight, script: 0u32, language: "", features: requests[0..] }
+    let ranged = shape.Options { direction: .LeftToRight, script: 0u32, language: "", features: requests[0..], ppem: 0u32 }
     let (small, small_error) = shape.shape(a, font, "aa", ranged)
     if small_error != ok || small.glyphs.len != 2usize || small.glyphs[0].id != 8u32 || small.glyphs[1].id != 1u32 || !near(small.glyphs[0].advance_x, 0.48) { os.exit(8i32) }
     requests[0].end = 2usize
     let (both, both_error) = shape.shape(a, font, "aa", ranged)
     if both_error != ok || both.glyphs[0].id != 8u32 || both.glyphs[1].id != 8u32 { os.exit(9i32) }
     var off: [1]shape.Feature = [1]shape.Feature{ shape.Feature { tag: 1818847073u32, value: 0u32, start: 0usize, end: 0usize } }
-    let no_liga = shape.Options { direction: .LeftToRight, script: 1818326388u32, language: "ENG ", features: off[0..] }
+    let no_liga = shape.Options { direction: .LeftToRight, script: 1818326388u32, language: "ENG ", features: off[0..], ppem: 0u32 }
     let (apart, apart_error) = shape.shape(a, font, "fi", no_liga)
     if apart_error != ok || apart.glyphs.len != 2usize || apart.glyphs[0].id != 2u32 || apart.glyphs[1].id != 3u32 || apart.script != 1818326388u32 { os.exit(10i32) }
 
     // Right to left reverses the visual order; a missing character is glyph 0; a
     // multi-byte character keeps byte clusters.
-    let rtl = shape.Options { direction: .RightToLeft, script: 0u32, language: "", features: zero }
+    let rtl = shape.Options { direction: .RightToLeft, script: 0u32, language: "", features: zero, ppem: 0u32 }
     let (backwards, backwards_error) = shape.shape(a, font, "AV", rtl)
     if backwards_error != ok || backwards.direction != .RightToLeft || backwards.glyphs[0].id != 6u32 || backwards.glyphs[0].cluster != 1usize || backwards.glyphs[1].id != 5u32 { os.exit(11i32) }
     let (missing, missing_error) = shape.shape(a, font, "zé", plain)
