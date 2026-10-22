@@ -41855,3 +41855,7 @@ Three sizing faults surfaced when the full Windows suite was run for the first t
 ## D5184 — A build for macOS writes its executable mode 0755
 
 The first run of the self-host workflow on a Mac showed `neper build ... -o /tmp/basic` writing a Mach-O file that the shell refused ("Permission denied"): D291's mode 0755 was given to Linux targets only. `save_executable` now does it for macOS targets too; a Windows host still keeps its one bit, as for Linux. The same run showed the fixed point on a Mac: stage 2 and stage 3 byte-identical for aarch64 and for x64 under Rosetta, and the default target of `build` is the Mac (an arm64 and an x86_64 Mach-O).
+
+## D5185 — Linux socket sends use MSG_NOSIGNAL; the ui_datagrid fixture carries its SVG
+
+The first Linux suite run since the Looks work found two host-specific faults. `os.linux.e`'s `socket_send` passed flags 0 to `sendto`, so writing to a connection the peer had closed raised SIGPIPE and ended the process with 141 (`net_http_pool`'s keep-alive pool does this by design); it passes MSG_NOSIGNAL, and the error is EPIPE as on Windows. The `ui_datagrid` fixture read the 10th Edition symbol from an absolute Windows path in a sibling repository, so on any other host it exited 409 (153 after the exit status is truncated); the 674-byte SVG is a function in the fixture. Not fixed: `net_ssh` fails about half its sessions on Linux (protocol and MAC errors, every cipher and login mode), a regression from 8dfad8da1 that the original fixture and `ssh.e` (fb91c974d) do not show.

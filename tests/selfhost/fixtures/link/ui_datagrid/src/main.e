@@ -244,6 +244,11 @@ fn px(x: f32, y: f32) -> usize {
     ret (usize(y) * W + usize(x)) * 4usize
 }
 
+// v3's 10th Edition symbol (mtg.studio v5/cardgrid/symbols/ed_10e.svg), held here so the fixture runs on any host.
+fn ed_10e() -> str {
+    ret "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"27\" height=\"32\" viewBox=\"0 0 27 32\"><path fill=\"#444\" d=\"M26.371 26.131c-.338-.676-1.352-.676-2.025-.845-.676-.169-1.014-.507-7.769-9.287 6.755-8.78 7.093-9.117 7.769-9.287.674-.169 1.687-.169 2.025-.844h-8.442c0 .338 0 .676-.256 1.265-.251.591-.758 1.436-4.474 6.164C9.487 8.569 8.98 7.725 8.726 7.133c-.253-.589-.253-.927-.253-1.265H.029c.338.676 1.351.676 2.027.844.674.169 1.014.507 7.766 9.287-6.753 8.78-7.093 9.118-7.766 9.287-.676.169-1.689.169-2.027.845h8.444c0-.338 0-.676.253-1.267s.76-1.434 4.473-6.164c3.716 4.73 4.223 5.572 4.474 6.164.256.591.256.929.256 1.267h8.442z\" style=\"fill:#00000f;fill-opacity:1\"/></svg>"
+}
+
 fn close_to(value: u8, expected: f32) -> bool {
     let e = expected * 255.0
     let v = f32(value)
@@ -1240,8 +1245,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !varied { os.exit(406) }
     }
     // 19. an SVG mark (v3's edition symbol, dark blue-black fill) is drawn at the size of its box
-    let (svg_text, svg_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
-    if svg_error != ok { os.exit(409) }
+    let svg_text = ed_10e()
     if true {
         mem.reset(&f, 0usize)
         let (drawing, drawing_error) = gl.svg_mark(&f, svg_text, paint.rgba(1.0, 1.0, 1.0, 1.0), 64.0, 64.0)
@@ -1280,8 +1284,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if ink_height < 38usize || ink_height > 42usize { os.exit(414) }
     }
     // 19b. a fitted SVG mark (v3's edition symbol, dark blue-black fill) is drawn at the size of its box
-    let (fit_text, fit_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
-    if fit_error != ok { os.exit(409) }
+    let fit_text = ed_10e()
     if true {
         mem.reset(&f, 0usize)
         let (fit_drawing, fit_drawing_error) = gl.svg_fit_mark(&f, fit_text, paint.rgba(1.0, 1.0, 1.0, 1.0), 64.0, 64.0)
@@ -1394,8 +1397,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !home_has || home_at != 0usize { os.exit(433) }
     // 21. the extent of a drawing is measured from its path data (the 10th Edition symbol:
     // x 0.03 to 26.4, y 5.87 to 26.13 of a 27 by 32 view box)
-    let (ink_text, ink_error) = fs.read_file(a, "D:/repos/mtg.studio.src/v5/cardgrid/symbols/ed_10e.svg", 65536usize)
-    if ink_error != ok { os.exit(449) }
+    let ink_text = ed_10e()
     let (ink, ink_w, ink_h) = gl.svg_ink(ink_text)
     if !ink.any { os.exit(450) }
     if ink_w != 27.0 || ink_h != 32.0 { os.exit(451) }

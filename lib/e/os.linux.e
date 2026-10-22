@@ -1887,7 +1887,8 @@ fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
 // syscalls for both the connected and the unconnected form.
 fn socket_send(s: Socket, src: []const u8) -> (usize, err) {
     if src.len == 0usize { ret (0usize, ok) }
-    let sent = syscall(SYS_SENDTO, s.raw, mem.address_of(&src[0usize]), src.len, 0usize, 0usize, 0usize)
+    // MSG_NOSIGNAL (0x4000): a peer that has gone is the error EPIPE, not SIGPIPE ending the process.
+    let sent = syscall(SYS_SENDTO, s.raw, mem.address_of(&src[0usize]), src.len, 16384usize, 0usize, 0usize)
     if sent < 0isize { ret (0usize, from_errno(sent)) }
     ret (usize(sent), ok)
 }
