@@ -8,6 +8,8 @@ test_build="$repo/build/linux/tests/selfhost"
 # NEPER_REFRESH_GOLDENS=1 rewrites a tool golden whose only difference is its snapshot hashes (D5190).
 . "$repo/tests/selfhost/refresh-goldens.sh"
 sh "$repo/tests/selfhost/refresh-goldens-test.sh"
+# This script and run.ps1 are one suite on two shells (D5191): parse, unassigned variables, fixtures one has and the other lacks.
+python3 "$repo/scripts/check_suite_parity.py"
 
 # A rejection test asserts only that the compiler failed, and a path that does not
 # exist fails too -- so a fixture whose path is wrong passes for the wrong reason.

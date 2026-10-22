@@ -11,6 +11,9 @@ $testBuild = Join-Path $repo 'build\windows\tests\selfhost'
 & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot 'refresh-goldens-test.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'the golden refresh mode failed its own check' }
 . (Join-Path $PSScriptRoot 'refresh-goldens.ps1')
+# This script and run.sh are one suite on two shells (D5191): parse, unassigned variables, fixtures one has and the other lacks.
+& python (Join-Path $repo 'scripts\check_suite_parity.py')
+if ($LASTEXITCODE -ne 0) { throw 'run.sh and run.ps1 are out of step' }
 & (Join-Path $repo 'scripts\build-bootstrap.ps1') | Out-Null
 New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 
