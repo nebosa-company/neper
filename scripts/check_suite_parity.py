@@ -29,9 +29,10 @@ failures = []
 
 bash = shutil.which("bash")
 if bash:
-    check = subprocess.run([bash, "-n", str(selfhost / "run.sh")], capture_output=True, text=True)
+    # By stdin: on Windows `bash` can be WSL's, which does not read a Windows path.
+    check = subprocess.run([bash, "-n"], input=sh_text.encode("utf-8"), capture_output=True)
     if check.returncode != 0:
-        failures.append("run.sh does not parse: " + check.stderr.strip().splitlines()[0])
+        failures.append("run.sh does not parse: " + check.stderr.decode("utf-8", "replace").strip().splitlines()[0])
 else:
     print("skipped: bash is not on PATH, run.sh was not parsed")
 
