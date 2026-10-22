@@ -1104,6 +1104,8 @@ crypto_sign_wide_written=$($test_build/neper-self emit-executable "$repo/tests/s
 [ "$crypto_sign_wide_written" = 'executable written' ]
 chmod +x "$test_build/crypto-sign-wide-selfhost"
 "$test_build/crypto-sign-wide-selfhost"
+# NeperOS is paused: its host-side tests here and the QEMU boots at the end run only with NEPER_NEPEROS=1.
+if [ "${NEPER_NEPEROS:-}" = 1 ]; then
 # The Secure vault's cryptography (neperos/src/vault.e, D2252): PBKDF2-HMAC-SHA-256 against hashlib, records
 # byte-for-byte equal to AES-256-GCM's from Python's cryptography package, the meta file, and the refusals.
 vault_test_written=$($test_build/neper-self emit-executable "$repo/neperos/src/vault_test.e" "$repo" x64 linux "$test_build/vault-test-selfhost")
@@ -1127,6 +1129,7 @@ scan_test_written=$($test_build/neper-self emit-executable "$repo/neperos/src/sc
 [ "$scan_test_written" = 'executable written' ]
 chmod +x "$test_build/scan-test-selfhost"
 "$test_build/scan-test-selfhost"
+fi
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 fmt_pem_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pem/src/main.e" "$repo" x64 linux "$test_build/fmt-pem-selfhost")
 [ "$fmt_pem_written" = 'executable written' ]
@@ -10614,6 +10617,7 @@ case "$cycle_output" in
     *) printf '%s\n' 'module import cycle rejection failed' >&2; exit 1 ;;
 esac
 
+if [ "${NEPER_NEPEROS:-}" = 1 ]; then
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
 # finds its console, firmware and memory in the device tree, turns translation on, takes a
 # fault on purpose, then on GICv3 runs EL0 threads from the initrd program under the timer.
@@ -11574,6 +11578,9 @@ greeting"
     unset NEPEROS_RNG
     unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU
+fi
+else
+    printf '%s\n' 'NeperOS tests skipped: NEPER_NEPEROS=1 runs them'
 fi
 
 printf '%s\n' 'selfhost tests passed'

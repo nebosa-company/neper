@@ -1182,6 +1182,8 @@ $cryptoSignWideWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $cryptoSignWideWritten -ne 'executable written') { throw 'crypto_sign_wide emission failed' }
 & $cryptoSignWidePath
 if ($LASTEXITCODE -ne 0) { throw "a crypto_sign_wide check failed: exit $LASTEXITCODE" }
+# NeperOS is paused: its host-side tests here and the QEMU boots at the end run only with NEPER_NEPEROS=1.
+if ($env:NEPER_NEPEROS -eq '1') {
 # The Secure vault's cryptography (neperos/src/vault.e, D2252): PBKDF2-HMAC-SHA-256 against hashlib, records
 # byte-for-byte equal to AES-256-GCM's from Python's cryptography package, the meta file, and the refusals.
 $vaultTestPath = Join-Path $testBuild 'vault-test-selfhost.exe'
@@ -1210,6 +1212,7 @@ $scanTestWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\sca
 if ($LASTEXITCODE -ne 0 -or $scanTestWritten -ne 'executable written') { throw 'scan_test emission failed' }
 & $scanTestPath
 if ($LASTEXITCODE -ne 0) { throw "a scan_test check failed: exit $LASTEXITCODE" }
+}
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 $fmtPemPath = Join-Path $testBuild 'fmt-pem-selfhost.exe'
 $fmtPemWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pem\src\main.e') $repo 'x64' 'windows' $fmtPemPath
@@ -10925,6 +10928,7 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
     throw 'module import cycle rejection failed'
 }
 
+if ($env:NEPER_NEPEROS -eq '1') {
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
 # finds its console, firmware and memory in the device tree, turns translation on, takes a
 # fault on purpose, then on GICv3 runs EL0 threads from the initrd program under the timer.
@@ -11745,6 +11749,9 @@ if ($neperosQemu) {
     Remove-Item Env:NEPEROS_RNG -ErrorAction SilentlyContinue
     Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
+}
+} else {
+    Write-Output 'NeperOS tests skipped: NEPER_NEPEROS=1 runs them'
 }
 
 Write-Output 'selfhost tests passed'
