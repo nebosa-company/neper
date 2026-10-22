@@ -530,7 +530,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (list_path, list_path_error) = str.concat(a, dir, "/atlases.txt")
     if list_path_error != ok { ret list_path_error }
     let (present, present_error) = fs.exists(a, list_path)
-    if present_error != ok || !present { ret ok }
+    if present_error != ok || !present {
+        let (written, write_error) = os.write(os.stdout(), "skipped: the GDI glyph oracle is not present\n")
+        ret ok
+    }
     let (listing, listing_error) = fs.read_file(a, list_path, 1000000usize)
     if listing_error != ok { ret listing_error }
     // The expectation: per atlas name, a bit per code that must still agree (exact.txt).

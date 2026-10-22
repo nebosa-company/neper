@@ -8,6 +8,7 @@ use e.fs
 use e.gfx.dwtext
 use e.io
 use e.mem
+use e.os
 use e.str
 use e.text.shape
 use e.text.tthint
@@ -60,7 +61,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dwtext.lut_key(36.0 / 255.0, 36.0 / 255.0, 36.0 / 255.0) != 1usize { ret tthint.Trap }
     if dwtext.lut_key(1.0, 1.0, 1.0) != 7usize { ret tthint.Trap }
     let (bytes, read_error) = fs.read_file(a, font_path(), 16777216usize)
-    if read_error != ok { ret ok }
+    if read_error != ok {
+        let (written, write_error) = os.write(os.stdout(), "skipped: the font is not present\n")
+        ret ok
+    }
     let (h, open_error) = tthint.open(a, bytes)
     if open_error != ok { ret open_error }
     let font = shape.Font { id: 1u32, data: bytes, face_index: 0u32 }

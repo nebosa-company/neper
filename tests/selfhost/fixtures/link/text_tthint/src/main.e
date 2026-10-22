@@ -7,6 +7,7 @@
 use e.fs
 use e.gfx.cleartype
 use e.mem
+use e.os
 use e.text.shape
 use e.text.tthint
 use e.text.ttglyph
@@ -91,7 +92,10 @@ fn image_sum(h: *tthint.Hinter, a: *mem.Arena, bytes: []const u8, sub: usize, te
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (bytes, read_error) = fs.read_file(a, font_path(), 16777216usize)
-    if read_error != ok { ret ok }
+    if read_error != ok {
+        let (written, write_error) = os.write(os.stdout(), "skipped: the font is not present\n")
+        ret ok
+    }
     let (h, open_error) = tthint.open(a, bytes)
     if open_error != ok { ret open_error }
     let font = shape.Font { id: 1u32, data: bytes, face_index: 0u32 }
