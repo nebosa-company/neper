@@ -74,5 +74,7 @@ for dis in (False, True):
         out.append('    }')
 out.append('    ret 1000usize\n}\n')
 vals = [v for k in keys for v in tiles[k][0]]
-out.append('fn atlas() -> [%d]u32 { ret [%d]u32{ %s } }' % (len(vals), len(vals), ', '.join('0x%08Xu32' % v for v in vals)))
+# One tile row (16 values) a line: a 676 KB line made every token's column a scan of the line, minutes in `neper tokens`.
+rows = [', '.join('0x%08Xu32' % v for v in vals[i:i + 16]) for i in range(0, len(vals), 16)]
+out.append('fn atlas() -> [%d]u32 { ret [%d]u32{\n    %s\n} }' % (len(vals), len(vals), ',\n    '.join(rows)))
 open('lib/e/ui/winmenuicon.e', 'w', newline='\n').write('\n'.join(out) + '\n')
