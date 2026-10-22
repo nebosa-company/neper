@@ -158,7 +158,7 @@
     .library-item p { margin: var(--space-2) 0 0; color: var(--muted); font-size: 13px; }
     .library-item.wide { grid-column: 1 / -1; }
     .library-item.wide code { display: inline-block; margin-right: var(--space-3); }
-    .catalog-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); margin-bottom: var(--space-8); padding: var(--space-8); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .catalog-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-6); margin-bottom: var(--space-8); padding: var(--space-8); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .catalog-stat strong { display: block; font: 400 clamp(32px, 4vw, 45px)/52px var(--font-display); }
     .catalog-stat span { font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
     .catalog-explore { display: block; margin-top: var(--space-3); padding: 0; border: 0; border-bottom: 1px solid currentColor; background: transparent; color: inherit; font: 600 12px/20px var(--font-sans); cursor: pointer; }
@@ -196,8 +196,10 @@
     #module-catalog .catalog-entry { align-content: start; }
     #module-catalog .catalog-entry span { color: var(--primary); }
     .catalog-entry code { overflow-wrap: anywhere; color: var(--primary); font: 400 11px/16px var(--font-mono); }
-    #control-catalog .catalog-entry-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--space-4); }
-    #control-catalog .catalog-entry { overflow: hidden; gap: 0; padding: 0; border-radius: var(--radius-md); }
+    #control-catalog .catalog-entry-grid, #chart-catalog .catalog-entry-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--space-4); }
+    #chart-catalog .catalog-entry-image { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; border-bottom: 1px solid var(--outline-variant); background: #fff; }
+    #chart-catalog .catalog-entry > span:last-child { padding: var(--space-3) var(--space-4); }
+    #control-catalog .catalog-entry, #chart-catalog .catalog-entry { overflow: hidden; gap: 0; padding: 0; border-radius: var(--radius-md); }
     #control-catalog .catalog-entry > span:last-child { padding: var(--space-3) var(--space-4); }
     .catalog-entry-preview { height: 150px; overflow: hidden; border-bottom: 1px solid var(--outline-variant); background: #080a0f; }
     .catalog-entry-preview iframe { width: 200%; height: 200%; border: 0; pointer-events: none; transform: scale(.5); transform-origin: 0 0; }
@@ -388,6 +390,7 @@ Hello, Neper</code></pre>
           <div class="catalog-stat"><strong>603</strong><span>standard-library modules</span><button class="catalog-explore" type="button" data-catalog="module-catalog">Explore →</button></div>
           <div class="catalog-stat"><strong>1,248</strong><span>standard-library algorithms</span><button class="catalog-explore" type="button" data-catalog="algorithm-catalog">Explore →</button></div>
           <div class="catalog-stat"><strong>115</strong><span>native UI controls</span><button class="catalog-explore" type="button" data-catalog="control-catalog">Explore →</button></div>
+          <div class="catalog-stat"><strong>234</strong><span>chart types</span><button class="catalog-explore" type="button" data-catalog="chart-catalog">Explore →</button></div>
         </div>
         <div class="library-grid">
           <div class="library-item"><code>e.algo</code><p>sorting, search, graphs, geometry, hashing, random</p></div>
@@ -640,6 +643,18 @@ Hello, Neper</code></pre>
       </div>
     </div>
   </dialog>
+  <dialog class="catalog-dialog" id="chart-catalog" aria-labelledby="chart-catalog-title">
+    <div class="catalog-dialog-frame">
+      <header class="catalog-dialog-header">
+        <div><div class="eyebrow">e.chart // charts</div><h2 id="chart-catalog-title">234 chart types</h2></div>
+        <form method="dialog"><button class="catalog-dialog-close" aria-label="Close chart catalog"><span aria-hidden="true">×</span></button></form>
+      </header>
+      <div class="catalog-dialog-body">
+        <p class="catalog-dialog-status" aria-live="polite" hidden></p>
+        <div class="catalog-dialog-groups"></div>
+      </div>
+    </div>
+  </dialog>
   <dialog class="catalog-dialog" id="control-detail" aria-labelledby="control-detail-title">
     <div class="catalog-dialog-frame">
       <header class="catalog-dialog-header">
@@ -680,7 +695,7 @@ Hello, Neper</code></pre>
           card.className = "catalog-entry"
           if (item.href) {
             card.href = item.href
-            card.addEventListener("click", event => {
+            if (item.preview) card.addEventListener("click", event => {
               if (event.ctrlKey || event.metaKey || event.shiftKey || event.button) return
               event.preventDefault()
               const detail = document.getElementById("control-detail")
@@ -689,6 +704,16 @@ Hello, Neper</code></pre>
               detail.querySelector("#control-detail-spec").href = `https://github.com/nebosa-company/neper/blob/master/docs/ux/components/${item.name}/README.md`
               detail.showModal()
             })
+          }
+          if (item.image) {
+            const image = document.createElement("img")
+            image.className = "catalog-entry-image"
+            image.src = item.image
+            image.width = 360
+            image.height = 240
+            image.loading = "lazy"
+            image.alt = `${item.name} chart rendered by Neper`
+            card.append(image)
           }
           if (item.preview) {
             const preview = document.createElement("span")
@@ -721,7 +746,7 @@ Hello, Neper</code></pre>
         fragment.append(group)
       }
       if (!count) throw new Error("catalog is empty")
-      if (dialog.id !== "control-catalog") dialog.querySelector("h2").textContent = `${count.toLocaleString("en-US")} ${dialog.id === "module-catalog" ? "modules" : "algorithms"}`
+      if (dialog.id !== "control-catalog") dialog.querySelector("h2").textContent = `${count.toLocaleString("en-US")} ${{"module-catalog": "modules", "algorithm-catalog": "algorithms", "chart-catalog": "chart types"}[dialog.id]}`
       output.replaceChildren(fragment)
       dialog.querySelector(".catalog-dialog-status").hidden = true
       dialog.dataset.loaded = "true"
@@ -969,6 +994,23 @@ Hello, Neper</code></pre>
       renderCatalog(dialog, groups)
     }
 
+    async function loadCharts(dialog) {
+      const guide = "blog/charts-field-guide.html"
+      const response = await fetch(guide)
+      if (!response.ok) throw new Error("chart guide unavailable")
+      const page = new DOMParser().parseFromString(await response.text(), "text/html")
+      const groups = new Map()
+      let category = ""
+      for (const node of page.querySelectorAll("h2, figure.chart-card")) {
+        if (node.tagName === "H2") { category = node.textContent.trim(); continue }
+        const image = node.querySelector("img")
+        if (!category || !image) continue
+        if (!groups.has(category)) groups.set(category, [])
+        groups.get(category).push({name: node.querySelector("h3").textContent.trim(), image: `blog/${image.getAttribute("src")}`, href: `${guide}#${node.id}`})
+      }
+      renderCatalog(dialog, groups)
+    }
+
     function loadControls(dialog) {
       const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, preview: name, href: `ux/control-preview.html?name=${name}`}))]))
       renderCatalog(dialog, groups)
@@ -982,6 +1024,7 @@ Hello, Neper</code></pre>
         try {
           if (dialog.id === "module-catalog") await loadModules(dialog)
           else if (dialog.id === "algorithm-catalog") await loadAlgorithms(dialog)
+          else if (dialog.id === "chart-catalog") await loadCharts(dialog)
           else loadControls(dialog)
         } catch {
           const status = dialog.querySelector(".catalog-dialog-status")
