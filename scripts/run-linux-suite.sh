@@ -10,4 +10,7 @@ src=$(cd "$(dirname "$0")/.." && pwd)
 dst=~/neper-suite/$(basename "$src")
 mkdir -p "$dst"
 rsync -a --delete --exclude=/build --exclude=/.git --exclude=.neper/ "$src/" "$dst/"
+# The fixtures read and write beside the checkout (tests/browser/assets, np-config) and watch it with inotify: from
+# the copy on WSL's disk, never from /mnt/d, where watches deliver nothing and a fixture waits for ever.
+cd "$dst"
 exec bash "$dst/tests/selfhost/${1:-run.sh}"

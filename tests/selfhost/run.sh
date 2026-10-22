@@ -7135,7 +7135,7 @@ case "$device_edit_body" in *'rebuilt main'*) ;; *) printf %s "a device-reached 
 case "$device_edit_body" in *'rebuilt lowhelp'*) ;; *) printf %s "a device-reached edit did not rebuild its own module: $device_edit_body" >&2; echo >&2; exit 1 ;; esac
 case "$device_edit_body" in *'kept midhelp'*) ;; *) printf %s "a device-reached edit rebuilt the module in between: $device_edit_body" >&2; echo >&2; exit 1 ;; esac
 [ "$(sha256sum "$device_edit_main_artifact" | cut -d' ' -f1)" != "$device_edit_before" ]
-device_edit_hot_scratch="$test_build/gpu-device-edit-hot"
+device_edit_hot_scratch="$test_build/gpu-device-edit-hot-scratch"
 rm -rf "$device_edit_hot_scratch"
 mkdir -p "$device_edit_hot_scratch/src"
 cp "$device_edit_fixture"/src/*.e "$device_edit_hot_scratch/src/"
