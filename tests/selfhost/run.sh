@@ -72,6 +72,8 @@ chmod +x "$call_len_path"
 # `os.release` and the reservation registry (D1665), run by the bootstrap itself: the
 # bootstrap oracle below reports a program the bootstrap refuses as skipped, not failed.
 [ "$($neper run "$repo/tests/neper0/os-release.e" --output "$test_build/os-release-bootstrap")" = 'release ok' ]
+# Two environment entries for a child, by the bootstrap's runtime (self-hosted `run --gpu-inventory` passes two).
+[ "$($neper run "$repo/tests/neper0/spawn-env.e" --output "$test_build/spawn-env-bootstrap")" = 'spawn env ok' ]
 lexer=$($test_build/neper-self self-test)
 [ "$lexer" = 'selfhost lexer ok' ]
 scan=$($test_build/neper-self scan 'fn main() -> err { ret ok }')

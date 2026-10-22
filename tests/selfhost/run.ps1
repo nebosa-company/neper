@@ -96,6 +96,9 @@ if ($LASTEXITCODE -ne 0) { throw 'the bootstrap reads the length of a call resul
 # bootstrap oracle below reports a program the bootstrap refuses as skipped, not failed.
 $osReleaseBootstrap = & $neper run (Join-Path $repo 'tests\neper0\os-release.e') --output (Join-Path $testBuild 'os-release-bootstrap.exe')
 if ($LASTEXITCODE -ne 0 -or $osReleaseBootstrap -ne 'release ok') { throw 'the bootstrap refused os-release.e, or its os.release or reservation registry failed' }
+# Two environment entries for a child, by the bootstrap's runtime (self-hosted `run --gpu-inventory` passes two).
+$spawnEnvBootstrap = & $neper run (Join-Path $repo 'tests\neper0\spawn-env.e') --output (Join-Path $testBuild 'spawn-env-bootstrap.exe')
+if ($LASTEXITCODE -ne 0 -or $spawnEnvBootstrap -ne 'spawn env ok') { throw 'the bootstrap did not pass two environment entries to a child' }
 if ($LASTEXITCODE -ne 0 -or $lexer -ne 'selfhost lexer ok') { throw 'self-hosted lexer behavior failed' }
 $scan = & $compiler scan 'fn main() -> err { ret ok }'
 if ($LASTEXITCODE -ne 0 -or $scan -ne 'scan ok') { throw 'self-hosted compiler scan command failed' }

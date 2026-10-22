@@ -626,7 +626,7 @@ void neper_os_spawn(void *result, NpArena *arena, const NpStr *argv, size_t argc
     CloseHandle(process.hThread); *(uintptr_t *)out = (uintptr_t)process.hProcess;
 }
 
-/* The stage-one compiler only uses one inherited environment override for `run`.
+/* Inherited environment overrides: each is set around a recursive spawn with the rest, then restored.
    ponytail: this temporarily changes the parent's environment; build a private
    CreateProcess block if stage one ever spawns concurrently. */
 void neper_os_spawn_with_options(void *result, NpArena *arena, const NpSpawnOptions *options) {
@@ -636,7 +636,7 @@ void neper_os_spawn_with_options(void *result, NpArena *arena, const NpSpawnOpti
     DWORD needed, environment_error;
     int existed = 0;
     HANDLE heap = GetProcessHeap();
-    if (!options->inherit_env || options->cwd.len || options->env.len > 1) {
+    if (!options->inherit_env || options->cwd.len) {
         *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_UNSUPPORTED; return;
     }
     if (!options->env.len) {
@@ -666,7 +666,10 @@ void neper_os_spawn_with_options(void *result, NpArena *arena, const NpSpawnOpti
         HeapFree(heap, 0, previous); HeapFree(heap, 0, wide_name); HeapFree(heap, 0, wide_value);
         *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_FAILED; return;
     }
-    neper_os_spawn(result, arena, options->argv.ptr, options->argv.len, &options->stdio);
+    if (options->env.len > 1) {
+        NpSpawnOptions rest = *options; rest.env.ptr++; rest.env.len--;
+        neper_os_spawn_with_options(result, arena, &rest);
+    } else neper_os_spawn(result, arena, options->argv.ptr, options->argv.len, &options->stdio);
     SetEnvironmentVariableW(wide_name, existed ? previous : 0);
     HeapFree(heap, 0, previous); HeapFree(heap, 0, wide_name); HeapFree(heap, 0, wide_value);
 }
@@ -1054,7 +1057,7 @@ void neper_os_spawn_with_options(void *result, NpArena *arena, const NpSpawnOpti
     unsigned char *out = (unsigned char *)result;
     NpStr name, value;
     char *native_name, *native_value, *previous, *saved = 0;
-    if (!options->inherit_env || options->cwd.len || options->env.len > 1) {
+    if (!options->inherit_env || options->cwd.len) {
         *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_UNSUPPORTED; return;
     }
     if (!options->env.len) {
@@ -1072,7 +1075,10 @@ void neper_os_spawn_with_options(void *result, NpArena *arena, const NpSpawnOpti
     if (setenv(native_name, native_value, 1) != 0) {
         *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = np_error(errno);
     } else {
-        neper_os_spawn(result, arena, options->argv.ptr, options->argv.len, &options->stdio);
+        if (options->env.len > 1) {
+            NpSpawnOptions rest = *options; rest.env.ptr++; rest.env.len--;
+            neper_os_spawn_with_options(result, arena, &rest);
+        } else neper_os_spawn(result, arena, options->argv.ptr, options->argv.len, &options->stdio);
         if (saved) setenv(native_name, saved, 1); else unsetenv(native_name);
     }
     free(saved); free(native_name); free(native_value); return;
