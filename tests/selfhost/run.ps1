@@ -10938,6 +10938,15 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
     throw 'module import cycle rejection failed'
 }
 
+# Fixtures no block above names (extra-fixtures.txt, D5192): built, then run from the repo root, where they read their fonts.
+foreach ($extraFixture in (Get-Content (Join-Path $PSScriptRoot 'extra-fixtures.txt') | Where-Object { $_.Trim() })) {
+    $extraPath = Join-Path $testBuild "extra-$extraFixture.exe"
+    $extraWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$extraFixture\src\main.e") $repo 'x64' 'windows' $extraPath -j 2
+    if ($LASTEXITCODE -ne 0 -or $extraWritten -ne 'executable written') { throw "$extraFixture emission failed" }
+    Push-Location $repo
+    try { & $extraPath | Out-Null } finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { throw "a $extraFixture check failed: exit $LASTEXITCODE" }
+}
 if ($env:NEPER_NEPEROS -eq '1') {
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
 # finds its console, firmware and memory in the device tree, turns translation on, takes a

@@ -10625,6 +10625,14 @@ case "$cycle_output" in
     *) printf '%s\n' 'module import cycle rejection failed' >&2; exit 1 ;;
 esac
 
+# Fixtures no block above names (extra-fixtures.txt, D5192): built, then run from the repo root, where they read their fonts.
+while read -r extra_fixture; do
+    [ -n "$extra_fixture" ] || continue
+    extra_written=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$extra_fixture/src/main.e" "$repo" x64 linux "$test_build/extra-$extra_fixture" -j 2)
+    [ "$extra_written" = 'executable written' ] || { printf '%s\n' "$extra_fixture emission failed" >&2; exit 1; }
+    chmod +x "$test_build/extra-$extra_fixture"
+    (cd "$repo" && "$test_build/extra-$extra_fixture" > /dev/null) || { printf '%s\n' "a $extra_fixture check failed" >&2; exit 1; }
+done < "$repo/tests/selfhost/extra-fixtures.txt"
 if [ "${NEPER_NEPEROS:-}" = 1 ]; then
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
 # finds its console, firmware and memory in the device tree, turns translation on, takes a

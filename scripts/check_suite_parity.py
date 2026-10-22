@@ -68,6 +68,21 @@ for name in ONE_HOST:
     if name not in (in_sh if ONE_HOST[name] == "sh" else in_ps):
         failures.append(f"ONE_HOST lists {name}, which {ONE_HOST[name]} no longer names")
 
+# A fixture directory no suite runs is a test that has stopped testing. extra-fixtures.txt holds the ones neither
+# script names; `differential` belongs to scripts/a64-differential.
+extra = {line.strip() for line in (selfhost / "extra-fixtures.txt").read_text(encoding="utf-8").split("\n") if line.strip()}
+NOT_SUITE = {"differential"}
+named = in_sh | in_ps | extra | NOT_SUITE
+for main in sorted((selfhost / "fixtures" / "link").glob("*/src/main.e")):
+    name = main.parent.parent.name
+    if name not in named:
+        failures.append(f"fixture {name} is run by no suite: add it to tests/selfhost/extra-fixtures.txt")
+for name in sorted(extra):
+    if not (selfhost / "fixtures" / "link" / name / "src" / "main.e").exists():
+        failures.append(f"extra-fixtures.txt names {name}, which has no src/main.e")
+    if name in in_sh or name in in_ps:
+        failures.append(f"extra-fixtures.txt names {name}, which a suite script already runs")
+
 if failures:
     print("\n".join(failures), file=sys.stderr)
     sys.exit(1)
