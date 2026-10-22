@@ -7,6 +7,10 @@ if (-not $env:NEPER_JOBS) { $env:NEPER_JOBS = '2' }
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $neper = Join-Path $repo 'build\windows\neper.exe'
 $testBuild = Join-Path $repo 'build\windows\tests\selfhost'
+# NEPER_REFRESH_GOLDENS=1 rewrites a tool golden whose only difference is its snapshot hashes (D5190).
+& (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot 'refresh-goldens-test.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'the golden refresh mode failed its own check' }
+. (Join-Path $PSScriptRoot 'refresh-goldens.ps1')
 & (Join-Path $repo 'scripts\build-bootstrap.ps1') | Out-Null
 New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 

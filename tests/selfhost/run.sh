@@ -5,6 +5,10 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 neper="$repo/build/linux/neper"
 test_build="$repo/build/linux/tests/selfhost"
 
+# NEPER_REFRESH_GOLDENS=1 rewrites a tool golden whose only difference is its snapshot hashes (D5190).
+. "$repo/tests/selfhost/refresh-goldens.sh"
+sh "$repo/tests/selfhost/refresh-goldens-test.sh"
+
 # A rejection test asserts only that the compiler failed, and a path that does not
 # exist fails too -- so a fixture whose path is wrong passes for the wrong reason.
 # Twice today a mangled path in the PowerShell runner did exactly that. Every
