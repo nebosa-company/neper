@@ -323,6 +323,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var fingerprint: [64]u8 = zero
     let fp_len = ssh.host_fingerprint(&s, fingerprint[0usize..64usize])
     if fp_len != 50usize || fingerprint[0usize] != 83u8 || fingerprint[5usize] != 54u8 || fingerprint[6usize] != 58u8 { os.exit(7i32) }
+    if str.eq(mode, "early") {
+        // The server's NEWKEYS and what follows it can arrive before the key is trusted. Read here, they must wait for
+        // the keys `trust` derives; read at once they were applied as zeros and everything after was garbage.
+        let (poller, poller_error) = os.poller_open(a)
+        if poller_error != ok { os.exit(80i32) }
+        defer let _ = os.poller_close(poller)
+        var readable: os.PollInterest = zero
+        readable.readable = true
+        if os.poller_register(poller, os.socket_handle(sock), 1usize, readable) != ok { os.exit(81i32) }
+        var events: [2]os.PollEvent = zero
+        let (ready, ready_error) = os.poller_wait(poller, events[..], 500000000i64)
+        if ready_error != ok { os.exit(82i32) }
+        if ready > 0usize {
+            var early: [4096]u8 = zero
+            let (got, early_error) = net.receive(sock, early[0usize..4096usize])
+            if early_error != ok || got == 0usize { os.exit(83i32) }
+            let fed = ssh.feed(&s, early[0usize..got])
+        }
+        if ssh.status(&s) == ssh.FAILED { os.exit(84i32) }
+    }
     ssh.trust(&s)
     rounds = 0usize
     while ssh.status(&s) != ssh.READY && ssh.status(&s) != ssh.FAILED && rounds < 60usize {

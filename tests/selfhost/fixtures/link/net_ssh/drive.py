@@ -90,7 +90,7 @@ async def main(exe):
     key_bytes = public_raw[-32:]
     wrong_bytes = other_key.public_data[-32:]
     failed = 0
-    for mode, hex_key, want in (("password", key_bytes.hex(), 0), ("key", key_bytes.hex(), 0),
+    for mode, hex_key, want in (("password", key_bytes.hex(), 0), ("early", key_bytes.hex(), 0), ("key", key_bytes.hex(), 0),
                                 ("badpass", key_bytes.hex(), 0), ("badhost", wrong_bytes.hex(), 0)):
         code = await run_client(exe, mode, port, hex_key)
         print("net_ssh %s: exit %s" % (mode, code))

@@ -820,6 +820,9 @@ fn trust(s: *Session) {
     s.sent_newkeys = true
     s.status = KEX
     if s.got_newkeys { start_auth(s) }
+    // What arrived while the key was pending (the server's NEWKEYS, perhaps more) is read now, under the new keys.
+    var more = true
+    while more { more = take_packet(s) }
 }
 
 // The server's host key (the 32 ed25519 bytes) and its SHA-256 fingerprint as OpenSSH shows it, SHA256:base64.
@@ -1331,6 +1334,9 @@ fn take_packet(s: *Session) -> bool {
         }
         ret false
     }
+    // Nothing more is read until the host key is trusted: the server's NEWKEYS can follow its key exchange reply in the
+    // same read, and the keys it switches to are only derived in `trust`.
+    if s.status == HOST_KEY_PENDING { ret false }
     // A binary packet.
     if s.in_len < 4usize { ret false }
     var length = 0u32
