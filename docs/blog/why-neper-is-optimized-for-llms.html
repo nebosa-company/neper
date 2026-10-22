@@ -126,6 +126,7 @@
     td.nw, th.nw { white-space: nowrap; }
     .try-cta .button { display: inline-flex; align-items: center; justify-content: center; text-align: center; }
     td.num, th.num { text-align: right; white-space: nowrap; }
+    figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
     figure video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
     .win-note { color: var(--on-surface-variant); font-size: 14px; }
     pre.term { margin: 0 0 var(--space-6); }
@@ -157,10 +158,7 @@
       <p class="lede">A model editing code does not browse it the way you do. It sees a window of text, guesses what lies outside it, and pays for every token it reads and writes. Neper's design goal is that a model should not be able to write a line whose meaning depends on context it cannot see. This post walks through the language rules, the compiler commands and the diagnostics that follow from that goal, runs each one on a small program, and says which of the claims we have not proved yet.</p>
 
       <figure>
-        <video controls preload="none" playsinline width="1920" height="1080" poster="video/neper-benefits-poster.jpg" aria-label="A 1 minute 42 second walkthrough of the benefits, with narration and real compiler output">
-          <source src="video/neper-benefits.mp4?v=2" type="video/mp4">
-          <a href="video/neper-benefits.mp4">Watch the video (MP4, 5.9 MB)</a>
-        </video>
+        <iframe src="https://www.youtube-nocookie.com/embed/rPqzJyocrEU?rel=0" title="Why Neper is built for the agent loop" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
         <figcaption>The same benefits in 1 minute 42 seconds, with zooms into the real compiler output. Captioned, with narration.</figcaption>
       </figure>
 
