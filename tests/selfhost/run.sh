@@ -11212,6 +11212,7 @@ greeting"
         app_images+=("$test_build/neperos-app-$name.img")
     done < <(grep -v '^#' "$apps_table")
     crater_archive="$test_build/shell-crater-archive.img"
+    live_archive="$test_build/shell-live-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$settings_server_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der"
     # The same archive with the fixture's root as one more entry, for the fixtures that run on a network (livefixture rows).
     python3 "$repo/scripts/build-shell-archive.py" "$live_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$settings_server_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der" "$repo/tests/selfhost/fixtures/neperos/net/ca.der"
