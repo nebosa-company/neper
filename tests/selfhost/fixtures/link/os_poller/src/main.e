@@ -76,8 +76,17 @@ fn main(a: *mem.Arena) -> err {
     let (sent_two, sent_two_error) = os.socket_send_to(sender, to_second, payload[..])
     if sent_two_error != ok { os.exit(21i32) }
 
-    let (ready, ready_error) = os.poller_wait(poller, events[..], 2000000000i64)
-    if ready_error != ok { os.exit(22i32) }
+    // A host may deliver the second datagram a moment after the first (loopback on a loaded Mac did): both sockets
+    // stay readable until drained, so a later wait reports both. A few waits are allowed; two events is still
+    // what has to come out of one.
+    var ready = 0usize
+    var waits = 0usize
+    while ready != 2usize && waits < 5usize {
+        let (got, ready_error) = os.poller_wait(poller, events[..], 2000000000i64)
+        if ready_error != ok { os.exit(22i32) }
+        ready = got
+        waits += 1usize
+    }
     if ready != 2usize { os.exit(23i32) }
     var saw_read = false
     var saw_write = false
