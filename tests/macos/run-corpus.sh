@@ -23,6 +23,8 @@ expected() {
     # extern_struct loads libnepercabi, which the real suite compiles from the fixture's cabi.c; proc_output runs into
     # the 60 s limit on a Mac, cause not found (os_process and os_gaps do not link there: neper_os_spawn is missing).
     extern_struct|proc_output) echo any ;;
+    # os_gaps starts children (it runs on a Mac) and then checks the sandbox, which os.sandbox answers Unsupported on macOS.
+    os_gaps) echo any ;;
     *) echo 0 ;;
   esac
 }

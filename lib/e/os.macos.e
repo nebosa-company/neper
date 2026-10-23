@@ -1474,7 +1474,13 @@ fn wait_usage(p: own Proc) -> (ProcUsage, err) {
     ret (usage, ok)
 }
 
-fn peak_memory() -> (usize, err) { ret (0usize, Unsupported) }
+// getrusage(RUSAGE_SELF): `ru_maxrss` is the fifth word, and bytes here where Linux counts kilobytes.
+fn peak_memory() -> (usize, err) {
+    var usage: Rusage = zero
+    let result = syscall(117usize, 0usize, mem.address_of(&usage), 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (0usize, from_errno(result)) }
+    ret (usize(usage.words[4usize]), ok)
+}
 
 // SIGKILL, so this is not a request.
 fn kill(p: Proc) -> err {
