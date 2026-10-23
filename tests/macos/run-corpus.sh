@@ -20,9 +20,6 @@ expected() {
     net|net_http|net_http_pool|net_ssh|net_tls|x_tds_integrated|gpu_fault_unchecked|gpu_vulkan_raw|freestanding|os_syscall) echo any ;;
     # Imports four glibc extensions (memrchr, rawmemchr, strchrnul, strverscmp) that libSystem lacks; dyld binds all or none.
     extern_many) echo any ;;
-    # extern_struct loads libnepercabi, which the real suite compiles from the fixture's cabi.c; proc_output runs into
-    # the 60 s limit on a Mac, cause not found (os_process and os_gaps do not link there: neper_os_spawn is missing).
-    extern_struct) echo any ;;
     # The shell services (clipboard, notices, printing, permissions, activation, lifecycle, file access) answer Unsupported
     # on macOS until there is a Cocoa implementation (D5199); these fixtures check them.
     os_exchange|os_shell|ui_activation|ui_file_access|ui_lifecycle|ui_notification|ui_permissions|ui_print|ui_shell_ops) echo any ;;
@@ -55,7 +52,11 @@ for file in "$dir"/*; do
   extra=$(extra_args "$name")
   if [ -n "$extra" ]; then IFS='|' read -ra args <<< "$extra"; fi
   start=$(date +%s)
-  ( cd "$where" && perl -e 'alarm 60; exec @ARGV' "${runner[@]}" "$file" "${args[@]}" >"$scratch/.out" 2>"$scratch/.err" )
+  # CORPUS_LIBS: a directory of dylibs the programs name by leaf (extern_struct's nepercabi). It is set inside a shell
+  # because `arch` strips DYLD_* from what it launches.
+  launch=("$file")
+  if [ -n "${CORPUS_LIBS:-}" ]; then launch=(/bin/sh -c 'DYLD_LIBRARY_PATH="$0" exec "$@"' "$CORPUS_LIBS" "$file"); fi
+  ( cd "$where" && perl -e 'alarm 60; exec @ARGV' "${runner[@]}" "${launch[@]}" "${args[@]}" >"$scratch/.out" 2>"$scratch/.err" )
   code=$?
   seconds=$(( $(date +%s) - start ))
   want=$(expected "$name")

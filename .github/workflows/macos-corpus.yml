@@ -50,11 +50,19 @@ jobs:
         run: |
           mkdir -p /tmp/corpus && tar -xzf "/tmp/corpus-${{ matrix.arch }}.tar.gz" -C /tmp/corpus
           ls /tmp/corpus | wc -l
+      - name: C helper library
+        run: |
+          # extern_struct's `nepercabi`: the real suite builds it from the fixture's C with cc; here it is found by
+          # leaf name through DYLD_LIBRARY_PATH, which run-corpus.sh sets for the program alone (CORPUS_LIBS).
+          flag=arm64; if [ "${{ matrix.arch }}" = "x64" ]; then flag=x86_64; fi
+          mkdir -p /tmp/cabi
+          clang -arch "$flag" -std=c99 -O2 -shared -install_name /usr/lib/libnepercabi.dylib -o /tmp/cabi/libnepercabi.dylib tests/selfhost/fixtures/link/extern_struct/cabi.c
+          file /tmp/cabi/libnepercabi.dylib
       - name: Run
         run: |
           runner=()
           if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
-          CORPUS_CWD="$GITHUB_WORKSPACE" bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt | grep -E "^(FAIL|TOTAL)|^    \|" | head -80
+          CORPUS_LIBS=/tmp/cabi CORPUS_CWD="$GITHUB_WORKSPACE" bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt | grep -E "^(FAIL|TOTAL)|^    \|" | head -80
       - uses: actions/upload-artifact@v4
         if: always()
         with:
