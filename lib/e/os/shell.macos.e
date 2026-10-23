@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -197,10 +197,20 @@ fn target_ready() -> err {
     dock.function = target_dock_menu
     let returning = "@@:@\x00"
     let fifth = objc_class_method(class, os.cocoa_sel("applicationDockMenu:\x00"), dock.bits, &returning[0usize])
+    var sleeping: MenuImp = zero
+    sleeping.function = target_will_sleep
+    var waking: MenuImp = zero
+    waking.function = target_did_wake
+    var ending: MenuImp = zero
+    ending.function = target_will_terminate
+    let sixth = objc_class_method(class, os.cocoa_sel("neperSleep:\x00"), sleeping.bits, &types[0usize])
+    let seventh = objc_class_method(class, os.cocoa_sel("neperWake:\x00"), waking.bits, &types[0usize])
+    let eighth = objc_class_method(class, os.cocoa_sel("applicationWillTerminate:\x00"), ending.bits, &types[0usize])
     objc_class_register(class)
     let object = os.msg0(os.msg0(class, os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
     if object == 0usize { ret Failed }
     shell_target = object
+    lifecycle_observe()
     let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
     let delegated = os.msg1(app, os.cocoa_sel("setDelegate:\x00"), object)
     ret ok
@@ -1274,8 +1284,47 @@ fn power_release(a: *mem.Arena) -> err {
     ret ok
 }
 
+// Lifecycle events (D5210): the workspace's will-sleep and did-wake notifications are Suspend and Resume, and the
+// application delegate's `applicationWillTerminate:` (Quit from the menu, a logout) is Shutdown. The shell target is the
+// observer and the delegate; what it hears is queued here and handed out by `lifecycle_poll`.
+const LIFE_QUEUE: usize = 8usize
+var life_events: [8]LifecycleEvent = zero
+var life_head: usize = zero
+var life_tail: usize = zero
+
+fn life_push(event: LifecycleEvent) {
+    let next = (life_tail + 1usize) % LIFE_QUEUE
+    if next == life_head { ret }
+    life_events[life_tail] = event
+    life_tail = next
+}
+
+@cc(c)
+fn target_will_sleep(this: usize, command: usize, sender: usize) { life_push(.Suspend) }
+
+@cc(c)
+fn target_did_wake(this: usize, command: usize, sender: usize) { life_push(.Resume) }
+
+@cc(c)
+fn target_will_terminate(this: usize, command: usize, sender: usize) { life_push(.Shutdown) }
+
+fn lifecycle_observe() {
+    let center = os.msg0(os.msg0(os.cocoa_class("NSWorkspace\x00"), os.cocoa_sel("sharedWorkspace\x00")), os.cocoa_sel("notificationCenter\x00"))
+    let sleeping = os.cocoa_text("NSWorkspaceWillSleepNotification")
+    let waking = os.cocoa_text("NSWorkspaceDidWakeNotification")
+    let first = os.msg4(center, os.cocoa_sel("addObserver:selector:name:object:\x00"), shell_target, os.cocoa_sel("neperSleep:\x00"), sleeping, 0usize)
+    let second = os.msg4(center, os.cocoa_sel("addObserver:selector:name:object:\x00"), shell_target, os.cocoa_sel("neperWake:\x00"), waking, 0usize)
+    os.cf_release(sleeping)
+    os.cf_release(waking)
+}
+
 fn lifecycle_poll() -> (LifecycleEvent, bool) {
-    ret (.Resume, false)
+    if target_ready() != ok { ret (.Resume, false) }
+    os.cocoa_pump(0i64)
+    if life_head == life_tail { ret (.Resume, false) }
+    let event = life_events[life_head]
+    life_head = (life_head + 1usize) % LIFE_QUEUE
+    ret (event, true)
 }
 
 fn restart_register(a: *mem.Arena, arguments: str) -> err {
