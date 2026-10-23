@@ -41935,3 +41935,7 @@ The Mac stubs that answered `Unsupported` (D5199) are replaced in `lib/e/os.maco
 ## D5204 — macOS clipboard is NSPasteboard with private exact types; notices are `osascript` banners
 
 Text is `public.utf8-plain-text`, bytes sit under their mime string, and files and an image use `com.neper.paths` (one path per line) and `com.neper.image` (width, height, pixels) so what was written is read back exactly; `changeCount` is the sequence. A notice is `osascript display notification` with the text passed as arguments; the id is the monotonic clock's (the system hands none back), an update is a fresh banner, and `notice_remove` stays `Unsupported`. The record turns on `clipboard_text`, `clipboard_typed` and `notices`.
+
+## D5205 — macOS file dialogs are NSOpenPanel/NSSavePanel run modally; recent documents are the shared document controller
+
+`file_dialog` builds an NSOpenPanel (files, folder, several) or NSSavePanel, applies the title, start folder, name and the filters' extensions (`*.txt` is `txt`; `*` allows all) through `allowedFileTypes`, runs it modally and answers `Cancelled` for anything but OK; `recent_add` refuses an empty or missing path and calls `noteNewRecentDocumentURL:`. `tests/macos/probe/file_dialog.e` shows the panel on a runner and aborts it from the run loop (`abortModal` after eight seconds) so the macos-probe screenshot catches it. The record turns on `file_dialogs` and `recent_documents`.
