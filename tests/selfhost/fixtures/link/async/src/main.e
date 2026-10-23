@@ -77,6 +77,8 @@ fn main(a: *mem.Arena) -> err {
     if sent_one_error != ok { os.exit(20i32) }
     let (sent_two, sent_two_error) = os.socket_send_to(sender, to_second, payload[..])
     if sent_two_error != ok { os.exit(21i32) }
+    if sent_one != 1usize { os.exit(70i32) }
+    if sent_two != 1usize { os.exit(71i32) }
 
     // A host may deliver the second datagram a moment after the first (a loaded Mac's loopback did, for `os_poller`
     // and here), and report only what is new in the next poll or everything still readable: what is asked is that both

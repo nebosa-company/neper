@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: false, notice_actions: false, notice_remove: false, clipboard_text: false, clipboard_typed: false, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: false, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: false, notice_actions: false, notice_remove: false, clipboard_text: false, clipboard_typed: false, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -502,20 +502,13 @@ fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
 }
 
 fn autostart_path(a: *mem.Arena, id: str) -> (str, err) {
-    let (config_home, has_config_home) = fs.env_directory(a, "XDG_CONFIG_HOME")
-    var base = config_home
-    if !has_config_home {
-        let (home, home_error) = fs.home_dir(a)
-        if home_error != ok { ret ("", home_error) }
-        let (config, config_error) = str.concat(a, home, "/.config")
-        if config_error != ok { ret ("", config_error) }
-        base = config
-    }
-    let (directory, directory_error) = str.concat(a, base, "/autostart")
+    let (home, home_error) = fs.home_dir(a)
+    if home_error != ok { ret ("", home_error) }
+    let (directory, directory_error) = str.concat(a, home, "/Library/LaunchAgents")
     if directory_error != ok { ret ("", directory_error) }
     let (with_id, id_error) = join3(a, directory, "/", id)
     if id_error != ok { ret ("", id_error) }
-    let (path, path_error) = str.concat(a, with_id, ".desktop")
+    let (path, path_error) = str.concat(a, with_id, ".plist")
     ret (path, path_error)
 }
 
@@ -531,9 +524,9 @@ fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
     let (exe, exe_error) = fs.executable_path(a)
     if exe_error != ok { ret exe_error }
     try fs.make_dirs(a, parent_of(path))
-    let (head, head_error) = join3(a, "[Desktop Entry]\nType=Application\nName=", id, "\nExec=")
+    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>Label</key><string>", id, "</string><key>ProgramArguments</key><array><string>")
     if head_error != ok { ret head_error }
-    let (content, content_error) = join3(a, head, exe, "\nX-GNOME-Autostart-enabled=true\n")
+    let (content, content_error) = join3(a, head, exe, "</string></array><key>RunAtLoad</key><true/></dict></plist>\n")
     if content_error != ok { ret content_error }
     ret fs.write_file(a, path, content)
 }
