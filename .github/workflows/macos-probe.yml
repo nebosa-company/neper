@@ -1,0 +1,78 @@
+name: macos-probe
+# Builds one Neper program for the Mac on Linux and runs it on a real Mac, printing what it wrote: the quick loop for
+# work that only a Mac can test (Cocoa, dyld, the Seatbelt profile). The compiler is cached on the compiler's sources,
+# so a change to the program or the library does not rebuild it.
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: The program, relative to the repository root
+        default: tests/macos/probe/objc_hello.e
+      args:
+        description: Arguments for the program
+        default: ''
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: compiler
+        with:
+          path: build/linux/neper-self
+          key: neper-self-${{ hashFiles('src/**', 'bootstrap/**', 'scripts/build-bootstrap.sh') }}
+      - name: Compiler
+        if: steps.compiler.outputs.cache-hit != 'true'
+        run: |
+          sh scripts/build-bootstrap.sh
+          build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: Program
+        run: |
+          mkdir -p /tmp/probe
+          for arch in aarch64 x64; do
+            build/linux/neper-self emit-executable "${{ inputs.source }}" . "$arch" macos "/tmp/probe/probe-$arch"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe
+          path: /tmp/probe
+  run:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, x64]
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rosetta
+        if: matrix.arch == 'x64'
+        run: softwareupdate --install-rosetta --agree-to-license 2>&1 | tail -2 || true
+      - uses: actions/download-artifact@v4
+        with:
+          name: probe
+          path: /tmp/probe
+      - name: The session
+        run: |
+          sw_vers; uname -m
+          echo "launchd session: $(launchctl managername 2>&1)"
+          system_profiler SPDisplaysDataType 2>/dev/null | grep -iE "resolution|display type|online" | head -4 || true
+          pgrep -l WindowServer || echo "no WindowServer"
+      - name: Run
+        run: |
+          chmod +x /tmp/probe/probe-${{ matrix.arch }}
+          runner=()
+          if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
+          cd "$GITHUB_WORKSPACE"
+          set +e
+          perl -e 'alarm 120; exec @ARGV' "${runner[@]}" /tmp/probe/probe-${{ matrix.arch }} ${{ inputs.args }}
+          echo "exit=$?"
+          screencapture -x /tmp/shot-${{ matrix.arch }}.png 2>&1 | head -2 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shot-${{ matrix.arch }}
+          path: /tmp/shot-${{ matrix.arch }}.png
+          if-no-files-found: ignore
