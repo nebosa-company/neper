@@ -1134,7 +1134,7 @@ fn place_argument(ty: check.Type, integers: *usize, floats: *usize, stacked: *us
 // the stack, eight bytes each. Filling both register counts sends it there.
 fn variadic_to_stack(builder: *nir.Builder, instruction: nir.Instruction, position: usize, integers: *usize, floats: *usize) {
     if !builder.apple_variadic || instruction.opcode != .Call { ret }
-    let from = builder.function_refs[instruction.immediate].variadic_from
+    let from = usize(builder.function_refs[instruction.immediate].variadic_from)
     if from != 0usize && position + 1usize >= from {
         *integers = 8usize
         *floats = 8usize

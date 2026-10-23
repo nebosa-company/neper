@@ -253,8 +253,9 @@ type FunctionRef = struct {
     target: usize,
     has_target: bool,
     // A C variadic import: one more than the number of its fixed parameters, 0 for any other. Apple's arm64
-    // convention passes every variadic argument on the stack, so the call has to know where they begin.
-    variadic_from: usize,
+    // convention passes every variadic argument on the stack, so the call has to know where they begin. A byte
+    // beside `has_target`, so the reference stays the size it was (the static gate holds arena bytes to +0%).
+    variadic_from: u8,
 }
 
 type StringConstant = struct {
@@ -1002,7 +1003,7 @@ fn intern_function(builder: *Builder, module_index: usize, name: str, instance: 
             if found { ret (found_at, ok) }
             if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
             let index = builder.function_ref_count
-            builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false, variadic_from: 0usize }
+            builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false, variadic_from: 0u8 }
             builder.function_ref_count += 1usize
             ret (index, ok)
         }
@@ -1015,7 +1016,7 @@ fn intern_function(builder: *Builder, module_index: usize, name: str, instance: 
     }
     if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
     let index = builder.function_ref_count
-    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false, variadic_from: 0usize }
+    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false, variadic_from: 0u8 }
     builder.function_ref_count += 1usize
     ret (index, ok)
 }
@@ -1028,7 +1029,7 @@ fn intern_import(builder: *Builder, module_index: usize, name: str, library: str
     if intern_error != ok { ret (0usize, intern_error) }
     builder.function_refs[index].library = library
     builder.function_refs[index].symbol = symbol
-    builder.function_refs[index].variadic_from = variadic_from
+    if variadic_from > 255usize { builder.function_refs[index].variadic_from = 255u8 } else { builder.function_refs[index].variadic_from = u8(variadic_from) }
     ret (index, ok)
 }
 

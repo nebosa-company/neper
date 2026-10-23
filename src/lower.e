@@ -3045,7 +3045,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                         let reference = oracle.function_refs[instruction.immediate]
                         var interned = 0usize
                         if reference.library.len != 0usize {
-                            let (imported, import_error) = nir.intern_import(builder, reference.module_index, reference.name, reference.library, reference.symbol, reference.variadic_from)
+                            let (imported, import_error) = nir.intern_import(builder, reference.module_index, reference.name, reference.library, reference.symbol, usize(reference.variadic_from))
                             if import_error != ok { ret import_error }
                             interned = imported
                         } else {
