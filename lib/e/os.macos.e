@@ -2895,6 +2895,8 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
     let started = cocoa_start()
     if started != ok { ret (none, started) }
+    // A window with no area is not one the other hosts make either: Unsupported.
+    if options.width == 0u32 || options.height == 0u32 { ret (none, Unsupported) }
     var slot = 0usize
     while slot < COCOA_TABLE && cocoa_windows[slot] != 0usize { slot += 1usize }
     if slot == COCOA_TABLE { ret (none, OutOfMemory) }
