@@ -93,7 +93,7 @@ fn main(a: *mem.Arena) -> err {
     options.visible = true
     let (window, open_error) = os.window_open(a, options)
     if open_error != ok { os.exit(2i32) }
-    let (view, handle, native_error) = os.window_native(window)
+    let (handle, view, native_error) = os.window_native(window)
     if native_error != ok { os.exit(3i32) }
     let window_id = msg0(handle, sel("windowNumber\x00"))
     let app = msg0(class_of("NSApplication\x00"), sel("sharedApplication\x00"))
