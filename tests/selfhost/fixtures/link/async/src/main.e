@@ -86,13 +86,16 @@ fn main(a: *mem.Arena) -> err {
     var saw_read = false
     var saw_write = false
     var polls = 0usize
+    var busy = 0usize
     while !(saw_read && saw_write) && polls < 5usize {
         let (ready, ready_error) = async.poll(&loop, events[..], time.Duration { nanos: 2000000000i64 })
         if ready_error != ok { os.exit(22i32) }
+        if ready != 0usize { busy += 1usize }
         var at = 0usize
         while at < ready {
             if events[at].token.value == READ_TOKEN { saw_read = true }
             if events[at].token.value == WRITE_TOKEN { saw_write = true }
+            if events[at].token.value != READ_TOKEN && events[at].token.value != WRITE_TOKEN { os.exit(90i32) }
             if !events[at].readable { os.exit(24i32) }
             if events[at].failed { os.exit(25i32) }
             at += 1usize
@@ -100,7 +103,7 @@ fn main(a: *mem.Arena) -> err {
         polls += 1usize
     }
     if !saw_read { os.exit(26i32) }
-    if !saw_write { os.exit(27i32) }
+    if !saw_write { os.exit(100i32 + i32(busy)) }
 
     // Drain both, so the next wait has nothing of its own to report.
     var sink: [8]u8 = zero

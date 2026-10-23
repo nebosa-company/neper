@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: false, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -256,106 +256,51 @@ fn trash(a: *mem.Arena, path: str) -> err {
 // client would give actions, closing and the activation events.
 
 fn notice_permission(a: *mem.Arena) -> NoticePermission {
-    let (tool, tool_error) = find_program(a, "notify-send")
+    let (tool, tool_error) = find_program(a, "osascript")
     if tool_error != ok { ret .Unavailable }
-    let (bus, bus_error) = os.env(a, "DBUS_SESSION_BUS_ADDRESS")
-    if bus_error != ok || bus.len == 0usize { ret .Unavailable }
     ret .Granted
 }
 
-fn parse_id(text: []const u8) -> (u32, bool) {
-    var value = 0u32
-    var digits = 0usize
-    var at = 0usize
-    while at < text.len && text[at] >= 48u8 && text[at] <= 57u8 {
-        value = value * 10u32 + u32(text[at] - 48u8)
-        digits += 1usize
-        at += 1usize
-    }
-    ret (value, digits != 0usize)
-}
-
-// `notify-send` with its output on a pipe, read to the end for the id it prints.
-fn send_notice(a: *mem.Arena, replace: u32, title: str, body: str, silent: bool) -> (u32, err) {
-    let (tool, tool_error) = find_program(a, "notify-send")
-    if tool_error != ok { ret (0u32, Unsupported) }
-    var replacing: [24]u8 = zero
-    var argv: [7]str = zero
-    var count = 0usize
-    argv[count] = tool
-    count += 1usize
-    argv[count] = "--print-id"
-    count += 1usize
-    if silent {
-        argv[count] = "--hint=int:suppress-sound:1"
-        count += 1usize
-    }
-    if replace != 0u32 {
-        let prefix = "--replace-id="
-        var at = 0usize
-        while at < prefix.len {
-            replacing[at] = prefix[at]
-            at += 1usize
-        }
-        var digits: [10]u8 = zero
-        var digit_count = 0usize
-        var value = replace
-        while value > 0u32 {
-            digits[9usize - digit_count] = u8(48u32 + value % 10u32)
-            value /= 10u32
-            digit_count += 1usize
-        }
-        var copied = 0usize
-        while copied < digit_count {
-            replacing[at + copied] = digits[10usize - digit_count + copied]
-            copied += 1usize
-        }
-        argv[count] = replacing[0usize..at + digit_count]
-        count += 1usize
-    }
-    argv[count] = title
-    count += 1usize
-    argv[count] = body
-    count += 1usize
-    let (reading, writing, pipe_error) = os.pipe()
-    if pipe_error != ok { ret (0u32, Failed) }
+// A banner from `osascript`, the text passed as arguments so no quoting reaches the script. The system gives a
+// notice no id to hand back, so the id is the clock's, never zero; an update is a fresh banner under the same id.
+// ponytail: a banner is attributed to Script Editor and cannot be removed from here.
+fn send_notice(a: *mem.Arena, title: str, body: str) -> err {
+    let (tool, tool_error) = find_program(a, "osascript")
+    if tool_error != ok { ret Unsupported }
+    var argv: [9]str = zero
+    argv[0usize] = tool
+    argv[1usize] = "-e"
+    argv[2usize] = "on run argv"
+    argv[3usize] = "-e"
+    argv[4usize] = "display notification (item 1 of argv) with title (item 2 of argv)"
+    argv[5usize] = "-e"
+    argv[6usize] = "end run"
+    argv[7usize] = body
+    argv[8usize] = title
     var options: os.SpawnOptions = zero
-    options.argv = argv[0usize..count]
+    options.argv = argv[..]
     options.inherit_env = true
-    options.stdio.stdout = writing
+    options.stdio.stdout = os.File { raw: 1usize }
     options.stdio.stderr = os.File { raw: 2usize }
     let (child, spawn_error) = os.spawn_with_options(a, options)
-    // The write end went into the options, and is closed from there.
-    let closed_writing = os.close(options.stdio.stdout)
-    if spawn_error != ok {
-        let closed_reading = os.close(reading)
-        ret (0u32, Failed)
-    }
-    var output: [64]u8 = zero
-    var filled = 0usize
-    while filled < 64usize {
-        let (got, read_error) = os.read(reading, output[filled..64usize])
-        if read_error != ok || got == 0usize { break }
-        filled += got
-    }
-    let closed_reading = os.close(reading)
+    if spawn_error != ok { ret Failed }
     let (usage, wait_error) = os.wait_usage(child)
-    if wait_error != ok || usage.exit_code != 0i32 { ret (0u32, Failed) }
-    let (id, has_id) = parse_id(output[0usize..filled])
-    if !has_id { ret (0u32, Failed) }
-    ret (id, ok)
+    if wait_error != ok || usage.exit_code != 0i32 { ret Failed }
+    ret ok
 }
 
 fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> (u32, err) {
     if body.len == 0usize { ret (0u32, Invalid) }
-    let (id, send_error) = send_notice(a, 0u32, title, body, silent)
-    ret (id, send_error)
+    let sent = send_notice(a, title, body)
+    if sent != ok { ret (0u32, sent) }
+    let (stamp, clock_error) = os.clock(.Monotonic)
+    if clock_error != ok { ret (1u32, ok) }
+    ret (u32(stamp & 2147483647i64) | 1u32, ok)
 }
 
 fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: str, silent: bool) -> err {
     if body.len == 0usize || notice_id == 0u32 { ret Invalid }
-    let (id, send_error) = send_notice(a, notice_id, title, body, silent)
-    ret send_error
+    ret send_notice(a, title, body)
 }
 
 fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
