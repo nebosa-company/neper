@@ -1,16 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <rect width="1200" height="630" fill="#0c0e14"/>
   <rect x="60" y="60" width="1080" height="510" rx="28" fill="none" stroke="#39475f" stroke-width="2"/>
-  <text x="120" y="150" font-family="Segoe UI, system-ui, sans-serif" font-size="44" fill="#8d909e" letter-spacing="2">BLOG // COMPARISON</text>
-  <text x="120" y="250" font-family="Segoe UI, system-ui, sans-serif" font-size="68" font-weight="600" fill="#ffffff">Ten languages, one window:</text>
-  <text x="120" y="335" font-family="Segoe UI, system-ui, sans-serif" font-size="68" font-weight="600" fill="#ffffff">what you install</text>
-  <g font-family="Cambria Math, STIX Two Math, Cambria, Times New Roman, serif" fill="#b3c5ff" font-size="64">
-    <text x="120" y="470" font-style="italic">e</text>
-    <text x="165" y="470">=</text>
-    <text x="235" y="470">lim</text>
-    <text x="238" y="508" font-size="30"><tspan font-style="italic">n</tspan>→∞</text>
-    <text x="345" y="470">(1 + <tspan font-style="italic">n</tspan><tspan font-size="36" dy="-24">−1</tspan><tspan dy="24">)</tspan></text>
-    <text x="598" y="438" font-size="40" font-style="italic">n</text>
+  <text x="110" y="135" font-family="Segoe UI, system-ui, sans-serif" font-size="32" fill="#8d909e" letter-spacing="2">BLOG // COMPARISON</text>
+  <text x="110" y="215" font-family="Segoe UI, system-ui, sans-serif" font-size="62" font-weight="600" fill="#ffffff">Ten languages, one window</text>
+  <text x="110" y="280" font-family="Segoe UI, system-ui, sans-serif" font-size="40" fill="#b3c5ff">A real desktop app in under 3 MiB</text>
+  <g font-family="Segoe UI, system-ui, sans-serif">
+    <g transform="translate(110 320)">
+      <rect width="300" height="170" rx="14" fill="#12141b" stroke="#39475f" stroke-width="2"/>
+      <path d="M0 14a14 14 0 0 1 14-14h272a14 14 0 0 1 14 14v22H0z" fill="#1e2a44"/>
+      <circle cx="22" cy="18" r="6" fill="#39475f"/><circle cx="42" cy="18" r="6" fill="#39475f"/><circle cx="62" cy="18" r="6" fill="#39475f"/>
+      <text x="150" y="102" text-anchor="middle" font-family="Cascadia Code, Consolas, monospace" font-size="46" font-weight="600" fill="#b3c5ff">2.7 MiB</text>
+      <text x="150" y="146" text-anchor="middle" font-size="26" fill="#c3c6d5">Windows x64</text>
+    </g>
+    <g transform="translate(450 320)">
+      <rect width="300" height="170" rx="14" fill="#12141b" stroke="#39475f" stroke-width="2"/>
+      <path d="M0 14a14 14 0 0 1 14-14h272a14 14 0 0 1 14 14v22H0z" fill="#1e2a44"/>
+      <circle cx="22" cy="18" r="6" fill="#39475f"/><circle cx="42" cy="18" r="6" fill="#39475f"/><circle cx="62" cy="18" r="6" fill="#39475f"/>
+      <text x="150" y="102" text-anchor="middle" font-family="Cascadia Code, Consolas, monospace" font-size="46" font-weight="600" fill="#b3c5ff">2.8 MiB</text>
+      <text x="150" y="146" text-anchor="middle" font-size="26" fill="#c3c6d5">Linux x64</text>
+    </g>
+    <g transform="translate(790 320)">
+      <rect width="300" height="170" rx="14" fill="#12141b" stroke="#39475f" stroke-width="2"/>
+      <path d="M0 14a14 14 0 0 1 14-14h272a14 14 0 0 1 14 14v22H0z" fill="#1e2a44"/>
+      <circle cx="22" cy="18" r="6" fill="#39475f"/><circle cx="42" cy="18" r="6" fill="#39475f"/><circle cx="62" cy="18" r="6" fill="#39475f"/>
+      <text x="150" y="102" text-anchor="middle" font-family="Cascadia Code, Consolas, monospace" font-size="46" font-weight="600" fill="#b3c5ff">2.3 MiB</text>
+      <text x="150" y="146" text-anchor="middle" font-size="26" fill="#c3c6d5">macOS arm64</text>
+    </g>
   </g>
-  <text x="700" y="470" font-family="Cascadia Code, Consolas, monospace" font-size="30" fill="#ffb692">one binary, nothing to install</text>
+  <text x="110" y="537" font-family="Cascadia Code, Consolas, monospace" font-size="26" fill="#ffb692">one compiler · no runtime · no DLLs</text>
 </svg>
