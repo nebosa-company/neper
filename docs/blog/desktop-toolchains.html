@@ -18,7 +18,6 @@
   <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../ux/components/bundle.css">
   <style>
-  <style>
     :root {
       color-scheme: light dark;
       --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
@@ -120,6 +119,37 @@
     }
     figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
     .text-table th, .text-table td { text-align: left; white-space: normal; vertical-align: top; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin: var(--space-8) 0; }
+    .stat { padding: var(--space-5) var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); text-align: center; }
+    .stat b { display: block; color: var(--primary); font: 400 32px/40px var(--font-display); }
+    .stat span { display: block; margin-top: var(--space-1); color: var(--on-surface-variant); font: 400 13px/18px var(--font-sans); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: var(--space-6) 0; }
+    .tiles.three { grid-template-columns: 1fr; }
+    .tile { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); }
+    .tile h3 { margin: 0 0 var(--space-2); font: 600 17px/24px var(--font-sans); }
+    .tile p { margin: 0; color: var(--on-surface-variant); font-size: 15px; line-height: 23px; }
+    .note { color: var(--on-surface-variant); font-size: 14px; line-height: 22px; }
+    .score th, .score td { font-size: 14px; line-height: 20px; }
+    .score tr.neper td { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip { display: inline-block; padding: 0 9px; border-radius: var(--radius-full); font: 600 12px/20px var(--font-sans); }
+    .chip.ok { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip.warn { background: var(--secondary-container); color: var(--on-secondary-container); }
+    .score tr.neper .chip.ok { background: var(--surface); color: var(--on-surface); }
+    .bars { margin: var(--space-6) 0 var(--space-3); }
+    .bar-row { display: grid; grid-template-columns: 200px 1fr; gap: var(--space-3); align-items: center; margin: var(--space-2) 0; font-size: 14px; line-height: 20px; }
+    .bar-track { display: flex; align-items: center; gap: var(--space-3); }
+    .bar-fill { height: 24px; min-width: 6px; border-radius: var(--radius-xs); background: var(--outline-variant); }
+    .bar-fill.n { background: var(--primary); }
+    .bar-track em { font-style: normal; color: var(--on-surface-variant); white-space: nowrap; }
+    details.lang { margin: 0 0 var(--space-2); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-low); }
+    details.lang summary { cursor: pointer; padding: var(--space-3) var(--space-4); font: 600 16px/24px var(--font-sans); }
+    details.lang[open] summary { border-bottom: 1px solid var(--outline-variant); }
+    details.lang ul { margin: 0; padding: var(--space-4) var(--space-5) var(--space-2) 36px; font-size: 15px; line-height: 23px; }
+    @media (max-width: 599px) {
+      .stats, .tiles { grid-template-columns: 1fr 1fr; }
+      .tiles { grid-template-columns: 1fr; }
+      .bar-row { grid-template-columns: 1fr; gap: var(--space-1); }
+    }
   </style>
 </head>
 <body class="nu-page">
@@ -139,7 +169,14 @@
       <p class="meta">October 23, 2026 · Neper binaries measured with <code>emit-executable</code>; every other number is cited below</p>
       <img class="banner" src="img/desktop-toolchains.svg" width="1200" height="630" alt="Ten languages, one window. A real desktop app in under 3 MiB: 2.7 MiB on Windows x64, 2.8 MiB on Linux x64, 2.3 MiB on macOS arm64. One compiler, no runtime, no DLLs.">
 
-      <p class="lede">Putting one window on screen on Windows, Linux and macOS takes very different amounts of software depending on the language. We read the official install guides for ten popular desktop languages and set them beside Neper. Neper wins on three things: one install builds Windows and Linux programs from a single machine, the user installs nothing to run them, and the window is 2.7 MiB with no runtime inside it.</p>
+      <p class="lede">Putting one window on screen on Windows, Linux and macOS takes very different amounts of software depending on the language. We read the official install guides for ten popular desktop languages and set them beside Neper. Neper wins on three things: one install builds programs for every desktop OS from a single machine, the user installs nothing to run them, and the window is 2.7 MiB with no runtime inside it.</p>
+
+      <div class="stats">
+        <div class="stat"><b>5</b><span>targets built from one Windows machine</span></div>
+        <div class="stat"><b>2.7 MiB</b><span>a real window, Windows x64</span></div>
+        <div class="stat"><b>0</b><span>things the user installs to run it</span></div>
+        <div class="stat"><b>13.3 KiB</b><span>program that imports 398 KiB of source</span></div>
+      </div>
 
       <figure>
         <iframe src="https://www.youtube-nocookie.com/embed/6lnnzUtDIXM?rel=0" title="Ten languages, one window: what you install" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
@@ -147,71 +184,114 @@
       </figure>
 
       <h2>Where Neper wins</h2>
-      <ul>
-        <li><strong>One install, several targets.</strong> Windows, Linux and macOS executables, for x64 and arm64, came out of one Windows machine with one compiler, one command each. The ten others mostly build each OS's package on that OS: jpackage, PyInstaller, Compose and Tauri's MSI all say so, and Flutter needs Xcode on a Mac and Visual Studio on Windows.</li>
-        <li><strong>No second toolchain.</strong> The compiler writes the PE and ELF files itself, with its own linker. No SDK, no Visual Studio workload, no <code>clang</code>, no <code>-dev</code> packages, no MinGW. Seven of the ten need a C++ toolchain somewhere (see below); for Neper it appears once, to build the first compiler.</li>
-        <li><strong>Nothing to install to run.</strong> No .NET or Java runtime, no VC++ redistributable, no Qt or GTK libraries, no bundled browser or interpreter. On Windows the program calls the system's own window functions. On Linux it speaks the X11 protocol itself. On macOS it uses the frameworks that ship with the system.</li>
-        <li><strong>Small, with everything in it.</strong> A window with the real renderer and widget runtime is 2.7 MiB on Windows and 2.8 MiB on Linux. That is below every reported size in the tables that follow: Electron 115 to 151 MB for the runtime alone, Compose about 50 MB, Qt 42 to 50 MB, Flutter about 25 MB, Wails 8 to 11 MB and Tauri 3 to 5 MB. Only Tauri's own documentation claims less (under 0.6 MB), and that number leaves out the system webview.</li>
-        <li><strong>No IDE, no installer.</strong> Edit in anything, build from the command line. There is no designer to buy or workload to select.</li>
-      </ul>
-      <p>The rest of the post is the evidence: how we picked the ten, what each of them needs, and how Neper's numbers were measured.</p>
+      <div class="tiles">
+        <div class="tile"><h3>One install, several targets</h3><p>Windows, Linux and macOS executables, for x64 and arm64, came out of one Windows machine with one compiler and one command each. Most of the ten build each OS's package on that OS.</p></div>
+        <div class="tile"><h3>No second toolchain</h3><p>The compiler writes the PE, ELF and Mach-O files itself, with its own linker. No SDK, no Visual Studio workload, no <code>clang</code>, no <code>-dev</code> packages, no IDE, no installer.</p></div>
+        <div class="tile"><h3>Nothing to install to run</h3><p>No .NET or Java runtime, no VC++ redistributable, no Qt or GTK libraries, no bundled browser or interpreter. The program talks to the system directly.</p></div>
+        <div class="tile"><h3>Small, with everything in it</h3><p>A window with the real renderer and widget runtime is 2.7 MiB on Windows and 2.8 MiB on Linux. Only code your program can reach is kept.</p></div>
+      </div>
+
+      <h2>The scorecard</h2>
+      <p>One row per stack. "C++ toolchain" means a C or C++ compiler or Visual Studio workload somewhere on the way to an executable. Details and sources for each language are further down.</p>
+      <div class="table-scroll">
+        <table class="text-table score">
+          <thead><tr><th>Stack</th><th>Install to build</th><th>C++ toolchain</th><th>User needs</th><th>Smallest app</th></tr></thead>
+          <tbody>
+            <tr class="neper"><td><strong>Neper</strong></td><td>The compiler, one file</td><td><span class="chip ok">No</span> once, to bootstrap</td><td>Nothing</td><td><strong>2.7 MiB</strong> window, measured</td></tr>
+            <tr><td>C# / .NET</td><td>.NET 10 SDK, 206 MB</td><td><span class="chip ok">AOT only</span></td><td>.NET runtime, or self-contained</td><td>18 to 65 MB</td></tr>
+            <tr><td>C++ / Qt</td><td>MSVC or MinGW; Xcode on macOS</td><td><span class="chip warn">Yes</span></td><td>VC++ runtime, Qt libraries</td><td>42 to 50 MB</td></tr>
+            <tr><td>Java</td><td>JDK, 112 MB (+ WiX on Windows)</td><td><span class="chip ok">No</span></td><td>JRE, or a bundled one</td><td>runtime about 40 MB</td></tr>
+            <tr><td>Electron</td><td>Node.js</td><td><span class="chip ok">No</span></td><td>Nothing, ships Chromium</td><td>runtime 115 to 151 MB</td></tr>
+            <tr><td>Tauri</td><td>Rust, MSVC tools, WebView2</td><td><span class="chip warn">Yes</span></td><td>System webview</td><td>3 to 5 MB</td></tr>
+            <tr><td>Python</td><td>Python 3.15, PyInstaller</td><td><span class="chip ok">No</span></td><td>Nothing, bundled</td><td>8 to 120 MB</td></tr>
+            <tr><td>Kotlin</td><td>JDK 17+, Gradle</td><td><span class="chip ok">No</span></td><td>Nothing, bundled</td><td>about 50 MB</td></tr>
+            <tr><td>Dart / Flutter</td><td>SDK 1.8 GB, Visual Studio C++</td><td><span class="chip warn">Yes</span></td><td>VC++ runtime DLLs</td><td>about 25 MB</td></tr>
+            <tr><td>Rust</td><td>rustup, MSVC build tools</td><td><span class="chip warn">A linker</span></td><td>VC++ runtime, system GL</td><td>Tauri 3 to 5 MB</td></tr>
+            <tr><td>Go</td><td>Go 63 MB (+ MinGW for Fyne)</td><td><span class="chip warn">Fyne yes</span></td><td>System GL or webview</td><td>Wails 8 to 11 MB</td></tr>
+            <tr><td>Swift</td><td>Xcode 3.1 GB; VS parts on Windows</td><td><span class="chip warn">Windows yes</span></td><td>macOS: nothing</td><td>no sourced figure</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Sizes for the ten others are reported or documented, for different kinds of app. Only the Neper figure is ours.</p>
+
+      <h2>How big is the smallest app?</h2>
+      <div class="bars">
+        <div class="bar-row"><span>Electron, runtime zip alone</span><div class="bar-track"><div class="bar-fill" style="width:78%"></div><em>151 MB</em></div></div>
+        <div class="bar-row"><span>Compose Multiplatform</span><div class="bar-track"><div class="bar-fill" style="width:25.8%"></div><em>about 50 MB</em></div></div>
+        <div class="bar-row"><span>Qt</span><div class="bar-track"><div class="bar-fill" style="width:23.8%"></div><em>42 to 50 MB</em></div></div>
+        <div class="bar-row"><span>Flutter</span><div class="bar-track"><div class="bar-fill" style="width:12.9%"></div><em>about 25 MB</em></div></div>
+        <div class="bar-row"><span>Go + Wails</span><div class="bar-track"><div class="bar-fill" style="width:5.2%"></div><em>8 to 11 MB</em></div></div>
+        <div class="bar-row"><span>Tauri</span><div class="bar-track"><div class="bar-fill" style="width:2.1%"></div><em>3 to 5 MB</em></div></div>
+        <div class="bar-row"><span><strong>Neper window</strong></span><div class="bar-track"><div class="bar-fill n" style="width:1.4%"></div><em><strong>2.7 MiB, measured</strong></em></div></div>
+      </div>
+      <p class="note">Tauri's own documentation claims under 0.6 MB, without counting the system webview. Neper's number is the whole window stack: renderer and widget runtime included.</p>
 
       <h2>How we picked, and what we counted</h2>
-      <p>No 2025 or 2026 survey measures which language people use <em>for desktop</em>. We took language usage from the Stack Overflow 2025 survey and desktop frameworks from its 2024 edition, the latest that asks: .NET 25.2%, Flutter 9.4%, Qt 7.3%, Electron 6.5%, SwiftUI 4.3%, Tauri 2.4%. The ten are C#/.NET, C++, Java, JavaScript/TypeScript, Python, Kotlin, Dart, Rust, Go and Swift. Kotlin is the weakest pick: Compose Multiplatform is not in the 2024 framework list. Delphi (2.5% usage) is the likely swap for someone ranking desktop only. We could not verify that, so we kept the list.</p>
-      <p>For each language we took its mainstream cross-platform path, plus the native path where that is what people use, and counted three things:</p>
-      <ul>
-        <li><strong>To build:</strong> what you install on the developer machine to get an executable, including anything the language's own installer does not cover, such as a C++ workload or Xcode.</li>
-        <li><strong>To run:</strong> what the end user must already have, or what the app must bundle.</li>
-        <li><strong>The smallest app:</strong> a hello window, when a source gives a number.</li>
-      </ul>
-      <p>Two kinds of numbers appear. Neper's are ours: we built the programs and read the file sizes. Everyone else's are from official documentation or vendor download metadata, which we mark, or from third-party reports, which we mark "reported". We did not build a hello window in the other ten. Cells we could not source say so.</p>
-
-      <h2>To build: what you install first</h2>
-      <div class="table-scroll">
-        <table class="text-table">
-          <thead><tr><th>Language</th><th>Mainstream path</th><th>Install to build</th><th>C/C++ toolchain?</th></tr></thead>
-          <tbody>
-            <tr><td>C# / .NET</td><td>WinForms, WPF, WinUI 3 (Windows); Avalonia (all three); MAUI (no Linux)</td><td>.NET 10 SDK, 206 MB Windows, 229 MB Linux, 215 MB macOS (download sizes). Visual Studio is optional; its docs list 2.5 to 210 GB.</td><td>Only for Native AOT: VS "Desktop development with C++", <code>clang</code> on Linux, Command Line Tools on macOS. WPF and WinForms cannot be trimmed, so they cannot use AOT.</td></tr>
-            <tr><td>C++</td><td>Qt 6.12, Win32/MFC, GTK, AppKit</td><td>MSVC or MinGW-w64 on Windows; <code>build-essential libgl1-mesa-dev</code> on Linux; Qt requires full Xcode 16 on macOS. The online Qt installer wants a Qt account.</td><td>It is the toolchain.</td></tr>
-            <tr><td>Java</td><td>Swing (in the JDK), JavaFX 27</td><td>JDK 25 or 27, 112 MB Windows, 136 MB Linux, 132 MB macOS. Packaging needs WiX on Windows and <code>fakeroot</code> or <code>rpm-build</code> on Linux.</td><td>No.</td></tr>
-            <tr><td>JavaScript / TypeScript</td><td>Electron 45; Tauri 2</td><td>Node.js. Tauri adds Rust, MSVC C++ Build Tools and WebView2 on Windows, nine <code>-dev</code> packages including <code>libwebkit2gtk-4.1-dev</code> on Linux, Command Line Tools on macOS.</td><td>Electron no; Tauri yes.</td></tr>
-            <tr><td>Python</td><td>Tkinter, PyQt / PySide6</td><td>Python 3.15; PyInstaller to package. Tkinter is optional on Linux distributions (<code>python3-tk</code>).</td><td>No.</td></tr>
-            <tr><td>Kotlin</td><td>Compose Multiplatform 1.12</td><td>JDK 17+ and Gradle; the plugin downloads WiX itself on Windows. Each OS builds its own package.</td><td>No.</td></tr>
-            <tr><td>Dart</td><td>Flutter 3.47</td><td>SDK archive 1.8 GB Windows, 2.2 GB macOS, 1.5 GB Linux. Windows: Git and Visual Studio with the C++ workload. macOS: Xcode and CocoaPods. Linux: <code>clang cmake ninja-build pkg-config libgtk-3-dev</code>.</td><td>Yes.</td></tr>
-            <tr><td>Rust</td><td>Tauri, egui, iced, Slint, gtk4-rs</td><td>rustup, then MSVC v143 build tools and a Windows SDK (or the GNU target); a linker on Linux and macOS; <code>-dev</code> packages for the GUI kit.</td><td>A linker, always; Tauri more.</td></tr>
-            <tr><td>Go</td><td>Fyne 2.8, Wails 2.17</td><td>Go, 63 to 67 MB. Fyne needs a C compiler (MSYS2 MinGW-w64, Xcode, or gcc plus Mesa/X11/Wayland headers). Wails needs Node and WebView2 on Windows.</td><td>Fyne yes (cgo); Wails on Windows no.</td></tr>
-            <tr><td>Swift</td><td>SwiftUI, AppKit (macOS only); SwiftCrossUI</td><td>Xcode 27 on macOS (3.1 GB in the App Store). Windows: Visual Studio 2022 components plus a 2.0 GB toolchain. No first-party GUI on Windows or Linux.</td><td>Windows yes.</td></tr>
-          </tbody>
-        </table>
+      <p>No 2025 or 2026 survey measures which language people use <em>for desktop</em>. We took language usage from the Stack Overflow 2025 survey and desktop frameworks from its 2024 edition, the latest that asks: .NET 25.2%, Flutter 9.4%, Qt 7.3%, Electron 6.5%, SwiftUI 4.3%, Tauri 2.4%. Kotlin is the weakest pick, since Compose Multiplatform is not in that list. Delphi (2.5% usage) is the likely swap for someone ranking desktop only; we could not verify that, so we kept the list.</p>
+      <div class="callout">
+        <strong>Three things counted per language</strong>
+        <p><b>To build:</b> what you install to get an executable, including a C++ workload or Xcode that the language's own installer does not cover. <b>To run:</b> what the user must have, or what the app must bundle. <b>The smallest app:</b> a hello window, when a source gives a number. Neper's numbers are ours; everyone else's are from official documentation, vendor download metadata, or third-party reports, which we mark "reported". We did not build a hello window in the other ten.</p>
       </div>
-      <p>Two signing facts apply to every row. Distributing a Mac app outside the App Store means notarization, which needs a Developer ID certificate and the $99-a-year Apple Developer Program. Windows signing is optional, but unsigned apps trigger warnings.</p>
 
-      <h2>To run: what the user needs, and what you ship</h2>
-      <div class="table-scroll">
-        <table class="text-table">
-          <thead><tr><th>Language</th><th>End user needs</th><th>Minimal app (reported unless noted)</th></tr></thead>
-          <tbody>
-            <tr><td>C# / .NET</td><td>The .NET runtime (57 MB desktop installer on Windows), unless self-contained or AOT. WinUI adds the Windows App SDK runtime.</td><td>About 59 to 65 MB self-contained (a .NET 5 console app); about 18 MB for an Avalonia AOT template.</td></tr>
-            <tr><td>C++</td><td>The VC++ Redistributable unless linked with <code>/MT</code>; Qt or GTK shared libraries and plugins, collected with <code>windeployqt</code>.</td><td>About 42 to 50 MB for a Qt app (Qt 5-era forum posts).</td></tr>
-            <tr><td>Java</td><td>A JRE, unless jpackage bundles a trimmed one.</td><td>No sourced figure; a minimal jlink runtime is about 40 MB.</td></tr>
-            <tr><td>JavaScript / TypeScript</td><td>Electron: nothing, it ships Chromium and Node. Tauri: WebView2 on Windows (in Windows 11), WebKitGTK on Linux, the system webview on macOS.</td><td>Electron's runtime zip alone is 151 MB Windows, 118 MB Linux, 115 MB macOS (documented). Tauri: under 0.6 MB documented, 3 to 5 MB in a CI benchmark.</td></tr>
-            <tr><td>Python</td><td>Nothing if PyInstaller bundles the interpreter.</td><td>Tkinter about 8 to 10 MB (a 2017 post); PyQt 30 to 120 MB.</td></tr>
-            <tr><td>Kotlin</td><td>Nothing; the package includes a trimmed runtime.</td><td>About 50 MB MSI, which a maintainer calls the baseline because Skia is large.</td></tr>
-            <tr><td>Dart</td><td>Windows: the VC++ runtime DLLs next to the exe. Linux: GTK 3.</td><td>About 25 MB on Windows.</td></tr>
-            <tr><td>Rust</td><td>The VC++ runtime unless built with <code>+crt-static</code>; system GL libraries or webview.</td><td>Tauri 3 to 5 MB; egui and iced no sourced figure.</td></tr>
-            <tr><td>Go</td><td>One binary plus system GL (Fyne) or webview (Wails).</td><td>Wails 8 to 11 MB; Fyne no sourced figure.</td></tr>
-            <tr><td>Swift</td><td>macOS: nothing, the runtime is part of the OS. Windows: the Swift runtime DLLs, ICU and the VC++ runtime.</td><td>No sourced figure.</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <h2>Each language in detail</h2>
+      <p>Open a language for what it needs to build, what the user needs to run, and the sources behind the scorecard.</p>
+      <details class="lang"><summary>C# / .NET</summary><ul>
+        <li><strong>Frameworks:</strong> WinForms, WPF, WinUI 3 (Windows); Avalonia (all three); MAUI (no Linux).</li>
+        <li><strong>Build:</strong> .NET 10 SDK, 206 MB Windows, 229 MB Linux, 215 MB macOS (download sizes). Visual Studio is optional. Native AOT needs the C++ workload, <code>clang</code> on Linux or Command Line Tools on macOS, and WPF and WinForms cannot use it because they cannot be trimmed.</li>
+        <li><strong>Run:</strong> the .NET runtime (57 MB desktop installer on Windows) unless self-contained or AOT. WinUI adds the Windows App SDK runtime.</li>
+        <li><strong>Size:</strong> about 59 to 65 MB self-contained (a .NET 5 console app); about 18 MB for an Avalonia AOT template.</li></ul></details>
+      <details class="lang"><summary>C++</summary><ul>
+        <li><strong>Frameworks:</strong> Qt 6.12, Win32/MFC, GTK, AppKit.</li>
+        <li><strong>Build:</strong> MSVC or MinGW-w64 on Windows; <code>build-essential libgl1-mesa-dev</code> on Linux; Qt requires full Xcode 16 on macOS. The online Qt installer wants a Qt account.</li>
+        <li><strong>Run:</strong> the VC++ Redistributable unless linked with <code>/MT</code>; Qt or GTK shared libraries and plugins, collected with <code>windeployqt</code>.</li>
+        <li><strong>Size:</strong> about 42 to 50 MB for a Qt app (Qt 5-era forum posts).</li></ul></details>
+      <details class="lang"><summary>Java</summary><ul>
+        <li><strong>Frameworks:</strong> Swing (in the JDK), JavaFX 27.</li>
+        <li><strong>Build:</strong> JDK 25 or 27, 112 MB Windows, 136 MB Linux, 132 MB macOS. Packaging needs WiX on Windows and <code>fakeroot</code> or <code>rpm-build</code> on Linux; each OS builds its own package.</li>
+        <li><strong>Run:</strong> a JRE, unless jpackage bundles a trimmed one.</li>
+        <li><strong>Size:</strong> no sourced figure; a minimal jlink runtime is about 40 MB.</li></ul></details>
+      <details class="lang"><summary>JavaScript / TypeScript (Electron, Tauri)</summary><ul>
+        <li><strong>Build:</strong> Electron needs Node.js. Tauri adds Rust, MSVC C++ Build Tools and WebView2 on Windows, nine <code>-dev</code> packages including <code>libwebkit2gtk-4.1-dev</code> on Linux, Command Line Tools on macOS.</li>
+        <li><strong>Run:</strong> Electron: nothing, it ships Chromium and Node. Tauri: WebView2 on Windows (in Windows 11), WebKitGTK on Linux, the system webview on macOS.</li>
+        <li><strong>Size:</strong> Electron's runtime zip alone is 151 MB Windows, 118 MB Linux, 115 MB macOS (documented). Tauri: under 0.6 MB documented, 3 to 5 MB in a CI benchmark.</li></ul></details>
+      <details class="lang"><summary>Python</summary><ul>
+        <li><strong>Frameworks:</strong> Tkinter, PyQt / PySide6.</li>
+        <li><strong>Build:</strong> Python 3.15; PyInstaller to package, on each OS. Tkinter is optional on Linux distributions (<code>python3-tk</code>).</li>
+        <li><strong>Run:</strong> nothing if PyInstaller bundles the interpreter.</li>
+        <li><strong>Size:</strong> Tkinter about 8 to 10 MB (a 2017 post); PyQt 30 to 120 MB.</li></ul></details>
+      <details class="lang"><summary>Kotlin</summary><ul>
+        <li><strong>Frameworks:</strong> Compose Multiplatform 1.12.</li>
+        <li><strong>Build:</strong> JDK 17+ and Gradle; the plugin downloads WiX itself on Windows. Each OS builds its own package.</li>
+        <li><strong>Run:</strong> nothing; the package includes a trimmed runtime.</li>
+        <li><strong>Size:</strong> about 50 MB MSI, which a maintainer calls the baseline because Skia is large.</li></ul></details>
+      <details class="lang"><summary>Dart / Flutter</summary><ul>
+        <li><strong>Build:</strong> SDK archive 1.8 GB Windows, 2.2 GB macOS, 1.5 GB Linux. Windows: Git and Visual Studio with the C++ workload. macOS: Xcode and CocoaPods. Linux: <code>clang cmake ninja-build pkg-config libgtk-3-dev</code>.</li>
+        <li><strong>Run:</strong> Windows: the VC++ runtime DLLs next to the exe. Linux: GTK 3.</li>
+        <li><strong>Size:</strong> about 25 MB on Windows.</li></ul></details>
+      <details class="lang"><summary>Rust</summary><ul>
+        <li><strong>Frameworks:</strong> Tauri, egui, iced, Slint, gtk4-rs.</li>
+        <li><strong>Build:</strong> rustup, then MSVC v143 build tools and a Windows SDK (or the GNU target); a linker on Linux and macOS; <code>-dev</code> packages for the GUI kit.</li>
+        <li><strong>Run:</strong> the VC++ runtime unless built with <code>+crt-static</code>; system GL libraries or webview.</li>
+        <li><strong>Size:</strong> Tauri 3 to 5 MB; egui and iced no sourced figure.</li></ul></details>
+      <details class="lang"><summary>Go</summary><ul>
+        <li><strong>Frameworks:</strong> Fyne 2.8, Wails 2.17.</li>
+        <li><strong>Build:</strong> Go, 63 to 67 MB. Fyne needs a C compiler (MSYS2 MinGW-w64, Xcode, or gcc plus Mesa/X11/Wayland headers). Wails needs Node and WebView2 on Windows.</li>
+        <li><strong>Run:</strong> one binary plus system GL (Fyne) or the system webview (Wails).</li>
+        <li><strong>Size:</strong> Wails about 8 to 11 MB; Fyne no sourced figure.</li></ul></details>
+      <details class="lang"><summary>Swift</summary><ul>
+        <li><strong>Frameworks:</strong> SwiftUI, AppKit (macOS only); SwiftCrossUI. No first-party GUI on Windows or Linux.</li>
+        <li><strong>Build:</strong> Xcode 27 on macOS (3.1 GB in the App Store). Windows: Visual Studio 2022 components plus a 2.0 GB toolchain.</li>
+        <li><strong>Run:</strong> macOS: nothing, the runtime is part of the OS. Windows: the Swift runtime DLLs, ICU and the VC++ runtime.</li>
+        <li><strong>Size:</strong> no sourced figure.</li></ul></details>
+      <p class="note">Two signing facts apply to every language. Distributing a Mac app outside the App Store means notarization, which needs a Developer ID certificate and the $99-a-year Apple Developer Program. Windows signing is optional, but unsigned apps trigger warnings.</p>
 
       <h2>What the ten have in common</h2>
-      <ul>
-        <li><strong>Seven of the ten reach a C++ toolchain on at least one OS.</strong> C++ itself, Flutter, Rust, Fyne, Swift on Windows, Tauri and .NET Native AOT all do. On Windows that means Visual Studio or its Build Tools, which Microsoft lists at 2.3 to 60 GB.</li>
-        <li><strong>The managed languages move the weight to the user's machine or into your package.</strong> .NET and Java need a runtime unless you bundle one. Electron bundles a browser. PyInstaller bundles an interpreter.</li>
-        <li><strong>You build each OS on that OS.</strong> jpackage, PyInstaller, Compose and Tauri's MSI all build their packages natively. Cross-compiling a desktop app is the exception, not the rule.</li>
-        <li><strong>The IDE is rarely required.</strong> Every language here builds from a command line. The exceptions are in practice: Xcode for Swift on macOS, and Visual Studio as a toolchain for Flutter and C++ on Windows.</li>
-      </ul>
+      <div class="tiles">
+        <div class="tile"><h3>A C++ toolchain, often</h3><p>Seven of the ten reach one on at least one OS: C++ itself, Flutter, Rust, Fyne, Swift on Windows, Tauri and .NET Native AOT. On Windows that means Visual Studio or its Build Tools, listed at 2.3 to 60 GB.</p></div>
+        <div class="tile"><h3>Weight moves elsewhere</h3><p>.NET and Java need a runtime unless you bundle one. Electron bundles a browser. PyInstaller bundles an interpreter.</p></div>
+        <div class="tile"><h3>Build each OS on that OS</h3><p>jpackage, PyInstaller, Compose and Tauri's MSI all build their packages natively. Cross-compiling a desktop app is the exception.</p></div>
+        <div class="tile"><h3>The IDE is rarely required</h3><p>Every language builds from a command line. In practice, Xcode for Swift on macOS and Visual Studio as a toolchain for Flutter and C++ on Windows are the exceptions.</p></div>
+      </div>
 
       <h2>Neper</h2>
       <p>Neper's compiler writes the executable itself, including the PE, ELF and Mach-O headers, the linker and the ad-hoc macOS code signature, so a program does not go through a C++ compiler, an SDK or a system linker. The compiler is written in Neper. Getting the first compiler means building from source, and that is the one place a C toolchain appears:</p>
@@ -236,7 +316,7 @@
           </tbody>
         </table>
       </div>
-      <p>In the form of the two tables above:</p>
+      <p>What that means for the build and the run:</p>
       <ul>
         <li><strong>To build:</strong> the Neper compiler and a text editor. No SDK, no IDE, no installer download, and no second language's toolchain once you have the compiler.</li>
         <li><strong>To run on Windows:</strong> Windows. The program calls the system's own window functions.</li>
@@ -244,10 +324,6 @@
         <li><strong>To run on macOS:</strong> macOS. The program uses the Objective-C runtime, CoreFoundation and CoreGraphics that ship with the system.</li>
       </ul>
 
-      <div class="callout">
-        <strong>Size is not a clean win.</strong>
-        <p>At 2.7 MiB the window is smaller than every reported figure above, including Tauri's 3 to 5 MB benchmark, but Tauri's own documentation claims under 0.6 MB, and its webview is not counted in that number. Neper's size is the whole window stack: the CPU renderer and the widget runtime, because Neper draws its own pixels instead of using native widgets. A console program is 12.3 KiB.</p>
-      </div>
 
       <h2>The limits of those wins</h2>
       <ul>
@@ -260,12 +336,12 @@
       </ul>
 
       <h2>Targets we plan next</h2>
-      <p>The compiler's target list is shorter than the one above suggests. What exists today is Windows, Linux and macOS on x64 and arm64. These are planned, and none of them exists yet:</p>
-      <ul>
-        <li><strong>Android, on x86_64 and AArch64.</strong> The design document describes a distinct Android target, not an alias for Linux. The aim is to write the APK itself (binary manifest, aligned native library, signature) with no Android Studio, SDK, NDK, Gradle or Java.</li>
-        <li><strong>iOS.</strong> The first step is compiling to arm64 iOS Mach-O objects on Windows. The final link, app bundle, signing and upload would stay in Apple's own toolchain, because iOS has no unsigned path: it needs an App ID, provisioning profile and entitlements. So "nothing to install" holds for compiling, not for shipping to the App Store. The language specification currently excludes iOS.</li>
-        <li><strong>WebAssembly.</strong> Today Neper can run WebAssembly: <code>e.wasm</code> is an interpreter for the 2.0 core format. Compiling Neper programs to WebAssembly is a goal with no design document yet.</li>
-      </ul>
+      <p>What exists today is Windows, Linux and macOS on x64 and arm64. These are planned, and none of them exists yet:</p>
+      <div class="tiles three">
+        <div class="tile"><h3>Android</h3><p>On x86_64 and AArch64, as a distinct target and not an alias for Linux. The aim is to write the APK itself (binary manifest, aligned native library, signature) with no Android Studio, SDK, NDK, Gradle or Java.</p></div>
+        <div class="tile"><h3>iOS</h3><p>First step: compile to arm64 iOS Mach-O objects on Windows. The final link, app bundle, signing and upload stay in Apple's toolchain, because iOS has no unsigned path. So "nothing to install" would hold for compiling, not for the App Store. The language specification currently excludes iOS.</p></div>
+        <div class="tile"><h3>WebAssembly</h3><p>Today Neper can run WebAssembly: <code>e.wasm</code> is an interpreter for the 2.0 core format. Compiling Neper programs to WebAssembly is a goal with no design document yet.</p></div>
+      </div>
       <p>FreeBSD is evaluated as a candidate and not scheduled. Each of these is a distinct target with its own binary rules, not a relabelled Linux or macOS build, and we will report them here as we measure them, not before.</p>
 
       <h2>Sources</h2>
