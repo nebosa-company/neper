@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -1184,8 +1184,11 @@ fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
     ret (.Unavailable, ok)
 }
 
+// The login keychain through `security`: a generic password whose service is the name and whose account is the user.
+// ponytail: the secret travels in the tool's arguments, which a process listing shows for the moment it runs; the Keychain
+// API (SecItemAdd) takes it as a CFData and is the way to close that.
 fn credential_tool(a: *mem.Arena) -> (str, err) {
-    let (tool, tool_error) = find_program(a, "secret-tool")
+    let (tool, tool_error) = find_program(a, "security")
     if tool_error != ok { ret ("", Unsupported) }
     ret (tool, ok)
 }
@@ -1227,21 +1230,25 @@ fn run_tool(a: *mem.Arena, argv: []const str, input: []const u8, output: []u8) -
     ret (filled, usage.exit_code, ok)
 }
 
+// `security` answers 44 for an item that is not there.
+const KEYCHAIN_MISSING: i32 = 44i32
+
 fn credential_store(a: *mem.Arena, target_name: str, user: str, secret: []const u8) -> err {
     if target_name.len == 0usize || secret.len == 0usize || secret.len > 2560usize { ret Invalid }
     let (tool, tool_error) = credential_tool(a)
     if tool_error != ok { ret tool_error }
-    var argv: [8]str = zero
+    var argv: [10]str = zero
     argv[0usize] = tool
-    argv[1usize] = "store"
-    argv[2usize] = "--label"
-    argv[3usize] = target_name
-    argv[4usize] = "target"
-    argv[5usize] = target_name
-    argv[6usize] = "user"
-    argv[7usize] = user
+    argv[1usize] = "add-generic-password"
+    argv[2usize] = "-U"
+    argv[3usize] = "-s"
+    argv[4usize] = target_name
+    argv[5usize] = "-a"
+    argv[6usize] = user
+    argv[7usize] = "-w"
+    argv[8usize] = secret
     var output: [16]u8 = zero
-    let (filled, code, run_error) = run_tool(a, argv[..], secret, output[..])
+    let (filled, code, run_error) = run_tool(a, argv[0usize..9usize], "", output[..])
     if run_error != ok || code != 0i32 { ret Failed }
     ret ok
 }
@@ -1251,17 +1258,22 @@ fn credential_read(a: *mem.Arena, target_name: str) -> (Credential, err) {
     if target_name.len == 0usize { ret (nothing, Invalid) }
     let (tool, tool_error) = credential_tool(a)
     if tool_error != ok { ret (nothing, tool_error) }
-    var argv: [4]str = zero
+    var argv: [5]str = zero
     argv[0usize] = tool
-    argv[1usize] = "lookup"
-    argv[2usize] = "target"
+    argv[1usize] = "find-generic-password"
+    argv[2usize] = "-s"
     argv[3usize] = target_name
-    let (output, allocation_error) = mem.alloc[u8](a, 2560usize)
+    argv[4usize] = "-w"
+    let (output, allocation_error) = mem.alloc[u8](a, 2561usize)
     if allocation_error != ok { ret (nothing, allocation_error) }
     let (filled, code, run_error) = run_tool(a, argv[..], "", output)
     if run_error != ok { ret (nothing, run_error) }
-    if code != 0i32 || filled == 0usize { ret (nothing, NotFound) }
-    ret (Credential { user: "", secret: output[0usize..filled] }, ok)
+    if code == KEYCHAIN_MISSING { ret (nothing, NotFound) }
+    if code != 0i32 { ret (nothing, Failed) }
+    var length = filled
+    if length != 0usize && output[length - 1usize] == 10u8 { length -= 1usize }
+    if length == 0usize { ret (nothing, NotFound) }
+    ret (Credential { user: "", secret: output[0usize..length] }, ok)
 }
 
 fn credential_delete(a: *mem.Arena, target_name: str) -> err {
@@ -1270,12 +1282,14 @@ fn credential_delete(a: *mem.Arena, target_name: str) -> err {
     if tool_error != ok { ret tool_error }
     var argv: [4]str = zero
     argv[0usize] = tool
-    argv[1usize] = "clear"
-    argv[2usize] = "target"
+    argv[1usize] = "delete-generic-password"
+    argv[2usize] = "-s"
     argv[3usize] = target_name
     var output: [16]u8 = zero
     let (filled, code, run_error) = run_tool(a, argv[..], "", output[..])
-    if run_error != ok || code != 0i32 { ret Failed }
+    if run_error != ok { ret Failed }
+    if code == KEYCHAIN_MISSING { ret NotFound }
+    if code != 0i32 { ret Failed }
     ret ok
 }
 
