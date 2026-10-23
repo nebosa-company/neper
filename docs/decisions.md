@@ -41931,3 +41931,7 @@ The Mac stubs that answered `Unsupported` (D5199) are replaced in `lib/e/os.maco
 ## D5203 — macOS shell services are tool-backed, and the record claims only what runs
 
 `e.os.shell` on macOS is `shell.linux.e` with the Mac's tools for the bodies, so the argument checks the shell fixtures require are inherited: `open_uri` and `reveal` are `/usr/bin/open` (`-R`), `trash` is a move into `~/.Trash` with a counter on a name clash, `startup` is a LaunchAgent plist. Every other capability is `false` and its verb answers `Unsupported` until a Cocoa body exists (clipboard, notices, dialogs, tray, power, credentials, screen capture); a flag is turned on in the commit that makes the verb real. The nine shell fixtures left the corpus INFO list; the Mac corpus is 1091 pass, 0 fail per architecture.
+
+## D5204 — macOS clipboard is NSPasteboard with private exact types; notices are `osascript` banners
+
+Text is `public.utf8-plain-text`, bytes sit under their mime string, and files and an image use `com.neper.paths` (one path per line) and `com.neper.image` (width, height, pixels) so what was written is read back exactly; `changeCount` is the sequence. A notice is `osascript display notification` with the text passed as arguments; the id is the monotonic clock's (the system hands none back), an update is a fresh banner, and `notice_remove` stays `Unsupported`. The record turns on `clipboard_text`, `clipboard_typed` and `notices`.
