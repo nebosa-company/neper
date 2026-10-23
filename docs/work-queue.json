@@ -26,6 +26,17 @@
       "evidence": "Found on 2026-10-23 by the macOS window probe: `extern fn f(r: usize, s: usize) -> CGRect` with CGRect = struct { x: f64, y: f64, w: f64, h: f64 } stops aarch64 lowering with `cannot lower main: construct is not implemented in self-hosted lowering` at the call (x64 compiles it, through the memory-returned slot). A two-double struct, a double, a BOOL and a C string all return correctly on both Mac architectures; AppKit hands window and view sizes back as NSRect, so the window code reads them through KVC (`valueForKey:` then `NSValue getValue:`) until this is fixed. Where it stops: `lower.e` `c_result_type` already names a 3- or 4-member HFA `return-hfa-N-W` (D2124) and `codegen_a64.e` `pack_hfa` / `hfa_pair` pack the members into at most the two eightbytes x0 and x1 hold; a four-double HFA comes back in v0-v3, four eightbytes, which the result model (one value, or a pair) has no room for. Plan: give a call whose result is a 3- or 4-member HFA a result slot, as a C return slot is for a struct returned in memory: lowering allocates it and passes nothing, the call selection stores v0-v3 into it after the call, and the value is read from the slot. Acceptance: (1) a fixture `macos_hfa_return` calls CoreGraphics `CGRectMake`, `CGRectInset` and `CGRectUnion` through `@import` for aarch64-macos and x64-macos and checks every member, and passes on a Mac in the corpus; (2) an aarch64-linux fixture returns 3- and 4-member double HFAs and a 4-member float HFA from a C shared object built by cc, run under the aarch64 test environment; (3) x64 and the 2-member case are byte-identical to before; (4) the window code reads sizes by a direct rect-returning call and the KVC workaround is deleted."
     },
     {
+      "id": "C179",
+      "category": "library",
+      "group": "e.os",
+      "order": 179,
+      "title": "macOS kqueue poller loses a read wakeup for one of two loopback datagram sockets",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Found on 2026-10-24 by tests/macos/probe/poller_flake.e on macos-14 runners: two UDP sockets registered with EVFILT_READ before one datagram is sent to each; the poller reports the first and never the second in five 200 ms waits, 0.7% to 7% of rounds on both archs. A fresh queue holding only the missing socket reports it at once, and so does re-adding the same filter to the original queue (that wait then reports both), so the datagram arrived and the knote was not activated. Why: not found. The corpus fixtures os_poller and async tolerate it only by waiting; a fix must not re-add from a registry of fds (a closed and reused fd would be registered by mistake) -- try EV_RECEIPT, kevent64, or re-adding only on a timed-out wait of the fd the caller named. Done when poller_flake reports 0 misses of 300 on both archs."
+    },
+    {
       "id": "C107",
       "category": "compiler",
       "group": "NeperOS",

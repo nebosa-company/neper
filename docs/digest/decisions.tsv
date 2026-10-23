@@ -2833,4 +2833,7 @@ D5197	1140	`os.spawn` and `os.peak_memory` on macOS
 D5198	1137	macOS pipes are close-on-exec, and `proc_output` runs on a Mac
 D5199	1417	macOS answers the window verbs `Unsupported`, and `e.os.shell` is the same shape
 D5200	1089	The Mac corpus builds `extern_struct`'s C helper library and runs the fixture against it
-D5201	1366	macOS `os.sandbox` is Seatbelt's `sandbox_init`
+D5201	1367	macOS `os.sandbox` is Seatbelt's `sandbox_init`
+D5202	2350	macOS windows are AppKit windows: the `os.window_*` verbs, the clipboard and `monitors`
+D5203	718	macOS shell services are tool-backed, and the record claims only what runs
+D5204	640	macOS clipboard is NSPasteboard with private exact types; notices are `osascript` banners
