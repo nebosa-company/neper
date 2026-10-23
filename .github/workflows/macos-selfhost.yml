@@ -1,16 +1,33 @@
 name: macos-selfhost
-# The compiler building itself on a Mac. Stage 1 is the compiler cross-built on another host for
-# the Mac's architecture (a pre-release's asset, named in tests/macos/selfhost-tag.txt, so a push
-# that changes that file starts a run). It builds stage 2 from src/main.e on the Mac; stage 2
-# builds stage 3; the two must be byte-identical, as on Linux and Windows. Stage 2 then builds
-# and runs a program for its default target, which is the Mac itself (host_target).
+# The compiler building itself on a Mac. Stage 1 is built here, on Linux, from the commit under test: the C
+# bootstrap builds the self-hosted compiler, which cross-builds itself for each Mac architecture. The Mac then
+# builds stage 2 from src/main.e; stage 2 builds stage 3; the two must be byte-identical, as on Linux and
+# Windows. Stage 2 then builds and runs a program for its default target, which is the Mac itself (host_target).
 on:
-  push:
-    branches: [macos-ci, macos-dir]
-    paths: [tests/macos/selfhost-tag.txt]
   workflow_dispatch:
 jobs:
+  stage1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap compiler
+        run: sh scripts/build-bootstrap.sh
+      - name: Self-hosted compiler
+        run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: Cross-build for the Mac
+        run: |
+          mkdir -p /tmp/stage1
+          for arch in aarch64 x64; do
+            build/linux/neper-self emit-executable src/main.e . "$arch" macos "/tmp/stage1/neper-$arch-macos" --arena 1g
+          done
+          ls -l /tmp/stage1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage1
+          path: /tmp/stage1
   selfhost:
+    needs: stage1
     strategy:
       fail-fast: false
       matrix:
@@ -22,12 +39,12 @@ jobs:
       - name: Rosetta
         if: matrix.arch == 'x64'
         run: softwareupdate --install-rosetta --agree-to-license 2>&1 | tail -2 || true
-      - name: Fetch stage 1
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: stage1
+          path: /tmp
+      - name: Stage 1
         run: |
-          tag=$(cat tests/macos/selfhost-tag.txt)
-          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "neper-${{ matrix.arch }}-macos" --dir /tmp
           chmod +x /tmp/neper-${{ matrix.arch }}-macos
           sw_vers; uname -m
       - name: Stage 2 and stage 3
