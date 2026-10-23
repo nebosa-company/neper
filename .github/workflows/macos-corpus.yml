@@ -1,12 +1,36 @@
 name: macos-corpus
-# Runs the compiled link fixtures (tests/selfhost/fixtures/link) on a real Mac. The binaries are a
-# pre-release's assets, named in tests/macos/corpus-tag.txt, so a push that changes that file starts a run.
+# Runs the compiled link fixtures (tests/selfhost/fixtures/link) on a real Mac. They are cross-built here, on
+# Linux, from the commit under test: the C bootstrap builds the self-hosted compiler, which compiles every
+# fixture for one Mac architecture (tests/macos/build-corpus.sh); the Mac job runs them.
 on:
-  push:
-    branches: [macos-dir, macos-ci]
-    paths: [tests/macos/corpus-tag.txt]
+  workflow_dispatch:
 jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, x64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compiler
+        run: |
+          sh scripts/build-bootstrap.sh
+          build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: Compile the fixtures
+        run: |
+          CORPUS_ARCHS=${{ matrix.arch }} bash tests/macos/build-corpus.sh "$PWD/build/linux/neper-self" "$PWD" /tmp/corpus-out 4 | tee /tmp/corpus-build.tsv | awk -F'\t' '$3 != "ok"'
+          echo "built: $(grep -c -P '\tok\t' /tmp/corpus-build.tsv) of $(wc -l < /tmp/corpus-build.tsv)"
+          tar -czf /tmp/corpus-${{ matrix.arch }}.tar.gz -C /tmp/corpus-out/${{ matrix.arch }} .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corpus-${{ matrix.arch }}
+          path: |
+            /tmp/corpus-${{ matrix.arch }}.tar.gz
+            /tmp/corpus-build.tsv
   corpus:
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -18,19 +42,19 @@ jobs:
       - name: Rosetta
         if: matrix.arch == 'x64'
         run: softwareupdate --install-rosetta --agree-to-license 2>&1 | tail -2 || true
-      - name: Fetch the fixtures
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: corpus-${{ matrix.arch }}
+          path: /tmp
+      - name: Unpack
         run: |
-          tag=$(cat tests/macos/corpus-tag.txt)
-          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "corpus-${{ matrix.arch }}.tar.gz" --dir /tmp
           mkdir -p /tmp/corpus && tar -xzf "/tmp/corpus-${{ matrix.arch }}.tar.gz" -C /tmp/corpus
           ls /tmp/corpus | wc -l
       - name: Run
         run: |
           runner=()
           if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
-          CORPUS_CWD="$GITHUB_WORKSPACE" bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt | grep -E "^(FAIL|TOTAL)|^    \|" | head -2000
+          CORPUS_CWD="$GITHUB_WORKSPACE" bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt | grep -E "^(FAIL|TOTAL)|^    \|" | head -80
       - uses: actions/upload-artifact@v4
         if: always()
         with:
