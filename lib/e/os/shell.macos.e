@@ -925,7 +925,10 @@ fn print_job_cancel(a: *mem.Arena, job: *PrintJob) -> err {
 // `Unsupported` and the record says so; a credential is `secret-tool` (libsecret)
 // where it is installed, the same tool-shaped path as the rest.
 
+// The screen is always capturable; without the Screen Recording permission the picture leaves out other applications' windows, which is a
+// difference in content and not a refusal. The other capabilities have no answer here.
 fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
+    if c == .Screen { ret .Granted }
     ret .Unavailable
 }
 
