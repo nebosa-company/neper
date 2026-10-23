@@ -2540,10 +2540,10 @@ fn cocoa_push(event: WindowEvent) {
     cocoa_count += 1usize
 }
 
+// A window's handle is its NSWindow, as an HWND is a Windows program's, so `window_native` can answer the handle the
+// caller already holds.
 fn cocoa_slot(w: Window) -> usize {
-    if w.raw == 0usize || w.raw > COCOA_TABLE { ret COCOA_TABLE }
-    if cocoa_windows[w.raw - 1usize] == 0usize { ret COCOA_TABLE }
-    ret w.raw - 1usize
+    ret cocoa_slot_of(w.raw)
 }
 
 fn cocoa_slot_of(window: usize) -> usize {
@@ -2750,7 +2750,7 @@ fn cocoa_translate(event: usize) -> bool {
     let slot = cocoa_slot_of(msg0(event, cocoa_sel("window\x00")))
     if slot >= COCOA_TABLE { ret false }
     var window: Window = zero
-    window.raw = slot + 1usize
+    window.raw = cocoa_windows[slot]
     let flags = msg0(event, cocoa_sel("modifierFlags\x00"))
     let modifiers = cocoa_modifiers(flags)
     let scale = f64(cocoa_scales[slot]) / 100.0f64
@@ -2830,7 +2830,7 @@ fn cocoa_poll_state() {
         let handle = cocoa_windows[at]
         if handle != 0usize {
             var window: Window = zero
-            window.raw = at + 1usize
+            window.raw = handle
             var event: WindowEvent = zero
             event.window = window
             let visible = msg_bool_ret(handle, cocoa_sel("isVisible\x00")) != 0u8
@@ -2943,7 +2943,7 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     cocoa_shown[slot] = false
     cocoa_paint[slot] = false
     var handle: Window = zero
-    handle.raw = slot + 1usize
+    handle.raw = window
     if options.visible {
         let ordered = msg1(window, cocoa_sel("makeKeyAndOrderFront:\x00"), 0usize)
         let active = msg_flag(cocoa_app, cocoa_sel("activateIgnoringOtherApps:\x00"), 1i32)
@@ -3083,7 +3083,7 @@ fn window_native(w: Window) -> (usize, usize, err) {
     let slot = cocoa_slot(w)
     if slot >= COCOA_TABLE { ret (0usize, 0usize, NotFound) }
     let view = msg0(cocoa_windows[slot], cocoa_sel("contentView\x00"))
-    ret (view, cocoa_windows[slot], ok)
+    ret (cocoa_windows[slot], view, ok)
 }
 
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
