@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+# The suite may be running with the mode on; the first checks are of the mode off.
+Remove-Item Env:NEPER_REFRESH_GOLDENS -ErrorAction SilentlyContinue
 # The refresh mode of refresh-goldens.ps1: a snapshot-only difference is rewritten, any other is not, and without
 # NEPER_REFRESH_GOLDENS a difference is just a difference.
 $work = Join-Path ([IO.Path]::GetTempPath()) ("refresh-goldens-" + [guid]::NewGuid())

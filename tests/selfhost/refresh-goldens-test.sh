@@ -2,6 +2,8 @@
 # The refresh mode of refresh-goldens.sh: a snapshot-only difference is rewritten, any other is not, and without
 # NEPER_REFRESH_GOLDENS a difference is just a difference.
 set -eu
+# The suite may be running with the mode on; the first checks are of the mode off.
+unset NEPER_REFRESH_GOLDENS
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$here/refresh-goldens.sh"
 work=$(mktemp -d)
