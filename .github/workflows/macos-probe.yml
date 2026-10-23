@@ -11,6 +11,9 @@ on:
       args:
         description: Arguments for the program
         default: ''
+      shot_after:
+        description: Seconds to wait before the screenshot
+        default: '5'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -67,9 +70,15 @@ jobs:
           if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
           cd "$GITHUB_WORKSPACE"
           set +e
-          perl -e 'alarm 120; exec @ARGV' "${runner[@]}" /tmp/probe/probe-${{ matrix.arch }} ${{ inputs.args }}
+          # In the background, so the screen can be looked at while a window is open.
+          perl -e 'alarm 120; exec @ARGV' "${runner[@]}" /tmp/probe/probe-${{ matrix.arch }} ${{ inputs.args }} > /tmp/probe-out.txt 2>&1 &
+          pid=$!
+          sleep ${{ inputs.shot_after }}
+          screencapture -x /tmp/shot-${{ matrix.arch }}.png 2>&1 | head -2
+          wait $pid
           echo "exit=$?"
-          screencapture -x /tmp/shot-${{ matrix.arch }}.png 2>&1 | head -2 || true
+          echo '--- what it wrote'
+          cat /tmp/probe-out.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
