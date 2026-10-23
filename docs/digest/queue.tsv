@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C147	compiler	0.5	1643	Full suites complete on this machine: Windows run.ps1 and Linux run.sh	a complete run on either host (run.sh under WSL not run) and the test-results.json totals. RUN 17 (2026-10-10, seeded, with the sc500k static gate and the live-API network assertion excluded through a
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C107	compiler	0.93	7073	NeperOS shell 3: the e.os surface on NeperOS (os.neperos.e)	Queued by D2148.
 C092	compiler	0.95	2360	M3-04: e.gpu runtime surface: Device, Queue, Buf[T], launch, sync, barrier	full-suite verification. The prior Windows suite reached its final function/type-renamed compiler image, which crashed with an access violation when compiling the original sources. Linux's bootstrap c

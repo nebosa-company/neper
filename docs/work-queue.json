@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C147",
-      "category": "compiler",
-      "group": "Validation",
-      "order": 147,
-      "title": "Full suites complete on this machine: Windows run.ps1 and Linux run.sh",
-      "score": 0.5,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Split from C115 (2026-10-08). Neither full suite finishes here: tests/selfhost/run.ps1 trips on PowerShell's Stop preference when a native command writes to stderr, and the Linux run.sh builds with neper build, which crashes the WSL2 VM on this host. Per-feature fixtures have been run by hand on both hosts. Acceptance: (1) run.ps1 runs to its end on this Windows host without manual patching; (2) run.sh runs to its end in WSL, with the memory it needs set down in the script's header and the VM left alive; (3) each reports its last line and the count of checks, and the totals feed docs/test-results.json, the tile on the readiness page. PART (D2313): NEPER_SEED in run.ps1 (the bootstrap cannot build src/main.e under this host's commit), stale assertions fixed, fix_module_surfaces.py, -j 2 for the two huge fixtures; run.ps1 passes stage 1 and about 3,700 lines. PART 2 (D2317): NEPER_JOBS caps default workers from the environment; stale NeperOS and determinism assertions fixed; the seeded Windows run passes to line 9914 of 9937 (stops at the Flashlight timing fixture; sc500k static gate needs >3 GB free commit; network check hits a live API). NOT DONE: a complete run on either host (run.sh under WSL not run) and the test-results.json totals. RUN 17 (2026-10-10, seeded, with the sc500k static gate and the live-API network assertion excluded through an untracked copy): every row passes through the NeperOS app fixtures, including x_migrate, the capabilities golden and the --compact rows; the only stop is the Flashlight fixture's `morse done` marker, which waits on wall-clock ticks the emulated frames delay on a loaded host."
-    },
-    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",

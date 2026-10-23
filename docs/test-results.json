@@ -1,4 +1,4 @@
 {
-  "windows": {"label": "Windows", "passed": 31, "total": 31, "what": "NeperOS app fixtures (QEMU, 2 needed a longer tap delay)", "date": "2026-10-08"},
-  "wsl": {"label": "WSL", "passed": 31, "total": 31, "what": "NeperOS app fixtures (QEMU, 3 needed a longer tap delay)", "date": "2026-10-08"}
+  "windows": {"label": "Windows", "passed": 1122, "total": 1122, "what": "selfhost suite run.ps1, every named fixture, to its last line in 45 min (NeperOS paused)", "date": "2026-10-23"},
+  "wsl": {"label": "WSL", "passed": 1122, "total": 1122, "what": "selfhost suite run.sh, every named fixture, to its last line in 41 min (NeperOS paused)", "date": "2026-10-23"}
 }

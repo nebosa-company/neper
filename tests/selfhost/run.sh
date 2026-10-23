@@ -1,5 +1,8 @@
 #!/usr/bin/env sh
 set -eu
+# Run it as `bash scripts/run-linux-suite.sh`, from a copy on WSL's own disk (inotify delivers nothing on /mnt/d).
+# Memory: the compiler building itself peaks at 388 MB and the VM at about 2.2 GB, but the VM is dropped when the
+# host's free commit gets short: it went down twice at 3.2 GB free and a run finished at 6.9 GB. Keep 5 GB free.
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 neper="$repo/build/linux/neper"

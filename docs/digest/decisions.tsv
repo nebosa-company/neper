@@ -2813,4 +2813,16 @@ D5177	1357	macOS libraries, signals, sockets and the executable's path go throug
 D5178	578	macOS recursive watches walk the tree into the same snapshot
 D5179	824	a macOS image carries its DWARF in a `__DWARF` segment
 D5180	2655	the link-fixture corpus runs on a Mac: 934 of 957 on arm64, 942 of 965 on x64
-D5181	492	net_zmtp arm64 failure was a borrowed-slice bug in e.net.zmtp
+D5181	493	net_zmtp arm64 failure was a borrowed-slice bug in e.net.zmtp
+D5182	1445	Windows image buffer counts the global area; the Android glyph grid is 512 KB; the gpu boot's arena is 32 MB
+D5183	1242	The compiler knows it is on a Mac; its own `run` and `test` use spawn_with_options
+D5184	576	A build for macOS writes its executable mode 0755
+D5185	881	Linux socket sends use MSG_NOSIGNAL; the ui_datagrid fixture carries its SVG
+D5186	844	The suites skip NeperOS unless NEPER_NEPEROS=1
+D5187	1071	e.net.ssh holds the server's packets while the host key is pending
+D5188	859	The bootstrap's runtime passes any number of environment entries to a child
+D5189	829	A fixture that cannot find its Windows font or oracle says it skipped
+D5190	1237	`NEPER_REFRESH_GOLDENS=1` rewrites a tool golden that differs only in its snapshot hashes
+D5191	1140	A static check keeps run.sh and run.ps1 one suite
+D5192	1313	Fixtures no suite block names are listed in `extra-fixtures.txt`, and a new orphan fails the parity check
+D5193	609	`cli_config` ends in 99 when the host delivers no watch event

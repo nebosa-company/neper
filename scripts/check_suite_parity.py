@@ -87,4 +87,4 @@ for name in sorted(extra):
 if failures:
     print("\n".join(failures), file=sys.stderr)
     sys.exit(1)
-print("suite parity ok")
+print(f"suite parity ok: run.sh names {len(in_sh | extra)} fixtures, run.ps1 names {len(in_ps | extra)}")
