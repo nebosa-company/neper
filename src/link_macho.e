@@ -322,6 +322,8 @@ fn append_signature(output: *emit_x64.Buffer, limit: usize, text_size: usize) ->
 }
 
 fn is_system(name: str) -> bool {
+    // The Linux sonames a portable program names: libSystem holds libc and libm.
+    if check.same(name, "libc.so.6") || check.same(name, "libm.so.6") { ret true }
     ret check.same(name, "c") || check.same(name, "System") || check.same(name, "libSystem") || check.same(name, "libSystem.B.dylib")
 }
 

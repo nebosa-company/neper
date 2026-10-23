@@ -14,6 +14,10 @@ expected() {
   case "$1" in
     gpu_barrier_helper_occurrence|gpu_barrier_occurrence|gpu_divergence|release_build|trap_backtrace) echo 134 ;;
     layout_attributes|incremental|incremental_deleted|incremental_fallback|incremental_layout|incremental_value|inline_nested|when_target) echo any ;;
+    gpu_reshape) echo any ;;
+    # What a bare Mac cannot give them: a server or arguments the real suite supplies (net*, x_tds_integrated), Vulkan
+    # (gpu_fault_unchecked, gpu_vulkan_raw), the ELF and Linux system calls they check (freestanding, os_syscall).
+    net|net_http|net_http_pool|net_ssh|net_tls|x_tds_integrated|gpu_fault_unchecked|gpu_vulkan_raw|freestanding|os_syscall) echo any ;;
     *) echo 0 ;;
   esac
 }

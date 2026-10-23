@@ -21,6 +21,7 @@ fn same(left: str, right: str) -> bool {
 
 fn host_library() -> str {
     if os.NATIVE_SEPARATOR == 92u8 { ret "kernel32.dll" }
+    if target.os == .Macos { ret "libSystem.B.dylib" }
     ret "libc.so.6"
 }
 
