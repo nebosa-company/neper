@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -824,25 +824,17 @@ fn background_permission(a: *mem.Arena) -> Permission {
 
 // ponytail: the tool's refusal (no session, a denied inhibitor) is printed by the
 // child and not seen here; a caller that must know reads the lifecycle later.
+// `caffeinate` holds the Mac awake for as long as it runs: `-i` against idle sleep, with `-d` for the display as well.
 fn power_inhibit(a: *mem.Arena, keep_display: bool) -> err {
     if inhibiting { ret ok }
-    let (tool, tool_error) = find_program(a, "systemd-inhibit")
+    let (tool, tool_error) = find_program(a, "caffeinate")
     if tool_error != ok { ret Unsupported }
-    var argv: [5]str = zero
+    var argv: [2]str = zero
     argv[0usize] = tool
-    argv[1usize] = "--what=idle:sleep"
-    argv[2usize] = "--who=neper"
-    argv[3usize] = "--why=The program asked to stay awake"
-    argv[4usize] = "sleep"
-    var with_span: [6]str = zero
-    var at = 0usize
-    while at < 5usize {
-        with_span[at] = argv[at]
-        at += 1usize
-    }
-    with_span[5usize] = "infinity"
+    argv[1usize] = "-i"
+    if keep_display { argv[1usize] = "-di" }
     var options: os.SpawnOptions = zero
-    options.argv = with_span[..]
+    options.argv = argv[..]
     options.inherit_env = true
     options.stdio.stdout = os.File { raw: 1usize }
     options.stdio.stderr = os.File { raw: 2usize }
@@ -1036,9 +1028,71 @@ fn credential_delete(a: *mem.Arena, target_name: str) -> err {
     ret ok
 }
 
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGMainDisplayID")
+extern fn cg_main_display() -> u32
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGDisplayCreateImage")
+extern fn cg_display_image(display: u32) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGImageGetWidth")
+extern fn cg_image_width(image: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGImageGetHeight")
+extern fn cg_image_height(image: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGImageGetBytesPerRow")
+extern fn cg_image_row(image: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGImageGetBitsPerPixel")
+extern fn cg_image_bits(image: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGImageGetDataProvider")
+extern fn cg_image_provider(image: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGDataProviderCopyData")
+extern fn cg_provider_copy(provider: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGImageRelease")
+extern fn cg_release_image(image: usize)
+
+@import("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", "CFDataGetBytePtr")
+extern fn cf_data_bytes(data: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", "CFRelease")
+extern fn cf_drop(object: usize)
+
+// The main display as it is now: `CGDisplayCreateImage`'s 32-bit pixels, copied row by row without the row padding.
+// Without the Screen Recording permission the system hands back a picture without other applications' windows.
 fn screen_capture(a: *mem.Arena) -> (Icon, err) {
     var nothing: Icon = zero
-    ret (nothing, Unsupported)
+    let image = cg_display_image(cg_main_display())
+    if image == 0usize { ret (nothing, Failed) }
+    let width = cg_image_width(image)
+    let height = cg_image_height(image)
+    let row = cg_image_row(image)
+    var result = ok
+    var pixels: []u32 = zero
+    if width == 0usize || height == 0usize || cg_image_bits(image) != 32usize || row < width * 4usize {
+        result = Failed
+    } else {
+        let data = cg_provider_copy(cg_image_provider(image))
+        if data == 0usize { result = Failed } else {
+            let source = cf_data_bytes(data)
+            let (copy, copy_error) = mem.alloc[u32](a, width * height)
+            if copy_error != ok { result = copy_error } else {
+                var y = 0usize
+                while y < height {
+                    let moved = os.raw_memcpy(mem.address_of(&copy[y * width]), source + y * row, width * 4usize)
+                    y += 1usize
+                }
+                pixels = copy[0usize..width * height]
+            }
+            cf_drop(data)
+        }
+    }
+    cg_release_image(image)
+    if result != ok { ret (nothing, result) }
+    ret (Icon { width: u32(width), height: u32(height), pixels: pixels }, ok)
 }
 
 fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
