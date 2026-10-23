@@ -1278,6 +1278,129 @@ neper_os_env_block:
     pop rbx
     ret
 
+# os.spawn: runtime_elf_x64.s's, with the BSD calls: fork (2: rdx is 1 in the child), dup2 (90),
+# execve (59) and exit (1).
+.global neper_os_spawn
+neper_os_spawn:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 16
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, QWORD PTR [rdx]
+    mov r15, QWORD PTR [rdx + 8]
+    mov rbx, rcx
+    mov QWORD PTR [r12], 0
+    mov DWORD PTR [r12 + 8], 0
+    test r15, r15
+    jz .Lspawn_not_found
+    mov rax, QWORD PTR [r13 + 16]
+    mov QWORD PTR [rsp], rax
+    lea rsi, [r15 + 1]
+    shl rsi, 3
+    mov rdi, r13
+    mov edx, 8
+    call np_alloc
+    test rax, rax
+    jz .Lspawn_oom
+    mov QWORD PTR [rsp + 8], rax
+    xor r10d, r10d
+.Lspawn_copy_arg:
+    cmp r10, r15
+    jae .Lspawn_copied
+    mov rcx, r10
+    shl rcx, 4
+    mov r11, QWORD PTR [r14 + rcx]
+    mov rsi, QWORD PTR [r14 + rcx + 8]
+    inc rsi
+    mov rdi, r13
+    mov edx, 1
+    push r10
+    push r11
+    call np_alloc
+    pop r11
+    pop r10
+    test rax, rax
+    jz .Lspawn_oom
+    mov rcx, r10
+    shl rcx, 4
+    mov rdx, QWORD PTR [r14 + rcx + 8]
+    mov rdi, rax
+    mov rsi, r11
+    mov rcx, rdx
+    rep movsb
+    mov BYTE PTR [rdi], 0
+    mov r8, QWORD PTR [rsp + 8]
+    mov QWORD PTR [r8 + r10 * 8], rax
+    inc r10
+    jmp .Lspawn_copy_arg
+.Lspawn_copied:
+    mov r8, QWORD PTR [rsp + 8]
+    mov QWORD PTR [r8 + r15 * 8], 0
+    mov eax, 0x2000002
+    darwin_syscall
+    test rax, rax
+    js .Lspawn_failed
+    test edx, edx
+    jnz .Lspawn_child
+    mov rcx, QWORD PTR [rsp]
+    mov QWORD PTR [r13 + 16], rcx
+    mov QWORD PTR [r12], rax
+    jmp .Lspawn_done
+.Lspawn_child:
+    mov rdi, QWORD PTR [rbx]
+    test rdi, rdi
+    jz .Lspawn_stdout
+    xor esi, esi
+    mov eax, 0x200005a
+    syscall
+.Lspawn_stdout:
+    mov rdi, QWORD PTR [rbx + 8]
+    cmp rdi, 1
+    je .Lspawn_stderr
+    mov esi, 1
+    mov eax, 0x200005a
+    syscall
+.Lspawn_stderr:
+    mov rdi, QWORD PTR [rbx + 16]
+    cmp rdi, 2
+    je .Lspawn_exec
+    mov esi, 2
+    mov eax, 0x200005a
+    syscall
+.Lspawn_exec:
+    mov rsi, QWORD PTR [rsp + 8]
+    mov rdi, QWORD PTR [rsi]
+    xor edx, edx
+    mov eax, 0x200003b
+    syscall
+    mov edi, 127
+    mov eax, 0x2000001
+    syscall
+.Lspawn_failed:
+    mov rcx, QWORD PTR [rsp]
+    mov QWORD PTR [r13 + 16], rcx
+    mov DWORD PTR [r12 + 8], 0x6f777ebf
+    jmp .Lspawn_done
+.Lspawn_not_found:
+    mov DWORD PTR [r12 + 8], 0x7683e2cd
+    jmp .Lspawn_done
+.Lspawn_oom:
+    mov rcx, QWORD PTR [rsp]
+    mov QWORD PTR [r13 + 16], rcx
+    mov DWORD PTR [r12 + 8], 0x6979aadc
+.Lspawn_done:
+    add rsp, 16
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
 # os.wait(proc: *Proc) -> (i32, err): the exit status, or 128 plus the signal that ended it.
 .global neper_os_wait
 neper_os_wait:

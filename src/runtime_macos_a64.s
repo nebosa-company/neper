@@ -882,6 +882,114 @@ neper_os_env_block:
     ldp x29, x30, [sp], #48
     ret
 
+// os.spawn: the result {Proc, err} at x0, the arena at x1, the argument slices at x2, the
+// Stdio at x3 (stdin, stdout, stderr). The arguments are copied terminated into the arena, a
+// child made with fork (BSD call 2: x1 is 1 in the child), its descriptors set with dup2 (90)
+// and the program run with execve (59); a child whose exec fails ends with 127.
+.global neper_os_spawn
+neper_os_spawn:
+    stp x29, x30, [sp, #-80]!
+    mov x29, sp
+    stp x19, x20, [sp, #16]
+    stp x21, x22, [sp, #32]
+    stp x23, x24, [sp, #48]
+    stp x25, x26, [sp, #64]
+    mov x19, x0
+    mov x20, x1
+    ldp x21, x22, [x2]
+    mov x23, x3
+    str xzr, [x19]
+    str wzr, [x19, #8]
+    cbz x22, .Lspawn_not_found
+    ldr x24, [x20, #16]
+    add x1, x22, #1
+    lsl x1, x1, #3
+    mov x0, x20
+    mov x2, #8
+    bl np_alloc
+    cbz x0, .Lspawn_oom
+    mov x25, x0
+    mov x26, #0
+.Lspawn_copy_argument:
+    cmp x26, x22
+    b.hs .Lspawn_copied
+    add x9, x21, x26, lsl #4
+    ldr x1, [x9, #8]
+    add x1, x1, #1
+    mov x0, x20
+    mov x2, #1
+    bl np_alloc
+    cbz x0, .Lspawn_oom
+    add x9, x21, x26, lsl #4
+    ldp x10, x11, [x9]
+    mov x12, x0
+.Lspawn_copy_byte:
+    cbz x11, .Lspawn_copy_done
+    ldrb w13, [x10], #1
+    strb w13, [x12], #1
+    sub x11, x11, #1
+    b .Lspawn_copy_byte
+.Lspawn_copy_done:
+    strb wzr, [x12]
+    str x0, [x25, x26, lsl #3]
+    add x26, x26, #1
+    b .Lspawn_copy_argument
+.Lspawn_copied:
+    str xzr, [x25, x22, lsl #3]
+    sys 2
+    tbnz x0, #63, .Lspawn_failed
+    cbnz x1, .Lspawn_child
+    str x24, [x20, #16]
+    str x0, [x19]
+    b .Lspawn_done
+.Lspawn_child:
+    ldr x0, [x23]
+    cbz x0, .Lspawn_stdout
+    mov x1, #0
+    sys 90
+.Lspawn_stdout:
+    ldr x0, [x23, #8]
+    cmp x0, #1
+    b.eq .Lspawn_stderr
+    mov x1, #1
+    sys 90
+.Lspawn_stderr:
+    ldr x0, [x23, #16]
+    cmp x0, #2
+    b.eq .Lspawn_exec
+    mov x1, #2
+    sys 90
+.Lspawn_exec:
+    ldr x0, [x25]
+    mov x1, x25
+    mov x2, #0
+    sys 59
+    mov x0, #127
+    sys 1
+.Lspawn_failed:
+    str x24, [x20, #16]
+    movz w9, #0x7ebf
+    movk w9, #0x6f77, lsl #16
+    str w9, [x19, #8]
+    b .Lspawn_done
+.Lspawn_not_found:
+    movz w9, #0xe2cd
+    movk w9, #0x7683, lsl #16
+    str w9, [x19, #8]
+    b .Lspawn_done
+.Lspawn_oom:
+    str x24, [x20, #16]
+    movz w9, #0xaadc
+    movk w9, #0x6979, lsl #16
+    str w9, [x19, #8]
+.Lspawn_done:
+    ldp x25, x26, [sp, #64]
+    ldp x23, x24, [sp, #48]
+    ldp x21, x22, [sp, #32]
+    ldp x19, x20, [sp, #16]
+    ldp x29, x30, [sp], #80
+    ret
+
 // os.wait(proc: *Proc) -> (i32, err): the exit status, or 128 plus the signal that ended it.
 .global neper_os_wait
 neper_os_wait:
