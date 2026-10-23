@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ten languages, one window: what you install — Neper blog</title>
+  <meta name="description" content="One compiler builds Windows and Linux desktop programs from one machine, the user installs nothing to run them, and the window is 2.7 MiB. Compared with the install guides of ten popular desktop languages, with the limits listed.">
+  <link rel="canonical" href="https://neper.dev/blog/desktop-toolchains.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Ten languages, one window: what you install">
+  <meta property="og:description" content="Ten desktop toolchains against Neper: what to install to build, what the user needs to run, and where Neper loses.">
+  <meta property="og:url" content="https://neper.dev/blog/desktop-toolchains.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/desktop-toolchains.svg">
+  <meta property="article:published_time" content="2026-10-23">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 9 7, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+    figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    .text-table th, .text-table td { text-align: left; white-space: normal; vertical-align: top; }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // comparison</div>
+      <h1>Ten languages, one window: what you install</h1>
+      <p class="meta">October 23, 2026 · Neper binaries measured with <code>emit-executable</code>; every other number is cited below</p>
+      <img class="banner" src="img/desktop-toolchains.svg" width="1200" height="630" alt="Ten languages, one window: what you install. e equals the limit as n goes to infinity of (1 + 1/n) to the n. One binary, nothing to install.">
+
+      <p class="lede">Putting one window on screen on Windows, Linux and macOS takes very different amounts of software depending on the language. We read the official install guides for ten popular desktop languages and set them beside Neper. Neper wins on three things: one install builds Windows and Linux programs from a single machine, the user installs nothing to run them, and the window is 2.7 MiB with no runtime inside it.</p>
+
+      <figure>
+        <iframe src="https://www.youtube-nocookie.com/embed/6lnnzUtDIXM?rel=0" title="Ten languages, one window: what you install" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <figcaption>The same story in 1 minute 32 seconds, with the real build commands and sizes. Captioned, with a synthetic voice. <a href="https://youtu.be/6lnnzUtDIXM">Watch on YouTube</a>.</figcaption>
+      </figure>
+
+      <h2>Where Neper wins</h2>
+      <ul>
+        <li><strong>One install, several targets.</strong> Windows, Linux and macOS executables, for x64 and arm64, came out of one Windows machine with one compiler, one command each. The ten others mostly build each OS's package on that OS: jpackage, PyInstaller, Compose and Tauri's MSI all say so, and Flutter needs Xcode on a Mac and Visual Studio on Windows.</li>
+        <li><strong>No second toolchain.</strong> The compiler writes the PE and ELF files itself, with its own linker. No SDK, no Visual Studio workload, no <code>clang</code>, no <code>-dev</code> packages, no MinGW. Seven of the ten need a C++ toolchain somewhere (see below); for Neper it appears once, to build the first compiler.</li>
+        <li><strong>Nothing to install to run.</strong> No .NET or Java runtime, no VC++ redistributable, no Qt or GTK libraries, no bundled browser or interpreter. On Windows the program calls the system's own window functions. On Linux it speaks the X11 protocol itself. On macOS it uses the frameworks that ship with the system.</li>
+        <li><strong>Small, with everything in it.</strong> A window with the real renderer and widget runtime is 2.7 MiB on Windows and 2.8 MiB on Linux. That is below every reported size in the tables that follow: Electron 115 to 151 MB for the runtime alone, Compose about 50 MB, Qt 42 to 50 MB, Flutter about 25 MB, Wails 8 to 11 MB and Tauri 3 to 5 MB. Only Tauri's own documentation claims less (under 0.6 MB), and that number leaves out the system webview.</li>
+        <li><strong>No IDE, no installer.</strong> Edit in anything, build from the command line. There is no designer to buy or workload to select.</li>
+      </ul>
+      <p>The rest of the post is the evidence: how we picked the ten, what each of them needs, and how Neper's numbers were measured.</p>
+
+      <h2>How we picked, and what we counted</h2>
+      <p>No 2025 or 2026 survey measures which language people use <em>for desktop</em>. We took language usage from the Stack Overflow 2025 survey and desktop frameworks from its 2024 edition, the latest that asks: .NET 25.2%, Flutter 9.4%, Qt 7.3%, Electron 6.5%, SwiftUI 4.3%, Tauri 2.4%. The ten are C#/.NET, C++, Java, JavaScript/TypeScript, Python, Kotlin, Dart, Rust, Go and Swift. Kotlin is the weakest pick: Compose Multiplatform is not in the 2024 framework list. Delphi (2.5% usage) is the likely swap for someone ranking desktop only. We could not verify that, so we kept the list.</p>
+      <p>For each language we took its mainstream cross-platform path, plus the native path where that is what people use, and counted three things:</p>
+      <ul>
+        <li><strong>To build:</strong> what you install on the developer machine to get an executable, including anything the language's own installer does not cover, such as a C++ workload or Xcode.</li>
+        <li><strong>To run:</strong> what the end user must already have, or what the app must bundle.</li>
+        <li><strong>The smallest app:</strong> a hello window, when a source gives a number.</li>
+      </ul>
+      <p>Two kinds of numbers appear. Neper's are ours: we built the programs and read the file sizes. Everyone else's are from official documentation or vendor download metadata, which we mark, or from third-party reports, which we mark "reported". We did not build a hello window in the other ten. Cells we could not source say so.</p>
+
+      <h2>To build: what you install first</h2>
+      <div class="table-scroll">
+        <table class="text-table">
+          <thead><tr><th>Language</th><th>Mainstream path</th><th>Install to build</th><th>C/C++ toolchain?</th></tr></thead>
+          <tbody>
+            <tr><td>C# / .NET</td><td>WinForms, WPF, WinUI 3 (Windows); Avalonia (all three); MAUI (no Linux)</td><td>.NET 10 SDK, 206 MB Windows, 229 MB Linux, 215 MB macOS (download sizes). Visual Studio is optional; its docs list 2.5 to 210 GB.</td><td>Only for Native AOT: VS "Desktop development with C++", <code>clang</code> on Linux, Command Line Tools on macOS. WPF and WinForms cannot be trimmed, so they cannot use AOT.</td></tr>
+            <tr><td>C++</td><td>Qt 6.12, Win32/MFC, GTK, AppKit</td><td>MSVC or MinGW-w64 on Windows; <code>build-essential libgl1-mesa-dev</code> on Linux; Qt requires full Xcode 16 on macOS. The online Qt installer wants a Qt account.</td><td>It is the toolchain.</td></tr>
+            <tr><td>Java</td><td>Swing (in the JDK), JavaFX 27</td><td>JDK 25 or 27, 112 MB Windows, 136 MB Linux, 132 MB macOS. Packaging needs WiX on Windows and <code>fakeroot</code> or <code>rpm-build</code> on Linux.</td><td>No.</td></tr>
+            <tr><td>JavaScript / TypeScript</td><td>Electron 45; Tauri 2</td><td>Node.js. Tauri adds Rust, MSVC C++ Build Tools and WebView2 on Windows, nine <code>-dev</code> packages including <code>libwebkit2gtk-4.1-dev</code> on Linux, Command Line Tools on macOS.</td><td>Electron no; Tauri yes.</td></tr>
+            <tr><td>Python</td><td>Tkinter, PyQt / PySide6</td><td>Python 3.15; PyInstaller to package. Tkinter is optional on Linux distributions (<code>python3-tk</code>).</td><td>No.</td></tr>
+            <tr><td>Kotlin</td><td>Compose Multiplatform 1.12</td><td>JDK 17+ and Gradle; the plugin downloads WiX itself on Windows. Each OS builds its own package.</td><td>No.</td></tr>
+            <tr><td>Dart</td><td>Flutter 3.47</td><td>SDK archive 1.8 GB Windows, 2.2 GB macOS, 1.5 GB Linux. Windows: Git and Visual Studio with the C++ workload. macOS: Xcode and CocoaPods. Linux: <code>clang cmake ninja-build pkg-config libgtk-3-dev</code>.</td><td>Yes.</td></tr>
+            <tr><td>Rust</td><td>Tauri, egui, iced, Slint, gtk4-rs</td><td>rustup, then MSVC v143 build tools and a Windows SDK (or the GNU target); a linker on Linux and macOS; <code>-dev</code> packages for the GUI kit.</td><td>A linker, always; Tauri more.</td></tr>
+            <tr><td>Go</td><td>Fyne 2.8, Wails 2.17</td><td>Go, 63 to 67 MB. Fyne needs a C compiler (MSYS2 MinGW-w64, Xcode, or gcc plus Mesa/X11/Wayland headers). Wails needs Node and WebView2 on Windows.</td><td>Fyne yes (cgo); Wails on Windows no.</td></tr>
+            <tr><td>Swift</td><td>SwiftUI, AppKit (macOS only); SwiftCrossUI</td><td>Xcode 27 on macOS (3.1 GB in the App Store). Windows: Visual Studio 2022 components plus a 2.0 GB toolchain. No first-party GUI on Windows or Linux.</td><td>Windows yes.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Two signing facts apply to every row. Distributing a Mac app outside the App Store means notarization, which needs a Developer ID certificate and the $99-a-year Apple Developer Program. Windows signing is optional, but unsigned apps trigger warnings.</p>
+
+      <h2>To run: what the user needs, and what you ship</h2>
+      <div class="table-scroll">
+        <table class="text-table">
+          <thead><tr><th>Language</th><th>End user needs</th><th>Minimal app (reported unless noted)</th></tr></thead>
+          <tbody>
+            <tr><td>C# / .NET</td><td>The .NET runtime (57 MB desktop installer on Windows), unless self-contained or AOT. WinUI adds the Windows App SDK runtime.</td><td>About 59 to 65 MB self-contained (a .NET 5 console app); about 18 MB for an Avalonia AOT template.</td></tr>
+            <tr><td>C++</td><td>The VC++ Redistributable unless linked with <code>/MT</code>; Qt or GTK shared libraries and plugins, collected with <code>windeployqt</code>.</td><td>About 42 to 50 MB for a Qt app (Qt 5-era forum posts).</td></tr>
+            <tr><td>Java</td><td>A JRE, unless jpackage bundles a trimmed one.</td><td>No sourced figure; a minimal jlink runtime is about 40 MB.</td></tr>
+            <tr><td>JavaScript / TypeScript</td><td>Electron: nothing, it ships Chromium and Node. Tauri: WebView2 on Windows (in Windows 11), WebKitGTK on Linux, the system webview on macOS.</td><td>Electron's runtime zip alone is 151 MB Windows, 118 MB Linux, 115 MB macOS (documented). Tauri: under 0.6 MB documented, 3 to 5 MB in a CI benchmark.</td></tr>
+            <tr><td>Python</td><td>Nothing if PyInstaller bundles the interpreter.</td><td>Tkinter about 8 to 10 MB (a 2017 post); PyQt 30 to 120 MB.</td></tr>
+            <tr><td>Kotlin</td><td>Nothing; the package includes a trimmed runtime.</td><td>About 50 MB MSI, which a maintainer calls the baseline because Skia is large.</td></tr>
+            <tr><td>Dart</td><td>Windows: the VC++ runtime DLLs next to the exe. Linux: GTK 3.</td><td>About 25 MB on Windows.</td></tr>
+            <tr><td>Rust</td><td>The VC++ runtime unless built with <code>+crt-static</code>; system GL libraries or webview.</td><td>Tauri 3 to 5 MB; egui and iced no sourced figure.</td></tr>
+            <tr><td>Go</td><td>One binary plus system GL (Fyne) or webview (Wails).</td><td>Wails 8 to 11 MB; Fyne no sourced figure.</td></tr>
+            <tr><td>Swift</td><td>macOS: nothing, the runtime is part of the OS. Windows: the Swift runtime DLLs, ICU and the VC++ runtime.</td><td>No sourced figure.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>What the ten have in common</h2>
+      <ul>
+        <li><strong>Seven of the ten reach a C++ toolchain on at least one OS.</strong> C++ itself, Flutter, Rust, Fyne, Swift on Windows, Tauri and .NET Native AOT all do. On Windows that means Visual Studio or its Build Tools, which Microsoft lists at 2.3 to 60 GB.</li>
+        <li><strong>The managed languages move the weight to the user's machine or into your package.</strong> .NET and Java need a runtime unless you bundle one. Electron bundles a browser. PyInstaller bundles an interpreter.</li>
+        <li><strong>You build each OS on that OS.</strong> jpackage, PyInstaller, Compose and Tauri's MSI all build their packages natively. Cross-compiling a desktop app is the exception, not the rule.</li>
+        <li><strong>The IDE is rarely required.</strong> Every language here builds from a command line. The exceptions are in practice: Xcode for Swift on macOS, and Visual Studio as a toolchain for Flutter and C++ on Windows.</li>
+      </ul>
+
+      <h2>Neper</h2>
+      <p>Neper's compiler writes the executable itself, including the PE, ELF and Mach-O headers, the linker and the ad-hoc macOS code signature, so a program does not go through a C++ compiler, an SDK or a system linker. The compiler is written in Neper. Getting the first compiler means building from source, and that is the one place a C toolchain appears:</p>
+      <pre><code><span class="prompt">$</span> scripts/build-selfhost.sh   <span class="com"># Linux, macOS; scripts/build-selfhost.ps1 on Windows</span>
+<span class="com"># a throwaway C99 bootstrap (cl, or cc) builds the compiler once;</span>
+<span class="com"># the compiler then builds itself and prints its own path</span></code></pre>
+      <p>After that the C compiler is not used again. We built the repository's smallest window program, <code>ui_app</code> (a 200 by 120 box, built with the real window, renderer and widget runtime), and a console hello, from one Windows machine with the self-hosted compiler:</p>
+      <pre><code><span class="prompt">$</span> neper-self emit-executable tests/selfhost/fixtures/link/ui_app/src/main.e . x64 windows hello-win.exe --release
+<span class="prompt">$</span> neper-self emit-executable tests/selfhost/fixtures/link/ui_app/src/main.e . x64 linux   hello-linux --release
+<span class="prompt">$</span> neper-self emit-executable tests/selfhost/fixtures/link/ui_app/src/main.e . aarch64 macos hello-macos --release
+<span class="prompt">$</span> neper-self emit-executable examples/hello.e . x64 windows h.exe --release   <span class="com"># also: x64 linux, aarch64 linux, x64 macos, aarch64 macos</span></code></pre>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Program</th><th>Target</th><th>Size</th></tr></thead>
+          <tbody>
+            <tr><td>ui_app (a window)</td><td>Windows x64</td><td class="win">2.7 MiB</td></tr>
+            <tr><td>ui_app (a window)</td><td>Linux x64</td><td class="win">2.8 MiB</td></tr>
+            <tr><td>ui_app (a window)</td><td>macOS arm64</td><td class="win">2.3 MiB</td></tr>
+            <tr><td>hello (console)</td><td>Windows x64</td><td class="win">12.3 KiB</td></tr>
+            <tr><td>hello (console)</td><td>Linux x64 / arm64</td><td class="win">9.5 KiB / 11.4 KiB</td></tr>
+            <tr><td>hello (console)</td><td>macOS x64 / arm64</td><td class="win">64.7 KiB each</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>In the form of the two tables above:</p>
+      <ul>
+        <li><strong>To build:</strong> the Neper compiler and a text editor. No SDK, no IDE, no installer download, and no second language's toolchain once you have the compiler.</li>
+        <li><strong>To run on Windows:</strong> Windows. The program calls the system's own window functions.</li>
+        <li><strong>To run on Linux:</strong> a display with an X11 socket. Neper speaks the X11 protocol itself, with no GTK or Qt. XWayland works; a Wayland-only session does not.</li>
+        <li><strong>To run on macOS:</strong> macOS. The program uses the Objective-C runtime, CoreFoundation and CoreGraphics that ship with the system.</li>
+      </ul>
+
+      <div class="callout">
+        <strong>Size is not a clean win.</strong>
+        <p>At 2.7 MiB the window is smaller than every reported figure above, including Tauri's 3 to 5 MB benchmark, but Tauri's own documentation claims under 0.6 MB, and its webview is not counted in that number. Neper's size is the whole window stack: the CPU renderer and the widget runtime, because Neper draws its own pixels instead of using native widgets. A console program is 12.3 KiB.</p>
+      </div>
+
+      <h2>The limits of those wins</h2>
+      <ul>
+        <li><strong>No Wayland.</strong> A Linux session without an X server cannot open a window. <code>window_open</code> answers <code>Unsupported</code>.</li>
+        <li><strong>macOS builds from Windows, but we have not run those binaries on a Mac.</strong> The x64 and arm64 executables are real Mach-O files, ad-hoc signed by the compiler as Apple Silicon requires. The repository's runner checks (a <code>macos-14</code> machine, x64 under Rosetta) cover the console and system-library side; the window program is built here but not confirmed on a Mac. There are no <code>.app</code> bundles, no Developer ID signing and no notarization, so a Mac app for other people still needs an Apple Developer account and a manual bundle step, in any language.</li>
+        <li><strong>No packaging story yet.</strong> There is no MSI, DMG or deb builder, no installer, and no package-manager release of the compiler. Today you clone the repository and run the build script.</li>
+        <li><strong>Windows still needs a C toolchain once.</strong> The bootstrap builds with <code>cl</code>, so the first compiler on Windows needs the MSVC build tools. This is the same prerequisite as Rust, Flutter and C++ have, paid once instead of per project.</li>
+        <li><strong>No designer, and a young ecosystem.</strong> There is no visual designer, no third-party control market and no Stack Overflow answer history. Every library in the box is Neper's own.</li>
+        <li><strong>This is not a like-for-like size test.</strong> The other ten rows are sourced reports of different app shapes (a console app, a template, a forum post). Only the Neper rows are ours. Build the same hello window in each language and measure it before quoting any ratio.</li>
+      </ul>
+
+      <h2>Targets we plan next</h2>
+      <p>The compiler's target list is shorter than the one above suggests. What exists today is Windows, Linux and macOS on x64 and arm64. These are planned, and none of them exists yet:</p>
+      <ul>
+        <li><strong>Android, on x86_64 and AArch64.</strong> The design document describes a distinct Android target, not an alias for Linux. The aim is to write the APK itself (binary manifest, aligned native library, signature) with no Android Studio, SDK, NDK, Gradle or Java.</li>
+        <li><strong>iOS.</strong> The first step is compiling to arm64 iOS Mach-O objects on Windows. The final link, app bundle, signing and upload would stay in Apple's own toolchain, because iOS has no unsigned path: it needs an App ID, provisioning profile and entitlements. So "nothing to install" holds for compiling, not for shipping to the App Store. The language specification currently excludes iOS.</li>
+        <li><strong>WebAssembly.</strong> Today Neper can run WebAssembly: <code>e.wasm</code> is an interpreter for the 2.0 core format. Compiling Neper programs to WebAssembly is a goal with no design document yet.</li>
+      </ul>
+      <p>FreeBSD is evaluated as a candidate and not scheduled. Each of these is a distinct target with its own binary rules, not a relabelled Linux or macOS build, and we will report them here as we measure them, not before.</p>
+
+      <h2>Sources</h2>
+      <ul>
+        <li>Language and framework usage: <a href="https://survey.stackoverflow.co/2025/technology/">Stack Overflow 2025</a> and <a href="https://survey.stackoverflow.co/2024/technology#most-popular-technologies-misc-tech">2024</a>; <a href="https://lp.jetbrains.com/the-state-of-dotnet-2025/">JetBrains .NET 2025</a>.</li>
+        <li>.NET: <a href="https://dotnet.microsoft.com/en-us/download/dotnet">downloads</a>, <a href="https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/">Native AOT</a>, <a href="https://learn.microsoft.com/en-us/dotnet/maui/supported-platforms">MAUI platforms</a>, <a href="https://learn.microsoft.com/en-us/visualstudio/releases/2026/vs-system-requirements">Visual Studio 2026 requirements</a>.</li>
+        <li>C++: <a href="https://doc.qt.io/qt-6/windows.html">Qt on Windows</a>, <a href="https://doc.qt.io/qt-6/macos.html">Qt on macOS</a>, <a href="https://doc.qt.io/qt-6/windows-deployment.html">Qt deployment</a>, <a href="https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files">VC++ redistributables</a>.</li>
+        <li>Java and Kotlin: <a href="https://docs.oracle.com/en/java/javase/25/jpackage/packaging-overview.html">jpackage</a>, <a href="https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html">Compose distribution</a>.</li>
+        <li>Web stacks: <a href="https://v2.tauri.app/start/prerequisites/">Tauri prerequisites</a>, <a href="https://v2.tauri.app/distribute/windows-installer/">Tauri Windows installer</a>, <a href="https://github.com/electron/electron/releases/tag/v45.0.0">Electron 45 assets</a>, <a href="https://github.com/Elanis/web-to-desktop-framework-comparison">framework size benchmark</a>.</li>
+        <li>Others: <a href="https://pyinstaller.org/en/stable/requirements.html">PyInstaller</a>, <a href="https://docs.flutter.dev/platform-integration/windows/setup">Flutter on Windows</a>, <a href="https://docs.flutter.dev/platform-integration/linux/setup">Flutter on Linux</a>, <a href="https://rust-lang.github.io/rustup/installation/windows-msvc.html">rustup on Windows</a>, <a href="https://docs.fyne.io/started/quick/">Fyne</a>, <a href="https://www.swift.org/install/windows/">Swift on Windows</a>, <a href="https://developer.apple.com/programs/">Apple Developer Program</a>.</li>
+        <li>Neper's X11 and macOS window code: <code>lib/e/os.linux.e</code>, <code>lib/e/os.macos.e</code>; the Mach-O linker and its ad-hoc signature: <code>src/link_macho.e</code>; the build scripts: <code>scripts/build-selfhost.*</code>.</li>
+      </ul>
+      <p>Versions and sizes were read on October 23, 2026 and drift. If a cell here is wrong or out of date, we want to know.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
