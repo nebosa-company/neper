@@ -514,5 +514,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 104. An absolutely positioned inline box follows the content before it, which sits at the right edge of a right-to-left line.
     let (p104, ok104) = build(a, "<div style=\"direction:rtl;width:100px;font-size:10px\">ab<span id=s style=\"position:absolute;width:5px;height:5px\"></span></div>", "")
     if !ok104 || !near(rect_of(p104, "s").x, 75.0f64) { os.exit(145) }
+    // 105. A vertical flow in an auto-height block wraps at the max-height of the nearest scroll container, not the viewport height.
+    let (p105, ok105) = build(a, "<div style=\"overflow:hidden;max-height:40px;font-size:10px\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div>", "")
+    if !ok105 || !near(rect_of(p105, "o").h, 40.0f64) { os.exit(146) }
+    // 106. A scroll container's min-height raises the space it gives a vertical flow above its height.
+    let (p106, ok106) = build(a, "<div style=\"overflow:hidden;height:20px;min-height:40px;font-size:10px\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div>", "")
+    if !ok106 || !near(rect_of(p106, "o").h, 40.0f64) { os.exit(147) }
+    // 107. A parent's min-height raises the space it gives a vertical child above its height.
+    let (p107, ok107) = build(a, "<div style=\"height:20px;min-height:40px;font-size:10px\"><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div>", "")
+    if !ok107 || !near(rect_of(p107, "o").h, 40.0f64) { os.exit(148) }
+    // 108. A scroll container taller than the viewport gives a vertical flow only the viewport height.
+    let (p108, ok108) = build(a, "<div style=\"overflow:hidden;max-height:2000px;font-size:100px\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div>", "")
+    if !ok108 || !near(rect_of(p108, "o").h, 600.0f64) { os.exit(149) }
     ret ok
 }

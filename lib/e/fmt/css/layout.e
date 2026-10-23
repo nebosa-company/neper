@@ -7911,16 +7911,48 @@ fn clear_widths(l: *Layout, b: u32) {
 // frame of the container) are kept; the result is its border box in that frame with every descendant mapped into it.
 // `pbase` is the percentage base and `pch` the definite height of the container (negative: none).
 // `fi` and `fb` (negative: none) force the inline size (physical height) and block size (physical width) of the content box.
+// The content block size of `b` from its own `height`, else its `max-height`, raised by `min-height`; negative when it has neither.
+fn fixed_block_size(l: *const Layout, b: u32) -> f64 {
+    let s = bstyle(l, b)
+    var h = -1.0f64
+    let (hv, has_h) = resolve_len(s.height, -1.0f64)
+    let (mv, has_m) = resolve_len(s.max_height, -1.0f64)
+    if s.height.kind == .Px && has_h {
+        h = to_content_h(l, b, hv)
+    } else if s.max_height.kind == .Px && has_m {
+        h = to_content_h(l, b, mv)
+    }
+    if h < 0.0f64 { ret h }
+    ret clamp_height(l, b, h, -1.0f64)
+}
+
+// The block space an orthogonal flow sizes its inline axis against (Writing Modes 3 7.3, WPT available-size-*): the containing
+// block's block size, else its max size, else that of the nearest scroll container ancestor; the last two no larger than the ICB.
+fn orthogonal_room(l: *const Layout, c: u32, pch: f64) -> f64 {
+    let p = l.boxes.items[usize(c)].parent
+    if pch >= 0.0f64 {
+        if p == NONE { ret pch }
+        ret clamp_height(l, p, pch, -1.0f64)
+    }
+    var icb = l.viewport_height
+    if l.vmode != 0u8 { icb = l.viewport_width }
+    if p == NONE { ret icb }
+    var room = fixed_block_size(l, p)
+    if room < 0.0f64 {
+        var a = p
+        while a != NONE && !is_scroll_container(bstyle(l, a)) { a = l.boxes.items[usize(a)].parent }
+        if a != NONE { room = fixed_block_size(l, a) }
+    }
+    if room < 0.0f64 { ret icb }
+    ret minf(room, icb)
+}
+
 fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64, fi: f64, fb: f64) {
     let old = l.vmode
     let code = mode_code(bstyle(l, c))
     let bb = bx(l, c)
     let pm = bb.margin
-    var room = pch
-    if room < 0.0f64 {
-        room = l.viewport_height
-        if old != 0u8 { room = l.viewport_width }
-    }
+    let room = orthogonal_room(l, c, pch)
     // The edges along the container's block axis are the box's inline edges.
     let outer_i = pm[0usize] + pm[2usize] + bb.border[0usize] + bb.border[2usize] + bb.padding[0usize] + bb.padding[2usize]
     l.vmode = code
