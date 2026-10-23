@@ -252,6 +252,9 @@ type FunctionRef = struct {
     // up (D306): every relocation to it then reads the index instead of searching.
     target: usize,
     has_target: bool,
+    // A C variadic import: one more than the number of its fixed parameters, 0 for any other. Apple's arm64
+    // convention passes every variadic argument on the stack, so the call has to know where they begin.
+    variadic_from: usize,
 }
 
 type StringConstant = struct {
@@ -612,6 +615,8 @@ type Builder = struct {
     next_value: usize,
     function_active: bool,
     block_active: bool,
+    // aarch64-macos: the C calling convention puts a variadic call's variadic arguments on the stack.
+    apple_variadic: bool,
 }
 
 // Given separately from `init` because `init` has eight callers and only one of them compiles a
@@ -997,7 +1002,7 @@ fn intern_function(builder: *Builder, module_index: usize, name: str, instance: 
             if found { ret (found_at, ok) }
             if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
             let index = builder.function_ref_count
-            builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false }
+            builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false, variadic_from: 0usize }
             builder.function_ref_count += 1usize
             ret (index, ok)
         }
@@ -1010,19 +1015,20 @@ fn intern_function(builder: *Builder, module_index: usize, name: str, instance: 
     }
     if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
     let index = builder.function_ref_count
-    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false }
+    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false, variadic_from: 0usize }
     builder.function_ref_count += 1usize
     ret (index, ok)
 }
 
 // The same reference, bound to an imported symbol. Interning is by neper-side name, so
 // the library and symbol are attached to whichever entry that name resolves to.
-fn intern_import(builder: *Builder, module_index: usize, name: str, library: str, symbol: str) -> (usize, err) {
+fn intern_import(builder: *Builder, module_index: usize, name: str, library: str, symbol: str, variadic_from: usize) -> (usize, err) {
     builder.imports_ordered = false
     let (index, intern_error) = intern_function(builder, module_index, name, 0usize)
     if intern_error != ok { ret (0usize, intern_error) }
     builder.function_refs[index].library = library
     builder.function_refs[index].symbol = symbol
+    builder.function_refs[index].variadic_from = variadic_from
     ret (index, ok)
 }
 

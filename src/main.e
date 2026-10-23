@@ -11560,6 +11560,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     try init_cli_nir(a, &w.builder, &w.signatures, signature_types, loaded, &w.report, loaded.largest_bytes, w.scale, !release)
     // What the program's builder carries of the build: the mode, the arena, the oracle.
     w.builder.release = program.release
+    w.builder.apple_variadic = program.apple_variadic
     w.builder.nocheck = program.nocheck
     w.builder.arena_bytes = program.arena_bytes
     w.builder.cpu_level = program.cpu_level
@@ -14277,6 +14278,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         var builder_scale = 1usize
         if writes_executable { builder_scale = 64usize }
         try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, writes_executable), builder_scale, !release_build)
+        builder.apple_variadic = same(args[4usize], "aarch64") && same(args[5usize], "macos")
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, loaded.count + 1usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, builder.functions.len + 1usize)

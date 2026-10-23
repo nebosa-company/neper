@@ -1232,7 +1232,9 @@ fn element_operand(c: *check.Checker, element_type: check.Type, stride: usize, d
 // module, and before it meant whichever module the worker happened to lower earlier.
 fn intern_declared(builder: *nir.Builder, function: check.Function) -> (usize, err) {
     if function.external && function.import_library.len != 0usize {
-        let (imported, import_error) = nir.intern_import(builder, function.owner_module_index, function.name, function.import_library, function.import_symbol)
+        var variadic_from = 0usize
+        if function.variadic { variadic_from = function.parameter_count + 1usize }
+        let (imported, import_error) = nir.intern_import(builder, function.owner_module_index, function.name, function.import_library, function.import_symbol, variadic_from)
         ret (imported, import_error)
     }
     let (interned, intern_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
@@ -3043,7 +3045,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                         let reference = oracle.function_refs[instruction.immediate]
                         var interned = 0usize
                         if reference.library.len != 0usize {
-                            let (imported, import_error) = nir.intern_import(builder, reference.module_index, reference.name, reference.library, reference.symbol)
+                            let (imported, import_error) = nir.intern_import(builder, reference.module_index, reference.name, reference.library, reference.symbol, reference.variadic_from)
                             if import_error != ok { ret import_error }
                             interned = imported
                         } else {
@@ -3992,7 +3994,9 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         // An `extern fn` bound by `@import` is called through the image's import
         // table, so the reference carries the library and the foreign name.
         if call.function.external && call.function.import_library.len != 0usize {
-            let (imported, import_error) = nir.intern_import(builder, call.function.owner_module_index, symbol, call.function.import_library, call.function.import_symbol)
+            var variadic_from = 0usize
+            if call.function.variadic { variadic_from = call.function.parameter_count + 1usize }
+            let (imported, import_error) = nir.intern_import(builder, call.function.owner_module_index, symbol, call.function.import_library, call.function.import_symbol, variadic_from)
             if import_error != ok { ret import_error }
             function_ref = imported
         } else {

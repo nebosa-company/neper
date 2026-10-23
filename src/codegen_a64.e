@@ -1130,6 +1130,17 @@ fn place_argument(ty: check.Type, integers: *usize, floats: *usize, stacked: *us
     ret 2usize
 }
 
+// Apple's arm64 convention (not AAPCS64's): from a C variadic's first variadic argument on, every argument goes on
+// the stack, eight bytes each. Filling both register counts sends it there.
+fn variadic_to_stack(builder: *nir.Builder, instruction: nir.Instruction, position: usize, integers: *usize, floats: *usize) {
+    if !builder.apple_variadic || instruction.opcode != .Call { ret }
+    let from = builder.function_refs[instruction.immediate].variadic_from
+    if from != 0usize && position + 1usize >= from {
+        *integers = 8usize
+        *floats = 8usize
+    }
+}
+
 fn stack_argument_count(builder: *nir.Builder, current: nir.Function) -> (usize, err) {
     var most = 0usize
     let end = current.first_instruction + current.instruction_count
@@ -1147,6 +1158,7 @@ fn stack_argument_count(builder: *nir.Builder, current: nir.Function) -> (usize,
             while operand_at < instruction.operand_count {
                 let (operand_type, operand_type_error) = codegen_x64.value_type(builder, current, builder.operands[instruction.first_operand + operand_at])
                 if operand_type_error != ok { ret (0usize, operand_type_error) }
+                variadic_to_stack(builder, instruction, operand_at - first_argument, &integers, &floats)
                 let place = place_argument(operand_type, &integers, &floats, &stacked, &index)
                 operand_at += 1usize
             }
@@ -1169,6 +1181,7 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
         if argument_type_error != ok { ret argument_type_error }
         let width = codegen_x64.float_width(argument_type)
         if argument_type.kind == .Float && width == 0usize { ret codegen_x64.Unsupported }
+        variadic_to_stack(builder, instruction, at - first_argument, &integers, &floats)
         let place = place_argument(argument_type, &integers, &floats, &stacked, &index)
         if place == 0usize || place == 3usize {
             try read_into(allocations, value, index, output)
