@@ -41939,3 +41939,7 @@ Text is `public.utf8-plain-text`, bytes sit under their mime string, and files a
 ## D5205 — macOS file dialogs are NSOpenPanel/NSSavePanel run modally; recent documents are the shared document controller
 
 `file_dialog` builds an NSOpenPanel (files, folder, several) or NSSavePanel, applies the title, start folder, name and the filters' extensions (`*.txt` is `txt`; `*` allows all) through `allowedFileTypes`, runs it modally and answers `Cancelled` for anything but OK; `recent_add` refuses an empty or missing path and calls `noteNewRecentDocumentURL:`. `tests/macos/probe/file_dialog.e` shows the panel on a runner and aborts it from the run loop (`abortModal` after eight seconds) so the macos-probe screenshot catches it. The record turns on `file_dialogs` and `recent_documents`.
+
+## D5206 — macOS power hold is `caffeinate`; the screen is `CGDisplayCreateImage`
+
+`power_inhibit` spawns `caffeinate -i` (`-di` with the display) and `power_release` kills it, as the Linux shell does with `systemd-inhibit`. `screen_capture` copies the main display's 32-bit image row by row into Bgra pixels and `permission_status(.Screen)` is `Granted` wherever the capture works: without the Screen Recording permission the picture only lacks other applications' windows, a difference in content and not a refusal. The record turns on `power_inhibit` (when `caffeinate` is on the path) and `screen_capture`; `tests/macos/probe/capture_power.e` captured 1920x1080 on a runner.
