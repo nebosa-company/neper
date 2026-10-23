@@ -76,6 +76,8 @@ NOT_SUITE = {"differential"}
 named = in_sh | in_ps | extra | NOT_SUITE
 for main in sorted((selfhost / "fixtures" / "link").glob("*/src/main.e")):
     name = main.parent.parent.name
+    # `macos_*` fixtures are the Mac corpus's (tests/macos): they need AppKit, so neither suite names them.
+    if name.startswith("macos_"): continue
     if name not in named:
         failures.append(f"fixture {name} is run by no suite: add it to tests/selfhost/extra-fixtures.txt")
 for name in sorted(extra):
