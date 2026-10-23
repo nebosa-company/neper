@@ -5,6 +5,7 @@
 if ($env:NEPER_REFRESH_GOLDENS -eq '1') {
     $script:goldenActual = $null
     function Get-FileHash {
+        [CmdletBinding()]
         param([string]$Algorithm, [string]$LiteralPath)
         if ($LiteralPath -match '[\\/]tests[\\/]conformance[\\/]tools[\\/][^\\/]+\.expected\.jsonl$' -and $script:goldenActual) {
             $actualText = [IO.File]::ReadAllText($script:goldenActual)
@@ -17,6 +18,6 @@ if ($env:NEPER_REFRESH_GOLDENS -eq '1') {
         } else {
             $script:goldenActual = $LiteralPath
         }
-        Microsoft.PowerShell.Utility\Get-FileHash -Algorithm $Algorithm -LiteralPath $LiteralPath
+        Microsoft.PowerShell.Utility\Get-FileHash @PSBoundParameters
     }
 }

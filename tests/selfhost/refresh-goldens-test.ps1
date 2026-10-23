@@ -24,6 +24,8 @@ try {
     if (Same "$work/snapshot_only" "$work/other") { throw 'a golden outside tests/conformance/tools was refreshed' }
     if (-not (Same "$work/snapshot_only" $golden)) { throw 'a snapshot-only difference was not refreshed' }
     if ([IO.File]::ReadAllText($golden) -ne [IO.File]::ReadAllText("$work/snapshot_only")) { throw 'the refreshed golden does not match' }
+    # Callers that name no algorithm still get the default one.
+    if (-not (Get-FileHash -LiteralPath "$work/other").Hash) { throw 'Get-FileHash without -Algorithm gave no hash' }
     Write-Output 'refresh goldens ok'
 } finally {
     Remove-Item Env:NEPER_REFRESH_GOLDENS -ErrorAction SilentlyContinue
