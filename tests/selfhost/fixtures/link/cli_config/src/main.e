@@ -10,6 +10,7 @@ use e.fs.watch as watch
 use e.io
 use e.mem
 use e.os
+use e.thread
 use e.str
 
 fn vectors() -> str {
@@ -273,7 +274,28 @@ fn check_flags(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
+// `watch.read` blocks until the host delivers an event. A file system that delivers none (inotify on a Windows
+// drive under WSL) would leave the run waiting for ever, so a thread with a poller of its own ends it with 99.
+type Watchdog = struct { seconds: i64 }
+
+fn watchdog(g: *Watchdog) {
+    var backing: [4096]u8 = zero
+    var arena = mem.arena_from(backing[..])
+    let (poller, open_error) = os.poller_open(&arena)
+    if open_error != ok { os.exit(98i32) }
+    defer let _ = os.poller_close(poller)
+    var none: [1]os.PollEvent = zero
+    let (woken, wait_error) = os.poller_wait(poller, none[..], g.seconds * 1000000000i64)
+    os.exit(99i32)
+}
+
 fn check_watch(a: *mem.Arena) -> i32 {
+    let (guards, guard_error) = mem.alloc[Watchdog](a, 1usize)
+    if guard_error != ok { ret 69i32 }
+    guards[0usize] = Watchdog { seconds: 120i64 }
+    let (sentinel, sentinel_error) = thread.spawn[Watchdog](watchdog, &guards[0usize], 0usize)
+    if sentinel_error != ok { ret 69i32 }
+    let sentinel_detached = thread.detach(sentinel)
     if !write(a, "np-config/live.json", "{\"mode\": \"one\"}") { ret 70i32 }
     let (c0, ce) = config.config(a, 16usize)
     if ce != ok { ret 71i32 }
