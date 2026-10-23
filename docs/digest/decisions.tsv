@@ -2825,4 +2825,12 @@ D5189	829	A fixture that cannot find its Windows font or oracle says it skipped
 D5190	1237	`NEPER_REFRESH_GOLDENS=1` rewrites a tool golden that differs only in its snapshot hashes
 D5191	1140	A static check keeps run.sh and run.ps1 one suite
 D5192	1313	Fixtures no suite block names are listed in `extra-fixtures.txt`, and a new orphan fails the parity check
-D5193	609	`cli_config` ends in 99 when the host delivers no watch event
+D5193	610	`cli_config` ends in 99 when the host delivers no watch event
+D5194	1608	A macOS image treats `libc.so.6` and `libm.so.6` as libSystem, and the corpus names what a bare Mac cannot run
+D5195	1274	Eleven more fixtures compile for macOS: `plat.macos.e` and `x.sqlite`'s `capi.macos.e`
+D5196	1603	aarch64-macos passes a C variadic's variadic arguments on the stack
+D5197	1140	`os.spawn` and `os.peak_memory` on macOS
+D5198	1137	macOS pipes are close-on-exec, and `proc_output` runs on a Mac
+D5199	1417	macOS answers the window verbs `Unsupported`, and `e.os.shell` is the same shape
+D5200	1089	The Mac corpus builds `extern_struct`'s C helper library and runs the fixture against it
+D5201	1366	macOS `os.sandbox` is Seatbelt's `sandbox_init`
