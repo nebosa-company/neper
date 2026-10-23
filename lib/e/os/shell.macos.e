@@ -71,28 +71,272 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: true, biometrics: false, photo_picker: false }
+}
+
+// The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
+// at run time (`NeperShellTarget`, a subclass of NSObject) with two methods whose implementations are `@cc(c)` functions
+// of this file: one for a status item's button, one for a menu item. What they do is write into the state below, which
+// `tray_poll` and `popup_menu` read once the run loop has delivered the click.
+type MenuPoint = struct { x: f64, y: f64 }
+type MenuImp = union { function: fn(usize, usize, usize), bits: usize }
+
+@import("/usr/lib/libobjc.A.dylib", "objc_allocateClassPair")
+extern fn objc_class_pair(superclass: usize, name: *const u8, extra: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "class_addMethod")
+extern fn objc_class_method(class: usize, selector: usize, implementation: usize, types: *const u8) -> u8
+
+@import("/usr/lib/libobjc.A.dylib", "objc_registerClassPair")
+extern fn objc_class_register(class: usize)
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_image(receiver: usize, selector: usize, image: usize, size: MenuPoint) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_popup(receiver: usize, selector: usize, item: usize, at: MenuPoint, view: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_event_point(receiver: usize, selector: usize) -> MenuPoint
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGDisplayPixelsHigh")
+extern fn cg_display_high(display: u32) -> usize
+
+const TRAYS: usize = 8usize
+const TRAY_QUEUE: usize = 16usize
+var shell_target: usize = zero
+var tray_ids: [8]u32 = zero
+var tray_items: [8]usize = zero
+var tray_buttons: [8]usize = zero
+var tray_queue: [16]TrayEvent = zero
+var tray_head: usize = zero
+var tray_tail: usize = zero
+var popup_choice: u32 = zero
+var popup_made: bool = zero
+
+fn tray_push(event: TrayEvent) {
+    let next = (tray_tail + 1usize) % TRAY_QUEUE
+    if next == tray_head { ret }
+    tray_queue[tray_tail] = event
+    tray_tail = next
+}
+
+// A status item's button was clicked: left is a Select, right a Context, at the pointer's place on the screen.
+@cc(c)
+fn target_tray_clicked(this: usize, command: usize, sender: usize) {
+    var slot = 0usize
+    while slot < TRAYS && tray_buttons[slot] != sender { slot += 1usize }
+    if slot == TRAYS { ret }
+    var event: TrayEvent = zero
+    event.kind = .Select
+    event.id = tray_ids[slot]
+    let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
+    let current = os.msg0(app, os.cocoa_sel("currentEvent\x00"))
+    if current != 0usize && os.msg0(current, os.cocoa_sel("type\x00")) == 4usize { event.kind = .Context }
+    let at = msg_event_point(os.cocoa_class("NSEvent\x00"), os.cocoa_sel("mouseLocation\x00"))
+    event.x = i32(at.x)
+    event.y = i32(f64(cg_display_high(cg_main_display())) - at.y)
+    tray_push(event)
+}
+
+@cc(c)
+fn target_menu_chosen(this: usize, command: usize, sender: usize) {
+    popup_choice = u32(os.msg0(sender, os.cocoa_sel("tag\x00")))
+    popup_made = true
+}
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_after(receiver: usize, selector: usize, action: usize, object: usize, delay: f64, modes: usize) -> usize
+
+var popup_active: usize = zero
+
+// The pop-up menu on show is dismissed, as an Escape would.
+@cc(c)
+fn target_menu_cancel(this: usize, command: usize, sender: usize) {
+    if popup_active != 0usize { let cancelled = os.msg0(popup_active, os.cocoa_sel("cancelTracking\x00")) }
+}
+
+// A pop-up menu shown later than this call is dismissed after `seconds`: the run loop does it while the menu tracks, which is
+// how a program with no one at the pointer closes one.
+fn popup_cancel_after(seconds: f64) -> err {
+    let ready = target_ready()
+    if ready != ok { ret ready }
+    let pool = os.objc_pool_push()
+    var modes: [2]usize = zero
+    modes[0usize] = os.cocoa_text("NSEventTrackingRunLoopMode")
+    modes[1usize] = os.cocoa_text("kCFRunLoopCommonModes")
+    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&modes[0usize]), 2usize)
+    let scheduled = msg_after(shell_target, os.cocoa_sel("performSelector:withObject:afterDelay:inModes:\x00"), os.cocoa_sel("neperCancel:\x00"), 0usize, seconds, list)
+    os.cf_release(modes[0usize])
+    os.cf_release(modes[1usize])
+    os.objc_pool_pop(pool)
+    ret ok
+}
+
+fn target_ready() -> err {
+    if shell_target != 0usize { ret ok }
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let name = "NeperShellTarget\x00"
+    let class = objc_class_pair(os.cocoa_class("NSObject\x00"), &name[0usize], 0usize)
+    if class == 0usize { ret Failed }
+    let types = "v@:@\x00"
+    var tray: MenuImp = zero
+    tray.function = target_tray_clicked
+    var chosen: MenuImp = zero
+    chosen.function = target_menu_chosen
+    let first = objc_class_method(class, os.cocoa_sel("neperTray:\x00"), tray.bits, &types[0usize])
+    let second = objc_class_method(class, os.cocoa_sel("neperChoice:\x00"), chosen.bits, &types[0usize])
+    var cancel: MenuImp = zero
+    cancel.function = target_menu_cancel
+    let third = objc_class_method(class, os.cocoa_sel("neperCancel:\x00"), cancel.bits, &types[0usize])
+    objc_class_register(class)
+    let object = os.msg0(os.msg0(class, os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+    if object == 0usize { ret Failed }
+    shell_target = object
+    ret ok
+}
+
+// An NSImage over the icon's pixels, which the caller releases; zero when it cannot be made.
+fn icon_image(icon: Icon) -> usize {
+    let count = usize(icon.width) * usize(icon.height)
+    let data = os.cf_data_create(0usize, mem.address_of(&icon.pixels[0usize]), count * 4usize)
+    let provider = os.cg_provider_with_data(data)
+    let space = os.cg_color_space()
+    let picture = os.cg_image_create(usize(icon.width), usize(icon.height), 8usize, 32usize, usize(icon.width) * 4usize, space, 8194u32, provider, 0usize, 0i32, 0i32)
+    var image = 0usize
+    if picture != 0usize {
+        let size = MenuPoint { x: f64(icon.width), y: f64(icon.height) }
+        image = msg_image(os.msg0(os.cocoa_class("NSImage\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithCGImage:size:\x00"), picture, size)
+        os.cg_image_release(picture)
+    }
+    os.cg_provider_release(provider)
+    os.cf_release(data)
+    ret image
+}
+
+fn tray_slot(id: u32) -> usize {
+    var slot = 0usize
+    while slot < TRAYS && !(tray_items[slot] != 0usize && tray_ids[slot] == id) { slot += 1usize }
+    ret slot
+}
+
+fn tray_valid_icon(icon: Icon) -> bool {
+    ret icon.width != 0u32 && icon.height != 0u32 && icon.pixels.len >= usize(icon.width) * usize(icon.height)
+}
+
+fn tray_decorate(button: usize, icon: Icon, tooltip: str) {
+    let image = icon_image(icon)
+    if image != 0usize {
+        let set = os.msg1(button, os.cocoa_sel("setImage:\x00"), image)
+        let released = os.msg0(image, os.cocoa_sel("release\x00"))
+    }
+    let text = os.cocoa_text(tooltip)
+    let tipped = os.msg1(button, os.cocoa_sel("setToolTip:\x00"), text)
+    os.cf_release(text)
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
-    ret Unsupported
+    if !tray_valid_icon(icon) || tray_slot(id) != TRAYS { ret Invalid }
+    let ready = target_ready()
+    if ready != ok { ret ready }
+    var slot = 0usize
+    while slot < TRAYS && tray_items[slot] != 0usize { slot += 1usize }
+    if slot == TRAYS { ret Failed }
+    let pool = os.objc_pool_push()
+    let bar = os.msg0(os.cocoa_class("NSStatusBar\x00"), os.cocoa_sel("systemStatusBar\x00"))
+    let item = os.msg_double(bar, os.cocoa_sel("statusItemWithLength:\x00"), -1.0f64)
+    var result = ok
+    if item == 0usize { result = Failed } else {
+        let kept = os.msg0(item, os.cocoa_sel("retain\x00"))
+        let button = os.msg0(item, os.cocoa_sel("button\x00"))
+        tray_decorate(button, icon, tooltip)
+        let targeted = os.msg1(button, os.cocoa_sel("setTarget:\x00"), shell_target)
+        let acted = os.msg1(button, os.cocoa_sel("setAction:\x00"), os.cocoa_sel("neperTray:\x00"))
+        let masked = os.msg1(button, os.cocoa_sel("sendActionOn:\x00"), 20usize)
+        tray_ids[slot] = id
+        tray_items[slot] = item
+        tray_buttons[slot] = button
+    }
+    os.objc_pool_pop(pool)
+    ret result
 }
 
 fn tray_update(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
-    ret Unsupported
+    if !tray_valid_icon(icon) { ret Invalid }
+    let slot = tray_slot(id)
+    if slot == TRAYS { ret NotFound }
+    let pool = os.objc_pool_push()
+    tray_decorate(tray_buttons[slot], icon, tooltip)
+    os.objc_pool_pop(pool)
+    ret ok
 }
 
 fn tray_remove(a: *mem.Arena, id: u32) -> err {
-    ret Unsupported
+    let slot = tray_slot(id)
+    if slot == TRAYS { ret NotFound }
+    let pool = os.objc_pool_push()
+    let bar = os.msg0(os.cocoa_class("NSStatusBar\x00"), os.cocoa_sel("systemStatusBar\x00"))
+    let removed = os.msg1(bar, os.cocoa_sel("removeStatusItem:\x00"), tray_items[slot])
+    let released = os.msg0(tray_items[slot], os.cocoa_sel("release\x00"))
+    tray_items[slot] = 0usize
+    tray_buttons[slot] = 0usize
+    tray_ids[slot] = 0u32
+    os.objc_pool_pop(pool)
+    ret ok
 }
 
+// The clicks the run loop has delivered since the last call: it is run for what is waiting, no longer.
 fn tray_poll() -> (TrayEvent, bool) {
     var none: TrayEvent = zero
-    ret (none, false)
+    if shell_target != 0usize { os.cocoa_pump(0i64) }
+    if tray_head == tray_tail { ret (none, false) }
+    let event = tray_queue[tray_head]
+    tray_head = (tray_head + 1usize) % TRAY_QUEUE
+    ret (event, true)
 }
 
+// A menu at a screen place (x from the left, y from the top), shown until an item is chosen or the menu is dismissed.
 fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, bool, err) {
-    ret (0u32, false, Unsupported)
+    if items.len == 0usize { ret (0u32, false, Invalid) }
+    var at = 0usize
+    while at < items.len {
+        if !items[at].separator && items[at].id == 0u32 { ret (0u32, false, Invalid) }
+        at += 1usize
+    }
+    let ready = target_ready()
+    if ready != ok { ret (0u32, false, ready) }
+    let pool = os.objc_pool_push()
+    let menu = os.msg0(os.msg0(os.cocoa_class("NSMenu\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+    let manual = os.msg_flag(menu, os.cocoa_sel("setAutoenablesItems:\x00"), 0i32)
+    at = 0usize
+    while at < items.len {
+        var entry = 0usize
+        if items[at].separator {
+            entry = os.msg0(os.cocoa_class("NSMenuItem\x00"), os.cocoa_sel("separatorItem\x00"))
+        } else {
+            let title = os.cocoa_text(items[at].label)
+            let nothing = os.cocoa_text("")
+            entry = os.msg4(os.msg0(os.cocoa_class("NSMenuItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithTitle:action:keyEquivalent:\x00"), title, os.cocoa_sel("neperChoice:\x00"), nothing, 0usize)
+            os.cf_release(title)
+            os.cf_release(nothing)
+            let tagged = os.msg1(entry, os.cocoa_sel("setTag:\x00"), usize(items[at].id))
+            let targeted = os.msg1(entry, os.cocoa_sel("setTarget:\x00"), shell_target)
+            let enabled = os.msg_flag(entry, os.cocoa_sel("setEnabled:\x00"), yes_no(items[at].enabled))
+            if items[at].checked { let state = os.msg1(entry, os.cocoa_sel("setState:\x00"), 1usize) }
+        }
+        let added = os.msg1(menu, os.cocoa_sel("addItem:\x00"), entry)
+        at += 1usize
+    }
+    popup_made = false
+    popup_active = menu
+    let place = MenuPoint { x: f64(x), y: f64(cg_display_high(cg_main_display())) - f64(y) }
+    let shown = msg_popup(menu, os.cocoa_sel("popUpMenuPositioningItem:atLocation:inView:\x00"), 0usize, place, 0usize)
+    popup_active = 0usize
+    let released = os.msg0(menu, os.cocoa_sel("release\x00"))
+    os.objc_pool_pop(pool)
+    if popup_made { ret (popup_choice, true, ok) }
+    ret (0u32, false, ok)
 }
 
 // A taskbar button's progress, overlay and jump list have no desktop standard;
@@ -289,10 +533,13 @@ fn send_notice(a: *mem.Arena, title: str, body: str) -> err {
     ret ok
 }
 
+// A notice that names a tray belongs to it, as on Windows: its id is the tray's, and a tray that is not there is NotFound.
 fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> (u32, err) {
     if body.len == 0usize { ret (0u32, Invalid) }
+    if tray_id != 0u32 && tray_slot(tray_id) == TRAYS { ret (0u32, NotFound) }
     let sent = send_notice(a, title, body)
     if sent != ok { ret (0u32, sent) }
+    if tray_id != 0u32 { ret (tray_id, ok) }
     let (stamp, clock_error) = os.clock(.Monotonic)
     if clock_error != ok { ret (1u32, ok) }
     ret (u32(stamp & 2147483647i64) | 1u32, ok)
@@ -300,6 +547,7 @@ fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bo
 
 fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: str, silent: bool) -> err {
     if body.len == 0usize || notice_id == 0u32 { ret Invalid }
+    if tray_id != 0u32 && tray_slot(tray_id) == TRAYS { ret NotFound }
     ret send_notice(a, title, body)
 }
 
