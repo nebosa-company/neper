@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: false, notice_actions: false, notice_remove: false, clipboard_text: false, clipboard_typed: false, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: false, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -370,23 +370,189 @@ fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
 // programs is XDND, a protocol of its own the library does not speak. Every
 // operation is written so that the day `e.os` learns the selection, these follow.
 
+// The clipboard (D5203), on NSPasteboard's general board. A text is `public.utf8-plain-text`; bytes sit under their
+// mime string as the type; files and an image have private types of their own (`com.neper.paths`: the paths, one per
+// line; `com.neper.image`: width and height as little-endian u32, then the pixels), which hold what was written exactly.
+fn type_text() -> str { ret "public.utf8-plain-text" }
+fn type_paths() -> str { ret "com.neper.paths" }
+fn type_image() -> str { ret "com.neper.image" }
+
+fn board() -> usize {
+    ret os.msg0(os.cocoa_class("NSPasteboard\x00"), os.cocoa_sel("generalPasteboard\x00"))
+}
+
+fn board_put(pasteboard: usize, kind: str, data: []const u8) -> bool {
+    var one: [1]u8 = zero
+    var at = mem.address_of(&one[0usize])
+    if data.len != 0usize { at = mem.address_of(&data[0usize]) }
+    let name = os.cocoa_text(kind)
+    let blob = os.cf_data_create(0usize, at, data.len)
+    let stored = os.msg2(pasteboard, os.cocoa_sel("setData:forType:\x00"), blob, name)
+    os.cf_release(blob)
+    os.cf_release(name)
+    ret stored & 255usize != 0usize
+}
+
+// The bytes under `kind`, copied into `a`; false when the board holds none.
+fn board_get(a: *mem.Arena, pasteboard: usize, kind: str) -> ([]const u8, bool, err) {
+    let name = os.cocoa_text(kind)
+    let blob = os.msg1(pasteboard, os.cocoa_sel("dataForType:\x00"), name)
+    os.cf_release(name)
+    if blob == 0usize { ret ("", false, ok) }
+    let length = os.msg0(blob, os.cocoa_sel("length\x00"))
+    if length == 0usize { ret ("", true, ok) }
+    let (copy, allocation_error) = mem.alloc[u8](a, length)
+    if allocation_error != ok { ret ("", false, allocation_error) }
+    let copied = os.raw_memcpy(mem.address_of(&copy[0usize]), os.msg0(blob, os.cocoa_sel("bytes\x00")), length)
+    ret (copy[0usize..length], true, ok)
+}
+
 fn clipboard_write(a: *mem.Arena, items: []const Content) -> err {
     if items.len == 0usize { ret Invalid }
-    ret Unsupported
+    var at = 0usize
+    while at < items.len {
+        if items[at].kind == .Bytes && items[at].mime.len == 0usize { ret Invalid }
+        if items[at].kind == .Promise { ret Unsupported }
+        at += 1usize
+    }
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let pool = os.objc_pool_push()
+    let pasteboard = board()
+    let cleared = os.msg0(pasteboard, os.cocoa_sel("clearContents\x00"))
+    var result = ok
+    at = 0usize
+    while at < items.len && result == ok {
+        let item = items[at]
+        if item.kind == .Text {
+            if !board_put(pasteboard, type_text(), item.text) { result = Failed }
+        } else if item.kind == .Bytes {
+            if !board_put(pasteboard, item.mime, item.bytes) { result = Failed }
+        } else if item.kind == .Files {
+            var total = 0usize
+            var path = 0usize
+            while path < item.paths.len {
+                total += item.paths[path].len + 1usize
+                path += 1usize
+            }
+            let (joined, joined_error) = mem.alloc[u8](a, total + 1usize)
+            if joined_error != ok { result = joined_error } else {
+                var written = 0usize
+                path = 0usize
+                while path < item.paths.len {
+                    if path != 0usize {
+                        joined[written] = 10u8
+                        written += 1usize
+                    }
+                    var byte = 0usize
+                    while byte < item.paths[path].len {
+                        joined[written] = item.paths[path][byte]
+                        written += 1usize
+                        byte += 1usize
+                    }
+                    path += 1usize
+                }
+                if !board_put(pasteboard, type_paths(), joined[0usize..written]) { result = Failed }
+            }
+        } else if item.kind == .Image {
+            let count = usize(item.image.width) * usize(item.image.height)
+            if count == 0usize || item.image.pixels.len < count { result = Invalid } else {
+                let (packed, packed_error) = mem.alloc[u8](a, 8usize + count * 4usize)
+                if packed_error != ok { result = packed_error } else {
+                    var shift = 0usize
+                    while shift < 4usize {
+                        packed[shift] = u8((item.image.width >> u32(shift * 8usize)) & 255u32)
+                        packed[4usize + shift] = u8((item.image.height >> u32(shift * 8usize)) & 255u32)
+                        shift += 1usize
+                    }
+                    let copied = os.raw_memcpy(mem.address_of(&packed[8usize]), mem.address_of(&item.image.pixels[0usize]), count * 4usize)
+                    if !board_put(pasteboard, type_image(), packed[0usize..8usize + count * 4usize]) { result = Failed }
+                }
+            }
+        }
+        at += 1usize
+    }
+    os.objc_pool_pop(pool)
+    ret result
+}
+
+fn clipboard_kind(kind: ContentKind, mime: str) -> str {
+    if kind == .Text { ret type_text() }
+    if kind == .Files { ret type_paths() }
+    if kind == .Image { ret type_image() }
+    ret mime
 }
 
 fn clipboard_has(a: *mem.Arena, kind: ContentKind, mime: str) -> bool {
-    ret false
+    if kind == .Promise || (kind == .Bytes && mime.len == 0usize) { ret false }
+    if os.cocoa_start() != ok { ret false }
+    let pool = os.objc_pool_push()
+    let (data, found, got_error) = board_get(a, board(), clipboard_kind(kind, mime))
+    os.objc_pool_pop(pool)
+    ret found && got_error == ok
 }
 
 fn clipboard_read(a: *mem.Arena, kind: ContentKind, mime: str) -> (Content, err) {
     var item: Content = zero
     if kind == .Bytes && mime.len == 0usize { ret (item, Invalid) }
-    ret (item, Unsupported)
+    if kind == .Promise { ret (item, Unsupported) }
+    let started = os.cocoa_start()
+    if started != ok { ret (item, started) }
+    let pool = os.objc_pool_push()
+    let (data, found, got_error) = board_get(a, board(), clipboard_kind(kind, mime))
+    os.objc_pool_pop(pool)
+    if got_error != ok { ret (item, got_error) }
+    if !found { ret (item, NotFound) }
+    item.kind = kind
+    if kind == .Text {
+        item.text = data
+    } else if kind == .Bytes {
+        item.mime = mime
+        item.bytes = data
+    } else if kind == .Files {
+        var lines = 1usize
+        var at = 0usize
+        while at < data.len {
+            if data[at] == 10u8 { lines += 1usize }
+            at += 1usize
+        }
+        let (paths, paths_error) = mem.alloc[str](a, lines)
+        if paths_error != ok { ret (item, paths_error) }
+        var start = 0usize
+        var line = 0usize
+        at = 0usize
+        while at <= data.len {
+            if at == data.len || data[at] == 10u8 {
+                paths[line] = data[start..at]
+                line += 1usize
+                start = at + 1usize
+            }
+            at += 1usize
+        }
+        item.paths = paths[0usize..lines]
+    } else {
+        if data.len < 8usize { ret (item, Failed) }
+        var width = 0u32
+        var height = 0u32
+        var shift = 0usize
+        while shift < 4usize {
+            width |= u32(data[shift]) << u32(shift * 8usize)
+            height |= u32(data[4usize + shift]) << u32(shift * 8usize)
+            shift += 1usize
+        }
+        let count = usize(width) * usize(height)
+        if count == 0usize || data.len != 8usize + count * 4usize { ret (item, Failed) }
+        let (pixels, pixels_error) = mem.alloc[u32](a, count)
+        if pixels_error != ok { ret (item, pixels_error) }
+        let copied = os.raw_memcpy(mem.address_of(&pixels[0usize]), mem.address_of(&data[8usize]), count * 4usize)
+        item.image = Icon { width: width, height: height, pixels: pixels[0usize..count] }
+    }
+    ret (item, ok)
 }
 
 fn clipboard_sequence() -> u32 {
-    ret 0u32
+    if os.cocoa_start() != ok { ret 0u32 }
+    ret u32(os.msg0(board(), os.cocoa_sel("changeCount\x00")))
 }
 
 fn drop_target_register(a: *mem.Arena, w: os.Window, storage: *mem.Arena) -> err {
