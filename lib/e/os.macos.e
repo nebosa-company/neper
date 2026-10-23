@@ -2274,11 +2274,78 @@ fn file_unlock(lock: own FileLock) -> err {
     ret from_errno_cleanup(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
 }
 
-// What a process gives up for the rest of its life. Darwin's sandbox_init is a private,
-// deprecated interface, so this answers `Unsupported`.
+// What a process gives up for the rest of its life. Seatbelt through `sandbox_init`, whose profile is text (SBPL):
+// deprecated since 10.8 and not a public interface, but what every browser's sandbox calls and what ships on every Mac.
+// A list of system calls is `(allow syscall-unix (syscall-number ...))` after a `(deny syscall-unix)`, the child
+// processes `process-fork` and `process-exec*`. Dynamic code has no profile rule (it is a hardened-runtime flag set
+// at signing), so it is `Unsupported`, as on Linux, after the rest has been applied.
 type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes: bool, deny_dynamic_code: bool, kill_on_violation: bool }
 
-fn sandbox(policy: *const SandboxPolicy) -> err { ret Unsupported }
+@import("c", "sandbox_init")
+extern fn raw_sandbox_init(profile: usize, flags: u64, error_text: usize) -> i32
+
+const SANDBOX_ALLOW_MAX: usize = 200usize
+
+fn sandbox_text(profile: []u8, at: *usize, text: str) {
+    var i = 0usize
+    while i < text.len && *at + 1usize < profile.len {
+        profile[*at] = text[i]
+        *at = *at + 1usize
+        i += 1usize
+    }
+}
+
+fn sandbox_number(profile: []u8, at: *usize, value: u32) {
+    var digits: [10]u8 = zero
+    var count = 0usize
+    var rest = value
+    if rest == 0u32 {
+        digits[0usize] = 48u8
+        count = 1usize
+    }
+    while rest > 0u32 {
+        digits[count] = u8(48u32 + rest % 10u32)
+        rest = rest / 10u32
+        count += 1usize
+    }
+    while count > 0usize {
+        count -= 1usize
+        if *at + 1usize < profile.len {
+            profile[*at] = digits[count]
+            *at = *at + 1usize
+        }
+    }
+}
+
+fn sandbox(policy: *const SandboxPolicy) -> err {
+    let allowed = policy.allow_syscalls
+    if allowed.len > SANDBOX_ALLOW_MAX { ret Unsupported }
+    if policy.deny_child_processes || allowed.len != 0usize {
+        var profile: [4096]u8 = zero
+        var at = 0usize
+        sandbox_text(profile[..], &at, "(version 1)(allow default)")
+        if policy.deny_child_processes { sandbox_text(profile[..], &at, "(deny process-fork)(deny process-exec*)") }
+        if allowed.len != 0usize {
+            if policy.kill_on_violation {
+                sandbox_text(profile[..], &at, "(deny syscall-unix (with send-signal SIGKILL))")
+            } else {
+                sandbox_text(profile[..], &at, "(deny syscall-unix)")
+            }
+            sandbox_text(profile[..], &at, "(allow syscall-unix (syscall-number")
+            var which = 0usize
+            while which < allowed.len {
+                sandbox_text(profile[..], &at, " ")
+                sandbox_number(profile[..], &at, allowed[which])
+                which += 1usize
+            }
+            sandbox_text(profile[..], &at, "))")
+        }
+        let applied = raw_sandbox_init(mem.address_of(&profile[0usize]), 0u64, 0usize)
+        if applied != 0i32 { ret Failed }
+    }
+    if policy.deny_dynamic_code { ret Unsupported }
+    ret ok
+}
 
 // ---- Windows (C107's shape, D5199): a macOS program has no window system yet, so the types the fence names are
 // here for the modules above `e.os` to compile against, and the verbs that need a window answer `Unsupported`.

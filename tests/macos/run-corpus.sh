@@ -25,8 +25,6 @@ expected() {
     os_exchange|os_shell|ui_activation|ui_file_access|ui_lifecycle|ui_notification|ui_permissions|ui_print|ui_shell_ops) echo any ;;
     # Reads DejaVu Sans from /usr/share/fonts/truetype/dejavu, which a Mac does not have (exit 30).
     ui_selection3_v2) echo any ;;
-    # os_gaps starts children (it runs on a Mac) and then checks the sandbox, which os.sandbox answers Unsupported on macOS.
-    os_gaps) echo any ;;
     *) echo 0 ;;
   esac
 }
