@@ -79,25 +79,23 @@ fn main(a: *mem.Arena) -> err {
     if sent_two_error != ok { os.exit(21i32) }
 
     // A host may deliver the second datagram a moment after the first (a loaded Mac's loopback did, for `os_poller`
-    // and here): both sockets stay readable until drained, so a later poll reports both.
-    var ready = 0usize
-    var polls = 0usize
-    while ready != 2usize && polls < 5usize {
-        let (got, ready_error) = async.poll(&loop, events[..], time.Duration { nanos: 2000000000i64 })
-        if ready_error != ok { os.exit(22i32) }
-        ready = got
-        polls += 1usize
-    }
-    if ready != 2usize { os.exit(23i32) }
+    // and here), and report only what is new in the next poll or everything still readable: what is asked is that both
+    // tokens are seen, each readable and not failed, within a few polls.
     var saw_read = false
     var saw_write = false
-    var at = 0usize
-    while at < ready {
-        if events[at].token.value == READ_TOKEN { saw_read = true }
-        if events[at].token.value == WRITE_TOKEN { saw_write = true }
-        if !events[at].readable { os.exit(24i32) }
-        if events[at].failed { os.exit(25i32) }
-        at += 1usize
+    var polls = 0usize
+    while !(saw_read && saw_write) && polls < 5usize {
+        let (ready, ready_error) = async.poll(&loop, events[..], time.Duration { nanos: 2000000000i64 })
+        if ready_error != ok { os.exit(22i32) }
+        var at = 0usize
+        while at < ready {
+            if events[at].token.value == READ_TOKEN { saw_read = true }
+            if events[at].token.value == WRITE_TOKEN { saw_write = true }
+            if !events[at].readable { os.exit(24i32) }
+            if events[at].failed { os.exit(25i32) }
+            at += 1usize
+        }
+        polls += 1usize
     }
     if !saw_read { os.exit(26i32) }
     if !saw_write { os.exit(27i32) }

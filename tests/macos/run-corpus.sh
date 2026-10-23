@@ -22,7 +22,6 @@ expected() {
     extern_many) echo any ;;
     # The shell services (clipboard, notices, printing, permissions, activation, lifecycle, file access) answer Unsupported
     # on macOS until there is a Cocoa implementation (D5199); these fixtures check them.
-    os_exchange|os_shell|ui_activation|ui_file_access|ui_lifecycle|ui_notification|ui_permissions|ui_print|ui_shell_ops) echo any ;;
     # Reads DejaVu Sans from /usr/share/fonts/truetype/dejavu, which a Mac does not have (exit 30).
     ui_selection3_v2) echo any ;;
     *) echo 0 ;;
