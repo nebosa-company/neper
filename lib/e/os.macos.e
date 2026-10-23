@@ -1497,6 +1497,12 @@ fn pipe() -> (File, File, err) {
     if result < 0isize { ret (reading, writing, from_errno(result)) }
     reading.raw = usize(pair[0usize])
     writing.raw = usize(pair[1usize])
+    // Close-on-exec as on Linux (pipe2 there): a child must not hold the other end of its own pipe, or its stdin
+    // never reaches end of file. macOS has no pipe2, so it is a second call, and a fork between them can leak.
+    let marked_read = syscall(SYS_FCNTL, reading.raw, F_SETFD, 1usize, 0usize, 0usize, 0usize)
+    if marked_read < 0isize { ret (reading, writing, from_errno(marked_read)) }
+    let marked_write = syscall(SYS_FCNTL, writing.raw, F_SETFD, 1usize, 0usize, 0usize, 0usize)
+    if marked_write < 0isize { ret (reading, writing, from_errno(marked_write)) }
     ret (reading, writing, ok)
 }
 
