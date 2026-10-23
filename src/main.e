@@ -14185,6 +14185,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         var early_builder: nir.Builder = zero
         // The cap and the explanations (D348) ride the builder the oracles copy from.
         early_builder.cpu_level = 1usize
+        early_builder.apple_variadic = same(args[4usize], "aarch64") && same(args[5usize], "macos")
         if trailing_flags {
             early_builder.inline_cap = inline_cap_flag(args)
             early_builder.cpu_level = cpu_level_flag(args)
