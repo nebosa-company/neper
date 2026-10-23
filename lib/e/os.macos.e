@@ -2347,9 +2347,7 @@ fn sandbox(policy: *const SandboxPolicy) -> err {
     ret ok
 }
 
-// ---- Windows (C107's shape, D5199): a macOS program has no window system yet, so the types the fence names are
-// here for the modules above `e.os` to compile against, and the verbs that need a window answer `Unsupported`.
-// `window_poll` reports no event, not an error, as on NeperOS. The Cocoa implementation replaces this block.
+// ---- Windows (D5202): the types the fence names. The verbs follow, over AppKit.
 type Window = struct { raw: usize }
 type WindowMode = enum u8 { Windowed, Maximized, Fullscreen }
 type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool, mode: WindowMode }
@@ -2361,30 +2359,834 @@ type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, Pointe
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
 type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
 
+// ---- Cocoa: Objective-C through libobjc, AppKit by dlopen (D5202). Every message goes through `objc_msgSend`, declared
+// once per signature (a symbol named twice is one import). A window is an NSWindow whose content view's layer takes
+// the pixels as a CGImage; events are pumped from NSApplication and translated to the Linux and Windows shape (the
+// X11 keysyms for keys, pixels for positions, 120 a wheel notch). A rectangle comes back through KVC and
+// `NSValue getValue:`, since a four-double return is not yet a thing the aarch64 back end can take (queue item C178).
+type CgRect = struct { x: f64, y: f64, w: f64, h: f64 }
+type CgPoint = struct { x: f64, y: f64 }
+type CgSize = struct { w: f64, h: f64 }
+
+@import("/usr/lib/libobjc.A.dylib", "objc_getClass")
+extern fn objc_get_class(name: *const u8) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "sel_registerName")
+extern fn objc_sel_register(name: *const u8) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_autoreleasePoolPush")
+extern fn objc_pool_push() -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_autoreleasePoolPop")
+extern fn objc_pool_pop(pool: usize)
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg0(receiver: usize, selector: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg1(receiver: usize, selector: usize, a: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg2(receiver: usize, selector: usize, a: usize, b: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg4(receiver: usize, selector: usize, a: usize, b: usize, c: usize, d: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_flag(receiver: usize, selector: usize, a: i32) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_double(receiver: usize, selector: usize, a: f64) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_size(receiver: usize, selector: usize, size: CgSize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_window(receiver: usize, selector: usize, rect: CgRect, style: usize, backing: usize, deferred: i32) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_double_ret(receiver: usize, selector: usize) -> f64
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_point_ret(receiver: usize, selector: usize) -> CgPoint
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_bool_ret(receiver: usize, selector: usize) -> u8
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_short_ret(receiver: usize, selector: usize) -> u16
+
+@import("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", "CFStringCreateWithBytes")
+extern fn cf_string_create(allocator: usize, bytes: *const u8, count: usize, encoding: u32, external: i32) -> usize
+
+@import("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", "CFDataCreate")
+extern fn cf_data_create(allocator: usize, bytes: usize, length: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", "CFRelease")
+extern fn cf_release(object: usize)
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGColorSpaceCreateDeviceRGB")
+extern fn cg_color_space() -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGDataProviderCreateWithCFData")
+extern fn cg_provider_with_data(data: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGImageCreate")
+extern fn cg_image_create(width: usize, height: usize, bits: usize, bits_pixel: usize, row: usize, space: usize, info: u32, provider: usize, decode: usize, interpolate: i32, intent: i32) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGImageRelease")
+extern fn cg_image_release(image: usize)
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGDataProviderRelease")
+extern fn cg_provider_release(provider: usize)
+
+@import("c", "strlen")
+extern fn raw_strlen(text: usize) -> usize
+
+const COCOA_TABLE: usize = 16usize
+const COCOA_RING: usize = 256usize
+const CF_UTF8: u32 = 134217984u32
+
+var cocoa_ready: bool = zero
+var cocoa_failed: bool = zero
+var cocoa_app: usize = 0usize
+var cocoa_space: usize = 0usize
+var cocoa_mode: usize = 0usize
+var cocoa_cursor_hidden: bool = zero
+var cocoa_windows: [16]usize = zero
+var cocoa_layers: [16]usize = zero
+var cocoa_widths: [16]u32 = zero
+var cocoa_heights: [16]u32 = zero
+var cocoa_scales: [16]u32 = zero
+var cocoa_focused: [16]bool = zero
+var cocoa_shown: [16]bool = zero
+var cocoa_paint: [16]bool = zero
+var cocoa_events: [256]WindowEvent = zero
+var cocoa_head: usize = 0usize
+var cocoa_count: usize = 0usize
+var cocoa_flags: usize = 0usize
+
+fn cocoa_sel(name: str) -> usize { ret objc_sel_register(&name[0usize]) }
+
+fn cocoa_class(name: str) -> usize { ret objc_get_class(&name[0usize]) }
+
+// A CFString (toll-free with NSString) made from the bytes, which the caller releases.
+fn cocoa_text(text: str) -> usize {
+    if text.len == 0usize {
+        let nothing = "\x00"
+        ret cf_string_create(0usize, &nothing[0usize], 0usize, CF_UTF8, 0i32)
+    }
+    ret cf_string_create(0usize, &text[0usize], text.len, CF_UTF8, 0i32)
+}
+
+// The text of an NSString into `out`, as many bytes as fit; the length it had.
+fn cocoa_read_text(string: usize, out: []u8) -> usize {
+    if string == 0usize { ret 0usize }
+    let pointer = msg0(string, cocoa_sel("UTF8String\x00"))
+    if pointer == 0usize { ret 0usize }
+    let length = raw_strlen(pointer)
+    var count = length
+    if count > out.len { count = out.len }
+    if count != 0usize {
+        let copied = raw_memcpy(mem.address_of(&out[0usize]), pointer, count)
+    }
+    ret length
+}
+
+fn cocoa_rect(object: usize, key: str) -> CgRect {
+    var rect: CgRect = zero
+    let name = cocoa_text(key)
+    let boxed = msg1(object, cocoa_sel("valueForKey:\x00"), name)
+    cf_release(name)
+    if boxed != 0usize {
+        let copied = msg1(boxed, cocoa_sel("getValue:\x00"), mem.address_of(&rect))
+    }
+    ret rect
+}
+
+fn cocoa_start() -> err {
+    if cocoa_ready { ret ok }
+    if cocoa_failed { ret Unsupported }
+    let foundation = "/System/Library/Frameworks/Foundation.framework/Foundation\x00"
+    let appkit = "/System/Library/Frameworks/AppKit.framework/AppKit\x00"
+    if raw_dlopen(mem.address_of(&foundation[0usize]), RTLD_NOW) == 0usize {
+        cocoa_failed = true
+        ret Unsupported
+    }
+    if raw_dlopen(mem.address_of(&appkit[0usize]), RTLD_NOW) == 0usize {
+        cocoa_failed = true
+        ret Unsupported
+    }
+    let pool = objc_pool_push()
+    cocoa_app = msg0(cocoa_class("NSApplication\x00"), cocoa_sel("sharedApplication\x00"))
+    if cocoa_app == 0usize {
+        cocoa_failed = true
+        objc_pool_pop(pool)
+        ret Unsupported
+    }
+    let policy = msg1(cocoa_app, cocoa_sel("setActivationPolicy:\x00"), 0usize)
+    let launched = msg0(cocoa_app, cocoa_sel("finishLaunching\x00"))
+    cocoa_space = cg_color_space()
+    let mode = "kCFRunLoopDefaultMode"
+    cocoa_mode = cocoa_text(mode)
+    objc_pool_pop(pool)
+    cocoa_ready = true
+    ret ok
+}
+
+fn cocoa_push(event: WindowEvent) {
+    if cocoa_count >= COCOA_RING { ret }
+    cocoa_events[(cocoa_head + cocoa_count) % COCOA_RING] = event
+    cocoa_count += 1usize
+}
+
+fn cocoa_slot(w: Window) -> usize {
+    if w.raw == 0usize || w.raw > COCOA_TABLE { ret COCOA_TABLE }
+    if cocoa_windows[w.raw - 1usize] == 0usize { ret COCOA_TABLE }
+    ret w.raw - 1usize
+}
+
+fn cocoa_slot_of(window: usize) -> usize {
+    var at = 0usize
+    while at < COCOA_TABLE {
+        if cocoa_windows[at] == window && window != 0usize { ret at }
+        at += 1usize
+    }
+    ret COCOA_TABLE
+}
+
+fn cocoa_scale_percent(window: usize) -> u32 {
+    let scale = msg_double_ret(window, cocoa_sel("backingScaleFactor\x00"))
+    if scale < 1.0f64 { ret 100u32 }
+    ret u32(scale * 100.0f64 + 0.5f64)
+}
+
+// The content area in pixels.
+fn cocoa_content_pixels(slot: usize) -> (u32, u32) {
+    let view = msg0(cocoa_windows[slot], cocoa_sel("contentView\x00"))
+    let bounds = cocoa_rect(view, "bounds")
+    let scale = f64(cocoa_scales[slot]) / 100.0f64
+    var width = 0u32
+    var height = 0u32
+    if bounds.w > 0.0f64 { width = u32(bounds.w * scale + 0.5f64) }
+    if bounds.h > 0.0f64 { height = u32(bounds.h * scale + 0.5f64) }
+    ret (width, height)
+}
+
+// The modifier bits the Linux and Windows hosts report: shift 1, control 2, alt 4, meta 8, caps lock 16.
+fn cocoa_modifiers(flags: usize) -> u8 {
+    var bits = 0u8
+    if flags & 131072usize != 0usize { bits = bits | 1u8 }
+    if flags & 262144usize != 0usize { bits = bits | 2u8 }
+    if flags & 524288usize != 0usize { bits = bits | 4u8 }
+    if flags & 1048576usize != 0usize { bits = bits | 8u8 }
+    if flags & 65536usize != 0usize { bits = bits | 16u8 }
+    ret bits
+}
+
+// A macOS virtual key code as the X11 keysym the other hosts send (ANSI layout; the letters and digits are their
+// unshifted ASCII).
+fn cocoa_keysym(code: u32) -> u32 {
+    if code == 0u32 { ret 97u32 }
+    if code == 1u32 { ret 115u32 }
+    if code == 2u32 { ret 100u32 }
+    if code == 3u32 { ret 102u32 }
+    if code == 4u32 { ret 104u32 }
+    if code == 5u32 { ret 103u32 }
+    if code == 6u32 { ret 122u32 }
+    if code == 7u32 { ret 120u32 }
+    if code == 8u32 { ret 99u32 }
+    if code == 9u32 { ret 118u32 }
+    if code == 11u32 { ret 98u32 }
+    if code == 12u32 { ret 113u32 }
+    if code == 13u32 { ret 119u32 }
+    if code == 14u32 { ret 101u32 }
+    if code == 15u32 { ret 114u32 }
+    if code == 16u32 { ret 121u32 }
+    if code == 17u32 { ret 116u32 }
+    if code == 18u32 { ret 49u32 }
+    if code == 19u32 { ret 50u32 }
+    if code == 20u32 { ret 51u32 }
+    if code == 21u32 { ret 52u32 }
+    if code == 22u32 { ret 54u32 }
+    if code == 23u32 { ret 53u32 }
+    if code == 24u32 { ret 61u32 }
+    if code == 25u32 { ret 57u32 }
+    if code == 26u32 { ret 55u32 }
+    if code == 27u32 { ret 45u32 }
+    if code == 28u32 { ret 56u32 }
+    if code == 29u32 { ret 48u32 }
+    if code == 30u32 { ret 93u32 }
+    if code == 31u32 { ret 111u32 }
+    if code == 32u32 { ret 117u32 }
+    if code == 33u32 { ret 91u32 }
+    if code == 34u32 { ret 105u32 }
+    if code == 35u32 { ret 112u32 }
+    if code == 36u32 { ret 65293u32 }
+    if code == 37u32 { ret 108u32 }
+    if code == 38u32 { ret 106u32 }
+    if code == 39u32 { ret 39u32 }
+    if code == 40u32 { ret 107u32 }
+    if code == 41u32 { ret 59u32 }
+    if code == 42u32 { ret 92u32 }
+    if code == 43u32 { ret 44u32 }
+    if code == 44u32 { ret 47u32 }
+    if code == 45u32 { ret 110u32 }
+    if code == 46u32 { ret 109u32 }
+    if code == 47u32 { ret 46u32 }
+    if code == 48u32 { ret 65289u32 }
+    if code == 49u32 { ret 32u32 }
+    if code == 50u32 { ret 96u32 }
+    if code == 51u32 { ret 65288u32 }
+    if code == 53u32 { ret 65307u32 }
+    if code == 54u32 { ret 65516u32 }
+    if code == 55u32 { ret 65515u32 }
+    if code == 56u32 { ret 65505u32 }
+    if code == 57u32 { ret 65509u32 }
+    if code == 58u32 { ret 65513u32 }
+    if code == 59u32 { ret 65507u32 }
+    if code == 60u32 { ret 65506u32 }
+    if code == 61u32 { ret 65514u32 }
+    if code == 62u32 { ret 65508u32 }
+    if code == 65u32 { ret 65454u32 }
+    if code == 67u32 { ret 65450u32 }
+    if code == 69u32 { ret 65451u32 }
+    if code == 71u32 { ret 65407u32 }
+    if code == 75u32 { ret 65455u32 }
+    if code == 76u32 { ret 65421u32 }
+    if code == 78u32 { ret 65453u32 }
+    if code == 81u32 { ret 65469u32 }
+    if code == 82u32 { ret 65456u32 }
+    if code == 83u32 { ret 65457u32 }
+    if code == 84u32 { ret 65458u32 }
+    if code == 85u32 { ret 65459u32 }
+    if code == 86u32 { ret 65460u32 }
+    if code == 87u32 { ret 65461u32 }
+    if code == 88u32 { ret 65462u32 }
+    if code == 89u32 { ret 65463u32 }
+    if code == 91u32 { ret 65464u32 }
+    if code == 92u32 { ret 65465u32 }
+    if code == 96u32 { ret 65474u32 }
+    if code == 97u32 { ret 65475u32 }
+    if code == 98u32 { ret 65476u32 }
+    if code == 99u32 { ret 65472u32 }
+    if code == 100u32 { ret 65477u32 }
+    if code == 101u32 { ret 65478u32 }
+    if code == 103u32 { ret 65480u32 }
+    if code == 105u32 { ret 65482u32 }
+    if code == 107u32 { ret 65483u32 }
+    if code == 109u32 { ret 65479u32 }
+    if code == 111u32 { ret 65481u32 }
+    if code == 113u32 { ret 65484u32 }
+    if code == 114u32 { ret 65379u32 }
+    if code == 115u32 { ret 65360u32 }
+    if code == 116u32 { ret 65365u32 }
+    if code == 117u32 { ret 65535u32 }
+    if code == 118u32 { ret 65473u32 }
+    if code == 119u32 { ret 65367u32 }
+    if code == 120u32 { ret 65471u32 }
+    if code == 121u32 { ret 65366u32 }
+    if code == 122u32 { ret 65470u32 }
+    if code == 123u32 { ret 65361u32 }
+    if code == 124u32 { ret 65363u32 }
+    if code == 125u32 { ret 65364u32 }
+    if code == 126u32 { ret 65362u32 }
+    ret 0u32
+}
+
+// The modifier flag a modifier key sets, so a flags-changed event is a press or a release of that key.
+fn cocoa_modifier_flag(code: u32) -> usize {
+    if code == 56u32 || code == 60u32 { ret 131072usize }
+    if code == 59u32 || code == 62u32 { ret 262144usize }
+    if code == 58u32 || code == 61u32 { ret 524288usize }
+    if code == 55u32 || code == 54u32 { ret 1048576usize }
+    if code == 57u32 { ret 65536usize }
+    ret 0usize
+}
+
+// Each code point of an NSString's UTF-8, as Text events. Function keys come as private-use scalars, and control and
+// command chords as control characters: neither is text.
+fn cocoa_text_events(window: Window, modifiers: u8, string: usize) {
+    if modifiers & 10u8 != 0u8 { ret }
+    var bytes: [32]u8 = zero
+    let length = cocoa_read_text(string, bytes[0usize..31usize])
+    var at = 0usize
+    var limit = length
+    if limit > 31usize { limit = 31usize }
+    while at < limit {
+        let lead = u32(bytes[at])
+        var point = lead
+        var width = 1usize
+        if lead >= 240u32 && at + 3usize < limit {
+            point = ((lead & 7u32) << 18u32) | ((u32(bytes[at + 1usize]) & 63u32) << 12u32) | ((u32(bytes[at + 2usize]) & 63u32) << 6u32) | (u32(bytes[at + 3usize]) & 63u32)
+            width = 4usize
+        } else {
+            if lead >= 224u32 && at + 2usize < limit {
+                point = ((lead & 15u32) << 12u32) | ((u32(bytes[at + 1usize]) & 63u32) << 6u32) | (u32(bytes[at + 2usize]) & 63u32)
+                width = 3usize
+            } else {
+                if lead >= 192u32 && at + 1usize < limit {
+                    point = ((lead & 31u32) << 6u32) | (u32(bytes[at + 1usize]) & 63u32)
+                    width = 2usize
+                }
+            }
+        }
+        if point >= 32u32 && point != 127u32 && (point < 63232u32 || point > 63743u32) {
+            var event: WindowEvent = zero
+            event.kind = .Text
+            event.window = window
+            event.modifiers = modifiers
+            event.codepoint = point
+            cocoa_push(event)
+        }
+        at += width
+    }
+}
+
+// What an input event means to the program; true when nothing else should see it. The rest go on to AppKit, so the
+// title bar, the window buttons and dragging keep working.
+fn cocoa_translate(event: usize) -> bool {
+    let kind = msg0(event, cocoa_sel("type\x00"))
+    let slot = cocoa_slot_of(msg0(event, cocoa_sel("window\x00")))
+    if slot >= COCOA_TABLE { ret false }
+    var window: Window = zero
+    window.raw = slot + 1usize
+    let flags = msg0(event, cocoa_sel("modifierFlags\x00"))
+    let modifiers = cocoa_modifiers(flags)
+    let scale = f64(cocoa_scales[slot]) / 100.0f64
+    let is_down = kind == 1usize || kind == 3usize || kind == 25usize
+    let is_up = kind == 2usize || kind == 4usize || kind == 26usize
+    let is_move = kind == 5usize || kind == 6usize || kind == 7usize || kind == 27usize
+    if is_down || is_up || is_move || kind == 22usize {
+        let at = msg_point_ret(event, cocoa_sel("locationInWindow\x00"))
+        var pointer: WindowEvent = zero
+        pointer.window = window
+        pointer.x = i32(at.x * scale)
+        pointer.y = i32(f64(cocoa_heights[slot]) - at.y * scale)
+        pointer.modifiers = modifiers
+        // The title bar is above the content: AppKit's, not the program's.
+        if pointer.y < 0i32 || at.x < 0.0f64 { ret false }
+        if is_move {
+            pointer.kind = .PointerMove
+            cocoa_push(pointer)
+            ret false
+        }
+        if kind == 22usize {
+            var rows = msg_double_ret(event, cocoa_sel("scrollingDeltaY\x00"))
+            if msg_bool_ret(event, cocoa_sel("hasPreciseScrollingDeltas\x00")) != 0u8 { rows = rows * 12.0f64 } else { rows = rows * 120.0f64 }
+            pointer.kind = .Scroll
+            pointer.delta = i32(rows)
+            if pointer.delta != 0i32 { cocoa_push(pointer) }
+            ret true
+        }
+        pointer.kind = .PointerDown
+        if is_up { pointer.kind = .PointerUp }
+        var button = 0u8
+        if kind == 3usize || kind == 4usize { button = 1u8 }
+        if kind == 25usize || kind == 26usize {
+            let number = msg0(event, cocoa_sel("buttonNumber\x00"))
+            if number == 2usize { button = 2u8 }
+            if number == 3usize { button = 3u8 }
+            if number == 4usize { button = 4u8 }
+        }
+        pointer.button = button
+        cocoa_push(pointer)
+        ret false
+    }
+    if kind == 10usize || kind == 11usize {
+        let code = u32(msg_short_ret(event, cocoa_sel("keyCode\x00")))
+        var key: WindowEvent = zero
+        key.window = window
+        key.modifiers = modifiers
+        key.key = cocoa_keysym(code)
+        key.kind = .KeyDown
+        if kind == 11usize { key.kind = .KeyUp }
+        if kind == 10usize { key.repeat = msg_bool_ret(event, cocoa_sel("isARepeat\x00")) != 0u8 }
+        cocoa_push(key)
+        if kind == 10usize { cocoa_text_events(window, modifiers, msg0(event, cocoa_sel("characters\x00"))) }
+        ret true
+    }
+    if kind == 12usize {
+        let code = u32(msg_short_ret(event, cocoa_sel("keyCode\x00")))
+        let flag = cocoa_modifier_flag(code)
+        if flag != 0usize {
+            var key: WindowEvent = zero
+            key.window = window
+            key.modifiers = modifiers
+            key.key = cocoa_keysym(code)
+            key.kind = .KeyUp
+            if flags & flag != 0usize { key.kind = .KeyDown }
+            cocoa_push(key)
+        }
+        ret true
+    }
+    ret false
+}
+
+// What changed without an event: a window the user closed, focus, size and scale, and the frames owed.
+fn cocoa_poll_state() {
+    var at = 0usize
+    while at < COCOA_TABLE {
+        let handle = cocoa_windows[at]
+        if handle != 0usize {
+            var window: Window = zero
+            window.raw = at + 1usize
+            var event: WindowEvent = zero
+            event.window = window
+            let visible = msg_bool_ret(handle, cocoa_sel("isVisible\x00")) != 0u8
+            let miniaturized = msg_bool_ret(handle, cocoa_sel("isMiniaturized\x00")) != 0u8
+            if cocoa_shown[at] && !visible && !miniaturized {
+                cocoa_shown[at] = false
+                event.kind = .Close
+                cocoa_push(event)
+            }
+            let key = msg_bool_ret(handle, cocoa_sel("isKeyWindow\x00")) != 0u8
+            if key != cocoa_focused[at] {
+                cocoa_focused[at] = key
+                event.kind = .Focus
+                if !key { event.kind = .Blur }
+                cocoa_push(event)
+            }
+            cocoa_scales[at] = cocoa_scale_percent(handle)
+            let (width, height) = cocoa_content_pixels(at)
+            if (width != cocoa_widths[at] || height != cocoa_heights[at]) && width != 0u32 && height != 0u32 {
+                cocoa_widths[at] = width
+                cocoa_heights[at] = height
+                event.kind = .Resize
+                event.width = width
+                event.height = height
+                cocoa_push(event)
+                cocoa_paint[at] = true
+            }
+            if cocoa_paint[at] && cocoa_shown[at] {
+                cocoa_paint[at] = false
+                var paint: WindowEvent = zero
+                paint.kind = .Paint
+                paint.window = window
+                cocoa_push(paint)
+            }
+        }
+        at += 1usize
+    }
+}
+
+fn cocoa_pump(timeout_ns: i64) {
+    let pool = objc_pool_push()
+    let dates = cocoa_class("NSDate\x00")
+    var date = msg0(dates, cocoa_sel("distantPast\x00"))
+    if timeout_ns > 0i64 { date = msg_double(dates, cocoa_sel("dateWithTimeIntervalSinceNow:\x00"), f64(timeout_ns) / 1000000000.0f64) }
+    var waiting = true
+    while waiting {
+        let event = msg4(cocoa_app, cocoa_sel("nextEventMatchingMask:untilDate:inMode:dequeue:\x00"), 18446744073709551615usize, date, cocoa_mode, 1usize)
+        if event == 0usize {
+            waiting = false
+        } else {
+            if !cocoa_translate(event) {
+                let sent = msg1(cocoa_app, cocoa_sel("sendEvent:\x00"), event)
+            }
+            date = msg0(dates, cocoa_sel("distantPast\x00"))
+        }
+    }
+    cocoa_poll_state()
+    objc_pool_pop(pool)
+}
+
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
-    ret (none, Unsupported)
+    let started = cocoa_start()
+    if started != ok { ret (none, started) }
+    var slot = 0usize
+    while slot < COCOA_TABLE && cocoa_windows[slot] != 0usize { slot += 1usize }
+    if slot == COCOA_TABLE { ret (none, OutOfMemory) }
+    let pool = objc_pool_push()
+    let screen = msg0(cocoa_class("NSScreen\x00"), cocoa_sel("mainScreen\x00"))
+    var scale_percent = 100u32
+    if screen != 0usize {
+        let factor = msg_double_ret(screen, cocoa_sel("backingScaleFactor\x00"))
+        if factor >= 1.0f64 { scale_percent = u32(factor * 100.0f64 + 0.5f64) }
+    }
+    let scale = f64(scale_percent) / 100.0f64
+    var frame: CgRect = zero
+    frame.x = 100.0f64 + f64(slot) * 24.0f64
+    frame.y = 100.0f64 + f64(slot) * 24.0f64
+    frame.w = f64(options.width) / scale
+    frame.h = f64(options.height) / scale
+    var style = 7usize
+    if options.resizable { style = 15usize }
+    let allocated = msg0(cocoa_class("NSWindow\x00"), cocoa_sel("alloc\x00"))
+    let window = msg_window(allocated, cocoa_sel("initWithContentRect:styleMask:backing:defer:\x00"), frame, style, 2usize, 0i32)
+    if window == 0usize {
+        objc_pool_pop(pool)
+        ret (none, Failed)
+    }
+    let kept = msg_flag(window, cocoa_sel("setReleasedWhenClosed:\x00"), 0i32)
+    let moving = msg_flag(window, cocoa_sel("setAcceptsMouseMovedEvents:\x00"), 1i32)
+    let title = cocoa_text(options.title)
+    let titled = msg1(window, cocoa_sel("setTitle:\x00"), title)
+    cf_release(title)
+    let view = msg0(window, cocoa_sel("contentView\x00"))
+    let wanted = msg_flag(view, cocoa_sel("setWantsLayer:\x00"), 1i32)
+    let layer = msg0(view, cocoa_sel("layer\x00"))
+    if layer != 0usize {
+        let gravity = cocoa_text("topLeft")
+        let placed = msg1(layer, cocoa_sel("setContentsGravity:\x00"), gravity)
+        cf_release(gravity)
+        let scaled = msg_double(layer, cocoa_sel("setContentsScale:\x00"), scale)
+        let opaque = msg_flag(layer, cocoa_sel("setOpaque:\x00"), 1i32)
+    }
+    cocoa_windows[slot] = window
+    cocoa_layers[slot] = layer
+    cocoa_scales[slot] = scale_percent
+    cocoa_widths[slot] = options.width
+    cocoa_heights[slot] = options.height
+    cocoa_focused[slot] = false
+    cocoa_shown[slot] = false
+    cocoa_paint[slot] = false
+    var handle: Window = zero
+    handle.raw = slot + 1usize
+    if options.visible {
+        let ordered = msg1(window, cocoa_sel("makeKeyAndOrderFront:\x00"), 0usize)
+        let active = msg_flag(cocoa_app, cocoa_sel("activateIgnoringOtherApps:\x00"), 1i32)
+        cocoa_shown[slot] = true
+        cocoa_paint[slot] = true
+        if options.mode == .Maximized { let zoomed = msg1(window, cocoa_sel("zoom:\x00"), 0usize) }
+        if options.mode == .Fullscreen { let full = msg1(window, cocoa_sel("toggleFullScreen:\x00"), 0usize) }
+    }
+    objc_pool_pop(pool)
+    ret (handle, ok)
 }
-fn window_close(w: Window) -> err { ret Unsupported }
+
+fn window_close(w: Window) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    let pool = objc_pool_push()
+    let window = cocoa_windows[slot]
+    cocoa_shown[slot] = false
+    let closed = msg0(window, cocoa_sel("close\x00"))
+    let released = msg0(window, cocoa_sel("release\x00"))
+    cocoa_windows[slot] = 0usize
+    cocoa_layers[slot] = 0usize
+    objc_pool_pop(pool)
+    ret ok
+}
+
 fn window_metrics(w: Window) -> (WindowMetrics, err) {
-    var none: WindowMetrics = zero
-    ret (none, Unsupported)
+    var metrics: WindowMetrics = zero
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret (metrics, NotFound) }
+    let pool = objc_pool_push()
+    let window = cocoa_windows[slot]
+    cocoa_scales[slot] = cocoa_scale_percent(window)
+    let (width, height) = cocoa_content_pixels(slot)
+    metrics.width = width
+    metrics.height = height
+    metrics.scale_percent = cocoa_scales[slot]
+    metrics.focused = msg_bool_ret(window, cocoa_sel("isKeyWindow\x00")) != 0u8
+    metrics.visible = msg_bool_ret(window, cocoa_sel("isVisible\x00")) != 0u8
+    objc_pool_pop(pool)
+    ret (metrics, ok)
 }
-fn window_title(w: Window, value: str) -> err { ret Unsupported }
-fn window_visible(w: Window, value: bool) -> err { ret Unsupported }
-fn window_cursor(w: Window, shape: CursorShape) -> err { ret Unsupported }
-fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err { ret Unsupported }
-fn window_capture(w: Window, on: bool) -> err { ret Unsupported }
+
+fn window_title(w: Window, value: str) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    let pool = objc_pool_push()
+    let title = cocoa_text(value)
+    let set = msg1(cocoa_windows[slot], cocoa_sel("setTitle:\x00"), title)
+    cf_release(title)
+    objc_pool_pop(pool)
+    ret ok
+}
+
+fn window_visible(w: Window, value: bool) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    let pool = objc_pool_push()
+    if value {
+        let ordered = msg1(cocoa_windows[slot], cocoa_sel("makeKeyAndOrderFront:\x00"), 0usize)
+        let active = msg_flag(cocoa_app, cocoa_sel("activateIgnoringOtherApps:\x00"), 1i32)
+        cocoa_shown[slot] = true
+        cocoa_paint[slot] = true
+    } else {
+        cocoa_shown[slot] = false
+        let hidden = msg1(cocoa_windows[slot], cocoa_sel("orderOut:\x00"), 0usize)
+    }
+    objc_pool_pop(pool)
+    ret ok
+}
+
+fn window_cursor(w: Window, shape: CursorShape) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    let pool = objc_pool_push()
+    let cursors = cocoa_class("NSCursor\x00")
+    if shape == .Hidden {
+        if !cocoa_cursor_hidden {
+            cocoa_cursor_hidden = true
+            let hidden = msg0(cursors, cocoa_sel("hide\x00"))
+        }
+        objc_pool_pop(pool)
+        ret ok
+    }
+    if cocoa_cursor_hidden {
+        cocoa_cursor_hidden = false
+        let shown = msg0(cursors, cocoa_sel("unhide\x00"))
+    }
+    var name = "arrowCursor\x00"
+    if shape == .Text { name = "IBeamCursor\x00" }
+    if shape == .Hand { name = "pointingHandCursor\x00" }
+    if shape == .Crosshair { name = "crosshairCursor\x00" }
+    if shape == .ResizeHorizontal { name = "resizeLeftRightCursor\x00" }
+    if shape == .ResizeVertical { name = "resizeUpDownCursor\x00" }
+    let cursor = msg0(cursors, cocoa_sel(name))
+    if cursor != 0usize {
+        let applied = msg0(cursor, cocoa_sel("set\x00"))
+    }
+    objc_pool_pop(pool)
+    ret ok
+}
+
+// A drag that starts in a window keeps going to it on macOS, so there is nothing to capture.
+fn window_capture(w: Window, on: bool) -> err {
+    if cocoa_slot(w) >= COCOA_TABLE { ret NotFound }
+    ret ok
+}
+
+// Bgra8 packed into u32, drawn at the content's origin: a CFData copy of the pixels, a CGImage over it, and the
+// layer's contents.
+fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    if width == 0u32 || height == 0u32 { ret Failed }
+    let count = usize(width) * usize(height)
+    if pixels.len < count { ret Failed }
+    let pool = objc_pool_push()
+    let data = cf_data_create(0usize, mem.address_of(&pixels[0usize]), count * 4usize)
+    let provider = cg_provider_with_data(data)
+    // 8194: little-endian 32-bit, alpha first and premultiplied, which is Bgra8 in a u32.
+    let image = cg_image_create(usize(width), usize(height), 8usize, 32usize, usize(width) * 4usize, cocoa_space, 8194u32, provider, 0usize, 0i32, 0i32)
+    var result = ok
+    if image == 0usize || cocoa_layers[slot] == 0usize {
+        result = Failed
+    } else {
+        let set = msg1(cocoa_layers[slot], cocoa_sel("setContents:\x00"), image)
+    }
+    if image != 0usize { cg_image_release(image) }
+    cg_provider_release(provider)
+    cf_release(data)
+    objc_pool_pop(pool)
+    ret result
+}
+
+// The view and the window, for a gpu surface of kind Cocoa.
+fn window_native(w: Window) -> (usize, usize, err) {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret (0usize, 0usize, NotFound) }
+    let view = msg0(cocoa_windows[slot], cocoa_sel("contentView\x00"))
+    ret (view, cocoa_windows[slot], ok)
+}
+
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
-    var event: WindowEvent = zero
-    ret (event, false, ok)
+    var none: WindowEvent = zero
+    if !cocoa_ready { ret (none, false, Unsupported) }
+    if cocoa_count == 0usize { cocoa_pump(timeout_ns) }
+    if cocoa_count == 0usize { ret (none, false, ok) }
+    let event = cocoa_events[cocoa_head]
+    cocoa_head = (cocoa_head + 1usize) % COCOA_RING
+    cocoa_count = cocoa_count - 1usize
+    ret (event, true, ok)
 }
+
+// The screens, the main one (the menu bar's) first; sizes in pixels and a position from the primary's top left.
 fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
     var none: []const MonitorInfo = zero
-    ret (none, Unsupported)
+    if limit == 0usize { ret (none, Unsupported) }
+    let started = cocoa_start()
+    if started != ok { ret (none, started) }
+    let pool = objc_pool_push()
+    let screens = msg0(cocoa_class("NSScreen\x00"), cocoa_sel("screens\x00"))
+    var total = 0usize
+    if screens != 0usize { total = msg0(screens, cocoa_sel("count\x00")) }
+    if total > limit { total = limit }
+    if total == 0usize {
+        objc_pool_pop(pool)
+        ret (none, NotFound)
+    }
+    let (list, list_error) = mem.alloc[MonitorInfo](a, total)
+    if list_error != ok {
+        objc_pool_pop(pool)
+        ret (none, OutOfMemory)
+    }
+    let first = msg1(screens, cocoa_sel("objectAtIndex:\x00"), 0usize)
+    let primary = cocoa_rect(first, "frame")
+    var at = 0usize
+    while at < total {
+        let screen = msg1(screens, cocoa_sel("objectAtIndex:\x00"), at)
+        let frame = cocoa_rect(screen, "frame")
+        let work = cocoa_rect(screen, "visibleFrame")
+        var factor = msg_double_ret(screen, cocoa_sel("backingScaleFactor\x00"))
+        if factor < 1.0f64 { factor = 1.0f64 }
+        var info: MonitorInfo = zero
+        info.x = i32(frame.x * factor)
+        info.y = i32((primary.h - frame.y - frame.h) * factor)
+        info.width = u32(frame.w * factor)
+        info.height = u32(frame.h * factor)
+        info.work_x = i32(work.x * factor)
+        info.work_y = i32((primary.h - work.y - work.h) * factor)
+        info.work_width = u32(work.w * factor)
+        info.work_height = u32(work.h * factor)
+        info.scale_percent = u32(factor * 100.0f64 + 0.5f64)
+        info.primary = at == 0usize
+        list[at] = info
+        at += 1usize
+    }
+    objc_pool_pop(pool)
+    ret (list[0usize..total], ok)
 }
-fn clipboard_text(a: *mem.Arena) -> (str, err) { ret ("", Unsupported) }
-fn set_clipboard_text(value: str) -> err { ret Unsupported }
+
+fn clipboard_text(a: *mem.Arena) -> (str, err) {
+    let started = cocoa_start()
+    if started != ok { ret ("", started) }
+    let pool = objc_pool_push()
+    let board = msg0(cocoa_class("NSPasteboard\x00"), cocoa_sel("generalPasteboard\x00"))
+    let kind = cocoa_text("public.utf8-plain-text")
+    let string = msg1(board, cocoa_sel("stringForType:\x00"), kind)
+    cf_release(kind)
+    var text = ""
+    var result = ok
+    if string != 0usize {
+        let pointer = msg0(string, cocoa_sel("UTF8String\x00"))
+        let length = raw_strlen(pointer)
+        if length != 0usize {
+            let (bytes, bytes_error) = mem.alloc[u8](a, length)
+            if bytes_error != ok {
+                result = OutOfMemory
+            } else {
+                let copied = raw_memcpy(mem.address_of(&bytes[0usize]), pointer, length)
+                text = bytes[0usize..length]
+            }
+        }
+    }
+    objc_pool_pop(pool)
+    ret (text, result)
+}
+
+fn set_clipboard_text(value: str) -> err {
+    let started = cocoa_start()
+    if started != ok { ret started }
+    let pool = objc_pool_push()
+    let board = msg0(cocoa_class("NSPasteboard\x00"), cocoa_sel("generalPasteboard\x00"))
+    let cleared = msg0(board, cocoa_sel("clearContents\x00"))
+    let kind = cocoa_text("public.utf8-plain-text")
+    let string = cocoa_text(value)
+    let stored = msg2(board, cocoa_sel("setString:forType:\x00"), string, kind)
+    cf_release(string)
+    cf_release(kind)
+    objc_pool_pop(pool)
+    if stored & 255usize == 0usize { ret Failed }
+    ret ok
+}
+
 fn accessibility_listening(w: Window) -> bool { ret false }
 fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err { ret Unsupported }
 fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
