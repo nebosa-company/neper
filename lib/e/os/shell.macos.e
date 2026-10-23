@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: false, lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: false, screen_capture: false, biometrics: false, photo_picker: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -526,16 +526,148 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
 // so. ponytail: `zenity --file-selection` would be the same tool-shaped path as
 // `xdg-open`, when a caller needs it.
 
+// The path of an NSURL, copied into `a`.
+fn url_path(a: *mem.Arena, url: usize) -> (str, err) {
+    let string = os.msg0(url, os.cocoa_sel("path\x00"))
+    var none: [1]u8 = zero
+    let length = os.cocoa_read_text(string, none[0usize..0usize])
+    if length == 0usize { ret ("", Failed) }
+    let (text, text_error) = mem.alloc[u8](a, length)
+    if text_error != ok { ret ("", text_error) }
+    let copied = os.cocoa_read_text(string, text[0usize..length])
+    ret (text[0usize..length], ok)
+}
+
+// `*.txt` is the extension `txt`; `*` and `*.*` name no extension and so allow every file.
+fn pattern_extension(pattern: str) -> str {
+    if pattern.len > 2usize && pattern[0usize] == 42u8 && pattern[1usize] == 46u8 && pattern[2usize] != 42u8 { ret pattern[2usize..pattern.len] }
+    ret ""
+}
+
+// NSOpenPanel and NSSavePanel, run modally; a dismissed panel is `Cancelled`. ponytail: `allowedFileTypes` is the
+// extension list the panels deprecated for content types but still honour.
 fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str, err) {
     var nothing: []const str = zero
     if dialog.filters.len > 16usize { ret (nothing, Invalid) }
     if dialog.kind != .Open && dialog.multiple { ret (nothing, Invalid) }
-    ret (nothing, Unsupported)
+    let started = os.cocoa_start()
+    if started != ok { ret (nothing, started) }
+    let pool = os.objc_pool_push()
+    var panel = 0usize
+    if dialog.kind == .Save {
+        panel = os.msg0(os.cocoa_class("NSSavePanel\x00"), os.cocoa_sel("savePanel\x00"))
+    } else {
+        panel = os.msg0(os.cocoa_class("NSOpenPanel\x00"), os.cocoa_sel("openPanel\x00"))
+        let files = os.msg_flag(panel, os.cocoa_sel("setCanChooseFiles:\x00"), yes_no(dialog.kind == .Open))
+        let folders = os.msg_flag(panel, os.cocoa_sel("setCanChooseDirectories:\x00"), yes_no(dialog.kind == .Folder))
+        let several = os.msg_flag(panel, os.cocoa_sel("setAllowsMultipleSelection:\x00"), yes_no(dialog.multiple))
+    }
+    let creating = os.msg_flag(panel, os.cocoa_sel("setCanCreateDirectories:\x00"), 1i32)
+    var held: [24]usize = zero
+    var holds = 0usize
+    if dialog.title.len != 0usize {
+        let title = os.cocoa_text(dialog.title)
+        held[holds] = title
+        holds += 1usize
+        let titled = os.msg1(panel, os.cocoa_sel("setTitle:\x00"), title)
+        let messaged = os.msg1(panel, os.cocoa_sel("setMessage:\x00"), title)
+    }
+    if dialog.kind == .Save && dialog.initial.len != 0usize {
+        let name = os.cocoa_text(dialog.initial)
+        held[holds] = name
+        holds += 1usize
+        let named = os.msg1(panel, os.cocoa_sel("setNameFieldStringValue:\x00"), name)
+    }
+    if dialog.folder.len != 0usize {
+        let folder = os.cocoa_text(dialog.folder)
+        held[holds] = folder
+        holds += 1usize
+        let url = os.msg1(os.cocoa_class("NSURL\x00"), os.cocoa_sel("fileURLWithPath:\x00"), folder)
+        let placed = os.msg1(panel, os.cocoa_sel("setDirectoryURL:\x00"), url)
+    }
+    var types: [17]usize = zero
+    var type_count = 0usize
+    var at = 0usize
+    while at < dialog.filters.len {
+        let extension = pattern_extension(dialog.filters[at].pattern)
+        if extension.len != 0usize {
+            let name = os.cocoa_text(extension)
+            types[type_count] = name
+            type_count += 1usize
+        }
+        at += 1usize
+    }
+    if type_count == 0usize && dialog.kind == .Save && dialog.default_extension.len != 0usize {
+        types[0usize] = os.cocoa_text(dialog.default_extension)
+        type_count = 1usize
+    }
+    if type_count != 0usize {
+        let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&types[0usize]), type_count)
+        let allowed = os.msg1(panel, os.cocoa_sel("setAllowedFileTypes:\x00"), list)
+    }
+    let response = os.msg0(panel, os.cocoa_sel("runModal\x00"))
+    var picked: []str = zero
+    var result = ok
+    if response != 1usize {
+        result = Cancelled
+    } else if dialog.kind == .Save {
+        let (chosen, chosen_error) = mem.alloc[str](a, 1usize)
+        if chosen_error != ok { result = chosen_error } else {
+            let (path, path_error) = url_path(a, os.msg0(panel, os.cocoa_sel("URL\x00")))
+            if path_error != ok { result = path_error } else {
+                chosen[0usize] = path
+                picked = chosen[0usize..1usize]
+            }
+        }
+    } else {
+        let urls = os.msg0(panel, os.cocoa_sel("URLs\x00"))
+        let count = os.msg0(urls, os.cocoa_sel("count\x00"))
+        let (chosen, chosen_error) = mem.alloc[str](a, count + 1usize)
+        if chosen_error != ok { result = chosen_error } else {
+            var index = 0usize
+            while index < count && result == ok {
+                let (path, path_error) = url_path(a, os.msg1(urls, os.cocoa_sel("objectAtIndex:\x00"), index))
+                if path_error != ok { result = path_error } else { chosen[index] = path }
+                index += 1usize
+            }
+            picked = chosen[0usize..count]
+        }
+    }
+    var release = 0usize
+    while release < holds {
+        os.cf_release(held[release])
+        release += 1usize
+    }
+    release = 0usize
+    while release < type_count {
+        os.cf_release(types[release])
+        release += 1usize
+    }
+    os.objc_pool_pop(pool)
+    ret (picked, result)
 }
 
+fn yes_no(on: bool) -> i32 {
+    if on { ret 1i32 }
+    ret 0i32
+}
+
+// The Recent Items list of the application menu and the Dock, through the shared document controller.
 fn recent_add(a: *mem.Arena, path: str) -> err {
     if path.len == 0usize { ret Invalid }
-    ret Unsupported
+    let (present, exists_error) = fs.exists(a, path)
+    if exists_error != ok { ret exists_error }
+    if !present { ret NotFound }
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let pool = os.objc_pool_push()
+    let text = os.cocoa_text(path)
+    let url = os.msg1(os.cocoa_class("NSURL\x00"), os.cocoa_sel("fileURLWithPath:\x00"), text)
+    let controller = os.msg0(os.cocoa_class("NSDocumentController\x00"), os.cocoa_sel("sharedDocumentController\x00"))
+    let noted = os.msg1(controller, os.cocoa_sel("noteNewRecentDocumentURL:\x00"), url)
+    os.cf_release(text)
+    os.objc_pool_pop(pool)
+    ret ok
 }
 // The activation a command line means: the first argument a URL when it has a
 // scheme before a colon and no separator, a file when it names one that exists,
