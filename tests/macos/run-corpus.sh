@@ -23,6 +23,11 @@ expected() {
     # extern_struct loads libnepercabi, which the real suite compiles from the fixture's cabi.c; proc_output runs into
     # the 60 s limit on a Mac, cause not found (os_process and os_gaps do not link there: neper_os_spawn is missing).
     extern_struct) echo any ;;
+    # The shell services (clipboard, notices, printing, permissions, activation, lifecycle, file access) answer Unsupported
+    # on macOS until there is a Cocoa implementation (D5199); these fixtures check them.
+    os_exchange|os_shell|ui_activation|ui_file_access|ui_lifecycle|ui_notification|ui_permissions|ui_print|ui_shell_ops) echo any ;;
+    # Reads DejaVu Sans from /usr/share/fonts/truetype/dejavu, which a Mac does not have (exit 30).
+    ui_selection3_v2) echo any ;;
     # os_gaps starts children (it runs on a Mac) and then checks the sandbox, which os.sandbox answers Unsupported on macOS.
     os_gaps) echo any ;;
     *) echo 0 ;;
