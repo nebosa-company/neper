@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -190,10 +190,19 @@ fn target_ready() -> err {
     var cancel: MenuImp = zero
     cancel.function = target_menu_cancel
     let third = objc_class_method(class, os.cocoa_sel("neperCancel:\x00"), cancel.bits, &types[0usize])
+    var task: MenuImp = zero
+    task.function = target_dock_task
+    let fourth = objc_class_method(class, os.cocoa_sel("neperTask:\x00"), task.bits, &types[0usize])
+    var dock: MenuImpReturn = zero
+    dock.function = target_dock_menu
+    let returning = "@@:@\x00"
+    let fifth = objc_class_method(class, os.cocoa_sel("applicationDockMenu:\x00"), dock.bits, &returning[0usize])
     objc_class_register(class)
     let object = os.msg0(os.msg0(class, os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
     if object == 0usize { ret Failed }
     shell_target = object
+    let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
+    let delegated = os.msg1(app, os.cocoa_sel("setDelegate:\x00"), object)
     ret ok
 }
 
@@ -339,22 +348,186 @@ fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, b
     ret (0u32, false, ok)
 }
 
-// A taskbar button's progress, overlay and jump list have no desktop standard;
-// the launcher APIs that had them are gone.
+// The Dock stands for the taskbar (D5209). Progress is the Dock tile's badge (`50%`, `...` while indeterminate, `!` for an
+// error); an overlay replaces the application's icon with the picture and a nil picture puts the system's back; a jump list is
+// the Dock menu, which the application delegate (the shell target) answers `applicationDockMenu:` with. A task is a menu item
+// whose represented object is `program`, a newline and `arguments`; choosing one runs it.
+type MenuImpReturn = union { function: fn(usize, usize, usize) -> usize, bits: usize }
+
+var dock_menu: usize = zero
+
+fn dock_tile() -> usize {
+    ret os.msg0(os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00")), os.cocoa_sel("dockTile\x00"))
+}
+
+fn dock_badge(label: str) {
+    let tile = dock_tile()
+    if label.len == 0usize {
+        let cleared = os.msg1(tile, os.cocoa_sel("setBadgeLabel:\x00"), 0usize)
+    } else {
+        let text = os.cocoa_text(label)
+        let set = os.msg1(tile, os.cocoa_sel("setBadgeLabel:\x00"), text)
+        os.cf_release(text)
+    }
+}
+
 fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed: u64, total: u64) -> err {
-    ret Unsupported
+    if state == .Normal || state == .Paused || state == .Error {
+        if total == 0u64 || completed > total { ret Invalid }
+    }
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let pool = os.objc_pool_push()
+    if state == .None {
+        dock_badge("")
+    } else if state == .Indeterminate {
+        dock_badge("...")
+    } else if state == .Error {
+        dock_badge("!")
+    } else {
+        var digits: [4]u8 = zero
+        let percent = (completed * 100u64) / total
+        var count = 0usize
+        if percent >= 100u64 {
+            digits[0usize] = 49u8
+            digits[1usize] = 48u8
+            digits[2usize] = 48u8
+            count = 3usize
+        } else if percent >= 10u64 {
+            digits[0usize] = u8(48u64 + percent / 10u64)
+            digits[1usize] = u8(48u64 + percent % 10u64)
+            count = 2usize
+        } else {
+            digits[0usize] = u8(48u64 + percent)
+            count = 1usize
+        }
+        var label: [5]u8 = zero
+        var at = 0usize
+        while at < count {
+            label[at] = digits[at]
+            at += 1usize
+        }
+        label[count] = 37u8
+        dock_badge(label[0usize..count + 1usize])
+    }
+    os.objc_pool_pop(pool)
+    ret ok
 }
 
 fn taskbar_overlay(a: *mem.Arena, w: os.Window, icon: Icon, description: str) -> err {
-    ret Unsupported
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let pool = os.objc_pool_push()
+    let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
+    var result = ok
+    if icon.width == 0u32 || icon.height == 0u32 {
+        let restored = os.msg1(app, os.cocoa_sel("setApplicationIconImage:\x00"), 0usize)
+    } else if !tray_valid_icon(icon) {
+        result = Invalid
+    } else {
+        let image = icon_image(icon)
+        if image == 0usize { result = Failed } else {
+            let set = os.msg1(app, os.cocoa_sel("setApplicationIconImage:\x00"), image)
+            let released = os.msg0(image, os.cocoa_sel("release\x00"))
+        }
+    }
+    os.objc_pool_pop(pool)
+    ret result
+}
+
+// The delegate's answer: the Dock menu made by the last `jump_list`, or none.
+@cc(c)
+fn target_dock_menu(this: usize, command: usize, sender: usize) -> usize {
+    ret dock_menu
+}
+
+// A Dock menu item: its program and arguments run in the background.
+@cc(c)
+fn target_dock_task(this: usize, command: usize, sender: usize) {
+    let held = os.msg0(sender, os.cocoa_sel("representedObject\x00"))
+    var text: [1024]u8 = zero
+    let length = os.cocoa_read_text(held, text[..])
+    if length == 0usize || length > 1000usize { ret }
+    // `sh` starts the program in the background and ends, so no child is left to wait for.
+    var line: [1040]u8 = zero
+    var out = 0usize
+    line[out] = 39u8
+    out += 1usize
+    var at = 0usize
+    while at < length && text[at] != 10u8 {
+        line[out] = text[at]
+        out += 1usize
+        at += 1usize
+    }
+    line[out] = 39u8
+    line[out + 1usize] = 32u8
+    out += 2usize
+    at += 1usize
+    while at < length {
+        line[out] = text[at]
+        out += 1usize
+        at += 1usize
+    }
+    let tail = " >/dev/null 2>&1 &"
+    var t = 0usize
+    while t < tail.len {
+        line[out] = tail[t]
+        out += 1usize
+        t += 1usize
+    }
+    var storage: [16384]u8 = zero
+    var scratch = mem.arena_from(storage[..])
+    var argv: [3]str = zero
+    argv[0usize] = "/bin/sh"
+    argv[1usize] = "-c"
+    argv[2usize] = line[0usize..out]
+    var options: os.SpawnOptions = zero
+    options.argv = argv[..]
+    options.inherit_env = true
+    options.stdio.stdout = os.File { raw: 1usize }
+    options.stdio.stderr = os.File { raw: 2usize }
+    let (child, spawn_error) = os.spawn_with_options(&scratch, options)
+    if spawn_error != ok { ret }
+    let (usage, wait_error) = os.wait_usage(child)
 }
 
 fn jump_list(a: *mem.Arena, tasks: []const JumpTask) -> err {
-    ret Unsupported
+    var at = 0usize
+    while at < tasks.len {
+        if tasks[at].title.len == 0usize || tasks[at].program.len == 0usize { ret Invalid }
+        at += 1usize
+    }
+    let ready = target_ready()
+    if ready != ok { ret ready }
+    let pool = os.objc_pool_push()
+    let menu = os.msg0(os.msg0(os.cocoa_class("NSMenu\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+    at = 0usize
+    while at < tasks.len {
+        let title = os.cocoa_text(tasks[at].title)
+        let nothing = os.cocoa_text("")
+        let entry = os.msg4(os.msg0(os.cocoa_class("NSMenuItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithTitle:action:keyEquivalent:\x00"), title, os.cocoa_sel("neperTask:\x00"), nothing, 0usize)
+        os.cf_release(title)
+        os.cf_release(nothing)
+        let (joined, join_error) = join3(a, tasks[at].program, "\n", tasks[at].arguments)
+        if join_error != ok { ret join_error }
+        let held = os.cocoa_text(joined)
+        let stored = os.msg1(entry, os.cocoa_sel("setRepresentedObject:\x00"), held)
+        os.cf_release(held)
+        let targeted = os.msg1(entry, os.cocoa_sel("setTarget:\x00"), shell_target)
+        let added = os.msg1(menu, os.cocoa_sel("addItem:\x00"), entry)
+        let released = os.msg0(entry, os.cocoa_sel("release\x00"))
+        at += 1usize
+    }
+    if dock_menu != 0usize { let dropped = os.msg0(dock_menu, os.cocoa_sel("release\x00")) }
+    dock_menu = menu
+    os.objc_pool_pop(pool)
+    ret ok
 }
 
 fn jump_list_clear(a: *mem.Arena) -> err {
-    ret Unsupported
+    if dock_menu != 0usize { let dropped = os.msg0(dock_menu, os.cocoa_sel("release\x00")) }
+    dock_menu = 0usize
+    ret ok
 }
 
 // A program by the PATH's first directory that holds it; `execve` searches nothing.
