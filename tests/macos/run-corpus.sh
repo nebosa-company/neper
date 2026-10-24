@@ -13,7 +13,11 @@ runner=("$@")
 expected() {
   case "$1" in
     gpu_barrier_helper_occurrence|gpu_barrier_occurrence|gpu_divergence|release_build|trap_backtrace) echo 134 ;;
-    incremental|incremental_deleted|incremental_fallback|incremental_layout|incremental_value) echo any ;;
+    # The unedited sources' answers, which the same program gives on Windows (incremental 7, deleted 5, fallback 3, layout 7, value 8).
+    incremental|incremental_layout) echo 7 ;;
+    incremental_deleted) echo 5 ;;
+    incremental_fallback) echo 3 ;;
+    incremental_value) echo 8 ;;
     # The linux suite's answers, which hold on a Mac too (layout_attributes, inline_nested), and `when_target`'s sum of the arms
     # a Mac takes: 127 for the OS, plus 96 for its code and 8 more on x64.
     layout_attributes) echo 35 ;;
