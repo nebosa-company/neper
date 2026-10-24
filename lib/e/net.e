@@ -334,6 +334,13 @@ fn map_error_with_code(source_error: err, code: i32) -> err {
     if code == 101i32 || code == 113i32 || code == 10051i32 || code == 10065i32 { ret Unreachable }
     if code == 110i32 || code == 10060i32 { ret Timeout }
     if code == 98i32 || code == 10048i32 { ret AddressInUse }
+    // macOS numbers these differently from Linux: refused 61, reset 54, no route 51 and 65, address in use 48.
+    when target.os == .Macos {
+        if code == 61i32 { ret Refused }
+        if code == 54i32 { ret Reset }
+        if code == 51i32 || code == 65i32 { ret Unreachable }
+        if code == 48i32 { ret AddressInUse }
+    }
     ret Failed
 }
 
@@ -607,6 +614,15 @@ fn resolve_with_control(a: *mem.Arena, host: str, port: u16, family: Family, con
     ret (addresses, resolve_error)
 }
 
+// EISCONN: 106 on Linux, 10056 on Windows, 56 on macOS.
+fn already_connected(code: i32) -> bool {
+    if code == 106i32 || code == 10056i32 { ret true }
+    when target.os == .Macos {
+        if code == 56i32 { ret true }
+    }
+    ret false
+}
+
 fn tcp_connect_with_control(endpoint: Endpoint, control: cancel.Control) -> (Socket, err) {
     var empty: Socket = zero
     let check_error = precheck(control)
@@ -632,7 +648,7 @@ fn tcp_connect_with_control(endpoint: Endpoint, control: cancel.Control) -> (Soc
         let detail = os.last_error_detail("connect", "")
         // A second connect after writable readiness reports already-connected on both
         // hosts rather than repeating success.
-        if detail.native_code != 106i32 && detail.native_code != 10056i32 {
+        if !already_connected(detail.native_code) {
             let mapped = map_error_with_code(connect_error, detail.native_code)
             let unused = os.socket_close(socket)
             ret (empty, mapped)

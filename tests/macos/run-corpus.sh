@@ -24,9 +24,9 @@ expected() {
     inline_nested) echo 5 ;;
     when_target) if [ "${runner[0]:-}" = arch ]; then echo 231; else echo 223; fi ;;
     gpu_reshape) echo any ;;
-    # What a bare Mac cannot give them: a server or arguments the real suite supplies (net*, x_tds_integrated), Vulkan
+    # What a bare Mac cannot give them: a server or arguments the real suite supplies (net_ssh, x_tds_integrated), Vulkan
     # (gpu_fault_unchecked, gpu_vulkan_raw), the ELF and Linux system calls they check (freestanding, os_syscall).
-    net|net_http|net_http_pool|net_ssh|net_tls|x_tds_integrated|gpu_fault_unchecked|gpu_vulkan_raw|freestanding|os_syscall) echo any ;;
+    net_ssh|x_tds_integrated|gpu_fault_unchecked|gpu_vulkan_raw|freestanding|os_syscall) echo any ;;
     # Imports four glibc extensions (memrchr, rawmemchr, strchrnul, strverscmp) that libSystem lacks; dyld binds all or none.
     extern_many) echo any ;;
     # Reads DejaVu Sans from /usr/share/fonts/truetype/dejavu, which a Mac does not have (exit 30).
