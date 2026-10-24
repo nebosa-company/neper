@@ -46,7 +46,7 @@ fn change(queue: usize, ident: usize, flags: u16, udata: u64) -> isize {
 fn variant(flags: u16, late: bool, reverse: bool, wait_ns: i64) -> usize {
     var misses = 0usize
     var round = 0usize
-    while round < 300usize {
+    while round < 3000usize {
         let queue = u64(os.syscall(362usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize))
         let (first, first_error) = os.socket_open(.Ip4, .Datagram)
         let (second, second_error) = os.socket_open(.Ip4, .Datagram)
@@ -117,6 +117,7 @@ fn main(a: *mem.Arena) -> err {
     report("add", variant(0u16, false, false, 200000000i64))
     report("add+clear", variant(32u16, false, false, 200000000i64))
     report("add+receipt", variant(64u16, false, false, 200000000i64))
+    report("add+dispatch", variant(128u16, false, false, 200000000i64))
     report("add late", variant(0u16, true, false, 200000000i64))
     report("add reversed sends", variant(0u16, false, true, 200000000i64))
     report("add, one long wait", variant(0u16, false, false, 1000000000i64))
