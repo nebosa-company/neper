@@ -1,7 +1,7 @@
 id	category	score	evidence_bytes	title	status
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C178	compiler	0	1705	AAPCS64: an extern fn that returns an HFA of three or four doubles (CGRect, NSRect)	Found on 2026-10-23 by the macOS window probe: `extern fn f(r: usize, s: usize) -> CGRect` with CGRect = struct { x: f64, y: f64, w: f64, h: f64 } stops aarch64 lowering with `cannot lower main: const
-C179	library	0	822	macOS kqueue poller loses a read wakeup for one of two loopback datagram sockets	Found on 2026-10-24 by tests/macos/probe/poller_flake.e on macos-14 runners: two UDP sockets registered with EVFILT_READ before one datagram is sent to each;
+C179	library	0	1132	macOS kqueue poller loses a read wakeup for one of two loopback datagram sockets	Found on 2026-10-24 by tests/macos/probe/poller_flake.e on macos-14 runners: two UDP sockets registered with EVFILT_READ before one datagram is sent to each;
 C107	compiler	0.93	7073	NeperOS shell 3: the e.os surface on NeperOS (os.neperos.e)	Queued by D2148.
 C092	compiler	0.95	2360	M3-04: e.gpu runtime surface: Device, Queue, Buf[T], launch, sync, barrier	full-suite verification. The prior Windows suite reached its final function/type-renamed compiler image, which crashed with an access violation when compiling the original sources. Linux's bootstrap c
 C093	compiler	0.95	1118	M3-05: device selection: devices, DeviceInfo/DeviceKind/DeviceKey, open_id, info	Vulkan and CUDA enumeration, stable keys and `AmbiguousDevice`, memory capacity. PART (D4200): Vulkan device keys from deviceUUID with key_valid, open_id matching backend and all 16 bytes (NoDevice, A
