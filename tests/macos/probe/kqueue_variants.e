@@ -43,7 +43,7 @@ fn change(queue: usize, ident: usize, flags: u16, udata: u64) -> isize {
 }
 
 // flags: what EV_ADD is combined with; late: add the filters after the datagrams are sent; reverse: send to the second first.
-fn variant(flags: u16, late: bool, reverse: bool, wait_ns: i64) -> usize {
+fn variant(flags: u16, late: bool, reverse: bool, wait_ns: i64, rearm: usize) -> usize {
     var misses = 0usize
     var round = 0usize
     while round < 3000usize {
@@ -82,16 +82,54 @@ fn variant(flags: u16, late: bool, reverse: bool, wait_ns: i64) -> usize {
         var seen_one = false
         var seen_two = false
         var waits = 0usize
+        var last_one = false
+        var last_two = false
         while !(seen_one && seen_two) && waits < 5usize {
+            var changes: [2]Kevent = zero
+            var count = 0usize
+            if rearm != 0usize {
+                if last_one {
+                    changes[count].ident = u64(first_fd)
+                    changes[count].filter = -1i16
+                    changes[count].flags = 1u16 | flags
+                    changes[count].udata = 1u64
+                    count += 1usize
+                }
+                if last_two {
+                    changes[count].ident = u64(second_fd)
+                    changes[count].filter = -1i16
+                    changes[count].flags = 1u16 | flags
+                    changes[count].udata = 2u64
+                    count += 1usize
+                }
+            }
+            last_one = false
+            last_two = false
+            var change_address = 0usize
+            var change_count = 0usize
+            if count != 0usize {
+                if rearm == 1usize {
+                    change_address = mem.address_of(&changes[0usize])
+                    change_count = count
+                } else {
+                    let separate = os.syscall(363usize, usize(queue), mem.address_of(&changes[0usize]), count, 0usize, 0usize, 0usize)
+                }
+            }
             var out: [8]Kevent = zero
             var limit: [2]i64 = zero
             limit[0usize] = wait_ns / 1000000000i64
             limit[1usize] = wait_ns % 1000000000i64
-            let got = os.syscall(363usize, usize(queue), 0usize, 0usize, mem.address_of(&out[0usize]), 8usize, mem.address_of(&limit[0usize]))
+            let got = os.syscall(363usize, usize(queue), change_address, change_count, mem.address_of(&out[0usize]), 8usize, mem.address_of(&limit[0usize]))
             var at = 0isize
             while at < got {
-                if out[usize(at)].udata == 1u64 { seen_one = true }
-                if out[usize(at)].udata == 2u64 { seen_two = true }
+                if out[usize(at)].udata == 1u64 {
+                    seen_one = true
+                    last_one = true
+                }
+                if out[usize(at)].udata == 2u64 {
+                    seen_two = true
+                    last_two = true
+                }
                 at += 1isize
             }
             waits += 1usize
@@ -114,12 +152,9 @@ fn report(name: str, misses: usize) {
 }
 
 fn main(a: *mem.Arena) -> err {
-    report("add", variant(0u16, false, false, 200000000i64))
-    report("add+clear", variant(32u16, false, false, 200000000i64))
-    report("add+receipt", variant(64u16, false, false, 200000000i64))
-    report("add+dispatch", variant(128u16, false, false, 200000000i64))
-    report("add late", variant(0u16, true, false, 200000000i64))
-    report("add reversed sends", variant(0u16, false, true, 200000000i64))
-    report("add, one long wait", variant(0u16, false, false, 1000000000i64))
+    report("clear, no rearm", variant(32u16, false, false, 200000000i64, 0usize))
+    report("clear, rearm in the wait call", variant(32u16, false, false, 200000000i64, 1usize))
+    report("clear, rearm by its own call", variant(32u16, false, false, 200000000i64, 2usize))
+    report("clear, rearm in the wait call, reversed", variant(32u16, false, true, 200000000i64, 1usize))
     ret ok
 }
