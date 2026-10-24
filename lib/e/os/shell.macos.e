@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -1552,20 +1552,122 @@ fn restart_unregister(a: *mem.Arena) -> err {
 // every verb is `Unsupported` and the record says so. ponytail: `lp` with a PNG
 // per page is the same tool-shaped path as `xdg-open`, when a caller needs it.
 
+// Printing (D5212) is a virtual PDF printer, the one every Mac has as "Save as PDF": a job writes its pages to the file
+// named as the job's output through Core Graphics' PDF context. There is no dialog and no hardware printer here, so
+// `print_dialogs` is off. A page is Letter at 300 dpi, 2550 by 3300 pixels; a page of pixels is drawn at its own size from the
+// top left, and a cancelled job leaves a closed file that the caller removes.
+type PdfRect = struct { x: f64, y: f64, w: f64, h: f64 }
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGPDFContextCreateWithURL")
+extern fn pdf_context_create(url: usize, media: *PdfRect, info: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGPDFContextBeginPage")
+extern fn pdf_begin_page(context: usize, info: usize)
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGPDFContextEndPage")
+extern fn pdf_end_page(context: usize)
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGPDFContextClose")
+extern fn pdf_close(context: usize)
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGContextRelease")
+extern fn pdf_release(context: usize)
+
+@import("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", "CGContextDrawImage")
+extern fn pdf_draw_image(context: usize, rect: PdfRect, image: usize)
+
+@import("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", "CFURLCreateFromFileSystemRepresentation")
+extern fn pdf_url_create(allocator: usize, bytes: *const u8, length: usize, directory: u8) -> usize
+
+fn pdf_name(name: str) -> bool {
+    ret name.len == 0usize || same_text(name, "Save as PDF") || same_text(name, "Print to PDF")
+}
+
+fn same_text(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var at = 0usize
+    while at < x.len {
+        if x[at] != y[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn printer_open(a: *mem.Arena, name: str) -> (Printer, err) {
-    var nothing: Printer = zero
-    ret (nothing, Unsupported)
+    var printer: Printer = zero
+    if !pdf_name(name) { ret (printer, NotFound) }
+    printer.device = 1usize
+    printer.from_page = 1u32
+    printer.to_page = 65535u32
+    printer.copies = 1u32
+    ret (printer, ok)
 }
 
 fn printer_close(a: *mem.Arena, p: Printer) -> err {
     if p.device == 0usize { ret Invalid }
-    ret Unsupported
+    ret ok
 }
 
 fn printer_page(p: Printer) -> PrintPage {
-    ret PrintPage { width: 0u32, height: 0u32, dpi_x: 0u32, dpi_y: 0u32 }
+    ret PrintPage { width: 2550u32, height: 3300u32, dpi_x: 300u32, dpi_y: 300u32 }
 }
 
+fn print_job_start(a: *mem.Arena, p: Printer, document: str, output: str) -> (PrintJob, err) {
+    var job: PrintJob = zero
+    if p.device == 0usize || document.len == 0usize || output.len == 0usize { ret (job, Invalid) }
+    let started = os.cocoa_start()
+    if started != ok { ret (job, started) }
+    let url = pdf_url_create(0usize, &output[0usize], output.len, 0u8)
+    if url == 0usize { ret (job, Failed) }
+    var media = PdfRect { x: 0.0f64, y: 0.0f64, w: 612.0f64, h: 792.0f64 }
+    let context = pdf_context_create(url, &media, 0usize)
+    os.cf_release(url)
+    if context == 0usize { ret (job, Failed) }
+    job.device = context
+    job.open = true
+    ret (job, ok)
+}
+
+fn print_page(a: *mem.Arena, job: *PrintJob, page: Icon) -> err {
+    if !job.open { ret NotFound }
+    if page.width == 0u32 || page.height == 0u32 || page.pixels.len < usize(page.width) * usize(page.height) { ret Invalid }
+    let pool = os.objc_pool_push()
+    let count = usize(page.width) * usize(page.height)
+    let data = os.cf_data_create(0usize, mem.address_of(&page.pixels[0usize]), count * 4usize)
+    let provider = os.cg_provider_with_data(data)
+    let space = os.cg_color_space()
+    let picture = os.cg_image_create(usize(page.width), usize(page.height), 8usize, 32usize, usize(page.width) * 4usize, space, 8194u32, provider, 0usize, 0i32, 0i32)
+    var result = ok
+    if picture == 0usize { result = Failed } else {
+        pdf_begin_page(job.device, 0usize)
+        let width = f64(page.width) * 72.0f64 / 300.0f64
+        let height = f64(page.height) * 72.0f64 / 300.0f64
+        pdf_draw_image(job.device, PdfRect { x: 0.0f64, y: 792.0f64 - height, w: width, h: height }, picture)
+        pdf_end_page(job.device)
+        job.pages += 1u32
+        os.cg_image_release(picture)
+    }
+    os.cg_provider_release(provider)
+    os.cf_release(data)
+    os.objc_pool_pop(pool)
+    ret result
+}
+
+fn print_job_end(a: *mem.Arena, job: *PrintJob) -> err {
+    if !job.open { ret NotFound }
+    pdf_close(job.device)
+    pdf_release(job.device)
+    job.open = false
+    ret ok
+}
+
+fn print_job_cancel(a: *mem.Arena, job: *PrintJob) -> err {
+    if !job.open { ret NotFound }
+    pdf_close(job.device)
+    pdf_release(job.device)
+    job.open = false
+    ret ok
+}
 fn print_dialog(a: *mem.Arena, w: os.Window, min_page: u32, max_page: u32) -> (Printer, err) {
     var nothing: Printer = zero
     if min_page == 0u32 || max_page < min_page || max_page > 65535u32 { ret (nothing, Invalid) }
@@ -1577,26 +1679,6 @@ fn page_setup_dialog(a: *mem.Arena, w: os.Window, current: PageSetup) -> (PageSe
     ret (nothing, Unsupported)
 }
 
-fn print_job_start(a: *mem.Arena, p: Printer, document: str, output: str) -> (PrintJob, err) {
-    var nothing: PrintJob = zero
-    if p.device == 0usize || document.len == 0usize { ret (nothing, Invalid) }
-    ret (nothing, Unsupported)
-}
-
-fn print_page(a: *mem.Arena, job: *PrintJob, page: Icon) -> err {
-    if !job.open { ret NotFound }
-    ret Unsupported
-}
-
-fn print_job_end(a: *mem.Arena, job: *PrintJob) -> err {
-    if !job.open { ret NotFound }
-    ret Unsupported
-}
-
-fn print_job_cancel(a: *mem.Arena, job: *PrintJob) -> err {
-    if !job.open { ret NotFound }
-    ret Unsupported
-}
 // ------------------------------------------------- permissions and services
 //
 // D902. A desktop gates the camera, the microphone and the location through the
