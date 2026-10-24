@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -1235,18 +1235,129 @@ fn activation_poll() -> (Activation, bool) {
 var inhibitor: os.Proc = zero
 var inhibiting: bool = zero
 
+// Global shortcuts (D5211) through Carbon's `RegisterEventHotKey`, which needs no accessibility permission. A key is a
+// Windows virtual-key code, as on the other hosts (letters and digits are their ASCII, F1..F12 are 112..123, and so on);
+// `hotkey_keycode` turns it into the ANSI keyboard's key code. The handler, a `@cc` function installed on the application
+// event target, queues the id of the shortcut that was pressed.
+type HotkeyId = struct { signature: u32, id: u32 }
+type HotkeyEventType = struct { class: u32, kind: u32 }
+type HotkeyHandler = union { function: fn(usize, usize, usize) -> i32, bits: usize }
+
+@import("/System/Library/Frameworks/Carbon.framework/Carbon", "RegisterEventHotKey")
+extern fn carbon_register_hotkey(code: u32, modifiers: u32, id: HotkeyId, destination: usize, options: u32, out: *usize) -> i32
+
+@import("/System/Library/Frameworks/Carbon.framework/Carbon", "UnregisterEventHotKey")
+extern fn carbon_unregister_hotkey(reference: usize) -> i32
+
+@import("/System/Library/Frameworks/Carbon.framework/Carbon", "GetApplicationEventTarget")
+extern fn carbon_application_target() -> usize
+
+@import("/System/Library/Frameworks/Carbon.framework/Carbon", "InstallEventHandler")
+extern fn carbon_install_handler(destination: usize, handler: usize, count: u32, types: *const HotkeyEventType, data: usize, out: *usize) -> i32
+
+@import("/System/Library/Frameworks/Carbon.framework/Carbon", "GetEventParameter")
+extern fn carbon_event_parameter(event: usize, name: u32, kind: u32, actual: usize, size: usize, written: usize, out: *HotkeyId) -> i32
+
+const HOTKEYS: usize = 16usize
+const HOTKEY_QUEUE: usize = 16usize
+var hotkey_ids: [16]u32 = zero
+var hotkey_refs: [16]usize = zero
+var hotkey_installed: bool = zero
+var hotkey_queue: [16]u32 = zero
+var hotkey_head: usize = zero
+var hotkey_tail: usize = zero
+
+// The ANSI key code of a virtual-key code, or 255 when there is none here.
+fn hotkey_keycode(vk: u32) -> u32 {
+    // 'A'..'Z' in virtual-key order -> ANSI codes
+    let letters = "\x00\x0b\x08\x02\x0e\x03\x05\x04\x22\x26\x28\x25\x2e\x2d\x1f\x23\x0c\x0f\x01\x11\x20\x09\x0d\x07\x10\x06"
+    if vk >= 65u32 && vk <= 90u32 { ret u32(letters[usize(vk - 65u32)]) }
+    // '0'..'9'
+    let digits = "\x1d\x12\x13\x14\x15\x17\x16\x1a\x1c\x19"
+    if vk >= 48u32 && vk <= 57u32 { ret u32(digits[usize(vk - 48u32)]) }
+    // F1..F12
+    let functions = "\x7a\x78\x63\x76\x60\x61\x62\x64\x65\x6d\x67\x6f"
+    if vk >= 112u32 && vk <= 123u32 { ret u32(functions[usize(vk - 112u32)]) }
+    if vk == 32u32 { ret 49u32 }
+    if vk == 13u32 { ret 36u32 }
+    if vk == 9u32 { ret 48u32 }
+    if vk == 27u32 { ret 53u32 }
+    if vk == 37u32 { ret 123u32 }
+    if vk == 39u32 { ret 124u32 }
+    if vk == 40u32 { ret 125u32 }
+    if vk == 38u32 { ret 126u32 }
+    ret 255u32
+}
+
+@cc(c)
+fn hotkey_pressed(next: usize, event: usize, data: usize) -> i32 {
+    var id: HotkeyId = zero
+    // 'dobj' of type 'hkid'
+    if carbon_event_parameter(event, 1685021290u32, 1751869796u32, 0usize, 8usize, 0usize, &id) != 0i32 { ret -9874i32 }
+    let following = (hotkey_tail + 1usize) % HOTKEY_QUEUE
+    if following != hotkey_head {
+        hotkey_queue[hotkey_tail] = id.id
+        hotkey_tail = following
+    }
+    ret 0i32
+}
+
+fn hotkey_slot(id: u32) -> usize {
+    var slot = 0usize
+    while slot < HOTKEYS && !(hotkey_refs[slot] != 0usize && hotkey_ids[slot] == id) { slot += 1usize }
+    ret slot
+}
+
 fn hotkey_register(a: *mem.Arena, id: u32, key: Hotkey) -> err {
     if id == 0u32 || id > 49151u32 || key.key == 0u32 { ret Invalid }
-    ret Unsupported
+    let code = hotkey_keycode(key.key)
+    if code == 255u32 { ret Invalid }
+    if hotkey_slot(id) != HOTKEYS { ret Invalid }
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    if !hotkey_installed {
+        var kinds: [1]HotkeyEventType = zero
+        // 'keyb', kEventHotKeyPressed
+        kinds[0usize] = HotkeyEventType { class: 1801812322u32, kind: 5u32 }
+        var handler: HotkeyHandler = zero
+        handler.function = hotkey_pressed
+        var installed = 0usize
+        if carbon_install_handler(carbon_application_target(), handler.bits, 1u32, &kinds[0usize], 0usize, &installed) != 0i32 { ret Failed }
+        hotkey_installed = true
+    }
+    var slot = 0usize
+    while slot < HOTKEYS && hotkey_refs[slot] != 0usize { slot += 1usize }
+    if slot == HOTKEYS { ret Failed }
+    var modifiers = 0u32
+    if key.super { modifiers |= 256u32 }
+    if key.shift { modifiers |= 512u32 }
+    if key.alt { modifiers |= 2048u32 }
+    if key.control { modifiers |= 4096u32 }
+    var reference = 0usize
+    // 'nepr'
+    let name = HotkeyId { signature: 1852141682u32, id: id }
+    if carbon_register_hotkey(code, modifiers, name, carbon_application_target(), 0u32, &reference) != 0i32 || reference == 0usize { ret Failed }
+    hotkey_ids[slot] = id
+    hotkey_refs[slot] = reference
+    ret ok
 }
 
 fn hotkey_unregister(a: *mem.Arena, id: u32) -> err {
     if id == 0u32 || id > 49151u32 { ret Invalid }
-    ret Unsupported
+    let slot = hotkey_slot(id)
+    if slot == HOTKEYS { ret NotFound }
+    let removed = carbon_unregister_hotkey(hotkey_refs[slot])
+    hotkey_refs[slot] = 0usize
+    hotkey_ids[slot] = 0u32
+    ret ok
 }
 
 fn hotkey_poll() -> (u32, bool) {
-    ret (0u32, false)
+    if hotkey_installed { os.cocoa_pump(0i64) }
+    if hotkey_head == hotkey_tail { ret (0u32, false) }
+    let id = hotkey_queue[hotkey_head]
+    hotkey_head = (hotkey_head + 1usize) % HOTKEY_QUEUE
+    ret (id, true)
 }
 
 fn background_permission(a: *mem.Arena) -> Permission {
