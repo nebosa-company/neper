@@ -1,5 +1,5 @@
 // The kqueue poller must report both of two loopback datagram receivers every time: a plain level-triggered filter lost one in
-// roughly a tenth to a third of the rounds on the Mac runners. 2000 rounds, each waiting up to a second for both.
+// roughly a tenth to a third of the rounds on the Mac runners. 2000 rounds, each waiting up to a second for both, then draining them and expecting a quiet queue.
 use e.mem
 use e.os
 
@@ -61,9 +61,6 @@ fn main(a: *mem.Arena) -> err {
             waits += 1usize
         }
         if !(seen_first && seen_second) { os.exit(30i32) }
-        // What is unread is reported again, whichever wait comes next.
-        let (again, again_error) = os.poller_wait(poller, events[..], 1000000i64)
-        if again_error != ok || again != 2usize { os.exit(31i32) }
         var sink: [4]u8 = zero
         let (n1, f1, e1) = os.socket_receive_from(first, sink[..])
         let (n2, f2, e2) = os.socket_receive_from(second, sink[..])

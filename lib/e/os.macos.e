@@ -2050,12 +2050,11 @@ const NOTE_TRIGGER: u32 = 16777216u32
 const WAKE_IDENT: u64 = 1u64
 const POLL_BATCH: usize = 64usize
 
-// A plain EV_ADD filter on a datagram socket sometimes never reports a datagram that arrived (measured: a third of the
-// rounds on an Apple-silicon runner, tests/macos/probe/kqueue_variants.e), where EV_CLEAR never does. So filters are
-// edge-triggered, and the level a caller expects is rebuilt: the filters reported by a wait are added again at the start
-// of the next, which tests readiness afresh and reports whatever is still unread.
-const POLL_REARM: usize = 64usize
-type PollerState = struct { queue: usize, rearm_count: usize, rearm_ident: [64]u64, rearm_filter: [64]i16, rearm_token: [64]u64 }
+// Filters are edge-triggered (EV_CLEAR): a plain level-triggered EV_ADD filter on a datagram socket sometimes never reports a
+// datagram that arrived (a tenth to a third of the rounds on the Mac runners, tests/macos/probe/kqueue_variants.e), where
+// EV_CLEAR never does, and adding a filter again to test readiness afresh is worse (it loses events itself). So a wait reports
+// what arrived since the last, and a caller reads until the descriptor is empty.
+type PollerState = struct { queue: usize }
 
 // One change to the queue; an error from a delete (the filter was never added) is the caller's
 // to ignore, so the result is returned as it came.
@@ -2079,7 +2078,6 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
         ret (poller, OutOfMemory)
     }
     holder[0usize].queue = usize(queue)
-    holder[0usize].rearm_count = 0usize
     // The wake is a user event, cleared as it is delivered.
     let added = poller_change(usize(queue), WAKE_IDENT, EVFILT_USER, EV_ADD | EV_CLEAR, 0u32, 0usize)
     if added < 0isize {
@@ -2092,7 +2090,7 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
 
 fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
     let state = mem.cast[*PollerState](p.state)
-    // Edge-triggered underneath, level for the caller: see POLL_REARM.
+    // Edge-triggered: see PollerState.
     if interest.readable {
         let added = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_ADD | EV_CLEAR, 0u32, token)
         if added < 0isize { ret from_errno(added) }
@@ -2108,18 +2106,6 @@ fn poller_unregister(p: Poller, handle: Handle) -> err {
     let state = mem.cast[*PollerState](p.state)
     // Either filter may never have been added, so ENOENT from one is not a failure; both gone
     // is what the caller asked for.
-    var keep = 0usize
-    var seen = 0usize
-    while seen < state.rearm_count {
-        if state.rearm_ident[seen] != u64(handle.raw) {
-            state.rearm_ident[keep] = state.rearm_ident[seen]
-            state.rearm_filter[keep] = state.rearm_filter[seen]
-            state.rearm_token[keep] = state.rearm_token[seen]
-            keep += 1usize
-        }
-        seen += 1usize
-    }
-    state.rearm_count = keep
     let read_removed = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_DELETE, 0u32, 0usize)
     let write_removed = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_DELETE, 0u32, 0usize)
     if read_removed < 0isize && write_removed < 0isize { ret from_errno(read_removed) }
@@ -2154,21 +2140,7 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
         limit[1usize] = timeout_ns % 1000000000i64
         limit_address = mem.address_of(&limit[0usize])
     }
-    // Last wait's reported filters, added again with this call: readiness is tested afresh, so what is still unread is
-    // reported once more.
-    var again: [64]Kevent = zero
-    var added = 0usize
-    while added < state.rearm_count {
-        again[added].ident = state.rearm_ident[added]
-        again[added].filter = state.rearm_filter[added]
-        again[added].flags = EV_ADD | EV_CLEAR
-        again[added].udata = state.rearm_token[added]
-        added += 1usize
-    }
-    state.rearm_count = 0usize
-    var changes_address = 0usize
-    if added != 0usize { changes_address = mem.address_of(&again[0usize]) }
-    let ready = syscall(SYS_KEVENT, state.queue, changes_address, added, mem.address_of(&raw[0usize]), capacity, limit_address)
+    let ready = syscall(SYS_KEVENT, state.queue, 0usize, 0usize, mem.address_of(&raw[0usize]), capacity, limit_address)
     if ready < 0isize {
         if ready == -4isize { ret (0usize, ok) }
         ret (0usize, from_errno(ready))
@@ -2180,18 +2152,7 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
             at += 1usize
             continue
         }
-        // A filter added again for a descriptor that was closed since (EBADF, ENOENT) is nothing to report.
-        if raw[at].flags & EV_ERROR != 0u16 && (raw[at].data == 9i64 || raw[at].data == 2i64) {
-            at += 1usize
-            continue
-        }
         let token = usize(raw[at].udata)
-        if state.rearm_count < POLL_REARM && raw[at].flags & EV_ERROR == 0u16 {
-            state.rearm_ident[state.rearm_count] = raw[at].ident
-            state.rearm_filter[state.rearm_count] = raw[at].filter
-            state.rearm_token[state.rearm_count] = raw[at].udata
-            state.rearm_count += 1usize
-        }
         var slot = produced
         if produced != 0usize && events[produced - 1usize].token == token { slot = produced - 1usize } else {
             events[slot].token = token
