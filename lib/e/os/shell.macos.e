@@ -1224,13 +1224,13 @@ var instance_held: bool = zero
 var instance_storage: *mem.Arena = zero
 
 fn instance_port(id: str) -> u16 {
-    var hash = 2166136261u32
+    var hash = 2166136261u64
     var at = 0usize
     while at < id.len {
-        hash = (hash ^ u32(id[at])) * 16777619u32
+        hash = ((hash ^ u64(id[at])) * 16777619u64) & 4294967295u64
         at += 1usize
     }
-    ret u16(49152u32 + hash % 16000u32)
+    ret u16(49152u64 + hash % 16000u64)
 }
 
 fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Arena) -> (bool, err) {
