@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -206,6 +206,17 @@ fn target_ready() -> err {
     let sixth = objc_class_method(class, os.cocoa_sel("neperSleep:\x00"), sleeping.bits, &types[0usize])
     let seventh = objc_class_method(class, os.cocoa_sel("neperWake:\x00"), waking.bits, &types[0usize])
     let eighth = objc_class_method(class, os.cocoa_sel("applicationWillTerminate:\x00"), ending.bits, &types[0usize])
+    var source_mask: MenuImp4Value = zero
+    source_mask.function = source_drag_mask
+    var source_end: MenuImp4 = zero
+    source_end.function = source_drag_ended
+    var end_drag: MenuImp = zero
+    end_drag.function = target_drag_end
+    let mask_types = "Q@:@q\x00"
+    let ended_types = "v@:@{CGPoint=dd}Q\x00"
+    let ninth = objc_class_method(class, os.cocoa_sel("draggingSession:sourceOperationMaskForDraggingContext:\x00"), source_mask.bits, &mask_types[0usize])
+    let tenth = objc_class_method(class, os.cocoa_sel("draggingSession:endedAtPoint:operation:\x00"), source_end.bits, &ended_types[0usize])
+    let eleventh = objc_class_method(class, os.cocoa_sel("neperEndDrag:\x00"), end_drag.bits, &types[0usize])
     objc_class_register(class)
     let object = os.msg0(os.msg0(class, os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
     if object == 0usize { ret Failed }
@@ -931,22 +942,303 @@ fn clipboard_sequence() -> u32 {
     ret u32(os.msg0(board(), os.cocoa_sel("changeCount\x00")))
 }
 
+// Drag and drop (D5213). A drop target is the window's content view given a subclass (`NeperDropView`, made at run time over
+// the view's own class, its `isa` swapped) that answers the dragging destination protocol: it accepts a copy, and
+// `performDragOperation:` reads the dragging pasteboard (file paths from `NSFilenamesPboardType`, text from
+// `public.utf8-plain-text`, bytes and images under the types of the clipboard) into the arena the caller gave and queues a Drop
+// at the pointer in the window's pixels. A drag source is `beginDraggingSessionWithItems:event:source:` on that view with the
+// shell target as the source, run until the system reports the session ended; `drag_cancel_after` ends one by posting a mouse
+// up, which is how a program with no one at the pointer closes it.
+type MenuImp4 = union { function: fn(usize, usize, usize, usize), bits: usize }
+type MenuImp4Value = union { function: fn(usize, usize, usize, usize) -> usize, bits: usize }
+type MenuImpValue = union { function: fn(usize, usize, usize) -> usize, bits: usize }
+type DragPoint = struct { x: f64, y: f64 }
+
+@import("/usr/lib/libobjc.A.dylib", "object_getClass")
+extern fn objc_class_of(object: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "object_setClass")
+extern fn objc_set_class(object: usize, class: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_mouse_event(receiver: usize, selector: usize, kind: usize, at: DragPoint, flags: usize, stamp: f64, window_number: usize, context: usize, event_number: usize, clicks: usize, pressure: f32) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_item_frame(receiver: usize, selector: usize, rect: PdfRect, contents: usize) -> usize
+
+const DROPS: usize = 8usize
+var drop_view: usize = zero
+var drop_class: usize = zero
+var drop_original: usize = zero
+var drop_window: os.Window = zero
+var drop_arena: *mem.Arena = zero
+var drop_queue: [8]Drop = zero
+var drop_head: usize = zero
+var drop_tail: usize = zero
+var drag_ended: bool = zero
+var drag_operation: usize = zero
+var drag_allow_move: bool = zero
+
+fn drop_push(item: Drop) {
+    let next = (drop_tail + 1usize) % DROPS
+    if next == drop_head { ret }
+    drop_queue[drop_tail] = item
+    drop_tail = next
+}
+
+@cc(c)
+fn view_drag_entered(this: usize, command: usize, sender: usize) -> usize { ret 1usize }
+
+@cc(c)
+fn view_drag_prepare(this: usize, command: usize, sender: usize) -> usize { ret 1usize }
+
+fn pasteboard_string(a: *mem.Arena, drag_board: usize, kind: str) -> (str, bool) {
+    let name = os.cocoa_text(kind)
+    let string = os.msg1(drag_board, os.cocoa_sel("stringForType:\x00"), name)
+    os.cf_release(name)
+    if string == 0usize { ret ("", false) }
+    var none: [1]u8 = zero
+    let length = os.cocoa_read_text(string, none[0usize..0usize])
+    if length == 0usize { ret ("", false) }
+    let (text, allocation_error) = mem.alloc[u8](a, length)
+    if allocation_error != ok { ret ("", false) }
+    let copied = os.cocoa_read_text(string, text[0usize..length])
+    ret (text[0usize..length], true)
+}
+
+@cc(c)
+fn view_drag_perform(this: usize, command: usize, sender: usize) -> usize {
+    if drop_view == 0usize { ret 0usize }
+    let drag_board = os.msg0(sender, os.cocoa_sel("draggingPasteboard\x00"))
+    if drag_board == 0usize { ret 0usize }
+    let at = msg_event_point(sender, os.cocoa_sel("draggingLocation\x00"))
+    var drop: Drop = zero
+    let (metrics, metrics_error) = os.window_metrics(drop_window)
+    var scale = 1.0f64
+    var height = 0.0f64
+    if metrics_error == ok {
+        scale = f64(metrics.scale_percent) / 100.0f64
+        height = f64(metrics.height)
+    }
+    drop.x = i32(at.x * scale)
+    drop.y = i32(height - at.y * scale)
+    let (slots, slots_error) = mem.alloc[Content](drop_arena, 8usize)
+    if slots_error != ok { ret 0usize }
+    var count = 0usize
+    let listed = os.cocoa_text("NSFilenamesPboardType")
+    let files = os.msg1(drag_board, os.cocoa_sel("propertyListForType:\x00"), listed)
+    os.cf_release(listed)
+    if files != 0usize {
+        let total = os.msg0(files, os.cocoa_sel("count\x00"))
+        if total != 0usize {
+            let (paths, paths_error) = mem.alloc[str](drop_arena, total)
+            if paths_error == ok {
+                var index = 0usize
+                var kept = 0usize
+                while index < total {
+                    let entry = os.msg1(files, os.cocoa_sel("objectAtIndex:\x00"), index)
+                    var none: [1]u8 = zero
+                    let length = os.cocoa_read_text(entry, none[0usize..0usize])
+                    if length != 0usize {
+                        let (text, text_error) = mem.alloc[u8](drop_arena, length)
+                        if text_error == ok {
+                            let copied = os.cocoa_read_text(entry, text[0usize..length])
+                            paths[kept] = text[0usize..length]
+                            kept += 1usize
+                        }
+                    }
+                    index += 1usize
+                }
+                slots[count] = Content { kind: .Files, mime: "", text: "", paths: paths[0usize..kept], image: zero, bytes: zero }
+                count += 1usize
+            }
+        }
+    }
+    let (words, has_words) = pasteboard_string(drop_arena, drag_board, type_text())
+    if has_words {
+        slots[count] = Content { kind: .Text, mime: "", text: words, paths: zero, image: zero, bytes: zero }
+        count += 1usize
+    }
+    drop.items = slots[0usize..count]
+    drop_push(drop)
+    ret 1usize
+}
+
+fn drop_class_make(view: usize) -> err {
+    if drop_class != 0usize && drop_original == objc_class_of(view) { ret ok }
+    if drop_class != 0usize { ret Failed }
+    let original = objc_class_of(view)
+    let name = "NeperDropView\x00"
+    let class = objc_class_pair(original, &name[0usize], 0usize)
+    if class == 0usize { ret Failed }
+    let entered_types = "Q@:@\x00"
+    let prepare_types = "c@:@\x00"
+    var entered: MenuImpValue = zero
+    entered.function = view_drag_entered
+    var prepare: MenuImpValue = zero
+    prepare.function = view_drag_prepare
+    var perform: MenuImpValue = zero
+    perform.function = view_drag_perform
+    let first = objc_class_method(class, os.cocoa_sel("draggingEntered:\x00"), entered.bits, &entered_types[0usize])
+    let second = objc_class_method(class, os.cocoa_sel("draggingUpdated:\x00"), entered.bits, &entered_types[0usize])
+    let third = objc_class_method(class, os.cocoa_sel("prepareForDragOperation:\x00"), prepare.bits, &prepare_types[0usize])
+    let fourth = objc_class_method(class, os.cocoa_sel("performDragOperation:\x00"), perform.bits, &prepare_types[0usize])
+    objc_class_register(class)
+    drop_class = class
+    drop_original = original
+    ret ok
+}
+
 fn drop_target_register(a: *mem.Arena, w: os.Window, storage: *mem.Arena) -> err {
-    ret Unsupported
+    if drop_view != 0usize { ret Invalid }
+    let (handle, view, native_error) = os.window_native(w)
+    if native_error != ok { ret Invalid }
+    let ready = os.cocoa_start()
+    if ready != ok { ret ready }
+    let made = drop_class_make(view)
+    if made != ok { ret made }
+    let swapped = objc_set_class(view, drop_class)
+    let pool = os.objc_pool_push()
+    var kinds: [3]usize = zero
+    kinds[0usize] = os.cocoa_text("NSFilenamesPboardType")
+    kinds[1usize] = os.cocoa_text(type_text())
+    kinds[2usize] = os.cocoa_text("NSStringPboardType")
+    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&kinds[0usize]), 3usize)
+    let registered = os.msg1(view, os.cocoa_sel("registerForDraggedTypes:\x00"), list)
+    os.cf_release(kinds[0usize])
+    os.cf_release(kinds[1usize])
+    os.cf_release(kinds[2usize])
+    os.objc_pool_pop(pool)
+    drop_view = view
+    drop_window = w
+    drop_arena = storage
+    ret ok
 }
 
 fn drop_target_unregister(a: *mem.Arena, w: os.Window) -> err {
-    ret Unsupported
+    if drop_view == 0usize { ret NotFound }
+    let unregistered = os.msg0(drop_view, os.cocoa_sel("unregisterDraggedTypes\x00"))
+    let restored = objc_set_class(drop_view, drop_original)
+    drop_view = 0usize
+    ret ok
 }
 
 fn drop_poll() -> (Drop, bool) {
     var none: Drop = zero
-    ret (none, false)
+    if drop_view != 0usize { os.cocoa_pump(0i64) }
+    if drop_head == drop_tail { ret (none, false) }
+    let item = drop_queue[drop_head]
+    drop_head = (drop_head + 1usize) % DROPS
+    ret (item, true)
 }
 
+@cc(c)
+fn source_drag_mask(this: usize, command: usize, session: usize, context: usize) -> usize {
+    if drag_allow_move { ret 17usize }
+    ret 1usize
+}
+
+@cc(c)
+fn source_drag_ended(this: usize, command: usize, session: usize, operation: usize) {
+    drag_operation = operation
+    drag_ended = true
+}
+
+// A mouse up in the first window, posted: it ends a drag session that no one is holding.
+@cc(c)
+fn target_drag_end(this: usize, command: usize, sender: usize) {
+    let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
+    let windows = os.msg0(app, os.cocoa_sel("windows\x00"))
+    let window = os.msg0(windows, os.cocoa_sel("firstObject\x00"))
+    if window == 0usize { ret }
+    let number = os.msg0(window, os.cocoa_sel("windowNumber\x00"))
+    let event = msg_mouse_event(os.cocoa_class("NSEvent\x00"), os.cocoa_sel("mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:\x00"), 2usize, DragPoint { x: 200.0f64, y: 200.0f64 }, 0usize, 1.0f64, number, 0usize, 0usize, 1usize, 0.0f32)
+    let posted = os.msg2(app, os.cocoa_sel("postEvent:atStart:\x00"), event, 0usize)
+}
+
+fn drag_cancel_after(seconds: f64) -> err {
+    let ready = target_ready()
+    if ready != ok { ret ready }
+    let pool = os.objc_pool_push()
+    var modes: [2]usize = zero
+    modes[0usize] = os.cocoa_text("NSEventTrackingRunLoopMode")
+    modes[1usize] = os.cocoa_text("kCFRunLoopCommonModes")
+    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&modes[0usize]), 2usize)
+    let scheduled = msg_after(shell_target, os.cocoa_sel("performSelector:withObject:afterDelay:inModes:\x00"), os.cocoa_sel("neperEndDrag:\x00"), 0usize, seconds, list)
+    os.cf_release(modes[0usize])
+    os.cf_release(modes[1usize])
+    os.objc_pool_pop(pool)
+    ret ok
+}
+
+// Starts a drag of the items from the first window's content view and answers when it ends: `Copied`, `Moved` or `Cancelled`.
 fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragResult, err) {
     if items.len == 0usize { ret (.Cancelled, Invalid) }
-    ret (.Cancelled, Unsupported)
+    let ready = target_ready()
+    if ready != ok { ret (.Cancelled, ready) }
+    let pool = os.objc_pool_push()
+    let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
+    let window = os.msg0(os.msg0(app, os.cocoa_sel("windows\x00")), os.cocoa_sel("firstObject\x00"))
+    if window == 0usize {
+        os.objc_pool_pop(pool)
+        ret (.Cancelled, Failed)
+    }
+    let view = os.msg0(window, os.cocoa_sel("contentView\x00"))
+    let writer = os.msg0(os.msg0(os.cocoa_class("NSPasteboardItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+    var at = 0usize
+    var stored = false
+    while at < items.len {
+        var bytes: []const u8 = zero
+        var kind = ""
+        if items[at].kind == .Text {
+            bytes = items[at].text
+            kind = type_text()
+        } else if items[at].kind == .Bytes && items[at].mime.len != 0usize {
+            bytes = items[at].bytes
+            kind = items[at].mime
+        }
+        if kind.len != 0usize {
+            var one: [1]u8 = zero
+            var address = mem.address_of(&one[0usize])
+            if bytes.len != 0usize { address = mem.address_of(&bytes[0usize]) }
+            let blob = os.cf_data_create(0usize, address, bytes.len)
+            let name = os.cocoa_text(kind)
+            let set = os.msg2(writer, os.cocoa_sel("setData:forType:\x00"), blob, name)
+            os.cf_release(blob)
+            os.cf_release(name)
+            stored = true
+        }
+        at += 1usize
+    }
+    if !stored {
+        os.objc_pool_pop(pool)
+        ret (.Cancelled, Unsupported)
+    }
+    var dragging = os.msg1(os.msg0(os.cocoa_class("NSDraggingItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithPasteboardWriter:\x00"), writer)
+    var pixels: [256]u32 = zero
+    var i = 0usize
+    while i < 256usize {
+        pixels[i] = 3435973836u32
+        i += 1usize
+    }
+    let image = icon_image(Icon { width: 16u32, height: 16u32, pixels: pixels[..] })
+    let framed = msg_item_frame(dragging, os.cocoa_sel("setDraggingFrame:contents:\x00"), PdfRect { x: 10.0f64, y: 10.0f64, w: 16.0f64, h: 16.0f64 }, image)
+    let number = os.msg0(window, os.cocoa_sel("windowNumber\x00"))
+    let down = msg_mouse_event(os.cocoa_class("NSEvent\x00"), os.cocoa_sel("mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:\x00"), 1usize, DragPoint { x: 20.0f64, y: 20.0f64 }, 0usize, 1.0f64, number, 0usize, 0usize, 1usize, 1.0f32)
+    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&dragging), 1usize)
+    drag_ended = false
+    drag_operation = 0usize
+    drag_allow_move = allow_move
+    let session = os.msg4(view, os.cocoa_sel("beginDraggingSessionWithItems:event:source:\x00"), list, down, shell_target, 0usize)
+    var result = ok
+    if session == 0usize { result = Failed } else {
+        while !drag_ended { os.cocoa_pump(50000000i64) }
+    }
+    os.objc_pool_pop(pool)
+    if result != ok { ret (.Cancelled, result) }
+    if drag_operation == 16usize { ret (.Moved, ok) }
+    if drag_operation != 0usize { ret (.Copied, ok) }
+    ret (.Cancelled, ok)
 }
 
 // ------------------------------------------------------ file dialogs and recents
