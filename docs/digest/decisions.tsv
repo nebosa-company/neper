@@ -2836,4 +2836,13 @@ D5200	1089	The Mac corpus builds `extern_struct`'s C helper library and runs the
 D5201	1367	macOS `os.sandbox` is Seatbelt's `sandbox_init`
 D5202	2350	macOS windows are AppKit windows: the `os.window_*` verbs, the clipboard and `monitors`
 D5203	718	macOS shell services are tool-backed, and the record claims only what runs
-D5204	640	macOS clipboard is NSPasteboard with private exact types; notices are `osascript` banners
+D5204	641	macOS clipboard is NSPasteboard with private exact types; notices are `osascript` banners
+D5205	709	macOS file dialogs are NSOpenPanel/NSSavePanel run modally; recent documents are the shared document controller
+D5206	682	macOS power hold is `caffeinate`; the screen is `CGDisplayCreateImage`
+D5207	1016	macOS tray and pop-up menu: NSStatusItem and NSMenu behind a target class made at run time
+D5208	808	macOS credentials are generic passwords in the login keychain, through `security`; the taskbar stays off
+D5209	933	the Dock is the macOS taskbar: a badge for progress, the icon for an overlay, the Dock menu for the jump list
+D5210	1061	macOS lifecycle events and global shortcuts
+D5211	1039	macOS single instance: the first program of an id owns a loopback datagram port
+D5212	843	macOS printing is a virtual PDF printer; there is no dialog
+D5213	13205	The WebAssembly target's design: wasm32-wasi, a whole-program emitter over NIR, and C180-C184
