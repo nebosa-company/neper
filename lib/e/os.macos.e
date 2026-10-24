@@ -2050,61 +2050,82 @@ const NOTE_TRIGGER: u32 = 16777216u32
 const WAKE_IDENT: u64 = 1u64
 const POLL_BATCH: usize = 64usize
 
-type PollerState = struct { queue: usize }
+// The readiness poller is poll(2) over the registered descriptors, level-triggered, with a pipe for `poller_wake`. kqueue was
+// what it was built on, and a level-triggered EVFILT_READ sometimes never reported a datagram that had arrived (a tenth to a
+// third of the rounds on the Mac runners, tests/macos/probe/kqueue_variants.e); the filters that did not lose it are
+// edge-triggered, and adding filters again to rebuild the level lost events itself. poll(2) tests the descriptors at every wait,
+// so nothing is lost and the level is the kernel's. ponytail: a wait costs one pass over the registered descriptors, and at
+// most 256 are held; kqueue's cost is per event, and it is the upgrade if a loop needs thousands of sockets.
+const POLL_MAX: usize = 256usize
+const POLLIN: i16 = 1i16
+const POLLOUT: i16 = 4i16
+const POLLERR: i16 = 8i16
+const POLLHUP: i16 = 16i16
+const POLLNVAL: i16 = 32i16
 
-// One change to the queue; an error from a delete (the filter was never added) is the caller's
-// to ignore, so the result is returned as it came.
-fn poller_change(queue: usize, ident: u64, filter: i16, flags: u16, fflags: u32, token: usize) -> isize {
-    var change: Kevent = zero
-    change.ident = ident
-    change.filter = filter
-    change.flags = flags
-    change.fflags = fflags
-    change.udata = u64(token)
-    ret syscall(SYS_KEVENT, queue, mem.address_of(&change), 1usize, 0usize, 0usize, 0usize)
-}
+type PollFd = struct { fd: i32, events: i16, revents: i16 }
+type PollerState = struct { wake_read: usize, wake_write: usize, count: usize, fd: [256]i32, token: [256]usize, reading: [256]bool, writing: [256]bool }
 
 fn poller_open(a: *mem.Arena) -> (Poller, err) {
     var poller: Poller = zero
-    let queue = syscall(SYS_KQUEUE, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
-    if queue < 0isize { ret (poller, from_errno(queue)) }
     let (holder, holder_error) = mem.alloc[PollerState](a, 1usize)
-    if holder_error != ok {
-        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
-        ret (poller, OutOfMemory)
-    }
-    holder[0usize].queue = usize(queue)
-    // The wake is a user event, cleared as it is delivered.
-    let added = poller_change(usize(queue), WAKE_IDENT, EVFILT_USER, EV_ADD | EV_CLEAR, 0u32, 0usize)
-    if added < 0isize {
-        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
-        ret (poller, from_errno(added))
-    }
+    if holder_error != ok { ret (poller, OutOfMemory) }
+    var pair: [2]i32 = zero
+    let made = syscall(SYS_PIPE, mem.address_of(&pair[0usize]), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if made < 0isize { ret (poller, from_errno(made)) }
+    let marked_read = syscall(SYS_FCNTL, usize(pair[0usize]), F_SETFD, 1usize, 0usize, 0usize, 0usize)
+    let marked_write = syscall(SYS_FCNTL, usize(pair[1usize]), F_SETFD, 1usize, 0usize, 0usize, 0usize)
+    // A wake that finds the pipe full is already pending, so the writing end never blocks.
+    let nonblocking = syscall(SYS_FCNTL, usize(pair[1usize]), F_SETFL, O_NONBLOCK, 0usize, 0usize, 0usize)
+    holder[0usize].wake_read = usize(pair[0usize])
+    holder[0usize].wake_write = usize(pair[1usize])
+    holder[0usize].count = 0usize
     poller.state = mem.cast[*void](&holder[0usize])
     ret (poller, ok)
 }
 
+fn poller_find(state: *PollerState, descriptor: i32) -> usize {
+    var at = 0usize
+    while at < state.count && state.fd[at] != descriptor { at += 1usize }
+    ret at
+}
+
 fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
     let state = mem.cast[*PollerState](p.state)
-    // Level-triggered, as epoll is without EPOLLET: no EV_CLEAR.
-    if interest.readable {
-        let added = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_ADD, 0u32, token)
-        if added < 0isize { ret from_errno(added) }
+    let tested = syscall(SYS_FCNTL, handle.raw, 1usize, 0usize, 0usize, 0usize, 0usize)
+    if tested < 0isize { ret from_errno(tested) }
+    if !interest.readable && !interest.writable { ret ok }
+    var at = poller_find(state, i32(handle.raw))
+    if at == state.count {
+        if state.count == POLL_MAX { ret Failed }
+        state.fd[at] = i32(handle.raw)
+        state.reading[at] = false
+        state.writing[at] = false
+        state.count += 1usize
     }
-    if interest.writable {
-        let added = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_ADD, 0u32, token)
-        if added < 0isize { ret from_errno(added) }
-    }
+    state.token[at] = token
+    if interest.readable { state.reading[at] = true }
+    if interest.writable { state.writing[at] = true }
     ret ok
+}
+
+fn poller_drop(state: *PollerState, at: usize) {
+    var next = at + 1usize
+    while next < state.count {
+        state.fd[next - 1usize] = state.fd[next]
+        state.token[next - 1usize] = state.token[next]
+        state.reading[next - 1usize] = state.reading[next]
+        state.writing[next - 1usize] = state.writing[next]
+        next += 1usize
+    }
+    state.count -= 1usize
 }
 
 fn poller_unregister(p: Poller, handle: Handle) -> err {
     let state = mem.cast[*PollerState](p.state)
-    // Either filter may never have been added, so ENOENT from one is not a failure; both gone
-    // is what the caller asked for.
-    let read_removed = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_DELETE, 0u32, 0usize)
-    let write_removed = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_DELETE, 0u32, 0usize)
-    if read_removed < 0isize && write_removed < 0isize { ret from_errno(read_removed) }
+    let at = poller_find(state, i32(handle.raw))
+    if at == state.count { ret NotFound }
+    poller_drop(state, at)
     ret ok
 }
 
@@ -2115,61 +2136,73 @@ fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest
 
 fn poller_wake(p: Poller) -> err {
     let state = mem.cast[*PollerState](p.state)
-    let triggered = poller_change(state.queue, WAKE_IDENT, EVFILT_USER, 0u16, NOTE_TRIGGER, 0usize)
-    if triggered < 0isize { ret from_errno(triggered) }
+    var byte: [1]u8 = zero
+    let sent = syscall(4usize, state.wake_write, mem.address_of(&byte[0usize]), 1usize, 0usize, 0usize, 0usize)
     ret ok
 }
 
-// A negative timeout waits for ever; a positive one shorter than a nanosecond tick is still
-// a wait. One descriptor ready for both reading and writing arrives as two kernel events and
-// is reported as one.
+// A negative timeout waits for ever; a positive one is rounded up to a whole millisecond, which poll(2) counts in. A wake ends
+// the wait without an event of its own. A descriptor closed while registered answers POLLNVAL and is dropped, as kqueue drops it.
 fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) {
     let state = mem.cast[*PollerState](p.state)
     if events.len == 0usize { ret (0usize, ok) }
-    var capacity = events.len
-    if capacity > POLL_BATCH { capacity = POLL_BATCH }
-    var raw: [64]Kevent = zero
-    var limit: [2]i64 = zero
-    var limit_address = 0usize
-    if timeout_ns >= 0i64 {
-        limit[0usize] = timeout_ns / 1000000000i64
-        limit[1usize] = timeout_ns % 1000000000i64
-        limit_address = mem.address_of(&limit[0usize])
+    var set: [257]PollFd = zero
+    set[0usize].fd = i32(state.wake_read)
+    set[0usize].events = POLLIN
+    var at = 0usize
+    while at < state.count {
+        set[at + 1usize].fd = state.fd[at]
+        var wanted = 0i16
+        if state.reading[at] { wanted = wanted | POLLIN }
+        if state.writing[at] { wanted = wanted | POLLOUT }
+        set[at + 1usize].events = wanted
+        at += 1usize
     }
-    let ready = syscall(SYS_KEVENT, state.queue, 0usize, 0usize, mem.address_of(&raw[0usize]), capacity, limit_address)
+    // -1 as the int poll(2) reads: wait for ever.
+    var milliseconds = 4294967295usize
+    if timeout_ns >= 0i64 { milliseconds = usize((timeout_ns + 999999i64) / 1000000i64) }
+    let ready = syscall(SYS_POLL, mem.address_of(&set[0usize]), state.count + 1usize, milliseconds, 0usize, 0usize, 0usize)
     if ready < 0isize {
         if ready == -4isize { ret (0usize, ok) }
         ret (0usize, from_errno(ready))
     }
+    if set[0usize].revents != 0i16 {
+        var drain: [64]u8 = zero
+        let drained = syscall(3usize, state.wake_read, mem.address_of(&drain[0usize]), 64usize, 0usize, 0usize, 0usize)
+    }
     var produced = 0usize
-    var at = 0usize
-    while at < usize(ready) {
-        if raw[at].filter == EVFILT_USER {
-            at += 1usize
-            continue
-        }
-        let token = usize(raw[at].udata)
-        var slot = produced
-        if produced != 0usize && events[produced - 1usize].token == token { slot = produced - 1usize } else {
-            events[slot].token = token
-            events[slot].readable = false
-            events[slot].writable = false
-            events[slot].closed = false
-            events[slot].failed = false
+    var dead: [256]bool = zero
+    var any_dead = false
+    at = 0usize
+    while at < state.count {
+        let flags = set[at + 1usize].revents
+        if flags & POLLNVAL != 0i16 {
+            dead[at] = true
+            any_dead = true
+        } else if flags != 0i16 && produced < events.len {
+            events[produced].token = state.token[at]
+            events[produced].readable = state.reading[at] && flags & (POLLIN | POLLHUP) != 0i16
+            events[produced].writable = state.writing[at] && flags & POLLOUT != 0i16
+            events[produced].closed = flags & POLLHUP != 0i16
+            events[produced].failed = flags & POLLERR != 0i16
             produced += 1usize
         }
-        if raw[at].filter == EVFILT_READ { events[slot].readable = true }
-        if raw[at].filter == EVFILT_WRITE { events[slot].writable = true }
-        if raw[at].flags & EV_EOF != 0u16 { events[slot].closed = true }
-        if raw[at].flags & EV_ERROR != 0u16 { events[slot].failed = true }
         at += 1usize
+    }
+    if any_dead {
+        var back = state.count
+        while back > 0usize {
+            back -= 1usize
+            if dead[back] { poller_drop(state, back) }
+        }
     }
     ret (produced, ok)
 }
 
 fn poller_close(p: own Poller) -> err {
     let state = mem.cast[*PollerState](p.state)
-    ret from_errno_cleanup(syscall(SYS_CLOSE, state.queue, 0usize, 0usize, 0usize, 0usize, 0usize))
+    let first = syscall(SYS_CLOSE, state.wake_read, 0usize, 0usize, 0usize, 0usize, 0usize)
+    ret from_errno_cleanup(syscall(SYS_CLOSE, state.wake_write, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
 
 // The calling thread's identifier, the system's own (thread_selfid), for the code that keys a
