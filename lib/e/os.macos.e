@@ -2050,10 +2050,6 @@ const NOTE_TRIGGER: u32 = 16777216u32
 const WAKE_IDENT: u64 = 1u64
 const POLL_BATCH: usize = 64usize
 
-// Filters are edge-triggered (EV_CLEAR): a plain level-triggered EV_ADD filter on a datagram socket sometimes never reports a
-// datagram that arrived (a tenth to a third of the rounds on the Mac runners, tests/macos/probe/kqueue_variants.e), where
-// EV_CLEAR never does, and adding a filter again to test readiness afresh is worse (it loses events itself). So a wait reports
-// what arrived since the last, and a caller reads until the descriptor is empty.
 type PollerState = struct { queue: usize }
 
 // One change to the queue; an error from a delete (the filter was never added) is the caller's
@@ -2090,13 +2086,13 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
 
 fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
     let state = mem.cast[*PollerState](p.state)
-    // Edge-triggered: see PollerState.
+    // Level-triggered, as epoll is without EPOLLET: no EV_CLEAR.
     if interest.readable {
-        let added = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_ADD | EV_CLEAR, 0u32, token)
+        let added = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_ADD, 0u32, token)
         if added < 0isize { ret from_errno(added) }
     }
     if interest.writable {
-        let added = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_ADD | EV_CLEAR, 0u32, token)
+        let added = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_ADD, 0u32, token)
         if added < 0isize { ret from_errno(added) }
     }
     ret ok

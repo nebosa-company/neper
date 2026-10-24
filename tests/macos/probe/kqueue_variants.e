@@ -43,6 +43,11 @@ fn change(queue: usize, ident: usize, flags: u16, udata: u64) -> isize {
 }
 
 // flags: what EV_ADD is combined with; late: add the filters after the datagrams are sent; reverse: send to the second first.
+fn rearm_flags(flags: u16, rearm: usize) -> u16 {
+    if rearm >= 3usize { ret 4u16 }
+    ret 1u16 | flags
+}
+
 fn variant(flags: u16, late: bool, reverse: bool, wait_ns: i64, rearm: usize) -> usize {
     var misses = 0usize
     var round = 0usize
@@ -91,14 +96,14 @@ fn variant(flags: u16, late: bool, reverse: bool, wait_ns: i64, rearm: usize) ->
                 if last_one {
                     changes[count].ident = u64(first_fd)
                     changes[count].filter = -1i16
-                    changes[count].flags = 1u16 | flags
+                    changes[count].flags = rearm_flags(flags, rearm)
                     changes[count].udata = 1u64
                     count += 1usize
                 }
                 if last_two {
                     changes[count].ident = u64(second_fd)
                     changes[count].filter = -1i16
-                    changes[count].flags = 1u16 | flags
+                    changes[count].flags = rearm_flags(flags, rearm)
                     changes[count].udata = 2u64
                     count += 1usize
                 }
@@ -108,7 +113,7 @@ fn variant(flags: u16, late: bool, reverse: bool, wait_ns: i64, rearm: usize) ->
             var change_address = 0usize
             var change_count = 0usize
             if count != 0usize {
-                if rearm == 1usize {
+                if rearm == 1usize || rearm == 3usize {
                     change_address = mem.address_of(&changes[0usize])
                     change_count = count
                 } else {
@@ -152,9 +157,9 @@ fn report(name: str, misses: usize) {
 }
 
 fn main(a: *mem.Arena) -> err {
-    report("clear, no rearm", variant(32u16, false, false, 200000000i64, 0usize))
-    report("clear, rearm in the wait call", variant(32u16, false, false, 200000000i64, 1usize))
-    report("clear, rearm by its own call", variant(32u16, false, false, 200000000i64, 2usize))
-    report("clear, rearm in the wait call, reversed", variant(32u16, false, true, 200000000i64, 1usize))
+    report("dispatch, no rearm", variant(128u16, false, false, 200000000i64, 0usize))
+    report("dispatch, enable in the wait call", variant(128u16, false, false, 200000000i64, 3usize))
+    report("dispatch, enable by its own call", variant(128u16, false, false, 200000000i64, 4usize))
+    report("dispatch, enable in the wait call, reversed", variant(128u16, false, true, 200000000i64, 3usize))
     ret ok
 }
