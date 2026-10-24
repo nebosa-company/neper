@@ -80,17 +80,17 @@ fn main(a: *mem.Arena) -> err {
     if sent_one != 1usize { os.exit(70i32) }
     if sent_two != 1usize { os.exit(71i32) }
 
-    // A host may deliver the second datagram a moment after the first (a loaded Mac's loopback did, for `os_poller`
-    // and here), and report only what is new in the next poll or everything still readable: what is asked is that both
-    // tokens are seen, each readable and not failed, within a few polls.
+    // A level-triggered wait answers at once while one receiver is unread, so a count of polls can be used up before the second
+    // datagram has arrived: the bound is a second of the clock, and what is asked is that both tokens are seen, each readable
+    // and not failed.
     var saw_read = false
     var saw_write = false
-    var polls = 0usize
-    var busy = 0usize
-    while !(saw_read && saw_write) && polls < 5usize {
+    let (began, began_error) = os.clock(.Monotonic)
+    if began_error != ok { os.exit(66i32) }
+    var waiting = true
+    while !(saw_read && saw_write) && waiting {
         let (ready, ready_error) = async.poll(&loop, events[..], time.Duration { nanos: 2000000000i64 })
         if ready_error != ok { os.exit(22i32) }
-        if ready != 0usize { busy += 1usize }
         var at = 0usize
         while at < ready {
             if events[at].token.value == READ_TOKEN { saw_read = true }
@@ -100,10 +100,11 @@ fn main(a: *mem.Arena) -> err {
             if events[at].failed { os.exit(25i32) }
             at += 1usize
         }
-        polls += 1usize
+        let (now, now_error) = os.clock(.Monotonic)
+        if now_error != ok || now - began > 1000000000i64 { waiting = false }
     }
     if !saw_read { os.exit(26i32) }
-    if !saw_write { os.exit(100i32 + i32(busy)) }
+    if !saw_write { os.exit(27i32) }
 
     // Drain both, so the next wait has nothing of its own to report.
     var sink: [8]u8 = zero

@@ -2845,4 +2845,6 @@ D5209	933	the Dock is the macOS taskbar: a badge for progress, the icon for an o
 D5210	1061	macOS lifecycle events and global shortcuts
 D5211	1039	macOS single instance: the first program of an id owns a loopback datagram port
 D5212	843	macOS printing is a virtual PDF printer; there is no dialog
-D5213	13205	The WebAssembly target's design: wasm32-wasi, a whole-program emitter over NIR, and C180-C184
+D5213	13206	The WebAssembly target's design: wasm32-wasi, a whole-program emitter over NIR, and C180-C184
+D5214	1373	macOS drag and drop: a run-time subclass of the window's view, and a dragging session from the first window
+D5215	1235	the kqueue poller never lost a wakeup; the fixtures counted waits where a level-triggered wait needs a clock
