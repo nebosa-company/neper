@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: false, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: false, drag_source: false, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -1214,14 +1214,113 @@ fn startup_enabled(a: *mem.Arena, id: str) -> (bool, err) {
     ret (present, ok)
 }
 
+// A single instance (D5211): the first program of an id binds a loopback datagram port that the id hashes to; a later one
+// finds the port taken, sends its command line to it and is told it is not first. The first reads what comes in through
+// `activation_poll`. ponytail: a stranger's program on the same port would receive the line; a lock file naming the owner
+// is the upgrade.
+var instance_socket: os.Socket = zero
+var instance_poller: os.Poller = zero
+var instance_held: bool = zero
+var instance_storage: *mem.Arena = zero
+
+fn instance_port(id: str) -> u16 {
+    var hash = 2166136261u32
+    var at = 0usize
+    while at < id.len {
+        hash = (hash ^ u32(id[at])) * 16777619u32
+        at += 1usize
+    }
+    ret u16(49152u32 + hash % 16000u32)
+}
+
 fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Arena) -> (bool, err) {
     if !valid_name(id) { ret (false, Invalid) }
-    ret (false, Unsupported)
+    if instance_held { ret (true, ok) }
+    var address: os.SocketAddress = zero
+    address.family = .Ip4
+    address.bytes[0usize] = 127u8
+    address.bytes[3usize] = 1u8
+    address.port = instance_port(id)
+    let (opened, open_error) = os.socket_open(.Ip4, .Datagram)
+    if open_error != ok { ret (false, Failed) }
+    if os.socket_bind(opened, address) == ok {
+        let (poller, poller_error) = os.poller_open(a)
+        if poller_error != ok {
+            let closed = os.socket_close(opened)
+            ret (false, Failed)
+        }
+        var readable: os.PollInterest = zero
+        readable.readable = true
+        if os.poller_register(poller, os.socket_handle(opened), 1usize, readable) != ok {
+            let closed_poller = os.poller_close(poller)
+            let closed = os.socket_close(opened)
+            ret (false, Failed)
+        }
+        instance_socket = opened
+        instance_poller = poller
+        instance_held = true
+        instance_storage = storage
+        ret (true, ok)
+    }
+    // Taken: hand the command line to whoever has it.
+    var packet: [4096]u8 = zero
+    var used = 0usize
+    var arg = 0usize
+    while arg < args.len {
+        if arg != 0usize && used < 4096usize {
+            packet[used] = 10u8
+            used += 1usize
+        }
+        var byte = 0usize
+        while byte < args[arg].len && used < 4096usize {
+            packet[used] = args[arg][byte]
+            used += 1usize
+            byte += 1usize
+        }
+        arg += 1usize
+    }
+    let (sent, send_error) = os.socket_send_to(opened, address, packet[0usize..used])
+    let closed = os.socket_close(opened)
+    if send_error != ok { ret (false, Failed) }
+    ret (false, ok)
 }
 
 fn activation_poll() -> (Activation, bool) {
     var none: Activation = zero
-    ret (none, false)
+    if !instance_held { ret (none, false) }
+    var events: [2]os.PollEvent = zero
+    let (ready, wait_error) = os.poller_wait(instance_poller, events[..], 0i64)
+    if wait_error != ok || ready == 0usize { ret (none, false) }
+    var packet: [4096]u8 = zero
+    let (got, from, receive_error) = os.socket_receive_from(instance_socket, packet[..])
+    if receive_error != ok || got == 0usize { ret (none, false) }
+    var lines = 1usize
+    var at = 0usize
+    while at < got {
+        if packet[at] == 10u8 { lines += 1usize }
+        at += 1usize
+    }
+    let (text, text_error) = mem.alloc[u8](instance_storage, got)
+    if text_error != ok { ret (none, false) }
+    at = 0usize
+    while at < got {
+        text[at] = packet[at]
+        at += 1usize
+    }
+    let (list, list_error) = mem.alloc[str](instance_storage, lines)
+    if list_error != ok { ret (none, false) }
+    var start = 0usize
+    var line = 0usize
+    at = 0usize
+    while at <= got {
+        if at == got || text[at] == 10u8 {
+            list[line] = text[start..at]
+            line += 1usize
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret (activation_of(instance_storage, list[0usize..lines]), true)
 }
 // ------------------------------------------------- lifecycle and global input
 //
