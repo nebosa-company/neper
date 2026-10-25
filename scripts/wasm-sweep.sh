@@ -10,17 +10,20 @@
 #   scripts/wasm-sweep.sh                 # every fixture
 #   scripts/wasm-sweep.sh -j 4 NAME...    # these, four at a time
 #   scripts/wasm-sweep.sh --release       # both builds with --release
+#   scripts/wasm-sweep.sh --host neper-host   # run the modules through lib/wasm/neper-host.js (D5678), not run-wasm.mjs
 #
 # The compiler is build/<host>/neper-try, or the one NEPER_COMPILER names. Results go to
 # build/wasm-sweep/results.tsv and the counts to the end of the run.
 set -u
 jobs=1
 release=
+runner=run-wasm
 names=()
 while [ $# -gt 0 ]; do
     case "$1" in
         -j) shift; jobs=${1:?-j needs a number} ;;
         --release) release=--release ;;
+        --host) shift; runner=${1:?--host needs run-wasm or neper-host} ;;
         *) names+=("$1") ;;
     esac
     shift
@@ -56,7 +59,7 @@ one() {
         printf '%s\trefused\t%s\n' "$name" "$(grep -m1 -o 'E-[A-Z]*-[0-9]*.*' "$out/$name.wasm.build" | cut -c1-200)"
         return
     fi
-    timeout 120 node --no-warnings "$repo/scripts/run-wasm.mjs" "$wasm" > "$out/$name.wasm.out" 2> "$out/$name.wasm.err" < /dev/null
+    timeout 120 node --no-warnings "$runner_path" "$wasm" > "$out/$name.wasm.out" 2> "$out/$name.wasm.err" < /dev/null
     wasm_status=$?
     rm -f "$wasm"
     if [ "$wasm_status" -eq 125 ]; then
@@ -69,6 +72,9 @@ one() {
 }
 export -f one
 export NEPER_WASM_STATS=${NEPER_WASM_STATS:-1}
+runner_path="$repo/scripts/run-wasm.mjs"
+[ "$runner" = neper-host ] && runner_path="$repo/lib/wasm/neper-host.js"
+export runner_path
 export repo host_os compiler out ext release
 
 printf '%s\n' "${names[@]}" | xargs -P "$jobs" -I{} bash -c 'one {}' | tee "$out/results.tsv"
