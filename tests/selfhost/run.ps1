@@ -10969,6 +10969,8 @@ if ($wasmNode) {
         if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
         $wasmRun = Invoke-Wasm $wasmPath @()
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+        # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
+        if ($wasmFixture -in 'os_socket', 'os_resolve', 'macos_poller_loss', 'net', 'wasm_net') { continue }
         $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through lib/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }

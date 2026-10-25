@@ -10646,6 +10646,10 @@ if command -v node >/dev/null 2>&1; then
         wasm_written=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")
         [ "$wasm_written" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as WebAssembly" >&2; exit 1; }
         (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
+        # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
+        case "$wasm_fixture" in
+            os_socket|os_resolve|macos_poller_loss|net|wasm_net) continue ;;
+        esac
         (cd "$repo" && node --no-warnings lib/wasm/neper-host.js "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi through lib/wasm/neper-host.js" >&2; exit 1; }
     done
     # (D5671, D5672, C201) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
@@ -10685,10 +10689,10 @@ if command -v node >/dev/null 2>&1; then
     # (threads) adds e.proc's output, piped stdin, limits, deadlines and an orphan held by a process group.
     for wasm_fixture in os_process os_group; do
         [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a WebAssembly module" >&2; exit 1; }
-        (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm") || { printf '%s\n' "$wasm_fixture failed as a WebAssembly module" >&2; exit 1; }
+        (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm") || { printf '%s\n' "$wasm_fixture failed as a WebAssembly module" >&2; exit 1; }
     done
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/proc_output/src/main.e" "$repo" wasm32 wasi "$wasm_build/proc_output.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "proc_output did not emit as a threaded WebAssembly module" >&2; exit 1; }
-    (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/proc_output.threads.wasm") || { printf '%s\n' "proc_output failed as a threaded WebAssembly module" >&2; exit 1; }
+    (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/proc_output.threads.wasm") || { printf '%s\n' "proc_output failed as a threaded WebAssembly module" >&2; exit 1; }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     wasm_fallback=wasm_irreducible
     wasm_forced=wasm_flow
