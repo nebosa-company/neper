@@ -8708,9 +8708,28 @@ fn layout_abs(l: *Layout, b: u32) {
     // Beside inline content in a block container the box has no flow position yet: use the content edge.
     var rect_w = -1.0f64
     var rect_h = -1.0f64
+    var flex_ja: style.Align = .Start
+    var flex_aa: style.Align = .Start
+    var flex_rect = false
     if bb.aux == 0u32 && bb.x == 0.0f64 && bb.y == 0.0f64 && (pb.inner == .Flow || pb.inner == .Grid || pb.inner == .Flex) && !pb.inline_level {
         static_x += pb.border[3usize] + pb.padding[3usize]
         static_y += pb.border[0usize] + pb.padding[0usize]
+        if pb.inner == .Flex && swap_code == 0u8 && bstyle(l, bb.parent).direction != .Rtl && (bstyle(l, bb.parent).flex_direction == .Row || bstyle(l, bb.parent).flex_direction == .Column) {
+            // The static position of a child of a flex container is where a lone flex item would sit.
+            rect_w = pb.w - pb.border[3usize] - pb.border[1usize] - pb.padding[3usize] - pb.padding[1usize]
+            rect_h = pb.h - pb.border[0usize] - pb.border[2usize] - pb.padding[0usize] - pb.padding[2usize]
+            let fps = bstyle(l, bb.parent)
+            var cross = s.align_self
+            if cross == .Auto { cross = fps.align_items }
+            if fps.flex_direction == .Row {
+                flex_ja = flex_static_align(fps.justify_content)
+                flex_aa = flex_static_align(cross)
+            } else {
+                flex_ja = flex_static_align(cross)
+                flex_aa = flex_static_align(fps.justify_content)
+            }
+            flex_rect = true
+        }
         if pb.inner == .Grid && !grid_cb && swap_code == 0u8 {
             rect_w = pb.w - pb.border[3usize] - pb.border[1usize] - pb.padding[3usize] - pb.padding[1usize]
             rect_h = pb.h - pb.border[0usize] - pb.border[2usize] - pb.padding[0usize] - pb.padding[2usize]
@@ -8788,6 +8807,11 @@ fn layout_abs(l: *Layout, b: u32) {
             var room = cb_w - ml - mr - extras_h - static_x
             if has_l { room = cb_w - lv - ml - mr - extras_h }
             if has_r { room = cb_w - rv - ml - mr - extras_h }
+            if !has_l && !has_r && flex_rect && flex_ja == .Center {
+                // A centred box may use twice the distance from the middle of its static rectangle to the nearer edge.
+                let mid = static_x + rect_w / 2.0f64
+                room = 2.0f64 * minf(mid, cb_w - mid) - ml - mr - extras_h
+            }
             if s.width.kind == .MinContent { cw = mn } else if s.width.kind == .MaxContent { cw = mx } else { cw = minf(maxf(mn, room), mx) }
         }
     }
@@ -8813,7 +8837,8 @@ fn layout_abs(l: *Layout, b: u32) {
         left = cb_w - rv - bb.w - mr - ml
     } else if rect_w >= 0.0f64 {
         var ja = s.justify_self
-        if ja == .Auto { ja = bstyle(l, bb.parent).justify_items }
+        if flex_rect { ja = flex_ja }
+        if ja == .Auto && !flex_rect { ja = bstyle(l, bb.parent).justify_items }
         let ja_room = rect_w - bb.w - ml - mr
         var ja_off = static_align_offset(ja, ja_room, true)
         // In a right-to-left container the start edge is the right one; `left` and `right` stay physical.
@@ -8880,7 +8905,8 @@ fn layout_abs(l: *Layout, b: u32) {
         top = cb_h - bv - bbh.h - mb - mt
     } else if rect_h >= 0.0f64 {
         var aa = s.align_self
-        if aa == .Auto { aa = bstyle(l, bbh.parent).align_items }
+        if flex_rect { aa = flex_aa }
+        if aa == .Auto && !flex_rect { aa = bstyle(l, bbh.parent).align_items }
         top += static_align_offset(aa, rect_h - bbh.h - mt - mb, false)
     }
     // To the parent's border box.
@@ -9317,3 +9343,10 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
 }
 
 error TooBig
+
+// The alignment of a lone flex item's static position along an axis: the three centring values centre, the end values end.
+fn flex_static_align(a: style.Align) -> style.Align {
+    if a == .Center || a == .SpaceAround || a == .SpaceEvenly { ret .Center }
+    if a == .End || a == .FlexEnd { ret .End }
+    ret .Start
+}

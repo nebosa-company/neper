@@ -579,6 +579,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !ok126 || !frag_has(p126, "3.") || !frag_has(p126, "2.") || !frag_has(p126, "1.") || frag_has(p126, "0.") { os.exit(167) }
     let (p127, ok127) = build(a, "<ol reversed style=\"list-style:none\"><li style=\"counter-increment:list-item -2\"></li><li style=\"counter-increment:list-item -2\"></li></ol>", "li { display: list-item; } li::before { content: counter(list-item) \".\"; }")
     if !ok127 || !frag_has(p127, "4.") || !frag_has(p127, "2.") || frag_has(p127, "6.") { os.exit(168) }
+    // 128. An absolute child of a flex container sits where a lone flex item would: justify-content centres it along the main axis.
+    let (p128, ok128) = build(a, "<div style=\"display:flex;justify-content:center;width:100px;height:40px;position:relative\"><div id=a style=\"position:absolute;width:20px;height:10px\"></div></div>", "")
+    if !ok128 || !near(rect_of(p128, "a").x, 40.0f64) { os.exit(169) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
