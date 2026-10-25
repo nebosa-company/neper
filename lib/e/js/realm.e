@@ -899,10 +899,14 @@ fn error_ctor_common(it: *js.Interp, proto_default: *js.Obj, args: []const js.Va
         let e = js.define_data(it, o, js.key_of("message"), js.str_value(s), js.P_HIDDEN)
     }
     let opts = arg(args, 1usize)
-    if js.is_object(opts) && js.has_property(it, js.as_object(opts), js.key_of("cause")) {
-        let (cv, ce) = js.get_prop(it, js.as_object(opts), js.key_of("cause"), opts)
-        if ce != ok { ret (js.undefv(), ce) }
-        let e2 = js.define_data(it, o, js.key_of("cause"), cv, js.P_HIDDEN)
+    if js.is_object(opts) {
+        let (has_cause, hce) = js.has_property_e(it, js.as_object(opts), js.key_of("cause"))
+        if hce != ok { ret (js.undefv(), hce) }
+        if has_cause {
+            let (cv, ce) = js.get_prop(it, js.as_object(opts), js.key_of("cause"), opts)
+            if ce != ok { ret (js.undefv(), ce) }
+            let e2 = js.define_data(it, o, js.key_of("cause"), cv, js.P_HIDDEN)
+        }
     }
     ret (js.obj_value(o), ok)
 }
