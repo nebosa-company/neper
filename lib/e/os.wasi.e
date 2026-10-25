@@ -85,6 +85,9 @@ extern fn wasi_args_get(pointers: u32, buffer: u32) -> u32
 @import("wasi_snapshot_preview1", "clock_time_get")
 extern fn wasi_clock_time_get(id: u32, precision: u64, time: u32) -> u32
 
+@import("wasi_snapshot_preview1", "poll_oneoff")
+extern fn wasi_poll_oneoff(subscriptions: u32, events: u32, count: u32, taken: u32) -> u32
+
 @import("wasi_snapshot_preview1", "proc_exit")
 extern fn wasi_proc_exit(code: u32)
 
@@ -407,7 +410,8 @@ fn neper_os_clock(kind: Clock) -> (i64, err) {
     var id = 0u32
     if kind == Clock.Monotonic { id = 1u32 }
     let status = wasi_clock_time_get(id, 1u64, u32(mem.address_of(&now[0usize])))
-    if status != 0u32 || now[0usize] > 9223372036854775807u64 { ret (0i64, wasi_error(status)) }
+    if status != 0u32 { ret (0i64, wasi_error(status)) }
+    if now[0usize] > 9223372036854775807u64 { ret (0i64, Failed) }
     ret (i64(now[0usize]), ok)
 }
 
@@ -463,9 +467,30 @@ fn neper_os_commit(p: *u8, n: usize) -> err {
     ret ok
 }
 
-// One thread: a futex wait would sleep for ever, so it returns at once, which a futex may do
-// spuriously, and a wake has nobody to wake.
-fn neper_os_wait_u32(p: *u8, expected: u32, timeout_ns: i64) -> err { ret ok }
+// A futex wait on a module with one thread. Nobody can change the word while this thread waits, so
+// there are three cases: the word is not `expected` (the wait is over, as on Linux); a finite
+// timeout (sleep for it on the monotonic clock with a `poll_oneoff` clock subscription, then report
+// `Timeout`; zero polls once); no timeout (negative), which can never end and which every caller
+// of `wait_u32` would answer by waiting again, so the module stops with the deadlock named.
+fn neper_os_wait_u32(p: *u8, expected: u32, timeout_ns: i64) -> err {
+    var word: [1]u32 = zero
+    wasm_memory_copy(u32(mem.address_of(&word[0usize])), u32(mem.address_of(p)), 4u32)
+    if word[0usize] != expected { ret ok }
+    if timeout_ns < 0i64 {
+        rt_stderr_bytes("trap[deadlock]: wait_u32 with no timeout on a word nothing can change (this module has one thread)\n")
+        wasi_proc_exit(134u32)
+    }
+    if timeout_ns > 0i64 {
+        var subscription: [6]u64 = zero
+        var event: [4]u64 = zero
+        var count: [1]u32 = zero
+        subscription[2usize] = 1u64
+        subscription[3usize] = u64(timeout_ns)
+        let status = wasi_poll_oneoff(u32(mem.address_of(&subscription[0usize])), u32(mem.address_of(&event[0usize])), 1u32, u32(mem.address_of(&count[0usize])))
+        if status != 0u32 { ret wasi_error(status) }
+    }
+    ret Timeout
+}
 
 fn neper_os_wake_one_u32(p: *u8) {}
 
