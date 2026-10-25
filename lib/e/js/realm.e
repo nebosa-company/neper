@@ -745,7 +745,7 @@ fn function_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js
     if !js.is_callable(this_val) { ret (js.undefv(), js.throw_type(it, "Function.prototype.toString requires that 'this' be a Function")) }
     let fo = js.as_object(this_val)
     // Built-ins written in JavaScript (the prelude) print like native functions.
-    let internal_fn = fo.class == js.C_FUNCTION && !fo.has_native && fo.node != ast.NONE && fo.prog.internal
+    let internal_fn = fo.class == js.C_FUNCTION && !fo.has_native && fo.node != ast.NONE && fo.prog.internal && !it.loading_internal
     if !internal_fn && fo.class == js.C_FUNCTION && fo.text.len > 0usize { ret (js.str_value(fo.text), ok) }
     if !internal_fn && fo.class == js.C_FUNCTION && !fo.has_native && fo.node != ast.NONE {
         let src = fo.prog.nodes[usize(fo.node)].text2
