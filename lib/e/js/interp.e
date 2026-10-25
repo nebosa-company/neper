@@ -139,12 +139,15 @@ type AgentHub = struct {
     gen: u64, msg: Value, msg_num: f64, reports: [64]str, rhead: usize, rtail: usize
 }
 
+// A tagged template's strings array is made once per call site (the program and the template node) in each realm.
+type TemplateSite = struct { prog: *const ast.Program, node: u32, obj: *Obj }
+
 type Interp = struct {
     a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32,
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, obj_to_string_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, obj_to_string_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, tmpl_sites: list.List[TemplateSite], tmpl_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool,
     gens: list.List[*GenState], wasm: *void, no_eval: bool
@@ -5040,18 +5043,38 @@ fn eval_tagged_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err
     let (fv, this_val, fe) = eval_callee(it, f, n.a)
     if fe != ok { ret (undefv(), fe) }
     // The strings array (cooked) with a frozen `raw` array, one per call site.
-    let strings = new_array(it)
-    let raw = new_array(it)
-    var s = 0usize
-    while s < usize(tn.b) {
-        let ts = f.prog.strs[usize(tn.a) + s]
-        if ts.valid { try array_push(it, strings, str_value(ts.cooked)) } else { try array_push(it, strings, undefv()) }
-        try array_push(it, raw, str_value(ts.raw))
-        s += 1usize
+    var cached = false
+    var strings = null_obj()
+    if it.tmpl_init {
+        var ci = 0usize
+        while ci < it.tmpl_sites.len && !cached {
+            if mem.address_of(it.tmpl_sites.items[ci].prog) == mem.address_of(f.prog) && it.tmpl_sites.items[ci].node == n.b {
+                strings = it.tmpl_sites.items[ci].obj
+                cached = true
+            }
+            ci += 1usize
+        }
     }
-    try define_data(it, strings, key_of("raw"), obj_value(raw), 0u8)
-    freeze_object(it, raw)
-    freeze_object(it, strings)
+    if !cached {
+        strings = new_array(it)
+        let raw = new_array(it)
+        var s = 0usize
+        while s < usize(tn.b) {
+            let ts = f.prog.strs[usize(tn.a) + s]
+            if ts.valid { try array_push(it, strings, str_value(ts.cooked)) } else { try array_push(it, strings, undefv()) }
+            try array_push(it, raw, str_value(ts.raw))
+            s += 1usize
+        }
+        try define_data(it, strings, key_of("raw"), obj_value(raw), 0u8)
+        freeze_object(it, raw)
+        freeze_object(it, strings)
+        if !it.tmpl_init {
+            let (tl, tle) = list.init[TemplateSite](it.a, 16usize)
+            it.tmpl_sites = tl
+            it.tmpl_init = true
+        }
+        let site_pushed = list.push[TemplateSite](&it.tmpl_sites, TemplateSite { prog: f.prog, node: n.b, obj: strings })
+    }
     let (l, le) = list.init[Value](it.a, usize(tn.d) + 1usize)
     var args = l
     if le != ok { ret (undefv(), le) }
