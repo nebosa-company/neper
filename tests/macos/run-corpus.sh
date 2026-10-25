@@ -29,8 +29,6 @@ expected() {
     net_ssh|x_tds_integrated|gpu_fault_unchecked|gpu_vulkan_raw|freestanding|os_syscall) echo any ;;
     # Imports four glibc extensions (memrchr, rawmemchr, strchrnul, strverscmp) that libSystem lacks; dyld binds all or none.
     extern_many) echo any ;;
-    # Reads DejaVu Sans from /usr/share/fonts/truetype/dejavu, which a Mac does not have (exit 30).
-    ui_selection3_v2) echo any ;;
     *) echo 0 ;;
   esac
 }
