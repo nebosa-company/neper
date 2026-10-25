@@ -2891,6 +2891,52 @@ fn cocoa_pump(timeout_ns: i64) {
     objc_pool_pop(pool)
 }
 
+// The close button asks the window's delegate, and this delegate answers no and tells the program: a Close event is a request,
+// as it is on the other hosts, and the window stays until the program calls `window_close`. `[window close]` does not ask.
+@import("/usr/lib/libobjc.A.dylib", "objc_allocateClassPair")
+extern fn cocoa_class_pair(superclass: usize, name: *const u8, extra: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "class_addMethod")
+extern fn cocoa_class_method(class: usize, selector: usize, implementation: usize, types: *const u8) -> u8
+
+@import("/usr/lib/libobjc.A.dylib", "objc_registerClassPair")
+extern fn cocoa_class_register(class: usize)
+
+type CocoaShould = union { function: fn(usize, usize, usize) -> usize, bits: usize }
+
+var cocoa_delegate: usize = zero
+
+@cc(c)
+fn cocoa_should_close(this: usize, command: usize, sender: usize) -> usize {
+    var at = 0usize
+    while at < COCOA_TABLE {
+        if cocoa_windows[at] == sender {
+            var window: Window = zero
+            window.raw = sender
+            var event: WindowEvent = zero
+            event.window = window
+            event.kind = .Close
+            cocoa_push(event)
+        }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+fn cocoa_make_delegate() -> usize {
+    if cocoa_delegate != 0usize { ret cocoa_delegate }
+    let name = "NeperWindowDelegate\x00"
+    let class = cocoa_class_pair(cocoa_class("NSObject\x00"), &name[0usize], 0usize)
+    if class == 0usize { ret 0usize }
+    var should: CocoaShould = zero
+    should.function = cocoa_should_close
+    let types = "c@:@\x00"
+    let added = cocoa_class_method(class, cocoa_sel("windowShouldClose:\x00"), should.bits, &types[0usize])
+    cocoa_class_register(class)
+    cocoa_delegate = msg0(msg0(class, cocoa_sel("alloc\x00")), cocoa_sel("init\x00"))
+    ret cocoa_delegate
+}
+
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
     let started = cocoa_start()
@@ -2937,6 +2983,8 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
         let opaque = msg_flag(layer, cocoa_sel("setOpaque:\x00"), 1i32)
     }
     cocoa_windows[slot] = window
+    let delegate = cocoa_make_delegate()
+    if delegate != 0usize { let delegated = msg1(window, cocoa_sel("setDelegate:\x00"), delegate) }
     cocoa_layers[slot] = layer
     cocoa_scales[slot] = scale_percent
     cocoa_widths[slot] = options.width
