@@ -571,6 +571,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 124. `lh` is the line height, and `line-clamp: auto` keeps the lines that fit `max-height`.
     let (p124, ok124) = build(a, "<div id=a style=\"line-clamp:auto;max-height:2lh;font:10px/20px serif;white-space:pre\">1\n2\n3\n4</div>", "")
     if !ok124 || !near(rect_of(p124, "a").h, 40.0f64) { os.exit(165) }
+    // 125. `counter-reset: reversed(c)` starts at the size of the last step of the items that step it: steps of -1 show 3, 2, 1.
+    let (p125, ok125) = build(a, "<div style=\"counter-reset:reversed(c)\"><div class=i></div><div class=i></div><div class=i></div></div>", ".i { counter-increment: c -1; } .i::before { content: counter(c); }")
+    if !ok125 || !str.eq(all_text(a, p125), "321") { os.exit(166) }
     if !ok119 || !near(rect_of(p119, "f").w, 100.0f64) { os.exit(160) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }

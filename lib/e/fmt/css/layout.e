@@ -292,24 +292,16 @@ fn counter_instantiate(l: *Layout, name: str, value: i64) {
     let pushed = list.push[CounterInst](&l.counters, CounterInst { name: name, value: value, depth: l.gen_depth })
 }
 
-// Applies `counter-reset`, `counter-increment` and `counter-set` (in that order) of an element.
-fn apply_counter_props(l: *Layout, s: *const style.Style) {
-    let (reset, has_reset) = extra_text(s, "counter-reset")
-    let (incr, has_incr) = extra_text(s, "counter-increment")
-    let (set, has_set) = extra_text(s, "counter-set")
-    if has_reset && !str.eq(cv.lower(l.a, cv.trim_ws(reset)), "none") { counter_pairs(l, reset, 0u8, 0i64) }
-    if has_incr && !str.eq(cv.lower(l.a, cv.trim_ws(incr)), "none") { counter_pairs(l, incr, 1u8, 1i64) }
-    if has_set && !str.eq(cv.lower(l.a, cv.trim_ws(set)), "none") { counter_pairs(l, set, 2u8, 0i64) }
-}
+type RevAcc = struct { sum: i64, last: i64 }
 
-// `name [integer]` pairs; op 0 reset, 1 increment, 2 set.
-fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64) {
+// The `counter-increment` of `name` in `text` (default 1), when it names the counter.
+fn incr_of(l: *Layout, text: str, name: str) -> (i64, bool) {
     let toks = cv.split_top_level_spaces(l.a, text)
     var i = 0usize
     while i < toks.len {
-        let name = toks[i]
+        let t = toks[i]
         i += 1usize
-        var v = default_value
+        var v = 1i64
         if i < toks.len {
             let (n, good) = str.parse_i64(toks[i])
             if good == ok {
@@ -317,6 +309,104 @@ fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64) {
                 i += 1usize
             }
         }
+        if str.eq(t, name) { ret (v, true) }
+    }
+    ret (0i64, false)
+}
+
+// Whether a `counter-reset` list creates a counter called `name` (plain or `reversed(name)`).
+fn resets_name(l: *Layout, text: str, name: str) -> bool {
+    let toks = cv.split_top_level_spaces(l.a, text)
+    var i = 0usize
+    while i < toks.len {
+        var t = toks[i]
+        i += 1usize
+        if str.starts_with(t, "reversed(") && t.len > 10usize { t = str.trim(t[9usize..t.len - 1usize]) }
+        if str.eq(t, name) { ret true }
+    }
+    ret false
+}
+
+fn rev_style(l: *Layout, s: *const style.Style, name: str, acc: *RevAcc) {
+    let (incr, has) = extra_text(s, "counter-increment")
+    if !has { ret }
+    let (v, found) = incr_of(l, incr, name)
+    if found {
+        acc.sum += v
+        acc.last = v
+    }
+}
+
+// The increments of `name` in the scope of element `e`: its own, its ::before and ::after, and its descendants' (an
+// element that resets the name starts a counter of its own and is left out).
+fn rev_walk(l: *Layout, e: u32, name: str, acc: *RevAcc, origin: bool) {
+    let s = &l.styles[usize(e)]
+    if s.display == .None { ret }
+    if !origin {
+        let (rs, has_rs) = extra_text(s, "counter-reset")
+        if has_rs && resets_name(l, rs, name) { ret }
+    }
+    let pb = s.pseudo[0usize]
+    if mem.address_of(pb) != 0usize && pb.display != .None { rev_style(l, pb, name, acc) }
+    rev_style(l, s, name, acc)
+    var kid = l.d.nodes[usize(e)].first_child
+    while kid != html.NONE {
+        if l.d.nodes[usize(kid)].kind == .Element { rev_walk(l, kid, name, acc, false) }
+        kid = l.d.nodes[usize(kid)].next_sibling
+    }
+    let pa = s.pseudo[1usize]
+    if mem.address_of(pa) != 0usize && pa.display != .None { rev_style(l, pa, name, acc) }
+}
+
+// The initial value of `reversed(name)` on `node`: the counter reaches the size of its last step on the last item that steps it.
+fn rev_initial(l: *Layout, node: u32, name: str) -> i64 {
+    var acc = RevAcc { sum: 0i64, last: 0i64 }
+    rev_walk(l, node, name, &acc, true)
+    var sib = l.d.nodes[usize(node)].next_sibling
+    while sib != html.NONE {
+        if l.d.nodes[usize(sib)].kind == .Element {
+            let (rs, has_rs) = extra_text(&l.styles[usize(sib)], "counter-reset")
+            if has_rs && resets_name(l, rs, name) { break }
+            rev_walk(l, sib, name, &acc, false)
+        }
+        sib = l.d.nodes[usize(sib)].next_sibling
+    }
+    ret 0i64 - acc.sum - acc.last
+}
+
+// Applies `counter-reset`, `counter-increment` and `counter-set` (in that order) of an element.
+fn apply_counter_props(l: *Layout, s: *const style.Style, node: u32) {
+    let (reset, has_reset) = extra_text(s, "counter-reset")
+    let (incr, has_incr) = extra_text(s, "counter-increment")
+    let (set, has_set) = extra_text(s, "counter-set")
+    if has_reset && !str.eq(cv.lower(l.a, cv.trim_ws(reset)), "none") { counter_pairs(l, reset, 0u8, 0i64, node) }
+    if has_incr && !str.eq(cv.lower(l.a, cv.trim_ws(incr)), "none") { counter_pairs(l, incr, 1u8, 1i64, NONE) }
+    if has_set && !str.eq(cv.lower(l.a, cv.trim_ws(set)), "none") { counter_pairs(l, set, 2u8, 0i64, NONE) }
+}
+
+// `name [integer]` pairs; op 0 reset, 1 increment, 2 set.
+fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64, node: u32) {
+    let toks = cv.split_top_level_spaces(l.a, text)
+    var i = 0usize
+    while i < toks.len {
+        var name = toks[i]
+        var rev = false
+        if op == 0u8 && str.starts_with(name, "reversed(") && name.len > 10usize {
+            name = str.trim(name[9usize..name.len - 1usize])
+            rev = true
+        }
+        i += 1usize
+        var v = default_value
+        var explicit = false
+        if i < toks.len {
+            let (n, good) = str.parse_i64(toks[i])
+            if good == ok {
+                v = n
+                explicit = true
+                i += 1usize
+            }
+        }
+        if rev && !explicit && node != NONE { v = rev_initial(l, node, name) }
         if op == 0u8 {
             counter_instantiate(l, name, v)
         } else {
@@ -544,7 +634,7 @@ fn gen_pseudo(l: *Layout, node: u32, parent_box: u32, kind: usize) {
     let ps = l.styles[usize(node)].pseudo[kind]
     if mem.address_of(ps) == 0usize { ret }
     if ps.display == .None { ret }
-    apply_counter_props(l, ps)
+    apply_counter_props(l, ps, NONE)
     let (text, has) = eval_content(l, ps, node)
     if !has { ret }
     let id = push_style(l, ps)
@@ -655,7 +745,7 @@ fn run_in_before(l: *Layout, node: u32) -> u32 {
 // A run-in element becomes an inline box at the start of the block it runs into.
 fn gen_run_in(l: *Layout, rnode: u32, target_box: u32) {
     let rs = &l.styles[usize(rnode)]
-    apply_counter_props(l, rs)
+    apply_counter_props(l, rs, rnode)
     let rb = new_box(l, .Flow, true, false, rnode, rnode)
     append(l, target_box, rb)
     gen_pseudo(l, rnode, rb, 0usize)
@@ -676,7 +766,7 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     if n.kind != .Element { ret }
     let s = &l.styles[usize(node)]
     if s.display == .None { ret }
-    apply_counter_props(l, s)
+    apply_counter_props(l, s, node)
     if s.display == .Contents {
         // The element has no box of its own, but its ::before and ::after still generate boxes in its parent.
         gen_pseudo(l, node, parent_box, 0usize)
