@@ -49,6 +49,7 @@ text_dwmask
 ui_tabs_rtl
 ui_windows_looks
 wasm_address
+wasm_atomics
 wasm_basics
 wasm_decode
 wasm_exec

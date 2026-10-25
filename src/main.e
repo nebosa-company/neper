@@ -1209,6 +1209,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var output = ""
     var has_output = false
     var release = false
+    var threads = false
     var unchecked = false
     var json = false
     var check_only = false
@@ -1246,6 +1247,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
                                 at += 1usize
                             }
                             if same(args[at], "--release") { release = true }
+                            if same(args[at], "--threads") { threads = true }
                             if same(args[at], "--unchecked") { unchecked = true }
                             if same(args[at], "--json") { json = true }
                             if same(args[at], "--check") { check_only = true }
@@ -1296,6 +1298,10 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         count += 5usize
         if release {
             long_form[count] = "--release"
+            count += 1usize
+        }
+        if threads {
+            long_form[count] = "--threads"
             count += 1usize
         }
         if unchecked {
@@ -1739,7 +1745,7 @@ fn wasm_command(a: *mem.Arena, args: []str) -> err {
     let (stats_switch, stats_error) = os.env(a, "NEPER_WASM_STATS")
     var flow_options = ""
     if stats_error == ok { flow_options = stats_switch }
-    let (module_bytes, emit_error) = wasm.emit(a, &checker, &loaded, &builder, arena_flag(args), &failure, &flow_stats, flow_options)
+    let (module_bytes, emit_error) = wasm.emit(a, &checker, &loaded, &builder, arena_flag(args), &failure, &flow_stats, flow_options, has_flag(args, "--threads"))
     if emit_error != ok {
         if emit_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
         try emit_command_diagnostic(&report, "E-WASM-9999", failure)

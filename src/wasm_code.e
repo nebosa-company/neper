@@ -26,7 +26,9 @@ error Unsupported
 type Out = struct { bytes: []u8, count: usize, full: bool }
 
 // An import (a WASI function) or one of the pseudo-library "wasm"'s instructions, which
-// are written inline (`inline_op`: 1 memory.grow, 2 memory.size, 3 memory.fill, 4 memory.copy).
+// are written inline (`inline_op`: 1 memory.grow, 2 memory.size, 3 memory.fill, 4 memory.copy,
+// and D5672's threads: 5 threads, 6 thread.id, 7 thread.spawn, 8 memory.atomic.wait32,
+// 9 memory.atomic.notify, 10 i32.atomic.rmw.cmpxchg, 11 i32.atomic.load, 12 i32.atomic.store).
 // `mask32` marks the parameters that are `i32`; `result_kind` is 0 none, 1 `i64`, 2 an
 // unsigned `i32` and 3 a signed one.
 type Import = struct {
@@ -124,6 +126,8 @@ type Gen = struct {
     fr_blocks: usize,
     fr_block: usize,
     fr_vec: bool,
+    // `--threads` (D5671): the module shape of wasm_threads.e and the atomics of D5672.
+    threads: bool,
 }
 
 // ---- bytes ---------------------------------------------------------------------
@@ -991,13 +995,53 @@ fn store_call_results(g: *Gen, instruction: nir.Instruction, expected: usize, pr
     ret ok
 }
 
+// A threads-proposal instruction (the 0xFE prefix) with its memarg: the alignment as a power
+// of two, offset 0.
+fn atomic_instruction(g: *Gen, code: usize, align: usize) {
+    op(g, 254usize)
+    put_uleb(&g.code, code)
+    put(&g.code, align)
+    put(&g.code, 0usize)
+}
+
+// The `wasm` library's threads instructions (D5672); `inline_op` 5 to 12. The plain module
+// has the atomics and a thread id of 0, and answers a spawn with -1.
+fn emit_thread_import(g: *Gen, item: Import) {
+    if item.inline_op == 5usize {
+        if g.threads { i32c(g, 1usize) } else { i32c(g, 0usize) }
+    }
+    if item.inline_op == 6usize {
+        if g.threads {
+            op(g, 35usize)
+            put_uleb(&g.code, 2usize)
+        } else {
+            i32c(g, 0usize)
+        }
+    }
+    if item.inline_op == 7usize {
+        if g.threads {
+            op(g, 16usize)
+            put_uleb(&g.code, g.imports[0usize].wasm_index)
+        } else {
+            op(g, 26usize)
+            i32c(g, 4294967295usize)
+        }
+    }
+    if item.inline_op == 8usize { atomic_instruction(g, 1usize, 2usize) }
+    if item.inline_op == 9usize { atomic_instruction(g, 0usize, 2usize) }
+    if item.inline_op == 10usize { atomic_instruction(g, 72usize, 2usize) }
+    if item.inline_op == 11usize { atomic_instruction(g, 16usize, 2usize) }
+    if item.inline_op == 12usize { atomic_instruction(g, 23usize, 2usize) }
+}
+
 fn emit_inline_import(g: *Gen, instruction: nir.Instruction, item: Import) -> err {
     var at = 0usize
     while at < instruction.operand_count {
         vget(g, operand(g, instruction, at))
-        wrap(g)
+        if item.inline_op <= 4usize || (item.mask32 >> at) & 1usize == 1usize { wrap(g) }
         at += 1usize
     }
+    if item.inline_op >= 5usize { emit_thread_import(g, item) }
     if item.inline_op == 1usize {
         op(g, 64usize)
         op(g, 0usize)
@@ -1380,6 +1424,119 @@ fn store_for(g: *Gen, width: usize) {
     memarg(g, 0usize)
 }
 
+// A threaded module's atomic (D5672): the `i64` form of the instruction whose base opcode is
+// `base`, B+1 for 64 bits and B+4, B+5, B+6 for 8, 16 and 32, with the natural alignment.
+fn atomic_for(g: *Gen, base: usize, width: usize) {
+    var code = base + 1usize
+    var align = 3usize
+    if width == 8usize {
+        code = base + 4usize
+        align = 0usize
+    }
+    if width == 16usize {
+        code = base + 5usize
+        align = 1usize
+    }
+    if width == 32usize {
+        code = base + 6usize
+        align = 2usize
+    }
+    atomic_instruction(g, code, align)
+}
+
+// The old value an instruction gave back zero-extended, as the type holds it.
+fn atomic_old_value(g: *Gen, width: usize, signed: bool) {
+    if signed { normalize_bits(g, width, true) }
+}
+
+// Section 8's five instructions as the threads proposal's: load, store, the six
+// read-modify-writes that have an instruction and compare-and-swap. `min` and `max` have none;
+// they are a loop of the load and a compare-and-swap of the chosen value.
+fn emit_atomic_threads(g: *Gen, instruction: nir.Instruction, width: usize, signed: bool) -> err {
+    let opcode = instruction.opcode
+    let address = operand(g, instruction, 0usize)
+    if opcode == .AtomicStore {
+        if instruction.operand_count != 2usize { ret fail(g, "an atomic store with the wrong operands") }
+        address_wrap(g, instruction, address)
+        vget(g, operand(g, instruction, 1usize))
+        atomic_for(g, 23usize, width)
+        ret ok
+    }
+    if !instruction.has_result { ret fail(g, "an atomic without a result") }
+    let result = instruction.result
+    if opcode == .AtomicLoad {
+        address_wrap(g, instruction, address)
+        atomic_for(g, 16usize, width)
+        atomic_old_value(g, width, signed)
+        vset(g, result)
+        ret ok
+    }
+    if opcode == .AtomicCas {
+        if instruction.operand_count != 3usize { ret fail(g, "a compare-and-swap with the wrong operands") }
+        address_wrap(g, instruction, address)
+        vget(g, operand(g, instruction, 1usize))
+        vget(g, operand(g, instruction, 2usize))
+        atomic_for(g, 72usize, width)
+        atomic_old_value(g, width, signed)
+        vset(g, result)
+        ret ok
+    }
+    if instruction.operand_count != 2usize { ret fail(g, "a read-modify-write with the wrong operands") }
+    let operand_value = operand(g, instruction, 1usize)
+    let kind = instruction.immediate / 8usize
+    if kind > 7usize { ret fail(g, "a read-modify-write of a kind that is not there") }
+    if kind <= 5usize {
+        // xchg, add, sub, and, or, xor
+        var base = 65usize
+        if kind == 1usize { base = 30usize }
+        if kind == 2usize { base = 37usize }
+        if kind == 3usize { base = 44usize }
+        if kind == 4usize { base = 51usize }
+        if kind == 5usize { base = 58usize }
+        address_wrap(g, instruction, address)
+        vget(g, operand_value)
+        atomic_for(g, base, width)
+        atomic_old_value(g, width, signed)
+        vset(g, result)
+        ret ok
+    }
+    check_address(g, instruction, address)
+    vget(g, address)
+    wrap(g)
+    atomic_for(g, 16usize, width)
+    atomic_old_value(g, width, signed)
+    vset(g, result)
+    op(g, 3usize)
+    op(g, 64usize)
+    vget(g, address)
+    wrap(g)
+    vget(g, result)
+    vget(g, result)
+    vget(g, operand_value)
+    vget(g, result)
+    vget(g, operand_value)
+    if kind == 6usize {
+        if signed { op(g, 83usize) } else { op(g, 84usize) }
+    } else {
+        if signed { op(g, 85usize) } else { op(g, 86usize) }
+    }
+    op(g, 27usize)
+    atomic_for(g, 72usize, width)
+    atomic_old_value(g, width, signed)
+    lset(g, local_s(g, 2usize))
+    lget(g, local_s(g, 2usize))
+    vget(g, result)
+    op(g, 82usize)
+    block_if(g)
+    lget(g, local_s(g, 2usize))
+    vset(g, result)
+    op(g, 12usize)
+    put_uleb(&g.code, 1usize)
+    block_end(g)
+    block_end(g)
+    ret ok
+}
+
 // Section 8's five instructions as plain memory operations: this target has one thread,
 // so a read-modify-write needs no lock. Each gives back the value that was there.
 fn emit_atomic(g: *Gen, instruction: nir.Instruction) -> err {
@@ -1388,6 +1545,7 @@ fn emit_atomic(g: *Gen, instruction: nir.Instruction) -> err {
     if width != 8usize && width != 16usize && width != 32usize && width != 64usize { ret fail(g, "an atomic of a width this target does not have") }
     if instruction.operand_count == 0usize { ret fail(g, "an atomic without an address") }
     let signed = codegen_x64.signed_integer(instruction.ty)
+    if g.threads { ret emit_atomic_threads(g, instruction, width, signed) }
     let address = operand(g, instruction, 0usize)
     if opcode == .AtomicStore {
         if instruction.operand_count != 2usize { ret fail(g, "an atomic store with the wrong operands") }
@@ -1694,7 +1852,14 @@ fn emit_one(g: *Gen, instruction: nir.Instruction, at: usize) -> err {
     if opcode == .BranchIf { ret emit_branch_if(g, instruction) }
     if opcode == .Trap || opcode == .Unreachable { ret emit_trap_instruction(g, instruction) }
     if opcode == .Return { ret emit_return(g, instruction) }
-    if opcode == .AtomicFence && instruction.immediate != 100usize && instruction.immediate != 101usize { ret ok }
+    if opcode == .AtomicFence && instruction.immediate != 100usize && instruction.immediate != 101usize {
+        if g.threads {
+            op(g, 254usize)
+            op(g, 3usize)
+            op(g, 0usize)
+        }
+        ret ok
+    }
     if opcode == .AtomicFence { ret fail(g, "a flush-to-zero mode switch (a kernel launched with .Ftz), which WebAssembly floats cannot do: they keep denormals") }
     if opcode == .Switch { ret fail(g, "a switch instruction, which no lowering makes and no back end reads (it carries no case table)") }
     ret fail(g, "an instruction this target does not have")

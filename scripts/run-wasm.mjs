@@ -27,6 +27,10 @@
 // SIGTERM) stops the worker and removes the scratch directories before the runner exits 130 or
 // 143. WASI writes to file descriptors 1 and 2 directly, so output order is the module's.
 //
+// A module built with `--threads` (D5671) imports its memory as `env.memory`: it is run on this one
+// worker with a shared memory of the size the import asks for and a `wasi.thread-spawn` that answers -1
+// (no thread can start), until the thread host of D5674 exists.
+//
 // The status is left in `process.exitCode` and the process left to end by itself: on Windows
 // `process.exit` while the engine is still finishing a background compile aborts Node
 // ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)", exit 127).
@@ -100,12 +104,77 @@ function withReaddir(imports, preopens, memory) {
   return imports
 }
 
+// The limits of the memory a module imports as `env.memory` (D5671), read from its import section
+// because the JS API does not report them: {initial, maximum} in pages, or null when it imports none.
+function importedMemory(bytes) {
+  let at = 8
+  const uleb = () => {
+    let value = 0
+    let shift = 0
+    for (;;) {
+      const byte = bytes[at++]
+      value += (byte & 127) * 2 ** shift
+      if (byte < 128) return value
+      shift += 7
+    }
+  }
+  const name = () => {
+    const length = uleb()
+    const text = Buffer.from(bytes.subarray(at, at + length)).toString()
+    at += length
+    return text
+  }
+  const limits = () => {
+    const flag = uleb()
+    const initial = uleb()
+    return { initial, maximum: flag & 1 ? uleb() : undefined }
+  }
+  while (at < bytes.length) {
+    const id = bytes[at++]
+    const size = uleb()
+    const end = at + size
+    if (id !== 2) {
+      at = end
+      continue
+    }
+    for (let count = uleb(); count > 0; count--) {
+      const library = name()
+      const field = name()
+      const kind = bytes[at++]
+      if (kind === 0) uleb()
+      else if (kind === 1) {
+        at++
+        limits()
+      } else if (kind === 2) {
+        const found = limits()
+        if (library === 'env' && field === 'memory') return found
+      } else if (kind === 3) at += 2
+      else if (kind === 4) {
+        at++
+        uleb()
+      }
+    }
+    return null
+  }
+  return null
+}
+
+// A threaded module (`--threads`) runs here on one thread until the thread host exists (C187): it is
+// given a shared memory of the size it asks for and a `wasi.thread-spawn` that answers -1, which
+// is the answer of a host that cannot start a thread.
 async function run({ args, env, preopens }) {
   const wasi = new WASI({ version: 'preview1', args, env, preopens, returnOnExit: true })
   let instance
   const began = performance.now()
   try {
-    ;({ instance } = await WebAssembly.instantiate(await readFile(workerData.file), withReaddir(wasi.getImportObject(), preopens, () => instance.exports.memory)))
+    const bytes = await readFile(workerData.file)
+    const imports = withReaddir(wasi.getImportObject(), preopens, () => instance.exports.memory)
+    const limits = importedMemory(bytes)
+    if (limits) {
+      imports.env = { memory: new WebAssembly.Memory({ initial: limits.initial, maximum: limits.maximum, shared: true }) }
+      imports.wasi = { 'thread-spawn': () => -1 }
+    }
+    ;({ instance } = await WebAssembly.instantiate(bytes, imports))
   } catch (error) {
     return { code: 125, note: `${error}\n` }
   }

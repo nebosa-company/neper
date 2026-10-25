@@ -13,6 +13,7 @@
 #   scripts/wasm-sweep.sh                 # every fixture
 #   scripts/wasm-sweep.sh -j 4 NAME...    # these, four at a time
 #   scripts/wasm-sweep.sh --release       # both builds with --release
+#   scripts/wasm-sweep.sh --threads       # the WebAssembly build as the threaded module shape (D5671)
 #
 # The compiler is build/<host>/neper-try, or the one NEPER_COMPILER names (required on macOS).
 # Results go to build/wasm-sweep/results.tsv (or WASM_SWEEP_OUT) and the counts to the end of the
@@ -20,11 +21,13 @@
 set -u
 jobs=1
 release=
+threads=
 names=()
 while [ $# -gt 0 ]; do
     case "$1" in
         -j) shift; jobs=${1:?-j needs a number} ;;
         --release) release=--release ;;
+        --threads) threads=--threads ;;
         *) names+=("$1") ;;
     esac
     shift
@@ -78,7 +81,7 @@ one() {
     limited 120 "$host" > "$out/$name.host.out" 2> "$out/$name.host.err" < /dev/null
     host_status=$?
     rm -f "$host"
-    if ! "$compiler" emit-executable "$source" "$repo" wasm32 wasi "$wasm" $release > "$out/$name.wasm.build" 2>&1; then
+    if ! "$compiler" emit-executable "$source" "$repo" wasm32 wasi "$wasm" $release $threads > "$out/$name.wasm.build" 2>&1; then
         printf '%s\trefused\t%s\n' "$name" "$(grep -m1 -o 'E-[A-Z]*-[0-9]*.*' "$out/$name.wasm.build" | cut -c1-200)"
         return
     fi
@@ -101,7 +104,7 @@ one() {
 }
 export -f one limited plain
 export NEPER_WASM_STATS=${NEPER_WASM_STATS:-1}
-export repo host_os host_arch compiler out ext release
+export repo host_os host_arch compiler out ext release threads
 
 printf '%s\n' "${names[@]}" | xargs -P "$jobs" -I{} bash -c 'one {}' | tee "$out/results.tsv"
 printf '\n'

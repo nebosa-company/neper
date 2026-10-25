@@ -10642,11 +10642,26 @@ if command -v node >/dev/null 2>&1; then
     wasm_build="$test_build/wasm"
     rm -rf "$wasm_build"
     mkdir -p "$wasm_build"
-    for wasm_fixture in wasm_basics wasm_ops wasm_flow wasm_reserve fs_basics os_clock_random os_environment os_wait_timeout wasm_address wasm_irreducible wasm_mask; do
+    for wasm_fixture in wasm_basics wasm_ops wasm_flow wasm_reserve fs_basics os_clock_random os_environment os_wait_timeout wasm_address wasm_irreducible wasm_mask wasm_atomics; do
         wasm_written=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")
         [ "$wasm_written" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as WebAssembly" >&2; exit 1; }
         (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
     done
+    # (D5671, D5672, C186) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
+    # and the seven instructions of the "wasm" library answer as a plain and as a threaded module should.
+    for wasm_fixture in wasm_basics wasm_atomics wasm_ops; do
+        [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a threaded WebAssembly module" >&2; exit 1; }
+        wasm_plain_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm")
+        wasm_threads_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.threads.wasm")
+        [ "$wasm_plain_output" = "$wasm_threads_output" ] || { printf '%s\n' "$wasm_fixture writes something else as a threaded module" >&2; exit 1; }
+    done
+    wasm_ops_source="$repo/tests/selfhost/fixtures/wasm/wasm_thread_ops/src/main.e"
+    "$test_build/neper-self" emit-executable "$wasm_ops_source" "$repo" wasm32 wasi "$wasm_build/thread_ops.wasm" > /dev/null
+    "$test_build/neper-self" emit-executable "$wasm_ops_source" "$repo" wasm32 wasi "$wasm_build/thread_ops.threads.wasm" --threads > /dev/null
+    wasm_plain_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/thread_ops.wasm")
+    [ "$wasm_plain_output" = "$(printf 'threads 0\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0')" ] || { printf '%s\n' "the plain module's thread instructions answered: $wasm_plain_output" >&2; exit 1; }
+    wasm_threads_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/thread_ops.threads.wasm")
+    [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     wasm_fallback=wasm_irreducible
     wasm_forced=wasm_flow
