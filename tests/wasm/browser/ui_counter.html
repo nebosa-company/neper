@@ -11,10 +11,13 @@
 <pre id="stdout"></pre>
 <script type="module">
   // The e.ui program tests/wasm/browser/ui_counter in a window on a canvas (C208, D5680). ?module=URL (default
-  // /build/wasm-sweep/ui_counter.wasm). The state is
+  // /build/wasm-sweep/ui_counter.wasm), w and h the canvas size in CSS pixels (examples/ui is built as ui_gallery.wasm). The state is
   // window.neperResult = { exitCode, stdout, error, isolated }, live while the program runs.
   import { run } from '../../../lib/wasm/neper-host.js'
   const query = new URLSearchParams(location.search)
+  const screen = document.getElementById('screen')
+  if (query.get('w')) screen.style.width = query.get('w') + 'px'
+  if (query.get('h')) screen.style.height = query.get('h') + 'px'
   const out = { exitCode: null, stdout: '', error: null, isolated: crossOriginIsolated }
   window.neperResult = out
   const shown = document.getElementById('stdout')
@@ -23,7 +26,7 @@
   try {
     const font = new Uint8Array(await (await fetch('/neperos/assets/fonts/jost-regular.ttf')).arrayBuffer())
     out.exitCode = (await run(query.get('module') ?? '/build/wasm-sweep/ui_counter.wasm', {
-      canvas: document.getElementById('screen'), files: { 'jost-regular.ttf': font }, stdout,
+      canvas: screen, files: { 'jost-regular.ttf': font }, stdout,
     })).exitCode
   } catch (error) {
     out.error = error.message
