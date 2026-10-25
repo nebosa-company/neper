@@ -103,6 +103,8 @@ const B_STRICT_CONST: u8 = 4u8
 const B_ALIAS: u8 = 8u8
 // A let / const / class binding (set with the temporal dead zone): a sloppy direct eval's `var` may not redeclare it.
 const B_LEX: u8 = 16u8
+// A `var` created by sloppy direct eval is configurable: `delete x` removes it.
+const B_DELETABLE: u8 = 32u8
 
 type Binding = struct { name: str, value: Value, flags: u8, target: *Env }
 
@@ -2648,13 +2650,19 @@ fn declare(it: *Interp, e: *Env, name: str, val: Value, flags_in: u8) -> err {
     let (at, found) = env_index(e, name)
     if found {
         e.vars.items[at].value = val
-        e.vars.items[at].flags = flags
+        e.vars.items[at].flags = flags | (e.vars.items[at].flags & B_DELETABLE)
         ret ok
     }
     ret list.push[Binding](&e.vars, Binding { name: name, value: val, flags: flags, target: null_env() })
 }
 
 // A `var`/parameter-style declaration: leaves an existing binding's value alone.
+fn declare_var_deletable(it: *Interp, e: *Env, name: str) -> err {
+    let (at, found) = env_index(e, name)
+    if found { ret ok }
+    ret list.push[Binding](&e.vars, Binding { name: name, value: undefv(), flags: B_DELETABLE, target: null_env() })
+}
+
 fn declare_var(it: *Interp, e: *Env, name: str) -> err {
     let (at, found) = env_index(e, name)
     if found { ret ok }
@@ -5169,6 +5177,12 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
             if he != ok { ret (undefv(), he) }
             if holder != null_env() {
                 if holder.has_with { ret (bool_value(delete_prop(it, holder.with_obj, key_of(an2.text))), ok) }
+                let (dat, dfound) = env_index(holder, an2.text)
+                if dfound && (holder.vars.items[dat].flags & B_DELETABLE) != 0u8 {
+                    // The binding goes away: its name no longer matches anything.
+                    holder.vars.items[dat].name = ""
+                    ret (bool_value(true), ok)
+                }
                 ret (bool_value(false), ok)
             }
             let done2 = delete_prop(it, it.global, key_of(an2.text))
@@ -7658,13 +7672,36 @@ fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
             if !has_own(it, it.global, key_of(name)) { try define_data(it, it.global, key_of(name), undefv(), P_DEFAULT) }
             note_var_name(it, name)
         } else {
-            try declare_var(it, tgt, name)
+            try declare_var_deletable(it, tgt, name)
         }
         h += 1usize
+    }
+    // Functions a sloppy direct eval declares are as deletable as its vars (unless the scope already had the name).
+    var fresh_fns: [32]str = zero
+    var fresh_n = 0usize
+    if !g.strict && tgt.parent != null_env() {
+        var fz = 0usize
+        while fz < usize(root.b) && fresh_n < 32usize {
+            let fnode3 = prog.nodes[usize(prog.kids[usize(root.a) + fz])]
+            fz += 1usize
+            if fnode3.kind == ast.N_FUNC && (fnode3.flags & ast.F_DECL) != 0u16 {
+                let (fat, ffound) = env_index(tgt, fnode3.text)
+                if !ffound {
+                    fresh_fns[fresh_n] = fnode3.text
+                    fresh_n += 1usize
+                }
+            }
+        }
     }
     var lex_scope = null_env()
     if !g.strict { lex_scope = tgt }
     try hoist_declarations_in(it, &g, root.a, root.b, lex_scope)
+    var fm = 0usize
+    while fm < fresh_n {
+        let (mat, mfound) = env_index(tgt, fresh_fns[fm])
+        if mfound { tgt.vars.items[mat].flags = tgt.vars.items[mat].flags | B_DELETABLE }
+        fm += 1usize
+    }
     var last = undefv()
     var k = 0usize
     while k < usize(root.b) {
