@@ -42209,3 +42209,272 @@ A second round gave 2873/1919, 1066/680 and 1329/910 ms. The programs print the 
 - `os_uia`: `os.UiaUnitsPun` and the UI Automation surface exist in `os.windows.e` only; the fixture is Windows-only.
 - `by_value_snapshot`, `extern_import`, `extern_struct`, `extern_variadic`, `import_protocol`, `import_rebind`, `proc_output`, `variadic_drop` (`use plat`): the module is fixture-local with `plat.linux.e`, `plat.macos.e` and `plat.windows.e` and no wasi variant; they test C-ABI imports a wasm module does not have. `extern_many` and `macos_window_events` import `libc.so.6` and libobjc, which the target names as missing. `db_migrate`, `db_orm`, `x_sqlite`, `x_postgresql`, `x_db_units`, `x_openssl`, `x_tds`, `x_odbc`, `x_mysql` need `x.*.capi` (variants for linux, windows, macos that `@import` a client library) or the client itself: no wasi variant exists, and a wasm module cannot load a library. All genuinely absent for this target, none a capacity.
 - Open: the loader's message for a module that has variants for other targets only is `names no module under the source root or the toolchain`; naming the variants it saw would be more honest, and is not done here.
+
+## D5670 — WebAssembly past one thread: what was measured, and the order of C186-C196
+
+**Problem.** After C180-C184 (D5600-D5662) the wasm32-wasi sweep fails where a program starts threads, opens sockets, resolves names or spawns processes, and nothing runs a module in a browser. Of the 78 failures in the last full sweep of the C184 tree (`build/wasm-sweep/results.tsv`), a grep of each fixture's own source puts 35 on threads (`thread_*`, `sync_*`, `concurrent_*`, `task_pool`, `cancel`, `mediator`, `os_futex`, `os_exit_threads`, ...), 19 on sockets, the poller or resolution (16 of them also start threads: every `net_*` runs its server on a thread), 15 on processes, 18 on windows or GPU devices, 5 on mappings and watches.
+
+**Measured here** (throwaway probes in the session scratchpad; Node 24.19.0 on Windows, 22.23.1 in WSL; wasm-tools 1.251.0; the Browser pane's Chrome 152; pages served from 127.0.0.1 by a 20-line static server):
+- Atomic instructions validate and run on an unshared memory (`i64.atomic.rmw.add`, `atomic.fence`; `memory.atomic.notify` answers 0); only `memory.atomic.wait32` traps there ("Atomics.wait cannot be called in this context"). An atomic's memarg must carry the natural alignment: `align=4` on `i64.atomic.load` fails validation.
+- A shared memory with a maximum of 65,536 pages (4 GiB) cost no resident memory when made; growing it by 1 GiB took 1.08 ms and 0.1 MiB resident.
+- A second instantiation over the same memory re-applies the module's active data segments: a value the first thread wrote over a segment read back as the segment's byte once the threads had started. A passive segment copied by `memory.init` in `_start` was not touched.
+- Eight Workers, each its own instance over one shared memory, 1,000,000 `i64.atomic.rmw.add` each: the exact total, 435 ms; joined by `memory.atomic.wait32` on a word each thread clears and notifies. Globals are per instance, so a thread id and `$sp` stayed per thread.
+- A new Worker per thread: spawn and join of an empty thread 33-35 ms on Windows, 41-46 ms in WSL. An idle Worker that already holds an instance, woken through a shared word: 3-4 µs median, 31-45 µs p90.
+- `memory.atomic.wait32` with a 5 ms timeout answered "timed-out" after 15.8-18.7 ms on Windows (the 15.6 ms timer tick) and 5.3 ms in WSL.
+- `node:wasi` works over a shared memory, and `WASI.start` accepts a stand-in `{exports: {memory, _start() {}}}`, so a host can bind one WASI instance to a memory it did not instantiate. A second `WASI` object has a descriptor table of its own: thread B reading the descriptor thread A's `path_open` returned got EBADF (8).
+- A wasm thread blocked in `Atomics.wait`, served by Node's main thread (a request word that thread awaits with `Atomics.waitAsync`, the reply by `Atomics.notify`): a proxied zero-byte `fd_write` 4.9-6.5 µs against 1.9 µs direct on Windows, 18.6 µs against 0.6 µs in WSL; a 64-byte TCP echo through `node:net` 53-66 µs; `dns.lookup("localhost")` 0.26-0.64 ms. With the request posted as a message instead: 25-31 µs.
+- Browser: with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` the page is `crossOriginIsolated` and has `SharedArrayBuffer`; without them it has neither. `Atomics.wait` on the page's main thread throws; `Atomics.waitAsync` works there. v2.exe's unchanged wasm32-wasi output for a small program (stdout, arguments, clock, random) ran in a module Worker under a 60-line JS WASI shim and printed its three lines with exit 0, isolated or not. A Worker made by a Worker that is blocked in `join` never started (8 s timeout); Workers the page made on the blocked Worker's request ran four threads of 100,000 atomic adds exactly, in 37 ms. A dedicated Worker has OPFS's synchronous access handle (write, read, flush), but finding and opening a file there is asynchronous. A 412x920 frame through `putImageData` on an OffscreenCanvas in a Worker: 1.15 ms.
+- Node 24 validates and runs a memory64 module.
+
+**Decision: the order**, each item implementable from its rows: C186 the threaded module and real atomics (D5671, D5672) → C187 the thread runtime and the Node thread host (D5673, D5674) → C188 `neper_host` with sockets, resolution and the poller in the plain build (D5675, D5676) → C189 the `net_*` corpus on `--threads` (needs C187 and C188) → C190 processes over `neper_host` (needs C188; D5677) → C191 the browser host (D5678) → C192 browser threads (needs C187, C191; D5679) → C193 `e.ui` on a canvas (needs C191; D5680) → C194 `neper run` for wasm32-wasi and the runner in the toolchain (D5681) → C195 the loader's message for variants of other targets (D5682) → C196 source maps and line numbers for engine traps (D5683). D5684 is what is not queued, and why.
+
+**Models** (D5213's rule: Sonnet unless the design is open or the work is deep debugging): C187 Opus high, because bringing threads up under some twenty fixtures means finding hangs and races in a runtime and a host at once, the class of work where C184 needed Opus; C186 and C188-C193 Sonnet high (an encoder change, JS hosts and `os.wasi.e` code from closed designs, where the bootstrap traps of the card are the risk); C194-C196 Sonnet medium.
+
+## D5671 — Threads on wasm32-wasi: a `--threads` build with its own module shape; the plain build does not change
+
+**Decision: a flag, not a target.** `emit-executable FILE ROOT wasm32 wasi OUT --threads` (and `neper build|run --target wasm32-wasi --threads`, which `short_form` forwards as it forwards `--release`) writes a threaded module; without the flag every module is byte-for-byte what the compiler writes now. There is no new os or arch: `os.wasi.e` serves both shapes and asks the back end at run time (D5672's `threads`). A target name `wasm32-wasi-threads` was rejected: `short_form` splits a triple at its first dash, `valid_os`, `target_suffix` and `render_tasks.py`'s `VARIANTS` would learn a name whose module variants are the same file, and nothing differs at check time. `wasm_command` reads `has_flag(args, "--threads")` where it reads `--release` (D5650) and passes it to `wasm.emit` in its options; lowering is the same for both.
+
+**Why opt-in.** A threaded module imports its memory and `wasi.thread-spawn`, so it runs only where the wasi-threads proposal is implemented (`scripts/run-wasm.mjs` from C187 on; wasmtime with `-S threads`), and it pays D5674's proxied WASI on every file call. A program with one thread gains nothing from it.
+
+**The threaded module** (the wasi-threads convention, as clang's and Rust's `wasm32-wasip1-threads` modules have it):
+- The memory is imported, not defined: import `("env", "memory")`, kind 2, limits flag `0x03` (shared, has a maximum), minimum the page count the memory section declares today, maximum 65,536; still exported as `memory`. D5640's layout (data, the 8 MiB main shadow stack, the root arena, reservations upward, growth by `memory.grow`) is unchanged: 4 GiB was always the ceiling, and measured, the shared maximum costs nothing until grown.
+- The data is passive. Every segment `write_data` writes (the blob and the one-per-global initial segments) has flag `0x01` and no offset expression; a data count section (id 12, the number of segments) goes between the element and code sections; `_start` begins, before it stores the arena cell, with `i32.const destination; i32.const 0; i32.const length; memory.init k` (`0xFC 0x08 k 0x00`) and `data.drop k` (`0xFC 0x09 k`) for every segment k. Measured: an active segment is applied again by each thread's instantiation and would reset what the program wrote over it.
+- Globals: `$sp` (0) as now; `$floor` (1) mutable, because each thread has its own stack; a new `$tid` (2), `i32`, mutable, initially 0. Every thread is its own instance and globals belong to an instance, so these three are thread-local by construction, and they are all the thread-local state the target needs: Neper source has no thread locals (`os.linux.e`'s per-thread error detail is a slot table keyed by the thread id).
+- Import `("wasi", "thread-spawn")`, type `(i32) -> (i32)`, and export `wasi_thread_start`, type `(i32, i32) -> ()`, written as D5673 gives it; both in every threaded module.
+- Everything else (types, table, elements, functions, the name section) as in the plain module.
+
+**Verification.** `scripts/wasm-sweep.sh --threads` and `scripts/check-fixture.sh NAME --target wasm32-wasi --threads` pass the flag to the wasm build only. Until C187 the runner gives a threaded module one thread (its own memory, `node:wasi` direct in the one Worker, `thread-spawn` answering -1), which is enough to run every fixture in the threaded shape.
+
+## D5672 — Threads: NIR's atomics as wasm atomics, and seven instructions more in the "wasm" library
+
+**Decision: in a `--threads` module the five atomic opcodes are the threads proposal's instructions**; a plain module keeps D5605's plain operations, so its bytes do not change. Every NIR value is an `i64` (D5600), so the `i64` forms serve every width and the old value is then extended by the type's sign exactly as D5605 does. Encoding: the prefix `0xFE`, the opcode as a ULEB, a memarg whose alignment is the natural one (0, 1, 2, 3 for 1, 2, 4, 8 bytes; anything else fails validation) and offset 0. For an operation whose base is B, the `i64` forms are B+1 for 64 bits, B+4 for 8, B+5 for 16 and B+6 for 32 (checked with wasm-tools: `i64.atomic.rmw8.sub_u` is `0x29`, `i64.atomic.rmw16.cmpxchg_u` `0x4D`, `i64.atomic.load32_u` `0x16`).
+
+| NIR | instruction | B |
+|---|---|---|
+| `AtomicLoad` | `i64.atomic.load` / `i64.atomic.load{8,16,32}_u` | `0x10` |
+| `AtomicStore` | `i64.atomic.store` / `i64.atomic.store{8,16,32}` | `0x17` |
+| `AtomicRmw` add, sub, and, or, xor, xchg | `i64.atomic.rmw[N].<op>[_u]` | `0x1E`, `0x25`, `0x2C`, `0x33`, `0x3A`, `0x41` |
+| `AtomicCas` | `i64.atomic.rmw[N].cmpxchg[_u]` (address, expected, replacement; gives the old value; it succeeded when the old value equals the expected one cut to the width) | `0x48` |
+| `AtomicFence` (the orderings) | `atomic.fence`: `0xFE 0x03 0x00` | |
+
+- `min` and `max` have no instruction: a loop of the atomic load, the signed or unsigned compare D5605 already chooses by the type, and `cmpxchg` of the chosen value, until `cmpxchg` gives back the value loaded.
+- The address is `i32.wrap_i64` of the operand, as for every access. A misaligned atomic traps in the engine ("unaligned atomic"); Neper's layout aligns every scalar to its size, so no program here reaches it, and the text is the engine's, as for D5604's null function.
+- `AtomicFence` 100 and 101 (`ftz`) stay refused (D5662).
+
+**Decision: the pseudo-library "wasm" (D5600) gains what `os.wasi.e` needs for threads**, so `e.os` keeps depending on `e.mem` alone (docs/modules.json) instead of `use e.atomic`. Each is declared in `os.wasi.e` as `@import("wasm", NAME) extern fn` and written inline by `inline_operation`:
+
+| NAME | declaration in `os.wasi.e` | threaded module | plain module |
+|---|---|---|---|
+| `threads` | `wasm_threads() -> u32` | `i32.const 1` | `i32.const 0` |
+| `thread.id` | `wasm_thread_id() -> u32` | `global.get $tid` | `i32.const 0` |
+| `thread.spawn` | `wasm_thread_spawn(record: u32) -> i32` | `call` of the `wasi.thread-spawn` import | `drop`, `i32.const -1` |
+| `memory.atomic.wait32` | `wasm_wait32(address: u32, expected: u32, timeout_ns: i64) -> u32` | `0xFE 0x01`, align 2 | the same; never reached, because `os.wasi.e` tests `threads` first (it traps on an unshared memory) |
+| `memory.atomic.notify` | `wasm_notify(address: u32, count: u32) -> u32` | `0xFE 0x00`, align 2 | the same (answers 0) |
+| `i32.atomic.rmw.cmpxchg` | `wasm_cas32(address: u32, expected: u32, replacement: u32) -> u32` | `0xFE 0x48`, align 2 | the same |
+| `i32.atomic.load`, `i32.atomic.store` | `wasm_load32(address: u32) -> u32`, `wasm_store32(address: u32, value: u32)` | `0xFE 0x10`, `0xFE 0x17`, align 2 | the same |
+
+Atomic instructions are valid on an unshared memory (measured), so only `threads`, `thread.id` and `thread.spawn` differ between the shapes, and `thread.spawn`'s plain form keeps the import out of a plain module. `wait32` answers 0 woken, 1 not equal, 2 timed out; a negative timeout waits for ever, which is already `wait_u32`'s convention.
+
+## D5673 — Threads: start, join and detach, and the per-thread state of `os.wasi.e`
+
+**A thread block.** `neper_os_thread_create(result, entry, context, stack)`, when `wasm_threads()` is 1, takes `size = round_up(max(stack, 65536) + 64, 65536)` bytes, from the free list below or else as a new reservation (D5640), and writes this record at its base (little-endian):
+
+| offset | field |
+|---|---|
+| 0 | `u32` state: 1 running, 2 detached, 0 finished |
+| 4 | `u32` tid, what `thread-spawn` returned |
+| 8 | `u64` entry: the function's table slot (`FunctionAddress` is the slot, D5604) |
+| 16 | `u64` context |
+| 24 | `u64` stack top: base + size, aligned down to 16 |
+| 32 | `u64` stack floor: base + 64 |
+| 40 | `u64` size |
+| 48 | `u64` the free list's link |
+
+It then calls `wasm_thread_spawn(u32(base))`. A positive result is stored at +4 and the answer is `Thread { raw: base }` with `ok`; zero or negative puts the block back and answers `Failed`, what the native runtimes answer for a failed clone. With `wasm_threads()` 0 it answers `Unsupported` without touching memory, as now.
+
+**`wasi_thread_start(tid, arg)`, written by the back end** beside `write_start` in `src/wasm.e`:
+```
+global.set $tid   (local.get tid)
+global.set $sp    (i64.load offset=24 (local.get arg))
+global.set $floor (i64.load offset=32 (local.get arg))
+i64.load offset=16 (local.get arg)                      ;; the context
+i32.wrap_i64 (i64.load offset=8 (local.get arg))        ;; the entry's slot
+call_indirect (type (i64) -> ())                         ;; fn(*Ctx)
+i32.atomic.store offset=0 (local.get arg) (i32.const 0)  ;; finished
+drop (memory.atomic.notify offset=0 (local.get arg) (i32.const -1))
+```
+The finishing store and the notify come after the entry returns and are the thread's last touches of its block, so a joiner may reuse the block the moment the word reads 0. `wasm.emit`'s reachability walk adds nothing for it: the entry is reached through its address.
+
+**Join, detach.** `neper_os_thread_join(t)`: `t.raw` 0 answers `Invalid`; it loops `s = wasm_load32(state)`, 0 ending the loop, 2 answering `Invalid` (detached), anything else `wasm_wait32(state, s, -1)`; then the block goes on the free list and the answer is `ok`. `neper_os_thread_detach(t)`: `wasm_cas32(state, 1, 2)`; an old value 0 means the thread has finished, and the block goes on the free list now. A detached thread still running stores 0 over the 2 when it ends and its block is not reclaimed, which is what the native runtime does with a detached thread's stack (runtime_elf_a64.s, "Nothing waits for a detached thread"). Ceiling: that leak; upgrade path: the host reports finished detached blocks.
+
+**One lock.** A module word `rt_lock` guards `rt_reserve_top`, `release` and the free list: acquire by `wasm_cas32(lock, 0, 1)`, and on failure by `wasm_cas32(lock, 0, 2)` and `wasm_wait32(lock, 2, -1)` until it is won (Drepper's mutex, the shape of `e.sync.Mutex`); release by `wasm_store32(lock, 0)` and, when it held 2, `wasm_notify(lock, 1)`. In a plain module it is never contended.
+
+**The futex.** `neper_os_wait_u32(p, expected, timeout_ns)` answers `ok` at once when `wasm_threads()` is 0 (as now), else `wasm_wait32(u32(address of p), expected, timeout_ns)`: 0 and 1 are `ok`, 2 is `Timeout`, the native contract (a spurious wake is allowed). `wake_one_u32` is `wasm_notify(p, 1)` and `wake_all_u32` `wasm_notify(p, 4294967295)`. On Windows a timed wait ends on the 15.6 ms timer tick (measured), which the contract allows.
+
+**Per-thread and shared state in `os.wasi.e`.**
+- `current_thread_id()` is `usize(wasm_thread_id()) + 1`: 1 on the main thread, as now, and non-zero and distinct on every thread (wasi-threads tids are 1 to 0x1FFFFFFF).
+- `last_error_detail`'s single slot (D5621) becomes `os.linux.e`'s 64 slots keyed by `current_thread_id()` (code, used, fresh, thread), with its ponytail note; with one thread it behaves as one slot.
+- `neper_start_args` loads the mount table before `main` runs instead of `load_mounts` loading it lazily, so two threads never load it at once.
+- `rt_grow` loops until `memory.size` covers the end: two threads growing at once may grow more than needed, never less, and `memory.grow` is atomic on a shared memory.
+- The working directory (`cwd_fd`, `cwd_text`) stays process-wide, as it is natively.
+
+**The end.** `proc_exit` from any thread ends the program with that status, as `exit_group` does (the host does it, D5674), and `neper_trap` already ends in `proc_exit(134)`. `_start` returning ends the program though threads still run, as native `main` returning does.
+
+## D5674 — Threads: the Node host; its main thread owns WASI, Workers are the threads, idle ones are reused
+
+**Decision: `scripts/run-wasm.mjs` recognises a threaded module by its import of `env.memory`** (`WebAssembly.Module.imports`) and then runs as a host:
+- Node's main thread is the host and never runs wasm. It makes the memory (`new WebAssembly.Memory({initial, maximum: 65536, shared: true})`, `initial` read from the memory import's limits by a walk of the module's import section, since the JS API reports no limits) and one `node:wasi` instance bound to it by `wasi.start({exports: {memory, _start() {}}})` (measured to work), wrapped by D5620's readdir shim.
+- Every wasm thread, the first one too, is a Worker holding its own instance of the one compiled module over the shared memory. Its `wasi_snapshot_preview1` imports are made from the module's import list as proxies: each writes its function number and arguments into the thread's mailbox and blocks, and the host calls the real `wasi.wasiImport[name]` with them. The pointers point into the shared memory, so nothing is copied. One WASI instance is one descriptor table, which threads need (measured: a second `WASI` answers EBADF for the first one's descriptor). `proc_exit` is not forwarded: the host takes the status, terminates every Worker and sets `process.exitCode` (never `process.exit`, D5600).
+- The mailbox, one per thread: a 128-byte `SharedArrayBuffer`; `Int32Array` word 0 the state (0 idle, 1 request, 2 reply), word 1 the function number, a `BigInt64Array` over bytes 8 to 103 holding up to twelve arguments widened to 64 bits, word 26 the result. The thread stores the request, sets 1, `Atomics.notify`s, `Atomics.wait(box, 0, 1)`s, reads the result and sets 0. The host waits on every mailbox with `Atomics.waitAsync` and answers in its event loop (measured 5-19 µs a call); a request posted as a message (25-31 µs) is only the fallback where `Atomics.waitAsync` is missing. Ceiling: every WASI call of a threaded module is a round trip between threads; upgrade path: WASI over `node:fs` inside each Worker on the OS's own descriptors, which are process-wide.
+- `wasi.thread-spawn(arg)` is a host call too. The host takes an idle Worker or makes one (the host thread is never blocked, so a new Worker starts; in a browser only an unblocked thread can start one, D5679), takes the next tid from 1, writes `(tid, arg)` into that Worker's start slot and wakes it, and replies the tid; past tid 0x1FFFFFFF, or when a Worker fails to start, it replies -6 (EAGAIN). A Worker whose `wasi_thread_start` returns marks itself idle and waits on its start slot: measured 3-4 µs for spawn and join of an empty thread, against 33-46 ms for a new Worker each time. Idle Workers are `unref()`'d so they never keep Node alive.
+- The engine's stack: the first thread keeps `stackSizeMb: 256` (D5600's reason), the others get 64.
+- The end: the first thread's `_start` returning, a `proc_exit` from any thread, or an engine error in any thread ends the run, and the host terminates the other Workers. An engine error prints its stack and exits 1, and a `RangeError` exits 134 with D5600's stack-overflow line, from any thread as from the first.
+- A plain module runs exactly as now (`node:wasi` direct in its one Worker).
+
+**Verification (C187).** A new fixture `link/wasm_threads`, on x64 and on wasm32-wasi `--threads`: eight threads add to an atomic counter and to a counter under an `e.sync.Mutex`; a thread starts a thread; a thread is detached; `wait_u32` with a 10 ms timeout answers `Timeout`; `current_thread_id` is 1 on the main thread and different on each other; a failed `stat` in one thread leaves another thread's `last_error_detail` alone; 200 spawn-and-join cycles finish (a pooled Worker each time); with the argument `exit`, a thread calls `os.exit(7)` while main is joining, and the status is 7. The D5651 block of `run.sh` and `run.ps1` gains `wasm_threads` built with `--threads`.
+
+## D5675 — `neper_host`: one more import module, answered by the host thread, for what WASI preview 1 lacks
+
+**Problem.** WASI preview 1 has no way to open, bind or connect a socket and no name resolution or process spawn (`sock_accept`, `sock_recv`, `sock_send` and `sock_shutdown` work only on sockets the host preopened, and Node's WASI preopens none). Preview 2 has sockets, but only for components, which Node cannot run. A module cannot await, and Node's sockets and resolver are asynchronous.
+
+**Decision: the import module `neper_host`**, implemented by the runner, reached through a synchronous call to the host thread.
+- `register_import` (src/wasm.e) accepts `neper_host` beside `wasi_snapshot_preview1` and `"wasm"`. Its functions keep the existing import rules (integer, `bool` or `err` parameters, a pointer as `u32` the way WASI's are, at most one integer result), so the encoder does not change. A module imports only what it reaches: a program that opens no socket has no `neper_host` import and still runs on any WASI preview 1 host, and one that does runs where `neper_host` exists (the Node runner; `neper-host.js` answers ENOSYS to what a page cannot do).
+- Every function returns a WASI errno as `u32` and writes its outputs through the pointers it was given. The numbers are preview 1's `errno` enum: 0 success, 3 EADDRINUSE, 4 EADDRNOTAVAIL, 6 EAGAIN, 7 EALREADY, 8 EBADF, 13 ECONNABORTED, 14 ECONNREFUSED, 15 ECONNRESET, 20 EEXIST, 23 EHOSTUNREACH, 26 EINPROGRESS, 28 EINVAL, 29 EIO, 30 EISCONN, 40 ENETUNREACH, 44 ENOENT, 52 ENOSYS, 53 ENOTCONN, 58 ENOTSUP, 64 EPIPE, 73 ETIMEDOUT. ENOSYS means this host has no such capability, and `os.wasi.e` answers it as `Unsupported`.
+- Host handles count up from 0x40000000, so they never equal a WASI descriptor; `os.wasi.e` answers EBADF itself when a socket or poller call is handed a `Handle` below that.
+- The call: in the Worker that runs the module, each `neper_host` import is a JS function that copies its input bytes from the module's memory into a 64 KiB data `SharedArrayBuffer` beside the thread's mailbox (D5674's protocol and layout), blocks in `Atomics.wait` for the reply, and copies output bytes back. The memory itself need not be shared, so a plain module uses `neper_host` with one thread. A transfer longer than 64 KiB is cut to 64 KiB, which a socket's send and receive may always do (a short count). The host side runs on Node's main thread, which is free: the runner already runs a plain module in a Worker. Measured: a 64-byte TCP echo round trip 53-66 µs; `dns.lookup` 0.26-0.64 ms.
+- Rejected: Asyncify-style unwinding (a whole-program transform of every function that can reach an import, where one `Atomics.wait` blocks the same call); sockets only in the threaded build (the plain build can block the same way, because the host is another JS thread); preview 2 sockets (no component support in Node).
+
+## D5676 — Sockets, resolution and the poller over `neper_host`
+
+**The address record**, written and read by `os.wasi.e` byte by byte, never a Neper struct's layout: 32 bytes; `u8` family at 0 (0 Ip4, 1 Ip6), `u16` port at 2, `u32` scope at 4, the 16 address bytes at 8 (an Ip4 address in the first four); the rest zero.
+
+**Functions** (`p` a pointer as `u32`; `h` a handle; outputs through pointers):
+
+| import | does (host side, Node's main thread) |
+|---|---|
+| `sock_open(family, kind, out_h)` | kind 0 stream, 1 datagram; makes no Node object yet |
+| `sock_set_nonblocking(h, on)` | the flag the calls below test |
+| `sock_bind(h, address_p)` | datagram: `dgram` socket of the family, `bind`, the reply after `listening`; stream: remembered for `listen` (or `connect`'s `localAddress`/`localPort`); EADDRINUSE from Node's `EADDRINUSE` |
+| `sock_local_address(h, out_address_p)` | `address()` of the bound or connected object (port 0 resolved); a stream socket bound and not yet listening is listened by this call with backlog 511 and its connections queued unaccepted, so the port is real |
+| `sock_listen(h, backlog)` | `net.createServer({pauseOnConnect: true}).listen({host, port, backlog})`; connections are queued as they arrive |
+| `sock_accept(h, out_h, out_address_p)` | the oldest queued connection, as a new stream handle (resumed), and its peer; none: EAGAIN when nonblocking, else the reply waits for one |
+| `sock_connect(h, address_p)` | stream: `net.connect({host, port, family})`; blocking: the reply after `connect` (0) or `error`; nonblocking: the first call EINPROGRESS, a call while pending EALREADY, after success EISCONN, after failure the connection's errno (ECONNREFUSED from `ECONNREFUSED` and so on) once; datagram: `connect`, the reply after its callback |
+| `sock_send(h, p, len, out_count)` | stream: `write` of a copy, the whole count; with more than 1 MiB unsent (`writableLength`) EAGAIN when nonblocking, else the reply waits for `drain`; not connected ENOTCONN; after a reset EPIPE; datagram (connected): `send` |
+| `sock_recv(h, p, len, out_count)` | stream: the queued bytes in order; count 0 at end of stream; none: EAGAIN when nonblocking, else the reply waits for data, end or error; the Node socket is `pause()`d above 1 MiB queued and `resume()`d below; datagram: one datagram |
+| `sock_send_to(h, address_p, p, len, out_count)` | `dgram.send`, the reply after its callback |
+| `sock_recv_from(h, p, len, out_count, out_address_p)` | one queued datagram cut to `len` (the rest dropped, as `recvfrom` does) and its sender |
+| `sock_shutdown(h, how)` | 0 read: later data dropped and `recv` answers 0; 1 write: `end()`; 2 both |
+| `sock_close(h)` | `destroy()` or `close()`; removed from every poller |
+| `resolve(host_p, host_len, port, family, out_p, out_cap, out_count)` | `dns.lookup(host, {all: true, family: 4 or 6})` (`SocketFamily` Ip4 or Ip6), each answer as an address record with the port, at most `out_cap`; `ENOTFOUND` and `ENODATA` answer ENOENT, other failures EIO |
+| `poll_open(out_h)` | a poller |
+| `poll_ctl(poller, op, h, token: i64, interest)` | op 0 add (a registered handle: EEXIST), 1 modify, 2 delete (an unregistered one: ENOENT); interest bit 0 readable, bit 1 writable |
+| `poll_wait(poller, events_p, cap, timeout_ns: i64, out_count)` | level-triggered, as `async_io` needs (D5215): every registered handle whose state matches now, as 16-byte records (`u64` token, `u32` flags: bit 0 readable, 1 writable, 2 closed, 3 failed, then 4 zero bytes); none and timeout 0: count 0 at once; else the reply waits for a change of a registered handle, a wake or the timeout (negative: for ever; a positive below 1 ms counts as 1 ms, as `os.linux.e` rounds) |
+| `poll_wake(poller)` | latched until a wait consumes it; that wait answers count 0, as `os.linux.e`'s eventfd does |
+| `poll_close(poller)` | |
+
+Readiness: readable when bytes, end of stream, an error, a queued connection or a queued datagram is there; writable when a stream is connected and under the 1 MiB mark, for a datagram socket, and when a connect has failed; closed at end of stream or after a reset; failed while an error is pending.
+
+**`os.wasi.e`.** The socket and poller functions of the fence call these (a `Poller`'s `state` points at an arena holder with the host handle, the way `os.linux.e` keeps its epoll state); `socket_handle` and `file_handle` stay as they are. Errors are `error_of_status` plus 26 and 7 as `WouldBlock` (a connect under way, as `os.linux.e` turns EINPROGRESS), with `native_code` the WASI errno. `send_file` reads the file and sends it in 64 KiB pieces.
+
+**`e.net`.** `map_error_with_code` and `already_connected` gain `when target.os == .Wasi` arms with the WASI numbers, the shape D5216 gave macOS: 14 `Refused`, 15 `Reset`, 23 and 40 `Unreachable`, 73 `Timeout`, 3 `AddressInUse`; already connected 30.
+
+**In scope.** C188, plain build: `os_socket`, `os_resolve`, `async_io`, `macos_poller_loss`, `net`. C189, `--threads` (they start a server thread; needs C187): `net_http`, `net_http_pool`, `net_tls`, `net_ftp`, `net_grpctls`, `net_imap`, `net_ldap`, `net_mdns`, `net_pop3`, `net_smtp`, `net_socks`, `net_sp`, `net_tftp`, `net_zmtp`. A fixture that needs a socket call this table lacks (a socket option, multicast) is recorded with that reason; adding the call is the same pattern and needs a row of its own.
+
+## D5677 — Processes over `neper_host`, in the Node runner only
+
+**Decision.** `neper_host` gains the process calls, implemented over `node:child_process` on the host thread; `neper-host.js` answers ENOSYS (a page has no processes).
+
+| import | does |
+|---|---|
+| `proc_spawn(argv_p, argv_len, argv_count, env_p, env_len, env_count, flags, cwd_p, cwd_len, stdio_p, out_h)` | `argv` and `env` are buffers of NUL-terminated strings (`env` as `NAME=value`); flags bit 0 inherit the runner's environment, bit 1 a new process group; `cwd` a guest path (empty: the runner's working directory); `stdio_p` three `u32`s for stdin, stdout, stderr: 0, 1 or 2 inherit the runner's own, a host pipe handle (from `pipe`) connects that end, anything else ENOTSUP |
+| `proc_wait(h, out_status)` | the reply after `exit`: the code, or 128 plus the signal's number, as `os.linux.e`'s `wait_usage` reports |
+| `proc_kill(h)` | `kill('SIGKILL')` |
+| `proc_group_kill(h, force)` | the group: `process.kill(-pid, force ? 'SIGKILL' : 'SIGTERM')` on POSIX, `taskkill /pid N /T` (`/F` when forced) on Windows |
+| `pipe(out_read_h, out_write_h)` | a host pipe: the two ends are handles; bytes written to one are read from the other, or connect to a child's stdio |
+| `handle_read(h, p, len, out_count)`, `handle_write(h, p, len, out_count)`, `handle_close(h)` | reads, writes and closes a pipe end (end of data answers count 0; `pipe_read`'s nonblocking form answers EAGAIN when nothing is there) |
+
+- A guest path is mapped to a host path through the preopens the runner made (`/` the working directory, `/tmp`, `/home`, `/exe`).
+- An `argv[0]` that is a guest path ending in `.wasm` is run as `process.execPath` with the runner's path, the host path of that module and the rest: `os_process` spawns its own image (`os.executable_path` gives its guest path, D5620), and that is how a wasm module's own image runs. Any other `argv[0]` is spawned as named, found on the host's `PATH` by Node.
+- `os.wasi.e`: `neper_os_spawn` (the intrinsic), `neper_os_wait`, `spawn_with_options`, `wait_usage` (`peak_memory` 0: Node reports no child peak), `kill`, `proc_group_*`, `pipe`, `pipe_read` call these. `neper_os_read`, `neper_os_write` and `neper_os_close` route a `File` whose `raw` is at least 0x40000000 to `handle_read`, `handle_write` and `handle_close`; `dup` of a host handle answers `Unsupported`.
+- Fixtures: `os_process` and `os_group` pass (on `--threads` if they start threads); `os_shell`, `os_exchange`, `proc_sys` and the `ui_*` fixtures that fail on the shell are rerun, and each that still fails is recorded with its reason (`e.os.shell`'s wasi variant answers `NotFound`/`Unsupported` by D5623 and is not part of this row).
+
+## D5678 — A browser host, `lib/wasm/neper-host.js`, and no new target
+
+**Decision: no `wasm32-browser` target.** A page runs the same wasm32-wasi module, plain or `--threads`; what differs is the host. Measured: v2.exe's unchanged output ran in a Chrome Worker under a 60-line WASI shim. A browser target would copy `os.wasi.e` to change answers the host can give at run time (ENOSYS becomes `Unsupported`).
+
+**The file.** `lib/wasm/neper-host.js`: one ES module with no build step and no dependency, loadable by a page and by Node 22 or later (for the tests). It lives under `lib/` so the toolchain's copy of `lib/` ships it, as it ships the runner after C194. Its API:
+```js
+import { run } from './neper-host.js'
+const { exitCode, files } = await run(source, {
+  args: ['input.txt'],                       // after args[0], the module's own path '/exe/<name>.wasm'
+  env: { KEY: 'value' },                     // added to TMPDIR, TMP, TEMP = /tmp and HOME, USERPROFILE = /home
+  files: { '/input.txt': 'text or bytes' },  // what the in-memory file system starts with
+  stdout: (bytes) => {}, stderr: (bytes) => {},  // default: decoded and logged to the console by line
+  canvas,                                    // D5680 only
+})
+```
+`source` is a URL, a `Response`, bytes or a `WebAssembly.Module`. `files` comes back as path to `Uint8Array` for everything under `/` after the end. `exitCode` is the module's status: 134 for a trap, and 1 for an engine error, whose stack goes to `stderr`, as run-wasm.mjs does.
+
+**Where the module runs.** Always in a dedicated module Worker made from `import.meta.url` (the same file is the Worker's code), never on the page's main thread, which may not block (measured: `Atomics.wait` throws there) and has to stay responsive. Under Node the same file uses `node:worker_threads`, told apart by `globalThis.process?.versions?.node`. A plain module's whole host lives in that Worker and needs no `SharedArrayBuffer`, so a page without special headers runs it.
+
+**WASI preview 1 in JS**: exactly the functions `os.wasi.e` imports (`args_sizes_get`, `args_get`, `environ_sizes_get`, `environ_get`, `clock_time_get`, `random_get`, `proc_exit`, `fd_write`, `fd_read`, `fd_close`, `fd_seek`, `fd_sync`, `fd_readdir`, `fd_prestat_get`, `fd_prestat_dir_name`, `path_open`, `path_filestat_get`, `path_filestat_set_times`, `path_create_directory`, `path_remove_directory`, `path_unlink_file`, `path_rename`, `path_readlink`, `path_symlink`), each answering what uvwasi answers for the same call (preview 1's errno values and filestat layout, D5620's dirent layout); any other `wasi_snapshot_preview1` import answers ENOSYS (52).
+- Files: an in-memory tree (directories, files as growable `Uint8Array`s with their times, symlinks), preopened in run-wasm.mjs's order: fd 3 `.`, which `os.wasi.e` mounts as `/`; fd 4 `/exe`, holding the module's bytes as `/exe/<name>.wasm`; fd 5 `/tmp`; fd 6 `/home`. OPFS is rejected for now: its synchronous handle reads and writes a file, but finding or opening one is asynchronous (measured), so `path_open` from a running module would need a second thread and cross-origin isolation for every program. A page that wants persistence stores `files` after `run` returns.
+- Clocks: realtime `Date.now()` in nanoseconds, monotonic `performance.timeOrigin + performance.now()` in nanoseconds (browsers coarsen it, to 100 µs without isolation and 5 µs with). `random_get`: `crypto.getRandomValues` in pieces of at most 65,536 bytes, its limit.
+- `stdout` and `stderr` get the bytes each `fd_write` delivers, posted from the Worker in order.
+- `proc_exit` ends the run by throwing a sentinel out of `_start`, as `node:wasi`'s `returnOnExit` does.
+- `neper_host`: every function answers ENOSYS, except D5680's window functions. A page has `fetch` and `WebSocket`, not TCP or UDP (D5684).
+
+**Testing here.**
+- Node: `node lib/wasm/neper-host.js FILE.wasm ARGS...` runs one module through `run()` (the file is a command when it is the main module), and `scripts/wasm-sweep.sh --host neper-host` runs the sweep through it, so the browser host's WASI is compared with the native results with no DOM.
+- Browser: `scripts/serve-wasm.mjs [--isolated] [--port N]` serves `lib/wasm`, `tests/wasm/browser` and `build/wasm-sweep` read-only on 127.0.0.1, adding `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` under `--isolated`. `tests/wasm/browser/index.html?module=URL&args=A,B` runs the module and sets `window.neperResult = {exitCode, stdout, stderr}`. An agent checks it in the Browser pane (`preview_start` with the URL, then `javascript_exec` reading `window.neperResult`), the way this row's probes were run, and puts the result in the item's evidence. No browser runs in the suites.
+
+## D5679 — Threads in the browser: cross-origin isolation, and the page is the host
+
+A `--threads` module in a page needs `SharedArrayBuffer`, so the page must be cross-origin isolated (COOP `same-origin` with COEP `require-corp` or `credentialless`); `run()` rejects a threaded module on a page that is not, saying so in one sentence. The structure is D5674's with the page's main thread as the host: it owns D5678's in-memory file system and WASI over the shared memory, every thread (the first too) is a Worker whose WASI imports are mailbox proxies, and the page answers through `Atomics.waitAsync`, or through `postMessage` where that is missing. `thread-spawn` is a host call and the page makes or reuses the Worker: measured, a Worker made by a blocked Worker never starts, and Workers the page made on request ran four threads exactly. A plain module keeps its file system inside its one Worker with no proxy. Verification: `wasm_threads` and C187's thread fixtures through `neper-host.js` under Node, and `wasm_threads` in the Browser pane on a page served with `--isolated`.
+
+## D5680 — `e.ui` in a browser: CPU frames onto a canvas through `neper_host`, input through a shared ring
+
+**Decision: a separate item after the browser host (C193), not part of it**, and only the window surface `e.ui` already uses on NeperOS: `e.ui` renders with the CPU `e.gpu` backend into a `[]u32` frame and calls `os.window_present(w, pixels, width, height)` (os.neperos.e copies it to the shared frame; os.wasi.e answers `Unsupported` today), and reads input with `os.window_poll(timeout_ns)`. WebGPU is not in scope (D5684).
+- `neper_host` imports: `window_open(width, height, out_h)`; `window_metrics(h, out_p)` (five `u32`s: width, height, scale percent from `devicePixelRatio`, focused, visible); `window_title(h, p, len)` (`document.title`); `window_present(h, pixels_p, width, height)`; `window_poll(out_event_p, timeout_ns: i64, out_has)`; `window_cursor(h, shape)` (the canvas's CSS `cursor`). Node's runner answers ENOSYS to all of them, and `os.wasi.e` then answers exactly what it answers today, so the headless harness and the Node sweep do not change.
+- Present: the page passes `canvas` to `run()`; the host transfers it to the module's Worker with `transferControlToOffscreen()`, and `window_present` copies the frame into an `ImageData` and `putImageData`s it on the OffscreenCanvas, synchronously in the Worker (1.15 ms for 412x920, measured). `ImageData` is RGBA bytes; the frame's `u32` channel order is whatever `os.windows.e`'s present hands the OS, and red and blue are swapped if they differ. One window: a second `window_open` answers ENOTSUP.
+- Input: the page listens on the canvas (pointer down, up and move, wheel, key down and up, text from `keydown.key`, focus, blur, resize by `ResizeObserver`) and writes each event as a fixed 32-byte record of `os.WindowEvent`'s fields into a 256-record ring in a `SharedArrayBuffer` (head and tail words), then `Atomics.notify`s the tail. `window_poll` takes one record, or when the ring is empty `Atomics.wait`s on the tail for `timeout_ns`. This needs cross-origin isolation even for a plain module, because a Worker running wasm cannot receive a message: `run()` with a `canvas` on a page that is not isolated rejects, saying so.
+- Coordinates are CSS pixels times `devicePixelRatio`, the backing size the frame is rendered at, and the canvas's backing size follows the window's metrics.
+- Verification: an `e.ui` program built for wasm32-wasi (a gallery example, or a new `tests/wasm/browser/ui_counter` with a button and a label) runs on a page served with `--isolated` in the Browser pane; one screenshot shows the frame, and after a click on the button the next shows the label changed. Both go in the evidence (the user's rule: UI work is shown in screenshots).
+
+## D5681 — `neper run` for wasm32-wasi, and the runner in the toolchain
+
+**Problem.** `run FILE ROOT wasm32 wasi OUT` (and `neper run --target wasm32-wasi`) takes the native path: `dispatch` sends only `emit-executable` with `wasm32 wasi` to `wasm_command` (main.e:14104), and `run_program` launches the output as a native executable.
+
+**Decision.**
+- `dispatch` sends `run ... wasm32 wasi ...` to `wasm_command` as well. After writing the module, `wasm_command` runs it when the command is `run`: `run_program` with the program `node` and the arguments `--no-warnings`, the runner's path, OUT, then the program's arguments, so the captured output, the run record and the exit status are what a native `run` reports. `node` is found by walking `PATH` (`node.exe` on Windows), the way `e.os.shell` walks it (shell.linux.e:118); `NEPER_NODE` names it explicitly; when neither finds it the command fails with `E-CLI-9999` "running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE". `--threads` and `--release` reach the build.
+- The runner moves from `scripts/run-wasm.mjs` to `lib/wasm/run-wasm.mjs`, beside `neper-host.js` (D5678), so the toolchain's copy of `lib/` (`build/<host>/lib`, which the suites make with `cp -r lib`) carries it, and `run` finds it at `<toolchain root>/lib/wasm/run-wasm.mjs`, the root being what `short_form` already computes (`own_directory(args[0])`). Every caller moves to the new path in the same change: `wasm-sweep.sh`, `check-fixture.sh`, `wasm-compiler.sh`, `wasm-bench.sh`, the D5651 blocks of `run.sh` and `run.ps1`, the runner's own comment; nothing stays at the old path.
+- D5650 found `neper build --target wasm32-wasi` from a worktree stopping at "the program has no main" for `wasm_basics`, because the toolchain root is `build/windows`; this row runs `neper run` from the toolchain the way the suites run `neper build`, and if the stop is a bug of the short form's own it is fixed here.
+- Verification: `neper run tests/selfhost/fixtures/link/wasm_basics/src/main.e --target wasm32-wasi` from the toolchain prints the program's output and reports its status; with `node` off `PATH` and no `NEPER_NODE` it prints the diagnostic; `wasm_release` built and run with the argument `bounds` reports 134.
+
+## D5682 — A module with variants for other targets only says so
+
+**Problem.** D5662's open point: seventeen of the 22 refusals that stay (`use plat` in eight fixtures, `x.*.capi` or `x.oracle.mysqlclient` in nine) say "`use plat` names no module under the source root or the toolchain", though `plat.linux.e`, `plat.macos.e` and `plat.windows.e` are right there. The rest of the 22 already name their reason (D5662).
+
+**Decision.** `project.select_source` (src/project.e:376) already lists the directory; when it finds no plain file and no variant for this arch or os but variants for others, it answers a new error `NoVariant` and the suffixes it saw, instead of `ModuleNotFound`. `graph.e` treats `NoVariant` like `ModuleNotFound` when it falls back from one root to the other (graph.e:798, :805) and keeps the first root's suffixes; the loader's diagnostic (E-MODULE-0001) becomes "`use plat` has variants for linux, macos and windows and none for wasi" (the suffixes sorted, "and" before the last; arch variants said the same way, "none for wasm32"). Native targets get the same message in the same situation, for example `use x.sqlite.capi` built for neperos. A conformance case beside `reject module_missing` (tests/conformance/reject, in both `run.sh` and `run.ps1`, which `check_suite_parity.py` checks) pins the text, and `module_missing` keeps its own.
+
+## D5683 — Source maps for wasm32-wasi, and line numbers for the engine's traps
+
+**Problem.** A trap the module raises prints native's `path:line:col` (D5213); one the engine raises (a null function value, D5604; an unaligned atomic, D5672; the engine's own stack overflow, D5600) prints `wasm-function[N]:0xOFFSET` frames, named through the name section (D5638) but with no line.
+
+**Decision.** `emit-executable ... wasm32 wasi OUT --source-map` (off by default, so no module changes) writes `OUT.map`, a Source Map v3 file (`version` 3, `sources` the module paths as trap records spell them, `names` empty, `mappings` on one generated line whose column is the byte offset in the module file, the convention Chrome DevTools reads for WebAssembly), and a custom section `sourceMappingURL` holding the map's file name, after the name section. An entry begins at the first byte of each NIR instruction whose `site.line` differs from the previous entry's (`instruction.site`, which `wasm_code.e` already reads for trap records); the offset is the code section's position in the file plus the body offsets `emit_all_functions` keeps.
+- The runner, and `neper-host.js`: when an engine error's stack has `wasm-function[...]:0x...` frames and `OUT.map` lies beside the module, each frame gets `path:line` from the map (binary search over the decoded entries).
+- Verification: a fixture `link/wasm_null_call` (a null function value called two frames deep) built with `--source-map`: the runner's error names the call's `src/main.e:LINE` in its first frame; `wasm-tools validate` passes; without the flag every sweep module is byte-identical to the compiler before. DWARF is not written (D5684).
+
+## D5684 — WebAssembly gaps not queued, and why
+
+- **wasm64 (memory64).** Node 24 validates and runs a memory64 module (measured), but WASI preview 1 is defined over 32-bit pointers, so `os.wasi.e` would copy every buffer below 4 GiB, and nothing needs more: neper.wasm's 3,368 MiB of linear memory (D5641) is reservation address, which D5641's upgrade path (reservations sized to what each crew reaches, 439 MB) removes more cheaply.
+- **WASI preview 2 and the component model.** Node runs no components, so nothing here could run or test one; a component can be made from a preview 1 module with `wasm-tools component new --adapt` outside the compiler when a host needs one.
+- **DWARF in wasm.** Browsers read it only through the C/C++ DevTools extension, and variable locations would need location lists over engine locals that D5600's shape and C183's folding move around; D5683's source map gives lines in DevTools and in the runner for a fraction of the work.
+- **A wasm-opt pass, or binaryen.** An external tool; C183 already made modules 24% smaller (D5639) and no consumer measures size. Revisit when pages ship modules.
+- **Narrowing locals to their types** (D5639's named next step). A speed project with no consumer; revisit when a browser program is CPU-bound.
+- **Asyncify.** Blocking calls already block in `Atomics.wait` off the main thread (D5675); the transform rewrites every function that can reach an import.
+- **Sockets in a browser.** A page has `fetch` and `WebSocket` (both in a Worker too), not TCP or UDP; answering a TCP connect with a WebSocket would be another protocol under the same name. `neper_host` answers ENOSYS there. An HTTP client over `fetch` would be a library feature of its own, not a host gap.
+- **WebGPU for `e.gpu`.** D5680 presents CPU-rendered frames; a WebGPU backend is a new device backend on the scale of C090 and has no item until a browser program needs device speed.
+- **File mappings, watches and locks** (`os_mapping`, `os_watch`, `fs_mmap_watch`, `os_lock`, `debug_dump`). A copy cannot keep a mapping's one promise (other writers' bytes are visible), Node has no `flock`, and `fs.watch` over `neper_host` would serve those fixtures alone; all stay `Unsupported`, which is the honest answer.
+- **Preview 1's `sock_accept`, `sock_recv`, `sock_send`** on preopened sockets: no connect, bind or resolution, and Node's WASI preopens no sockets.
+- **OPFS persistence in `neper-host.js`**, a **`wasm32-browser` target** (D5678) and a **`wasm32-wasi-threads` target name** (D5671).
