@@ -8667,6 +8667,19 @@ fn layout_abs(l: *Layout, b: u32) {
     var pad_y = cby + cbb.border[0usize]
     var cb_w = cbb.w - cbb.border[1usize] - cbb.border[3usize]
     var cb_h = cbb.h - cbb.border[0usize] - cbb.border[2usize]
+    // An inline containing block that holds blocks starts at the line its first fragment sits on: the line of the inline content just before it.
+    if !fixed && cbid != l.root && (bstyle(l, cbid).was_inline || bstyle(l, cbid).display == .Inline) && !cbb.inline_level && cbb.prev != NONE {
+        let pvb = &l.boxes.items[usize(cbb.prev)]
+        if pvb.line_count > 0u32 && !pvb.inline_level {
+            let last = l.lines.items[usize(pvb.line_first) + usize(pvb.line_count) - 1usize]
+            let (pvx, pvy) = abs_origin(l, cbb.prev)
+            let top_abs = pvy + pvb.border[0usize] + pvb.padding[0usize] + last.y
+            if top_abs < cby {
+                pad_y -= cby - top_abs
+                cb_h += cby - top_abs
+            }
+        }
+    }
     if cbid == l.root {
         pad_x = 0.0f64
         pad_y = 0.0f64

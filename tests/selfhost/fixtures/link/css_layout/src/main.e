@@ -582,6 +582,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 128. An absolute child of a flex container sits where a lone flex item would: justify-content centres it along the main axis.
     let (p128, ok128) = build(a, "<div style=\"display:flex;justify-content:center;width:100px;height:40px;position:relative\"><div id=a style=\"position:absolute;width:20px;height:10px\"></div></div>", "")
     if !ok128 || !near(rect_of(p128, "a").x, 40.0f64) { os.exit(169) }
+    // 129. The containing block of an absolute box in an inline that holds a block starts on the line where the inline began.
+    let (p129, ok129) = build(a, "<div style=\"width:100px;font:20px/1 serif\"><div style=\"height:60px\"></div>B<span style=\"position:relative\"><div></div>AA<div id=a style=\"position:absolute;top:-60px;width:10px;height:10px\"></div></span></div>", "")
+    if !ok129 || !near(rect_of(p129, "a").y, 0.0f64) { os.exit(170) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
