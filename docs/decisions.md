@@ -42478,3 +42478,37 @@ A `--threads` module in a page needs `SharedArrayBuffer`, so the page must be cr
 - **File mappings, watches and locks** (`os_mapping`, `os_watch`, `fs_mmap_watch`, `os_lock`, `debug_dump`). A copy cannot keep a mapping's one promise (other writers' bytes are visible), Node has no `flock`, and `fs.watch` over `neper_host` would serve those fixtures alone; all stay `Unsupported`, which is the honest answer.
 - **Preview 1's `sock_accept`, `sock_recv`, `sock_send`** on preopened sockets: no connect, bind or resolution, and Node's WASI preopens no sockets.
 - **OPFS persistence in `neper-host.js`**, a **`wasm32-browser` target** (D5678) and a **`wasm32-wasi-threads` target name** (D5671).
+
+## D5685 — `lib/wasm/neper-host.js` as built (C191)
+
+**Decision: D5678 implemented as written, with these particulars.** One ES module, no dependency, 24 WASI functions over an in-memory tree; every other `wasi_snapshot_preview1` import and every `neper_host` import is answered ENOSYS by reading `WebAssembly.Module.imports`, so a module that imports more still links.
+- Tree: directories, files (growable `Uint8Array`), symlinks, each with a parent pointer, an inode and BigInt nanosecond times. A descriptor remembers its preopen root, so `..` past it and an absolute path or absolute link text are ENOTCAPABLE (76), a link chain over 40 is ELOOP (32), opening a link with no follow is ELOOP (ENOTDIR with `O_DIRECTORY`), unlinking a directory is EISDIR, removing a non-empty one ENOTEMPTY, a directory into its own descendant EINVAL. `fd_readdir` lists `.`, `..`, then entries in insertion order with D5620's record layout and a cookie that is the next index. A file opened without the write right answers EBADF to `fd_write`, as uvwasi does.
+- Particulars D5678 left open: `env` entries override the TMPDIR/HOME defaults (the command copies `process.env` and then forces the five, as run-wasm.mjs does); a module the engine refuses to compile or link exits 125 (run-wasm.mjs's code, which the sweep counts as `invalid`), not 1; `files` in and out are the `/` tree only, `/tmp` and `/home` start empty and are not returned; a `WebAssembly.Module` source has no bytes, so `/exe/main.wasm` is an empty file; the name in `/exe/NAME.wasm` is the URL's last segment, else `main.wasm`; fd 0 reads end of file.
+- `lib/wasm/package.json` (`{"type":"module"}`) is part of it: Node 22.14 parses a bare `.js` as CommonJS and fails on the module's `await import`, where Node 24 detects the syntax.
+- The command form (`node lib/wasm/neper-host.js FILE.wasm ARGS`) writes the module's bytes to the process's stdout and stderr and leaves its status in `process.exitCode`, never `process.exit` (the Windows abort run-wasm.mjs documents). The Worker is a module Worker made from `import.meta.url` in a page and a `node:worker_threads` Worker with a 256 MB stack under Node.
+
+## D5686 — The sweep through `neper-host.js`, next to run-wasm.mjs's
+
+**Evidence.** `scripts/wasm-sweep.sh --host both -j 3` (new: `--host neper-host|run-wasm|both`; `both` builds once and writes the second runner's verdicts to `results-second.tsv`), Node 24.19, Windows, this compiler built with `--arena 4g` (the `neper-try` that `check-fixture.sh` builds has 1 GB and refused 46 host builds with "arena exhausted", which is the sweep's `skipped`):
+
+| runner | pass | fail | invalid | refused | skipped | fixtures |
+|---|---|---|---|---|---|---|
+| run-wasm.mjs | 1,026 | 78 | 0 | 23 | 7 | 1,134 |
+| neper-host.js | 1,018 | 86 | 0 | 23 | 7 | 1,134 |
+
+The 78 that fail under run-wasm.mjs fail here too (threads, sockets, processes, windows, mappings, locks: what D5684 leaves Unsupported). **Eight pass under run-wasm.mjs and fail here, one reason: they read files of the repository from the working directory, which run-wasm.mjs preopens and the in-memory tree does not hold:** `gfx_svg_text`, `gfx_svg_text_faces` (a font under `neperos/assets/fonts`), `gfx_chart_word_cloud` (Montserrat), `text_math` (two fonts), `web_shell`, `web_page_csp` (Cantarell), `ui_html_view` (`ahem.ttf`) and `text_cleartype_oracle` (the Windows glyph references). Seeding `files` with the font makes `gfx_svg_text` exit 0 with stdout byte-identical to the native run, and `gfx_chart_word_cloud`, `web_shell`, `web_page_csp`, `ui_html_view` and `text_math` exit 0; `gfx_svg_text_faces` and `text_cleartype_oracle` were not re-run seeded. Node 22.14: the seven suite fixtures (`wasm_basics wasm_ops wasm_flow wasm_reserve fs_basics os_clock_random os_environment`) pass through `wasm-sweep.sh --host neper-host` (native stdout and status), as they do on Node 24; the first full sweep of this item was discarded because two sweeps shared one output directory.
+
+## D5687 — The browser host in a real browser
+
+**Evidence.** `scripts/serve-wasm.mjs` on 127.0.0.1:8765 (plain) and :8766 (`--isolated`: `crossOriginIsolated` true, `SharedArrayBuffer` a function), the Browser pane (Chrome 152), `tests/wasm/browser/index.html?module=/build/wasm-sweep/NAME.wasm`, `window.neperResult` read with `javascript_exec`: `wasm_basics` on both pages exit 0 with the stdout `wasm_basics / widths 0 / aggregates 0 / calls 0 / strings 0 / arena 0 / ok` (the native fixture's text); `fs_basics` on both pages exit 0, empty stdout and stderr; `wasm_release` built without `--release` on the plain page exit 134, stderr `src/main.e:14:19: trap[overflow]: u8 + overflows`. The module ran in a module Worker in every case; nothing here ran on the page's thread.
+
+## D5688 — What is registered, and how it is run
+
+`tests/selfhost/run.sh` and `run.ps1` (the wasm32-wasi block, gated on `node` as before) run the seven curated fixtures through `lib/wasm/neper-host.js` as well as run-wasm.mjs, and run `tests/wasm/host.mjs` over `tests/wasm/browser/host_files` (a program that reads an argument, an environment variable and `/input.txt`, writes `/output.txt` and `/sub/n.txt`, prints to both streams and exits 7) and `wasm_release`: the four source kinds (URL, bytes, `WebAssembly.Module`, `Response`), the files that come back, independent concurrent runs, exit 134 with the compiler's trap text, 125 for bytes that are not a module. It passes on Node 22.14 and 24.19. No browser runs in the suites; `serve-wasm.mjs` and the page are for an agent in the Browser pane.
+
+## D5689 — Where D5678 was short
+
+- **No `PATH`.** `os_environment` needs `PATH` (it is "set for every process"), and a page has none: the host's environment is only what D5678 lists. A page that runs such a module passes `env: { PATH: ... }`; the command form passes the process's.
+- **An empty tree is not the working directory.** Programs that read the repository's fonts or assets (the eight above) need `files` seeded by the caller; a page fetches what it needs and passes it. Nothing is preloaded.
+- **Node 22 needs the `package.json`** (D5685).
+- A sweep needs a compiler with a 4 GB arena to build the large UI fixtures; the one `check-fixture.sh` builds is 1 GB.
