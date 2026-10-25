@@ -71,7 +71,7 @@ type TableLayout = enum u8 { Auto, Fixed }
 type CaptionSide = enum u8 { Top, Bottom }
 type EmptyCells = enum u8 { Show, Hide }
 type FlexDirection = enum u8 { Row, RowReverse, Column, ColumnReverse }
-type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse }
+type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse, Balance }
 type Align = enum u8 { Normal, Start, End, FlexStart, FlexEnd, Center, Stretch, SpaceBetween, SpaceAround, SpaceEvenly, Baseline, FirstBaseline, LastBaseline, SelfStart, SelfEnd, Left, Right, Safe, Unsafe, Auto }
 type DecorationStyle = enum u8 { Solid, Double, Dotted, Dashed, Wavy }
 type VAlign = enum u8 { Baseline, Sub, Super, Top, TextTop, Middle, Bottom, TextBottom, Length }
@@ -796,7 +796,7 @@ fn apply_flex(ap: *Ap, prop: str, v: str) -> bool {
         ret true
     }
     if str.eq(prop, "flex-wrap") {
-        s.flex_wrap = kw[FlexWrap](low, ",nowrap,wrap,wrap-reverse,", s.flex_wrap)
+        s.flex_wrap = kw[FlexWrap](low, ",nowrap,wrap,wrap-reverse,balance,", s.flex_wrap)
         ret true
     }
     if str.eq(prop, "flex-grow") {

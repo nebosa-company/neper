@@ -5210,6 +5210,31 @@ fn flex_place_item(l: *Layout, id: u32, w: f64, hspec: f64) {
     set_baseline(l, id)
 }
 
+// The flex lines of `items[0..n)` broken greedily at `limit` (a single line when `wrap` is false); answers the line count and
+// writes the first item of each line (and the end) to `line_start`.
+fn flex_breaks(items: []const FlexItem, n: usize, gap_main: f64, limit: f64, wrap: bool, line_start: []usize) -> usize {
+    var nlines = 0usize
+    var used = 0.0f64
+    var i = 0usize
+    while i < n {
+        let outer = items[i].hyp + items[i].main_ex + items[i].ms + items[i].me
+        if i == 0usize {
+            line_start[0usize] = 0usize
+            nlines = 1usize
+            used = outer
+        } else if wrap && used + gap_main + outer > limit + 0.001f64 {
+            line_start[nlines] = i
+            nlines += 1usize
+            used = outer
+        } else {
+            used += gap_main + outer
+        }
+        i += 1usize
+    }
+    line_start[nlines] = n
+    ret nlines
+}
+
 fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let cs = bstyle(l, b)
     let row = flex_is_row(cs)
@@ -5446,25 +5471,24 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let (line_up, lu_e) = mem.alloc[f64](l.a, n + 1usize)
     let (line_pos, lp_e) = mem.alloc[f64](l.a, n + 1usize)
     if ls_e != ok || lc_e != ok || lu_e != ok || lp_e != ok { ret 0.0f64 }
-    var nlines = 0usize
-    var used = 0.0f64
-    i = 0usize
-    while i < n {
-        let outer = items[i].hyp + items[i].main_ex + items[i].ms + items[i].me
-        if i == 0usize {
-            line_start[0usize] = 0usize
-            nlines = 1usize
-            used = outer
-        } else if wrap && used + gap_main + outer > avail + 0.001f64 {
-            line_start[nlines] = i
-            nlines += 1usize
-            used = outer
-        } else {
-            used += gap_main + outer
+    var nlines = flex_breaks(items, n, gap_main, avail, wrap, line_start)
+    // `flex-wrap: balance`: as few lines as `wrap` makes, but the shortest width that still makes no more, so they come out even.
+    if cs.flex_wrap == .Balance && nlines > 1usize {
+        var lo_w = 0.0f64
+        i = 0usize
+        while i < n {
+            lo_w = maxf(lo_w, items[i].hyp + items[i].main_ex + items[i].ms + items[i].me)
+            i += 1usize
         }
-        i += 1usize
+        var hi_w = avail
+        var step = 0usize
+        while step < 24usize {
+            let mid = (lo_w + hi_w) / 2.0f64
+            if flex_breaks(items, n, gap_main, mid, true, line_start) <= nlines { hi_w = mid } else { lo_w = mid }
+            step += 1usize
+        }
+        nlines = flex_breaks(items, n, gap_main, hi_w, true, line_start)
     }
-    line_start[nlines] = n
     // Resolve the flexible lengths of each line.
     var ln = 0usize
     while ln < nlines {
