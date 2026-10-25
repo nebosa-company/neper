@@ -7377,6 +7377,7 @@ fn global_declaration_checks(it: *Interp, f: *Frame, root: ast.Node) -> err {
         let fnode = f.prog.nodes[usize(f.prog.kids[usize(root.a) + fi])]
         fi += 1usize
         if fnode.kind == ast.N_FUNC && (fnode.flags & ast.F_DECL) != 0u16 {
+            if has_lexical_global(it, fnode.text) { ret throw_syntax(it, str_concat3(it, "Identifier '", fnode.text, "' has already been declared")) }
             if !can_declare_global_function(it, fnode.text) { ret throw_type(it, str_concat3(it, "Cannot declare global function '", fnode.text, "'")) }
         }
     }
