@@ -2895,4 +2895,8 @@ D5681	2257	`neper run` for wasm32-wasi, and the runner in the toolchain
 D5682	1367	A module with variants for other targets only says so
 D5683	1690	Source maps for wasm32-wasi, and line numbers for the engine's traps
 D5684	2537	WebAssembly gaps not queued, and why
-D5690	960	NoVariant carries its sentence, and the target is named by what the variants are
+D5690	961	NoVariant carries its sentence, and the target is named by what the variants are
+D5710	2998	C186 landed: `--threads` writes the threaded module, and nothing a plain build writes changed
+D5711	1949	Threads: the atomics as built
+D5712	1482	Threads: the seven `wasm` instructions, and `wasm_thread_ops` outside `link/`
+D5713	1477	The runner for a threaded module until C187, and two findings for C187
