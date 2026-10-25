@@ -75,10 +75,10 @@
       "group": "macOS",
       "order": 189,
       "title": "macOS notices through UNUserNotificationCenter: removal, replacement and actions",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Notices are osascript display notification banners attributed to Script Editor; notice_remove and notice_actions are Unsupported. UNUserNotificationCenter works only for a program in an application bundle with a bundle identifier, so it follows C185/C191 (a bundle mechanism); then removeDeliveredNotificationsWithIdentifiers, request identifiers for replacement, UNNotificationAction categories and a delegate method userNotificationCenter:didReceiveNotificationResponse:. The authorization request is a block (C186)."
+      "evidence": "Built 2026-10-25 (D5221), the center path unverified: for a program with a bundle identifier (shell.bundled()), notice_publish and notice_update ask UNUserNotificationCenter for alert and sound authorization once (requestAuthorizationWithOptions with a hand-built global block, waiting up to a minute) and post a request whose identifier is neper-<id> (the same id again replaces it); notice_remove removes the delivered and pending request; the capability notice_remove is true once the center has authorized the program. A program with no bundle, or one that was not authorized, keeps osascript banners and Unsupported removal. tests/macos/probe/un_notices.e on the runners (a registered association bundle started with open): bundled detection works and the program runs through publish, count, remove, count and ends, but the runner never authorizes the center, so the banner went through osascript, the delivered count stayed 0 and removal was refused; the corpus is 1105. Open: the center path itself (post, replace, remove, getDelivered) has never run, because nothing here can answer the authorization prompt (C192); action buttons (UNNotificationAction categories and a delegate for responses) are not built. Done when a real authorized run posts, replaces and removes, and actions are decided."
     },
     {
       "id": "C190",
