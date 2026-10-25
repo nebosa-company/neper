@@ -8328,6 +8328,17 @@ fn get_async_iterator(it: *Interp, v: Value) -> (Iter, err) {
     ret (iter, ok)
 }
 
+// A sync iterator behind `for await` or `yield*` is closed (its `return` called, errors from it ignored) when awaiting one of
+// its values fails; the error being reported is kept.
+fn sync_iter_close_quiet(it: *Interp, iter: Iter) {
+    let saved = it.thrown
+    let (rm, rme) = get_value(it, iter.obj, key_of("return"))
+    if rme == ok && is_callable(rm) {
+        let (rr, rre) = call_function(it, rm, iter.obj, zero_args())
+    }
+    it.thrown = saved
+}
+
 // One step of `for await`: (value, done, error); the frame supplies `await`.
 fn async_iterator_step(it: *Interp, f: *Frame, iter: Iter) -> (Value, bool, err) {
     let (r, re) = call_function(it, iter.next, iter.obj, zero_args())
@@ -8347,7 +8358,10 @@ fn async_iterator_step(it: *Interp, f: *Frame, iter: Iter) -> (Value, bool, err)
     if ve != ok { ret (undefv(), true, ve) }
     if iter.sync_wrapped {
         let (aw2, awe2) = await_value(it, f, vv)
-        if awe2 != ok { ret (undefv(), true, awe2) }
+        if awe2 != ok {
+            sync_iter_close_quiet(it, iter)
+            ret (undefv(), true, awe2)
+        }
         ret (aw2, false, ok)
     }
     ret (vv, false, ok)
@@ -8561,7 +8575,10 @@ fn gen_yield_star_async(it: *Interp, f: *Frame, iterable: Value) -> (Value, err)
         value = vv
         if iter.sync_wrapped {
             let (aw3, awe3) = await_value(it, f, value)
-            if awe3 != ok { ret (undefv(), awe3) }
+            if awe3 != ok {
+                sync_iter_close_quiet(it, iter)
+                ret (undefv(), awe3)
+            }
             value = aw3
         }
         if to_boolean(dn) {
