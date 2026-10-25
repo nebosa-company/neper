@@ -1,4 +1,4 @@
-// The module shape of a `--threads` build (D5671, C186): what wasm.e writes differently when
+// The module shape of a `--threads` build (D5671, C201): what wasm.e writes differently when
 // the program may run on more than one thread. The memory is imported and shared, every data
 // segment is passive and copied in by `_start`, and the wasi-threads entry `wasi_thread_start`
 // is exported. The atomics are wasm_code.e's (D5672).

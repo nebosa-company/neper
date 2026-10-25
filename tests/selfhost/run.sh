@@ -10648,7 +10648,7 @@ if command -v node >/dev/null 2>&1; then
         (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
         (cd "$repo" && node --no-warnings lib/wasm/neper-host.js "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi through lib/wasm/neper-host.js" >&2; exit 1; }
     done
-    # (D5671, D5672, C186) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
+    # (D5671, D5672, C201) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
     # and the seven instructions of the "wasm" library answer as a plain and as a threaded module should.
     for wasm_fixture in wasm_basics wasm_atomics wasm_ops; do
         [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a threaded WebAssembly module" >&2; exit 1; }
@@ -10663,7 +10663,7 @@ if command -v node >/dev/null 2>&1; then
     [ "$wasm_plain_output" = "$(printf 'threads 0\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0')" ] || { printf '%s\n' "the plain module's thread instructions answered: $wasm_plain_output" >&2; exit 1; }
     wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/thread_ops.threads.wasm")
     [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
-    # (D5673, D5674, C187) Threads under the thread host: wasm_threads built with --threads writes what the native build
+    # (D5673, D5674, C202) Threads under the thread host: wasm_threads built with --threads writes what the native build
     # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/wasm_threads/src/main.e" "$repo" wasm32 wasi "$wasm_build/wasm_threads.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "wasm_threads did not emit as a threaded WebAssembly module" >&2; exit 1; }
     wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/wasm_threads.threads.wasm")
@@ -10671,7 +10671,7 @@ if command -v node >/dev/null 2>&1; then
     wasm_status=0
     (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/wasm_threads.threads.wasm" exit > /dev/null) || wasm_status=$?
     [ "$wasm_status" -eq 7 ] || { printf '%s\n' "wasm_threads exit answered $wasm_status, not 7" >&2; exit 1; }
-    # (D5750, C189) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
+    # (D5750, C204) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
     # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
     for wasm_fixture in os_pipe_threads net_pop3; do
         [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a threaded WebAssembly module" >&2; exit 1; }
@@ -10680,7 +10680,7 @@ if command -v node >/dev/null 2>&1; then
     [ "$wasm_threads_output" = "$(printf 'write then read\nempty probe would block\n300000 bytes across threads\nend of stream after close\na blocked reader woke')" ] || { printf '%s\n' "os_pipe_threads answered: $wasm_threads_output" >&2; exit 1; }
     wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/net_pop3.threads.wasm")
     [ "$wasm_threads_output" = 'net pop3 ok' ] || { printf '%s\n' "net_pop3 answered: $wasm_threads_output" >&2; exit 1; }
-    # (D5770, C190) Processes through neper_host: each fixture spawns its own image, which the runner starts again as a child (os_process:
+    # (D5770, C205) Processes through neper_host: each fixture spawns its own image, which the runner starts again as a child (os_process:
     # kill, a pipe handed to the child, wait_usage; os_group: environment, cwd, a group terminated), plain and threaded; proc_output
     # (threads) adds e.proc's output, piped stdin, limits, deadlines and an orphan held by a process group.
     for wasm_fixture in os_process os_group; do
@@ -10729,7 +10729,7 @@ if command -v node >/dev/null 2>&1; then
     done
     wasm_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/release.wasm" address 2>&1)
     [ "$wasm_output" = '' ]
-    # (C194, D5681) `neper run --target wasm32-wasi` from a toolchain with lib/wasm/ beside it runs the module under node and
+    # (C209, D5681) `neper run --target wasm32-wasi` from a toolchain with lib/wasm/ beside it runs the module under node and
     # reports as a native run does; with no node it says what to install.
     wasm_run=$(cd "$wasm_build" && NEPER_NODE= "$repo/build/linux/short/neper-self-short" run "$wasm_release_source" --target wasm32-wasi --release -o run_release.wasm -- bounds)
     case "$wasm_run" in
@@ -10746,11 +10746,11 @@ if command -v node >/dev/null 2>&1; then
     # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/host_files/src/main.e" "$repo" wasm32 wasi "$wasm_build/host_files.wasm")" = 'executable written' ]
     (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm" "$wasm_build/wasm_threads.threads.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
-    # (C193, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
+    # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.wasm")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.threads.wasm" --threads)" = 'executable written' ]
     (cd "$repo" && node --no-warnings tests/wasm/window.mjs "$wasm_build/ui_counter.wasm" "$wasm_build/ui_counter.threads.wasm") || { printf '%s\n' 'the lib/wasm/window.js check failed' >&2; exit 1; }
-    # (C196, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
+    # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
     wasm_null_source="$repo/tests/wasm/null_call/src/main.e"
     [ "$("$test_build/neper-self" emit-executable "$wasm_null_source" "$repo" wasm32 wasi "$wasm_build/null_call.wasm" --source-map)" = 'executable written' ]

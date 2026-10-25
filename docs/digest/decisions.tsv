@@ -2880,7 +2880,7 @@ D5666	506	wasm32-wasi: the emitter fails where it used to guess
 D5667	885	The wasm scripts on macOS
 D5668	1152	The sweep compares standard error: the `stderr-differs` class
 D5669	1023	Coverage for the dispatch fallback and the narrow simd shapes
-D5670	5232	WebAssembly past one thread: what was measured, and the order of C186-C196
+D5670	5232	WebAssembly past one thread: what was measured, and the order of C201-C211
 D5671	3452	Threads on wasm32-wasi: a `--threads` build with its own module shape; the plain build does not change
 D5672	3615	Threads: NIR's atomics as wasm atomics, and seven instructions more in the "wasm" library
 D5673	4598	Threads: start, join and detach, and the per-thread state of `os.wasi.e`
@@ -2896,31 +2896,31 @@ D5682	1367	A module with variants for other targets only says so
 D5683	1690	Source maps for wasm32-wasi, and line numbers for the engine's traps
 D5684	2537	WebAssembly gaps not queued, and why
 D5690	960	NoVariant carries its sentence, and the target is named by what the variants are
-D5685	2165	`lib/wasm/neper-host.js` as built (C191)
+D5685	2165	`lib/wasm/neper-host.js` as built (C206)
 D5686	1842	The sweep through `neper-host.js`, next to run-wasm.mjs's
 D5687	782	The browser host in a real browser
 D5688	806	What is registered, and how it is run
 D5689	675	Where D5678 was short
 D5720	1962	`neper_host` in the plain build: a function table, a mailbox, and one request in flight
 D5721	1779	The host's socket semantics, as built
-D5722	1153	What C188 measured, and what it did not move
-D5710	2998	C186 landed: `--threads` writes the threaded module, and nothing a plain build writes changed
+D5722	1153	What C203 measured, and what it did not move
+D5710	2998	C201 landed: `--threads` writes the threaded module, and nothing a plain build writes changed
 D5711	1949	Threads: the atomics as built
 D5712	1482	Threads: the seven `wasm` instructions, and `wasm_thread_ops` outside `link/`
-D5713	1478	The runner for a threaded module until C187, and two findings for C187
+D5713	1478	The runner for a threaded module until C202, and two findings for C202
 D5740	2323	`--source-map` as built: the flag, the map, and where entries are made
 D5741	1256	Lines in the engine's traps: `lib/wasm/source-map.js`
-D5742	698	C196 verified
-D5730	2198	C187 landed: the thread runtime in `os.wasi.e`, as built
+D5742	698	C211 verified
+D5730	2198	C202 landed: the thread runtime in `os.wasi.e`, as built
 D5731	3039	The Node thread host, as built (`scripts/run-wasm.mjs`)
-D5732	3797	What C187 measured, and the races and hangs it found
-D5760	2340	Threads in the browser host, as built (C192)
+D5732	3797	What C202 measured, and the races and hangs it found
+D5760	2340	Threads in the browser host, as built (C207)
 D5761	1319	Where D5679 was short
-D5762	2611	C192 verified
+D5762	2611	C207 verified
 D5750	3940	Pipes on wasm32-wasi: D5677's `pipe` and `handle_*` calls, built ahead of the process calls
-D5751	2569	C189 landed: the `net_*` corpus on `--threads`, and what the sweeps say
-D5780	2976	`neper run --target wasm32-wasi` as built (C194)
-D5790	4152	`e.ui` in a page, as built (C193): frames go to the page, not to an OffscreenCanvas
-D5791	2036	C193 verified
-D5770	4774	Processes on wasm32-wasi, as built (C190): D5677 over `neper_host`
-D5771	2780	C190 landed: what the fixtures say, and what the design could not do
+D5751	2569	C204 landed: the `net_*` corpus on `--threads`, and what the sweeps say
+D5780	2976	`neper run --target wasm32-wasi` as built (C209)
+D5790	4152	`e.ui` in a page, as built (C208): frames go to the page, not to an OffscreenCanvas
+D5791	2036	C208 verified
+D5770	4774	Processes on wasm32-wasi, as built (C205): D5677 over `neper_host`
+D5771	2780	C205 landed: what the fixtures say, and what the design could not do

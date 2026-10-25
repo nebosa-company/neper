@@ -1,6 +1,6 @@
 // A null function value called two frames deep. Native ends it with an access violation
 // (D5604); under WebAssembly the engine traps in `call_indirect` and the runner names the
-// line of the call from the module's source map (C196, D5683).
+// line of the call from the module's source map (C211, D5683).
 use e.mem
 
 error Failed

@@ -1,4 +1,4 @@
-// A window in a page (D5680, C193): a title, a count with a button that raises it, a text field with a greeting
+// A window in a page (D5680, C208): a title, a count with a button that raises it, a text field with a greeting
 // under it, and a button that quits. Every change is also printed ("count N", "name TEXT") so a test can read
 // the program's state without the pixels, and once the first frame has been laid out the button and field
 // rectangles are printed ("layout KEY X Y W H", logical pixels) so a test can click them.

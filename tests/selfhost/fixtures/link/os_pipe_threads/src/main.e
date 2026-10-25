@@ -1,4 +1,4 @@
-// Pipes between threads (D5677's pipe subset, C189): a write then a read in one thread; the
+// Pipes between threads (D5677's pipe subset, C204): a write then a read in one thread; the
 // nonblocking probe answering WouldBlock on an empty pipe; 300000 bytes written by one thread while
 // main reads them (the writer blocks on a full pipe, the reader on an empty one); the end of the
 // stream after the writer closes; a reader thread woken by main's late write.

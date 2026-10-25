@@ -1659,7 +1659,7 @@ fn wasm_barrier_oracle(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, check
     ret ok
 }
 
-// `node` for a wasm32-wasi `run` (C194, D5681): NEPER_NODE when set, else the first PATH
+// `node` for a wasm32-wasi `run` (C209, D5681): NEPER_NODE when set, else the first PATH
 // directory that holds `node` (`node.exe` on Windows). Empty when neither does.
 fn find_node(a: *mem.Arena) -> (str, err) {
     let (named, named_error) = os.env(a, "NEPER_NODE")
@@ -1846,7 +1846,7 @@ fn wasm_command(a: *mem.Arena, args: []str) -> err {
     let (stats_switch, stats_error) = os.env(a, "NEPER_WASM_STATS")
     var flow_options = ""
     if stats_error == ok { flow_options = stats_switch }
-    // `--source-map` (C196, D5683): OUT.map beside the module, named by its last segment.
+    // `--source-map` (C211, D5683): OUT.map beside the module, named by its last segment.
     var map_name = ""
     var map_bytes: []u8 = zero
     var map_path = ""

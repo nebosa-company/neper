@@ -1,4 +1,4 @@
-// What a page hands a module and takes back (C191, D5678): the first argument, an environment
+// What a page hands a module and takes back (C206, D5678): the first argument, an environment
 // variable, a file in `/` and, as output, the file upcased, a file in a new directory, standard
 // output and standard error, and exit status 7. Run by tests/wasm/host.mjs, never by the sweep.
 use e.mem

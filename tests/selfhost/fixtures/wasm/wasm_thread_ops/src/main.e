@@ -1,4 +1,4 @@
-// The seven instructions the pseudo-library "wasm" gains for threads (D5672, C186), run on one
+// The seven instructions the pseudo-library "wasm" gains for threads (D5672, C201), run on one
 // thread: `threads` and `thread.id` differ between a plain and a `--threads` module, a spawn
 // is refused by a plain module (-1; only that one tries, since the thread host of a threaded
 // one would start a real thread on the record), and the atomics on a word work in both shapes.

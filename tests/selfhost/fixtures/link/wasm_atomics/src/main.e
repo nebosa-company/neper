@@ -1,4 +1,4 @@
-// Section 8's atomics at every width (C186, D5672): load, store, add, sub, and, or, xor,
+// Section 8's atomics at every width (C201, D5672): load, store, add, sub, and, or, xor,
 // xchg, min and max (signed and unsigned) and compare-and-swap (success and failure) at 8,
 // 16, 32 and 64 bits, a fence of each ordering, and the same through a field, a local, an
 // array element and a pointer parameter. Each operation prints the value it gave back and

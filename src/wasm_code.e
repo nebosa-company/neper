@@ -128,7 +128,7 @@ type Gen = struct {
     fr_vec: bool,
     // `--threads` (D5671): the module shape of wasm_threads.e and the atomics of D5672.
     threads: bool,
-    // `--source-map` (C196, D5683): an entry per change of source line, offsets relative to
+    // `--source-map` (C211, D5683): an entry per change of source line, offsets relative to
     // `bodies` once the function is finished; `map_done` entries are finished.
     map_on: bool,
     map_name: str,
@@ -2299,7 +2299,7 @@ fn emit_folded(g: *Gen, instruction: nir.Instruction, at: usize, mode: usize) ->
     ret ok
 }
 
-// ---- the source map (C196) ------------------------------------------------------
+// ---- the source map (C211) ------------------------------------------------------
 
 // An entry at `offset` of the function being written when its line or file is not the last
 // entry's; an entry at the same offset (an instruction that wrote nothing) is replaced.

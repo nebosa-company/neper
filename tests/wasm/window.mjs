@@ -1,4 +1,4 @@
-// The window of lib/wasm/window.js under Node with a canvas shim (C193, D5680):
+// The window of lib/wasm/window.js under Node with a canvas shim (C208, D5680):
 //   node --no-warnings tests/wasm/window.mjs UI_COUNTER.wasm [UI_COUNTER.threads.wasm]
 // UI_COUNTER is tests/wasm/browser/ui_counter built for wasm32-wasi (the second one with --threads, the first thread's
 // Worker owning the window). The shim is a canvas that is an EventTarget and keeps the frames the page draws on it

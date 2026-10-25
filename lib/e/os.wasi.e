@@ -248,7 +248,7 @@ extern fn host_handle_write(handle: u32, bytes: u32, length: u32, sent: u32) -> 
 @import("neper_host", "handle_close")
 extern fn host_handle_close(handle: u32) -> u32
 
-// The window of a page (D5680, C193): a canvas the host draws frames on, input from a ring. A host without a
+// The window of a page (D5680, C208): a canvas the host draws frames on, input from a ring. A host without a
 // window answers ENOSYS (52) to each, and every window function then answers what it answered before.
 @import("neper_host", "window_open")
 extern fn host_window_open(width: u32, height: u32, made: u32) -> u32
@@ -2106,7 +2106,7 @@ fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err) {
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) { ret (detail.operation, ok) }
 fn window_native(w: Window) -> (usize, usize, err) { ret (0usize, 0usize, Unsupported) }
 
-// Pipes (D5677's pipe, handle_read, handle_write and handle_close; the process calls are C190's): the
+// Pipes (D5677's pipe, handle_read, handle_write and handle_close; the process calls are C205's): the
 // ends are host handles, a read blocks the calling thread's mailbox only, so a server thread may wait
 // on one while main writes it.
 fn pipe_read_end(f: *File, buffer: *[]u8) -> (usize, err) {
