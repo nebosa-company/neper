@@ -276,6 +276,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let rules = policy.parse_filter_list(a, filter_text)
         net_config.block_hosts = rules.domains
         net_config.allow_hosts = rules.allow
+        net_config.third_hosts = rules.third
     }
     let (cl, client_error) = fetch.client(a, net_config, 256usize)
     if client_error != ok { os.exit(7i32) }

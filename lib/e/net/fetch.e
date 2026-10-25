@@ -61,13 +61,13 @@ type Response = struct {
 // `allow_file` lets `file:` URLs be read from the local disk (for tests and local pages; off by default).
 type Config = struct {
     roots: []const u8, user_agent: str, accept_language: str,
-    body_limit: usize, max_redirects: usize, allow_file: bool, block_hosts: []const str, allow_hosts: []const str
+    body_limit: usize, max_redirects: usize, allow_file: bool, block_hosts: []const str, allow_hosts: []const str, third_hosts: []const str
 }
 
 type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize, blocked: usize }
 
 fn default_config(roots: []const u8) -> Config {
-    ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize, allow_file: false, block_hosts: zero, allow_hosts: zero }
+    ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize, allow_file: false, block_hosts: zero, allow_hosts: zero, third_hosts: zero }
 }
 
 // A client with a jar of up to `max_cookies` cookies.
@@ -504,9 +504,16 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
         if !str.eq(cur.scheme, "http") && !str.eq(cur.scheme, "https") { ret (zero, UnsupportedScheme) }
         if bad_port(cur.port) { ret (zero, BlockedPort) }
         // A subresource (it has a referrer) whose host a filter list names is never requested; the document itself is not filtered.
-        if req.referrer.len > 0usize && policy.host_blocked(c.cfg.block_hosts, cur.host) && !policy.host_blocked(c.cfg.allow_hosts, cur.host) {
-            c.blocked += 1usize
-            ret (zero, BlockedByFilter)
+        if req.referrer.len > 0usize && !policy.host_blocked(c.cfg.allow_hosts, cur.host) {
+            var hit = policy.host_blocked(c.cfg.block_hosts, cur.host)
+            if hit && c.cfg.third_hosts.len > 0usize && policy.host_blocked(c.cfg.third_hosts, cur.host) {
+                let (rurl, re) = url.parse(c.a, req.referrer, zero, false)
+                hit = re != ok || !policy.same_party(rurl.host, cur.host)
+            }
+            if hit {
+                c.blocked += 1usize
+                ret (zero, BlockedByFilter)
+            }
         }
         // Request headers.
         let (hm, hme) = list_of_headers(c.a, 12usize + req.headers.len)

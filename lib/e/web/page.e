@@ -55,7 +55,7 @@ type ImageEntry = struct {
 }
 
 type Page = struct {
-    pa: *mem.Arena, va: mem.Arena, client: *fetch.Client, fonts: *fontset.Set,
+    pa: *mem.Arena, va: mem.Arena, client: *fetch.Client, blocked0: usize, fonts: *fontset.Set,
     url: str, status: u16, charset: str, title: str, mime: str,
     base: url.Url, tree: dom.Dom, sheets: []const str,
     images: list.List[ImageEntry],
@@ -1075,6 +1075,7 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     let p = &cell[0usize]
     p.pa = a
     p.client = client
+    p.blocked0 = client.blocked
     p.fonts = fonts
     p.has_renderer = false
     p.scripted = false
@@ -1191,3 +1192,6 @@ fn attach_renderer(p: *Page, r: *scene.Renderer) {
         i += 1usize
     }
 }
+
+// How many requests the client's filter list has refused since this page began loading.
+fn blocked_count(p: *const Page) -> usize { ret p.client.blocked - p.blocked0 }

@@ -34,6 +34,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e6 == fetch.BlockedByFilter || c.blocked != 3usize { os.exit(7i32) }
     let (r7, e7) = fetch.fetch(&c, request("http://other.tracker.test/a.js", "http://site.test/"))
     if e7 != fetch.BlockedByFilter || c.blocked != 4usize { os.exit(8i32) }
+    // A `$third-party` rule blocks only requests from another site.
+    var cfg3 = fetch.default_config(zero)
+    let rules3 = policy.parse_filter_list(a, "||thirdp.test^$third-party\n")
+    cfg3.block_hosts = rules3.domains
+    cfg3.third_hosts = rules3.third
+    if rules3.domains.len != 1usize || rules3.third.len != 1usize { os.exit(11i32) }
+    let (c3, ce3) = fetch.client(a, cfg3, 8usize)
+    if ce3 != ok { os.exit(12i32) }
+    var t3 = c3
+    let (r9, e9) = fetch.fetch(&t3, request("http://thirdp.test/a.js", "http://site.test/"))
+    if e9 != fetch.BlockedByFilter || t3.blocked != 1usize { os.exit(13i32) }
+    let (r10, e10) = fetch.fetch(&t3, request("http://thirdp.test/a.js", "http://www.thirdp.test/"))
+    if e10 == fetch.BlockedByFilter || t3.blocked != 1usize { os.exit(14i32) }
     // With no list there is no blocking.
     let (c1, ce1) = fetch.client(a, fetch.default_config(zero), 8usize)
     if ce1 != ok { os.exit(9i32) }

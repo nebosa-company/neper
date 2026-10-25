@@ -695,7 +695,7 @@ fn is_private_network_host(a: *mem.Arena, host: str) -> bool {
 
 // --- filter lists ----------------------------------------------------------------------------------------------
 
-type FilterRules = struct { domains: []const str, selectors: []const str, allow: []const str }
+type FilterRules = struct { domains: []const str, selectors: []const str, allow: []const str, third: []const str }
 
 fn add_unique(out: []str, n: *usize, v: str) {
     var i = 0usize
@@ -712,6 +712,8 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
     let (domains, e1) = mem.alloc[str](a, text.len + 1usize)
     let (selectors, e2) = mem.alloc[str](a, text.len + 1usize)
     let (exempt, e3) = mem.alloc[str](a, text.len + 1usize)
+    let (third, e4) = mem.alloc[str](a, text.len + 1usize)
+    var nt = 0usize
     var na = 0usize
     var nd = 0usize
     var ns = 0usize
@@ -756,13 +758,17 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
                     k += 1usize
                 }
                 let host = trim(lower(a, line[2usize..end]))
-                if host.len > 0usize && !str.contains(host, "/") && !str.contains(host, "*") && !str.contains(host, "[") { add_unique(domains, &nd, host) }
+                if host.len > 0usize && !str.contains(host, "/") && !str.contains(host, "*") && !str.contains(host, "[") {
+                    // `$third-party` limits the rule to requests from another site.
+                    if str.contains(line[end..], "$") && str.contains(line[end..], "third-party") && !str.contains(line[end..], "~third-party") { add_unique(third, &nt, host) }
+                    add_unique(domains, &nd, host)
+                }
             }
             continue
         }
         i += 1usize
     }
-    ret FilterRules { domains: domains[0usize..nd], selectors: selectors[0usize..ns], allow: exempt[0usize..na] }
+    ret FilterRules { domains: domains[0usize..nd], selectors: selectors[0usize..ns], allow: exempt[0usize..na], third: third[0usize..nt] }
 }
 
 // --- Content-Security-Policy -----------------------------------------------------------------------------------
@@ -1808,4 +1814,11 @@ fn host_blocked(domains: []const str, host: str) -> bool {
         i += 1usize
     }
     ret false
+}
+
+// Whether two hosts belong to one site: equal, or one a subdomain of the other.
+fn same_party(x: str, y: str) -> bool {
+    if str.eq(x, y) { ret true }
+    if x.len > y.len + 1usize && x[x.len - y.len - 1usize] == 46u8 && str.eq(x[x.len - y.len..], y) { ret true }
+    ret y.len > x.len + 1usize && y[y.len - x.len - 1usize] == 46u8 && str.eq(y[y.len - x.len..], x)
 }
