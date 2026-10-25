@@ -12,6 +12,9 @@
 //     NO_COLOR, SystemRoot and NEPER_*, with TMPDIR, TMP, TEMP, HOME and USERPROFILE pointed at
 //     the two directories above. `--env=all` (or NEPER_WASM_ENV=all) hands over the whole
 //     environment, as before; the module can read and write the working directory either way.
+// A module that imports `neper_host` (sockets, name resolution and the poller, D5675, D5676) gets
+// them from scripts/run-wasm-host.mjs: each call blocks the module's worker while this process's
+// main thread does it over node:net, node:dgram and node:dns. NEPER_HOST_TRACE=1 prints each call.
 // NEPER_WASM_MEMORY=1 and NEPER_WASM_TIME=1 add `wasm memory: N MiB` and `wasm time: N ms`
 // (compile, link and run, as scripts/wasm-bench.sh reads it) to standard error at the end.
 // The first argument is the module's path inside the preopens (relative to `.`, else under /exe), so

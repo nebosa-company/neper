@@ -42521,3 +42521,29 @@ A `--threads` module in a page needs `SharedArrayBuffer`, so the page must be cr
 **Problem.** D5682 left open how the loader learns which suffixes `project.select_source` saw, and which target to name in "none for ...": a fixture's expected diagnostic must read the same on the Linux and Windows hosts.
 
 **Decision.** `select_source` answers `NoVariant` with the finished tail ("has variants for linux, macos and windows and none for wasi") in its string slot; `graph.resolve_source` keeps the first root's tail in `Graph.variant_note` (project lib, then project src, then toolchain) and answers `NoVariant` when no root has the module; `main.e` prints `` `use X` `` and the tail under E-MODULE-0001. The target named is the os when any os variant was seen, the arch when every variant is an arch variant, so `reject/module_variants_other` (host.aarch64.e, host.x86.e; "none for x64") reads the same on both hosts. `module_missing` is unchanged.
+
+## D5720 — `neper_host` in the plain build: a function table, a mailbox, and one request in flight
+
+**Problem.** D5675 fixed the mechanism (a Worker blocks in `Atomics.wait` while Node's main thread answers) and D5676 the calls; the plain runner had no mailbox, and the threaded one (C187) will need the same one.
+
+**Decision.** `scripts/run-wasm-host.mjs` holds both halves, and `run-wasm.mjs` only wires them. The main thread makes the 128-byte mailbox and the 64 KiB data buffer (D5674's layout: Int32 word 0 state, word 1 function number, BigInt64 arguments from byte 8, word 26 the result) and starts `serve`; the Worker gets both in `workerData` and, when `WebAssembly.Module.imports` lists a `neper_host` function, builds that import object (a function the host does not know answers ENOSYS, 52, so a module that names C190's calls still links). A module that names none gets no object and runs as before.
+- `FUNCTIONS` is the one table: each import's name and, per argument, a letter -- `v` value, `l` i64 value, `i`/`o` an address record in/out, `c` a u32 output slot, `p` bytes in then their length, `q`/`r`/`s` bytes, 32-byte records or 16-byte records out then their capacity. The Worker's shim copies by those letters and the host reads fixed places: address in at data byte 0, address out at 32, output slots from 64, bytes in at 128, bytes out at 128 (at 1024 when the call also has bytes in, which only `resolve` does). A transfer is cut to what fits, so a send or receive is a short count.
+- The host side waits for a request with `Atomics.waitAsync` on word 0 and, after its reply, for the Worker to put the state back to 0, so it never spins; a blocking call is a promise the socket's changes settle, and Node's loop runs meanwhile. One request is in flight per mailbox; C187 makes one mailbox per thread and shares `NetHost`.
+- `NEPER_HOST_TRACE=1` prints each call, its arguments, its errno and the first 72 data bytes to standard error.
+
+## D5721 — The host's socket semantics, as built
+
+**Decision** (what D5676 left to the implementation).
+- The address record's port and scope are little-endian. Connecting or sending to the any-address (0.0.0.0, ::) goes to loopback, as the kernel does.
+- Streams are made with `allowHalfOpen: true` on both ends: a peer's `shutdown(Write)` is end of stream here and must not close the writing half. `sock_close` of a connected stream is `end()` and then `destroy()` at `finish`, so bytes already sent are delivered; the rest is destroyed at once. The runner destroys every socket when the module's Worker ends.
+- A call that would answer "nothing yet" without blocking (nonblocking `recv`, `accept`, `recv_from`, and `poll_wait` with timeout 0) first lets two turns of Node's loop run, so a datagram or connection already at the OS is not missed. This is what keeps `socket_send_to` then a nonblocking `socket_receive_from` from racing.
+- Readiness: readable for bytes, end of stream, a pending error, a queued connection or datagram; writable for a connected stream under 1 MiB unsent, any datagram socket, and a failed connect; closed after end of stream or a reset; failed for a pending error. A registered handle's readable and writable bits show only if asked for; closed and failed always show.
+- Ceilings: a datagram queue is not bounded; a stream's receive queue pauses the Node socket at 1 MiB and resumes below it; IPv6 scope is a number (no interface names); `SO_REUSEADDR`, buffer sizes, `TCP_NODELAY` and multicast are not reachable (D5676's rule: a row of their own).
+- `send_file` is `fd_pread` into a 32 KiB buffer and `socket_send`, so the file's position is not touched, as `sendfile` leaves it; a send that would block ends the call with the count so far.
+
+## D5722 — What C188 measured, and what it did not move
+
+- Round trip of a 64-byte TCP echo between two sockets of one module (two sends, two receives, 5000 rounds): 360 µs on Windows Node 24 and 704 µs in WSL Node 22. D5670's 53-66 µs was a JS client and server with no mailbox; here each of the four calls is a hop and the receives also wait for the loop to read the socket.
+- Trap sites in a build are source line numbers, so adding the socket code to `os.wasi.e` changes the sites of every function after the new imports: `wasm_basics` still imports nothing from `neper_host` and differs from the build before only in those constants (compared with the same lib tree before and after; the structure and size are the same).
+- A connect to a closed loopback port never completes in the Windows x64 build of `e.os` (its poller does not report the failed connect; found while writing `wasm_net`, not looked into). `wasm_net` asks for the refusal only where `target.os == .Wasi`.
+- The `net_*` fixtures that start a server thread still fail (`thread_create` answers Unsupported), now after reaching their socket calls; none hangs. They are C189's.
