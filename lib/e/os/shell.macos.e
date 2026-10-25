@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -217,11 +217,24 @@ fn target_ready() -> err {
     let ninth = objc_class_method(class, os.cocoa_sel("draggingSession:sourceOperationMaskForDraggingContext:\x00"), source_mask.bits, &mask_types[0usize])
     let tenth = objc_class_method(class, os.cocoa_sel("draggingSession:endedAtPoint:operation:\x00"), source_end.bits, &ended_types[0usize])
     let eleventh = objc_class_method(class, os.cocoa_sel("neperEndDrag:\x00"), end_drag.bits, &types[0usize])
+    var open_files: MenuImp4 = zero
+    open_files.function = target_open_files
+    var open_urls: MenuImp4 = zero
+    open_urls.function = target_open_urls
+    let open_types = "v@:@@\x00"
+    let twelfth = objc_class_method(class, os.cocoa_sel("application:openFiles:\x00"), open_files.bits, &open_types[0usize])
+    let thirteenth = objc_class_method(class, os.cocoa_sel("application:openURLs:\x00"), open_urls.bits, &open_types[0usize])
+    var get_url: MenuImp4 = zero
+    get_url.function = target_get_url
+    let fourteenth = objc_class_method(class, os.cocoa_sel("neperURL:withReplyEvent:\x00"), get_url.bits, &open_types[0usize])
     objc_class_register(class)
     let object = os.msg0(os.msg0(class, os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
     if object == 0usize { ret Failed }
     shell_target = object
     lifecycle_observe()
+    // 'GURL' 'GURL'
+    let manager = os.msg0(os.cocoa_class("NSAppleEventManager\x00"), os.cocoa_sel("sharedAppleEventManager\x00"))
+    let handled = os.msg4(manager, os.cocoa_sel("setEventHandler:andSelector:forEventClass:andEventID:\x00"), object, os.cocoa_sel("neperURL:withReplyEvent:\x00"), 1196773964usize, 1196773964usize)
     let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
     let delegated = os.msg1(app, os.cocoa_sel("setDelegate:\x00"), object)
     ret ok
@@ -1447,24 +1460,237 @@ fn valid_name(text: str) -> bool {
     ret true
 }
 
+// File types and URL schemes (D5217). A Mac sends "open this file" and "open this URL" as Apple events to an application
+// bundle that declares the type, so registering one writes a small bundle under `~/Library/Application Support/Neper/
+// Associations`: an Info.plist naming the extension (or the scheme) and, as its executable, a copy of this program, so the
+// program itself is what Finder starts. It is told to LaunchServices (`lsregister -f`) and made the default handler for the
+// type. A launched program receives the event through the application delegate (`application:openFiles:` and
+// `application:openURLs:`), which queues it for `activation_poll`.
+@import("/System/Library/Frameworks/CoreServices.framework/CoreServices", "UTTypeCreatePreferredIdentifierForTag")
+extern fn ls_type_for_tag(class: usize, tag: usize, conforming: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreServices.framework/CoreServices", "LSSetDefaultRoleHandlerForContentType")
+extern fn ls_default_for_type(content_type: usize, roles: u32, handler: usize) -> i32
+
+@import("/System/Library/Frameworks/CoreServices.framework/CoreServices", "LSSetDefaultHandlerForURLScheme")
+extern fn ls_default_for_scheme(scheme: usize, handler: usize) -> i32
+
+const ACTIVATIONS: usize = 8usize
+var act_text: [16384]u8 = zero
+var act_used: usize = zero
+var act_strs: [16]str = zero
+var act_kinds: [8]ActivationKind = zero
+var act_payloads: [8]str = zero
+var act_head: usize = zero
+var act_tail: usize = zero
+
+fn act_push(kind: ActivationKind, string: usize) {
+    let next = (act_tail + 1usize) % ACTIVATIONS
+    if next == act_head || string == 0usize { ret }
+    var none: [1]u8 = zero
+    let length = os.cocoa_read_text(string, none[0usize..0usize])
+    if length == 0usize || act_used + length > 16384usize { ret }
+    let copied = os.cocoa_read_text(string, act_text[act_used..act_used + length])
+    act_payloads[act_tail] = act_text[act_used..act_used + length]
+    act_kinds[act_tail] = kind
+    act_used += length
+    act_tail = next
+    if act_head == act_tail { act_used = 0usize }
+}
+
+@cc(c)
+fn target_open_files(this: usize, command: usize, application: usize, files: usize) {
+    let count = os.msg0(files, os.cocoa_sel("count\x00"))
+    var at = 0usize
+    while at < count {
+        act_push(.File, os.msg1(files, os.cocoa_sel("objectAtIndex:\x00"), at))
+        at += 1usize
+    }
+    let replied = os.msg1(application, os.cocoa_sel("replyToOpenOrPrint:\x00"), 0usize)
+}
+
+@cc(c)
+fn target_open_urls(this: usize, command: usize, application: usize, urls: usize) {
+    let count = os.msg0(urls, os.cocoa_sel("count\x00"))
+    var at = 0usize
+    while at < count {
+        let url = os.msg1(urls, os.cocoa_sel("objectAtIndex:\x00"), at)
+        // Finder's open-document arrives here too, as a file URL: that is a file, named by its path.
+        if os.msg_bool_ret(url, os.cocoa_sel("isFileURL\x00")) != 0u8 {
+            act_push(.File, os.msg0(url, os.cocoa_sel("path\x00")))
+        } else {
+            act_push(.Url, os.msg0(url, os.cocoa_sel("absoluteString\x00")))
+        }
+        at += 1usize
+    }
+}
+
+// The system's "open this URL" Apple event (GURL/GURL), handled here directly: AppKit does not turn it into
+// application:openURLs: for every kind of program, and a handler installed after launch replaces whatever it set.
+@cc(c)
+fn target_get_url(this: usize, command: usize, event: usize, reply: usize) {
+    // keyDirectObject, '----'
+    let descriptor = os.msg1(event, os.cocoa_sel("paramDescriptorForKeyword:\x00"), 757935405usize)
+    if descriptor == 0usize { ret }
+    act_push(.Url, os.msg0(descriptor, os.cocoa_sel("stringValue\x00")))
+}
+
+fn bundle_root(a: *mem.Arena, name: str) -> (str, err) {
+    let (home, home_error) = fs.home_dir(a)
+    if home_error != ok { ret ("", home_error) }
+    let (base, base_error) = str.concat(a, home, "/Library/Application Support/Neper/Associations/")
+    if base_error != ok { ret ("", base_error) }
+    let (named, named_error) = str.concat(a, base, name)
+    if named_error != ok { ret ("", named_error) }
+    let (bundle, bundle_error) = str.concat(a, named, ".app")
+    ret (bundle, bundle_error)
+}
+
+fn lsregister(a: *mem.Arena, flag: str, bundle: str) -> err {
+    var argv: [3]str = zero
+    argv[0usize] = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    argv[1usize] = flag
+    argv[2usize] = bundle
+    var options: os.SpawnOptions = zero
+    options.argv = argv[..]
+    options.inherit_env = true
+    options.stdio.stdout = os.File { raw: 1usize }
+    options.stdio.stderr = os.File { raw: 2usize }
+    let (child, spawn_error) = os.spawn_with_options(a, options)
+    if spawn_error != ok { ret Failed }
+    let (usage, wait_error) = os.wait_usage(child)
+    if wait_error != ok { ret Failed }
+    ret ok
+}
+
+// The bundle's Info.plist declaring either a document type (`extension`, no dot) or a URL scheme.
+fn bundle_make(a: *mem.Arena, name: str, bundle_id: str, label: str, extension: str, scheme: str) -> (str, err) {
+    let (root, root_error) = bundle_root(a, name)
+    if root_error != ok { ret ("", root_error) }
+    let (macos, macos_error) = str.concat(a, root, "/Contents/MacOS")
+    if macos_error != ok { ret ("", macos_error) }
+    try fs.make_dirs(a, macos)
+    let (exe, exe_error) = fs.executable_path(a)
+    if exe_error != ok { ret ("", exe_error) }
+    let (link, link_error) = str.concat(a, macos, "/neper-app")
+    if link_error != ok { ret ("", link_error) }
+    let dropped = fs.remove_file(a, link)
+    // A copy and not a symlink: the system finds the bundle from the executable's own path, and a link leads out of it.
+    let (scratch, scratch_error) = mem.alloc[u8](a, 65536usize)
+    if scratch_error != ok { ret ("", scratch_error) }
+    try fs.copy_file(a, exe, link, scratch)
+    let moded = os.set_mode(a, link, 493u32)
+    var declared = ""
+    if extension.len != 0usize {
+        let (opened, opened_error) = join3(a, "<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>", label, "</string><key>CFBundleTypeRole</key><string>Viewer</string><key>CFBundleTypeExtensions</key><array><string>")
+        if opened_error != ok { ret ("", opened_error) }
+        let (middle, middle_error) = str.concat(a, opened, extension)
+        if middle_error != ok { ret ("", middle_error) }
+        let (closed, closed_error) = str.concat(a, middle, "</string></array></dict></array>")
+        if closed_error != ok { ret ("", closed_error) }
+        declared = closed
+    } else {
+        let (opened, opened_error) = join3(a, "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>", label, "</string><key>CFBundleURLSchemes</key><array><string>")
+        if opened_error != ok { ret ("", opened_error) }
+        let (middle, middle_error) = str.concat(a, opened, scheme)
+        if middle_error != ok { ret ("", middle_error) }
+        let (closed, closed_error) = str.concat(a, middle, "</string></array></dict></array>")
+        if closed_error != ok { ret ("", closed_error) }
+        declared = closed
+    }
+    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>", bundle_id, "</string><key>CFBundleName</key><string>")
+    if head_error != ok { ret ("", head_error) }
+    let (named, named_error) = join3(a, head, name, "</string><key>CFBundleExecutable</key><string>neper-app</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>")
+    if named_error != ok { ret ("", named_error) }
+    let (plist, plist_error) = join3(a, named, declared, "</dict></plist>\n")
+    if plist_error != ok { ret ("", plist_error) }
+    let (path, path_error) = str.concat(a, root, "/Contents/Info.plist")
+    if path_error != ok { ret ("", path_error) }
+    try fs.write_file(a, path, plist)
+    ret (root, ok)
+}
+
+fn bundle_remove(a: *mem.Arena, name: str) -> err {
+    let (root, root_error) = bundle_root(a, name)
+    if root_error != ok { ret root_error }
+    let (present, exists_error) = fs.exists(a, root)
+    if exists_error != ok { ret exists_error }
+    if !present { ret NotFound }
+    let unregistered = lsregister(a, "-u", root)
+    let (macos, macos_error) = str.concat(a, root, "/Contents/MacOS")
+    if macos_error != ok { ret macos_error }
+    let (link, link_error) = str.concat(a, macos, "/neper-app")
+    if link_error != ok { ret link_error }
+    let (plist, plist_error) = str.concat(a, root, "/Contents/Info.plist")
+    if plist_error != ok { ret plist_error }
+    let (contents, contents_error) = str.concat(a, root, "/Contents")
+    if contents_error != ok { ret contents_error }
+    let first = fs.remove_file(a, link)
+    let second = fs.remove_file(a, plist)
+    let third = fs.remove_dir(a, macos)
+    let fourth = fs.remove_dir(a, contents)
+    let fifth = fs.remove_dir(a, root)
+    if fifth != ok { ret Failed }
+    ret ok
+}
+
 fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: str) -> err {
     if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
-    ret Unsupported
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let (bundle_id, id_error) = str.concat(a, "com.neper.assoc.", program_id)
+    if id_error != ok { ret id_error }
+    let (root, make_error) = bundle_make(a, program_id, bundle_id, description, extension[1usize..extension.len], "")
+    if make_error != ok { ret make_error }
+    if lsregister(a, "-f", root) != ok { ret Failed }
+    let pool = os.objc_pool_push()
+    let tag = os.cocoa_text(extension[1usize..extension.len])
+    let class = os.cocoa_text("public.filename-extension")
+    let kind = ls_type_for_tag(class, tag, 0usize)
+    let handler = os.cocoa_text(bundle_id)
+    var status = 0i32
+    if kind != 0usize { status = ls_default_for_type(kind, 4294967295u32, handler) }
+    os.cf_release(handler)
+    os.cf_release(tag)
+    os.cf_release(class)
+    if kind != 0usize { os.cf_release(kind) }
+    os.objc_pool_pop(pool)
+    if kind == 0usize || status != 0i32 { ret Failed }
+    ret ok
 }
 
 fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err {
     if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
-    ret Unsupported
+    ret bundle_remove(a, program_id)
 }
 
 fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
     if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
-    ret Unsupported
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let (name, name_error) = str.concat(a, "protocol-", scheme)
+    if name_error != ok { ret name_error }
+    let (bundle_id, id_error) = str.concat(a, "com.neper.assoc.", name)
+    if id_error != ok { ret id_error }
+    let (root, make_error) = bundle_make(a, name, bundle_id, description, "", scheme)
+    if make_error != ok { ret make_error }
+    if lsregister(a, "-f", root) != ok { ret Failed }
+    let pool = os.objc_pool_push()
+    let text = os.cocoa_text(scheme)
+    let handler = os.cocoa_text(bundle_id)
+    let status = ls_default_for_scheme(text, handler)
+    os.cf_release(handler)
+    os.cf_release(text)
+    os.objc_pool_pop(pool)
+    if status != 0i32 { ret Failed }
+    ret ok
 }
 
 fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
     if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
-    ret Unsupported
+    let (name, name_error) = str.concat(a, "protocol-", scheme)
+    if name_error != ok { ret name_error }
+    ret bundle_remove(a, name)
 }
 
 fn autostart_path(a: *mem.Arena, id: str) -> (str, err) {
@@ -1579,6 +1805,20 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
 
 fn activation_poll() -> (Activation, bool) {
     var none: Activation = zero
+    // What Finder or the URL handler sent through the delegate comes first.
+    // The delegate must be there for the system's open events to find: made now if nothing has needed it yet.
+    if target_ready() == ok { os.cocoa_pump(0i64) }
+    if act_head != act_tail {
+        let slot = act_head
+        act_strs[2usize * slot] = "neper"
+        act_strs[2usize * slot + 1usize] = act_payloads[slot]
+        var delivered: Activation = zero
+        delivered.kind = act_kinds[slot]
+        delivered.payload = act_payloads[slot]
+        delivered.args = act_strs[2usize * slot..2usize * slot + 2usize]
+        act_head = (act_head + 1usize) % ACTIVATIONS
+        ret (delivered, true)
+    }
     if !instance_held { ret (none, false) }
     var events: [2]os.PollEvent = zero
     let (ready, wait_error) = os.poller_wait(instance_poller, events[..], 0i64)

@@ -31,10 +31,10 @@
       "group": "macOS",
       "order": 185,
       "title": "macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)",
-      "score": 0.8,
+      "score": 0.9,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Built 2026-10-25 on assoc-ci, not yet merged: shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleURLTypes, the program copied in as its executable), register it with lsregister -f and make it the default handler through LSSetDefaultRoleHandlerForContentType / LSSetDefaultHandlerForURLScheme; dissociate removes it. The shell target is the NSApp delegate and answers application:openFiles: and application:openURLs: into activation_poll. tests/macos/probe/open_events.e on the Mac runners: LaunchServices starts the registered copy, which sees a bundle identifier and receives the open-file event (log: bundled, delegate set, got an activation). Open: the probe's result files are not yet seen by the parent (exit 10), and the URL event has not been seen; then the ui_activation fixture and the corpus must pass with associations turned on. Done when open_events prints open events ok on both architectures."
+      "evidence": "Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleURLTypes, a copy of the program as its executable), register it with lsregister -f and make it the default handler (LSSetDefaultRoleHandlerForContentType / LSSetDefaultHandlerForURLScheme); dissociate removes it. The shell target is the NSApp delegate and the GURL Apple event handler; application:openURLs: (file URLs become File activations by path) and application:openFiles: feed activation_poll. tests/macos/probe/open_events.e: open on a file of the registered type and on a registered URL start the registered copy, which receives both and the parent reads them back, on aarch64 and x64; ui_activation passes with associations on; the corpus is 1105 pass. Open: a double-click in Finder and a link in a browser are what a person does and are untested (C192), and the bundle holds a copy of the program, so it is stale after the program is rebuilt (register again). Done when a real Finder open is checked."
     },
     {
       "id": "C186",
