@@ -5284,8 +5284,11 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         if tn.kind == ast.N_IDENT {
             let (holder, he) = resolve_scope(it, f, tn.text)
             if he != ok { ret (undefv(), he) }
+            // An unresolvable reference in strict code stays unresolvable even if the right-hand side creates the global.
+            let unresolved = holder == null_env() && !has_property(it, it.global, key_of(tn.text))
             let (v, e) = eval_named(it, f, n.b, target_name(f, n.a))
             if e != ok { ret (undefv(), e) }
+            if unresolved && f.strict { ret (undefv(), throw_reference(it, str_concat(it, tn.text, " is not defined"))) }
             let ae = put_in_scope(it, f, holder, tn.text, v)
             if ae != ok { ret (undefv(), ae) }
             ret (v, ok)
@@ -6939,7 +6942,7 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
     if ce != ok { ret (normal(), ce) }
     var last = undefv()
     if n.kind == ast.N_FORIN {
-        if is_nullish(coll) { ret (normal(), ok) }
+        if is_nullish(coll) { ret (Completion { kind: CK_NORMAL, value: undefv(), label: "" }, ok) }
         let (co, coe) = to_object(it, coll)
         if coe != ok { ret (normal(), coe) }
         // Enumerable string keys along the prototype chain, each name once.
