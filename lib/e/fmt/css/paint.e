@@ -1001,8 +1001,24 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
         let pre = fr.text[0usize..cut]
         let pl = env.text(env.ctx, layout.st(p.l, p.l.boxes.items[usize(fr.box)].style), pre)
         if mem.address_of(pl) != 0usize && f64(pl.bounds.width) <= width_left + 0.01f64 {
-            paint_text_run(p, fr.box, pre, cx + fr.x, cy + fr.y, f64(pl.bounds.width))
-            paint_text_run(p, owner, dots, cx + fr.x + f64(pl.bounds.width), dots_y, ew)
+            var shown = pre
+            var shown_w = f64(pl.bounds.width)
+            // The ellipsis goes after the last break opportunity that fits: a word cut in the middle is dropped whole.
+            if cut < fr.text.len && fr.text[cut] != 32u8 && cut > 0usize && fr.text[cut - 1usize] != 32u8 {
+                var sp = cut
+                while sp > 0usize && fr.text[sp - 1usize] != 32u8 { sp -= 1usize }
+                var e = sp
+                while e > 0usize && fr.text[e - 1usize] == 32u8 { e -= 1usize }
+                if e > 0usize {
+                    let w2 = env.text(env.ctx, layout.st(p.l, p.l.boxes.items[usize(fr.box)].style), fr.text[0usize..e])
+                    if mem.address_of(w2) != 0usize {
+                        shown = fr.text[0usize..e]
+                        shown_w = f64(w2.bounds.width)
+                    }
+                }
+            }
+            paint_text_run(p, fr.box, shown, cx + fr.x, cy + fr.y, shown_w)
+            paint_text_run(p, owner, dots, cx + fr.x + shown_w, dots_y, ew)
             ret
         }
     }
