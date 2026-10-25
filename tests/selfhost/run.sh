@@ -10648,12 +10648,14 @@ if command -v node >/dev/null 2>&1; then
         (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
     done
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
-    wasm_stats=$(NEPER_WASM_STATS=1 "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/wasm_irreducible/src/main.e" "$repo" wasm32 wasi "$wasm_build/irreducible-stats.wasm" 2>&1)
+    wasm_fallback=wasm_irreducible
+    wasm_forced=wasm_flow
+    wasm_stats=$(NEPER_WASM_STATS=1 "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fallback/src/main.e" "$repo" wasm32 wasi "$wasm_build/irreducible-stats.wasm" 2>&1)
     case "$wasm_stats" in
         *'dispatch 1 (irreducible 1)'*) ;;
         *) printf '%s\n' "wasm_irreducible did not fall back to the dispatch loop: $wasm_stats" >&2; exit 1 ;;
     esac
-    NEPER_WASM_STATS=dispatch "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/wasm_flow/src/main.e" "$repo" wasm32 wasi "$wasm_build/flow-dispatch.wasm" > /dev/null 2>&1
+    NEPER_WASM_STATS=dispatch "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_forced/src/main.e" "$repo" wasm32 wasi "$wasm_build/flow-dispatch.wasm" > /dev/null 2>&1
     (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/flow-dispatch.wasm" > /dev/null) || { printf '%s\n' 'wasm_flow failed with every function on the dispatch loop' >&2; exit 1; }
     wasm_release_source="$repo/tests/selfhost/fixtures/link/wasm_release/src/main.e"
     [ "$("$test_build/neper-self" emit-executable "$wasm_release_source" "$repo" wasm32 wasi "$wasm_build/release-debug.wasm")" = 'executable written' ]

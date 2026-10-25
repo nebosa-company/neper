@@ -10971,12 +10971,14 @@ if ($wasmNode) {
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
+    $wasmFallback = 'wasm_irreducible'
+    $wasmForced = 'wasm_flow'
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     $env:NEPER_WASM_STATS = '1'
-    try { $wasmStats = (& $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\wasm_irreducible\src\main.e') $repo 'wasm32' 'wasi' (Join-Path $wasmBuild 'irreducible-stats.wasm') 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { Remove-Item Env:NEPER_WASM_STATS }
+    try { $wasmStats = (& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFallback\src\main.e") $repo 'wasm32' 'wasi' (Join-Path $wasmBuild 'irreducible-stats.wasm') 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { Remove-Item Env:NEPER_WASM_STATS }
     $env:NEPER_WASM_STATS = 'dispatch'
-    try { & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\wasm_flow\src\main.e') $repo 'wasm32' 'wasi' (Join-Path $wasmBuild 'flow-dispatch.wasm') 2>&1 | Out-Null } finally { Remove-Item Env:NEPER_WASM_STATS }
+    try { & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmForced\src\main.e") $repo 'wasm32' 'wasi' (Join-Path $wasmBuild 'flow-dispatch.wasm') 2>&1 | Out-Null } finally { Remove-Item Env:NEPER_WASM_STATS }
     $ErrorActionPreference = $previousPreference
     if ($wasmStats -notmatch [regex]::Escape('dispatch 1 (irreducible 1)')) { throw "wasm_irreducible did not fall back to the dispatch loop: $wasmStats" }
     $wasmRun = Invoke-Wasm (Join-Path $wasmBuild 'flow-dispatch.wasm') @()
