@@ -37,6 +37,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { WASI } from 'node:wasi'
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { argv, env as hostEnv, stderr } from 'node:process'
+import { hostImports, serve } from './run-wasm-host.mjs'
 
 // Node's WASI answers fd_readdir with ENOSYS on Windows (uvwasi has no directory listing there). Where
 // it does, the call is answered here: the directory descriptors the module opens are followed
@@ -105,7 +106,11 @@ async function run({ args, env, preopens }) {
   let instance
   const began = performance.now()
   try {
-    ;({ instance } = await WebAssembly.instantiate(await readFile(workerData.file), withReaddir(wasi.getImportObject(), preopens, () => instance.exports.memory)))
+    const module = await WebAssembly.compile(await readFile(workerData.file))
+    const imports = withReaddir(wasi.getImportObject(), preopens, () => instance.exports.memory)
+    const names = WebAssembly.Module.imports(module).filter((item) => item.module === 'neper_host').map((item) => item.name)
+    if (names.length) imports.neper_host = hostImports(names, () => instance.exports.memory, workerData.box, workerData.data)
+    instance = await WebAssembly.instantiate(module, imports)
   } catch (error) {
     return { code: 125, note: `${error}\n` }
   }
@@ -149,8 +154,14 @@ if (isMainThread) {
   preopens['/home'] = home
   const inherited = everything ? { ...hostEnv } : Object.fromEntries(Object.entries(hostEnv).filter(([name]) => ALLOWED.test(name.toUpperCase())))
   const env = { ...inherited, PATH: hostEnv.PATH, TMPDIR: '/tmp', TMP: '/tmp', TEMP: '/tmp', HOME: '/home', USERPROFILE: '/home' }
-  const worker = new Worker(new URL(import.meta.url), { workerData: { file: absolute, args: [guest, ...moduleArgs], env, preopens }, resourceLimits: { stackSizeMb: 256 } })
-  const clean = () => rmSync(scratch, { recursive: true, force: true })
+  const box = new SharedArrayBuffer(128)
+  const data = new SharedArrayBuffer(65536)
+  const host = serve(box, data)
+  const worker = new Worker(new URL(import.meta.url), { workerData: { file: absolute, args: [guest, ...moduleArgs], env, preopens, box, data }, resourceLimits: { stackSizeMb: 256 } })
+  const clean = () => {
+    host.stop()
+    rmSync(scratch, { recursive: true, force: true })
+  }
   let answered = false
   worker.on('message', (result) => {
     answered = true

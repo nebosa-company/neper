@@ -151,6 +151,68 @@ extern fn wasm_memory_fill(destination: u32, value: u32, count: u32)
 @import("wasm", "memory.copy")
 extern fn wasm_memory_copy(destination: u32, source: u32, count: u32)
 
+// The sockets, the resolver and the poller come from the host (D5675): one more import module, each
+// function answering a WASI errno and writing its outputs through the pointers it is given.
+@import("neper_host", "sock_open")
+extern fn host_sock_open(family: u32, kind: u32, made: u32) -> u32
+
+@import("neper_host", "sock_set_nonblocking")
+extern fn host_sock_set_nonblocking(handle: u32, enabled: u32) -> u32
+
+@import("neper_host", "sock_bind")
+extern fn host_sock_bind(handle: u32, address: u32) -> u32
+
+@import("neper_host", "sock_local_address")
+extern fn host_sock_local_address(handle: u32, address: u32) -> u32
+
+@import("neper_host", "sock_listen")
+extern fn host_sock_listen(handle: u32, backlog: u32) -> u32
+
+@import("neper_host", "sock_accept")
+extern fn host_sock_accept(handle: u32, made: u32, address: u32) -> u32
+
+@import("neper_host", "sock_connect")
+extern fn host_sock_connect(handle: u32, address: u32) -> u32
+
+@import("neper_host", "sock_send")
+extern fn host_sock_send(handle: u32, bytes: u32, length: u32, sent: u32) -> u32
+
+@import("neper_host", "sock_recv")
+extern fn host_sock_recv(handle: u32, bytes: u32, length: u32, taken: u32) -> u32
+
+@import("neper_host", "sock_send_to")
+extern fn host_sock_send_to(handle: u32, address: u32, bytes: u32, length: u32, sent: u32) -> u32
+
+@import("neper_host", "sock_recv_from")
+extern fn host_sock_recv_from(handle: u32, bytes: u32, length: u32, taken: u32, address: u32) -> u32
+
+@import("neper_host", "sock_shutdown")
+extern fn host_sock_shutdown(handle: u32, how: u32) -> u32
+
+@import("neper_host", "sock_close")
+extern fn host_sock_close(handle: u32) -> u32
+
+@import("neper_host", "resolve")
+extern fn host_resolve(host: u32, host_length: u32, port: u32, family: u32, out: u32, capacity: u32, found: u32) -> u32
+
+@import("neper_host", "poll_open")
+extern fn host_poll_open(made: u32) -> u32
+
+@import("neper_host", "poll_ctl")
+extern fn host_poll_ctl(poller: u32, operation: u32, handle: u32, token: i64, interest: u32) -> u32
+
+@import("neper_host", "poll_wait")
+extern fn host_poll_wait(poller: u32, events: u32, capacity: u32, timeout_ns: i64, count: u32) -> u32
+
+@import("neper_host", "poll_wake")
+extern fn host_poll_wake(poller: u32) -> u32
+
+@import("neper_host", "poll_close")
+extern fn host_poll_close(poller: u32) -> u32
+
+@import("wasi_snapshot_preview1", "fd_pread")
+extern fn wasi_fd_pread(fd: u32, iovs: u32, iovs_len: u32, offset: u64, read_count: u32) -> u32
+
 // ---- the results the convention returns through a slot ---------------------------------------------
 
 type AllocResult = struct { data: []u8, failure: err }
@@ -1586,7 +1648,34 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err { ret Unsupported 
 fn proc_group_close(group: own ProcGroup) -> err { ret ok }
 fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) { ret (FileLock { raw: 0usize }, Unsupported) }
 fn file_unlock(lock: own FileLock) -> err { ret ok }
-fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) { ret (0usize, Unsupported) }
+// The file's bytes at `offset`, read in pieces and sent; the file's own position stays where it was.
+// A socket that takes no more answers the count so far, as sendfile does.
+fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) {
+    var piece: [32768]u8 = zero
+    var iov: [2]u32 = zero
+    var taken: [1]u32 = zero
+    var total = 0usize
+    while total < count {
+        var want = count - total
+        if want > piece.len { want = piece.len }
+        iov[0usize] = u32(mem.address_of(&piece[0usize]))
+        iov[1usize] = u32(want)
+        taken[0usize] = 0u32
+        let status = wasi_fd_pread(fd_of(source.raw), u32(mem.address_of(&iov[0usize])), 1u32, offset + u64(total), u32(mem.address_of(&taken[0usize])))
+        if status != 0u32 { ret (total, wasi_error(status)) }
+        let got = usize(taken[0usize])
+        if got == 0usize { ret (total, ok) }
+        var sent_so_far = 0usize
+        while sent_so_far < got {
+            let (sent, send_error) = socket_send(destination, piece[sent_so_far..got])
+            if send_error == WouldBlock { ret (total + sent_so_far, ok) }
+            if send_error != ok { ret (total + sent_so_far, send_error) }
+            sent_so_far += sent
+        }
+        total += got
+    }
+    ret (total, ok)
+}
 fn signal(which: Signal, handler: fn(Signal)) -> err { ret Unsupported }
 fn signal_default(which: Signal) -> err { ret Unsupported }
 fn signal_raise(which: Signal) -> err { ret Unsupported }
@@ -1594,43 +1683,264 @@ fn sandbox(policy: *const SandboxPolicy) -> err { ret Unsupported }
 
 fn file_handle(f: File) -> Handle { ret Handle { raw: f.raw } }
 fn socket_handle(s: Socket) -> Handle { ret Handle { raw: s.raw } }
-fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) { ret (Socket { raw: 0usize }, Unsupported) }
-fn socket_set_nonblocking(s: Socket, enabled: bool) -> err { ret Unsupported }
-fn socket_bind(s: Socket, address: SocketAddress) -> err { ret Unsupported }
-fn socket_local_address(s: Socket) -> (SocketAddress, err) {
-    var none: SocketAddress = zero
-    ret (none, Unsupported)
-}
-fn socket_listen(s: Socket, backlog: u32) -> err { ret Unsupported }
-fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
-    var none: SocketAddress = zero
-    ret (Socket { raw: 0usize }, none, Unsupported)
-}
-fn socket_connect(s: Socket, address: SocketAddress) -> err { ret Unsupported }
-fn socket_receive(s: Socket, dst: []u8) -> (usize, err) { ret (0usize, Unsupported) }
-fn socket_send(s: Socket, src: []const u8) -> (usize, err) { ret (0usize, Unsupported) }
-fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
-    var none: SocketAddress = zero
-    ret (0usize, none, Unsupported)
-}
-fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) { ret (0usize, Unsupported) }
-fn socket_shutdown(s: Socket, how: SocketShutdown) -> err { ret Unsupported }
-fn socket_close(s: own Socket) -> err { ret ok }
-fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
-    var none: []SocketAddress = zero
-    ret (none, Unsupported)
+// ---- sockets, name resolution and the poller: the `neper_host` imports (D5675, D5676) ---------------------
+// The host answers a WASI errno for each; a handle is a number the host counts up from 0x40000000. The
+// address record is 32 bytes written byte by byte: family at 0 (0 Ip4, 1 Ip6), port at 2 (u16) and scope
+// at 4 (u32), both little-endian, the address at 8.
+
+const HOST_BASE: usize = 1073741824usize
+const ADDRESS_RECORD: usize = 32usize
+const RESOLVE_MAX: usize = 8usize
+const POLL_RECORD: usize = 16usize
+const POLL_BATCH: usize = 32usize
+
+type WasiPoller = struct { host: u32 }
+
+// The error for a status; EINPROGRESS and EALREADY are a call that has started and must be asked again.
+fn net_error(status: u32) -> err {
+    if status == 0u32 { ret ok }
+    record_error_detail(i32(status))
+    if status == 26u32 || status == 7u32 { ret WouldBlock }
+    ret error_of_status(status)
 }
 
-fn poller_open(a: *mem.Arena) -> (Poller, err) {
-    var none: Poller = zero
-    ret (none, Unsupported)
+fn net_cleanup(status: u32) -> err {
+    if status == 0u32 { ret ok }
+    record_cleanup_error_detail(i32(status))
+    ret error_of_status(status)
 }
-fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err { ret Unsupported }
-fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err { ret Unsupported }
-fn poller_unregister(p: Poller, handle: Handle) -> err { ret Unsupported }
-fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) { ret (0usize, Unsupported) }
-fn poller_wake(p: Poller) -> err { ret Unsupported }
-fn poller_close(p: own Poller) -> err { ret ok }
+
+// A handle no host would have made is the one number that is never open, so the host answers EBADF.
+fn host_handle(raw: usize) -> u32 {
+    if raw < HOST_BASE || raw > 4294967295usize { ret NO_FD }
+    ret u32(raw)
+}
+
+fn put_address(record: []u8, address: SocketAddress) {
+    var at = 0usize
+    while at < ADDRESS_RECORD {
+        record[at] = 0u8
+        at += 1usize
+    }
+    if address.family == .Ip6 { record[0usize] = 1u8 }
+    record[2usize] = u8(usize(address.port) % 256usize)
+    record[3usize] = u8(usize(address.port) / 256usize)
+    record[4usize] = u8(address.scope % 256u32)
+    record[5usize] = u8(address.scope / 256u32 % 256u32)
+    record[6usize] = u8(address.scope / 65536u32 % 256u32)
+    record[7usize] = u8(address.scope / 16777216u32)
+    at = 0usize
+    while at < 16usize {
+        record[8usize + at] = address.bytes[at]
+        at += 1usize
+    }
+}
+
+fn get_address(record: []u8, base: usize) -> SocketAddress {
+    var address: SocketAddress = zero
+    if record[base] == 1u8 { address.family = .Ip6 }
+    address.port = u16(usize(record[base + 2usize]) + usize(record[base + 3usize]) * 256usize)
+    address.scope = u32(record[base + 4usize]) + u32(record[base + 5usize]) * 256u32 + u32(record[base + 6usize]) * 65536u32 + u32(record[base + 7usize]) * 16777216u32
+    var at = 0usize
+    while at < 16usize {
+        address.bytes[at] = record[base + 8usize + at]
+        at += 1usize
+    }
+    ret address
+}
+
+fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
+    var made: [1]u32 = zero
+    var family_value = 0u32
+    if family == .Ip6 { family_value = 1u32 }
+    var kind_value = 0u32
+    if kind == .Datagram { kind_value = 1u32 }
+    let status = host_sock_open(family_value, kind_value, u32(mem.address_of(&made[0usize])))
+    if status != 0u32 { ret (Socket { raw: 0usize }, net_error(status)) }
+    ret (Socket { raw: usize(made[0usize]) }, ok)
+}
+
+fn socket_set_nonblocking(s: Socket, enabled: bool) -> err {
+    var flag = 0u32
+    if enabled { flag = 1u32 }
+    ret net_error(host_sock_set_nonblocking(host_handle(s.raw), flag))
+}
+
+fn socket_bind(s: Socket, address: SocketAddress) -> err {
+    var record: [32]u8 = zero
+    put_address(record[..], address)
+    ret net_error(host_sock_bind(host_handle(s.raw), u32(mem.address_of(&record[0usize]))))
+}
+
+fn socket_local_address(s: Socket) -> (SocketAddress, err) {
+    var record: [32]u8 = zero
+    let status = host_sock_local_address(host_handle(s.raw), u32(mem.address_of(&record[0usize])))
+    if status != 0u32 {
+        var none: SocketAddress = zero
+        ret (none, net_error(status))
+    }
+    ret (get_address(record[..], 0usize), ok)
+}
+
+fn socket_listen(s: Socket, backlog: u32) -> err {
+    ret net_error(host_sock_listen(host_handle(s.raw), backlog))
+}
+
+fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
+    var made: [1]u32 = zero
+    var record: [32]u8 = zero
+    var none: SocketAddress = zero
+    let status = host_sock_accept(host_handle(s.raw), u32(mem.address_of(&made[0usize])), u32(mem.address_of(&record[0usize])))
+    if status != 0u32 { ret (Socket { raw: 0usize }, none, net_error(status)) }
+    ret (Socket { raw: usize(made[0usize]) }, get_address(record[..], 0usize), ok)
+}
+
+fn socket_connect(s: Socket, address: SocketAddress) -> err {
+    var record: [32]u8 = zero
+    put_address(record[..], address)
+    ret net_error(host_sock_connect(host_handle(s.raw), u32(mem.address_of(&record[0usize]))))
+}
+
+fn socket_receive(s: Socket, dst: []u8) -> (usize, err) {
+    if dst.len == 0usize { ret (0usize, ok) }
+    var taken: [1]u32 = zero
+    let status = host_sock_recv(host_handle(s.raw), u32(mem.address_of(&dst[0usize])), u32(dst.len), u32(mem.address_of(&taken[0usize])))
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(taken[0usize]), ok)
+}
+
+fn socket_send(s: Socket, src: []const u8) -> (usize, err) {
+    if src.len == 0usize { ret (0usize, ok) }
+    var sent: [1]u32 = zero
+    let status = host_sock_send(host_handle(s.raw), u32(mem.address_of(&src[0usize])), u32(src.len), u32(mem.address_of(&sent[0usize])))
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(sent[0usize]), ok)
+}
+
+fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
+    var peer: SocketAddress = zero
+    if dst.len == 0usize { ret (0usize, peer, ok) }
+    var taken: [1]u32 = zero
+    var record: [32]u8 = zero
+    let status = host_sock_recv_from(host_handle(s.raw), u32(mem.address_of(&dst[0usize])), u32(dst.len), u32(mem.address_of(&taken[0usize])), u32(mem.address_of(&record[0usize])))
+    if status != 0u32 { ret (0usize, peer, net_error(status)) }
+    ret (usize(taken[0usize]), get_address(record[..], 0usize), ok)
+}
+
+fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) {
+    var record: [32]u8 = zero
+    put_address(record[..], dst)
+    var sent: [1]u32 = zero
+    var source_address = 0u32
+    if src.len != 0usize { source_address = u32(mem.address_of(&src[0usize])) }
+    let status = host_sock_send_to(host_handle(s.raw), u32(mem.address_of(&record[0usize])), source_address, u32(src.len), u32(mem.address_of(&sent[0usize])))
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(sent[0usize]), ok)
+}
+
+fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {
+    var how_value = 2u32
+    if how == .Read { how_value = 0u32 }
+    if how == .Write { how_value = 1u32 }
+    ret net_error(host_sock_shutdown(host_handle(s.raw), how_value))
+}
+
+fn socket_close(s: own Socket) -> err {
+    ret net_cleanup(host_sock_close(host_handle(s.raw)))
+}
+
+fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
+    var nothing: []SocketAddress = zero
+    if host.len == 0usize { ret (nothing, NotFound) }
+    let (results, results_error) = mem.alloc[SocketAddress](a, RESOLVE_MAX)
+    if results_error != ok { ret (nothing, OutOfMemory) }
+    var records: [256]u8 = zero
+    var found: [1]u32 = zero
+    var family_value = 0u32
+    if family == .Ip6 { family_value = 1u32 }
+    let status = host_resolve(address_of_str(host), u32(host.len), u32(port), family_value, u32(mem.address_of(&records[0usize])), u32(RESOLVE_MAX), u32(mem.address_of(&found[0usize])))
+    if status != 0u32 { ret (nothing, net_error(status)) }
+    let count = usize(found[0usize])
+    if count == 0usize || count > RESOLVE_MAX { ret (nothing, NotFound) }
+    var at = 0usize
+    while at < count {
+        results[at] = get_address(records[..], at * ADDRESS_RECORD)
+        at += 1usize
+    }
+    ret (results[0usize..count], ok)
+}
+
+// A poller's state is the host's handle for it, kept in the arena it was opened with.
+fn poller_open(a: *mem.Arena) -> (Poller, err) {
+    var poller: Poller = zero
+    let (holder, holder_error) = mem.alloc[WasiPoller](a, 1usize)
+    if holder_error != ok { ret (poller, OutOfMemory) }
+    var made: [1]u32 = zero
+    let status = host_poll_open(u32(mem.address_of(&made[0usize])))
+    if status != 0u32 { ret (poller, net_error(status)) }
+    holder[0usize].host = made[0usize]
+    poller.state = mem.cast[*void](&holder[0usize])
+    ret (poller, ok)
+}
+
+fn poller_interest(interest: PollInterest) -> u32 {
+    var mask = 0u32
+    if interest.readable { mask = mask | 1u32 }
+    if interest.writable { mask = mask | 2u32 }
+    ret mask
+}
+
+fn poller_control(p: Poller, operation: u32, handle: Handle, token: usize, interest: PollInterest) -> err {
+    let state = mem.cast[*WasiPoller](p.state)
+    ret net_error(host_poll_ctl(state.host, operation, host_handle(handle.raw), mem.bitcast[i64](u64(token)), poller_interest(interest)))
+}
+
+fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret poller_control(p, 0u32, handle, token, interest)
+}
+
+fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret poller_control(p, 1u32, handle, token, interest)
+}
+
+fn poller_unregister(p: Poller, handle: Handle) -> err {
+    var nothing: PollInterest = zero
+    ret poller_control(p, 2u32, handle, 0usize, nothing)
+}
+
+fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) {
+    let state = mem.cast[*WasiPoller](p.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    var capacity = events.len
+    if capacity > POLL_BATCH { capacity = POLL_BATCH }
+    var raw: [512]u8 = zero
+    var count: [1]u32 = zero
+    let status = host_poll_wait(state.host, u32(mem.address_of(&raw[0usize])), u32(capacity), timeout_ns, u32(mem.address_of(&count[0usize])))
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    let ready = usize(count[0usize])
+    var at = 0usize
+    while at < ready && at < capacity {
+        let base = at * POLL_RECORD
+        let flags = le32(raw[..], base + 8usize)
+        events[at].token = le32(raw[..], base) + le32(raw[..], base + 4usize) * 4294967296usize
+        events[at].readable = flags & 1usize != 0usize
+        events[at].writable = flags & 2usize != 0usize
+        events[at].closed = flags & 4usize != 0usize
+        events[at].failed = flags & 8usize != 0usize
+        at += 1usize
+    }
+    ret (at, ok)
+}
+
+fn poller_wake(p: Poller) -> err {
+    let state = mem.cast[*WasiPoller](p.state)
+    ret net_error(host_poll_wake(state.host))
+}
+
+fn poller_close(p: own Poller) -> err {
+    let state = mem.cast[*WasiPoller](p.state)
+    ret net_cleanup(host_poll_close(state.host))
+}
 
 fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err) {
     var none: Mapping = zero
