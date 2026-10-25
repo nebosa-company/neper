@@ -1,13 +1,14 @@
 // The API of lib/wasm/neper-host.js under Node (C191, D5678):
-//   node --no-warnings tests/wasm/host.mjs FILES.wasm DEBUG.wasm RELEASE.wasm
+//   node --no-warnings tests/wasm/host.mjs FILES.wasm DEBUG.wasm RELEASE.wasm [THREADS.wasm]
 // FILES is tests/wasm/browser/host_files, DEBUG and RELEASE are wasm_release built without and with --release.
+// THREADS is link/wasm_threads built with --threads (C192, D5679).
 // The sweep (scripts/wasm-sweep.sh --host neper-host) covers WASI itself; this covers what a page passes in and gets back.
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { run } from '../../lib/wasm/neper-host.js'
 
-const [filesPath, debugPath, releasePath] = process.argv.slice(2)
+const [filesPath, debugPath, releasePath, threadsPath] = process.argv.slice(2)
 const text = (bytes) => new TextDecoder().decode(bytes)
 const capture = () => {
   const got = { stdout: '', stderr: '' }
@@ -50,5 +51,27 @@ assert.match(bounds.got.stderr, /trap\[bounds\]: index 8 out of bounds for len 8
 const bad = capture()
 assert.equal((await run(new Uint8Array([0, 1, 2, 3]), { stdout: bad.stdout, stderr: bad.stderr })).exitCode, 125)
 assert.notEqual(bad.got.stderr, '')
+
+// threads (C192, D5679): the calling thread is the host and every wasm thread a Worker; both ways of answering a
+// request (Atomics.waitAsync, and a ping message where it is missing), exit from a thread, two runs at once, and
+// the one thing a compiled module cannot do (its memory limits are read from bytes)
+if (threadsPath) {
+  const expected = 'atomic 8000\nmutex 8000\nids distinct\nmain id 1\na thread started a thread\ndetached\nwait timeout\ndetails per thread\n200 cycles\nmain returns\n'
+  const threaded = new Uint8Array(await readFile(threadsPath))
+  for (const [source, label, extra] of [[pathToFileURL(threadsPath), 'URL', {}], [threaded, 'bytes', {}], [threaded, 'bytes, ping messages', { messages: true }]]) {
+    const c = capture()
+    const { exitCode } = await run(source, { ...extra, stdout: c.stdout, stderr: c.stderr })
+    assert.equal(exitCode, 0, `threads ${label}: ${c.got.stderr}`)
+    assert.equal(c.got.stdout, expected, `threads ${label}`)
+  }
+  for (const extra of [{}, { messages: true }]) {
+    const c = capture()
+    assert.equal((await run(threaded, { args: ['exit'], ...extra, stdout: c.stdout, stderr: c.stderr })).exitCode, 7, 'a thread\'s os.exit')
+  }
+  const [one, two] = await Promise.all([0, 1].map(() => { const c = capture(); return run(threaded, { stdout: c.stdout, stderr: c.stderr }).then((r) => ({ ...r, ...c.got })) }))
+  assert.equal(one.stdout, expected)
+  assert.equal(two.stdout, expected)
+  await assert.rejects(run(await WebAssembly.compile(threaded), { stdout() {}, stderr() {} }), /URL, a Response or bytes/)
+}
 
 console.log('neper-host api ok')

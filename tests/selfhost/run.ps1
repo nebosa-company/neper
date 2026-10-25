@@ -11032,7 +11032,7 @@ if ($wasmNode) {
     # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'
     if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
-    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath) (Join-Path $repo 'tests\wasm\host.mjs')
+    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath) (Join-Path $repo 'tests\wasm\host.mjs')
     if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
     # (C196, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
