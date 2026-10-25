@@ -7347,6 +7347,41 @@ if ($LASTEXITCODE -ne 0 -or $deviceEditPerturbWritten -ne 'executable written') 
 foreach ($deviceEditVariant in @($deviceEditSerialExe, $deviceEditPerturbExe)) {
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditVariant).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditCleanExe).Hash) { throw "the device edit fixture's image depends on the crew's schedule: $deviceEditVariant" }
 }
+# A launch carries its kernel's requirements whoever checked the kernel (D5700): another
+# worker, or in a warm build the kernel module's Interface. One image hot and clean at
+# one worker, and at every worker count, for `gpu_launch_facts` and for `gpu_tensor`,
+# whose launches are in generic instances its `main` makes.
+$launchFactsFixture = Join-Path $PSScriptRoot 'fixtures\link\gpu_launch_facts'
+$launchFactsScratch = Join-Path $testBuild 'gpu-launch-facts-scratch'
+if (Test-Path -LiteralPath $launchFactsScratch) { Remove-Item -LiteralPath $launchFactsScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $launchFactsScratch 'src') | Out-Null
+Copy-Item (Join-Path $launchFactsFixture 'src\*.e') (Join-Path $launchFactsScratch 'src')
+$launchFactsMain = Join-Path $launchFactsScratch 'src\main.e'
+$launchFactsHotExe = Join-Path $testBuild 'gpu-launch-facts-hot.exe'
+$launchFactsSerialExe = Join-Path $testBuild 'gpu-launch-facts-j1.exe'
+$launchFactsWritten = & $compiler emit-executable $launchFactsMain $repo 'x64' 'windows' $launchFactsHotExe --incremental -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw 'the launch facts fixture did not build hot' }
+Copy-Item (Join-Path $launchFactsFixture 'edits\main_body.e') $launchFactsMain
+$launchFactsWritten = & $compiler emit-executable $launchFactsMain $repo 'x64' 'windows' $launchFactsHotExe --incremental -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw 'the launch facts fixture did not rebuild hot after the edit' }
+$launchFactsWritten = & $compiler emit-executable $launchFactsMain $repo 'x64' 'windows' $launchFactsSerialExe -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw 'the launch facts fixture did not build under -j 1' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $launchFactsHotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $launchFactsSerialExe).Hash) { throw "a warm build's launch is not the clean build's: the kernel's facts were not read from its Interface" }
+$launchFactsOutput = & $launchFactsSerialExe
+if ($LASTEXITCODE -ne 0 -or $launchFactsOutput -ne 'gpu launch facts ok again') { throw "the launch facts fixture answered wrongly: exit $LASTEXITCODE $launchFactsOutput" }
+$launchTensor = Join-Path $PSScriptRoot 'fixtures\link\gpu_tensor\src\main.e'
+$launchTensorSerialExe = Join-Path $testBuild 'gpu-tensor-j1.exe'
+$launchFactsWritten = & $compiler emit-executable $launchTensor $repo 'x64' 'windows' $launchTensorSerialExe -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw 'gpu_tensor did not build under -j 1' }
+foreach ($launchFactsJobs in @(@('-j', '2'), @('-j', '3', '--perturb'), @('-j', '8'), @())) {
+    $launchFactsTag = $launchFactsJobs -join ''
+    foreach ($launchFactsPair in @(@($launchFactsMain, $launchFactsSerialExe, 'gpu-launch-facts'), @($launchTensor, $launchTensorSerialExe, 'gpu-tensor'))) {
+        $launchFactsExe = Join-Path $testBuild "$($launchFactsPair[2])$launchFactsTag.exe"
+        $launchFactsWritten = & $compiler emit-executable $launchFactsPair[0] $repo 'x64' 'windows' $launchFactsExe @launchFactsJobs 2>$null
+        if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw "$($launchFactsPair[2]) did not build under '$launchFactsJobs'" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $launchFactsExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $launchFactsPair[1]).Hash) { throw "$($launchFactsPair[2])'s image depends on the worker count: '$launchFactsJobs'" }
+    }
+}
 # (D1667) The counts a cold build takes as each block goes back are a warm no-edit
 # build's, on a program whose `@gpus` and `@tests` rows are not zero.
 $frontScratch = Join-Path $testBuild 'front-counts'

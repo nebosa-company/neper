@@ -2847,4 +2847,6 @@ D5211	1039	macOS single instance: the first program of an id owns a loopback dat
 D5212	843	macOS printing is a virtual PDF printer; there is no dialog
 D5213	13206	The WebAssembly target's design: wasm32-wasi, a whole-program emitter over NIR, and C180-C184
 D5214	1373	macOS drag and drop: a run-time subclass of the window's view, and a dragging session from the first window
-D5215	1235	the kqueue poller never lost a wakeup; the fixtures counted waits where a level-triggered wait needs a clock
+D5215	1236	the kqueue poller never lost a wakeup; the fixtures counted waits where a level-triggered wait needs a clock
+D5216	844	e.net knows macOS's errno numbers; four net fixtures run on a Mac
+D5700	2976	A launch reads its kernel's facts whoever checked the kernel; C185 closes
