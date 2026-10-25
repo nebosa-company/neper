@@ -7633,6 +7633,37 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         }
         i += 1usize
     }
+    // Items of a lane aligned on their first baseline line up with the lowest one of the lane.
+    var lane_up: [64]f64 = zero
+    var bi = 0usize
+    while bi < g.n {
+        let bs = bstyle(l, g.items[bi].box)
+        var bal = bs.align_self
+        if bal == .Auto { bal = cs.align_items }
+        if (bal == .Baseline || bal == .FirstBaseline) && rstart[bi] < 64usize {
+            let bpb = bx(l, g.items[bi].box)
+            let (bfound, bby) = first_baseline(l, g.items[bi].box)
+            var bup = bpb.h
+            if bfound { bup = bby }
+            let bu = bpb.margin[0usize] + bup
+            if bu > lane_up[rstart[bi]] { lane_up[rstart[bi]] = bu }
+        }
+        bi += 1usize
+    }
+    bi = 0usize
+    while bi < g.n {
+        let bs = bstyle(l, g.items[bi].box)
+        var bal = bs.align_self
+        if bal == .Auto { bal = cs.align_items }
+        if (bal == .Baseline || bal == .FirstBaseline) && rstart[bi] < 64usize {
+            let bpb = bx(l, g.items[bi].box)
+            let (bfound, bby) = first_baseline(l, g.items[bi].box)
+            var bup = bpb.h
+            if bfound { bup = bby }
+            bpb.y = oy0 + g.rows[rstart[bi]].pos + bpb.margin[0usize] + (lane_up[rstart[bi]] - bpb.margin[0usize] - bup)
+        }
+        bi += 1usize
+    }
     // An item is aligned within the room it has along the lane: from its own end to just before the next item laid after it
     // in any of its lanes, or to the end of the container for the last one.
     i = 0usize

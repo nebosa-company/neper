@@ -551,6 +551,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 117. Grid items aligned on their baseline line up with the lowest one of the row.
     let (p117, ok117) = build(a, "<div style=\"display:grid;grid-template-columns:50px 50px;align-items:baseline\"><div id=a style=\"font-size:10px\">x</div><div id=b style=\"font-size:20px\">x</div></div>", "")
     if !ok117 || !near(rect_of(p117, "a").y, 8.0f64) || !near(rect_of(p117, "b").y, 0.0f64) { os.exit(158) }
+    // 118. Row-lane items aligned on their baseline line up with the lowest one of the lane.
+    let (p118, ok118) = build(a, "<div style=\"display:grid-lanes;grid-template-rows:60px;width:200px;align-items:baseline\"><div id=a style=\"font-size:10px\">x</div><div id=b style=\"font-size:20px\">x</div></div>", "")
+    if !ok118 || !near(rect_of(p118, "a").y, 8.0f64) || !near(rect_of(p118, "b").y, 0.0f64) { os.exit(159) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
