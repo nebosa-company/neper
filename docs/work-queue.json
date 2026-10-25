@@ -86,10 +86,10 @@
       "group": "macOS",
       "order": 190,
       "title": "macOS window system: accessibility, input methods, close veto, live resize, Retina",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "D5202 delivered open, events, clipboard text, resize, cursor, close and monitors. Not done: accessibility_publish/take/listening answer nothing (an NSAccessibility bridge over the AccessibleNode tree, as UIA and AT-SPI are on the other hosts; os_uia and os_atspi never compile on a Mac); IME composition (NSTextInputClient on the content view: setMarkedText, insertText, firstRectForCharacterRange) so Text events carry composed input; a close veto (windowShouldClose: returning NO until the program answers); live resize while the pointer drags the window edge (the run loop is inside tracking, so Resize and Paint must be delivered from it); Retina scale changes between displays (backingScaleFactor notifications) and a native-resolution check on real hardware."
+      "evidence": "Close veto built 2026-10-25 (D5222): windows have a delegate (NeperWindowDelegate, a class made at run time) whose windowShouldClose: answers no and queues a Close event, so the close button is a request and the window stays until the program calls window_close, as on the other hosts; [window close] still closes without asking. The macos_window_close corpus fixture sends performClose:, sees Close, finds the window still visible, then closes it (passes on aarch64 and x64; corpus 1106). Not done: accessibility_publish/take/listening (an NSAccessibility bridge over the AccessibleNode tree, as UIA and AT-SPI are on the other hosts; os_uia and os_atspi never compile on a Mac); IME composition (NSTextInputClient on the content view: setMarkedText, insertText, firstRectForCharacterRange) so Text events carry composed input; live resize while the pointer drags the window edge (the run loop is inside tracking, so Resize and Paint must be delivered from it; the delegate's windowDidResize: is the hook now that a delegate exists); Retina scale changes between displays (windowDidChangeBackingProperties:) and a native-resolution check on real hardware (C192)."
     },
     {
       "id": "C191",
