@@ -10707,6 +10707,25 @@ if command -v node >/dev/null 2>&1; then
     # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/host_files/src/main.e" "$repo" wasm32 wasi "$wasm_build/host_files.wasm")" = 'executable written' ]
     (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
+    # (C196, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
+    # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
+    wasm_null_source="$repo/tests/wasm/null_call/src/main.e"
+    [ "$("$test_build/neper-self" emit-executable "$wasm_null_source" "$repo" wasm32 wasi "$wasm_build/null_call.wasm" --source-map)" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$wasm_null_source" "$repo" wasm32 wasi "$wasm_build/null_call_plain.wasm")" = 'executable written' ]
+    [ -f "$wasm_build/null_call.wasm.map" ] && [ ! -f "$wasm_build/null_call_plain.wasm.map" ] || { printf '%s\n' 'the source map was not written exactly when asked for' >&2; exit 1; }
+    if command -v wasm-tools >/dev/null 2>&1; then wasm-tools validate "$wasm_build/null_call.wasm" || { printf '%s\n' 'the module with a source map does not validate' >&2; exit 1; }; fi
+    for wasm_runner in scripts/run-wasm.mjs lib/wasm/neper-host.js; do
+        wasm_output=$(cd "$repo" && node --no-warnings "$wasm_runner" "$wasm_build/null_call.wasm" 2>&1) || true
+        wasm_first=$(printf '%s\n' "$wasm_output" | grep -m1 '^ *at ')
+        case "$wasm_first" in
+            *'main.fire'*'[src/main.e:13]'*) ;;
+            *) printf '%s\n' "$wasm_runner did not name the null call's line: $wasm_output" >&2; exit 1 ;;
+        esac
+        wasm_output=$(cd "$repo" && node --no-warnings "$wasm_runner" "$wasm_build/null_call_plain.wasm" 2>&1) || true
+        case "$wasm_output" in
+            *'[src/main.e:'*) printf '%s\n' "$wasm_runner named a line without a source map: $wasm_output" >&2; exit 1 ;;
+        esac
+    done
     NEPER_COMPILER="$test_build/neper-self" "$repo/scripts/wasm-compiler.sh" || { printf '%s\n' 'neper.wasm emits something the native compiler does not' >&2; exit 1; }
 else
     printf '%s\n' 'node is not on PATH: the wasm32-wasi checks were skipped'

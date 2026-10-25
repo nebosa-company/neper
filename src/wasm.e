@@ -14,6 +14,7 @@ use graph
 use nir
 use wasm_code as w
 use wasm_flow as wf
+use wasm_map as wm
 use wasm_threads as wt
 
 const DATA_START: usize = 4096usize
@@ -710,6 +711,8 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
         w.put_uleb(&section, gen.order_count + 1usize)
     }
     w.put_bytes(&section, &gen.bodies)
+    // The section's id, its size, then the count: where the bodies begin in the file.
+    let bodies_start = out.count + 1usize + w.uleb_size(section.count) + section.count - gen.bodies.count
     put_section(&out, 10usize, &section)
     section.count = 0usize
     write_data(gen, &section)
@@ -717,6 +720,15 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
     section.count = 0usize
     write_names(gen, &section, start_index)
     put_section(&out, 0usize, &section)
+    if gen.map_on {
+        if gen.map_full { ret (no_bytes, fail_at(gen, "the source map outgrew its storage", "")) }
+        let (map_bytes, map_error) = wm.map_text(gen, bodies_start)
+        if map_error != ok { ret (no_bytes, map_error) }
+        gen.map_text = map_bytes
+        section.count = 0usize
+        wm.write_url(&section, gen.map_name)
+        put_section(&out, 0usize, &section)
+    }
     if out.full || section.full { ret (no_bytes, fail_at(gen, "the module outgrew the back end's storage", "")) }
     ret (out.bytes[0usize..out.count], ok)
 }
@@ -743,12 +755,34 @@ fn describe_flow(a: *mem.Arena, gen: *w.Gen) -> str {
 // The module for the program lowered into `builder`; `message` says why when it cannot and
 // `stats` says how the functions were written (`options` is NEPER_WASM_STATS: any text asks
 // for the report, and "dispatch" keeps every function on the dispatch loop, to test it).
-fn emit(a: *mem.Arena, c: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, arena_bytes: usize, message: *str, stats: *str, options: str, threads: bool) -> ([]u8, err) {
+// `map_name` (C196) is the source map's file name beside the module, empty for none; the map's
+// text is left in `map_bytes`.
+fn emit(a: *mem.Arena, c: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, arena_bytes: usize, message: *str, stats: *str, options: str, threads: bool, map_name: str, map_bytes: *[]u8) -> ([]u8, err) {
     var no_bytes: []u8 = zero
     var gen: w.Gen = zero
     let init_error = init_gen(a, &gen, c, loaded, builder)
     if init_error != ok { ret (no_bytes, init_error) }
     gen.threads = threads
+    if map_name.len != 0usize {
+        let entries = builder.instruction_count + builder.function_count + 16usize
+        let (offsets, offsets_error) = mem.alloc[usize](a, entries)
+        if offsets_error != ok { ret (no_bytes, offsets_error) }
+        let (lines, lines_error) = mem.alloc[usize](a, entries)
+        if lines_error != ok { ret (no_bytes, lines_error) }
+        let (columns, columns_error) = mem.alloc[usize](a, entries)
+        if columns_error != ok { ret (no_bytes, columns_error) }
+        let (sources, sources_error) = mem.alloc[usize](a, entries)
+        if sources_error != ok { ret (no_bytes, sources_error) }
+        let (paths, paths_error) = mem.alloc[str](a, 4096usize)
+        if paths_error != ok { ret (no_bytes, paths_error) }
+        gen.map_on = true
+        gen.map_name = map_name
+        gen.map_offset = offsets
+        gen.map_line = lines
+        gen.map_column = columns
+        gen.map_source = sources
+        gen.map_paths = paths
+    }
     if threads {
         // `wasi.thread-spawn` is import 0 of every threaded module (D5671); `thread.spawn` calls it.
         var spawn_import: w.Import = zero
@@ -795,6 +829,7 @@ fn emit(a: *mem.Arena, c: *check.Checker, loaded: *graph.Graph, builder: *nir.Bu
         ret (no_bytes, module_error)
     }
     *stats = describe_flow(a, &gen)
+    *map_bytes = gen.map_text
     ret (emitted, ok)
 }
 

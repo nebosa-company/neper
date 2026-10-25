@@ -11026,6 +11026,25 @@ if ($wasmNode) {
     if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
     $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath) (Join-Path $repo 'tests\wasm\host.mjs')
     if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
+    # (C196, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
+    # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
+    $wasmNullSource = Join-Path $repo 'tests\wasm\null_call\src\main.e'
+    $wasmNullPath = Join-Path $wasmBuild 'null_call.wasm'
+    $wasmNullPlain = Join-Path $wasmBuild 'null_call_plain.wasm'
+    if ((& $compiler emit-executable $wasmNullSource $repo 'wasm32' 'wasi' $wasmNullPath '--source-map') -ne 'executable written') { throw 'null_call did not emit with a source map' }
+    if ((& $compiler emit-executable $wasmNullSource $repo 'wasm32' 'wasi' $wasmNullPlain) -ne 'executable written') { throw 'null_call did not emit' }
+    if (-not (Test-Path "$wasmNullPath.map") -or (Test-Path "$wasmNullPlain.map")) { throw 'the source map was not written exactly when asked for' }
+    if (Get-Command wasm-tools -ErrorAction SilentlyContinue) {
+        & wasm-tools validate $wasmNullPath
+        if ($LASTEXITCODE -ne 0) { throw 'the module with a source map does not validate' }
+    }
+    foreach ($wasmNullRunner in $wasmRunner, (Join-Path $repo 'lib\wasm\neper-host.js')) {
+        $wasmRun = Invoke-Wasm $wasmNullPath @() $wasmNullRunner
+        $wasmFirst = ($wasmRun.Output -split "`n" | Where-Object { $_ -match '^\s*at ' } | Select-Object -First 1)
+        if ($wasmFirst -notmatch 'main\.fire.*\[src/main\.e:13\]') { throw "$wasmNullRunner did not name the null call's line: $($wasmRun.Output)" }
+        $wasmRun = Invoke-Wasm $wasmNullPlain @() $wasmNullRunner
+        if ($wasmRun.Output -match '\[src/main\.e:') { throw "$wasmNullRunner named a line without a source map: $($wasmRun.Output)" }
+    }
     # scripts/wasm-compiler.sh is bash: Git's, never WSL's, which cannot read a Windows path.
     $wasmGit = Get-Command git -ErrorAction SilentlyContinue
     $wasmBash = $null
