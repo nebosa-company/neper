@@ -2895,4 +2895,7 @@ D5681	2257	`neper run` for wasm32-wasi, and the runner in the toolchain
 D5682	1367	A module with variants for other targets only says so
 D5683	1690	Source maps for wasm32-wasi, and line numbers for the engine's traps
 D5684	2537	WebAssembly gaps not queued, and why
-D5690	960	NoVariant carries its sentence, and the target is named by what the variants are
+D5690	961	NoVariant carries its sentence, and the target is named by what the variants are
+D5720	1962	`neper_host` in the plain build: a function table, a mailbox, and one request in flight
+D5721	1779	The host's socket semantics, as built
+D5722	1152	What C188 measured, and what it did not move
