@@ -6945,6 +6945,20 @@ fn lanes_reversal(cs: *const style.Style) -> (bool, bool) {
     ret (str.contains(v, "fill-reverse"), str.contains(v, "track-reverse"))
 }
 
+// Where the lanes holding an item whose margin box starts at `at` begin along the lane axis, and how far they run.
+fn lane_area(tr: []GTrack, n: usize, gap: f64, at: f64, span: usize) -> (f64, f64) {
+    var k = 0usize
+    var q = 0usize
+    while q < n {
+        if tr[q].pos <= at + 0.01f64 { k = q }
+        q += 1usize
+    }
+    var sp = span
+    if sp < 1usize { sp = 1usize }
+    if k + sp > n { sp = n - k }
+    ret (tr[k].pos, grid_area_size(tr, i32(k), i32(sp), gap))
+}
+
 fn lanes_mirror(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: bool, lane_extent: f64, stack_extent: f64) {
     let (fill_rev, track_rev) = lanes_reversal(cs)
     if !fill_rev && !track_rev { ret }
@@ -6955,10 +6969,17 @@ fn lanes_mirror(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: b
     while i < g.n {
         let pb = bx(l, g.items[i].box)
         if columns {
-            if track_rev { pb.x = ox0 + lane_extent - (pb.x - ox0) - pb.w }
+            if track_rev && g.nc > 0usize {
+                // The lane area moves to the other end; the item keeps its place inside it.
+                let (top, size) = lane_area(g.cols, g.nc, g.gap_c, pb.x - ox0 - pb.margin[3usize], usize(maxf(1.0f64, f64(g.items[i].cn))))
+                pb.x = ox0 + (lane_extent - top - size) + (pb.x - ox0 - top)
+            }
             if fill_rev { pb.y = oy0 + stack_extent - (pb.y - oy0) - pb.h }
         } else {
-            if track_rev { pb.y = oy0 + lane_extent - (pb.y - oy0) - pb.h }
+            if track_rev && g.nr > 0usize {
+                let (top, size) = lane_area(g.rows, g.nr, g.gap_r, pb.y - oy0 - pb.margin[0usize], usize(maxf(1.0f64, f64(g.items[i].rn))))
+                pb.y = oy0 + (lane_extent - top - size) + (pb.y - oy0 - top)
+            }
             if fill_rev { pb.x = ox0 + stack_extent - (pb.x - ox0) - pb.w }
         }
         i += 1usize
@@ -7125,6 +7146,23 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     ret total
 }
 
+// Whether an item of a lane container fills its lane in the lane axis: `stretch` and the `normal` default do.
+fn cross_stretches(is: *const style.Style, cs: *const style.Style) -> bool {
+    var al = is.align_self
+    if al == .Auto { al = cs.align_items }
+    ret al == .Stretch || al == .Normal
+}
+
+// How far an item of a lane container moves along the lane axis inside `free` room: centred or against the end.
+fn cross_offset(is: *const style.Style, cs: *const style.Style, free: f64) -> f64 {
+    if free <= 0.0f64 { ret 0.0f64 }
+    var al = is.align_self
+    if al == .Auto { al = cs.align_items }
+    if al == .Center { ret free / 2.0f64 }
+    if al == .End || al == .FlexEnd || al == .SelfEnd { ret free }
+    ret 0.0f64
+}
+
 // `display: grid-lanes` with the lanes along the rows: items flow sideways, each into the lane (or run of lanes) whose
 // content ends furthest left, and take their width from their content.
 fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64 {
@@ -7170,6 +7208,10 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
     }
     position_tracks(g.rows, g.nr, g.gap_r, ch, cs.align_content)
     let (ends, ee) = mem.alloc[f64](l.a, g.nr + 1usize)
+    let (lefts, le1) = mem.alloc[f64](l.a, g.n + 1usize)
+    let (rstart, re1) = mem.alloc[usize](l.a, g.n + 1usize)
+    let (rspan, re2) = mem.alloc[usize](l.a, g.n + 1usize)
+    if le1 != ok || re1 != ok || re2 != ok { ret 0.0f64 }
     if ee != ok { ret 0.0f64 }
     var q = 0usize
     while q < g.nr {
@@ -7229,19 +7271,54 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let (hv, has_h) = resolve_len(is.height, area_h)
         if is.height.kind == .Px && has_h {
             hs = to_content_h(l, id, hv)
-        } else if is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced {
+        } else if is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced && cross_stretches(is, cs) {
             hs = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
         }
         flex_place_item(l, id, w, hs)
         let pb = bx(l, id)
         let x0 = left + g.gap_c
         pb.x = ox0 + x0 + pb.margin[3usize]
-        pb.y = oy0 + g.rows[start].pos + pb.margin[0usize]
+        pb.y = oy0 + g.rows[start].pos + pb.margin[0usize] + cross_offset(is, cs, area_h - pb.h - pb.margin[0usize] - pb.margin[2usize])
         let right = x0 + pb.margin[3usize] + pb.w + pb.margin[1usize]
+        lefts[i] = x0
+        rstart[i] = start
+        rspan[i] = span
         var t3 = start
         while t3 < start + span && t3 < g.nr {
             ends[t3] = right
             t3 += 1usize
+        }
+        i += 1usize
+    }
+    // An item is aligned within the room it has along the lane: from its own end to just before the next item laid after it
+    // in any of its lanes, or to the end of the container for the last one.
+    i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let is = bstyle(l, id)
+        let pb = bx(l, id)
+        var limit = cw
+        var j = i + 1usize
+        while j < g.n {
+            if rstart[j] < rstart[i] + rspan[i] && rstart[i] < rstart[j] + rspan[j] {
+                let cand = lefts[j] - g.gap_c
+                if cand < limit { limit = cand }
+            }
+            j += 1usize
+        }
+        let right = (pb.x - ox0) + pb.w + pb.margin[1usize]
+        let free = limit - right
+        if free > 0.0f64 {
+            var just = is.justify_self
+            if just == .Auto { just = cs.justify_items }
+            if just == .Center {
+                pb.x += free / 2.0f64
+            } else if just == .End || just == .FlexEnd || just == .SelfEnd {
+                pb.x += free
+            } else if just == .Stretch && is.width.kind == .Auto {
+                let hcontent = pb.h - vertical_extras(pb)
+                flex_place_item(l, id, pb.w - horizontal_extras(pb) + free, hcontent)
+            }
         }
         i += 1usize
     }

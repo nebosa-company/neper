@@ -541,5 +541,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 113. fill-reverse stacks from the end of the container, track-reverse from the last lane.
     let (p113, ok113) = build(a, "<div style=\"display:grid-lanes;grid-lanes-direction:column fill-reverse track-reverse;grid-template-columns:50px 50px;width:110px;height:200px;gap:10px\"><div id=a style=\"height:20px\"></div></div>", "")
     if !ok113 || !near(rect_of(p113, "a").y, 180.0f64) || !near(rect_of(p113, "a").x, 60.0f64) { os.exit(154) }
+    // 114. In row lanes align-items places an item inside its lane, and justify-items inside the room along the lane.
+    let (p114, ok114) = build(a, "<div style=\"display:grid-lanes;grid-template-rows:100px 100px;width:300px;align-items:center;justify-items:end\"><div id=a style=\"width:50px;height:50px\"></div><div id=b style=\"width:20px;height:20px\"></div><div id=c style=\"width:30px;height:10px\"></div></div>", "")
+    if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
 }
