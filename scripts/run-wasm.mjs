@@ -8,15 +8,24 @@
 //   /tmp    a fresh directory, removed when the module ends; TMPDIR, TMP and TEMP name it
 //   /home   another, for HOME and USERPROFILE
 //   /exe    the module's own directory, only when it is outside the working directory
-//   the environment is this process's, except for the four variables above.
+//   the environment is an allowlist of this process's (D5663): PATH, LANG, LC_*, TZ, TERM,
+//     NO_COLOR, SystemRoot and NEPER_*, with TMPDIR, TMP, TEMP, HOME and USERPROFILE pointed at
+//     the two directories above. `--env=all` (or NEPER_WASM_ENV=all) hands over the whole
+//     environment, as before; the module can read and write the working directory either way.
+// NEPER_WASM_MEMORY=1 and NEPER_WASM_TIME=1 add `wasm memory: N MiB` and `wasm time: N ms`
+// (compile, link and run, as scripts/wasm-bench.sh reads it) to standard error at the end.
 // The first argument is the module's path inside the preopens (relative to `.`, else under /exe), so
 // os.executable_path can stat it.
 //
 // The module runs in a worker thread with a 256 MB engine stack: the main thread's is about
 // a megabyte, which a deeply recursive program (the JSON schema checker, say) exhausts long
 // before the 8 MiB shadow stack the module keeps in memory. Running out of the engine's
-// stack is reported as the stack overflow it is, with the trap's status. WASI writes to file
-// descriptors 1 and 2 directly, so output order is the module's.
+// stack ("Maximum call stack size exceeded") is reported as the stack overflow it is, with the
+// trap's status 134; any other RangeError (the engine could not grow the memory, say) is reported
+// with its own text, also as status 134 because the module did not finish. A worker that ends
+// without an answer (killed, out of memory) makes the runner exit 1, and an interrupt (SIGINT,
+// SIGTERM) stops the worker and removes the scratch directories before the runner exits 130 or
+// 143. WASI writes to file descriptors 1 and 2 directly, so output order is the module's.
 //
 // The status is left in `process.exitCode` and the process left to end by itself: on Windows
 // `process.exit` while the engine is still finishing a background compile aborts Node
@@ -45,21 +54,31 @@ function withReaddir(imports, preopens, memory) {
     }
     return status
   }
+  // A listing is read when a walk starts (cookie 0) and kept until the next one starts or the
+  // descriptor closes, so entries added or removed between two calls of one walk do not shift
+  // the cookies the module holds.
+  const listings = new Map()
   calls.fd_close = (fd) => {
     const status = fd_close(fd)
-    if (fd > 2) host.delete(fd)
+    if (fd > 2) {
+      host.delete(fd)
+      listings.delete(fd)
+    }
     return status
   }
   calls.fd_readdir = (fd, buffer, length, cookie, usedPointer) => {
     const status = fd_readdir(fd, buffer, length, cookie, usedPointer)
     if (status !== 52 || !host.has(fd)) return status
-    let entries
-    try {
-      const listed = readdirSync(host.get(fd), { withFileTypes: true })
-      entries = [{ name: '.', type: 3 }, { name: '..', type: 3 }]
-      for (const entry of listed) entries.push({ name: entry.name, type: entry.isDirectory() ? 3 : entry.isFile() ? 4 : entry.isSymbolicLink() ? 7 : 0 })
-    } catch {
-      return 29
+    let entries = listings.get(fd)
+    if (!entries || Number(cookie) === 0) {
+      try {
+        const listed = readdirSync(host.get(fd), { withFileTypes: true })
+        entries = [{ name: '.', type: 3 }, { name: '..', type: 3 }]
+        for (const entry of listed) entries.push({ name: entry.name, type: entry.isDirectory() ? 3 : entry.isFile() ? 4 : entry.isSymbolicLink() ? 7 : 0 })
+      } catch {
+        return 29
+      }
+      listings.set(fd, entries)
     }
     const bytes = new Uint8Array(memory().buffer)
     let used = 0
@@ -84,23 +103,35 @@ function withReaddir(imports, preopens, memory) {
 async function run({ args, env, preopens }) {
   const wasi = new WASI({ version: 'preview1', args, env, preopens, returnOnExit: true })
   let instance
+  const began = performance.now()
   try {
     ;({ instance } = await WebAssembly.instantiate(await readFile(workerData.file), withReaddir(wasi.getImportObject(), preopens, () => instance.exports.memory)))
   } catch (error) {
     return { code: 125, note: `${error}\n` }
   }
-  const memory = () => (env.NEPER_WASM_MEMORY ? `wasm memory: ${instance.exports.memory.buffer.byteLength / 1048576} MiB\n` : '')
+  const memory = () =>
+    (env.NEPER_WASM_MEMORY ? `wasm memory: ${instance.exports.memory.buffer.byteLength / 1048576} MiB\n` : '') +
+    (env.NEPER_WASM_TIME ? `wasm time: ${Math.round(performance.now() - began)} ms\n` : '')
   try {
     const code = wasi.start(instance)
     return { code, note: memory() }
   } catch (error) {
     if (!(error instanceof RangeError)) throw error
-    return { code: 134, note: ': trap[stack]: stack overflow (the engine\'s call stack)\n' }
+    if (/Maximum call stack size exceeded/.test(error.message)) return { code: 134, note: ': trap[stack]: stack overflow (the engine\'s call stack)\n' }
+    return { code: 134, note: `: engine error: ${error}\n` }
   }
 }
 
+// The environment the module sees: the names a program may reasonably read, not the host's
+// secrets (tokens, keys and credentials live in environment variables). A Windows environment is
+// case-insensitive, so names are compared upper-cased.
+const ALLOWED = /^(PATH|LANG|LC_.*|TZ|TERM|NO_COLOR|SYSTEMROOT|NEPER_.*)$/
+
 if (isMainThread) {
-  const [file, ...rest] = argv.slice(2)
+  const rest = argv.slice(2)
+  let everything = hostEnv.NEPER_WASM_ENV === 'all'
+  while (rest[0]?.startsWith('--env=')) everything = rest.shift() === '--env=all'
+  const [file, ...moduleArgs] = rest
   const absolute = resolve(file)
   const inside = relative('.', absolute)
   const preopens = { '.': '.' }
@@ -116,18 +147,31 @@ if (isMainThread) {
   mkdirSync(home)
   preopens['/tmp'] = tmp
   preopens['/home'] = home
-  const env = { ...hostEnv, PATH: hostEnv.PATH, TMPDIR: '/tmp', TMP: '/tmp', TEMP: '/tmp', HOME: '/home', USERPROFILE: '/home' }
-  const worker = new Worker(new URL(import.meta.url), { workerData: { file: absolute, args: [guest, ...rest], env, preopens }, resourceLimits: { stackSizeMb: 256 } })
+  const inherited = everything ? { ...hostEnv } : Object.fromEntries(Object.entries(hostEnv).filter(([name]) => ALLOWED.test(name.toUpperCase())))
+  const env = { ...inherited, PATH: hostEnv.PATH, TMPDIR: '/tmp', TMP: '/tmp', TEMP: '/tmp', HOME: '/home', USERPROFILE: '/home' }
+  const worker = new Worker(new URL(import.meta.url), { workerData: { file: absolute, args: [guest, ...moduleArgs], env, preopens }, resourceLimits: { stackSizeMb: 256 } })
   const clean = () => rmSync(scratch, { recursive: true, force: true })
+  let answered = false
   worker.on('message', (result) => {
+    answered = true
     if (result.note) stderr.write(result.note)
     process.exitCode = result.code
   })
   worker.on('error', (error) => {
+    answered = true
     stderr.write(`${error.stack ?? error}\n`)
     process.exitCode = 1
   })
-  worker.on('exit', clean)
+  worker.on('exit', (code) => {
+    clean()
+    if (!answered) process.exitCode = code || 1
+  })
+  for (const [signal, status] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+    process.on(signal, () => {
+      clean()
+      process.exit(status)
+    })
+  }
 } else {
   parentPort.postMessage(await run(workerData))
 }

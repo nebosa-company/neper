@@ -27,12 +27,11 @@ for name in "${names[@]}"; do
     fi
     best=
     for run in 1 2 3; do
-        start=$(date +%s%N)
-        node --no-warnings "$repo/scripts/run-wasm.mjs" "$wasm" > "$out/$name.$tag.out" 2> "$out/$name.$tag.err" < /dev/null
+        # The runner times compile, link and run itself (NEPER_WASM_TIME): `date +%s%N` is GNU's.
+        NEPER_WASM_TIME=1 node --no-warnings "$repo/scripts/run-wasm.mjs" "$wasm" > "$out/$name.$tag.out" 2> "$out/$name.$tag.err" < /dev/null
         status=$?
-        stop=$(date +%s%N)
-        elapsed=$(( (stop - start) / 1000000 ))
         if [ "$status" -ne 0 ]; then best="exit $status"; break; fi
+        elapsed=$(sed -n 's/^wasm time: \([0-9]*\) ms$/\1/p' "$out/$name.$tag.err" | tail -n 1)
         if [ -z "$best" ] || [ "$elapsed" -lt "$best" ]; then best=$elapsed; fi
     done
     printf '%s\t%s\t%s ms\t%s bytes\t%s\n' "$name" "$tag" "$best" "$(wc -c < "$wasm" | tr -d ' ')" "$(head -c 80 "$out/$name.$tag.out" | tr '\n' ' ')"

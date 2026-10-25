@@ -33,8 +33,10 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 source="$repo/tests/selfhost/fixtures/link/$fixture/src/main.e"
 [ -f "$source" ] || { printf '%s\n' "no such fixture: $fixture" >&2; exit 2; }
 
+host_arch=x64
 case "$(uname -s)" in
   Linux) host_os=linux;  bootstrap="$repo/build/linux/neper";       compiler="$repo/build/linux/neper-try";       exe="$repo/build/linux/check-$fixture" ;;
+  Darwin) host_os=macos;  bootstrap=/nonexistent; compiler=${NEPER_COMPILER:?set NEPER_COMPILER to a compiler built on this Mac}; exe="$repo/build/check-$fixture"; [ "$(uname -m)" = arm64 ] && host_arch=aarch64 ;;
   *)     host_os=windows; bootstrap="$repo/build/windows/neper.exe"; compiler="$repo/build/windows/neper-try.exe"; exe="$repo/build/windows/check-$fixture.exe" ;;
 esac
 
@@ -43,7 +45,7 @@ esac
 # NEPER_COMPILER names a compiler already built (a stage 2, say) and skips the rebuild below.
 newest_source=
 [ -n "${NEPER_COMPILER:-}" ] && compiler=$NEPER_COMPILER
-[ -z "${NEPER_COMPILER:-}" ] && newest_source=$(find "$repo/src" -name '*.e' -newer "$compiler" -print -quit 2>/dev/null || true)
+[ -z "${NEPER_COMPILER:-}" ] && newest_source=$(find "$repo/src" -name '*.e' -newer "$compiler" 2>/dev/null | head -n 1 || true)
 if [ -z "${NEPER_COMPILER:-}" ] && { [ ! -x "$compiler" ] || [ -n "$newest_source" ]; }; then
     printf '%s\n' "building the self-hosted compiler ($host_os)..."
     [ -x "$bootstrap" ] || "$repo/scripts/build-bootstrap.sh"
@@ -67,7 +69,7 @@ if [ -n "$target" ]; then
     exit "$status"
 fi
 
-written=$("$compiler" emit-executable "$source" "$repo" x64 "$host_os" "$exe" $release)
+written=$("$compiler" emit-executable "$source" "$repo" "$host_arch" "$host_os" "$exe" $release)
 [ "$written" = 'executable written' ] || { printf '%s\n' "$fixture did not emit: $written" >&2; exit 1; }
 [ "$host_os" = windows ] || chmod +x "$exe"
 
@@ -76,10 +78,10 @@ status=0
 [ -n "$keep" ] || rm -f "$exe"
 
 if [ "$status" -eq 0 ]; then
-    printf '%s\n' "$fixture passed on x64-$host_os"
+    printf '%s\n' "$fixture passed on $host_arch-$host_os"
 else
     # A fixture returns a check number, but `fn main() -> i64` reaches the exit code as 1
     # whatever it returns, so the number is a marker in the source rather than a status.
-    printf '%s\n' "$fixture FAILED on x64-$host_os (exit $status)" >&2
+    printf '%s\n' "$fixture FAILED on $host_arch-$host_os (exit $status)" >&2
 fi
 exit "$status"

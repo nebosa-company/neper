@@ -35,6 +35,7 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo" || exit 2
 case "$(uname -s)" in
   Linux) compiler=build/linux/neper-try ;;
+  Darwin) compiler=${NEPER_COMPILER:?set NEPER_COMPILER to a compiler built on this Mac} ;;
   *)     compiler=build/windows/neper-try.exe ;;
 esac
 compiler=${NEPER_COMPILER:-$compiler}
@@ -54,14 +55,23 @@ written=$("$compiler" emit-executable src/main.e . wasm32 wasi "$out/neper.wasm"
 # An executable that embeds device code carries the identity of the compiler that wrote it: a CRC
 # and the size of the compiler's own file, as sixteen hex digits before a colon (D398, D1734). Two
 # native compilers of different bytes differ there too, so a difference inside those digits and
-# nowhere else is the identity, not a miscompile.
+# nowhere else is the identity, not a miscompile. Done in node, which the runner needs anyway:
+# BSD grep and awk disagree with GNU's over binary files and match offsets.
 identity_only() {
-    [ "$(wc -c < "$1")" = "$(wc -c < "$2")" ] || return 1
-    ids=$(LC_ALL=C grep -obaP '[0-9a-f]{16}:' "$1" | cut -d: -f1 | tr '\n' ' ')
-    [ -n "$ids" ] && [ "$ids" = "$(LC_ALL=C grep -obaP '[0-9a-f]{16}:' "$2" | cut -d: -f1 | tr '\n' ' ')" ] || return 1
-    cmp -l "$1" "$2" | awk -v ids="$ids" 'BEGIN { n = split(ids, at, " ") }
-        { hit = 0; for (i = 1; i <= n; i++) if ($1 > at[i] && $1 <= at[i] + 16) hit = 1; if (!hit) bad = 1 }
-        END { exit bad }'
+    node -e '
+const fs = require("fs")
+const [a, b] = process.argv.slice(1).map((file) => fs.readFileSync(file))
+if (a.length !== b.length) process.exit(1)
+const where = (buffer) => Array.from(buffer.toString("latin1").matchAll(/[0-9a-f]{16}:/g), (match) => match.index)
+const ids = where(a)
+if (ids.length === 0 || ids.join() !== where(b).join()) process.exit(1)
+let at = 0
+for (let i = 0; i < a.length; i++) {
+  if (a[i] === b[i]) continue
+  while (at < ids.length && ids[at] + 16 <= i) at++
+  if (at === ids.length || i < ids[at]) process.exit(1)
+}
+' "$1" "$2"
 }
 
 one() {
@@ -72,9 +82,9 @@ one() {
     native="$out/bytes/$name.$target.native" wasm="$out/bytes/$name.$target.wasm"
     rm -f "$native" "$wasm"
     native_said=$("$compiler" emit-executable "$source" . "$arch" "$os" "$native" 2>&1)
-    start=$(date +%s%N)
+    start=$(date +%s)
     wasm_said=$(node --no-warnings scripts/run-wasm.mjs "$out/neper.wasm" emit-executable "$source" . "$arch" "$os" "$wasm" 2>&1)
-    ms=$(( ($(date +%s%N) - start) / 1000000 ))
+    seconds=$(( $(date +%s) - start ))
     if [ -f "$native" ] && [ -f "$wasm" ]; then
         if cmp -s "$native" "$wasm"; then
             result=identical
@@ -91,7 +101,7 @@ one() {
         result="refused-differently	$(printf '%s' "$wasm_said" | tr '\n\t' '  ' | cut -c1-240)"
     fi
     rm -f "$native" "$wasm"
-    printf '%s\t%s\t%s\t%sms\n' "$name" "$target" "$result" "$ms"
+    printf '%s\t%s\t%s\t%ss\n' "$name" "$target" "$result" "$seconds"
 }
 export -f one identity_only
 export compiler out
