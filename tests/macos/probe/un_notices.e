@@ -47,6 +47,10 @@ fn main(a: *mem.Arena) -> err {
         if caps.notice_remove { note(a, "remove offered\n") } else { note(a, "remove not offered\n") }
         let (id, publish_error) = shell.notice_publish(a, 0u32, "Neper", "A notice from a bundle", true)
         if publish_error != ok { note(a, "publish failed\n") } else { note(a, "published\n") }
+        let caps = shell.capabilities()
+        if caps.notice_remove { note(a, "remove offered
+") } else { note(a, "remove not offered
+") }
         number(a, "delivered after publish: ", shell.un_delivered_count())
         let removed = shell.notice_remove(a, 0u32, id)
         if removed == ok { note(a, "removed\n") } else { note(a, "remove refused\n") }
