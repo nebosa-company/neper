@@ -2843,10 +2843,29 @@ fn init_binding(it: *Interp, e: *Env, name: str, val: Value) -> err {
 
 // --- functions
 
+// Whether finding `f`'s realm hits a revoked proxy (GetFunctionRealm throws a TypeError there).
+fn realm_chain_revoked(f: *Obj) -> bool {
+    var cur = f
+    var guard = 0u32
+    while guard < 64u32 {
+        guard += 1u32
+        if cur.class == C_BOUND {
+            cur = cur.bound_target
+        } else if cur.class == C_PROXY {
+            if cur.aux == null_obj() { ret true }
+            cur = cur.aux
+        } else {
+            break
+        }
+    }
+    ret false
+}
+
 fn proto_value_of(it: *Interp, ctor: *Obj, fallback: *Obj) -> (*Obj, err) {
     let (pv, pe) = get_prop(it, ctor, key_of("prototype"), obj_value(ctor))
     if pe != ok { ret (fallback, pe) }
     if is_object(pv) { ret (as_object(pv), ok) }
+    if realm_chain_revoked(ctor) { ret (fallback, throw_type(it, "Cannot perform GetFunctionRealm on a revoked proxy")) }
     ret (realm_proto(it, ctor, fallback), ok)
 }
 
