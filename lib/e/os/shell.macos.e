@@ -389,6 +389,13 @@ fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, b
 type MenuImpReturn = union { function: fn(usize, usize, usize) -> usize, bits: usize }
 
 var dock_menu: usize = zero
+var dock_base: usize = zero
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_new_sized(receiver: usize, selector: usize, size: MenuPoint) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_draw_in(receiver: usize, selector: usize, rect: PdfRect) -> usize
 
 fn dock_tile() -> usize {
     ret os.msg0(os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00")), os.cocoa_sel("dockTile\x00"))
@@ -456,14 +463,27 @@ fn taskbar_overlay(a: *mem.Arena, w: os.Window, icon: Icon, description: str) ->
     var result = ok
     if icon.width == 0u32 || icon.height == 0u32 {
         let restored = os.msg1(app, os.cocoa_sel("setApplicationIconImage:\x00"), 0usize)
+        if dock_base != 0usize {
+            let dropped = os.msg0(dock_base, os.cocoa_sel("release\x00"))
+            dock_base = 0usize
+        }
     } else if !tray_valid_icon(icon) {
         result = Invalid
     } else {
+        // The overlay is drawn over the lower right quarter of the program's own icon, which is kept the first time so a second
+        // overlay replaces the first and does not stack on it.
         let image = icon_image(icon)
-        if image == 0usize { result = Failed } else {
-            let set = os.msg1(app, os.cocoa_sel("setApplicationIconImage:\x00"), image)
-            let released = os.msg0(image, os.cocoa_sel("release\x00"))
+        if dock_base == 0usize { dock_base = os.msg0(os.msg0(app, os.cocoa_sel("applicationIconImage\x00")), os.cocoa_sel("retain\x00")) }
+        if image == 0usize || dock_base == 0usize { result = Failed } else {
+            let composite = msg_new_sized(os.msg0(os.cocoa_class("NSImage\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithSize:\x00"), MenuPoint { x: 128.0f64, y: 128.0f64 })
+            let focused = os.msg0(composite, os.cocoa_sel("lockFocus\x00"))
+            let first = msg_draw_in(dock_base, os.cocoa_sel("drawInRect:\x00"), PdfRect { x: 0.0f64, y: 0.0f64, w: 128.0f64, h: 128.0f64 })
+            let second = msg_draw_in(image, os.cocoa_sel("drawInRect:\x00"), PdfRect { x: 64.0f64, y: 0.0f64, w: 64.0f64, h: 64.0f64 })
+            let unfocused = os.msg0(composite, os.cocoa_sel("unlockFocus\x00"))
+            let set = os.msg1(app, os.cocoa_sel("setApplicationIconImage:\x00"), composite)
+            let released = os.msg0(composite, os.cocoa_sel("release\x00"))
         }
+        if image != 0usize { let dropped = os.msg0(image, os.cocoa_sel("release\x00")) }
     }
     os.objc_pool_pop(pool)
     ret result
@@ -1382,9 +1402,33 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
     let writer = os.msg0(os.msg0(os.cocoa_class("NSPasteboardItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
     var at = 0usize
     var stored = false
+    var file_items: [16]usize = zero
+    var file_count = 0usize
     while at < items.len {
         var bytes: []const u8 = zero
         var kind = ""
+        // A file is dragged as its URL, which NSURL writes to the pasteboard itself; an image as TIFF data.
+        if items[at].kind == .Files {
+            var path = 0usize
+            while path < items[at].paths.len && file_count < 16usize {
+                let text = os.cocoa_text(items[at].paths[path])
+                file_items[file_count] = os.msg1(os.cocoa_class("NSURL\x00"), os.cocoa_sel("fileURLWithPath:\x00"), text)
+                os.cf_release(text)
+                file_count += 1usize
+                path += 1usize
+            }
+        }
+        if items[at].kind == .Image && tray_valid_icon(items[at].image) {
+            let picture = icon_image(items[at].image)
+            if picture != 0usize {
+                let tiff = os.msg0(picture, os.cocoa_sel("TIFFRepresentation\x00"))
+                let name = os.cocoa_text("public.tiff")
+                let set = os.msg2(writer, os.cocoa_sel("setData:forType:\x00"), tiff, name)
+                os.cf_release(name)
+                let released = os.msg0(picture, os.cocoa_sel("release\x00"))
+                stored = true
+            }
+        }
         if items[at].kind == .Text {
             bytes = items[at].text
             kind = type_text()
@@ -1405,11 +1449,10 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
         }
         at += 1usize
     }
-    if !stored {
+    if !stored && file_count == 0usize {
         os.objc_pool_pop(pool)
         ret (.Cancelled, Unsupported)
     }
-    var dragging = os.msg1(os.msg0(os.cocoa_class("NSDraggingItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithPasteboardWriter:\x00"), writer)
     var pixels: [256]u32 = zero
     var i = 0usize
     while i < 256usize {
@@ -1417,10 +1460,26 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
         i += 1usize
     }
     let image = icon_image(Icon { width: 16u32, height: 16u32, pixels: pixels[..] })
-    let framed = msg_item_frame(dragging, os.cocoa_sel("setDraggingFrame:contents:\x00"), PdfRect { x: 10.0f64, y: 10.0f64, w: 16.0f64, h: 16.0f64 }, image)
+    var dragged: [17]usize = zero
+    var dragged_count = 0usize
+    if stored {
+        dragged[dragged_count] = os.msg1(os.msg0(os.cocoa_class("NSDraggingItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithPasteboardWriter:\x00"), writer)
+        dragged_count += 1usize
+    }
+    var file_at = 0usize
+    while file_at < file_count {
+        dragged[dragged_count] = os.msg1(os.msg0(os.cocoa_class("NSDraggingItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithPasteboardWriter:\x00"), file_items[file_at])
+        dragged_count += 1usize
+        file_at += 1usize
+    }
+    var framing = 0usize
+    while framing < dragged_count {
+        let framed = msg_item_frame(dragged[framing], os.cocoa_sel("setDraggingFrame:contents:\x00"), PdfRect { x: 10.0f64 + f64(framing) * 4.0f64, y: 10.0f64, w: 16.0f64, h: 16.0f64 }, image)
+        framing += 1usize
+    }
     let number = os.msg0(window, os.cocoa_sel("windowNumber\x00"))
     let down = msg_mouse_event(os.cocoa_class("NSEvent\x00"), os.cocoa_sel("mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:\x00"), 1usize, DragPoint { x: 20.0f64, y: 20.0f64 }, 0usize, 1.0f64, number, 0usize, 0usize, 1usize, 1.0f32)
-    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&dragging), 1usize)
+    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&dragged[0usize]), dragged_count)
     drag_ended = false
     drag_operation = 0usize
     drag_allow_move = allow_move
