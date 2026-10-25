@@ -1,6 +1,6 @@
 // A published tree as VoiceOver would meet it: three nodes (a group holding a button and a text) become elements; the window's view
 // answers the group as its child, the group answers the two, the button says AXButton and "OK", and pressing it through the
-// accessibility API reaches `accessibility_take` as a press of node 2.
+// accessibility API reaches `accessibility_take` as a press of node 2. macOS only; the corpus runs it on a Mac.
 use e.mem
 use e.os
 
