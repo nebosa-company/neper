@@ -2860,4 +2860,5 @@ D5224	1326	macOS application bundles are made by a script, and the corpus job ch
 D5225	903	the Mac corpus asserts everything a Mac can run and skips the rest with a reason
 D5226	1123	macOS drag out takes files and images, and the Dock overlay is drawn over the program's own icon
 D5227	969	no GPU backend for macOS yet: MoltenVK loads but dies on the CI runner's virtual GPU
-D5228	827	the checks a CI runner cannot do are a program a person runs on a real Mac
+D5228	828	the checks a CI runner cannot do are a program a person runs on a real Mac
+D5229	1486	macOS input methods commit text through the content view's text input protocol
