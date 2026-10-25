@@ -93,6 +93,5 @@ L171	library	0	623	Browser M6: beyond Vaper (gap items)	all of it.
 C185	compiler	0	1316	A launch's requirements depend on the worker count	Found by C184's differential (D5641): `emit-executable tests/selfhost/fixtures/link/gpu_tensor/src/main.e .
 C189	library	0	802	wasm32-wasi: the net_* corpus on --threads	all of it.
 C190	library	0	1310	wasm32-wasi processes and pipes through neper_host (Node only)	all of it.
-C192	tooling	0	1125	Threads in the browser host: cross-origin isolation, the page as host	all of it.
 C193	library	0	1198	e.ui in a browser: CPU frames on a canvas, input through a shared ring	all of it.
 C194	tooling	0	1452	neper run for wasm32-wasi, and the runner moved into the toolchain	all of it.
