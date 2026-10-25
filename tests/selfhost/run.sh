@@ -10754,7 +10754,8 @@ if command -v node >/dev/null 2>&1; then
     # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.wasm")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.threads.wasm" --threads)" = 'executable written' ]
-    (cd "$repo" && node --no-warnings tests/wasm/window.mjs "$wasm_build/ui_counter.wasm" "$wasm_build/ui_counter.threads.wasm") || { printf '%s\n' 'the lib/wasm/window.js check failed' >&2; exit 1; }
+    [ "$("$test_build/neper-self" emit-executable "$repo/examples/ui/main.e" "$repo" wasm32 wasi "$wasm_build/ui_gallery.wasm")" = 'executable written' ]
+    (cd "$repo" && node --no-warnings tests/wasm/window.mjs "$wasm_build/ui_counter.wasm" "$wasm_build/ui_counter.threads.wasm" "$wasm_build/ui_gallery.wasm") || { printf '%s\n' 'the lib/wasm/window.js check failed' >&2; exit 1; }
     # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
     wasm_null_source="$repo/tests/wasm/null_call/src/main.e"

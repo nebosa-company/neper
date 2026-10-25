@@ -11071,7 +11071,9 @@ if ($wasmNode) {
     $wasmCounterSource = Join-Path $repo 'tests\wasm\browser\ui_counter\src\main.e'
     if ((& $compiler emit-executable $wasmCounterSource $repo 'wasm32' 'wasi' $wasmCounterPath) -ne 'executable written') { throw 'ui_counter did not emit as WebAssembly' }
     if ((& $compiler emit-executable $wasmCounterSource $repo 'wasm32' 'wasi' $wasmCounterThreads --threads) -ne 'executable written') { throw 'ui_counter did not emit as a threaded WebAssembly module' }
-    $wasmWindow = Invoke-Wasm $wasmCounterPath @($wasmCounterThreads) (Join-Path $repo 'tests\wasm\window.mjs')
+    $wasmGalleryPath = Join-Path $wasmBuild 'ui_gallery.wasm'
+    if ((& $compiler emit-executable (Join-Path $repo 'examples\ui\main.e') $repo 'wasm32' 'wasi' $wasmGalleryPath) -ne 'executable written') { throw 'examples/ui did not emit as WebAssembly' }
+    $wasmWindow = Invoke-Wasm $wasmCounterPath @($wasmCounterThreads, $wasmGalleryPath) (Join-Path $repo 'tests\wasm\window.mjs')
     if ($wasmWindow.Status -ne 0) { throw "the lib/wasm/window.js check failed: $($wasmWindow.Output)" }
     # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.

@@ -2923,4 +2923,6 @@ D5780	2976	`neper run --target wasm32-wasi` as built (C209)
 D5790	4152	`e.ui` in a page, as built (C208): frames go to the page, not to an OffscreenCanvas
 D5791	2036	C208 verified
 D5770	4774	Processes on wasm32-wasi, as built (C205): D5677 over `neper_host`
-D5771	2780	C205 landed: what the fixtures say, and what the design could not do
+D5771	2781	C205 landed: what the fixtures say, and what the design could not do
+D5800	3288	`e.ui` in a page: text, the clipboard, newest frame, the gallery (C212)
+D5801	1820	C212 verified

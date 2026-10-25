@@ -253,6 +253,12 @@ extern fn host_handle_close(handle: u32) -> u32
 @import("neper_host", "window_open")
 extern fn host_window_open(width: u32, height: u32, made: u32) -> u32
 
+@import("neper_host", "clipboard_text")
+extern fn host_clipboard_text(out: u32, capacity: u32, used: u32) -> u32
+
+@import("neper_host", "set_clipboard_text")
+extern fn host_set_clipboard_text(bytes: u32, length: u32) -> u32
+
 @import("neper_host", "window_metrics")
 extern fn host_window_metrics(handle: u32, out: u32) -> u32
 
@@ -2002,8 +2008,21 @@ fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
     var none: []const MonitorInfo = zero
     ret (none, Unsupported)
 }
-fn clipboard_text(a: *mem.Arena) -> (str, err) { ret ("", Unsupported) }
-fn set_clipboard_text(value: str) -> err { ret Unsupported }
+// A page's clipboard is the copy the page keeps (navigator.clipboard is asynchronous, so the page refreshes it on
+// a paste and a focus and the module reads it from the ring); a host without one answers Unsupported.
+fn clipboard_text(a: *mem.Arena) -> (str, err) {
+    if host_window_live == 0u32 { ret ("", Unsupported) }
+    let (buffer, allocation_error) = mem.alloc[u8](a, 65536usize)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var used: [1]u32 = zero
+    if host_clipboard_text(address_of_bytes(buffer), 65536u32, u32(mem.address_of(&used[0usize]))) != 0u32 { ret ("", Unsupported) }
+    ret (buffer[0usize..usize(used[0usize])], ok)
+}
+fn set_clipboard_text(value: str) -> err {
+    if host_window_live == 0u32 { ret Unsupported }
+    if host_set_clipboard_text(address_of_str(value), u32(value.len)) != 0u32 { ret Failed }
+    ret ok
+}
 // e.ui.input polls this; a NeperOS app gets input over the compositor's routed endpoint instead, so
 // there is never a window event here -- but it answers ok (no event), not Unsupported, or the e.ui
 // app loop would treat the poll as a failure.
