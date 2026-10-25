@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: false, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: un_state == 1usize, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: true, permissions: true, credentials: has_tool("security"), screen_capture: true, biometrics: biometric_available(), photo_picker: true }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -217,11 +217,24 @@ fn target_ready() -> err {
     let ninth = objc_class_method(class, os.cocoa_sel("draggingSession:sourceOperationMaskForDraggingContext:\x00"), source_mask.bits, &mask_types[0usize])
     let tenth = objc_class_method(class, os.cocoa_sel("draggingSession:endedAtPoint:operation:\x00"), source_end.bits, &ended_types[0usize])
     let eleventh = objc_class_method(class, os.cocoa_sel("neperEndDrag:\x00"), end_drag.bits, &types[0usize])
+    var open_files: MenuImp4 = zero
+    open_files.function = target_open_files
+    var open_urls: MenuImp4 = zero
+    open_urls.function = target_open_urls
+    let open_types = "v@:@@\x00"
+    let twelfth = objc_class_method(class, os.cocoa_sel("application:openFiles:\x00"), open_files.bits, &open_types[0usize])
+    let thirteenth = objc_class_method(class, os.cocoa_sel("application:openURLs:\x00"), open_urls.bits, &open_types[0usize])
+    var get_url: MenuImp4 = zero
+    get_url.function = target_get_url
+    let fourteenth = objc_class_method(class, os.cocoa_sel("neperURL:withReplyEvent:\x00"), get_url.bits, &open_types[0usize])
     objc_class_register(class)
     let object = os.msg0(os.msg0(class, os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
     if object == 0usize { ret Failed }
     shell_target = object
     lifecycle_observe()
+    // 'GURL' 'GURL'
+    let manager = os.msg0(os.cocoa_class("NSAppleEventManager\x00"), os.cocoa_sel("sharedAppleEventManager\x00"))
+    let handled = os.msg4(manager, os.cocoa_sel("setEventHandler:andSelector:forEventClass:andEventID:\x00"), object, os.cocoa_sel("neperURL:withReplyEvent:\x00"), 1196773964usize, 1196773964usize)
     let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
     let delegated = os.msg1(app, os.cocoa_sel("setDelegate:\x00"), object)
     ret ok
@@ -376,6 +389,13 @@ fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, b
 type MenuImpReturn = union { function: fn(usize, usize, usize) -> usize, bits: usize }
 
 var dock_menu: usize = zero
+var dock_base: usize = zero
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_new_sized(receiver: usize, selector: usize, size: MenuPoint) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_draw_in(receiver: usize, selector: usize, rect: PdfRect) -> usize
 
 fn dock_tile() -> usize {
     ret os.msg0(os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00")), os.cocoa_sel("dockTile\x00"))
@@ -443,14 +463,27 @@ fn taskbar_overlay(a: *mem.Arena, w: os.Window, icon: Icon, description: str) ->
     var result = ok
     if icon.width == 0u32 || icon.height == 0u32 {
         let restored = os.msg1(app, os.cocoa_sel("setApplicationIconImage:\x00"), 0usize)
+        if dock_base != 0usize {
+            let dropped = os.msg0(dock_base, os.cocoa_sel("release\x00"))
+            dock_base = 0usize
+        }
     } else if !tray_valid_icon(icon) {
         result = Invalid
     } else {
+        // The overlay is drawn over the lower right quarter of the program's own icon, which is kept the first time so a second
+        // overlay replaces the first and does not stack on it.
         let image = icon_image(icon)
-        if image == 0usize { result = Failed } else {
-            let set = os.msg1(app, os.cocoa_sel("setApplicationIconImage:\x00"), image)
-            let released = os.msg0(image, os.cocoa_sel("release\x00"))
+        if dock_base == 0usize { dock_base = os.msg0(os.msg0(app, os.cocoa_sel("applicationIconImage\x00")), os.cocoa_sel("retain\x00")) }
+        if image == 0usize || dock_base == 0usize { result = Failed } else {
+            let composite = msg_new_sized(os.msg0(os.cocoa_class("NSImage\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithSize:\x00"), MenuPoint { x: 128.0f64, y: 128.0f64 })
+            let focused = os.msg0(composite, os.cocoa_sel("lockFocus\x00"))
+            let first = msg_draw_in(dock_base, os.cocoa_sel("drawInRect:\x00"), PdfRect { x: 0.0f64, y: 0.0f64, w: 128.0f64, h: 128.0f64 })
+            let second = msg_draw_in(image, os.cocoa_sel("drawInRect:\x00"), PdfRect { x: 64.0f64, y: 0.0f64, w: 64.0f64, h: 64.0f64 })
+            let unfocused = os.msg0(composite, os.cocoa_sel("unlockFocus\x00"))
+            let set = os.msg1(app, os.cocoa_sel("setApplicationIconImage:\x00"), composite)
+            let released = os.msg0(composite, os.cocoa_sel("release\x00"))
         }
+        if image != 0usize { let dropped = os.msg0(image, os.cocoa_sel("release\x00")) }
     }
     os.objc_pool_pop(pool)
     ret result
@@ -699,6 +732,181 @@ fn notice_permission(a: *mem.Arena) -> NoticePermission {
     ret .Granted
 }
 
+// Notices through UNUserNotificationCenter (D5221), for a program that runs in an application bundle (it has a bundle
+// identifier; the center refuses to exist otherwise, and raises). Such a program asks for authorization once, posts a request
+// whose identifier is the notice's id (posting the same id again replaces it, which is an update) and can remove a delivered
+// notice. Every answer comes through a block, built by hand as the permission block is (D5218). A program with no bundle, or
+// one the person has not authorized, keeps `osascript` banners, which cannot be removed.
+var un_words: [8]u64 = zero
+var un_done: bool = zero
+var un_flag: bool = zero
+var un_count: usize = zero
+var un_state: usize = zero
+type UnInvoke = union { function: fn(usize, usize, usize), bits: usize }
+
+fn bundled() -> bool {
+    if os.cocoa_start() != ok { ret false }
+    let bundle = os.msg0(os.cocoa_class("NSBundle\x00"), os.cocoa_sel("mainBundle\x00"))
+    ret os.msg0(bundle, os.cocoa_sel("bundleIdentifier\x00")) != 0usize
+}
+
+@cc(c)
+fn un_auth_done(block: usize, granted: usize, problem: usize) {
+    un_flag = granted & 255usize != 0usize
+    un_done = true
+}
+
+@cc(c)
+fn un_add_done(block: usize, problem: usize, unused: usize) {
+    un_flag = problem == 0usize
+    un_done = true
+}
+
+@cc(c)
+fn un_list_done(block: usize, list: usize, unused: usize) {
+    un_count = 0usize
+    if list != 0usize { un_count = os.msg0(list, os.cocoa_sel("count\x00")) }
+    un_done = true
+}
+
+// The address of a global block calling `invoke`, kept in `un_words` until the answer has come.
+fn un_block(invoke: UnInvoke) -> usize {
+    let symbol = "_NSConcreteGlobalBlock\x00"
+    un_words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    un_words[1usize] = 268435456u64
+    un_words[2usize] = u64(invoke.bits)
+    un_words[3usize] = u64(mem.address_of(&un_words[4usize]))
+    un_words[4usize] = 0u64
+    un_words[5usize] = 32u64
+    un_done = false
+    un_flag = false
+    ret mem.address_of(&un_words[0usize])
+}
+
+fn un_wait(seconds: usize) -> bool {
+    var waited = 0usize
+    while !un_done && waited < seconds * 10usize {
+        os.cocoa_pump(100000000i64)
+        waited += 1usize
+    }
+    ret un_done
+}
+
+fn un_center() -> usize {
+    let framework = "/System/Library/Frameworks/UserNotifications.framework/UserNotifications\x00"
+    let handle = os.raw_dlopen(mem.address_of(&framework[0usize]), 2i32)
+    if handle == 0usize { ret 0usize }
+    ret os.msg0(os.cocoa_class("UNUserNotificationCenter\x00"), os.cocoa_sel("currentNotificationCenter\x00"))
+}
+
+// Authorized for alerts and sounds, asked once per run: 1 yes, 2 no.
+fn un_authorized() -> bool {
+    if un_state != 0usize { ret un_state == 1usize }
+    if !bundled() {
+        un_state = 2usize
+        ret false
+    }
+    let pool = os.objc_pool_push()
+    let center = un_center()
+    var granted = false
+    if center != 0usize {
+        var invoke: UnInvoke = zero
+        invoke.function = un_auth_done
+        let block = un_block(invoke)
+        // alert and sound
+        let asked = os.msg2(center, os.cocoa_sel("requestAuthorizationWithOptions:completionHandler:\x00"), 6usize, block)
+        if un_wait(60usize) { granted = un_flag }
+    }
+    os.objc_pool_pop(pool)
+    un_state = 2usize
+    if granted { un_state = 1usize }
+    ret granted
+}
+
+fn un_identifier(a: *mem.Arena, id: u32) -> (str, err) {
+    var digits: [10]u8 = zero
+    var count = 0usize
+    var value = id
+    if value == 0u32 {
+        digits[9usize] = 48u8
+        count = 1usize
+    }
+    while value > 0u32 {
+        digits[9usize - count] = u8(48u32 + value % 10u32)
+        value /= 10u32
+        count += 1usize
+    }
+    let (named, named_error) = str.concat(a, "neper-", digits[10usize - count..10usize])
+    ret (named, named_error)
+}
+
+// Posts (or replaces) the notice `id`; false when the center would not take it.
+fn un_post(a: *mem.Arena, id: u32, title: str, body: str, silent: bool) -> bool {
+    let (name, name_error) = un_identifier(a, id)
+    if name_error != ok { ret false }
+    let pool = os.objc_pool_push()
+    let center = un_center()
+    var posted = false
+    if center != 0usize {
+        let content = os.msg0(os.msg0(os.cocoa_class("UNMutableNotificationContent\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+        let text_title = os.cocoa_text(title)
+        let text_body = os.cocoa_text(body)
+        let one = os.msg1(content, os.cocoa_sel("setTitle:\x00"), text_title)
+        let two = os.msg1(content, os.cocoa_sel("setBody:\x00"), text_body)
+        if !silent {
+            let sound = os.msg0(os.cocoa_class("UNNotificationSound\x00"), os.cocoa_sel("defaultSound\x00"))
+            let three = os.msg1(content, os.cocoa_sel("setSound:\x00"), sound)
+        }
+        let identifier = os.cocoa_text(name)
+        let request = os.msg4(os.cocoa_class("UNNotificationRequest\x00"), os.cocoa_sel("requestWithIdentifier:content:trigger:\x00"), identifier, content, 0usize, 0usize)
+        var invoke: UnInvoke = zero
+        invoke.function = un_add_done
+        let block = un_block(invoke)
+        let added = os.msg2(center, os.cocoa_sel("addNotificationRequest:withCompletionHandler:\x00"), request, block)
+        if un_wait(10usize) { posted = un_flag }
+        os.cf_release(identifier)
+        os.cf_release(text_body)
+        os.cf_release(text_title)
+        let released = os.msg0(content, os.cocoa_sel("release\x00"))
+    }
+    os.objc_pool_pop(pool)
+    ret posted
+}
+
+fn un_remove(a: *mem.Arena, id: u32) -> err {
+    let (name, name_error) = un_identifier(a, id)
+    if name_error != ok { ret name_error }
+    let pool = os.objc_pool_push()
+    let center = un_center()
+    if center == 0usize {
+        os.objc_pool_pop(pool)
+        ret Unsupported
+    }
+    let identifier = os.cocoa_text(name)
+    var one = identifier
+    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&one), 1usize)
+    let delivered = os.msg1(center, os.cocoa_sel("removeDeliveredNotificationsWithIdentifiers:\x00"), list)
+    let pending = os.msg1(center, os.cocoa_sel("removePendingNotificationRequestsWithIdentifiers:\x00"), list)
+    os.cf_release(identifier)
+    os.objc_pool_pop(pool)
+    ret ok
+}
+
+// How many notices of this program are on the screen now (for the probe).
+fn un_delivered_count() -> usize {
+    let pool = os.objc_pool_push()
+    let center = un_center()
+    var counted = 0usize
+    if center != 0usize {
+        var invoke: UnInvoke = zero
+        invoke.function = un_list_done
+        let block = un_block(invoke)
+        let asked = os.msg1(center, os.cocoa_sel("getDeliveredNotificationsWithCompletionHandler:\x00"), block)
+        if un_wait(10usize) { counted = un_count }
+    }
+    os.objc_pool_pop(pool)
+    ret counted
+}
 // A banner from `osascript`, the text passed as arguments so no quoting reaches the script. The system gives a
 // notice no id to hand back, so the id is the clock's, never zero; an update is a fresh banner under the same id.
 // ponytail: a banner is attributed to Script Editor and cannot be removed from here.
@@ -731,21 +939,28 @@ fn send_notice(a: *mem.Arena, title: str, body: str) -> err {
 fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> (u32, err) {
     if body.len == 0usize { ret (0u32, Invalid) }
     if tray_id != 0u32 && tray_slot(tray_id) == TRAYS { ret (0u32, NotFound) }
+    var id = tray_id
+    if id == 0u32 {
+        let (stamp, clock_error) = os.clock(.Monotonic)
+        id = 1u32
+        if clock_error == ok { id = u32(stamp & 2147483647i64) | 1u32 }
+    }
+    if un_authorized() && un_post(a, id, title, body, silent) { ret (id, ok) }
     let sent = send_notice(a, title, body)
     if sent != ok { ret (0u32, sent) }
-    if tray_id != 0u32 { ret (tray_id, ok) }
-    let (stamp, clock_error) = os.clock(.Monotonic)
-    if clock_error != ok { ret (1u32, ok) }
-    ret (u32(stamp & 2147483647i64) | 1u32, ok)
+    ret (id, ok)
 }
 
 fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: str, silent: bool) -> err {
     if body.len == 0usize || notice_id == 0u32 { ret Invalid }
     if tray_id != 0u32 && tray_slot(tray_id) == TRAYS { ret NotFound }
+    if un_authorized() && un_post(a, notice_id, title, body, silent) { ret ok }
     ret send_notice(a, title, body)
 }
 
 fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
+    if notice_id == 0u32 { ret Invalid }
+    if un_authorized() { ret un_remove(a, notice_id) }
     ret Unsupported
 }
 
@@ -1187,9 +1402,33 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
     let writer = os.msg0(os.msg0(os.cocoa_class("NSPasteboardItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
     var at = 0usize
     var stored = false
+    var file_items: [16]usize = zero
+    var file_count = 0usize
     while at < items.len {
         var bytes: []const u8 = zero
         var kind = ""
+        // A file is dragged as its URL, which NSURL writes to the pasteboard itself; an image as TIFF data.
+        if items[at].kind == .Files {
+            var path = 0usize
+            while path < items[at].paths.len && file_count < 16usize {
+                let text = os.cocoa_text(items[at].paths[path])
+                file_items[file_count] = os.msg1(os.cocoa_class("NSURL\x00"), os.cocoa_sel("fileURLWithPath:\x00"), text)
+                os.cf_release(text)
+                file_count += 1usize
+                path += 1usize
+            }
+        }
+        if items[at].kind == .Image && tray_valid_icon(items[at].image) {
+            let picture = icon_image(items[at].image)
+            if picture != 0usize {
+                let tiff = os.msg0(picture, os.cocoa_sel("TIFFRepresentation\x00"))
+                let name = os.cocoa_text("public.tiff")
+                let set = os.msg2(writer, os.cocoa_sel("setData:forType:\x00"), tiff, name)
+                os.cf_release(name)
+                let released = os.msg0(picture, os.cocoa_sel("release\x00"))
+                stored = true
+            }
+        }
         if items[at].kind == .Text {
             bytes = items[at].text
             kind = type_text()
@@ -1210,11 +1449,10 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
         }
         at += 1usize
     }
-    if !stored {
+    if !stored && file_count == 0usize {
         os.objc_pool_pop(pool)
         ret (.Cancelled, Unsupported)
     }
-    var dragging = os.msg1(os.msg0(os.cocoa_class("NSDraggingItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithPasteboardWriter:\x00"), writer)
     var pixels: [256]u32 = zero
     var i = 0usize
     while i < 256usize {
@@ -1222,10 +1460,26 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
         i += 1usize
     }
     let image = icon_image(Icon { width: 16u32, height: 16u32, pixels: pixels[..] })
-    let framed = msg_item_frame(dragging, os.cocoa_sel("setDraggingFrame:contents:\x00"), PdfRect { x: 10.0f64, y: 10.0f64, w: 16.0f64, h: 16.0f64 }, image)
+    var dragged: [17]usize = zero
+    var dragged_count = 0usize
+    if stored {
+        dragged[dragged_count] = os.msg1(os.msg0(os.cocoa_class("NSDraggingItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithPasteboardWriter:\x00"), writer)
+        dragged_count += 1usize
+    }
+    var file_at = 0usize
+    while file_at < file_count {
+        dragged[dragged_count] = os.msg1(os.msg0(os.cocoa_class("NSDraggingItem\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithPasteboardWriter:\x00"), file_items[file_at])
+        dragged_count += 1usize
+        file_at += 1usize
+    }
+    var framing = 0usize
+    while framing < dragged_count {
+        let framed = msg_item_frame(dragged[framing], os.cocoa_sel("setDraggingFrame:contents:\x00"), PdfRect { x: 10.0f64 + f64(framing) * 4.0f64, y: 10.0f64, w: 16.0f64, h: 16.0f64 }, image)
+        framing += 1usize
+    }
     let number = os.msg0(window, os.cocoa_sel("windowNumber\x00"))
     let down = msg_mouse_event(os.cocoa_class("NSEvent\x00"), os.cocoa_sel("mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:\x00"), 1usize, DragPoint { x: 20.0f64, y: 20.0f64 }, 0usize, 1.0f64, number, 0usize, 0usize, 1usize, 1.0f32)
-    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&dragging), 1usize)
+    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&dragged[0usize]), dragged_count)
     drag_ended = false
     drag_operation = 0usize
     drag_allow_move = allow_move
@@ -1447,24 +1701,237 @@ fn valid_name(text: str) -> bool {
     ret true
 }
 
+// File types and URL schemes (D5217). A Mac sends "open this file" and "open this URL" as Apple events to an application
+// bundle that declares the type, so registering one writes a small bundle under `~/Library/Application Support/Neper/
+// Associations`: an Info.plist naming the extension (or the scheme) and, as its executable, a copy of this program, so the
+// program itself is what Finder starts. It is told to LaunchServices (`lsregister -f`) and made the default handler for the
+// type. A launched program receives the event through the application delegate (`application:openFiles:` and
+// `application:openURLs:`), which queues it for `activation_poll`.
+@import("/System/Library/Frameworks/CoreServices.framework/CoreServices", "UTTypeCreatePreferredIdentifierForTag")
+extern fn ls_type_for_tag(class: usize, tag: usize, conforming: usize) -> usize
+
+@import("/System/Library/Frameworks/CoreServices.framework/CoreServices", "LSSetDefaultRoleHandlerForContentType")
+extern fn ls_default_for_type(content_type: usize, roles: u32, handler: usize) -> i32
+
+@import("/System/Library/Frameworks/CoreServices.framework/CoreServices", "LSSetDefaultHandlerForURLScheme")
+extern fn ls_default_for_scheme(scheme: usize, handler: usize) -> i32
+
+const ACTIVATIONS: usize = 8usize
+var act_text: [16384]u8 = zero
+var act_used: usize = zero
+var act_strs: [16]str = zero
+var act_kinds: [8]ActivationKind = zero
+var act_payloads: [8]str = zero
+var act_head: usize = zero
+var act_tail: usize = zero
+
+fn act_push(kind: ActivationKind, string: usize) {
+    let next = (act_tail + 1usize) % ACTIVATIONS
+    if next == act_head || string == 0usize { ret }
+    var none: [1]u8 = zero
+    let length = os.cocoa_read_text(string, none[0usize..0usize])
+    if length == 0usize || act_used + length > 16384usize { ret }
+    let copied = os.cocoa_read_text(string, act_text[act_used..act_used + length])
+    act_payloads[act_tail] = act_text[act_used..act_used + length]
+    act_kinds[act_tail] = kind
+    act_used += length
+    act_tail = next
+    if act_head == act_tail { act_used = 0usize }
+}
+
+@cc(c)
+fn target_open_files(this: usize, command: usize, application: usize, files: usize) {
+    let count = os.msg0(files, os.cocoa_sel("count\x00"))
+    var at = 0usize
+    while at < count {
+        act_push(.File, os.msg1(files, os.cocoa_sel("objectAtIndex:\x00"), at))
+        at += 1usize
+    }
+    let replied = os.msg1(application, os.cocoa_sel("replyToOpenOrPrint:\x00"), 0usize)
+}
+
+@cc(c)
+fn target_open_urls(this: usize, command: usize, application: usize, urls: usize) {
+    let count = os.msg0(urls, os.cocoa_sel("count\x00"))
+    var at = 0usize
+    while at < count {
+        let url = os.msg1(urls, os.cocoa_sel("objectAtIndex:\x00"), at)
+        // Finder's open-document arrives here too, as a file URL: that is a file, named by its path.
+        if os.msg_bool_ret(url, os.cocoa_sel("isFileURL\x00")) != 0u8 {
+            act_push(.File, os.msg0(url, os.cocoa_sel("path\x00")))
+        } else {
+            act_push(.Url, os.msg0(url, os.cocoa_sel("absoluteString\x00")))
+        }
+        at += 1usize
+    }
+}
+
+// The system's "open this URL" Apple event (GURL/GURL), handled here directly: AppKit does not turn it into
+// application:openURLs: for every kind of program, and a handler installed after launch replaces whatever it set.
+@cc(c)
+fn target_get_url(this: usize, command: usize, event: usize, reply: usize) {
+    // keyDirectObject, '----'
+    let descriptor = os.msg1(event, os.cocoa_sel("paramDescriptorForKeyword:\x00"), 757935405usize)
+    if descriptor == 0usize { ret }
+    act_push(.Url, os.msg0(descriptor, os.cocoa_sel("stringValue\x00")))
+}
+
+fn bundle_root(a: *mem.Arena, name: str) -> (str, err) {
+    let (home, home_error) = fs.home_dir(a)
+    if home_error != ok { ret ("", home_error) }
+    let (base, base_error) = str.concat(a, home, "/Library/Application Support/Neper/Associations/")
+    if base_error != ok { ret ("", base_error) }
+    let (named, named_error) = str.concat(a, base, name)
+    if named_error != ok { ret ("", named_error) }
+    let (bundle, bundle_error) = str.concat(a, named, ".app")
+    ret (bundle, bundle_error)
+}
+
+fn lsregister(a: *mem.Arena, flag: str, bundle: str) -> err {
+    var argv: [3]str = zero
+    argv[0usize] = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    argv[1usize] = flag
+    argv[2usize] = bundle
+    var options: os.SpawnOptions = zero
+    options.argv = argv[..]
+    options.inherit_env = true
+    options.stdio.stdout = os.File { raw: 1usize }
+    options.stdio.stderr = os.File { raw: 2usize }
+    let (child, spawn_error) = os.spawn_with_options(a, options)
+    if spawn_error != ok { ret Failed }
+    let (usage, wait_error) = os.wait_usage(child)
+    if wait_error != ok { ret Failed }
+    ret ok
+}
+
+// The bundle's Info.plist declaring either a document type (`extension`, no dot) or a URL scheme.
+fn bundle_make(a: *mem.Arena, name: str, bundle_id: str, label: str, extension: str, scheme: str) -> (str, err) {
+    let (root, root_error) = bundle_root(a, name)
+    if root_error != ok { ret ("", root_error) }
+    let (macos, macos_error) = str.concat(a, root, "/Contents/MacOS")
+    if macos_error != ok { ret ("", macos_error) }
+    try fs.make_dirs(a, macos)
+    let (exe, exe_error) = fs.executable_path(a)
+    if exe_error != ok { ret ("", exe_error) }
+    let (link, link_error) = str.concat(a, macos, "/neper-app")
+    if link_error != ok { ret ("", link_error) }
+    let dropped = fs.remove_file(a, link)
+    // A copy and not a symlink: the system finds the bundle from the executable's own path, and a link leads out of it.
+    let (scratch, scratch_error) = mem.alloc[u8](a, 65536usize)
+    if scratch_error != ok { ret ("", scratch_error) }
+    try fs.copy_file(a, exe, link, scratch)
+    let moded = os.set_mode(a, link, 493u32)
+    var declared = ""
+    if extension.len != 0usize {
+        let (opened, opened_error) = join3(a, "<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>", label, "</string><key>CFBundleTypeRole</key><string>Viewer</string><key>CFBundleTypeExtensions</key><array><string>")
+        if opened_error != ok { ret ("", opened_error) }
+        let (middle, middle_error) = str.concat(a, opened, extension)
+        if middle_error != ok { ret ("", middle_error) }
+        let (closed, closed_error) = str.concat(a, middle, "</string></array></dict></array>")
+        if closed_error != ok { ret ("", closed_error) }
+        declared = closed
+    } else {
+        let (opened, opened_error) = join3(a, "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>", label, "</string><key>CFBundleURLSchemes</key><array><string>")
+        if opened_error != ok { ret ("", opened_error) }
+        let (middle, middle_error) = str.concat(a, opened, scheme)
+        if middle_error != ok { ret ("", middle_error) }
+        let (closed, closed_error) = str.concat(a, middle, "</string></array></dict></array>")
+        if closed_error != ok { ret ("", closed_error) }
+        declared = closed
+    }
+    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>", bundle_id, "</string><key>CFBundleName</key><string>")
+    if head_error != ok { ret ("", head_error) }
+    let (named, named_error) = join3(a, head, name, "</string><key>CFBundleExecutable</key><string>neper-app</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>")
+    if named_error != ok { ret ("", named_error) }
+    let (plist, plist_error) = join3(a, named, declared, "</dict></plist>\n")
+    if plist_error != ok { ret ("", plist_error) }
+    let (path, path_error) = str.concat(a, root, "/Contents/Info.plist")
+    if path_error != ok { ret ("", path_error) }
+    try fs.write_file(a, path, plist)
+    ret (root, ok)
+}
+
+fn bundle_remove(a: *mem.Arena, name: str) -> err {
+    let (root, root_error) = bundle_root(a, name)
+    if root_error != ok { ret root_error }
+    let (present, exists_error) = fs.exists(a, root)
+    if exists_error != ok { ret exists_error }
+    if !present { ret NotFound }
+    let unregistered = lsregister(a, "-u", root)
+    let (macos, macos_error) = str.concat(a, root, "/Contents/MacOS")
+    if macos_error != ok { ret macos_error }
+    let (link, link_error) = str.concat(a, macos, "/neper-app")
+    if link_error != ok { ret link_error }
+    let (plist, plist_error) = str.concat(a, root, "/Contents/Info.plist")
+    if plist_error != ok { ret plist_error }
+    let (contents, contents_error) = str.concat(a, root, "/Contents")
+    if contents_error != ok { ret contents_error }
+    let first = fs.remove_file(a, link)
+    let second = fs.remove_file(a, plist)
+    let third = fs.remove_dir(a, macos)
+    let fourth = fs.remove_dir(a, contents)
+    let fifth = fs.remove_dir(a, root)
+    if fifth != ok { ret Failed }
+    ret ok
+}
+
 fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: str) -> err {
     if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
-    ret Unsupported
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let (bundle_id, id_error) = str.concat(a, "com.neper.assoc.", program_id)
+    if id_error != ok { ret id_error }
+    let (root, make_error) = bundle_make(a, program_id, bundle_id, description, extension[1usize..extension.len], "")
+    if make_error != ok { ret make_error }
+    if lsregister(a, "-f", root) != ok { ret Failed }
+    let pool = os.objc_pool_push()
+    let tag = os.cocoa_text(extension[1usize..extension.len])
+    let class = os.cocoa_text("public.filename-extension")
+    let kind = ls_type_for_tag(class, tag, 0usize)
+    let handler = os.cocoa_text(bundle_id)
+    var status = 0i32
+    if kind != 0usize { status = ls_default_for_type(kind, 4294967295u32, handler) }
+    os.cf_release(handler)
+    os.cf_release(tag)
+    os.cf_release(class)
+    if kind != 0usize { os.cf_release(kind) }
+    os.objc_pool_pop(pool)
+    if kind == 0usize || status != 0i32 { ret Failed }
+    ret ok
 }
 
 fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err {
     if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
-    ret Unsupported
+    ret bundle_remove(a, program_id)
 }
 
 fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
     if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
-    ret Unsupported
+    let started = os.cocoa_start()
+    if started != ok { ret started }
+    let (name, name_error) = str.concat(a, "protocol-", scheme)
+    if name_error != ok { ret name_error }
+    let (bundle_id, id_error) = str.concat(a, "com.neper.assoc.", name)
+    if id_error != ok { ret id_error }
+    let (root, make_error) = bundle_make(a, name, bundle_id, description, "", scheme)
+    if make_error != ok { ret make_error }
+    if lsregister(a, "-f", root) != ok { ret Failed }
+    let pool = os.objc_pool_push()
+    let text = os.cocoa_text(scheme)
+    let handler = os.cocoa_text(bundle_id)
+    let status = ls_default_for_scheme(text, handler)
+    os.cf_release(handler)
+    os.cf_release(text)
+    os.objc_pool_pop(pool)
+    if status != 0i32 { ret Failed }
+    ret ok
 }
 
 fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
     if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
-    ret Unsupported
+    let (name, name_error) = str.concat(a, "protocol-", scheme)
+    if name_error != ok { ret name_error }
+    ret bundle_remove(a, name)
 }
 
 fn autostart_path(a: *mem.Arena, id: str) -> (str, err) {
@@ -1579,6 +2046,20 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
 
 fn activation_poll() -> (Activation, bool) {
     var none: Activation = zero
+    // What Finder or the URL handler sent through the delegate comes first.
+    // The delegate must be there for the system's open events to find: made now if nothing has needed it yet.
+    if target_ready() == ok { os.cocoa_pump(0i64) }
+    if act_head != act_tail {
+        let slot = act_head
+        act_strs[2usize * slot] = "neper"
+        act_strs[2usize * slot + 1usize] = act_payloads[slot]
+        var delivered: Activation = zero
+        delivered.kind = act_kinds[slot]
+        delivered.payload = act_payloads[slot]
+        delivered.args = act_strs[2usize * slot..2usize * slot + 2usize]
+        act_head = (act_head + 1usize) % ACTIVATIONS
+        ret (delivered, true)
+    }
     if !instance_held { ret (none, false) }
     var events: [2]os.PollEvent = zero
     let (ready, wait_error) = os.poller_wait(instance_poller, events[..], 0i64)
@@ -1960,15 +2441,108 @@ fn print_job_cancel(a: *mem.Arena, job: *PrintJob) -> err {
     job.open = false
     ret ok
 }
+// The print and page setup panels (D5219), run modally like the file panels. The printer this library prints to is the virtual PDF
+// printer (D5212), so the print panel is asked for what a caller can use of it, the page range and the copies, and a printer
+// picked in it is not honoured: a job always writes the PDF named as its output. ponytail: NSPrintOperation drawing into a view
+// is the way to print to a real printer; it is a design of its own (C188).
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_paper(receiver: usize, selector: usize) -> MenuPoint
+
+fn print_number(value: usize) -> usize {
+    ret os.msg1(os.cocoa_class("NSNumber\x00"), os.cocoa_sel("numberWithInteger:\x00"), value)
+}
+
+fn print_key(dictionary: usize, key: str, value: usize) {
+    let name = os.cocoa_text(key)
+    let set = os.msg2(dictionary, os.cocoa_sel("setObject:forKey:\x00"), value, name)
+    os.cf_release(name)
+}
+
+fn print_integer(dictionary: usize, key: str) -> usize {
+    let name = os.cocoa_text(key)
+    let held = os.msg1(dictionary, os.cocoa_sel("objectForKey:\x00"), name)
+    os.cf_release(name)
+    if held == 0usize { ret 0usize }
+    ret os.msg0(held, os.cocoa_sel("integerValue\x00"))
+}
+
 fn print_dialog(a: *mem.Arena, w: os.Window, min_page: u32, max_page: u32) -> (Printer, err) {
     var nothing: Printer = zero
     if min_page == 0u32 || max_page < min_page || max_page > 65535u32 { ret (nothing, Invalid) }
-    ret (nothing, Unsupported)
+    let started = os.cocoa_start()
+    if started != ok { ret (nothing, started) }
+    let pool = os.objc_pool_push()
+    let info = os.msg0(os.msg0(os.cocoa_class("NSPrintInfo\x00"), os.cocoa_sel("sharedPrintInfo\x00")), os.cocoa_sel("copy\x00"))
+    let dictionary = os.msg0(info, os.cocoa_sel("dictionary\x00"))
+    print_key(dictionary, "NSFirstPage", print_number(usize(min_page)))
+    print_key(dictionary, "NSLastPage", print_number(usize(max_page)))
+    print_key(dictionary, "NSCopies", print_number(1usize))
+    let panel = os.msg0(os.cocoa_class("NSPrintPanel\x00"), os.cocoa_sel("printPanel\x00"))
+    // copies, page range and the preview
+    let optioned = os.msg1(panel, os.cocoa_sel("setOptions:\x00"), 131075usize)
+    let response = os.msg1(panel, os.cocoa_sel("runModalWithPrintInfo:\x00"), info)
+    var printer: Printer = zero
+    var result = ok
+    if response != 1usize {
+        result = Cancelled
+    } else {
+        var first = print_integer(dictionary, "NSFirstPage")
+        var last = print_integer(dictionary, "NSLastPage")
+        var copies = print_integer(dictionary, "NSCopies")
+        if first < usize(min_page) { first = usize(min_page) }
+        if last > usize(max_page) || last < first { last = usize(max_page) }
+        if copies == 0usize { copies = 1usize }
+        printer.device = 1usize
+        printer.from_page = u32(first)
+        printer.to_page = u32(last)
+        printer.copies = u32(copies)
+    }
+    let released = os.msg0(info, os.cocoa_sel("release\x00"))
+    os.objc_pool_pop(pool)
+    if result != ok { ret (nothing, result) }
+    ret (printer, ok)
+}
+
+// Points to hundredths of a millimetre, and back.
+fn points_to_hmm(points: f64) -> u32 {
+    ret u32(points * 35.277778f64 + 0.5f64)
+}
+
+fn hmm_to_points(hundredths: u32) -> f64 {
+    ret f64(hundredths) / 35.277778f64
 }
 
 fn page_setup_dialog(a: *mem.Arena, w: os.Window, current: PageSetup) -> (PageSetup, err) {
     var nothing: PageSetup = zero
-    ret (nothing, Unsupported)
+    let started = os.cocoa_start()
+    if started != ok { ret (nothing, started) }
+    let pool = os.objc_pool_push()
+    let info = os.msg0(os.msg0(os.cocoa_class("NSPrintInfo\x00"), os.cocoa_sel("sharedPrintInfo\x00")), os.cocoa_sel("copy\x00"))
+    if current.margin_left != 0u32 || current.margin_top != 0u32 || current.margin_right != 0u32 || current.margin_bottom != 0u32 {
+        let l = os.msg_double(info, os.cocoa_sel("setLeftMargin:\x00"), hmm_to_points(current.margin_left))
+        let t = os.msg_double(info, os.cocoa_sel("setTopMargin:\x00"), hmm_to_points(current.margin_top))
+        let r = os.msg_double(info, os.cocoa_sel("setRightMargin:\x00"), hmm_to_points(current.margin_right))
+        let b = os.msg_double(info, os.cocoa_sel("setBottomMargin:\x00"), hmm_to_points(current.margin_bottom))
+    }
+    let layout = os.msg0(os.cocoa_class("NSPageLayout\x00"), os.cocoa_sel("pageLayout\x00"))
+    let response = os.msg1(layout, os.cocoa_sel("runModalWithPrintInfo:\x00"), info)
+    var chosen: PageSetup = zero
+    var result = ok
+    if response != 1usize {
+        result = Cancelled
+    } else {
+        let paper = msg_paper(info, os.cocoa_sel("paperSize\x00"))
+        chosen.paper_width = points_to_hmm(paper.x)
+        chosen.paper_height = points_to_hmm(paper.y)
+        chosen.margin_left = points_to_hmm(os.msg_double_ret(info, os.cocoa_sel("leftMargin\x00")))
+        chosen.margin_top = points_to_hmm(os.msg_double_ret(info, os.cocoa_sel("topMargin\x00")))
+        chosen.margin_right = points_to_hmm(os.msg_double_ret(info, os.cocoa_sel("rightMargin\x00")))
+        chosen.margin_bottom = points_to_hmm(os.msg_double_ret(info, os.cocoa_sel("bottomMargin\x00")))
+    }
+    let released = os.msg0(info, os.cocoa_sel("release\x00"))
+    os.objc_pool_pop(pool)
+    if result != ok { ret (nothing, result) }
+    ret (chosen, ok)
 }
 
 // ------------------------------------------------- permissions and services
@@ -1979,17 +2553,126 @@ fn page_setup_dialog(a: *mem.Arena, w: os.Window, current: PageSetup) -> (PageSe
 // `Unsupported` and the record says so; a credential is `secret-tool` (libsecret)
 // where it is installed, the same tool-shaped path as the rest.
 
-// The screen is always capturable; without the Screen Recording permission the picture leaves out other applications' windows, which is a
-// difference in content and not a refusal. The other capabilities have no answer here.
-fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
-    if c == .Screen { ret .Granted }
+// Camera, microphone and location (D5218). The status is what the system last decided, read without asking: AVFoundation's
+// `authorizationStatusForMediaType:` for the camera ('vide') and the microphone ('soun'), CoreLocation's authorization status
+// for the location. `Permission` has no "not decided" state, so a status the user has not answered, like a restricted one that
+// cannot be changed, is `Unavailable` and `permission_request` is what asks: it is made for the camera and the microphone, needs a device that
+// could be used (none on a virtual machine, so it answers at once there) and waits for the answer, which the system delivers
+// through a block (a global block of this file); a location request is not made, only its status is read.
+type PermissionInvoke = union { function: fn(usize, usize), bits: usize }
+
+// An Objective-C global block in words: isa, flags (and a reserved word), the function, the descriptor's address, then the
+// descriptor itself (reserved, size).
+var permission_words: [8]u64 = zero
+var permission_done: bool = zero
+var permission_granted: bool = zero
+var permission_frameworks: bool = zero
+
+// The completion handler: its second argument is the BOOL, in the low byte.
+@cc(c)
+fn permission_answered(block: usize, granted: usize) {
+    permission_granted = granted & 255usize != 0usize
+    permission_done = true
+}
+
+fn permission_load() {
+    if permission_frameworks { ret }
+    let av = "/System/Library/Frameworks/AVFoundation.framework/AVFoundation\x00"
+    let location = "/System/Library/Frameworks/CoreLocation.framework/CoreLocation\x00"
+    let a = os.raw_dlopen(mem.address_of(&av[0usize]), 2i32)
+    let b = os.raw_dlopen(mem.address_of(&location[0usize]), 2i32)
+    permission_frameworks = true
+}
+
+// 0 not decided, 1 restricted, 2 denied, 3 authorized (AVFoundation's numbering; CoreLocation's 3 and 4 are authorized too).
+fn permission_media_status(kind: str) -> usize {
+    permission_load()
+    let name = os.cocoa_text(kind)
+    let status = os.msg1(os.cocoa_class("AVCaptureDevice\x00"), os.cocoa_sel("authorizationStatusForMediaType:\x00"), name)
+    os.cf_release(name)
+    ret status
+}
+
+fn permission_location_status() -> usize {
+    permission_load()
+    ret os.msg0(os.cocoa_class("CLLocationManager\x00"), os.cocoa_sel("authorizationStatus\x00"))
+}
+
+fn permission_of(code: usize, authorized_from: usize) -> Permission {
+    if code >= authorized_from && code <= 4usize { ret .Granted }
+    if code == 2usize || code == 1usize { ret .Denied }
     ret .Unavailable
 }
 
-fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
-    ret (.Unavailable, ok)
+// The screen is always capturable; without the Screen Recording permission the picture leaves out other applications' windows,
+// which is a difference in content and not a refusal.
+fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
+    if c == .Screen { ret .Granted }
+    if c == .Biometric && biometric_available() { ret .Granted }
+    if os.cocoa_start() != ok { ret .Unavailable }
+    let pool = os.objc_pool_push()
+    var answer = Permission.Unavailable
+    if c == .Camera { answer = permission_of(permission_media_status("vide"), 3usize) }
+    if c == .Microphone { answer = permission_of(permission_media_status("soun"), 3usize) }
+    if c == .Location { answer = permission_of(permission_location_status(), 3usize) }
+    os.objc_pool_pop(pool)
+    ret answer
 }
 
+fn permission_media_request(kind: str) -> (Permission, err) {
+    permission_load()
+    let name = os.cocoa_text(kind)
+    let device = os.msg1(os.cocoa_class("AVCaptureDevice\x00"), os.cocoa_sel("defaultDeviceWithMediaType:\x00"), name)
+    if device == 0usize {
+        os.cf_release(name)
+        ret (.Unavailable, ok)
+    }
+    var invoke: PermissionInvoke = zero
+    invoke.function = permission_answered
+    let symbol = "_NSConcreteGlobalBlock\x00"
+    permission_words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    permission_words[1usize] = 268435456u64
+    permission_words[2usize] = u64(invoke.bits)
+    permission_words[3usize] = u64(mem.address_of(&permission_words[4usize]))
+    permission_words[4usize] = 0u64
+    permission_words[5usize] = 32u64
+    permission_done = false
+    let asked = os.msg2(os.cocoa_class("AVCaptureDevice\x00"), os.cocoa_sel("requestAccessForMediaType:completionHandler:\x00"), name, mem.address_of(&permission_words[0usize]))
+    os.cf_release(name)
+    var waited = 0usize
+    while !permission_done && waited < 3000usize {
+        os.cocoa_pump(100000000i64)
+        waited += 1usize
+    }
+    if !permission_done { ret (.Unavailable, Failed) }
+    if permission_granted { ret (.Granted, ok) }
+    ret (.Denied, ok)
+}
+
+fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
+    if c == .Screen { ret (.Granted, ok) }
+    if c != .Camera && c != .Microphone && c != .Location { ret (.Unavailable, ok) }
+    let started = os.cocoa_start()
+    if started != ok { ret (.Unavailable, ok) }
+    let decided = permission_status(a, c)
+    if decided != .Unavailable { ret (decided, ok) }
+    // Unavailable is also "restricted": only a not-decided status is worth asking about.
+    let pool = os.objc_pool_push()
+    var result = Permission.Unavailable
+    var failure = ok
+    if c == .Camera {
+        let (answer, answer_error) = permission_media_request("vide")
+        result = answer
+        failure = answer_error
+    }
+    if c == .Microphone {
+        let (answer, answer_error) = permission_media_request("soun")
+        result = answer
+        failure = answer_error
+    }
+    os.objc_pool_pop(pool)
+    ret (result, failure)
+}
 // The login keychain through `security`: a generic password whose service is the name and whose account is the user.
 // ponytail: the secret travels in the tool's arguments, which a process listing shows for the moment it runs; the Keychain
 // API (SecItemAdd) takes it as a CFData and is the way to close that.
@@ -2166,11 +2849,84 @@ fn screen_capture(a: *mem.Arena) -> (Icon, err) {
     ret (Icon { width: u32(width), height: u32(height), pixels: pixels }, ok)
 }
 
-fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
-    ret (.Unavailable, Unsupported)
+// Biometrics (D5220): LocalAuthentication's `canEvaluatePolicy:` for Touch ID is asked every time, so the capability is true
+// only on a Mac that has it enrolled; `biometric_verify` shows the system sheet through `evaluatePolicy:localizedReason:reply:`,
+// whose reply is a block (built by hand like the permission block, a global one), and waits up to a minute for the person.
+var bio_words: [8]u64 = zero
+var bio_done: bool = zero
+var bio_ok: bool = zero
+
+type BioInvoke = union { function: fn(usize, usize, usize), bits: usize }
+
+@cc(c)
+fn bio_replied(block: usize, success: usize, failure: usize) {
+    bio_ok = success & 255usize != 0usize
+    bio_done = true
 }
 
+fn biometric_context() -> usize {
+    let framework = "/System/Library/Frameworks/LocalAuthentication.framework/LocalAuthentication\x00"
+    let handle = os.raw_dlopen(mem.address_of(&framework[0usize]), 2i32)
+    if handle == 0usize { ret 0usize }
+    ret os.msg0(os.msg0(os.cocoa_class("LAContext\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+}
+
+fn biometric_available() -> bool {
+    if os.cocoa_start() != ok { ret false }
+    let pool = os.objc_pool_push()
+    let context = biometric_context()
+    var available = false
+    if context != 0usize {
+        // LAPolicyDeviceOwnerAuthenticationWithBiometrics
+        available = os.msg2(context, os.cocoa_sel("canEvaluatePolicy:error:\x00"), 1usize, 0usize) & 255usize != 0usize
+        let released = os.msg0(context, os.cocoa_sel("release\x00"))
+    }
+    os.objc_pool_pop(pool)
+    ret available
+}
+
+fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
+    if !biometric_available() { ret (.Unavailable, Unsupported) }
+    let pool = os.objc_pool_push()
+    let context = biometric_context()
+    var invoke: BioInvoke = zero
+    invoke.function = bio_replied
+    let symbol = "_NSConcreteGlobalBlock\x00"
+    bio_words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    bio_words[1usize] = 268435456u64
+    bio_words[2usize] = u64(invoke.bits)
+    bio_words[3usize] = u64(mem.address_of(&bio_words[4usize]))
+    bio_words[4usize] = 0u64
+    bio_words[5usize] = 32u64
+    bio_done = false
+    let why = os.cocoa_text(reason)
+    let asked = os.msg4(context, os.cocoa_sel("evaluatePolicy:localizedReason:reply:\x00"), 1usize, why, mem.address_of(&bio_words[0usize]), 0usize)
+    var waited = 0usize
+    while !bio_done && waited < 600usize {
+        os.cocoa_pump(100000000i64)
+        waited += 1usize
+    }
+    os.cf_release(why)
+    let released = os.msg0(context, os.cocoa_sel("release\x00"))
+    os.objc_pool_pop(pool)
+    if !bio_done { ret (.Unavailable, Failed) }
+    if bio_ok { ret (.Granted, ok) }
+    ret (.Denied, ok)
+}
+
+// The photo picker is the open panel narrowed to the image types the system reads, as `file_dialog`'s Open with several
+// filters; the Photos library's own picker (PHPicker) is a SwiftUI view this library cannot present.
 fn photo_picker(a: *mem.Arena, w: os.Window, multiple: bool) -> ([]const str, err) {
-    var nothing: []const str = zero
-    ret (nothing, Unsupported)
+    var filters: [8]FileFilter = zero
+    filters[0usize] = FileFilter { label: "Images", pattern: "*.png" }
+    filters[1usize] = FileFilter { label: "Images", pattern: "*.jpg" }
+    filters[2usize] = FileFilter { label: "Images", pattern: "*.jpeg" }
+    filters[3usize] = FileFilter { label: "Images", pattern: "*.gif" }
+    filters[4usize] = FileFilter { label: "Images", pattern: "*.heic" }
+    filters[5usize] = FileFilter { label: "Images", pattern: "*.tiff" }
+    filters[6usize] = FileFilter { label: "Images", pattern: "*.bmp" }
+    filters[7usize] = FileFilter { label: "Images", pattern: "*.webp" }
+    let dialog = FileDialog { kind: .Open, title: "Choose photos", filters: filters[..], multiple: multiple, initial: "", default_extension: "", folder: "" }
+    let (picked, picked_error) = file_dialog(a, w, dialog)
+    ret (picked, picked_error)
 }

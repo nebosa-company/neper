@@ -26,6 +26,127 @@
       "evidence": "Found on 2026-10-23 by the macOS window probe: `extern fn f(r: usize, s: usize) -> CGRect` with CGRect = struct { x: f64, y: f64, w: f64, h: f64 } stops aarch64 lowering with `cannot lower main: construct is not implemented in self-hosted lowering` at the call (x64 compiles it, through the memory-returned slot). A two-double struct, a double, a BOOL and a C string all return correctly on both Mac architectures; AppKit hands window and view sizes back as NSRect, so the window code reads them through KVC (`valueForKey:` then `NSValue getValue:`) until this is fixed. Where it stops: `lower.e` `c_result_type` already names a 3- or 4-member HFA `return-hfa-N-W` (D2124) and `codegen_a64.e` `pack_hfa` / `hfa_pair` pack the members into at most the two eightbytes x0 and x1 hold; a four-double HFA comes back in v0-v3, four eightbytes, which the result model (one value, or a pair) has no room for. Plan: give a call whose result is a 3- or 4-member HFA a result slot, as a C return slot is for a struct returned in memory: lowering allocates it and passes nothing, the call selection stores v0-v3 into it after the call, and the value is read from the slot. Acceptance: (1) a fixture `macos_hfa_return` calls CoreGraphics `CGRectMake`, `CGRectInset` and `CGRectUnion` through `@import` for aarch64-macos and x64-macos and checks every member, and passes on a Mac in the corpus; (2) an aarch64-linux fixture returns 3- and 4-member double HFAs and a 4-member float HFA from a C shared object built by cc, run under the aarch64 test environment; (3) x64 and the 2-member case are byte-identical to before; (4) the window code reads sizes by a direct rect-returning call and the KVC workaround is deleted."
     },
     {
+      "id": "C185",
+      "category": "library",
+      "group": "macOS",
+      "order": 185,
+      "title": "macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)",
+      "score": 0.9,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleURLTypes, a copy of the program as its executable), register it with lsregister -f and make it the default handler (LSSetDefaultRoleHandlerForContentType / LSSetDefaultHandlerForURLScheme); dissociate removes it. The shell target is the NSApp delegate and the GURL Apple event handler; application:openURLs: (file URLs become File activations by path) and application:openFiles: feed activation_poll. tests/macos/probe/open_events.e: open on a file of the registered type and on a registered URL start the registered copy, which receives both and the parent reads them back, on aarch64 and x64; ui_activation passes with associations on; the corpus is 1105 pass. Open: a double-click in Finder and a link in a browser are what a person does and are untested (C192), and the bundle holds a copy of the program, so it is stale after the program is rebuilt (register again). Done when a real Finder open is checked."
+    },
+    {
+      "id": "C186",
+      "category": "library",
+      "group": "macOS",
+      "order": 186,
+      "title": "macOS permissions: camera, microphone and location status and request",
+      "score": 0.6,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationStatusForMediaType (camera, microphone) and CLLocationManager authorizationStatus (location); a status that is not decided or is restricted is Unavailable because shell.Permission has no not-determined state. permission_request asks for the camera and microphone through AVCaptureDevice requestAccessForMediaType with a global Objective-C block (isa from dlsym _NSConcreteGlobalBlock, BLOCK_IS_GLOBAL, an @cc invoke), only when a capture device exists, and waits for the answer (up to five minutes). tests/macos/probe/permissions.e on the runners: camera unavailable, microphone granted, location unavailable, requests return at once, no crash; ui_permissions passes and the corpus is 1105. Open: a location request (CLLocationManager requestWhenInUseAuthorization with a delegate callback on the shell target), a not-determined state in shell.Permission (shared by every host), and a real prompt on a Mac with a camera, which only a person can answer (C192). Done when those three are checked."
+    },
+    {
+      "id": "C187",
+      "category": "library",
+      "group": "macOS",
+      "order": 187,
+      "title": "macOS biometrics (LocalAuthentication) and the photo picker (PHPicker)",
+      "score": 0.5,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-10-25 (D5220): biometrics through LocalAuthentication, capabilities().biometrics is LAContext canEvaluatePolicy for Touch ID asked at every call (true only where enrolled), permission_status(Biometric) is Granted there, and biometric_verify shows the system sheet through evaluatePolicy:localizedReason:reply: with a hand-built global block and waits up to a minute; without biometrics it answers Unsupported. The photo picker is the open panel narrowed to image extensions (png, jpg, jpeg, gif, heic, tiff, bmp, webp), several files on request; PHPicker (the Photos library) is a SwiftUI view this library cannot present. ui_permissions now follows what the host offers (the fixture used to require biometrics to be off everywhere). tests/macos/probe/biometrics_photos.e on the runners: no biometrics, verify is Unsupported, the picker is shown and dismissed (Cancelled); the corpus is 1105. Open: a real Touch ID sheet and a confirmed photo selection need a person and a Mac with Touch ID (C192); Photos-library access (PHPicker) is not done. Done when those are checked."
+    },
+    {
+      "id": "C188",
+      "category": "library",
+      "group": "macOS",
+      "order": 188,
+      "title": "macOS print dialogs: NSPrintPanel and the page setup panel over the PDF printer",
+      "score": 0.7,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "Built 2026-10-25 (D5219): print_dialog runs NSPrintPanel modally over a copy of the shared NSPrintInfo with the page range preset to the caller's minimum and maximum, copies and range shown, and returns a Printer (the virtual PDF printer of D5212) carrying the chosen range and copies; page_setup_dialog runs NSPageLayout and returns paper and margins in hundredths of a millimetre (points converted). tests/macos/probe/print_dialogs.e shows both on the runners and dismisses them from the run loop: both answer Cancelled on aarch64 and x64, the screenshot shows the print panel with range 1 to 9; ui_print passes and the corpus is 1105. Open: a confirmed OK (range, copies and the paper and margin values read back) needs a person (C192); a printer other than PDF picked in the panel is ignored, so real printing (NSPrintOperation drawing into a view) is still a design of its own. Done when a confirmed dialog is checked and the real-printer question is decided."
+    },
+    {
+      "id": "C189",
+      "category": "library",
+      "group": "macOS",
+      "order": 189,
+      "title": "macOS notices through UNUserNotificationCenter: removal, replacement and actions",
+      "score": 0.4,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-10-25 (D5221), the center path unverified: for a program with a bundle identifier (shell.bundled()), notice_publish and notice_update ask UNUserNotificationCenter for alert and sound authorization once (requestAuthorizationWithOptions with a hand-built global block, waiting up to a minute) and post a request whose identifier is neper-<id> (the same id again replaces it); notice_remove removes the delivered and pending request; the capability notice_remove is true once the center has authorized the program. A program with no bundle, or one that was not authorized, keeps osascript banners and Unsupported removal. tests/macos/probe/un_notices.e on the runners (a registered association bundle started with open): bundled detection works and the program runs through publish, count, remove, count and ends, but the runner never authorizes the center, so the banner went through osascript, the delivered count stayed 0 and removal was refused; the corpus is 1105. Open: the center path itself (post, replace, remove, getDelivered) has never run, because nothing here can answer the authorization prompt (C192); action buttons (UNNotificationAction categories and a delegate for responses) are not built. Done when a real authorized run posts, replaces and removes, and actions are decided."
+    },
+    {
+      "id": "C190",
+      "category": "library",
+      "group": "macOS",
+      "order": 190,
+      "title": "macOS window system: accessibility, input methods, close veto, live resize, Retina",
+      "score": 0.6,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Done 2026-10-25: the close button is a request answered through a window delegate (D5222, macos_window_close); the published accessibility tree is NSAccessibilityElements under the content view (D5223, macos_accessibility); input methods commit text (D5229, macos_text_input). The content view's class (NeperTextView, made at run time over the view's own class) answers the text input protocol: insertText:replacementRange: turns committed text, from an NSString or an NSAttributedString, into Text events; setMarkedText, unmarkText, hasMarkedText, markedRange and selectedRange hold a composition's state (marked text is not shown, since a window event has no preedit kind: that is an API change for every host); firstRectForCharacterRange answers a point in the window's top left for the candidate window; doCommandBySelector: is ignored; the view accepts first responder, so the window has an input context. A key with an input method selected (its source id has \"inputmethod\" in it) goes through interpretKeyEvents:, a plain layout's key keeps its own characters as before (a synthetic key event does not come back from the input context synchronously, so the layout path stays direct). macos_text_input calls the input method's methods by hand: an accented letter and a kana become Text events, marked text produces none, committing clears the mark; aarch64 and x64, corpus 1109. Not done: a real input method composing Japanese, Chinese or Korean and its candidate window's place (C192); preedit display; focus, set-value and selection requests, tables, relations and live regions in the accessibility elements, and a real VoiceOver reading the tree (C192); live resize while the pointer drags an edge, which the poll model cannot do (the program is inside AppKit's tracking loop and gets Resize and Paint only afterwards; a callback API would be needed); Retina scale changes between displays (windowDidChangeBackingProperties: on the window delegate) and native-resolution checks (C192)."
+    },
+    {
+      "id": "C191",
+      "category": "tooling",
+      "group": "macOS",
+      "order": 191,
+      "title": "macOS application bundles and distribution: a bundle command, icon, code signing, notarization",
+      "score": 0.6,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-10-25 (D5224): scripts/macos-bundle.sh, run on a Mac, makes NAME.app from a program built for macOS: Contents/Info.plist (bundle id, name, version, NSHighResolutionCapable, LSUIElement with --agent, camera, microphone and location usage descriptions on request), Contents/MacOS/NAME, Contents/Resources/NAME.icns from a png (sips and iconutil), an ad-hoc signature verified with codesign --verify --deep --strict, and NAME.zip (ditto) with --zip. The macos-corpus job runs it on os_poller with an icon and checks plutil, the bundle id with PlistBuddy, the zip, and that the program inside the bundle runs, on aarch64 and x64 (BUNDLE PASS). It reuses what the run-time association bundles (D5217) already needed. Not done: a Developer ID signature with the hardened runtime and notarization (xcrun notarytool), which need an Apple developer identity this repository does not have, so their commands are in the script's header; a .dmg; document and URL types in the script (programs register them at run time with associate_file); a neper command that calls the script (the compiler's declaration capacity is full, so the script is the interface); Info.plist keys for entitlements. Done when a notarized bundle has been built and opened on a clean Mac."
+    },
+    {
+      "id": "C192",
+      "category": "library",
+      "group": "macOS",
+      "order": 192,
+      "title": "macOS verification on real hardware: what the CI runners cannot do",
+      "score": 0.2,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "The checklist is a program, written 2026-10-25 (D5228) and compiled for both architectures but never run: tests/macos/manual/main.e. Build it on the Mac (neper-self emit-executable tests/macos/manual/main.e . aarch64 macos manual; x64 on an Intel Mac) and run ./manual from a Terminal: it goes through one check at a time, says what to do, waits where a person is needed, and writes PASS, FAIL or skipped lines to ~/neper-manual-results.txt. It covers: the window's Retina scale, a menu-bar icon's left and right click, a pop-up menu choice, a global shortcut press (Control-Option-Shift-F12), the Open panel with two files and the Save panel's name and .txt, a drop from Finder, the clipboard in TextEdit, a notice banner, a Dock menu task and the 50% badge, Finder starting a program for an associated file, the print panel's range and copies, the camera permission, Touch ID where enrolled, the screen capture size, and VoiceOver reading a published tree and pressing its button. Not covered by it (a program cannot drive them): a real pointer drag out of a window into Finder, a notarized bundle opened on a clean Mac (C191), live resize while dragging an edge and IME composition (C190), a Metal or MoltenVK device run (C193). Done when it has been run on an Apple-silicon Mac and an Intel Mac and its results are recorded here."
+    },
+    {
+      "id": "C193",
+      "category": "compiler",
+      "group": "macOS",
+      "order": 193,
+      "title": "macOS GPU: a Metal backend for e.gpu (the Vulkan fixtures cannot run on a Mac)",
+      "score": 0.25,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Phase 1 done 2026-10-25 (D5231): e.gpu.metal, the runtime alone, as e.gpu.vulkan was before e.gpu used it: available, open, name, buffer (MTLResourceStorageModeShared, the mapping is the CPU's view), compile (MSL text compiled at run time with newLibraryWithSource, an entry function, a compute pipeline), dispatch (thread groups, optional threadgroup memory, the buffers kept resident, committed and waited on) and the matching free, destroy and close. macos_metal_raw (corpus 1110 on aarch64 and x64) runs saxpy over 1024 floats, a reversal through threadgroup memory and a barrier, and a kernel that does not compile (CompileFailed, the device keeps working). Findings on the macos-14 runners: Metal works on their paravirtual GPU (\"Apple Paravirtual device\") on both architectures, MSL compiles at run time, a kernel may cast a ulong to a device pointer in source (it compiles), but a kernel that did so read and wrote nothing (the buffer's gpuAddress is not usable on the paravirtual device even with useResource), so the launch ABI cannot hand a kernel physical addresses as the SPIR-V path does. The way through is one big shared heap buffer per device, buffers carved from it, addresses being offsets into it that the kernel adds to the heap's pointer (a plain buffer binding, which does work). Phase 2, not started: an MSL emitter in the compiler beside src/spirv.e (141 KB, 118 functions: structured control flow from the NIR graph, device loads and stores through the heap, atomics, barriers, shared memory, builtins, the checked-build fault buffer), a target the compiler can write kernels for on macOS (embedded in the program as the module text the way SPIR-V is), and e.gpu's Metal backend (devices, buffers carved from the heap, launch_device for Metal beside the Vulkan one, faults, queues). The earlier MoltenVK route stays unshippable on the runners (MoltenVK dies in the paravirtual device). The compiler's declaration capacity is not the blocker (D5230)."
+    },
+    {
+      "id": "C194",
+      "category": "library",
+      "group": "macOS",
+      "order": 194,
+      "title": "macOS corpus: the fixtures that are only reported (extern_many, freestanding, os_syscall, x_tds_integrated, gpu_*)",
+      "score": 0.7,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Done 2026-10-25 (D5225): the Mac corpus asserts every fixture that can run on a Mac (1108 pass, 0 fail, 0 info) and skips seven with the reason a Mac has by nature, as SKIP lines counted apart in the TOTAL: extern_many (four glibc extensions libSystem lacks, then it reads its own ELF header), freestanding and os_syscall (an ELF image, Linux system call numbers), gpu_vulkan_raw and gpu_fault_unchecked (Vulkan, which a Mac does not have; a Metal backend is C193), x_tds_integrated (SSPI, Windows), net_ssh (driven by the workflow's SSH step, reported as its SSH line). gpu_reshape is now asserted at 50, the sum its own comment gives. Open: Mac counterparts of the ELF and system-call fixtures (a Mach-O header check and BSD system call numbers) would turn three skips into asserted tests; ui_collections4_v2 failed once on x64 under Rosetta (exit 190, a gesture timing check at 50 ms after a release) and passed on rerun, so it is timing-sensitive on a loaded runner. Done when the three Mac counterparts exist or are decided against."
+    },
+    {
+      "id": "C195",
+      "category": "library",
+      "group": "macOS",
+      "order": 195,
+      "title": "macOS shell polish: drag files and images out, session restore, Dock overlay image",
+      "score": 0.7,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Built 2026-10-25 (D5226): drag_start now drags files (each path as an NSURL file URL, one dragging item per file, up to 16) and images (TIFF data under public.tiff) as well as text and bytes; taskbar_overlay draws the overlay into the lower right quarter of the program's own Dock icon (the first icon is kept so a second overlay replaces the first, and a picture with no area puts the system's back). tests/macos/probe/polish.e on the runners: the overlay is seen in the Dock screenshot over the folder icon, replaced and cleared without error, and a drag of two files and an image out of a window ends Cancelled when a mouse up is posted, on aarch64 and x64; ui_drag_drop and ui_taskbar pass and the corpus is 1108. Not done: session restore (restart_register) stays Unsupported, because a launchd job with KeepAlive starts at once and a Mac restores a program's windows through the system's own saved state, which is not a command line to register; promised files (a file made at the drop's destination) and a real pointer drag with the files landing in Finder (C192)."
+    },
+    {
       "id": "C107",
       "category": "compiler",
       "group": "NeperOS",

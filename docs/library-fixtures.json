@@ -2603,6 +2603,17 @@
    ]
   },
   {
+   "module": "e.gpu.metal",
+   "milestone": "M3",
+   "schedule": "scheduled",
+   "catalogue": 9,
+   "delivered": 9,
+   "pending": [],
+   "fixtures": [
+    "macos_metal_raw"
+   ]
+  },
+  {
    "module": "e.gpu.tensor",
    "milestone": null,
    "schedule": "later",
