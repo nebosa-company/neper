@@ -1155,6 +1155,7 @@ fn box_ratio(l: *const Layout, b: u32) -> (f64, bool) {
         if de != ok || d2 <= 0.0f64 { ret (0.0f64, false) }
         den = d2
     }
+    if l.vmode != 0u8 { ret (den / num, true) }
     ret (num / den, true)
 }
 
@@ -8609,6 +8610,15 @@ fn layout_abs(l: *Layout, b: u32) {
                 cw = rw0
                 ratio_w = true
             }
+        }
+    }
+    if !ratio_w && w_auto && !(has_l && has_r) && has_t && has_b && s.height.kind != .Px && bb.inner != .Replaced {
+        // `top` and `bottom` fix the height: a box with a preferred ratio takes its width from it.
+        let h_from_insets = maxf(0.0f64, cb_h - tv - bv - mt - mb - extras_v)
+        let (rw1, has_rw1) = ratio_width(l, b, to_content_h(l, b, h_from_insets + extras_v) )
+        if has_rw1 {
+            cw = rw1
+            ratio_w = true
         }
     }
     if ratio_w {
