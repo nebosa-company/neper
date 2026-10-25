@@ -24,9 +24,9 @@ Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationS
 
 biometric_verify and photo_picker answer Unsupported and the record says so. LAContext canEvaluatePolicy and evaluatePolicy:localizedReason:reply: (reply is a block, as in C186) for Touch ID; PHPickerViewController is SwiftUI/AppKit-view based and needs a presented window and a result delegate, so check that NSOpenPanel with image types is not the honest answer instead. Verification needs a Mac with Touch ID and a Photos library; CI runners have neither.
 
-### C188 — macOS print dialogs: NSPrintPanel and the page setup panel over the PDF printer (0%)
+### C188 — macOS print dialogs: NSPrintPanel and the page setup panel over the PDF printer (70%)
 
-print_dialog and page_setup_dialog answer Unsupported (D5212 made printing a virtual Save-as-PDF printer; print_dialogs is off). NSPrintPanel / NSPageLayout run modally like the file panels (probe shows a dialog and cancels it from the run loop, tests/macos/probe/file_dialog.e). Decide first: a dialog that lets the user choose a real printer returns a Printer the library cannot print to, so either restrict the panel to PDF output or add real printing through NSPrintOperation with the pages drawn into a view; the first is small, the second is a design.
+Built 2026-10-25 (D5219): print_dialog runs NSPrintPanel modally over a copy of the shared NSPrintInfo with the page range preset to the caller's minimum and maximum, copies and range shown, and returns a Printer (the virtual PDF printer of D5212) carrying the chosen range and copies; page_setup_dialog runs NSPageLayout and returns paper and margins in hundredths of a millimetre (points converted). tests/macos/probe/print_dialogs.e shows both on the runners and dismisses them from the run loop: both answer Cancelled on aarch64 and x64, the screenshot shows the print panel with range 1 to 9; ui_print passes and the corpus is 1105. Open: a confirmed OK (range, copies and the paper and margin values read back) needs a person (C192); a printer other than PDF picked in the panel is ignored, so real printing (NSPrintOperation drawing into a view) is still a design of its own. Done when a confirmed dialog is checked and the real-printer question is decided.
 
 ### C189 — macOS notices through UNUserNotificationCenter: removal, replacement and actions (0%)
 
