@@ -23,14 +23,13 @@ expected() {
     layout_attributes) echo 35 ;;
     inline_nested) echo 5 ;;
     when_target) if [ "${runner[0]:-}" = arch ]; then echo 231; else echo 223; fi ;;
-    gpu_reshape) echo any ;;
-    # What a bare Mac cannot give them: a server or arguments the real suite supplies (x_tds_integrated), and net_ssh, which the workflow's SSH step runs against an asyncssh server and reports as the SSH line, Vulkan
-    # (gpu_fault_unchecked, gpu_vulkan_raw), the ELF and Linux system calls they check (freestanding, os_syscall).
-    net_ssh|x_tds_integrated|gpu_fault_unchecked|gpu_vulkan_raw|freestanding|os_syscall) echo any ;;
-    # Imports four glibc extensions (memrchr, rawmemchr, strchrnul, strverscmp) that libSystem lacks; dyld binds all or none.
-    extern_many) echo any ;;
-    # Reads DejaVu Sans from /usr/share/fonts/truetype/dejavu, which a Mac does not have (exit 30).
-    ui_selection3_v2) echo any ;;
+    # Four workgroups of four, the buffer's sum (the fixture's own comment).
+    gpu_reshape) echo 50 ;;
+    # Skipped, each for a reason a Mac has by nature: net_ssh needs the server the workflow's SSH step starts and is reported as that
+    # step's SSH line; x_tds_integrated is SSPI (Windows); gpu_vulkan_raw and gpu_fault_unchecked call Vulkan, which a Mac does not
+    # have (a Metal backend is C193); freestanding and os_syscall check an ELF image and Linux system call numbers; extern_many
+    # imports four glibc extensions that libSystem lacks (dyld binds all or none) and then reads its own ELF header.
+    net_ssh|x_tds_integrated|gpu_vulkan_raw|gpu_fault_unchecked|freestanding|os_syscall|extern_many) echo skip ;;
     *) echo 0 ;;
   esac
 }
@@ -46,7 +45,7 @@ extra_args() {
   esac
 }
 
-pass=0; fail=0; info=0
+pass=0; fail=0; info=0; skipped=0
 for file in "$dir"/*; do
   name=$(basename "$file")
   chmod +x "$file"
@@ -64,7 +63,9 @@ for file in "$dir"/*; do
   code=$?
   seconds=$(( $(date +%s) - start ))
   want=$(expected "$name")
-  if [ "$want" = "any" ]; then
+  if [ "$want" = "skip" ]; then
+    skipped=$((skipped+1)); echo "SKIP $name $code ${seconds}s"
+  elif [ "$want" = "any" ]; then
     info=$((info+1)); echo "INFO $name $code ${seconds}s"
   elif [ "$code" -eq "$want" ]; then
     pass=$((pass+1)); echo "PASS $name $code ${seconds}s"
@@ -76,4 +77,4 @@ for file in "$dir"/*; do
   fi
   rm -rf "$scratch"
 done
-echo "TOTAL pass=$pass fail=$fail info=$info"
+echo "TOTAL pass=$pass fail=$fail info=$info skip=$skipped"
