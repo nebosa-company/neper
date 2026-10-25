@@ -1153,10 +1153,10 @@
       "group": "WebAssembly",
       "order": 212,
       "title": "e.ui in a browser: text from a virtual keyboard, the clipboard, newest frame only, the gallery",
-      "score": 0,
+      "score": 0.9,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Left by C208 (D5791). Build: lib/wasm/window.js listens for beforeinput and compositionend and sends Text events (the pane's type action, a phone keyboard); clipboard_text and set_clipboard_text through neper_host (navigator.clipboard is async, so the page keeps a copy the Worker reads from the ring's side); the page draws only the newest posted frame per requestAnimationFrame; examples/ui builds for wasm32-wasi with its font read from the in-memory file system and runs on a page. Acceptance: each in the Browser pane with a screenshot. Not yet: all of it."
+      "evidence": "D5800/D5801: text from beforeinput and compositionend through a textarea beside the canvas (the Browser pane's type action reaches a field), clipboard_text and set_clipboard_text over a copy in the ring (Ctrl+C/Ctrl+V and a paste event in the pane), newest frame per requestAnimationFrame (Node test: three posted, one drawn), examples/ui built for wasm32-wasi and running on a page (screenshots in docs/wasm-ui). Sweep sample 26/26 under both runners; window.mjs registered with the gallery. Not yet: a real device's virtual keyboard, newest-frame dropping measured in the pane, window_visible."
     }
   ]
 }
