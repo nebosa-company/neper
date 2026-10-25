@@ -91,3 +91,5 @@ L168	library	0	603	Browser M3: the real web without JavaScript	all of it.
 L169	library	0	640	Browser M4: JavaScript engine and DOM bindings	all of it.
 L170	library	0	541	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it.
 L171	library	0	623	Browser M6: beyond Vaper (gap items)	all of it.
+L173	library	0.9	1338	Browser: ad and tracker blocking on every request	PART: e.net.fetch.Config.block_hosts and allow_hosts (from e.net.policy.parse_filter_list: ||host^ rules and @@||host^ exceptions) refuse any request that has a referrer (a subresource) to a listed ho
+L174	library	0.85	1234	Browser: certificate validation result and error page	PART: e.net.fetch reports a certificate failure from the TLS handshake (HTTP/1.1 and HTTP/2 paths) as CertificateError instead of the generic network error, the shell shows a not-private message on th
