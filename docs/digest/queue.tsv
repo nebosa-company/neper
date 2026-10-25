@@ -90,8 +90,4 @@ L168	library	0	603	Browser M3: the real web without JavaScript	all of it.
 L169	library	0	640	Browser M4: JavaScript engine and DOM bindings	all of it.
 L170	library	0	541	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it.
 L171	library	0	623	Browser M6: beyond Vaper (gap items)	all of it.
-C180	compiler	0	953	wasm32-wasi 1: target, whole-program emitter, dispatch-loop control flow, integer subset, runtime in os.wasi.e	all of it.
-C181	compiler	0	503	wasm32-wasi 2: the rest of NIR (floats, casts, f16/bf16, Switch, indirect calls, atomics, simd128)	all of it.
-C182	library	0	514	wasm32-wasi 3: the WASI surface (files, readdir, clock, random, environment) and .wasi.e variants	all of it.
-C183	compiler	0	600	wasm32-wasi 4: structured control flow, operand folding, name section	all of it.
-C184	compiler	0	312	wasm32-wasi 5: the compiler itself as neper.wasm	all of it.
+C185	compiler	0	1316	A launch's requirements depend on the worker count	Found by C184's differential (D5641): `emit-executable tests/selfhost/fixtures/link/gpu_tensor/src/main.e .

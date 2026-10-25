@@ -10947,6 +10947,55 @@ foreach ($extraFixture in (Get-Content (Join-Path $PSScriptRoot 'extra-fixtures.
     try { & $extraPath | Out-Null } finally { Pop-Location }
     if ($LASTEXITCODE -ne 0) { throw "a $extraFixture check failed: exit $LASTEXITCODE" }
 }
+# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by scripts/run-wasm.mjs from the repo
+# root; `--release` drops the debug-only rows and keeps the bounds row; neper.wasm emits what this compiler emits.
+$wasmNode = Get-Command node -ErrorAction SilentlyContinue
+if ($wasmNode) {
+    $wasmBuild = Join-Path $testBuild 'wasm'
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $wasmBuild
+    New-Item -ItemType Directory -Force -Path $wasmBuild | Out-Null
+    $wasmRunner = Join-Path $repo 'scripts\run-wasm.mjs'
+    # A trap writes to standard error, which -ErrorAction Stop would turn into a terminating error.
+    function Invoke-Wasm([string]$module, [string[]]$arguments) {
+        Push-Location $repo
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $text = (& node --no-warnings $wasmRunner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
+        return @{ Status = $LASTEXITCODE; Output = $text }
+    }
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment') {
+        $wasmPath = Join-Path $wasmBuild "$wasmFixture.wasm"
+        $wasmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPath
+        if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
+        $wasmRun = Invoke-Wasm $wasmPath @()
+        if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    }
+    $wasmReleaseSource = Join-Path $PSScriptRoot 'fixtures\link\wasm_release\src\main.e'
+    $wasmDebugPath = Join-Path $wasmBuild 'release-debug.wasm'
+    $wasmReleasePath = Join-Path $wasmBuild 'release.wasm'
+    if ((& $compiler emit-executable $wasmReleaseSource $repo 'wasm32' 'wasi' $wasmDebugPath) -ne 'executable written') { throw 'the release fixture did not emit as WebAssembly' }
+    if ((& $compiler emit-executable $wasmReleaseSource $repo 'wasm32' 'wasi' $wasmReleasePath --release) -ne 'executable written') { throw 'the release fixture did not emit as WebAssembly with --release' }
+    $wasmRun = Invoke-Wasm $wasmDebugPath @()
+    if ($wasmRun.Status -ne 134 -or $wasmRun.Output -notmatch [regex]::Escape('main.e:14:19: trap[overflow]: u8 + overflows')) { throw "the release fixture did not trap in debug on wasm32-wasi: $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmReleasePath @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the release fixture failed with --release on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmReleasePath @('bounds')
+    if ($wasmRun.Status -ne 134 -or $wasmRun.Output -notmatch [regex]::Escape('main.e:35:9: trap[bounds]: index 8 out of bounds for len 8')) { throw "the bounds row did not trap in a wasm32-wasi release build: $($wasmRun.Output)" }
+    if ((Get-Item $wasmReleasePath).Length -ge (Get-Item $wasmDebugPath).Length) { throw 'the wasm32-wasi release module is not smaller than the debug one' }
+    # scripts/wasm-compiler.sh is bash: Git's, never WSL's, which cannot read a Windows path.
+    $wasmGit = Get-Command git -ErrorAction SilentlyContinue
+    $wasmBash = $null
+    if ($wasmGit) { $wasmBash = Join-Path (Split-Path -Parent (Split-Path -Parent $wasmGit.Source)) 'bin\bash.exe' }
+    if ($wasmBash -and (Test-Path -LiteralPath $wasmBash)) {
+        $env:NEPER_COMPILER = $compiler
+        try { & $wasmBash (Join-Path $repo 'scripts/wasm-compiler.sh') } finally { Remove-Item Env:NEPER_COMPILER }
+        if ($LASTEXITCODE -ne 0) { throw 'neper.wasm emits something the native compiler does not' }
+    } else {
+        Write-Host 'Git Bash was not found: the neper.wasm differential was skipped'
+    }
+} else {
+    Write-Host 'node is not on PATH: the wasm32-wasi checks were skipped'
+}
 if ($env:NEPER_NEPEROS -eq '1') {
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
 # finds its console, firmware and memory in the device tree, turns translation on, takes a

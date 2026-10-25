@@ -10636,6 +10636,41 @@ while read -r extra_fixture; do
     chmod +x "$test_build/extra-$extra_fixture"
     (cd "$repo" && "$test_build/extra-$extra_fixture" > /dev/null) || { printf '%s\n' "a $extra_fixture check failed" >&2; exit 1; }
 done < "$repo/tests/selfhost/extra-fixtures.txt"
+# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by scripts/run-wasm.mjs from the repo
+# root; `--release` drops the debug-only rows and keeps the bounds row; neper.wasm emits what this compiler emits.
+if command -v node >/dev/null 2>&1; then
+    wasm_build="$test_build/wasm"
+    rm -rf "$wasm_build"
+    mkdir -p "$wasm_build"
+    for wasm_fixture in wasm_basics wasm_ops wasm_flow wasm_reserve fs_basics os_clock_random os_environment; do
+        wasm_written=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")
+        [ "$wasm_written" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as WebAssembly" >&2; exit 1; }
+        (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
+    done
+    wasm_release_source="$repo/tests/selfhost/fixtures/link/wasm_release/src/main.e"
+    [ "$("$test_build/neper-self" emit-executable "$wasm_release_source" "$repo" wasm32 wasi "$wasm_build/release-debug.wasm")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$wasm_release_source" "$repo" wasm32 wasi "$wasm_build/release.wasm" --release)" = 'executable written' ]
+    wasm_status=0
+    wasm_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/release-debug.wasm" 2>&1) || wasm_status=$?
+    [ "$wasm_status" -eq 134 ]
+    case "$wasm_output" in
+        *'main.e:14:19: trap[overflow]: u8 + overflows'*) ;;
+        *) printf '%s\n' "the release fixture did not trap in debug on wasm32-wasi: $wasm_output" >&2; exit 1 ;;
+    esac
+    wasm_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/release.wasm" 2>&1)
+    [ "$wasm_output" = '' ]
+    wasm_status=0
+    wasm_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/release.wasm" bounds 2>&1) || wasm_status=$?
+    [ "$wasm_status" -eq 134 ]
+    case "$wasm_output" in
+        *'main.e:35:9: trap[bounds]: index 8 out of bounds for len 8'*) ;;
+        *) printf '%s\n' "the bounds row did not trap in a wasm32-wasi release build: $wasm_output" >&2; exit 1 ;;
+    esac
+    [ "$(wc -c < "$wasm_build/release.wasm")" -lt "$(wc -c < "$wasm_build/release-debug.wasm")" ]
+    NEPER_COMPILER="$test_build/neper-self" "$repo/scripts/wasm-compiler.sh" || { printf '%s\n' 'neper.wasm emits something the native compiler does not' >&2; exit 1; }
+else
+    printf '%s\n' 'node is not on PATH: the wasm32-wasi checks were skipped'
+fi
 if [ "${NEPER_NEPEROS:-}" = 1 ]; then
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
 # finds its console, firmware and memory in the device tree, turns translation on, takes a

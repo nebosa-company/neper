@@ -1005,59 +1005,15 @@
       "evidence": "Plan docs/browser-progress.html. Needs L170; individual gap rows may start earlier when nothing blocks them. Acceptance: every tracker row with track gap or core is done or explicitly deferred with a decision: Shadow DOM and custom elements (6.16), Workers and Service Workers (6.18, 6.19), contenteditable and Selection (6.11, 6.12), process isolation and OS sandbox (8.1 to 8.3, N.6), DevTools (7.13), WebAssembly (5.17), vertical writing modes (2.16, N.5), audio (3.19), backdrop-filter and blend modes (N.3), colour emoji and CFF (N.4), HSTS and clickjacking protections (4.15, 4.16), fuzzing (8.4). Not yet: all of it."
     },
     {
-      "id": "C180",
+      "id": "C185",
       "category": "compiler",
-      "group": "WebAssembly",
-      "order": 180,
-      "title": "wasm32-wasi 1: target, whole-program emitter, dispatch-loop control flow, integer subset, runtime in os.wasi.e",
+      "group": "Back end",
+      "order": 185,
+      "title": "A launch's requirements depend on the worker count",
       "score": 0,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Design D5213. Acceptance: (1) `emit-executable FILE ROOT wasm32 wasi OUT` and `neper build FILE --target wasm32-wasi` write a module Node instantiates (project.e target matrix, wasm_command beside spirv_command, src/wasm.e); (2) integer, bool, err and pointer instructions, calls with 0-2 results, Stack frames on the shadow stack, Load/Store/Copy/Zero, globals, strings, checked arithmetic and traps with native text and status 134; (3) lib/e/os.wasi.e defines the neper_* runtime symbols the subset reaches (write, stdout, stderr, exit, args, neper_mem_*, neper_hash_bytes, neper_trap) and _start; (4) scripts/run-wasm.mjs, `scripts/check-fixture.sh NAME --target wasm32-wasi`, and scripts/wasm-sweep.sh comparing exit status and stdout with the host x64 build of each link fixture; (5) a new link fixture wasm_basics passes on wasm32-wasi under Node on Windows and WSL and natively; (6) the sweep passes at least 20 link fixtures. Not yet: all of it."
-    },
-    {
-      "id": "C181",
-      "category": "compiler",
-      "group": "WebAssembly",
-      "order": 181,
-      "title": "wasm32-wasi 2: the rest of NIR (floats, casts, f16/bf16, Switch, indirect calls, atomics, simd128)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Design D5213; needs C180. Acceptance: (1) every NIR opcode but Barrier, MemoryBarrier, Subgroup and FrameAddress is emitted, and the sweep reports no opcode the emitter refuses; (2) VectorBinary through simd128 per D5213's table, i8x16 multiply lane by lane; (3) a link fixture wasm_ops covers each opcode family and passes on wasm32-wasi and natively; (4) every link fixture that emits for wasm32-wasi and needs no files, threads, processes or network passes the differential sweep. Not yet: all of it."
-    },
-    {
-      "id": "C182",
-      "category": "library",
-      "group": "WebAssembly",
-      "order": 182,
-      "title": "wasm32-wasi 3: the WASI surface (files, readdir, clock, random, environment) and .wasi.e variants",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Design D5213; needs C180. Acceptance: (1) os.wasi.e implements open/read/write/close/seek/readdir over path_open on the preopened directory, clock over clock_time_get, random over random_get, environment over environ_get, wait_u32 and wake_* returning at once; (2) threads, spawn, wait, reserve and commit answer Unsupported; (3) .wasi.e variants for the e.* modules a passing fixture needs; (4) link fixtures fs_basics, a time fixture and an environment fixture pass on wasm32-wasi under Node. Not yet: all of it."
-    },
-    {
-      "id": "C183",
-      "category": "compiler",
-      "group": "WebAssembly",
-      "order": 183,
-      "title": "wasm32-wasi 4: structured control flow, operand folding, name section",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Design D5213; needs C181. Acceptance: (1) every reducible function is emitted as structured block/loop/br from the dominator tree and reverse postorder (Ramsey, Beyond Relooper), reusing spirv.plan_flow's RPO and back-edge work (D1612), with the dispatch loop kept for an irreducible function and the sweep reporting how many fell back; (2) single-use values fold onto the operand stack; (3) a name section, shown by a Node stack trace naming module.function; (4) the differential sweep is unchanged and the speed against the dispatch loop is measured on benchmarks/ and recorded. Not yet: all of it."
-    },
-    {
-      "id": "C184",
-      "category": "compiler",
-      "group": "WebAssembly",
-      "order": 184,
-      "title": "wasm32-wasi 5: the compiler itself as neper.wasm",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Design D5213; needs C182 and C183. Acceptance: `emit-executable src/main.e ROOT wasm32 wasi neper.wasm` builds the compiler; run under Node with the repository preopened, it emits an executable for a link fixture that is byte-identical to what the native neper-self emits for the same target. Not yet: all of it."
+      "evidence": "Found by C184's differential (D5641): `emit-executable tests/selfhost/fixtures/link/gpu_tensor/src/main.e . x64 windows OUT` writes different bytes at the default worker count and at `-j 1` (offsets 50339, 51948 and 53420 for x64 windows: the `mov r8d` of `launch_run`'s requirements argument is 0 with eight workers and 4, 256, 256 with one). `lower.e` `lower_launcher_instance` emits `check.kernel_fact(c, template) & 511` as a constant, but the facts are a per-checker table filled by `check_kernel_profile` when the kernel's body is checked, so a launcher lowered by a worker that did not check the kernel (`tensor.add[i64]` instantiated in main, kernel `add_i64` in e.gpu.tensor) reads 0 and a device without Int64 would be launched anyway. Plan: make the requirements a companion of the kernel like `K$frame` and `K$shared` (`emit_kernel_size` beside the kernel, `emit_kernel_size_call` in the launcher, the suffix in `em.e`'s companion list), so the module that checked the kernel answers. Acceptance: (1) gpu_tensor emits the same bytes at -j 1, -j 2 and the default on x64 windows and x64 linux, and its requirements are the -j 1 values; (2) a fixture whose launcher and kernel live in different modules checks the requirement a launch reports; (3) `scripts/wasm-compiler.sh --all` reports no `differ` pair."
     }
   ]
 }

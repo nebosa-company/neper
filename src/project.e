@@ -131,7 +131,7 @@ fn without_extension(path: str) -> (str, err) {
 }
 
 fn target_suffix(value: str) -> bool {
-    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "neperos") || same(value, "x64") || same(value, "x86") || same(value, "aarch64") || same(value, "spv") || same(value, "ptx")
+    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "neperos") || same(value, "wasi") || same(value, "x64") || same(value, "x86") || same(value, "aarch64") || same(value, "wasm32") || same(value, "spv") || same(value, "ptx")
 }
 
 fn without_target_suffix(stem: str) -> str {
@@ -191,14 +191,15 @@ fn module_name(a: *mem.Arena, project: Project, named_file: str) -> (str, err) {
 }
 
 fn valid_arch(arch: str) -> bool {
-    ret same(arch, "x64") || same(arch, "x86") || same(arch, "aarch64") || same(arch, "spv") || same(arch, "ptx")
+    ret same(arch, "x64") || same(arch, "x86") || same(arch, "aarch64") || same(arch, "wasm32") || same(arch, "spv") || same(arch, "ptx")
 }
 
 fn valid_os(value: str) -> bool {
-    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "neperos")
+    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "neperos") || same(value, "wasi")
 }
 
 fn valid_target(arch: str, target_os: str) -> bool {
+    if same(arch, "wasm32") || same(target_os, "wasi") { ret same(arch, "wasm32") && same(target_os, "wasi") }
     if same(arch, "spv") || same(arch, "ptx") { ret same(target_os, "none") }
     // aarch64-none is a kernel image (D2126); no other CPU target runs without an OS.
     // aarch64-neperos is a program NeperOS runs at EL0 (D2127).

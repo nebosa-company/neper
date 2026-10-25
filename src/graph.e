@@ -5,6 +5,7 @@ use e.os
 use assets
 use lex
 use parse
+use platform
 use project
 use source
 use syntax
@@ -319,8 +320,8 @@ type FrontCounts = struct {
 fn reserved_arena(a: *mem.Arena) -> (mem.Arena, err) {
     var none: mem.Arena = zero
     // One page short of the root's capacity: the mark by which the runtime tells a
-    // reservation from the root, which it still commits to its offset.
-    let capacity = mem.stats(a).capacity - 4096usize
+    // reservation from the root, which it still commits to its offset (less on wasi, D5640).
+    let capacity = platform.reservation(mem.stats(a).capacity)
     let (base, reserve_error) = os.reserve(capacity)
     if reserve_error != ok { ret (none, reserve_error) }
     // The host by the shape of its current directory (D348): `/` first is Linux.
@@ -411,7 +412,8 @@ fn front_block(scratch: *mem.Arena, token_count: usize, tree: *parse.Tree) -> (m
 }
 
 fn worker_cap(g: *Graph, most: usize) -> usize {
-    if g.jobs != 0usize && g.jobs < most { ret g.jobs }
+    let jobs = platform.jobs(g.jobs)
+    if jobs != 0usize && jobs < most { ret jobs }
     ret most
 }
 
@@ -1317,8 +1319,7 @@ fn finish(g: *Graph) -> err {
     ret ok
 }
 
-fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, host_os: str, project_root: str) -> err {
-    try begin(a, g, root_path, toolchain_root, arch, host_os, project_root)
+fn load_waves(a: *mem.Arena, g: *Graph) -> err {
     while g.scanned < g.count {
         let wave_start = g.scanned
         let wave_end = g.count
@@ -1330,6 +1331,21 @@ fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str
         }
         try front_modules(a, g, g.list[0usize..wave_end - wave_start])
         try wave_imports(a, g, wave_start, wave_end)
+    }
+    ret ok
+}
+
+fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, host_os: str, project_root: str) -> err {
+    try begin(a, g, root_path, toolchain_root, arch, host_os, project_root)
+    try load_waves(a, g)
+    // A WebAssembly program has no runtime to carry `neper_os_write` and the rest: they
+    // are functions of the `e.os` variant, so it is in every graph (D5600).
+    if same(host_os, "wasi") && !has_module(g, "e.os") {
+        let (os_path, os_error) = resolve_source(a, g, "e.os")
+        if os_error != ok { ret os_error }
+        let (os_module, add_error) = add_module(a, g, "e.os", os_path)
+        if add_error != ok { ret add_error }
+        try load_waves(a, g)
     }
     ret finish(g)
 }

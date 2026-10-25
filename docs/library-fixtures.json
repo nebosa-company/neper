@@ -2695,7 +2695,8 @@
     "robot_plan",
     "text_tokenize",
     "ui_inputs3_v2",
-    "ui_theme"
+    "ui_theme",
+    "wasm_ops"
    ]
   },
   {
@@ -2861,7 +2862,8 @@
     "gpu_fault_bounds",
     "simd_lanes",
     "trap_align",
-    "trap_arithmetic"
+    "trap_arithmetic",
+    "wasm_ops"
    ]
   },
   {

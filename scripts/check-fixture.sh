@@ -9,12 +9,26 @@
 # else in the suite can see the change, and the only new fact is whether this one fixture
 # passes. Use this during development and the full suite once per batch, at merge.
 #
-#   scripts/check-fixture.sh game_core          # host compiler, host target
-#   scripts/check-fixture.sh game_core --keep   # leave the executable behind
+#   scripts/check-fixture.sh game_core                          # host compiler, host target
+#   scripts/check-fixture.sh game_core --keep                   # leave the executable behind
+#   scripts/check-fixture.sh game_core --target wasm32-wasi     # a WebAssembly module under Node
+#   scripts/check-fixture.sh wasm_release --target wasm32-wasi --release   # built with --release
 set -eu
 
-fixture=${1:?usage: check-fixture.sh <fixture-name> [--keep]}
-keep=${2:-}
+fixture=${1:?usage: check-fixture.sh <fixture-name> [--keep] [--target wasm32-wasi] [--release]}
+shift
+keep=
+release=
+target=
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --keep) keep=1 ;;
+        --release) release=--release ;;
+        --target) shift; target=${1:?--target needs a value} ;;
+        *) printf '%s\n' "unknown argument: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 source="$repo/tests/selfhost/fixtures/link/$fixture/src/main.e"
 [ -f "$source" ] || { printf '%s\n' "no such fixture: $fixture" >&2; exit 2; }
@@ -26,15 +40,34 @@ esac
 
 # Rebuild the self-hosted compiler only when a source file is newer than it, so a run of
 # this script normally costs one compile of one fixture.
-newest_source=$(find "$repo/src" -name '*.e' -newer "$compiler" -print -quit 2>/dev/null || true)
-if [ ! -x "$compiler" ] || [ -n "$newest_source" ]; then
+# NEPER_COMPILER names a compiler already built (a stage 2, say) and skips the rebuild below.
+newest_source=
+[ -n "${NEPER_COMPILER:-}" ] && compiler=$NEPER_COMPILER
+[ -z "${NEPER_COMPILER:-}" ] && newest_source=$(find "$repo/src" -name '*.e' -newer "$compiler" -print -quit 2>/dev/null || true)
+if [ -z "${NEPER_COMPILER:-}" ] && { [ ! -x "$compiler" ] || [ -n "$newest_source" ]; }; then
     printf '%s\n' "building the self-hosted compiler ($host_os)..."
     [ -x "$bootstrap" ] || "$repo/scripts/build-bootstrap.sh"
     "$bootstrap" build "$repo/src/main.e" --arena 1g --output "$compiler" > "$repo/build/check-fixture-build.log" 2>&1 \
         || { printf '%s\n' "the compiler did not build; see build/check-fixture-build.log" >&2; exit 1; }
 fi
 
-written=$("$compiler" emit-executable "$source" "$repo" x64 "$host_os" "$exe")
+if [ -n "$target" ]; then
+    [ "$target" = wasm32-wasi ] || { printf '%s\n' "unknown target: $target" >&2; exit 2; }
+    exe="${exe%.exe}.wasm"
+    written=$("$compiler" emit-executable "$source" "$repo" wasm32 wasi "$exe" $release)
+    [ "$written" = 'executable written' ] || { printf '%s\n' "$fixture did not emit: $written" >&2; exit 1; }
+    status=0
+    node --no-warnings "$repo/scripts/run-wasm.mjs" "$exe" || status=$?
+    [ -n "$keep" ] || rm -f "$exe"
+    if [ "$status" -eq 0 ]; then
+        printf '%s\n' "$fixture passed on wasm32-wasi"
+    else
+        printf '%s\n' "$fixture FAILED on wasm32-wasi (exit $status)" >&2
+    fi
+    exit "$status"
+fi
+
+written=$("$compiler" emit-executable "$source" "$repo" x64 "$host_os" "$exe" $release)
 [ "$written" = 'executable written' ] || { printf '%s\n' "$fixture did not emit: $written" >&2; exit 1; }
 [ "$host_os" = windows ] || chmod +x "$exe"
 

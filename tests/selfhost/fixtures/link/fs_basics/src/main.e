@@ -251,14 +251,18 @@ fn main(a: *mem.Arena) -> err {
     // nothing would pass either one on its own.
     var read_only: fs.Permissions = zero
     read_only.owner_read = true
-    if fs.set_permissions(a, "np-fs/one.txt", read_only) != ok { os.exit(110i32) }
-    let (locked, locked_error) = fs.metadata(a, "np-fs/one.txt", true)
-    if locked_error != ok { os.exit(111i32) }
-    if locked.permissions.owner_write { os.exit(112i32) }
-    if !locked.permissions.owner_read { os.exit(113i32) }
     var writable: fs.Permissions = zero
     writable.owner_read = true
     writable.owner_write = true
+    if fs.set_permissions(a, "np-fs/one.txt", read_only) != ok { os.exit(110i32) }
+    // WASI has no chmod (D5622): there a set succeeds and changes nothing, so only the calls are
+    // checked, not what they leave behind.
+    when target.os != .Wasi {
+        let (locked, locked_error) = fs.metadata(a, "np-fs/one.txt", true)
+        if locked_error != ok { os.exit(111i32) }
+        if locked.permissions.owner_write { os.exit(112i32) }
+        if !locked.permissions.owner_read { os.exit(113i32) }
+    }
     if fs.set_permissions(a, "np-fs/one.txt", writable) != ok { os.exit(114i32) }
     let (freed, freed_error) = fs.metadata(a, "np-fs/one.txt", true)
     if freed_error != ok { os.exit(115i32) }
@@ -486,6 +490,8 @@ fn main(a: *mem.Arena) -> err {
         if durability_target_error != os.NotFound { os.exit(262i32) }
     }
 
+    // Needs a second thread (D5622): a module has one, and thread.spawn answers Unsupported.
+    when target.os != .Wasi {
     // Race a real directory against a link that points outside the held root. The host
     // enforces `NoSymlinks` during its walk: successful opens may read only the safe file,
     // while the link and the short missing-name windows may be refused.
@@ -551,6 +557,7 @@ fn main(a: *mem.Arena) -> err {
     } else {
         if race_link_error != fs.Denied { os.exit(198i32) }
     }
+    }
     clear_root_race(a)
 
     // A `Root` is a directory held open, and every name used through it resolves against
@@ -607,6 +614,10 @@ fn main(a: *mem.Arena) -> err {
     if moved_gone_error != ok { os.exit(260i32) }
     if moved_gone { os.exit(261i32) }
 
+    // Node's WASI keeps the path a descriptor was opened by and resolves names against that, so a
+    // moved directory is not reachable through its handle there (D5622); the rest of the fixture
+    // does not depend on this block.
+    when target.os != .Wasi {
     // The handle, not the path that first named it, is the authority. Move the directory
     // while `Root` is live, then exercise every relative operation through that same
     // handle. A path-joined implementation would look under the now-missing old name.
@@ -635,6 +646,7 @@ fn main(a: *mem.Arena) -> err {
     }
 
     if fs.move(a, "np-fs-moved", "np-fs") != ok { os.exit(197i32) }
+    }
 
     if fs.root_close(&root_holder) != ok { os.exit(249i32) }
 
