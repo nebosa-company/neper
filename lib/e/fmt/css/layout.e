@@ -75,7 +75,7 @@ type Layout = struct {
     floats: list.List[FloatRec], tables: list.List[TableData],
     counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
     orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule],
-    sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool
+    sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64
 }
 
 // A column rule: a filled rectangle in the border box of multicol container `box` (see `layout_multicol`).
@@ -8172,6 +8172,17 @@ fn unbreakable(l: *const Layout, b: u32) -> bool {
     ret bb.inner == .Replaced || bb.inner == .Table || bb.inner == .Flex || bb.inner == .Grid || bb.inner == .Marker || bb.inner == .Text || bb.inner == .Break
 }
 
+// Where column `k` of a multicol container sits: across a row of `mc_count` columns (a wrapping container, `column-wrap: wrap`) or in one row.
+fn col_dx(l: *const Layout, k: usize, stride: f64) -> f64 {
+    if l.mc_count > 0usize { ret f64(k % l.mc_count) * stride }
+    ret f64(k) * stride
+}
+
+fn col_dy(l: *const Layout, k: usize, colh: f64) -> f64 {
+    if l.mc_count > 0usize { ret f64(k) * colh - f64(k / l.mc_count) * (colh + l.mc_rgap) }
+    ret f64(k) * colh
+}
+
 // Moves the lines and blocks of `b` into columns of height `colh` (apply) or only finds the last column used.
 // `abs_y` is `b`'s border box top in the one-column layout, measured from the multicol content top.
 fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -> usize {
@@ -8186,8 +8197,8 @@ fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -
             let k = column_of(top + ln.y, colh)
             if k > maxk { maxk = k }
             if apply && k > 0usize {
-                let dx = f64(k) * stride
-                let dy = f64(k) * colh
+                let dx = col_dx(l, k, stride)
+                let dy = col_dy(l, k, colh)
                 l.lines.items[first + li].x += dx
                 l.lines.items[first + li].y -= dy
                 l.lines.items[first + li].baseline -= dy
@@ -8220,8 +8231,8 @@ fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -
                 if k0 == k1 || unbreakable(l, kid) || (kb.first == NONE && kb.line_count == 0u32) {
                     if k0 > maxk { maxk = k0 }
                     if apply && k0 > 0usize {
-                        l.boxes.items[usize(kid)].x += f64(k0) * stride
-                        l.boxes.items[usize(kid)].y -= f64(k0) * colh
+                        l.boxes.items[usize(kid)].x += col_dx(l, k0, stride)
+                        l.boxes.items[usize(kid)].y -= col_dy(l, k0, colh)
                     }
                 } else {
                     let m = colify(l, kid, ky, colh, stride, apply)
@@ -8410,7 +8421,30 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
     let s = st(l, bb.style)
     let (fill, has_fill) = extra_text(s, "column-fill")
     let fill_auto = has_fill && str.eq(cv.lower(l.a, cv.trim_ws(fill)), "auto")
-    if ch >= 0.0f64 && fill_auto {
+    // `column-height` fixes the columns' height; `column-wrap: wrap` starts another row of columns when they run out.
+    let (chv, has_chv) = extra_text(s, "column-height")
+    var col_fixed = -1.0f64
+    if has_chv {
+        let ctxh = style.new_context(l.a, l.viewport_width, l.viewport_height)
+        let (hlen, hgood) = style.parse_len(&ctxh, cv.trim_ws(chv), s.font_size, 0u32)
+        if hgood && hlen.kind == .Px && hlen.pct == 0.0f64 && hlen.px > 0.0f64 { col_fixed = hlen.px }
+    }
+    let (cwr, has_cwr) = extra_text(s, "column-wrap")
+    let col_wrap = col_fixed >= 0.0f64 && has_cwr && str.eq(cv.lower(l.a, cv.trim_ws(cwr)), "wrap")
+    if col_fixed >= 0.0f64 && fill_auto {
+        colh = col_fixed
+    } else if col_fixed >= 0.0f64 && !col_wrap {
+        colh = col_fixed
+    } else if col_fixed >= 0.0f64 {
+        // Wrapping and balancing: as short as the columns of one row allow, no taller than `column-height`.
+        var stepw = maxf(1.0f64, total / 64.0f64)
+        var iterw = 0usize
+        while iterw < 80usize && colify(l, b, origin, colh, stride, false) >= cols.count && colh < col_fixed {
+            colh += stepw
+            iterw += 1usize
+        }
+        if colh > col_fixed { colh = col_fixed }
+    } else if ch >= 0.0f64 && fill_auto {
         colh = ch
     } else {
         // Balance: the least column height under which everything fits in the available columns.
@@ -8423,9 +8457,19 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
         if colh > total { colh = total }
         if ch >= 0.0f64 && colh > ch { colh = ch }
     }
-    let used_k = colify(l, b, origin, colh, stride, true)
+    var used_k = colify(l, b, origin, colh, stride, false)
+    var result_h = colh
+    if col_wrap {
+        let rows = used_k / cols.count + 1usize
+        let rgap = flex_gap(s.row_gap, maxf(ch, 0.0f64))
+        l.mc_count = cols.count
+        l.mc_rgap = rgap
+        result_h = f64(rows) * colh + f64(rows - 1usize) * rgap
+    }
+    used_k = colify(l, b, origin, colh, stride, true)
+    l.mc_count = 0usize
     record_rules(l, b, cols, used_k + 1usize, 0.0f64, colh)
-    ret colh
+    ret result_h
 }
 
 // --- Positioned boxes.
@@ -9073,7 +9117,7 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (grids, e8) = list.init[GridGeom](a, 4usize)
     let (rules_made, e9r) = list.init[ColRule](a, 8usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9r != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false, mc_count: 0usize, mc_rgap: 0.0f64 }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))
