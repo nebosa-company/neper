@@ -1,9 +1,10 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ui_counter</title>
 <style>
   body { margin: 16px; font: 14px sans-serif }
-  canvas { display: block; width: 480px; height: 320px; border: 1px solid #888 }
+  canvas { display: block; width: 480px; max-width: calc(100vw - 34px); height: 320px; border: 1px solid #888 }
   pre { margin: 8px 0 }
 </style>
 <canvas id="screen" width="480" height="320"></canvas>
@@ -22,11 +23,15 @@
   window.neperResult = out
   const shown = document.getElementById('stdout')
   const decoder = new TextDecoder()
-  const stdout = (bytes) => { if (bytes) shown.textContent = out.stdout += decoder.decode(bytes, { stream: true }) }
+  const stdout = (bytes) => {
+    if (!bytes) return
+    shown.textContent = out.stdout += decoder.decode(bytes, { stream: true })
+    if (window.neperDebug) (window.neperDebug.lines ??= []).push([Math.round(performance.now()), out.stdout.slice(-20)])
+  }
   try {
     const font = new Uint8Array(await (await fetch('/neperos/assets/fonts/jost-regular.ttf')).arrayBuffer())
     out.exitCode = (await run(query.get('module') ?? '/build/wasm-sweep/ui_counter.wasm', {
-      canvas: screen, files: { 'jost-regular.ttf': font }, stdout,
+      canvas: screen, files: { 'jost-regular.ttf': font }, stdout, debug: query.has('debug') ? (window.neperDebug = { t0: performance.now() }) : undefined,
     })).exitCode
   } catch (error) {
     out.error = error.message
