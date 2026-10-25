@@ -26,6 +26,127 @@
       "evidence": "Found on 2026-10-23 by the macOS window probe: `extern fn f(r: usize, s: usize) -> CGRect` with CGRect = struct { x: f64, y: f64, w: f64, h: f64 } stops aarch64 lowering with `cannot lower main: construct is not implemented in self-hosted lowering` at the call (x64 compiles it, through the memory-returned slot). A two-double struct, a double, a BOOL and a C string all return correctly on both Mac architectures; AppKit hands window and view sizes back as NSRect, so the window code reads them through KVC (`valueForKey:` then `NSValue getValue:`) until this is fixed. Where it stops: `lower.e` `c_result_type` already names a 3- or 4-member HFA `return-hfa-N-W` (D2124) and `codegen_a64.e` `pack_hfa` / `hfa_pair` pack the members into at most the two eightbytes x0 and x1 hold; a four-double HFA comes back in v0-v3, four eightbytes, which the result model (one value, or a pair) has no room for. Plan: give a call whose result is a 3- or 4-member HFA a result slot, as a C return slot is for a struct returned in memory: lowering allocates it and passes nothing, the call selection stores v0-v3 into it after the call, and the value is read from the slot. Acceptance: (1) a fixture `macos_hfa_return` calls CoreGraphics `CGRectMake`, `CGRectInset` and `CGRectUnion` through `@import` for aarch64-macos and x64-macos and checks every member, and passes on a Mac in the corpus; (2) an aarch64-linux fixture returns 3- and 4-member double HFAs and a 4-member float HFA from a C shared object built by cc, run under the aarch64 test environment; (3) x64 and the 2-member case are byte-identical to before; (4) the window code reads sizes by a direct rect-returning call and the KVC workaround is deleted."
     },
     {
+      "id": "C185",
+      "category": "library",
+      "group": "macOS",
+      "order": 185,
+      "title": "macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)",
+      "score": 0.8,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-10-25 on assoc-ci, not yet merged: shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleURLTypes, the program copied in as its executable), register it with lsregister -f and make it the default handler through LSSetDefaultRoleHandlerForContentType / LSSetDefaultHandlerForURLScheme; dissociate removes it. The shell target is the NSApp delegate and answers application:openFiles: and application:openURLs: into activation_poll. tests/macos/probe/open_events.e on the Mac runners: LaunchServices starts the registered copy, which sees a bundle identifier and receives the open-file event (log: bundled, delegate set, got an activation). Open: the probe's result files are not yet seen by the parent (exit 10), and the URL event has not been seen; then the ui_activation fixture and the corpus must pass with associations turned on. Done when open_events prints open events ok on both architectures."
+    },
+    {
+      "id": "C186",
+      "category": "library",
+      "group": "macOS",
+      "order": 186,
+      "title": "macOS permissions: camera, microphone and location status and request",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "permission_status answers Granted only for the screen; permission_request answers Unavailable. Needs: AVCaptureDevice authorizationStatusForMediaType and requestAccessForMediaType, CLLocationManager authorizationStatus and requestWhenInUseAuthorization (Foundation/AVFoundation/CoreLocation by dlopen); the shell.Permission enum has no not-determined state (Granted, Denied, Unavailable), so a request that has not been answered needs one or a Prompting answer; a request completes through an Objective-C block, which Neper builds as a global block (isa _NSConcreteGlobalBlock, flags BLOCK_IS_GLOBAL, an @cc invoke function, a descriptor). Prompts need a user: the ui_permissions fixture calls camera_access, so the fixture must not prompt on a runner (honour a test switch or answer from status). Hardware is needed to verify."
+    },
+    {
+      "id": "C187",
+      "category": "library",
+      "group": "macOS",
+      "order": 187,
+      "title": "macOS biometrics (LocalAuthentication) and the photo picker (PHPicker)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "biometric_verify and photo_picker answer Unsupported and the record says so. LAContext canEvaluatePolicy and evaluatePolicy:localizedReason:reply: (reply is a block, as in C186) for Touch ID; PHPickerViewController is SwiftUI/AppKit-view based and needs a presented window and a result delegate, so check that NSOpenPanel with image types is not the honest answer instead. Verification needs a Mac with Touch ID and a Photos library; CI runners have neither."
+    },
+    {
+      "id": "C188",
+      "category": "library",
+      "group": "macOS",
+      "order": 188,
+      "title": "macOS print dialogs: NSPrintPanel and the page setup panel over the PDF printer",
+      "score": 0,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "print_dialog and page_setup_dialog answer Unsupported (D5212 made printing a virtual Save-as-PDF printer; print_dialogs is off). NSPrintPanel / NSPageLayout run modally like the file panels (probe shows a dialog and cancels it from the run loop, tests/macos/probe/file_dialog.e). Decide first: a dialog that lets the user choose a real printer returns a Printer the library cannot print to, so either restrict the panel to PDF output or add real printing through NSPrintOperation with the pages drawn into a view; the first is small, the second is a design."
+    },
+    {
+      "id": "C189",
+      "category": "library",
+      "group": "macOS",
+      "order": 189,
+      "title": "macOS notices through UNUserNotificationCenter: removal, replacement and actions",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Notices are osascript display notification banners attributed to Script Editor; notice_remove and notice_actions are Unsupported. UNUserNotificationCenter works only for a program in an application bundle with a bundle identifier, so it follows C185/C191 (a bundle mechanism); then removeDeliveredNotificationsWithIdentifiers, request identifiers for replacement, UNNotificationAction categories and a delegate method userNotificationCenter:didReceiveNotificationResponse:. The authorization request is a block (C186)."
+    },
+    {
+      "id": "C190",
+      "category": "library",
+      "group": "macOS",
+      "order": 190,
+      "title": "macOS window system: accessibility, input methods, close veto, live resize, Retina",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "D5202 delivered open, events, clipboard text, resize, cursor, close and monitors. Not done: accessibility_publish/take/listening answer nothing (an NSAccessibility bridge over the AccessibleNode tree, as UIA and AT-SPI are on the other hosts; os_uia and os_atspi never compile on a Mac); IME composition (NSTextInputClient on the content view: setMarkedText, insertText, firstRectForCharacterRange) so Text events carry composed input; a close veto (windowShouldClose: returning NO until the program answers); live resize while the pointer drags the window edge (the run loop is inside tracking, so Resize and Paint must be delivered from it); Retina scale changes between displays (backingScaleFactor notifications) and a native-resolution check on real hardware."
+    },
+    {
+      "id": "C191",
+      "category": "tooling",
+      "group": "macOS",
+      "order": 191,
+      "title": "macOS application bundles and distribution: a bundle command, icon, code signing, notarization",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Programs are plain Mach-O files today; Finder-opened files, notification removal and the Dock identity need an application bundle (C185 builds a minimal one at run time). Needs: a neper command or script that writes Name.app/Contents with Info.plist (bundle id, version, document and URL types, LSUIElement or a Dock icon), the executable, an .icns made from a png, ad-hoc signing (the emitter already ad-hoc signs), then a hardened-runtime signature and notarization for distribution, and a .dmg. Notarization needs an Apple developer identity that is not in this repository; stop at ad-hoc signing and document the rest."
+    },
+    {
+      "id": "C192",
+      "category": "library",
+      "group": "macOS",
+      "order": 192,
+      "title": "macOS verification on real hardware: what the CI runners cannot do",
+      "score": 0,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "Everything above is verified on macos-14 runners with no one at the screen. Not exercised: a click on a status item and a menu choice (Select, Context, popup_menu result), a pressed global shortcut, a real drop from Finder and a real pointer drag out of a window, multi-select Open and a confirmed Save returning paths, Dock menu click by a person, sleep and wake events, the Screen Recording permission's effect on screen_capture, Retina rendering, native Intel hardware (x64 runs under Rosetta in CI), and Apple silicon builds against a GPU. Write the manual checklist as a fixture-like script (tests/macos/manual.md is not a score document: keep it as one file) and run it once on a real Mac."
+    },
+    {
+      "id": "C193",
+      "category": "compiler",
+      "group": "macOS",
+      "order": 193,
+      "title": "macOS GPU: a Metal backend for e.gpu (the Vulkan fixtures cannot run on a Mac)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "gpu_vulkan_raw and gpu_fault_unchecked need Vulkan, which a Mac does not have; gpu_reshape answers 50 on the Mac against the Linux suite's answer for its path. e.gpu has a CPU backend that every Mac fixture uses. A Metal backend (MTLDevice, MTLComputePipelineState from MSL, buffers in shared storage) would let the compute fixtures run on the GPU, and the runners have a Metal-capable device (macos-14 is Apple silicon). Large: decide between lowering the kernel IR to MSL source (compiled at run time with newLibraryWithSource) and a Metal Shading Language emitter; the first mirrors the Vulkan path (SPIR-V) with a different text target."
+    },
+    {
+      "id": "C194",
+      "category": "library",
+      "group": "macOS",
+      "order": 194,
+      "title": "macOS corpus: the fixtures that are only reported (extern_many, freestanding, os_syscall, x_tds_integrated, gpu_*)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Eight fixtures run on the Mac corpus but are not asserted: extern_many imports four glibc extensions (memrchr, rawmemchr, strchrnul, strverscmp) that libSystem lacks and dyld binds all or none (split the fixture by target, or import the BSD equivalents on a Mac); freestanding and os_syscall check the ELF and the Linux system call numbers (by design: write Mac counterparts that check the Mach-O and BSD numbers, or exclude them from the Mac set); x_tds_integrated needs SSPI (Windows); gpu_* need Vulkan (C193). Done when each is either asserted or listed as excluded with its reason in tests/macos/run-corpus.sh."
+    },
+    {
+      "id": "C195",
+      "category": "library",
+      "group": "macOS",
+      "order": 195,
+      "title": "macOS shell polish: drag files and images out, session restore, Dock overlay image",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "drag_start offers text and bytes only (D5214): add file URLs (NSPasteboardItem with public.file-url) and images (png data), and promised files; session restore (restart_register) is Unsupported because a Mac restores through the system (NSApplication restorable state, a LaunchAgent with RunAtLoad for a relaunch after a crash is the nearest honest answer); taskbar_overlay replaces the whole Dock icon (a Dock tile has no overlay slot): draw the overlay into the icon image so the original shows. Each needs its own probe on a runner."
+    },
+    {
       "id": "C107",
       "category": "compiler",
       "group": "NeperOS",
