@@ -74,7 +74,8 @@ type Layout = struct {
     root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64,
     floats: list.List[FloatRec], tables: list.List[TableData],
     counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
-    orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule]
+    orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule],
+    sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool
 }
 
 // A column rule: a filled rectangle in the border box of multicol container `box` (see `layout_multicol`).
@@ -6217,7 +6218,7 @@ fn item_axis_specs(a: *mem.Arena, s: *const style.Style, col: bool) -> (LineSpec
 type Grid = struct {
     cols: []GTrack, rows: []GTrack, nc: usize, nr: usize,
     items: []GItem, n: usize, gap_c: f64, gap_r: f64,
-    cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32
+    cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32, c_dummy: bool, r_dummy: bool
 }
 
 // A laid-out grid's track geometry, kept so absolutely positioned children can use their grid area as containing block.
@@ -6388,11 +6389,184 @@ fn grid_make_track(auto_list: *const list.List[GTrack], index: usize) -> GTrack 
 }
 
 // Builds the grid of container `b`: tracks, items (margins resolved, contributions measured) and their placement.
+// `subgrid` as a track list (optionally followed by line names).
+fn subgrid_axis(text: str) -> bool {
+    let t = str.trim(text)
+    ret str.starts_with(t, "subgrid") && (t.len == 7usize || t[7usize] == 32u8)
+}
+
+// A subgrid in an orthogonal writing mode does not share the parent's axes: it is an independent grid.
+fn subgrid_axes_match(l: *Layout, id: u32) -> bool {
+    let p = l.boxes.items[usize(id)].parent
+    if p == NONE { ret false }
+    ret bstyle(l, id).writing_mode == bstyle(l, p).writing_mode && !bstyle(l, id).lanes && !bstyle(l, p).lanes
+}
+
+// A grid item that is itself a grid with `subgrid` in an axis takes its tracks from the lines it spans: the parent leaves their
+// sizes (and its gap) for `grid_build` to pick up when the item is laid out.
+fn subgrid_prepare(l: *Layout, g: *Grid, i: usize, cols: bool, rows: bool) {
+    l.sub_has_c = false
+    l.sub_has_r = false
+    let id = g.items[i].box
+    if bx(l, id).inner != .Grid || !subgrid_axes_match(l, id) || bstyle(l, id).lanes { ret }
+    let ks = bstyle(l, id)
+    if cols && !g.c_dummy {
+        let (ct, hct) = extra_text(ks, "grid-template-columns")
+        if hct && subgrid_axis(ct) && g.items[i].cn > 0i32 {
+            let (sz, e) = mem.alloc[f64](l.a, usize(g.items[i].cn))
+            if e == ok {
+                var k = 0usize
+                while k < usize(g.items[i].cn) {
+                    sz[k] = g.cols[usize(g.items[i].cs) + k].base
+                    k += 1usize
+                }
+                l.sub_c = sz
+                l.sub_gc = g.gap_c
+                l.sub_has_c = true
+            }
+        }
+    }
+    if rows && !g.r_dummy {
+        let (rt, hrt) = extra_text(ks, "grid-template-rows")
+        if hrt && subgrid_axis(rt) && g.items[i].rn > 0i32 {
+            let (sz, e) = mem.alloc[f64](l.a, usize(g.items[i].rn))
+            if e == ok {
+                var k = 0usize
+                while k < usize(g.items[i].rn) {
+                    sz[k] = g.rows[usize(g.items[i].rs) + k].base
+                    k += 1usize
+                }
+                l.sub_r = sz
+                l.sub_gr = g.gap_r
+                l.sub_has_r = true
+            }
+        }
+    }
+}
+
+// The tracks of a subgrid: the parent's tracks it spans, moved by the difference of the two gaps and by its own edges.
+fn subgrid_tracks(a: *mem.Arena, sizes: []const f64, parent_gap: f64, own_gap: f64, edge_start: f64, edge_end: f64, out: *list.List[GTrack]) {
+    var k = 0usize
+    while k < sizes.len {
+        var sz = sizes[k]
+        if k > 0usize { sz += (parent_gap - own_gap) / 2.0f64 }
+        if k + 1usize < sizes.len { sz += (parent_gap - own_gap) / 2.0f64 }
+        if k == 0usize { sz -= edge_start }
+        if k + 1usize == sizes.len { sz -= edge_end }
+        let t = GTrack { min: SizeFn { kind: 0u8, v: maxf(0.0f64, sz) }, max: SizeFn { kind: 0u8, v: maxf(0.0f64, sz) }, base: 0.0f64, limit: 0.0f64, pos: 0.0f64, collapsed: false, fit: false }
+        let pushed = list.push[GTrack](out, t)
+        k += 1usize
+    }
+}
+
+// The items of the grid's subgrids (in the column axis) count towards the tracks they span, as if they were its own items:
+// answers the grid's items followed by those, and the count.
+fn subgrid_contributions(l: *Layout, g: *Grid) -> ([]GItem, usize) {
+    if g.c_dummy { ret (g.items, g.n) }
+    var extra = 0usize
+    var i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        if bx(l, id).inner == .Grid && subgrid_axes_match(l, id) {
+            let (ct, hct) = extra_text(bstyle(l, id), "grid-template-columns")
+            if hct && subgrid_axis(ct) { extra += 64usize }
+        }
+        i += 1usize
+    }
+    let (out, e) = mem.alloc[GItem](l.a, g.n + extra + 1usize)
+    if e != ok { ret (g.items, g.n) }
+    var n = 0usize
+    i = 0usize
+    while i < g.n {
+        out[n] = g.items[i]
+        n += 1usize
+        i += 1usize
+    }
+    // A subgrid has no width of its own to give its tracks: its items stand in for it.
+    i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        if bx(l, id).inner == .Grid && subgrid_axes_match(l, id) {
+            let (ct, hct) = extra_text(bstyle(l, id), "grid-template-columns")
+            if hct && subgrid_axis(ct) {
+                out[i].cmin = 0.0f64
+                out[i].cmax = 0.0f64
+            }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let ks = bstyle(l, id)
+        if bx(l, id).inner == .Grid && g.items[i].cn > 0i32 && subgrid_axes_match(l, id) {
+            let (ct, hct) = extra_text(ks, "grid-template-columns")
+            if hct && subgrid_axis(ct) {
+                let span = usize(g.items[i].cn)
+                let (zero_sizes, ze) = mem.alloc[f64](l.a, span)
+                if ze == ok {
+                    var z = 0usize
+                    while z < span {
+                        zero_sizes[z] = 0.0f64
+                        z += 1usize
+                    }
+                    l.sub_c = zero_sizes
+                    l.sub_gc = g.gap_c
+                    l.sub_has_c = true
+                    let (cg, built) = grid_build(l, id, -1.0f64, -1.0f64)
+                    l.sub_has_c = false
+                    if built {
+                        let sbb = bx(l, id)
+                        let edge_s = sbb.margin[3usize] + sbb.border[3usize] + sbb.padding[3usize]
+                        let edge_e = sbb.margin[1usize] + sbb.border[1usize] + sbb.padding[1usize]
+                        var j = 0usize
+                        while j < cg.n && n < g.n + extra {
+                            var it: GItem = zero
+                            it.box = cg.items[j].box
+                            it.cs = g.items[i].cs + cg.items[j].cs
+                            it.cn = cg.items[j].cn
+                            it.rs = 0i32
+                            it.rn = 1i32
+                            it.cmin = cg.items[j].cmin
+                            it.cmax = cg.items[j].cmax
+                            if cg.items[j].cs == 0i32 {
+                                it.cmin += edge_s
+                                it.cmax += edge_s
+                            }
+                            if usize(cg.items[j].cs + cg.items[j].cn) >= span {
+                                it.cmin += edge_e
+                                it.cmax += edge_e
+                            }
+                            // The subgrid's own gap against the parent's: half the difference sits on each side that faces a gap.
+                            let half_gap = (cg.gap_c - g.gap_c) / 2.0f64
+                            if cg.items[j].cs > 0i32 {
+                                it.cmin += half_gap
+                                it.cmax += half_gap
+                            }
+                            if usize(cg.items[j].cs + cg.items[j].cn) < span {
+                                it.cmin += half_gap
+                                it.cmax += half_gap
+                            }
+                            out[n] = it
+                            n += 1usize
+                            j += 1usize
+                        }
+                    }
+                }
+            }
+        }
+        i += 1usize
+    }
+    ret (out, n)
+}
+
 fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     let cs = bstyle(l, b)
     let (gcell, ge) = mem.alloc[Grid](l.a, 1usize)
     if ge != ok { ret (zero, false) }
     let g = &gcell[0usize]
+    g.c_dummy = false
+    g.r_dummy = false
     let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
     var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64, item_min: 0.0f64 }
     g.gap_c = flex_gap(cs.column_gap, maxf(avail_w, 0.0f64))
@@ -6432,12 +6606,35 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
         }
     }
     let (ctext, has_ct) = extra_text(cs, "grid-template-columns")
-    if has_ct { gp_list(&gp, ctext, &ctr, &cnames) }
+    let sbb = bx(l, b)
+    if has_ct && subgrid_axis(ctext) && l.sub_has_c {
+        // A subgrid's tracks are the ones of the parent grid it spans.
+        if l.sub_has_c {
+            if cs.column_gap.kind == .Normal { g.gap_c = l.sub_gc }
+            gp.gap = g.gap_c
+            subgrid_tracks(l.a, l.sub_c, l.sub_gc, g.gap_c, sbb.margin[3usize] + sbb.border[3usize] + sbb.padding[3usize], sbb.margin[1usize] + sbb.border[1usize] + sbb.padding[1usize], &ctr)
+        }
+        l.sub_has_c = false
+    } else if has_ct {
+        // `subgrid` with no parent tracks to take is left to the auto tracks, and so are the grids nested in it.
+        if subgrid_axis(ctext) { g.c_dummy = true }
+        gp_list(&gp, ctext, &ctr, &cnames)
+    }
     gp.item_min = 0.0f64
     gp.gap = g.gap_r
     gp.avail = avail_h
     let (rtext, has_rt) = extra_text(cs, "grid-template-rows")
-    if has_rt { gp_list(&gp, rtext, &rtr, &rnames) }
+    if has_rt && subgrid_axis(rtext) && l.sub_has_r {
+        if l.sub_has_r {
+            if cs.row_gap.kind == .Normal { g.gap_r = l.sub_gr }
+            gp.gap = g.gap_r
+            subgrid_tracks(l.a, l.sub_r, l.sub_gr, g.gap_r, sbb.margin[0usize] + sbb.border[0usize] + sbb.padding[0usize], sbb.margin[2usize] + sbb.border[2usize] + sbb.padding[2usize], &rtr)
+        }
+        l.sub_has_r = false
+    } else if has_rt {
+        if subgrid_axis(rtext) { g.r_dummy = true }
+        gp_list(&gp, rtext, &rtr, &rnames)
+    }
     var dims = Dims { rows: 0i32, cols: 0i32 }
     let (atext, has_at) = extra_text(cs, "grid-template-areas")
     if has_at { parse_areas(l.a, atext, &areas, &dims) }
@@ -6953,7 +7150,8 @@ fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
     while pass < 2usize {
         let (g, built) = grid_build(l, b, -1.0f64, -1.0f64)
         if !built { ret (0.0f64, 0.0f64) }
-        size_tracks(g.cols, g.nc, g.gap_c, -1.0f64, g.items, g.n, true, pass == 0usize, false)
+        let (wide_items, wide_n) = subgrid_contributions(l, g)
+        size_tracks(g.cols, g.nc, g.gap_c, -1.0f64, wide_items, wide_n, true, pass == 0usize, false)
         let total = tracks_total(g.cols, g.nc, g.gap_c)
         if pass == 0usize { mn = total } else { mx = total }
         pass += 1usize
@@ -7064,8 +7262,12 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         lanes_mirror(l, b, g, cs, true, cw, lane_h)
         ret lanes_h
     }
-    size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
+    let (sized_items, sized_n) = subgrid_contributions(l, g)
+    size_tracks(g.cols, g.nc, g.gap_c, cw, sized_items, sized_n, true, false, stretch_cols)
     // Row contributions are the items' heights at their column widths.
+    let (row_made, ree) = list.init[GItem](l.a, 8usize)
+    var row_extra = row_made
+    if ree != ok { ret 0.0f64 }
     var i = 0usize
     while i < g.n {
         let id = g.items[i].box
@@ -7075,11 +7277,51 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         var hs0 = -1.0f64
         let (hv0, has_h0) = resolve_len(is0.height, -1.0f64)
         if is0.height.kind == .Px && has_h0 { hs0 = to_content_h(l, id, hv0) }
+        subgrid_prepare(l, g, i, true, false)
         flex_place_item(l, id, w, hs0)
+        l.sub_has_c = false
+        l.sub_has_r = false
         let ib = bx(l, id)
         let outer = ib.h + ib.margin[0usize] + ib.margin[2usize]
         g.items[i].rmin = outer
         g.items[i].rmax = outer
+        // A subgrid in the rows has no height of its own to give: its own rows (sized by its content) stand in for it.
+        if bx(l, id).inner == .Grid && g.items[i].rn > 0i32 && subgrid_axes_match(l, id) {
+            let (rt0, hrt0) = extra_text(is0, "grid-template-rows")
+            if hrt0 && subgrid_axis(rt0) && l.grids.len > 0usize {
+                var gi = l.grids.len
+                var gfound = false
+                var geom: GridGeom = zero
+                while gi > 0usize && !gfound {
+                    gi -= 1usize
+                    if l.grids.items[gi].box == id {
+                        geom = l.grids.items[gi]
+                        gfound = true
+                    }
+                }
+                if gfound && geom.nr > 0usize {
+                    g.items[i].rmin = 0.0f64
+                    g.items[i].rmax = 0.0f64
+                    let sb2 = bx(l, id)
+                    var rk = 0usize
+                    while rk < geom.nr && rk < usize(g.items[i].rn) {
+                        var rv = geom.rsz[rk]
+                        if rk == 0usize { rv += sb2.margin[0usize] + sb2.border[0usize] + sb2.padding[0usize] }
+                        if rk + 1usize == geom.nr || rk + 1usize == usize(g.items[i].rn) { rv += sb2.margin[2usize] + sb2.border[2usize] + sb2.padding[2usize] }
+                        var rit: GItem = zero
+                        rit.box = id
+                        rit.cs = 0i32
+                        rit.cn = 1i32
+                        rit.rs = g.items[i].rs + i32(rk)
+                        rit.rn = 1i32
+                        rit.rmin = rv
+                        rit.rmax = rv
+                        let rp = list.push[GItem](&row_extra, rit)
+                        rk += 1usize
+                    }
+                }
+            }
+        }
         i += 1usize
     }
     // An automatic height still stretches the rows up to the container's `min-height`.
@@ -7088,7 +7330,26 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let (mhv, has_mh) = resolve_len(cs.min_height, -1.0f64)
         if has_mh && mhv > 0.0f64 { ch_fill = to_content_h(l, b, mhv) }
     }
-    size_tracks(g.rows, g.nr, g.gap_r, ch_fill, g.items, g.n, false, false, stretch_rows && ch_fill >= 0.0f64)
+    var row_items = g.items
+    var row_n = g.n
+    if row_extra.len > 0usize {
+        let (merged, me) = mem.alloc[GItem](l.a, g.n + row_extra.len)
+        if me == ok {
+            var mi = 0usize
+            while mi < g.n {
+                merged[mi] = g.items[mi]
+                mi += 1usize
+            }
+            var mj = 0usize
+            while mj < row_extra.len {
+                merged[g.n + mj] = row_extra.items[mj]
+                mj += 1usize
+            }
+            row_items = merged
+            row_n = g.n + row_extra.len
+        }
+    }
+    size_tracks(g.rows, g.nr, g.gap_r, ch_fill, row_items, row_n, false, false, stretch_rows && ch_fill >= 0.0f64)
     position_tracks(g.cols, g.nc, g.gap_c, cw, cs.justify_content)
     position_tracks(g.rows, g.nr, g.gap_r, ch, cs.align_content)
     let bb0 = bx(l, b)
@@ -7118,7 +7379,10 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         var just0 = is.justify_self
         if just0 == .Auto { just0 = cs.justify_items }
         if (just0 == .Normal || just0 == .Stretch) && is.width.kind == .Auto && is.margin[3usize].kind != .Auto && is.margin[1usize].kind != .Auto { l.orth_fb = w }
+        subgrid_prepare(l, g, i, true, true)
         flex_place_item(l, id, w, hspec)
+        l.sub_has_c = false
+        l.sub_has_r = false
         let pb = bx(l, id)
         // Auto margins and the alignment offsets.
         var just = is.justify_self
@@ -7185,6 +7449,25 @@ fn cross_offset(is: *const style.Style, cs: *const style.Style, free: f64) -> f6
     if al == .Center { ret free / 2.0f64 }
     if al == .End || al == .FlexEnd || al == .SelfEnd { ret free }
     ret 0.0f64
+}
+
+// The same for a plain grid with `subgrid` rows laid out in row lanes: the lanes it spans are its row tracks.
+fn subgrid_prepare_lane_rows(l: *Layout, g: *Grid, id: u32, start: usize, span: usize) {
+    l.sub_has_c = false
+    l.sub_has_r = false
+    if bx(l, id).inner != .Grid || bstyle(l, id).lanes || span == 0usize || start + span > g.nr { ret }
+    let (rt, hrt) = extra_text(bstyle(l, id), "grid-template-rows")
+    if !hrt || !subgrid_axis(rt) { ret }
+    let (sz, e) = mem.alloc[f64](l.a, span)
+    if e != ok { ret }
+    var k = 0usize
+    while k < span {
+        sz[k] = g.rows[start + k].base
+        k += 1usize
+    }
+    l.sub_r = sz
+    l.sub_gr = g.gap_r
+    l.sub_has_r = true
 }
 
 // `display: grid-lanes` with the lanes along the rows: items flow sideways, each into the lane (or run of lanes) whose
@@ -7298,7 +7581,10 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         } else if is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced && cross_stretches(is, cs) {
             hs = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
         }
+        subgrid_prepare_lane_rows(l, g, id, start, span)
         flex_place_item(l, id, w, hs)
+        l.sub_has_c = false
+        l.sub_has_r = false
         let pb = bx(l, id)
         let x0 = left + g.gap_c
         pb.x = ox0 + x0 + pb.margin[3usize]
@@ -7411,7 +7697,10 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
             var hs = -1.0f64
             let (hv, has_h) = resolve_len(is.height, -1.0f64)
             if is.height.kind == .Px && has_h { hs = to_content_h(l, id, hv) }
+            subgrid_prepare_lane(l, g, id, s0, span)
             flex_place_item(l, id, w, hs)
+            l.sub_has_c = false
+            l.sub_has_r = false
             let ib = bx(l, id)
             let outer = ib.h + ib.margin[0usize] + ib.margin[2usize]
             // Candidate tops: 0 and just below every interval end in the spanned lanes.
@@ -7453,7 +7742,10 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
         var hs2 = -1.0f64
         let (hv2, has_h2) = resolve_len(is.height, -1.0f64)
         if is.height.kind == .Px && has_h2 { hs2 = to_content_h(l, id, hv2) }
+        subgrid_prepare_lane(l, g, id, best_s, span)
         flex_place_item(l, id, w, hs2)
+        l.sub_has_c = false
+        l.sub_has_r = false
         let pb = bx(l, id)
         pb.x = ox0 + g.cols[best_s].pos + pb.margin[3usize]
         pb.y = oy0 + best_y + pb.margin[0usize]
@@ -7469,6 +7761,25 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
         i += 1usize
     }
     ret total
+}
+
+// A plain grid laid out in grid-lanes with `subgrid` columns takes the lanes it spans as its tracks.
+fn subgrid_prepare_lane(l: *Layout, g: *Grid, id: u32, start: usize, span: usize) {
+    l.sub_has_c = false
+    l.sub_has_r = false
+    if bx(l, id).inner != .Grid || bstyle(l, id).lanes || span == 0usize || start + span > g.nc { ret }
+    let (ct, hct) = extra_text(bstyle(l, id), "grid-template-columns")
+    if !hct || !subgrid_axis(ct) { ret }
+    let (sz, e) = mem.alloc[f64](l.a, span)
+    if e != ok { ret }
+    var k = 0usize
+    while k < span {
+        sz[k] = g.cols[start + k].base
+        k += 1usize
+    }
+    l.sub_c = sz
+    l.sub_gc = g.gap_c
+    l.sub_has_c = true
 }
 
 fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64 {
@@ -7541,7 +7852,10 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, c
         var hs = -1.0f64
         let (hv, has_h) = resolve_len(is.height, -1.0f64)
         if is.height.kind == .Px && has_h { hs = to_content_h(l, id, hv) }
+        subgrid_prepare_lane(l, g, id, start, span)
         flex_place_item(l, id, w, hs)
+        l.sub_has_c = false
+        l.sub_has_r = false
         let pb = bx(l, id)
         let y0 = top + g.gap_r
         pb.x = ox0 + g.cols[start].pos + pb.margin[3usize]
@@ -8603,7 +8917,7 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (grids, e8) = list.init[GridGeom](a, 4usize)
     let (rules_made, e9r) = list.init[ColRule](a, 8usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9r != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))

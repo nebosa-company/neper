@@ -546,6 +546,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 115. flex-wrap: balance breaks four items into two even lines where wrap fills the first line.
     let (p115, ok115) = build(a, "<div style=\"display:flex;flex-wrap:balance;width:100px;gap:10px\"><div id=a style=\"width:20px;height:10px\"></div><div id=b style=\"width:20px;height:10px\"></div><div id=c style=\"width:20px;height:10px\"></div><div id=d style=\"width:20px;height:10px\"></div></div>", "")
     if !ok115 || !near(rect_of(p115, "c").y, 20.0f64) || !near(rect_of(p115, "c").x, 0.0f64) { os.exit(156) }
+    // 116. A grid item with `subgrid` columns lays its items on the parent's tracks, and they size those tracks.
+    let (p116, ok116) = build(a, "<div style=\"display:grid;grid-template-columns:auto auto;width:300px\"><div style=\"grid-column:1\"></div><div id=s style=\"display:grid;grid-column:1 / 3;grid-template-columns:subgrid\"><div id=x style=\"width:70px;height:5px\"></div><div id=y style=\"width:30px;height:5px\"></div></div></div>", "")
+    if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
 }
