@@ -1947,10 +1947,9 @@ fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Uns
 // distinct on every other. Non-zero matters: a zero reads as "no owner" to a reentrant lock
 // (e.gpu's device lock), which would then re-lock a mutex it already holds and deadlock.
 fn current_thread_id() -> usize { ret usize(wasm_thread_id()) + 1usize }
-
-// (D2168/D2169, C110) The native-window surface e.ui.window compiles against, as os.neperos.e has it:
-// there is no window manager under WASI, so a window opens and presents nothing. The headless testing
-// harness touches none of these.
+// (D2168/D2169, C110) The native-window surface e.ui.window compiles against, as os.neperos.e has it. A window exists only
+// where the host has one (lib/wasm/window.js in a page, D5680); under Node, which answers ENOSYS to window_open, there is
+// none and open answers Unsupported, the answer the window fixtures print "unsupported" for.
 const SURFACE_W: usize = 1280usize
 const SURFACE_H: usize = 2856usize
 type Window = struct { raw: usize }
@@ -1969,8 +1968,7 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
         host_window_live = 1u32
         ret (Window { raw: usize(made[0usize]) }, ok)
     }
-    if status != 52u32 { ret (Window { raw: 0usize }, Unsupported) }
-    ret (Window { raw: 1usize }, ok)
+    ret (Window { raw: 0usize }, Unsupported)
 }
 fn window_close(w: Window) -> err { ret ok }
 fn window_metrics(w: Window) -> (WindowMetrics, err) {
