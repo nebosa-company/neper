@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: true, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: true, permissions: true, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -2200,15 +2200,108 @@ fn print_job_cancel(a: *mem.Arena, job: *PrintJob) -> err {
     job.open = false
     ret ok
 }
+// The print and page setup panels (D5219), run modally like the file panels. The printer this library prints to is the virtual PDF
+// printer (D5212), so the print panel is asked for what a caller can use of it, the page range and the copies, and a printer
+// picked in it is not honoured: a job always writes the PDF named as its output. ponytail: NSPrintOperation drawing into a view
+// is the way to print to a real printer; it is a design of its own (C188).
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_paper(receiver: usize, selector: usize) -> MenuPoint
+
+fn print_number(value: usize) -> usize {
+    ret os.msg1(os.cocoa_class("NSNumber\x00"), os.cocoa_sel("numberWithInteger:\x00"), value)
+}
+
+fn print_key(dictionary: usize, key: str, value: usize) {
+    let name = os.cocoa_text(key)
+    let set = os.msg2(dictionary, os.cocoa_sel("setObject:forKey:\x00"), value, name)
+    os.cf_release(name)
+}
+
+fn print_integer(dictionary: usize, key: str) -> usize {
+    let name = os.cocoa_text(key)
+    let held = os.msg1(dictionary, os.cocoa_sel("objectForKey:\x00"), name)
+    os.cf_release(name)
+    if held == 0usize { ret 0usize }
+    ret os.msg0(held, os.cocoa_sel("integerValue\x00"))
+}
+
 fn print_dialog(a: *mem.Arena, w: os.Window, min_page: u32, max_page: u32) -> (Printer, err) {
     var nothing: Printer = zero
     if min_page == 0u32 || max_page < min_page || max_page > 65535u32 { ret (nothing, Invalid) }
-    ret (nothing, Unsupported)
+    let started = os.cocoa_start()
+    if started != ok { ret (nothing, started) }
+    let pool = os.objc_pool_push()
+    let info = os.msg0(os.msg0(os.cocoa_class("NSPrintInfo\x00"), os.cocoa_sel("sharedPrintInfo\x00")), os.cocoa_sel("copy\x00"))
+    let dictionary = os.msg0(info, os.cocoa_sel("dictionary\x00"))
+    print_key(dictionary, "NSFirstPage", print_number(usize(min_page)))
+    print_key(dictionary, "NSLastPage", print_number(usize(max_page)))
+    print_key(dictionary, "NSCopies", print_number(1usize))
+    let panel = os.msg0(os.cocoa_class("NSPrintPanel\x00"), os.cocoa_sel("printPanel\x00"))
+    // copies, page range and the preview
+    let optioned = os.msg1(panel, os.cocoa_sel("setOptions:\x00"), 131075usize)
+    let response = os.msg1(panel, os.cocoa_sel("runModalWithPrintInfo:\x00"), info)
+    var printer: Printer = zero
+    var result = ok
+    if response != 1usize {
+        result = Cancelled
+    } else {
+        var first = print_integer(dictionary, "NSFirstPage")
+        var last = print_integer(dictionary, "NSLastPage")
+        var copies = print_integer(dictionary, "NSCopies")
+        if first < usize(min_page) { first = usize(min_page) }
+        if last > usize(max_page) || last < first { last = usize(max_page) }
+        if copies == 0usize { copies = 1usize }
+        printer.device = 1usize
+        printer.from_page = u32(first)
+        printer.to_page = u32(last)
+        printer.copies = u32(copies)
+    }
+    let released = os.msg0(info, os.cocoa_sel("release\x00"))
+    os.objc_pool_pop(pool)
+    if result != ok { ret (nothing, result) }
+    ret (printer, ok)
+}
+
+// Points to hundredths of a millimetre, and back.
+fn points_to_hmm(points: f64) -> u32 {
+    ret u32(points * 35.277778f64 + 0.5f64)
+}
+
+fn hmm_to_points(hundredths: u32) -> f64 {
+    ret f64(hundredths) / 35.277778f64
 }
 
 fn page_setup_dialog(a: *mem.Arena, w: os.Window, current: PageSetup) -> (PageSetup, err) {
     var nothing: PageSetup = zero
-    ret (nothing, Unsupported)
+    let started = os.cocoa_start()
+    if started != ok { ret (nothing, started) }
+    let pool = os.objc_pool_push()
+    let info = os.msg0(os.msg0(os.cocoa_class("NSPrintInfo\x00"), os.cocoa_sel("sharedPrintInfo\x00")), os.cocoa_sel("copy\x00"))
+    if current.margin_left != 0u32 || current.margin_top != 0u32 || current.margin_right != 0u32 || current.margin_bottom != 0u32 {
+        let l = os.msg_double(info, os.cocoa_sel("setLeftMargin:\x00"), hmm_to_points(current.margin_left))
+        let t = os.msg_double(info, os.cocoa_sel("setTopMargin:\x00"), hmm_to_points(current.margin_top))
+        let r = os.msg_double(info, os.cocoa_sel("setRightMargin:\x00"), hmm_to_points(current.margin_right))
+        let b = os.msg_double(info, os.cocoa_sel("setBottomMargin:\x00"), hmm_to_points(current.margin_bottom))
+    }
+    let layout = os.msg0(os.cocoa_class("NSPageLayout\x00"), os.cocoa_sel("pageLayout\x00"))
+    let response = os.msg1(layout, os.cocoa_sel("runModalWithPrintInfo:\x00"), info)
+    var chosen: PageSetup = zero
+    var result = ok
+    if response != 1usize {
+        result = Cancelled
+    } else {
+        let paper = msg_paper(info, os.cocoa_sel("paperSize\x00"))
+        chosen.paper_width = points_to_hmm(paper.x)
+        chosen.paper_height = points_to_hmm(paper.y)
+        chosen.margin_left = points_to_hmm(os.msg_double_ret(info, os.cocoa_sel("leftMargin\x00")))
+        chosen.margin_top = points_to_hmm(os.msg_double_ret(info, os.cocoa_sel("topMargin\x00")))
+        chosen.margin_right = points_to_hmm(os.msg_double_ret(info, os.cocoa_sel("rightMargin\x00")))
+        chosen.margin_bottom = points_to_hmm(os.msg_double_ret(info, os.cocoa_sel("bottomMargin\x00")))
+    }
+    let released = os.msg0(info, os.cocoa_sel("release\x00"))
+    os.objc_pool_pop(pool)
+    if result != ok { ret (nothing, result) }
+    ret (chosen, ok)
 }
 
 // ------------------------------------------------- permissions and services

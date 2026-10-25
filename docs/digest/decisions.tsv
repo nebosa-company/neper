@@ -2850,4 +2850,5 @@ D5214	1373	macOS drag and drop: a run-time subclass of the window's view, and a 
 D5215	1236	the kqueue poller never lost a wakeup; the fixtures counted waits where a level-triggered wait needs a clock
 D5216	844	e.net knows macOS's errno numbers; four net fixtures run on a Mac
 D5217	1355	macOS associations are small bundles that LaunchServices starts, and the delegate receives what they were sent
-D5218	1293	macOS permissions: status is read, a request asks only where a device exists, through a global block
+D5218	1294	macOS permissions: status is read, a request asks only where a device exists, through a global block
+D5219	964	macOS print dialogs run NSPrintPanel and NSPageLayout over the PDF printer
