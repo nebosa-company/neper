@@ -40,13 +40,24 @@
 // `process.exit` while the engine is still finishing a background compile aborts Node
 // ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)", exit 127).
 import { readFile } from 'node:fs/promises'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { WASI } from 'node:wasi'
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads'
-import { argv, env as hostEnv, stderr } from 'node:process'
-import { NetHost, hostImports, serve } from './run-wasm-host.mjs'
+// Not `import { ... } from 'node:process'`: the import creates process.stdout and process.stderr, which makes a piped fd 1 and 2
+// nonblocking, and a module's own writes to them (a child whose output is a pipe) then fail with EAGAIN.
+const { argv, env: hostEnv } = process
+const stderr = { write: (text) => process.stderr.write(text) }
+// A Worker pipes its own stdout and stderr into this thread's, which creates those streams; take them and write the fds.
+const ownStdio = { stdout: true, stderr: true }
+const forward = (worker) => {
+  worker.stdout.on('data', (data) => writeSync(1, data))
+  worker.stderr.on('data', (data) => writeSync(2, data))
+  return worker
+}
+import { fileURLToPath } from 'node:url'
+import { NetHost, context as hostContext, hostImports, serve } from './run-wasm-host.mjs'
 import { addLines } from '../lib/wasm/source-map.js'
 
 // OUT.map beside the module (C196): an engine error's frames get the source lines it names.
@@ -317,10 +328,11 @@ async function hostThreads({ bytes, limits, args, env, preopens, clean }) {
     }
     const netBox = usesNet ? new SharedArrayBuffer(128) : null
     const netData = usesNet ? new SharedArrayBuffer(65536) : null
-    const worker = new Worker(new URL(import.meta.url), {
+    const worker = forward(new Worker(new URL(import.meta.url), {
       workerData: { threaded: true, first, module, memory, box, netBox, netData },
       resourceLimits: { stackSizeMb: first ? 256 : 64 },
-    })
+      ...ownStdio,
+    }))
     const record = { first, worker, state, net: usesNet ? serve(netBox, netData, net) : null }
     worker.on('message', (result) => end(result.code, result.note))
     worker.on('error', (error) => end(1, `${error.stack ?? error}\n`))
@@ -449,8 +461,11 @@ if (isMainThread) {
   mkdirSync(home)
   preopens['/tmp'] = tmp
   preopens['/home'] = home
-  const inherited = everything ? { ...hostEnv } : Object.fromEntries(Object.entries(hostEnv).filter(([name]) => ALLOWED.test(name.toUpperCase())))
-  const env = { ...inherited, PATH: hostEnv.PATH, TMPDIR: '/tmp', TMP: '/tmp', TEMP: '/tmp', HOME: '/home', USERPROFILE: '/home' }
+  // A child the module spawned (D5677) gets its whole environment as JSON in NEPER_GUEST_ENV, so a bare one stays bare.
+  const guestEnv = hostEnv.NEPER_GUEST_ENV ? JSON.parse(hostEnv.NEPER_GUEST_ENV) : null
+  const inherited = guestEnv ?? (everything ? { ...hostEnv } : Object.fromEntries(Object.entries(hostEnv).filter(([name]) => ALLOWED.test(name.toUpperCase()))))
+  const env = { ...inherited, ...(guestEnv ? {} : { PATH: hostEnv.PATH }), TMPDIR: '/tmp', TMP: '/tmp', TEMP: '/tmp', HOME: '/home', USERPROFILE: '/home' }
+  Object.assign(hostContext, { cwd: resolve('.'), tmp: tmpdir(), preopens, env, runner: fileURLToPath(import.meta.url) })
   for (const [signal, status] of [['SIGINT', 130], ['SIGTERM', 143]]) {
     process.on(signal, () => {
       rmSync(scratch, { recursive: true, force: true })
@@ -468,7 +483,7 @@ if (isMainThread) {
     const box = new SharedArrayBuffer(128)
     const data = new SharedArrayBuffer(65536)
     const host = serve(box, data)
-    const worker = new Worker(new URL(import.meta.url), { workerData: { file: absolute, args: [guest, ...moduleArgs], env, preopens, box, data }, resourceLimits: { stackSizeMb: 256 } })
+    const worker = forward(new Worker(new URL(import.meta.url), { workerData: { file: absolute, args: [guest, ...moduleArgs], env, preopens, box, data }, resourceLimits: { stackSizeMb: 256 }, ...ownStdio }))
     let answered = false
     worker.on('message', (result) => {
       answered = true

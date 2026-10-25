@@ -248,6 +248,18 @@ extern fn host_handle_write(handle: u32, bytes: u32, length: u32, sent: u32) -> 
 @import("neper_host", "handle_close")
 extern fn host_handle_close(handle: u32) -> u32
 
+@import("neper_host", "proc_spawn")
+extern fn host_proc_spawn(bytes: u32, length: u32, argv_count: u32, env_count: u32, flags: u32, cwd_length: u32, input: u32, output: u32, errors: u32, made: u32) -> u32
+
+@import("neper_host", "proc_wait")
+extern fn host_proc_wait(handle: u32, status: u32) -> u32
+
+@import("neper_host", "proc_kill")
+extern fn host_proc_kill(handle: u32) -> u32
+
+@import("neper_host", "proc_group_kill")
+extern fn host_proc_group_kill(handle: u32, force: u32) -> u32
+
 @import("wasi_snapshot_preview1", "fd_pread")
 extern fn wasi_fd_pread(fd: u32, iovs: u32, iovs_len: u32, offset: u64, read_count: u32) -> u32
 
@@ -549,12 +561,97 @@ fn neper_os_clock(kind: Clock) -> (i64, err) {
 
 // ---- what WASI cannot do, and what a build answers "nothing done" ------------------------------------
 
-fn neper_os_spawn(result: *SpawnResult, arena: *mem.Arena, argv: *[]const str, stdio: *Stdio) {
-    result.proc = Proc { raw: 0usize }
-    result.failure = Unsupported
+// ---- processes (D5677): the host starts them, in the Node runner only ---------------------------------------
+// A child whose argv[0] is a guest path ending in .wasm runs through the runner, because its image is a
+// module; the cwd and that path go to the host as absolute guest paths. The request is one buffer: the argv
+// strings, then the env strings (each NUL-terminated), then the cwd.
+const SPAWN_BYTES: usize = 60000usize
+
+fn ends_in_wasm(text: str) -> bool {
+    if text.len < 5usize { ret false }
+    let tail = ".wasm"
+    var k = 0usize
+    while k < 5usize {
+        if text[text.len - 5usize + k] != tail[k] { ret false }
+        k += 1usize
+    }
+    ret true
 }
 
-fn neper_os_wait(p: *Proc) -> (i32, err) { ret (0i32, Unsupported) }
+// A stream the child is given: 0-2 are the runner's own, a pipe end is a host handle, a WASI descriptor
+// goes as it is and the host answers ENOTSUP.
+fn stdio_word(f: File) -> u32 {
+    if f.raw < HOST_BASE { ret u32(f.raw) }
+    ret host_handle(f.raw)
+}
+
+fn push_terminated(buffer: []u8, at: usize, text: str) -> usize {
+    let end = push_text(buffer, at, text)
+    if end < buffer.len { buffer[end] = 0u8 }
+    ret end + 1usize
+}
+
+fn host_spawn_in(child: *Proc, a: *mem.Arena, argv: []const str, extra: []const str, inherit: bool, cwd: str, grouped: bool, stdio: Stdio) -> err {
+    if argv.len == 0usize { ret Failed }
+    var directory = cwd
+    if cwd.len == 0usize {
+        let (here, here_error) = current_dir(a)
+        if here_error != ok { ret here_error }
+        directory = here
+    } else {
+        let (resolved, resolved_error) = canonical(a, cwd)
+        if resolved_error != ok { ret resolved_error }
+        directory = resolved
+    }
+    var first = argv[0usize]
+    if ends_in_wasm(first) {
+        let (resolved, resolved_error) = canonical(a, first)
+        if resolved_error != ok { ret resolved_error }
+        first = resolved
+    }
+    let (bytes, alloc_error) = mem.alloc[u8](a, SPAWN_BYTES)
+    if alloc_error != ok { ret OutOfMemory }
+    var at = push_terminated(bytes, 0usize, first)
+    var k = 1usize
+    while k < argv.len {
+        at = push_terminated(bytes, at, argv[k])
+        k += 1usize
+    }
+    k = 0usize
+    while k < extra.len {
+        at = push_terminated(bytes, at, extra[k])
+        k += 1usize
+    }
+    at = push_text(bytes, at, directory)
+    if at > bytes.len { ret Failed }
+    var flags = 0u32
+    if inherit { flags = flags | 1u32 }
+    if grouped { flags = flags | 2u32 }
+    var made: [1]u32 = zero
+    let status = host_proc_spawn(address_of_bytes(bytes), u32(at), u32(argv.len), u32(extra.len), flags, u32(directory.len), stdio_word(stdio.stdin), stdio_word(stdio.stdout), stdio_word(stdio.stderr), u32(mem.address_of(&made[0usize])))
+    if status != 0u32 { ret wasi_error(status) }
+    child.raw = usize(made[0usize])
+    ret ok
+}
+fn host_spawn(child: *Proc, a: *mem.Arena, argv: []const str, extra: []const str, inherit: bool, cwd: str, grouped: bool, stdio: Stdio) -> err {
+    let checkpoint = mem.mark(a)
+    let spawn_error = host_spawn_in(child, a, argv, extra, inherit, cwd, grouped, stdio)
+    mem.reset(a, checkpoint)
+    ret spawn_error
+}
+
+fn neper_os_spawn(result: *SpawnResult, arena: *mem.Arena, argv: *[]const str, stdio: *Stdio) {
+    var none: [1]str = zero
+    result.proc = Proc { raw: 0usize }
+    result.failure = host_spawn(&result.proc, arena, *argv, none[0usize..0usize], true, "", false, *stdio)
+}
+
+fn neper_os_wait(p: *Proc) -> (i32, err) {
+    var status: [1]u32 = zero
+    let code = host_proc_wait(host_handle(p.raw), u32(mem.address_of(&status[0usize])))
+    if code != 0u32 { ret (0i32, wasi_error(code)) }
+    ret (i32(status[0usize]), ok)
+}
 
 // ---- threads (D5673) ---------------------------------------------------------------------------------
 // A plain module has one thread and no way to start another, so it answers what a refusing host
@@ -986,6 +1083,53 @@ fn load_mounts() {
         fd += 1u32
     }
     if root_mount < MOUNT_MAX { cwd_fd = mount_fds[root_mount] }
+    start_directory()
+}
+
+// The directory a spawned child starts in (D5677): the runner puts the parent's `cwd`, a guest path, in
+// NEPER_PWD. Anything that is not a directory here leaves the root.
+fn start_directory() {
+    var sizes: [2]u32 = zero
+    if wasi_environ_sizes_get(u32(mem.address_of(&sizes[0usize])), u32(mem.address_of(&sizes[1usize]))) != 0u32 { ret }
+    let count = usize(sizes[0usize])
+    let block_size = usize(sizes[1usize])
+    if count == 0usize || count > 128usize || block_size > 8192usize { ret }
+    var pointers: [129]u32 = zero
+    var block: [8193]u8 = zero
+    let base = u32(mem.address_of(&block[0usize]))
+    if wasi_environ_get(u32(mem.address_of(&pointers[0usize])), base) != 0u32 { ret }
+    var entry = 0usize
+    while entry < count {
+        let at = usize(pointers[entry] - base)
+        var matched = at + 10usize < block_size
+        if matched {
+            let prefix = "NEPER_PWD="
+            var k = 0usize
+            while k < prefix.len {
+                if block[at + k] != prefix[k] { matched = false }
+                k += 1usize
+            }
+        }
+        if matched {
+            var end = at + 10usize
+            while end < block_size && block[end] != 0u8 { end += 1usize }
+            let value = block[at + 10usize..end]
+            if value.len > 1usize && value.len < 1024usize && value[0usize] == 47u8 {
+                let (fd, open_error) = open_directory(value)
+                if open_error != ok { ret }
+                cwd_fd = fd
+                cwd_owned = true
+                var copied = 0usize
+                while copied < value.len {
+                    cwd_text[copied] = value[copied]
+                    copied += 1usize
+                }
+                cwd_len = value.len
+            }
+            ret
+        }
+        entry += 1usize
+    }
 }
 
 fn mount_matches(path: str, index: usize) -> bool {
@@ -1908,14 +2052,26 @@ fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
     ret (usize(taken[0usize]), ok)
 }
 fn dup(f: File) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
-fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) { ret (Proc { raw: 0usize }, Unsupported) }
+fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
+    var child: Proc = zero
+    let spawn_error = host_spawn(&child, a, options.argv, options.env, options.inherit_env, options.cwd, false, options.stdio)
+    ret (child, spawn_error)
+}
 fn wait_usage(p: own Proc) -> (ProcUsage, err) {
     let (code, wait_error) = wait(p)
     ret (ProcUsage { exit_code: code, peak_memory: 0usize }, wait_error)
 }
-fn kill(p: Proc) -> err { ret Unsupported }
-fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) { ret (ProcGroup { raw: 0usize }, Proc { raw: 0usize }, Unsupported) }
-fn proc_group_terminate(group: ProcGroup, force: bool) -> err { ret Unsupported }
+fn kill(p: Proc) -> err { ret wasi_error(host_proc_kill(host_handle(p.raw))) }
+fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) {
+    var child: Proc = zero
+    let spawn_error = host_spawn(&child, a, options.argv, options.env, options.inherit_env, options.cwd, true, options.stdio)
+    ret (ProcGroup { raw: child.raw }, child, spawn_error)
+}
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
+    var flag = 0u32
+    if force { flag = 1u32 }
+    ret wasi_error(host_proc_group_kill(host_handle(group.raw), flag))
+}
 fn proc_group_close(group: own ProcGroup) -> err { ret ok }
 fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) { ret (FileLock { raw: 0usize }, Unsupported) }
 fn file_unlock(lock: own FileLock) -> err { ret ok }

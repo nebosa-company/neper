@@ -17,6 +17,10 @@
 import dgram from 'node:dgram'
 import dns from 'node:dns'
 import net from 'node:net'
+import { execFile, spawn } from 'node:child_process'
+import { constants as osConstants } from 'node:os'
+import { join } from 'node:path'
+import { isatty } from 'node:tty'
 
 export const BASE = 0x40000000
 const MARK = 1048576
@@ -24,12 +28,12 @@ const DATA_SIZE = 65536
 const PAYLOAD = 128
 const PAYLOAD_OUT_AFTER_IN = 1024
 
-const E = { ACCES: 2, ADDRINUSE: 3, ADDRNOTAVAIL: 4, AFNOSUPPORT: 5, AGAIN: 6, ALREADY: 7, BADF: 8, CONNABORTED: 13, CONNREFUSED: 14, CONNRESET: 15, DESTADDRREQ: 17, EXIST: 20, HOSTUNREACH: 23, INPROGRESS: 26, INVAL: 28, IO: 29, ISCONN: 30, MSGSIZE: 35, NETDOWN: 38, NETUNREACH: 40, NOENT: 44, NOSYS: 52, NOTCONN: 53, PIPE: 64, TIMEDOUT: 73 }
+const E = { ACCES: 2, ADDRINUSE: 3, ADDRNOTAVAIL: 4, AFNOSUPPORT: 5, AGAIN: 6, ALREADY: 7, BADF: 8, CONNABORTED: 13, CONNREFUSED: 14, CONNRESET: 15, DESTADDRREQ: 17, EXIST: 20, HOSTUNREACH: 23, INPROGRESS: 26, INVAL: 28, IO: 29, ISCONN: 30, MSGSIZE: 35, NETDOWN: 38, NETUNREACH: 40, NOENT: 44, NOSYS: 52, NOTCONN: 53, NOTSUP: 58, PIPE: 64, SRCH: 71, TIMEDOUT: 73 }
 const ERRNO = {
   EACCES: E.ACCES, EPERM: E.ACCES, EADDRINUSE: E.ADDRINUSE, EADDRNOTAVAIL: E.ADDRNOTAVAIL, EAFNOSUPPORT: E.AFNOSUPPORT,
   ECONNABORTED: E.CONNABORTED, ECONNREFUSED: E.CONNREFUSED, ECONNRESET: E.CONNRESET, EHOSTUNREACH: E.HOSTUNREACH,
   EINVAL: E.INVAL, EMSGSIZE: E.MSGSIZE, ENETDOWN: E.NETDOWN, ENETUNREACH: E.NETUNREACH, ENOTCONN: E.NOTCONN,
-  EPIPE: E.PIPE, ETIMEDOUT: E.TIMEDOUT, ENOENT: E.NOENT, ENOTFOUND: E.NOENT, ENODATA: E.NOENT,
+  EPIPE: E.PIPE, ETIMEDOUT: E.TIMEDOUT, ENOENT: E.NOENT, ESRCH: E.SRCH, ENOTFOUND: E.NOENT, ENODATA: E.NOENT,
 }
 const errnoOf = (error) => ERRNO[error?.code] ?? E.IO
 
@@ -43,8 +47,13 @@ export const FUNCTIONS = [
   ['sock_close', 'v'], ['resolve', 'pnvvrnc'], ['poll_open', 'c'], ['poll_ctl', 'vvvlv'],
   ['poll_wait', 'vsnlc'], ['poll_wake', 'v'], ['poll_close', 'v'],
   ['pipe', 'cc'], ['handle_read', 'vqncv'], ['handle_write', 'vpnc'], ['handle_close', 'v'],
+  ['proc_spawn', 'pnvvvvvvvc'], ['proc_wait', 'vc'], ['proc_kill', 'v'], ['proc_group_kill', 'vv'],
 ]
 const SIZE = { q: 1, r: 32, s: 16 }
+
+// What the processes need from the runner (D5677), set by its main thread: the working directory, the
+// preopens (guest name -> host directory), the guest's environment and the runner's own path.
+export const context = { cwd: '', tmp: '', preopens: {}, env: {}, runner: '' }
 
 // ---- the Worker side -------------------------------------------------------------------------------
 
@@ -370,7 +379,9 @@ class Pipe {
     this.rxBytes = 0
     this.paused = false
     this.writers = 1
-    this.reader = true
+    this.readers = 1
+    this.feeders = new Set()
+    this.conn = { pause: () => this.feeders.forEach((s) => s.pause()), resume: () => this.feeders.forEach((s) => s.resume()) }
   }
 
   changed() {
@@ -411,6 +422,7 @@ export class NetHost {
     this.socks = new Map()
     this.pollers = new Map()
     this.ends = new Map()
+    this.procs = new Map()
   }
 
   closeAll() {
@@ -421,6 +433,11 @@ export class NetHost {
     this.socks.clear()
     for (const poller of this.pollers.values()) poller.waiter?.()
     this.pollers.clear()
+    // The module ended: its children go on (as orphans do), but the runner no longer waits for them or reads their pipes.
+    for (const proc of this.procs.values()) {
+      proc.child.unref()
+      for (const stream of [proc.child.stdin, proc.child.stdout, proc.child.stderr]) stream?.destroy()
+    }
   }
 
   slot(index, value) {
@@ -461,6 +478,21 @@ export class NetHost {
       }
       case 'resolve': return this.resolve(a[1], a[2], a[3], a[5])
       case 'pipe': return this.pipeOpen()
+      case 'proc_spawn': return this.procSpawn(a)
+    }
+    if (name.startsWith('proc_')) {
+      const proc = this.procs.get(a[0])
+      if (!proc) return E.BADF
+      if (name === 'proc_wait') {
+        await proc.waitUntil(() => proc.status !== null)
+        this.slot(0, proc.status >>> 0)
+        return 0
+      }
+      if (name === 'proc_kill') {
+        proc.child.kill('SIGKILL')
+        return 0
+      }
+      return this.procGroupKill(proc, a[1] !== 0)
     }
     if (name.startsWith('handle_')) {
       const end = this.ends.get(a[0])
@@ -517,8 +549,8 @@ export class NetHost {
   async pipeWrite(end, length) {
     if (!end.writing) return E.BADF
     const { pipe } = end
-    while (pipe.reader && pipe.rxBytes >= MARK) await pipe.waitUntil(() => pipe.rxBytes < MARK || !pipe.reader)
-    if (!pipe.reader) return E.PIPE
+    while (pipe.readers > 0 && pipe.rxBytes >= MARK) await pipe.waitUntil(() => pipe.rxBytes < MARK || pipe.readers === 0)
+    if (pipe.readers === 0) return E.PIPE
     pipe.rx.push(Buffer.from(this.data.subarray(PAYLOAD, PAYLOAD + length)))
     pipe.rxBytes += length
     pipe.changed()
@@ -529,8 +561,152 @@ export class NetHost {
   pipeClose(id, end) {
     this.ends.delete(id)
     if (end.writing) end.pipe.writers--
-    else end.pipe.reader = false
+    else end.pipe.readers--
     end.pipe.changed()
+    return 0
+  }
+
+  // D5677. The buffer holds the argv strings, then the env strings (each NUL-terminated), then the cwd (a
+  // guest path, no terminator). A child whose argv[0] ends in .wasm runs through this runner, since its
+  // image is a module; any other is spawned as named. The three stdio words are 0-2 (the runner's own
+  // stream) or a pipe end made by `pipe`.
+  async procSpawn(a) {
+    const buffer = Buffer.from(this.data.subarray(PAYLOAD, PAYLOAD + a[1]))
+    const items = []
+    let at = 0
+    for (let k = 0; k < a[2] + a[3]; k++) {
+      const end = buffer.indexOf(0, at)
+      if (end < 0) return E.INVAL
+      items.push(buffer.toString('utf8', at, end))
+      at = end + 1
+    }
+    const argv = items.slice(0, a[2])
+    const guestCwd = buffer.toString('utf8', at, at + a[5])
+    if (!argv.length) return E.INVAL
+    const wasm = argv[0].endsWith('.wasm')
+    const given = []
+    for (let k = 0; k < 3; k++) {
+      const id = a[6 + k]
+      if (id <= 2) {
+        given.push(null)
+        continue
+      }
+      const end = this.ends.get(id)
+      if (!end) return id >= BASE ? E.BADF : E.NOTSUP
+      if (end.writing === (k === 0)) return E.BADF
+      given.push(end)
+    }
+    const win = process.platform === 'win32'
+    const key = (name) => (win ? name.toUpperCase() : name)
+    const merged = new Map(Object.entries(a[4] & 1 ? (wasm ? context.env : process.env) : {}).map(([n, v]) => [key(n), [n, v]]))
+    for (const item of items.slice(a[2])) {
+      const cut = item.indexOf('=')
+      if (cut > 0) merged.set(key(item.slice(0, cut)), [item.slice(0, cut), item.slice(cut + 1)])
+    }
+    merged.delete('NEPER_PWD')
+    if (wasm && guestCwd !== '' && guestCwd !== '/') merged.set('NEPER_PWD', ['NEPER_PWD', guestCwd])
+    let env = Object.fromEntries(merged.values())
+    // The child runner is a node process: it gets the module's whole environment as JSON (its own is a real
+    // TMPDIR for the scratch directory, which it points the module's at /tmp again, and SystemRoot).
+    if (wasm) env = { NEPER_GUEST_ENV: JSON.stringify(env), TMPDIR: context.tmp, TMP: context.tmp, TEMP: context.tmp, ...(win && process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) }
+    const grouped = (a[4] & 2) !== 0
+    const child = spawn(wasm ? process.execPath : argv[0], wasm ? ['--no-warnings', context.runner, this.hostPath(argv[0]), ...argv.slice(1)] : argv.slice(1), {
+      cwd: wasm || guestCwd === '' ? context.cwd : this.hostPath(guestCwd),
+      env,
+      windowsHide: true,
+      // libuv puts a Windows child in a job that dies with this process; an orphan must outlive it, unless a console is shared.
+      detached: win ? ![0, 1, 2].some((fd) => isatty(fd)) : grouped,
+      stdio: given.map((end) => (end ? 'pipe' : 'inherit')),
+    })
+    const failure = await new Promise((resolve) => {
+      child.once('spawn', () => resolve(0))
+      child.once('error', (error) => resolve(errnoOf(error)))
+    })
+    if (failure) return failure
+    child.on('error', () => {})
+    const proc = { child, status: null, listeners: new Set(), group: grouped }
+    proc.waitUntil = Sock.prototype.waitUntil
+    child.once('exit', (code, signal) => {
+      proc.status = code ?? 128 + (osConstants.signals[signal] ?? 0)
+      for (const listener of [...proc.listeners]) listener()
+    })
+    if (given[0]) this.feedChild(given[0].pipe, child.stdin)
+    if (given[1]) this.drainChild(given[1].pipe, child.stdout)
+    if (given[2]) this.drainChild(given[2].pipe, child.stderr)
+    this.procs.set(this.ids.next, proc)
+    this.slot(0, this.ids.next++)
+    return 0
+  }
+
+  // A guest path as a host path: /tmp, /home and /exe are the runner's directories, any other is under the
+  // working directory (the root mount).
+  hostPath(guest) {
+    for (const [name, directory] of Object.entries(context.preopens)) {
+      if (name.startsWith('/') && (guest === name || guest.startsWith(`${name}/`))) return join(directory, guest.slice(name.length))
+    }
+    return join(context.cwd, guest)
+  }
+
+  // The child's stdout or stderr is a write end of a host pipe: its bytes join the pipe's queue, and the
+  // pipe has one more writer until the stream closes.
+  drainChild(pipe, stream) {
+    pipe.writers++
+    pipe.feeders.add(stream)
+    stream.on('data', (chunk) => {
+      if (pipe.readers === 0) return
+      pipe.rx.push(chunk)
+      pipe.rxBytes += chunk.length
+      if (pipe.rxBytes >= MARK && !pipe.paused) {
+        pipe.paused = true
+        pipe.conn.pause()
+      }
+      pipe.changed()
+    })
+    stream.on('close', () => {
+      pipe.feeders.delete(stream)
+      pipe.writers--
+      pipe.changed()
+    })
+  }
+
+  // The child's stdin is the read end of a host pipe: what is written to the pipe is written on, and the
+  // end of the pipe (the last writer closed) ends the child's stdin.
+  async feedChild(pipe, stream) {
+    pipe.readers++
+    stream.on('error', () => {})
+    stream.on('close', () => {
+      pipe.readers--
+      pipe.changed()
+    })
+    while (!stream.destroyed) {
+      await pipe.waitUntil(() => pipe.rxBytes > 0 || pipe.writers === 0 || stream.destroyed)
+      if (stream.destroyed) return
+      if (pipe.rxBytes === 0) {
+        stream.end()
+        return
+      }
+      const chunk = Buffer.alloc(Math.min(pipe.rxBytes, 65536))
+      pipe.take(chunk, chunk.length)
+      if (!stream.write(chunk)) await new Promise((resolve) => (stream.once('drain', resolve), stream.once('close', resolve)))
+    }
+  }
+
+  // The group: a negative pid on POSIX (the child leads its own group when spawned with the group flag),
+  // the process tree on Windows, where a polite stop does not reach a console program, so it falls back to
+  // the forced one.
+  async procGroupKill(proc, force) {
+    const { pid } = proc.child
+    if (process.platform === 'win32') {
+      if (proc.status !== null) return 0 // a dead root leaves taskkill nothing to walk
+      const run = (flags) => new Promise((resolve) => execFile('taskkill', ['/pid', String(pid), '/T', ...flags], { windowsHide: true }, (error) => resolve(!error)))
+      if (!(await run(force ? ['/F'] : [])) && !force) await run(['/F'])
+      return 0
+    }
+    try {
+      process.kill(proc.group ? -pid : pid, force ? 'SIGKILL' : 'SIGTERM')
+    } catch (error) {
+      if (error.code !== 'ESRCH') return errnoOf(error)
+    }
     return 0
   }
 

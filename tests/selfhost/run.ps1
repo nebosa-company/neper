@@ -11007,6 +11007,15 @@ if ($wasmNode) {
         $wasmWant = if ($wasmFixture -eq 'net_pop3') { 'net pop3 ok' } else { "write then read`nempty probe would block`n300000 bytes across threads`nend of stream after close`na blocked reader woke" }
         if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne $wasmWant) { throw "$wasmFixture answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
+    # (D5770, C190) Processes through neper_host: each fixture spawns its own image, which the runner starts again as a child (os_process:
+    # kill, a pipe handed to the child, wait_usage; os_group: environment, cwd, a group terminated). proc_output is not run here: its
+    # last checks hold an orphan in a process group, which taskkill /T cannot reach once the group's leader has exited (run.sh runs it).
+    foreach ($wasmFixture in 'os_process', 'os_group') {
+        $wasmProcPath = Join-Path $wasmBuild "$wasmFixture.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmProcPath) -ne 'executable written') { throw "$wasmFixture did not emit as a WebAssembly module" }
+        $wasmRun = Invoke-Wasm $wasmProcPath @()
+        if ($wasmRun.Status -ne 0) { throw "$wasmFixture answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     $wasmFallback = 'wasm_irreducible'
     $wasmForced = 'wasm_flow'
