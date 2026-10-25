@@ -941,7 +941,7 @@ fn match_length(s: str) -> (str, str, bool) {
 }
 
 fn length_unit_known(u: str) -> bool {
-    ret str.eq(u, "px") || str.eq(u, "pt") || str.eq(u, "pc") || str.eq(u, "em") || str.eq(u, "rem") || str.eq(u, "ex") || str.eq(u, "ch") || str.eq(u, "vw") || str.eq(u, "vh") || str.eq(u, "vmin") || str.eq(u, "vmax") || str.eq(u, "dvh") || str.eq(u, "svh") || str.eq(u, "lvh") || str.eq(u, "dvw") || str.eq(u, "svw") || str.eq(u, "lvw") || str.eq(u, "vi") || str.eq(u, "vb") || str.eq(u, "cm") || str.eq(u, "mm") || str.eq(u, "in") || str.eq(u, "q") || str.eq(u, "%")
+    ret str.eq(u, "px") || str.eq(u, "pt") || str.eq(u, "pc") || str.eq(u, "em") || str.eq(u, "rem") || str.eq(u, "ex") || str.eq(u, "ch") || str.eq(u, "ic") || str.eq(u, "cap") || str.eq(u, "vw") || str.eq(u, "vh") || str.eq(u, "vmin") || str.eq(u, "vmax") || str.eq(u, "dvh") || str.eq(u, "svh") || str.eq(u, "lvh") || str.eq(u, "dvw") || str.eq(u, "svw") || str.eq(u, "lvw") || str.eq(u, "vi") || str.eq(u, "vb") || str.eq(u, "cm") || str.eq(u, "mm") || str.eq(u, "in") || str.eq(u, "q") || str.eq(u, "%")
 }
 
 fn unit_length(value: f64, unit: str) -> (CssLength, bool) {
@@ -955,6 +955,9 @@ fn unit_length(value: f64, unit: str) -> (CssLength, bool) {
     if str.eq(unit, "rem") { ret (plain_length(value, .Rem), true) }
     if str.eq(unit, "ex") { ret (plain_length(value, .Ex), true) }
     if str.eq(unit, "ch") { ret (plain_length(value, .Ch), true) }
+    // `ic` is the advance of a CJK ideograph (one em for the fonts here) and `cap` the capital height (read as the x-height ratio).
+    if str.eq(unit, "ic") { ret (plain_length(value, .Em), true) }
+    if str.eq(unit, "cap") { ret (plain_length(value, .Ex), true) }
     if str.eq(unit, "in") { ret (plain_length(value * 96.0f64, .Px), true) }
     if str.eq(unit, "cm") { ret (plain_length(value * 96.0f64 / 2.54f64, .Px), true) }
     if str.eq(unit, "mm") { ret (plain_length(value * 96.0f64 / 25.4f64, .Px), true) }

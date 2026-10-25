@@ -571,6 +571,21 @@ fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.
         let se = svg_entry(p, node)
         var sratio = 0.0f64
         if se.height > 0u32 { sratio = f64(se.width) / f64(se.height) }
+        // Without width and height attributes the viewBox still gives the ratio, which a CSS width or height then uses.
+        let (sw_attr, has_sw) = dom.get_attribute(&p.tree, node, "width")
+        let (sh_attr, has_sh) = dom.get_attribute(&p.tree, node, "height")
+        if !has_sw && !has_sh {
+            var (svb, has_svb) = dom.get_attribute(&p.tree, node, "viewbox")
+            if !has_svb {
+                let (svb2, has_svb2) = dom.get_attribute(&p.tree, node, "viewBox")
+                svb = svb2
+                has_svb = has_svb2
+            }
+            if has_svb {
+                let sparts = cv_numbers(p.pa, svb)
+                if sparts.len == 4usize && sparts[2usize] > 0.0f64 && sparts[3usize] > 0.0f64 { sratio = sparts[2usize] / sparts[3usize] }
+            }
+        }
         ret layout.Intrinsic { kind: 1u8, has_width: true, width: f64(se.width), has_height: true, height: f64(se.height), ratio: sratio }
     }
     if str.eq(name, "img") {
@@ -641,7 +656,12 @@ fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.
     if str.eq(name, "meter") { ret known(80.0f64, 16.0f64, 0.0f64) }
     if str.eq(name, "audio") { ret known(300.0f64, 54.0f64, 0.0f64) }
     if str.eq(name, "svg") {
-        let (vb, has_vb) = dom.get_attribute(&p.tree, node, "viewbox")
+        var (vb, has_vb) = dom.get_attribute(&p.tree, node, "viewbox")
+        if !has_vb {
+            let (vb2, has_vb2) = dom.get_attribute(&p.tree, node, "viewBox")
+            vb = vb2
+            has_vb = has_vb2
+        }
         out.kind = 1u8
         if has_vb {
             let parts = cv_numbers(p.pa, vb)
