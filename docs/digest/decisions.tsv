@@ -2862,4 +2862,5 @@ D5226	1123	macOS drag out takes files and images, and the Dock overlay is drawn 
 D5227	969	no GPU backend for macOS yet: MoltenVK loads but dies on the CI runner's virtual GPU
 D5228	828	the checks a CI runner cannot do are a program a person runs on a real Mac
 D5229	1487	macOS input methods commit text through the content view's text input protocol
-D5230	941	correction: the compiler has declaration capacity; D5224 and D5227 said it had none
+D5230	942	correction: the compiler has declaration capacity; D5224 and D5227 said it had none
+D5231	1305	e.gpu.metal: Metal compute as a runtime of its own, kernels as MSL text
