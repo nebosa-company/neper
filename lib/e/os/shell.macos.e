@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: true, permissions: true, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: true, permissions: true, credentials: has_tool("security"), screen_capture: true, biometrics: biometric_available(), photo_picker: true }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -2367,6 +2367,7 @@ fn permission_of(code: usize, authorized_from: usize) -> Permission {
 // which is a difference in content and not a refusal.
 fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
     if c == .Screen { ret .Granted }
+    if c == .Biometric && biometric_available() { ret .Granted }
     if os.cocoa_start() != ok { ret .Unavailable }
     let pool = os.objc_pool_push()
     var answer = Permission.Unavailable
@@ -2607,11 +2608,84 @@ fn screen_capture(a: *mem.Arena) -> (Icon, err) {
     ret (Icon { width: u32(width), height: u32(height), pixels: pixels }, ok)
 }
 
-fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
-    ret (.Unavailable, Unsupported)
+// Biometrics (D5220): LocalAuthentication's `canEvaluatePolicy:` for Touch ID is asked every time, so the capability is true
+// only on a Mac that has it enrolled; `biometric_verify` shows the system sheet through `evaluatePolicy:localizedReason:reply:`,
+// whose reply is a block (built by hand like the permission block, a global one), and waits up to a minute for the person.
+var bio_words: [8]u64 = zero
+var bio_done: bool = zero
+var bio_ok: bool = zero
+
+type BioInvoke = union { function: fn(usize, usize, usize), bits: usize }
+
+@cc(c)
+fn bio_replied(block: usize, success: usize, failure: usize) {
+    bio_ok = success & 255usize != 0usize
+    bio_done = true
 }
 
+fn biometric_context() -> usize {
+    let framework = "/System/Library/Frameworks/LocalAuthentication.framework/LocalAuthentication\x00"
+    let handle = os.raw_dlopen(mem.address_of(&framework[0usize]), 2i32)
+    if handle == 0usize { ret 0usize }
+    ret os.msg0(os.msg0(os.cocoa_class("LAContext\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+}
+
+fn biometric_available() -> bool {
+    if os.cocoa_start() != ok { ret false }
+    let pool = os.objc_pool_push()
+    let context = biometric_context()
+    var available = false
+    if context != 0usize {
+        // LAPolicyDeviceOwnerAuthenticationWithBiometrics
+        available = os.msg2(context, os.cocoa_sel("canEvaluatePolicy:error:\x00"), 1usize, 0usize) & 255usize != 0usize
+        let released = os.msg0(context, os.cocoa_sel("release\x00"))
+    }
+    os.objc_pool_pop(pool)
+    ret available
+}
+
+fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
+    if !biometric_available() { ret (.Unavailable, Unsupported) }
+    let pool = os.objc_pool_push()
+    let context = biometric_context()
+    var invoke: BioInvoke = zero
+    invoke.function = bio_replied
+    let symbol = "_NSConcreteGlobalBlock\x00"
+    bio_words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    bio_words[1usize] = 268435456u64
+    bio_words[2usize] = u64(invoke.bits)
+    bio_words[3usize] = u64(mem.address_of(&bio_words[4usize]))
+    bio_words[4usize] = 0u64
+    bio_words[5usize] = 32u64
+    bio_done = false
+    let why = os.cocoa_text(reason)
+    let asked = os.msg4(context, os.cocoa_sel("evaluatePolicy:localizedReason:reply:\x00"), 1usize, why, mem.address_of(&bio_words[0usize]), 0usize)
+    var waited = 0usize
+    while !bio_done && waited < 600usize {
+        os.cocoa_pump(100000000i64)
+        waited += 1usize
+    }
+    os.cf_release(why)
+    let released = os.msg0(context, os.cocoa_sel("release\x00"))
+    os.objc_pool_pop(pool)
+    if !bio_done { ret (.Unavailable, Failed) }
+    if bio_ok { ret (.Granted, ok) }
+    ret (.Denied, ok)
+}
+
+// The photo picker is the open panel narrowed to the image types the system reads, as `file_dialog`'s Open with several
+// filters; the Photos library's own picker (PHPicker) is a SwiftUI view this library cannot present.
 fn photo_picker(a: *mem.Arena, w: os.Window, multiple: bool) -> ([]const str, err) {
-    var nothing: []const str = zero
-    ret (nothing, Unsupported)
+    var filters: [8]FileFilter = zero
+    filters[0usize] = FileFilter { label: "Images", pattern: "*.png" }
+    filters[1usize] = FileFilter { label: "Images", pattern: "*.jpg" }
+    filters[2usize] = FileFilter { label: "Images", pattern: "*.jpeg" }
+    filters[3usize] = FileFilter { label: "Images", pattern: "*.gif" }
+    filters[4usize] = FileFilter { label: "Images", pattern: "*.heic" }
+    filters[5usize] = FileFilter { label: "Images", pattern: "*.tiff" }
+    filters[6usize] = FileFilter { label: "Images", pattern: "*.bmp" }
+    filters[7usize] = FileFilter { label: "Images", pattern: "*.webp" }
+    let dialog = FileDialog { kind: .Open, title: "Choose photos", filters: filters[..], multiple: multiple, initial: "", default_extension: "", folder: "" }
+    let (picked, picked_error) = file_dialog(a, w, dialog)
+    ret (picked, picked_error)
 }
