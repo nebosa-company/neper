@@ -8,6 +8,7 @@ use e.gpu
 use e.io
 use e.mem
 use e.net.fetch as fetch
+use e.net.policy as policy
 use e.net.tls.hoststore as hoststore
 use e.os
 use e.str
@@ -268,7 +269,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Network.
     let (roots, roots_error) = hoststore.system_roots(a, 4194304usize)
     if roots_error != ok { os.exit(6i32) }
-    let (cl, client_error) = fetch.client(a, fetch.default_config(roots.der), 256usize)
+    var net_config = fetch.default_config(roots.der)
+    // An Adblock Plus list in `neper-browser.filters` (optional) names hosts no page may load from.
+    let (filter_text, filter_error) = fs.read_file(a, "neper-browser.filters", 33554432usize)
+    if filter_error == ok { 
+        let rules = policy.parse_filter_list(a, filter_text)
+        net_config.block_hosts = rules.domains
+        net_config.allow_hosts = rules.allow
+    }
+    let (cl, client_error) = fetch.client(a, net_config, 256usize)
     if client_error != ok { os.exit(7i32) }
     var client = cl
     // The shell, its profile and the first tab.

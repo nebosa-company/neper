@@ -695,7 +695,7 @@ fn is_private_network_host(a: *mem.Arena, host: str) -> bool {
 
 // --- filter lists ----------------------------------------------------------------------------------------------
 
-type FilterRules = struct { domains: []const str, selectors: []const str }
+type FilterRules = struct { domains: []const str, selectors: []const str, allow: []const str }
 
 fn add_unique(out: []str, n: *usize, v: str) {
     var i = 0usize
@@ -711,6 +711,8 @@ fn add_unique(out: []str, n: *usize, v: str) {
 fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
     let (domains, e1) = mem.alloc[str](a, text.len + 1usize)
     let (selectors, e2) = mem.alloc[str](a, text.len + 1usize)
+    let (exempt, e3) = mem.alloc[str](a, text.len + 1usize)
+    var na = 0usize
     var nd = 0usize
     var ns = 0usize
     var start = 0usize
@@ -721,7 +723,23 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
             start = i + 1usize
             i += 1usize
             if line.len == 0usize { continue }
-            if str.starts_with(line, "!") || str.starts_with(line, "[Adblock") || str.starts_with(line, "@@") { continue }
+            if str.starts_with(line, "!") || str.starts_with(line, "[Adblock") { continue }
+            // `@@||host^` exempts a host from the network rules.
+            if str.starts_with(line, "@@||") {
+                var aend = line.len
+                var ak = 4usize
+                while ak < line.len {
+                    if line[ak] == 94u8 || line[ak] == 47u8 || line[ak] == 36u8 {
+                        aend = ak
+                        break
+                    }
+                    ak += 1usize
+                }
+                let ahost = trim(lower(a, line[4usize..aend]))
+                if ahost.len > 0usize && !str.contains(ahost, "*") { add_unique(exempt, &na, ahost) }
+                continue
+            }
+            if str.starts_with(line, "@@") { continue }
             if str.starts_with(line, "##") {
                 let selector = trim(line[2usize..])
                 if selector.len > 0usize && !str.starts_with(selector, "+js(") { add_unique(selectors, &ns, selector) }
@@ -744,7 +762,7 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
         }
         i += 1usize
     }
-    ret FilterRules { domains: domains[0usize..nd], selectors: selectors[0usize..ns] }
+    ret FilterRules { domains: domains[0usize..nd], selectors: selectors[0usize..ns], allow: exempt[0usize..na] }
 }
 
 // --- Content-Security-Policy -----------------------------------------------------------------------------------
@@ -1778,4 +1796,16 @@ fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str) {
         }
         i += 1usize
     }
+}
+
+// Whether `host` (a parsed URL host, already lower case) is one of `domains` or a subdomain of one: an Adblock Plus `||host^` rule.
+fn host_blocked(domains: []const str, host: str) -> bool {
+    var i = 0usize
+    while i < domains.len {
+        let d = domains[i]
+        if str.eq(host, d) { ret true }
+        if host.len > d.len + 1usize && host[host.len - d.len - 1usize] == 46u8 && str.eq(host[host.len - d.len..], d) { ret true }
+        i += 1usize
+    }
+    ret false
 }

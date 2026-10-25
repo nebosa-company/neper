@@ -526,5 +526,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 108. A scroll container taller than the viewport gives a vertical flow only the viewport height.
     let (p108, ok108) = build(a, "<div style=\"overflow:hidden;max-height:2000px;font-size:100px\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div>", "")
     if !ok108 || !near(rect_of(p108, "o").h, 600.0f64) { os.exit(149) }
+    // 109. A right-to-left embedded span in a left-to-right line shows its words in reverse order, the spaces between them kept.
+    let (p109, ok109) = build(a, "<div>x <span style=\"direction:rtl;unicode-bidi:embed\">&#x5d0; &#x5d1;</span> y</div>", "")
+    if !ok109 || !str.eq(all_text(a, p109), "x ב א y") { os.exit(150) }
+    // 110. A mirrored character in a right-to-left run is drawn mirrored.
+    let (p110, ok110) = build(a, "<div style=\"direction:rtl\">&#x5d0; &gt; &#x5d1;</div>", "")
+    if !ok110 || !str.eq(all_text(a, p110), "\xd7\x91 < \xd7\x90") { os.exit(151) }
+    // 111. bidi-override puts the characters of the span in the order of its direction whatever their classes.
+    let (p111, ok111) = build(a, "<div>x <span style=\"direction:rtl;unicode-bidi:bidi-override\">ab cd</span></div>", "")
+    if !ok111 || !str.eq(all_text(a, p111), "x cd ab") { os.exit(152) }
+    // 112. In a grid-lanes container an auto-height item stretches to just before the next item laid below it in its lanes.
+    let (p112, ok112) = build(a, "<div style=\"display:grid-lanes;grid-template-columns:50px 50px;height:200px;gap:10px;align-items:stretch\"><div id=a style=\"height:20px\"></div><div id=b></div><div id=c style=\"height:10px;grid-column:span 2\"></div></div>", "")
+    if !ok112 || !near(rect_of(p112, "b").h, 20.0f64) || !near(rect_of(p112, "c").y, 30.0f64) { os.exit(153) }
+    // 113. fill-reverse stacks from the end of the container, track-reverse from the last lane.
+    let (p113, ok113) = build(a, "<div style=\"display:grid-lanes;grid-lanes-direction:column fill-reverse track-reverse;grid-template-columns:50px 50px;width:110px;height:200px;gap:10px\"><div id=a style=\"height:20px\"></div></div>", "")
+    if !ok113 || !near(rect_of(p113, "a").y, 180.0f64) || !near(rect_of(p113, "a").x, 60.0f64) { os.exit(154) }
     ret ok
 }

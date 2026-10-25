@@ -212,7 +212,7 @@ fn layout_run(s: *Set, a: *mem.Arena, families: str, weight: f64, italic: bool, 
     // A right-to-left paragraph starts at the right edge of the limit: lay it out again against its own width, so its
     // origin is the left edge of the run like a left-to-right one.
     if lay0.lines.len > 0usize && lay0.lines[0usize].bounds.x > 1.0f32 {
-        let (lay1, le1) = tl.layout(a, text, tl.Style { fonts: fonts, language: "", line_height: 0.0f32 }, opts(lay0.lines[0usize].bounds.width + 0.01f32))
+        let (lay1, le1) = tl.layout(a, text, tl.Style { fonts: fonts, language: "", line_height: 0.0f32 }, opts(lay0.lines[0usize].bounds.width))
         if le1 == ok { lay = lay1 } else { le = le1 }
     }
     if le != ok { ret (zero, le) }

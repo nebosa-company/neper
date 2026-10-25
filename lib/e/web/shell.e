@@ -14,6 +14,7 @@ use e.js.interp as js
 use e.mem
 use e.net.fetch as fetch
 use e.str
+use e.time
 use e.text.fontset as fontset
 use e.web.page as page
 
@@ -26,7 +27,7 @@ const TAB_ARENA_BYTES: usize = 134217728usize
 const VIEW_BYTES: usize = 33554432usize
 fn search_url() -> str { ret "https://duckduckgo.com/?q=" }
 
-type Entry = struct { url: str, title: str }
+type Entry = struct { url: str, title: str, at: i64, count: u32 }
 type Tab = struct {
     id: u32, arena: mem.Arena, mark: usize, pg: *page.Page, loaded: bool,
     history: list.List[Entry], index: usize, loading_url: str, error_text: str
@@ -221,6 +222,8 @@ fn reason_text(e: err) -> str {
     if e == fetch.BadUrl { ret "The address is not valid." }
     if e == fetch.UnsupportedScheme { ret "This kind of address is not supported." }
     if e == fetch.BlockedPort { ret "The port is blocked." }
+    if e == fetch.BlockedByFilter { ret "A filter list blocks this address." }
+    if e == fetch.CertificateError { ret "Your connection is not private: the server certificate is not valid for this address, so the page was not loaded." }
     if e == fetch.TooManyRedirects { ret "The server redirected too many times." }
     ret "The page could not be loaded."
 }
@@ -232,7 +235,7 @@ fn active_tab(sh: *Shell) -> *Tab { ret sh.tabs.items[sh.active] }
 fn tab_count(sh: *Shell) -> usize { ret sh.tabs.len }
 
 fn current_entry(t: *Tab) -> Entry {
-    if t.history.len == 0usize { ret Entry { url: "about:blank", title: "New tab" } }
+    if t.history.len == 0usize { ret Entry { url: "about:blank", title: "New tab", at: 0i64, count: 1u32 } }
     ret t.history.items[t.index]
 }
 
@@ -277,10 +280,80 @@ fn load_into(sh: *Shell, t: *Tab, logical: str) {
     t.loaded = true
 }
 
+const MAX_VISITS: usize = 5000usize
+
+fn now_ms() -> i64 {
+    let (t, e) = time.now()
+    if e != ok { ret 0i64 }
+    ret t.nanos / 1000000i64
+}
+
+// A visit is kept once per address: a revisit bumps its count and time, takes the new title and moves it to the newest end.
 fn record_visit(sh: *Shell, logical: str, title: str) {
     if str.starts_with(logical, "about:") || str.starts_with(logical, "data:") { ret }
-    let pe = list.push[Entry](&sh.visits, Entry { url: dup(sh.a, logical), title: dup(sh.a, title) })
+    var entry = Entry { url: dup(sh.a, logical), title: dup(sh.a, title), at: now_ms(), count: 1u32 }
+    var i = 0usize
+    while i < sh.visits.len {
+        if str.eq(sh.visits.items[i].url, logical) {
+            entry.count = sh.visits.items[i].count + 1u32
+            let gone = list.remove[Entry](&sh.visits, i)
+            break
+        }
+        i += 1usize
+    }
+    if sh.visits.len >= MAX_VISITS {
+        let oldest = list.remove[Entry](&sh.visits, 0usize)
+    }
+    let pe = list.push[Entry](&sh.visits, entry)
 }
+
+fn fold_byte(c: u8) -> u8 {
+    if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
+    ret c
+}
+
+fn contains_fold(hay: str, needle: str) -> bool {
+    if needle.len == 0usize { ret true }
+    var i = 0usize
+    while i + needle.len <= hay.len {
+        var k = 0usize
+        while k < needle.len && fold_byte(hay[i + k]) == fold_byte(needle[k]) { k += 1usize }
+        if k == needle.len { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// The visits whose address or title contains `needle` (any case), newest first.
+fn search_visits(sh: *Shell, needle: str) -> []const Entry {
+    let (out, e) = mem.alloc[Entry](sh.a, sh.visits.len + 1usize)
+    if e != ok { ret zero }
+    var n = 0usize
+    var i = sh.visits.len
+    while i > 0usize {
+        i -= 1usize
+        let v = sh.visits.items[i]
+        if contains_fold(v.url, needle) || contains_fold(v.title, needle) {
+            out[n] = v
+            n += 1usize
+        }
+    }
+    ret out[0usize..n]
+}
+
+fn delete_visit(sh: *Shell, address: str) -> bool {
+    var i = 0usize
+    while i < sh.visits.len {
+        if str.eq(sh.visits.items[i].url, address) {
+            let gone = list.remove[Entry](&sh.visits, i)
+            ret true
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+fn clear_visits(sh: *Shell) { list.clear[Entry](&sh.visits) }
 
 // Navigates `t` to what the omnibox makes of `input`, cutting the forward history.
 fn navigate(sh: *Shell, t: *Tab, input: str) -> err {
@@ -292,7 +365,7 @@ fn navigate(sh: *Shell, t: *Tab, input: str) -> err {
     var final_url = logical
     if !str.starts_with(logical, "about:") { final_url = t.pg.url }
     if t.history.len > 0usize { t.history.len = t.index + 1usize }
-    let pe = list.push[Entry](&t.history, Entry { url: dup(sh.a, final_url), title: dup(sh.a, title) })
+    let pe = list.push[Entry](&t.history, Entry { url: dup(sh.a, final_url), title: dup(sh.a, title), at: 0i64, count: 1u32 })
     if pe != ok { ret pe }
     t.index = t.history.len - 1usize
     record_visit(sh, final_url, title)
@@ -430,6 +503,12 @@ fn write_entries(a: *mem.Arena, label: str, entries: []const Entry, out: str) ->
         text = concat(a, text, clean_field(a, entries[i].url))
         text = concat(a, text, "\t")
         text = concat(a, text, clean_field(a, entries[i].title))
+        if str.eq(label, "V") {
+            text = concat(a, text, "\t")
+            text = concat(a, text, i64_text(a, entries[i].at))
+            text = concat(a, text, "\t")
+            text = concat(a, text, i64_text(a, i64(entries[i].count)))
+        }
         text = concat(a, text, "\n")
         i += 1usize
     }
@@ -453,9 +532,21 @@ fn load_profile_text(sh: *Shell, text: str) -> err {
         if line.len == 0usize { continue }
         let (kind, rest, f1) = str.split_once(line, "\t")
         if !f1 { ret BadProfile }
-        let (u, title, f2) = str.split_once(rest, "\t")
+        let (u, tail, f2) = str.split_once(rest, "\t")
         if !f2 { ret BadProfile }
-        let entry = Entry { url: dup(sh.a, u), title: dup(sh.a, title) }
+        // A visit line may carry its time and count after the title; older profiles do not.
+        let (title, stats, has_stats) = str.split_once(tail, "\t")
+        var entry = Entry { url: dup(sh.a, u), title: dup(sh.a, tail), at: 0i64, count: 1u32 }
+        if has_stats {
+            entry.title = dup(sh.a, title)
+            let (at_text, count_text, has_count) = str.split_once(stats, "\t")
+            let (at_n, at_e) = str.parse_i64(at_text)
+            if at_e == ok { entry.at = at_n }
+            if has_count {
+                let (cn, ce) = str.parse_i64(count_text)
+                if ce == ok && cn > 0i64 { entry.count = u32(cn) }
+            }
+        }
         if str.eq(kind, "B") {
             let pe = list.push[Entry](&sh.bookmarks, entry)
         } else if str.eq(kind, "V") {
@@ -475,4 +566,29 @@ fn load_profile(sh: *Shell, path: str) -> err {
     let (text, e) = fs.read_file(sh.a, path, 16777216usize)
     if e != ok { ret e }
     ret load_profile_text(sh, text)
+}
+
+fn i64_text(a: *mem.Arena, n: i64) -> str {
+    if n == 0i64 { ret "0" }
+    var digits: [24]u8 = zero
+    var at = 24usize
+    var v = n
+    var neg = false
+    if v < 0i64 {
+        neg = true
+        v = -v
+    }
+    while v > 0i64 && at > 1usize {
+        at -= 1usize
+        digits[at] = u8(48i64 + v % 10i64)
+        v = v / 10i64
+    }
+    if neg {
+        at -= 1usize
+        digits[at] = 45u8
+    }
+    let (out, e) = mem.alloc[u8](a, 24usize - at)
+    if e != ok { ret "" }
+    mem.copy[u8](out, digits[at..])
+    ret out
 }

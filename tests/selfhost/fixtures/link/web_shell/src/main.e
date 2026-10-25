@@ -73,5 +73,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4 != ok || !str.eq(t4.pg.title, "Can't load page") { os.exit(39i32) }
     if shell.close_tab(sh, 3usize) != ok || shell.tab_count(sh) != 3usize { os.exit(40i32) }
     if shell.close_tab(sh, 9usize) == ok { os.exit(41i32) }
+    // 6. The visit log: one entry per address, a revisit bumps the count and takes the newest end; it can be searched, deleted,
+    // cleared and survives the profile.
+    let (vs, vse) = shell.new(a, &client, &fonts, 400.0f32, 200.0f32)
+    if vse != ok { os.exit(42i32) }
+    shell.record_visit(vs, "https://a.test/x", "Alpha")
+    shell.record_visit(vs, "https://b.test/y", "Beta")
+    shell.record_visit(vs, "https://a.test/x", "Alpha 2")
+    shell.record_visit(vs, "about:blank", "skipped")
+    if vs.visits.len != 2usize || vs.visits.items[1usize].count != 2u32 || !str.eq(vs.visits.items[1usize].title, "Alpha 2") || !str.eq(vs.visits.items[0usize].url, "https://b.test/y") { os.exit(43i32) }
+    let beta = shell.search_visits(vs, "BETA")
+    if beta.len != 1usize || !str.eq(beta[0usize].url, "https://b.test/y") { os.exit(44i32) }
+    let both = shell.search_visits(vs, "test")
+    if both.len != 2usize || !str.eq(both[0usize].url, "https://a.test/x") { os.exit(45i32) }
+    let (vs2, vse2) = shell.new(a, &client, &fonts, 400.0f32, 200.0f32)
+    if vse2 != ok || shell.load_profile_text(vs2, shell.profile_text(vs)) != ok { os.exit(46i32) }
+    if vs2.visits.len != 2usize || vs2.visits.items[1usize].count != 2u32 || vs2.visits.items[1usize].at != vs.visits.items[1usize].at { os.exit(47i32) }
+    let (vs3, vse3) = shell.new(a, &client, &fonts, 400.0f32, 200.0f32)
+    if vse3 != ok || shell.load_profile_text(vs3, "V\thttps://c.test/\tGamma\n") != ok { os.exit(48i32) }
+    if vs3.visits.len != 1usize || vs3.visits.items[0usize].count != 1u32 || !str.eq(vs3.visits.items[0usize].title, "Gamma") { os.exit(49i32) }
+    if !shell.delete_visit(vs, "https://b.test/y") || vs.visits.len != 1usize || shell.delete_visit(vs, "https://b.test/y") { os.exit(50i32) }
+    shell.clear_visits(vs)
+    if vs.visits.len != 0usize { os.exit(51i32) }
+    var vi = 0i64
+    while vi < 5002i64 {
+        let (u, ue) = str.concat(a, "https://many.test/", shell.i64_text(a, vi))
+        shell.record_visit(vs, u, "n")
+        vi += 1i64
+    }
+    if vs.visits.len != 5000usize || !str.eq(vs.visits.items[0usize].url, "https://many.test/2") { os.exit(52i32) }
     ret ok
 }

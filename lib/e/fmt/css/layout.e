@@ -1816,7 +1816,7 @@ fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, pa
 type Ifc = struct {
     l: *Layout, bd: Builder, cont: u32, cs: *const style.Style, cbw: f64, fc: *Flow,
     y: f64, first_line: bool, open: [64]u32, open_count: usize, sa: f64, sd: f64,
-    own: list.List[u32]
+    own: list.List[u32], shift: i64, prev_strong: u8
 }
 
 type Scan = struct { restart: bool, end: usize, lead: usize, forced: bool, line_x: f64, avail: f64 }
@@ -2031,7 +2031,7 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
     let (sa, sd) = font_ad(l, cs)
     let (own_made, own_error) = list.init[u32](l.a, 16usize)
     if own_error != ok { ret 0.0f64 }
-    var x = Ifc { l: l, bd: bd, cont: cont, cs: cs, cbw: cbw, fc: fc, y: 0.0f64, first_line: true, open: zero, open_count: 0usize, sa: sa, sd: sd, own: own_made }
+    var x = Ifc { l: l, bd: bd, cont: cont, cs: cs, cbw: cbw, fc: fc, y: 0.0f64, first_line: true, open: zero, open_count: 0usize, sa: sa, sd: sd, own: own_made, shift: 0i64, prev_strong: 0u8 }
     var i = 0usize
     var guard = 0usize
     while i < x.bd.pieces.len && guard < 400000usize {
@@ -2041,6 +2041,7 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
         var end = scan.end
         if end <= i { end = i + 1usize }
         let lh = emit_line(&x, scan, end)
+        end = usize(i64(end) + x.shift)
         // Floats that waited for this line are placed below it.
         var df = scan.lead
         while df < end {
@@ -2112,93 +2113,500 @@ fn line_clamp_count(s: *const style.Style) -> usize {
 
 // Vertical metrics and fragments of the line made of pieces[scan.lead..end). Returns the line height, or -1 for a line
 // that held nothing to draw (only floats, absolutes or empty inline boxes).
-// Visual order of the words of a line of plain text (UAX #9 at the granularity of a piece): the levels come from the
-// characters of the whole line, then the pieces are reversed run by run. A line with boxes or atomics in it is left alone.
-fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
+// Visual order of a line (UAX #9 over the characters of its pieces, inline boxes included). A box's `direction` and
+// `unicode-bidi` stand in the paragraph as the formatting characters they mean (`bidi_marks`). Words are cut at level
+// changes and from their trailing space, put in visual order, and the boxes are opened and closed again around the
+// words they hold; a box that visual order splits becomes several fragments, the edges on the outermost ones.
+//
+// `unicode-bidi` flags: 1 embed, 2 isolate, 4 override, 8 plaintext.
+fn bidi_flags(l: *const Layout, s: *const style.Style) -> u8 {
+    let (v, has) = extra_text(s, "unicode-bidi")
+    if !has { ret 0u8 }
+    let t = cv.lower(l.a, cv.trim_ws(v))
+    var f = 0u8
+    if str.contains(t, "plaintext") { f = f | 8u8 }
+    if str.contains(t, "embed") { f = f | 1u8 }
+    if str.contains(t, "isolate") { f = f | 2u8 }
+    if str.contains(t, "override") { f = f | 4u8 }
+    ret f
+}
+
+// The characters that open (or close) a box with these flags, and how many.
+fn bidi_marks(flags: u8, rtl: bool, closing: bool, out: []u32) -> usize {
+    var n = 0usize
+    if (flags & 8u8) != 0u8 {
+        if closing { out[0usize] = 8297u32 } else { out[0usize] = 8296u32 }
+        ret 1usize
+    }
+    if !closing {
+        if (flags & 2u8) != 0u8 {
+            if rtl { out[n] = 8295u32 } else { out[n] = 8294u32 }
+            n += 1usize
+        }
+        if (flags & 1u8) != 0u8 {
+            if rtl { out[n] = 8235u32 } else { out[n] = 8234u32 }
+            n += 1usize
+        }
+        if (flags & 4u8) != 0u8 {
+            if rtl { out[n] = 8238u32 } else { out[n] = 8237u32 }
+            n += 1usize
+        }
+    } else {
+        if (flags & 5u8) != 0u8 {
+            out[n] = 8236u32
+            n += 1usize
+        }
+        if (flags & 2u8) != 0u8 {
+            out[n] = 8297u32
+            n += 1usize
+        }
+    }
+    ret n
+}
+
+fn bidi_is_rtl_mark(cp: u32) -> bool { ret cp == 8235u32 || cp == 8238u32 || cp == 8295u32 || cp == 8296u32 }
+
+fn bidi_index_of(items: []const u32, n: usize, b: u32) -> usize {
+    var i = 0usize
+    while i < n {
+        if items[i] == b { ret i }
+        i += 1usize
+    }
+    ret n
+}
+
+// A visual run: bytes [a, b) of piece `piece` (relative to the line), all at one level, all word or all trailing space.
+type BidiItem = struct { piece: usize, a: usize, b: usize, level: u8, trail: bool }
+
+type BidiOut = struct {
+    out: list.List[Piece], stk: [64]u32, ns: usize,
+    inset: [64]u32, nset: usize, has_open: [64]bool, has_close: [64]bool, open_w: [64]f64, close_w: [64]f64
+}
+
+fn bidi_open_box(o: *BidiOut, b: u32) {
+    let pushed = list.push[Piece](&o.out, Piece { kind: .Open, box: b, text: "", w: 0.0f64, trail: 0.0f64, soft: true, ink: false, start: 0usize, clen: 0usize })
+    if o.ns < 64usize {
+        o.stk[o.ns] = b
+        o.ns += 1usize
+    }
+}
+
+fn bidi_close_box(o: *BidiOut) {
+    if o.ns == 0usize { ret }
+    o.ns -= 1usize
+    let pushed = list.push[Piece](&o.out, Piece { kind: .Close, box: o.stk[o.ns], text: "", w: 0.0f64, trail: 0.0f64, soft: true, ink: false, start: 0usize, clen: 0usize })
+}
+
+// Leaves exactly the boxes of `chain` (outermost first) open.
+fn bidi_enter(o: *BidiOut, chain: []const u32, m: usize) {
+    var k = 0usize
+    while k < o.ns && k < m && o.stk[k] == chain[k] { k += 1usize }
+    while o.ns > k { bidi_close_box(o) }
+    while k < m {
+        bidi_open_box(o, chain[k])
+        k += 1usize
+    }
+}
+
+// The boxes of the line that hold box `b`, outermost first.
+fn bidi_chain(l: *const Layout, cont: u32, b: u32, o: *const BidiOut, out: []u32) -> usize {
+    var tmp: [64]u32 = zero
+    var m = 0usize
+    var q = l.boxes.items[usize(b)].parent
+    while q != NONE && q != cont && m < 64usize {
+        if bidi_index_of(o.inset[0usize..], o.nset, q) < o.nset {
+            tmp[m] = q
+            m += 1usize
+        }
+        q = l.boxes.items[usize(q)].parent
+    }
+    var i = 0usize
+    while i < m {
+        out[i] = tmp[m - 1usize - i]
+        i += 1usize
+    }
+    ret m
+}
+
+fn inline_depth(l: *const Layout, cont: u32, b: u32) -> usize {
+    var d = 0usize
+    var q = b
+    while q != NONE && q != cont {
+        d += 1usize
+        q = l.boxes.items[usize(q)].parent
+    }
+    ret d
+}
+
+// L4 for bytes [from, to) of box `b`'s processed text: mirrored characters of the same width are swapped in a private copy.
+fn bidi_mirror(l: *Layout, b: u32, from: usize, to: usize) {
+    let proc = l.boxes.items[usize(b)].proc
+    if to > proc.len { ret }
+    var need = false
+    var at = from
+    while at < to {
+        let (cp, w) = unicode.read_utf8(proc, at)
+        if bidi.is_mirrored(cp) { need = true }
+        at += w
+    }
+    if !need { ret }
+    let (copy, e) = mem.alloc[u8](l.a, proc.len)
+    if e != ok { ret }
+    mem.copy[u8](copy, proc)
+    at = from
+    while at < to {
+        let (cp, w) = unicode.read_utf8(proc, at)
+        if bidi.is_mirrored(cp) {
+            let (n, ee) = utf8.encode(bidi.mirror(cp), copy[at..])
+            if ee != ok || usize(n) != w {
+                let (rn, re2) = utf8.encode(cp, copy[at..])
+            }
+        }
+        at += w
+    }
+    l.boxes.items[usize(b)].proc = copy
+}
+
+// Emits one visual run (and the box boundaries before it).
+fn bidi_emit_item(x: *Ifc, o: *BidiOut, lead: usize, it: BidiItem) {
+    let l = x.l
+    let p = x.bd.pieces.items[lead + it.piece]
+    var chain: [64]u32 = zero
+    var m = bidi_chain(l, x.cont, p.box, o, chain[0usize..])
+    if p.kind == .Open && m < 64usize {
+        chain[m] = p.box
+        m += 1usize
+    }
+    bidi_enter(o, chain[0usize..], m)
+    if p.kind == .Open {
+        ret
+    }
+    if p.kind != .Text {
+        let pushed = list.push[Piece](&o.out, p)
+        ret
+    }
+    if it.level % 2u8 == 1u8 { bidi_mirror(l, p.box, p.start + it.a, p.start + it.b) }
+    let proc = l.boxes.items[usize(p.box)].proc
+    let s = bstyle(l, p.box)
+    let slice = proc[p.start + it.a..p.start + it.b]
+    if it.trail {
+        var tw = p.trail
+        if it.a != p.clen || it.b != p.text.len { tw = text_advance(l, s, slice) }
+        let pushed = list.push[Piece](&o.out, Piece { kind: .Text, box: p.box, text: slice, w: 0.0f64, trail: tw, soft: false, ink: false, start: p.start + it.a, clen: 0usize })
+        ret
+    }
+    var w = p.w
+    if it.a != 0usize || it.b != p.clen {
+        w = text_advance(l, s, slice)
+        let cut = Piece { kind: .Text, box: p.box, text: slice, w: w, trail: 0.0f64, soft: false, ink: p.ink, start: p.start + it.a, clen: it.b - it.a }
+        w += shy_hyphen_w(l, cut)
+    }
+    let pushed = list.push[Piece](&o.out, Piece { kind: .Text, box: p.box, text: slice, w: w, trail: 0.0f64, soft: p.soft && it.b == p.clen, ink: p.ink, start: p.start + it.a, clen: it.b - it.a })
+}
+
+fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> (bool, usize) {
     let l = x.l
     let n = tail - lead
-    if n < 2usize { ret false }
-    var bytes = 0usize
+    if n < 1usize { ret (false, tail) }
+    var cap = x.open_count * 3usize + 80usize
     var j = lead
     while j < tail {
         let p = x.bd.pieces.items[j]
-        if p.kind != .Text && p.kind != .Atomic { ret false }
-        if p.text.len > 0usize { bytes += p.text.len } else { bytes += 1usize }
+        if p.kind == .Marker { ret (false, tail) }
+        if p.kind == .Text { cap += p.text.len + 1usize } else { cap += 4usize }
         j += 1usize
     }
-    if bytes == 0usize { ret false }
-    let (text32, e1) = mem.alloc[u32](l.a, bytes)
-    let (first, e2) = mem.alloc[usize](l.a, n)
-    if e1 != ok || e2 != ok { ret false }
+    let (text32, e1) = mem.alloc[u32](l.a, cap)
+    let (ownp, e2) = mem.alloc[u32](l.a, cap)
+    let (owno, e3) = mem.alloc[u32](l.a, cap)
+    let (levels, e4) = mem.alloc[u8](l.a, cap)
+    let (scratch, e5) = mem.alloc[u32](l.a, 6usize * cap + 6usize)
+    let (cord, e6) = mem.alloc[usize](l.a, cap)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (false, tail) }
+    let (made, me) = list.init[Piece](l.a, n + 8usize)
+    if me != ok { ret (false, tail) }
+    var o = BidiOut { out: made, stk: zero, ns: 0usize, inset: zero, nset: 0usize, has_open: zero, has_close: zero, open_w: zero, close_w: zero }
+    var marks: [4]u32 = zero
     var total = 0usize
-    var strong = x.cs.direction == .Rtl
-    j = 0usize
-    while j < n {
-        let t = x.bd.pieces.items[lead + j].text
-        first[j] = total
-        var at = 0usize
-        if x.bd.pieces.items[lead + j].kind == .Atomic {
-            // An atomic inline is an object replacement character to the algorithm.
-            text32[total] = 65532u32
-            total += 1usize
-        }
-        while at < t.len {
-            let (cp, w) = unicode.read_utf8(t, at)
-            text32[total] = cp
-            total += 1usize
-            let cls = bidi.class_of(cp)
-            if cls == .R || cls == .AL || cls == .AN { strong = true }
-            at += w
-        }
-        j += 1usize
-    }
-    if !strong { ret false }
-    let (levels, e3) = mem.alloc[u8](l.a, total)
-    let (scratch, e4) = mem.alloc[u32](l.a, 6usize * total + 6usize)
-    let (cord, e5) = mem.alloc[usize](l.a, total)
-    let (plv, e6) = mem.alloc[u8](l.a, n)
-    let (order, e7) = mem.alloc[usize](l.a, n)
-    let (tmp, e8) = mem.alloc[Piece](l.a, n)
-    if e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret false }
+    var rtl_seen = x.cs.direction == .Rtl
     var base = 0i8
     if x.cs.direction == .Rtl { base = 1i8 }
+    let cflags = bidi_flags(l, x.cs)
+    if (cflags & 8u8) != 0u8 { base = -1i8 }
+    if (cflags & 4u8) != 0u8 {
+        if x.cs.direction == .Rtl { text32[total] = 8238u32 } else { text32[total] = 8237u32 }
+        ownp[total] = NONE
+        owno[total] = 0u32
+        total += 1usize
+        if x.cs.direction == .Rtl { rtl_seen = true }
+    }
+    // The boxes already open at the start of the line come first.
+    var c = 0usize
+    while c < x.open_count && o.nset < 64usize {
+        let ob = x.open[c]
+        o.inset[o.nset] = ob
+        o.nset += 1usize
+        let os = bstyle(l, ob)
+        let mn = bidi_marks(bidi_flags(l, os), os.direction == .Rtl, false, marks[0usize..])
+        var mi = 0usize
+        while mi < mn {
+            text32[total] = marks[mi]
+            ownp[total] = NONE
+            owno[total] = 0u32
+            total += 1usize
+            if bidi_is_rtl_mark(marks[mi]) { rtl_seen = true }
+            mi += 1usize
+        }
+        c += 1usize
+    }
+    // The text before the line is context for its levels: what the last line ended on.
+    var seg_start = total
+    if x.prev_strong != 0u8 {
+        if x.prev_strong == 2u8 { text32[total] = 1488u32 } else { text32[total] = 97u32 }
+        ownp[total] = NONE
+        owno[total] = 0u32
+        total += 1usize
+        seg_start = total
+    }
+    var last_strong = 0u8
+    j = 0usize
+    while j < n {
+        let p = x.bd.pieces.items[lead + j]
+        if p.kind == .Text {
+            var tlen = p.text.len
+            // The last word of the line loses its trailing space, wherever it ends up.
+            if j + 1usize == n { tlen = p.clen }
+            var at = 0usize
+            while at < tlen {
+                let (cp, w) = unicode.read_utf8(p.text, at)
+                text32[total] = cp
+                ownp[total] = u32(j)
+                owno[total] = u32(at)
+                total += 1usize
+                let cls = bidi.class_of(cp)
+                if cls == .R || cls == .AL || cls == .AN { rtl_seen = true }
+                if cls == .L { last_strong = 1u8 }
+                if cls == .R || cls == .AL { last_strong = 2u8 }
+                at += w
+            }
+        } else if p.kind == .Open || p.kind == .Close {
+            let si0 = bidi_index_of(o.inset[0usize..], o.nset, p.box)
+            var si = si0
+            if si0 >= o.nset && o.nset < 64usize {
+                o.inset[o.nset] = p.box
+                si = o.nset
+                o.nset += 1usize
+            }
+            if si >= 64usize { ret (false, tail) }
+            let bs = bstyle(l, p.box)
+            let bf = bidi_flags(l, bs)
+            let empty = p.kind == .Open && j + 1usize < n && x.bd.pieces.items[lead + j + 1usize].kind == .Close && x.bd.pieces.items[lead + j + 1usize].box == p.box
+            if p.kind == .Open {
+                o.has_open[si] = true
+                o.open_w[si] = p.w
+                let mn = bidi_marks(bf, bs.direction == .Rtl, false, marks[0usize..])
+                var mi = 0usize
+                while mi < mn {
+                    text32[total] = marks[mi]
+                    ownp[total] = NONE
+                    owno[total] = 0u32
+                    total += 1usize
+                    if bidi_is_rtl_mark(marks[mi]) { rtl_seen = true }
+                    mi += 1usize
+                }
+                if empty {
+                    text32[total] = 65532u32
+                    ownp[total] = u32(j)
+                    owno[total] = 0u32
+                    total += 1usize
+                }
+            } else {
+                o.has_close[si] = true
+                o.close_w[si] = p.w
+                let mn = bidi_marks(bf, bs.direction == .Rtl, true, marks[0usize..])
+                var mi = 0usize
+                while mi < mn {
+                    text32[total] = marks[mi]
+                    ownp[total] = NONE
+                    owno[total] = 0u32
+                    total += 1usize
+                    mi += 1usize
+                }
+            }
+        } else {
+            // Atomic inlines are objects, a forced break a line separator, floats and absolutes take no room.
+            var cp = 65532u32
+            if p.kind == .Hard { cp = 8232u32 }
+            if p.kind == .Float || p.kind == .Abs { cp = 8203u32 }
+            text32[total] = cp
+            ownp[total] = u32(j)
+            owno[total] = 0u32
+            total += 1usize
+        }
+        j += 1usize
+    }
+    let seg_end = total
+    if last_strong != 0u8 { x.prev_strong = last_strong }
+    // And the text after it, up to the first strong character.
+    var sj = tail
+    var scount = 0usize
+    var sfound = false
+    while sj < x.bd.pieces.len && scount < 64usize && !sfound {
+        let sp = x.bd.pieces.items[sj]
+        if sp.kind != .Text { break }
+        var sat = 0usize
+        while sat < sp.text.len && scount < 64usize && !sfound {
+            let (scp, sw) = unicode.read_utf8(sp.text, sat)
+            text32[total] = scp
+            ownp[total] = NONE
+            owno[total] = 0u32
+            total += 1usize
+            scount += 1usize
+            let scls = bidi.class_of(scp)
+            if scls == .L || scls == .R || scls == .AL { sfound = true }
+            sat += sw
+        }
+        sj += 1usize
+    }
+    if total == 0usize || !rtl_seen { ret (false, tail) }
     let (para, re) = bidi.resolve_levels(text32[..total], base, levels[..total], scratch)
-    if re != ok { ret false }
-    let le = bidi.reorder_line(text32[..total], levels[..total], para, 0usize, total, cord)
-    if le != ok { ret false }
-    j = 0usize
-    while j < n {
-        plv[j] = levels[first[j]]
-        j += 1usize
+    if re != ok { ret (false, tail) }
+    let le = bidi.reorder_line(text32[..total], levels[..total], para, seg_start, seg_end, cord)
+    if le != ok { ret (false, tail) }
+    // Visual runs.
+    var cur = BidiItem { piece: 0usize, a: 0usize, b: 0usize, level: 0u8, trail: false }
+    var has_cur = false
+    var v = 0usize
+    while v < seg_end - seg_start {
+        let ci = cord[v]
+        if ownp[ci] != NONE {
+            let pj = usize(ownp[ci])
+            let p = x.bd.pieces.items[lead + pj]
+            let off = usize(owno[ci])
+            var w = 1usize
+            var tr = false
+            if p.kind == .Text {
+                let (cp0, w0) = unicode.read_utf8(p.text, off)
+                w = w0
+                tr = off >= p.clen
+            }
+            let lv = levels[ci]
+            var extend = false
+            if has_cur && cur.piece == pj && cur.level == lv && cur.trail == tr && p.kind == .Text {
+                if lv % 2u8 == 0u8 { extend = off == cur.b } else { extend = off + w == cur.a }
+            }
+            if extend {
+                if lv % 2u8 == 0u8 { cur.b = off + w } else { cur.a = off }
+            } else {
+                if has_cur { bidi_emit_item(x, &o, lead, cur) }
+                cur = BidiItem { piece: pj, a: off, b: off + w, level: lv, trail: tr }
+                has_cur = true
+            }
+        }
+        v += 1usize
     }
-    let oe = bidi.reorder(plv[..n], 0usize, n, order)
-    if oe != ok { ret false }
-    // The last word of the line loses its trailing space, wherever it ends up.
-    let lastp = &x.bd.pieces.items[tail - 1usize]
-    if lastp.kind == .Text {
-        lastp.text = lastp.text[..lastp.clen]
-        lastp.trail = 0.0f64
+    if has_cur { bidi_emit_item(x, &o, lead, cur) }
+    // Close what is open; the boxes that go on past the line open again, outermost first.
+    while o.ns > 0usize { bidi_close_box(&o) }
+    var done: [64]bool = zero
+    var picked = 0usize
+    var cont_n = 0usize
+    var k = 0usize
+    while k < o.nset {
+        if !o.has_close[k] { cont_n += 1usize }
+        k += 1usize
     }
-    j = 0usize
-    while j < n {
-        tmp[j] = x.bd.pieces.items[lead + order[j]]
-        j += 1usize
+    while picked < cont_n {
+        var best = 64usize
+        var best_d = 4294967295usize
+        k = 0usize
+        while k < o.nset {
+            if !o.has_close[k] && !done[k] {
+                let d = inline_depth(l, x.cont, o.inset[k])
+                if d < best_d {
+                    best_d = d
+                    best = k
+                }
+            }
+            k += 1usize
+        }
+        if best >= 64usize { break }
+        done[best] = true
+        bidi_open_box(&o, o.inset[best])
+        picked += 1usize
     }
-    j = 0usize
-    while j < n {
-        x.bd.pieces.items[lead + j] = tmp[j]
-        j += 1usize
+    // The edges of a box go on its first opening and its last closing.
+    k = 0usize
+    while k < o.nset {
+        let b = o.inset[k]
+        if o.has_open[k] {
+            var oi = 0usize
+            var found = false
+            while oi < o.out.len && !found {
+                if o.out.items[oi].kind == .Open && o.out.items[oi].box == b {
+                    o.out.items[oi].soft = false
+                    o.out.items[oi].w = o.open_w[k]
+                    found = true
+                }
+                oi += 1usize
+            }
+        }
+        if o.has_close[k] {
+            var ci2 = o.out.len
+            var found2 = false
+            while ci2 > 0usize && !found2 {
+                ci2 -= 1usize
+                if o.out.items[ci2].kind == .Close && o.out.items[ci2].box == b {
+                    o.out.items[ci2].soft = false
+                    o.out.items[ci2].w = o.close_w[k]
+                    found2 = true
+                }
+            }
+        }
+        k += 1usize
     }
-    ret true
+    // Put the new pieces where the line's were.
+    let m = o.out.len
+    if m > n {
+        let grown = list.reserve[Piece](&x.bd.pieces, x.bd.pieces.len + (m - n))
+        if grown != ok { ret (false, tail) }
+        var s = x.bd.pieces.len
+        while s > tail {
+            s -= 1usize
+            x.bd.pieces.items[s + (m - n)] = x.bd.pieces.items[s]
+        }
+        x.bd.pieces.len += m - n
+    } else if m < n {
+        var s = tail
+        while s < x.bd.pieces.len {
+            x.bd.pieces.items[s - (n - m)] = x.bd.pieces.items[s]
+            s += 1usize
+        }
+        x.bd.pieces.len -= n - m
+    }
+    var q = 0usize
+    while q < m {
+        x.bd.pieces.items[lead + q] = o.out.items[q]
+        q += 1usize
+    }
+    x.open_count = 0usize
+    ret (true, lead + m)
 }
 
-fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
+fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
     let l = x.l
     let cs = x.cs
     let lead = scan.lead
+    var end = end0
     var trim_end = end
     while trim_end > lead && x.bd.pieces.items[trim_end - 1usize].kind == .Text && !x.bd.pieces.items[trim_end - 1usize].ink && x.bd.pieces.items[trim_end - 1usize].w == 0.0f64 { trim_end -= 1usize }
-    let tail_keep = bidi_order_pieces(x, lead, trim_end)
+    x.shift = 0i64
+    let (tail_keep, new_tail) = bidi_order_pieces(x, lead, trim_end)
+    if tail_keep {
+        x.shift = i64(new_tail) - i64(trim_end)
+        end = usize(i64(end) + x.shift)
+        trim_end = new_tail
+    }
     // Inline-box stack: the boxes carried in, then those opened on this line.
     var sbox: [64]u32 = zero
     var sshift: [64]f64 = zero
@@ -2333,7 +2741,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             if (ab.inline_level || st(l, ab.style).was_inline) && ab.aux == 2u32 {
                 let owner = &l.boxes.items[usize(x.cont)]
                 var nx = ax + abs_off
-                if cs.direction == .Rtl { nx = ax + used_w - abs_off }
+                if cs.direction == .Rtl && !tail_keep { nx = ax + used_w - abs_off }
                 if owner.inner == .Flow || owner.inner == .FlowRoot { nx += owner.border[3usize] + owner.padding[3usize] }
                 ab.x = nx
             }
@@ -2394,7 +2802,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             } else {
                 this_to = p.start + p.clen
             }
-            if tf_box == p.box && tf_to == p.start && cur_shift == tf_shift && spread == 0.0f64 {
+            if tf_box == p.box && tf_to == p.start && cur_shift == tf_shift && spread == 0.0f64 && !tail_keep {
                 tf_to = this_to
                 tf_w += this_w
             } else {
@@ -2419,7 +2827,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             tf_box = NONE
             let ob = p.box
             let obm = &l.boxes.items[usize(ob)]
-            cx += obm.margin[3usize]
+            if !p.soft { cx += obm.margin[3usize] }
             if sp < 64usize {
                 let obs = bstyle(l, ob)
                 let (oa, od) = font_ad(l, obs)
@@ -2428,21 +2836,21 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
                 sbox[sp] = ob
                 sshift[sp] = psh + valign_shift(l, obs, bstyle(l, obm.parent), oa, od, oa + od)
                 s_x[sp] = cx
-                sfirst[sp] = true
+                sfirst[sp] = !p.soft
                 sp += 1usize
             }
-            cx += obm.border[3usize] + obm.padding[3usize]
+            if !p.soft { cx += obm.border[3usize] + obm.padding[3usize] }
         } else if p.kind == .Close {
             if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
             tf_box = NONE
             let ob = p.box
             let obm = &l.boxes.items[usize(ob)]
-            cx += obm.padding[1usize] + obm.border[1usize]
+            if !p.soft { cx += obm.padding[1usize] + obm.border[1usize] }
             if sp > 0usize {
                 sp -= 1usize
-                emit_segment(l, ob, s_x[sp], cx, baseline, sshift[sp], sfirst[sp], true)
+                emit_segment(l, ob, s_x[sp], cx, baseline, sshift[sp], sfirst[sp], !p.soft)
             }
-            cx += obm.margin[1usize]
+            if !p.soft { cx += obm.margin[1usize] }
         } else if p.kind == .Atomic {
             if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
             tf_box = NONE
@@ -6529,6 +6937,34 @@ fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
     ret (mn, mx)
 }
 
+// `grid-lanes-direction: ... fill-reverse track-reverse`: the lanes are laid out in their normal order and flow, then the
+// layout is mirrored across the lane axis (track-reverse) and across the stacking axis (fill-reverse).
+fn lanes_reversal(cs: *const style.Style) -> (bool, bool) {
+    let (v, has) = extra_text(cs, "grid-lanes-direction")
+    if !has { ret (false, false) }
+    ret (str.contains(v, "fill-reverse"), str.contains(v, "track-reverse"))
+}
+
+fn lanes_mirror(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: bool, lane_extent: f64, stack_extent: f64) {
+    let (fill_rev, track_rev) = lanes_reversal(cs)
+    if !fill_rev && !track_rev { ret }
+    let bb = bx(l, b)
+    let ox0 = bb.border[3usize] + bb.padding[3usize]
+    let oy0 = bb.border[0usize] + bb.padding[0usize]
+    var i = 0usize
+    while i < g.n {
+        let pb = bx(l, g.items[i].box)
+        if columns {
+            if track_rev { pb.x = ox0 + lane_extent - (pb.x - ox0) - pb.w }
+            if fill_rev { pb.y = oy0 + stack_extent - (pb.y - oy0) - pb.h }
+        } else {
+            if track_rev { pb.y = oy0 + lane_extent - (pb.y - oy0) - pb.h }
+            if fill_rev { pb.x = ox0 + stack_extent - (pb.x - ox0) - pb.w }
+        }
+        i += 1usize
+    }
+}
+
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let cs = bstyle(l, b)
     let (g, built) = grid_build(l, b, cw, ch)
@@ -6540,6 +6976,9 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     if cs.lanes && g.er > 0i32 && g.ec == 0i32 && usize(g.er) < g.nr { g.nr = usize(g.er) }
     if cs.lanes && g.er > 0i32 && g.ec == 0i32 {
         let rows_h = layout_lanes_rows(l, b, g, cs, cw, ch)
+        var rows_lane = ch
+        if rows_lane < 0.0f64 { rows_lane = rows_h }
+        lanes_mirror(l, b, g, cs, false, rows_lane, cw)
         ret rows_h
     }
     if cs.lanes {
@@ -6569,9 +7008,15 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         }
         if lanes_dense(cs) {
             let dense_h = layout_lanes_dense(l, b, g, cs, cw)
+            var dense_stack = ch
+            if dense_stack < 0.0f64 { dense_stack = dense_h }
+            lanes_mirror(l, b, g, cs, true, cw, dense_stack)
             ret dense_h
         }
-        let lanes_h = layout_lanes(l, b, g, cs, cw)
+        let lanes_h = layout_lanes(l, b, g, cs, cw, ch)
+        var lane_h = ch
+        if lane_h < 0.0f64 { lane_h = lanes_h }
+        lanes_mirror(l, b, g, cs, true, cw, lane_h)
         ret lanes_h
     }
     size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
@@ -6925,7 +7370,7 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
     ret total
 }
 
-fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64 {
+fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64 {
     position_tracks(g.cols, g.nc, g.gap_c, cw, cs.justify_content)
     let bb0 = bx(l, b)
     let ox0 = bb0.border[3usize] + bb0.padding[3usize]
@@ -6933,6 +7378,10 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -
     let (ends, ee) = mem.alloc[f64](l.a, g.nc + 1usize)
     if ee != ok { ret 0.0f64 }
     let (lastin, le) = mem.alloc[usize](l.a, g.nc + 1usize)
+    let (tops, te1) = mem.alloc[f64](l.a, g.n + 1usize)
+    let (sstart, se1) = mem.alloc[usize](l.a, g.n + 1usize)
+    let (sspan, se2) = mem.alloc[usize](l.a, g.n + 1usize)
+    if te1 != ok || se1 != ok || se2 != ok { ret 0.0f64 }
     if le != ok { ret 0.0f64 }
     var q = 0usize
     while q < g.nc {
@@ -6997,6 +7446,9 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -
         pb.x = ox0 + g.cols[start].pos + pb.margin[3usize]
         pb.y = oy0 + y0 + pb.margin[0usize]
         let bottom = y0 + pb.margin[0usize] + pb.h + pb.margin[2usize]
+        tops[i] = y0
+        sstart[i] = start
+        sspan[i] = span
         var t3 = start
         while t3 < start + span && t3 < g.nc {
             ends[t3] = bottom
@@ -7006,45 +7458,36 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -
         if bottom > total { total = bottom }
         i += 1usize
     }
-    // The last item of a lane is aligned within what is left of the lane: stretched, centred or moved to the end.
+    // An item is aligned within the room it has in the stacking direction: from its own end to just before the next item laid
+    // below it in any of its lanes, or to the end of the container for the last one.
+    var container_end = total
+    if ch >= 0.0f64 { container_end = ch }
     i = 0usize
     while i < g.n {
         let id = g.items[i].box
         let is = bstyle(l, id)
         let pb = bx(l, id)
-        var first_lane = 0usize
-        var found = false
-        var all_last = true
-        var tt = 0usize
-        while tt < g.nc {
-            if lastin[tt] == i {
-                if !found {
-                    first_lane = tt
-                    found = true
-                }
+        var limit = container_end
+        var j = i + 1usize
+        while j < g.n {
+            if sstart[j] < sstart[i] + sspan[i] && sstart[i] < sstart[j] + sspan[j] {
+                let cand = tops[j] - g.gap_r
+                if cand < limit { limit = cand }
             }
-            tt += 1usize
+            j += 1usize
         }
-        if found {
-            let area_span = usize(maxf(1.0f64, f64(g.items[i].cn)))
-            var u = first_lane
-            while u < first_lane + area_span && u < g.nc {
-                if lastin[u] != i { all_last = false }
-                u += 1usize
-            }
-            let bottom = (pb.y - oy0) + pb.h + pb.margin[2usize]
-            let free = total - bottom
-            if all_last && free > 0.0f64 {
-                var al = is.align_self
-                if al == .Auto { al = cs.align_items }
-                if al == .Center {
-                    pb.y += free / 2.0f64
-                } else if al == .End || al == .FlexEnd || al == .SelfEnd {
-                    pb.y += free
-                } else if al == .Stretch && is.height.kind == .Auto {
-                    let wcontent = pb.w - horizontal_extras(pb)
-                    flex_place_item(l, id, wcontent, pb.h - vertical_extras(pb) + free)
-                }
+        let bottom = (pb.y - oy0) + pb.h + pb.margin[2usize]
+        let free = limit - bottom
+        if free > 0.0f64 {
+            var al = is.align_self
+            if al == .Auto { al = cs.align_items }
+            if al == .Center {
+                pb.y += free / 2.0f64
+            } else if al == .End || al == .FlexEnd || al == .SelfEnd {
+                pb.y += free
+            } else if al == .Stretch && is.height.kind == .Auto {
+                let wcontent = pb.w - horizontal_extras(pb)
+                flex_place_item(l, id, wcontent, pb.h - vertical_extras(pb) + free)
             }
         }
         i += 1usize
