@@ -5137,6 +5137,45 @@ fn flex_widths(l: *Layout, b: u32) -> (f64, f64) {
         }
         kid = l.boxes.items[usize(kid)].next
     }
+    // A wrapping column container of definite height: its max-content width is the widths of the columns the items fill.
+    if !row && wrap && cs.height.kind == .Px && cs.height.pct == 0.0f64 {
+        let avail_h = to_content_h(l, b, cs.height.px)
+        let rgap = flex_gap(cs.row_gap, avail_h)
+        let cgap = flex_gap(cs.column_gap, 0.0f64)
+        var cols_w = 0.0f64
+        var col_w = 0.0f64
+        var used_h = 0.0f64
+        var cols = 0usize
+        var k2 = l.boxes.items[usize(b)].first
+        while k2 != NONE {
+            if flex_in(l, k2) {
+                let ks2 = bstyle(l, k2)
+                let kb2 = &l.boxes.items[usize(k2)]
+                let (kmn2, kmx2) = outer_content_widths(l, k2)
+                var item_h = 0.0f64
+                if ks2.flex_basis.kind == .Px && ks2.flex_basis.pct == 0.0f64 {
+                    item_h = ks2.flex_basis.px
+                } else if ks2.height.kind == .Px && ks2.height.pct == 0.0f64 {
+                    item_h = ks2.height.px
+                }
+                item_h += kb2.margin[0usize] + kb2.margin[2usize]
+                if cols > 0usize && used_h + rgap + item_h > avail_h + 0.001f64 {
+                    cols_w += col_w
+                    col_w = 0.0f64
+                    used_h = 0.0f64
+                    cols += 1usize
+                }
+                if cols == 0usize { cols = 1usize }
+                if used_h > 0.0f64 { used_h += rgap }
+                used_h += item_h
+                col_w = maxf(col_w, kmx2)
+            }
+            k2 = l.boxes.items[usize(k2)].next
+        }
+        cols_w += col_w
+        if cols > 1usize { cols_w += cgap * f64(cols - 1usize) }
+        mx = maxf(mx, cols_w)
+    }
     if row && n > 1usize {
         let gap = flex_gap(cs.column_gap, 0.0f64)
         mx += gap * f64(n - 1usize)
