@@ -2842,7 +2842,7 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
                 this_to = p.start + p.clen
                 // A hanging space separator at the line end is painted but takes no room in the line.
                 let hang_text = proc[p.start + p.clen..p.start + p.text.len]
-                if has_painted_hang(hang_text) {
+                if hang_text.len > 0usize && (has_painted_hang(hang_text) || bstyle(l, p.box).white_space == .PreWrap) {
                     this_to = p.start + p.text.len
                     this_w += text_advance(l, bstyle(l, p.box), hang_text)
                 }
