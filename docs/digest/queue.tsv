@@ -91,6 +91,5 @@ L169	library	0	640	Browser M4: JavaScript engine and DOM bindings	all of it.
 L170	library	0	541	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it.
 L171	library	0	623	Browser M6: beyond Vaper (gap items)	all of it.
 C185	compiler	0	1316	A launch's requirements depend on the worker count	Found by C184's differential (D5641): `emit-executable tests/selfhost/fixtures/link/gpu_tensor/src/main.e .
-C190	library	0	1310	wasm32-wasi processes and pipes through neper_host (Node only)	all of it.
 C194	tooling	0.85	1856	neper run for wasm32-wasi, and the runner moved into the toolchain	the same on build/linux in WSL; the D5651 blocks run only piecewise (no full suite completes here).
 C197	library	0	561	e.ui in a browser: text from a virtual keyboard, the clipboard, newest frame only, the gallery	all of it.

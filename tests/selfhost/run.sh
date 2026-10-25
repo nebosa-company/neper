@@ -10680,6 +10680,15 @@ if command -v node >/dev/null 2>&1; then
     [ "$wasm_threads_output" = "$(printf 'write then read\nempty probe would block\n300000 bytes across threads\nend of stream after close\na blocked reader woke')" ] || { printf '%s\n' "os_pipe_threads answered: $wasm_threads_output" >&2; exit 1; }
     wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/net_pop3.threads.wasm")
     [ "$wasm_threads_output" = 'net pop3 ok' ] || { printf '%s\n' "net_pop3 answered: $wasm_threads_output" >&2; exit 1; }
+    # (D5770, C190) Processes through neper_host: each fixture spawns its own image, which the runner starts again as a child (os_process:
+    # kill, a pipe handed to the child, wait_usage; os_group: environment, cwd, a group terminated), plain and threaded; proc_output
+    # (threads) adds e.proc's output, piped stdin, limits, deadlines and an orphan held by a process group.
+    for wasm_fixture in os_process os_group; do
+        [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a WebAssembly module" >&2; exit 1; }
+        (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm") || { printf '%s\n' "$wasm_fixture failed as a WebAssembly module" >&2; exit 1; }
+    done
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/proc_output/src/main.e" "$repo" wasm32 wasi "$wasm_build/proc_output.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "proc_output did not emit as a threaded WebAssembly module" >&2; exit 1; }
+    (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/proc_output.threads.wasm") || { printf '%s\n' "proc_output failed as a threaded WebAssembly module" >&2; exit 1; }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     wasm_fallback=wasm_irreducible
     wasm_forced=wasm_flow

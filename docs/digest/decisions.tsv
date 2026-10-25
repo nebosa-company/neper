@@ -2922,3 +2922,5 @@ D5751	2569	C189 landed: the `net_*` corpus on `--threads`, and what the sweeps s
 D5780	2976	`neper run --target wasm32-wasi` as built (C194)
 D5790	4152	`e.ui` in a page, as built (C193): frames go to the page, not to an OffscreenCanvas
 D5791	2036	C193 verified
+D5770	4774	Processes on wasm32-wasi, as built (C190): D5677 over `neper_host`
+D5771	2780	C190 landed: what the fixtures say, and what the design could not do
