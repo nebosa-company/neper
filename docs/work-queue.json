@@ -1016,17 +1016,6 @@
       "evidence": "Found by C184's differential (D5641): `emit-executable tests/selfhost/fixtures/link/gpu_tensor/src/main.e . x64 windows OUT` writes different bytes at the default worker count and at `-j 1` (offsets 50339, 51948 and 53420 for x64 windows: the `mov r8d` of `launch_run`'s requirements argument is 0 with eight workers and 4, 256, 256 with one). `lower.e` `lower_launcher_instance` emits `check.kernel_fact(c, template) & 511` as a constant, but the facts are a per-checker table filled by `check_kernel_profile` when the kernel's body is checked, so a launcher lowered by a worker that did not check the kernel (`tensor.add[i64]` instantiated in main, kernel `add_i64` in e.gpu.tensor) reads 0 and a device without Int64 would be launched anyway. Plan: make the requirements a companion of the kernel like `K$frame` and `K$shared` (`emit_kernel_size` beside the kernel, `emit_kernel_size_call` in the launcher, the suffix in `em.e`'s companion list), so the module that checked the kernel answers. Acceptance: (1) gpu_tensor emits the same bytes at -j 1, -j 2 and the default on x64 windows and x64 linux, and its requirements are the -j 1 values; (2) a fixture whose launcher and kernel live in different modules checks the requirement a launch reports; (3) `scripts/wasm-compiler.sh --all` reports no `differ` pair."
     },
     {
-      "id": "C190",
-      "category": "library",
-      "group": "WebAssembly",
-      "order": 190,
-      "title": "wasm32-wasi processes and pipes through neper_host (Node only)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Design D5677. Needs C188 (the neper_host shims and host loop). Build: in scripts/run-wasm.mjs (lib/wasm/run-wasm.mjs once C194 has moved it) the imports proc_spawn, proc_wait, proc_kill, proc_group_kill, pipe, handle_read, handle_write, handle_close over node:child_process, with guest paths mapped through the runner's preopens and an argv[0] that is a guest path ending in .wasm run as process.execPath, the runner and that module's host path; neper-host.js answers ENOSYS if C191 has landed. os.wasi.e: `neper_os_spawn`, `neper_os_wait`, `spawn_with_options`, `wait_usage` (peak_memory 0), `kill`, `proc_group_spawn/terminate/close`, `pipe`, `pipe_read`; `neper_os_read`, `neper_os_write` and `neper_os_close` route a File whose raw is at least 0x40000000 to handle_read, handle_write and handle_close; `dup` of a host handle answers Unsupported. Acceptance: (1) os_process and os_group pass in `scripts/wasm-sweep.sh` (with --threads if they start threads) on Windows Node 24 and WSL Node 22. (2) os_shell, os_exchange, proc_sys, ui_activation, ui_file_access, ui_lifecycle, ui_notification, ui_permissions, ui_print and ui_shell_ops rerun: each passes or its remaining reason is recorded here (e.os.shell's wasi variant is D5623's and not this item). (3) Neither sweep gains a failure. Not yet: all of it."
-    },
-    {
       "id": "C193",
       "category": "library",
       "group": "WebAssembly",
