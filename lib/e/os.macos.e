@@ -3237,9 +3237,242 @@ fn set_clipboard_text(value: str) -> err {
     ret ok
 }
 
-fn accessibility_listening(w: Window) -> bool { ret false }
-fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err { ret Unsupported }
+// Accessibility (D5223): the published tree becomes NSAccessibilityElements, which VoiceOver and the other assistive tools read
+// through the window's content view. The nodes arrive flat with parent ids, as on the other hosts; each becomes an element of
+// `NeperAXElement` (a subclass of NSAccessibilityElement made at run time, so that a press or a step can be answered) with its role
+// mapped to the NSAccessibility role, its label, value, hint, enabled and focused state and its frame in screen coordinates
+// (`bounds` are in the window's points from the top left; the screen's origin is the bottom left). The elements with no parent are
+// the view's accessibility children. What a tool asks for -- press, increment, decrement, focus -- is queued for
+// `accessibility_take`. `accessibility_listening` is whether VoiceOver is on, so nothing is built until someone is reading.
+const AX_NODES: usize = 256usize
+const AX_QUEUE: usize = 16usize
+type AxShould = union { function: fn(usize, usize) -> usize, bits: usize }
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_frame(receiver: usize, selector: usize, rect: CgRect) -> usize
+
+var ax_class: usize = zero
+var ax_view: usize = zero
+var ax_elements: [256]usize = zero
+var ax_ids: [256]u32 = zero
+var ax_generations: [256]u32 = zero
+var ax_count: usize = zero
+var ax_requests: [16]AccessibleRequest = zero
+var ax_head: usize = zero
+var ax_tail: usize = zero
+
+fn ax_push(element: usize, action: u8) {
+    var at = 0usize
+    while at < ax_count && ax_elements[at] != element { at += 1usize }
+    if at == ax_count { ret }
+    let next = (ax_tail + 1usize) % AX_QUEUE
+    if next == ax_head { ret }
+    ax_requests[ax_tail] = AccessibleRequest { id: ax_ids[at], generation: ax_generations[at], action: action, value: "" }
+    ax_tail = next
+}
+
+@cc(c)
+fn ax_press(this: usize, command: usize) -> usize {
+    ax_push(this, 1u8)
+    ret 1usize
+}
+
+@cc(c)
+fn ax_increment(this: usize, command: usize) -> usize {
+    ax_push(this, 2u8)
+    ret 1usize
+}
+
+@cc(c)
+fn ax_decrement(this: usize, command: usize) -> usize {
+    ax_push(this, 3u8)
+    ret 1usize
+}
+
+fn ax_make_class() -> usize {
+    if ax_class != 0usize { ret ax_class }
+    let name = "NeperAXElement\x00"
+    let class = cocoa_class_pair(cocoa_class("NSAccessibilityElement\x00"), &name[0usize], 0usize)
+    if class == 0usize { ret 0usize }
+    var press: AxShould = zero
+    press.function = ax_press
+    var up: AxShould = zero
+    up.function = ax_increment
+    var down: AxShould = zero
+    down.function = ax_decrement
+    let types = "c@:\x00"
+    let one = cocoa_class_method(class, cocoa_sel("accessibilityPerformPress\x00"), press.bits, &types[0usize])
+    let two = cocoa_class_method(class, cocoa_sel("accessibilityPerformIncrement\x00"), up.bits, &types[0usize])
+    let three = cocoa_class_method(class, cocoa_sel("accessibilityPerformDecrement\x00"), down.bits, &types[0usize])
+    cocoa_class_register(class)
+    ax_class = class
+    ret class
+}
+
+// The NSAccessibility role of a node's role number (the order of `e.ui.accessibility.Role`).
+fn ax_role(role: u8) -> str {
+    if role == 3u8 { ret "AXButton" }
+    if role == 4u8 || role == 18u8 { ret "AXCheckBox" }
+    if role == 5u8 || role == 19u8 { ret "AXRadioButton" }
+    if role == 6u8 || role == 26u8 || role == 36u8 { ret "AXStaticText" }
+    if role == 7u8 { ret "AXTextField" }
+    if role == 8u8 { ret "AXImage" }
+    if role == 9u8 { ret "AXLink" }
+    if role == 10u8 || role == 35u8 { ret "AXList" }
+    if role == 12u8 { ret "AXTable" }
+    if role == 13u8 || role == 11u8 || role == 29u8 { ret "AXRow" }
+    if role == 14u8 || role == 31u8 || role == 32u8 { ret "AXCell" }
+    if role == 15u8 { ret "AXSlider" }
+    if role == 16u8 { ret "AXProgressIndicator" }
+    if role == 17u8 { ret "AXScrollBar" }
+    if role == 20u8 { ret "AXTabGroup" }
+    if role == 21u8 { ret "AXMenu" }
+    if role == 22u8 || role == 37u8 || role == 42u8 { ret "AXMenuItem" }
+    if role == 25u8 { ret "AXHeading" }
+    if role == 27u8 { ret "AXHelpTag" }
+    if role == 28u8 || role == 43u8 { ret "AXOutline" }
+    if role == 30u8 { ret "AXGrid" }
+    if role == 33u8 { ret "AXSplitter" }
+    if role == 38u8 { ret "AXComboBox" }
+    if role == 41u8 { ret "AXMenuBar" }
+    if role == 44u8 { ret "AXIncrementor" }
+    ret "AXGroup"
+}
+
+fn ax_text(text: str) -> usize {
+    ret cocoa_text(text)
+}
+
+fn accessibility_listening(w: Window) -> bool {
+    if cocoa_slot(w) >= COCOA_TABLE { ret false }
+    if cocoa_start() != ok { ret false }
+    let workspace = msg0(cocoa_class("NSWorkspace\x00"), cocoa_sel("sharedWorkspace\x00"))
+    ret msg_bool_ret(workspace, cocoa_sel("isVoiceOverEnabled\x00")) != 0u8
+}
+
+fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    let started = cocoa_start()
+    if started != ok { ret started }
+    let class = ax_make_class()
+    if class == 0usize { ret Failed }
+    let pool = objc_pool_push()
+    let window = cocoa_windows[slot]
+    let view = msg0(window, cocoa_sel("contentView\x00"))
+    // The last tree is let go of; the new one is built whole.
+    var at = 0usize
+    while at < ax_count {
+        let dropped = msg0(ax_elements[at], cocoa_sel("release\x00"))
+        at += 1usize
+    }
+    ax_count = 0usize
+    let frame = cocoa_rect(window, "frame")
+    let content = cocoa_rect(view, "frame")
+    var count = 0usize
+    while count < nodes.len && count < AX_NODES {
+        let node = nodes[count]
+        let element = msg0(msg0(class, cocoa_sel("alloc\x00")), cocoa_sel("init\x00"))
+        ax_elements[count] = element
+        ax_ids[count] = node.id
+        ax_generations[count] = node.generation
+        let role = ax_text(ax_role(node.role))
+        let set_role = msg1(element, cocoa_sel("setAccessibilityRole:\x00"), role)
+        cf_release(role)
+        if node.label.len != 0usize {
+            let label = ax_text(node.label)
+            let set_label = msg1(element, cocoa_sel("setAccessibilityLabel:\x00"), label)
+            cf_release(label)
+        }
+        if node.value.len != 0usize {
+            let value = ax_text(node.value)
+            let set_value = msg1(element, cocoa_sel("setAccessibilityValue:\x00"), value)
+            cf_release(value)
+        }
+        if node.hint.len != 0usize {
+            let hint = ax_text(node.hint)
+            let set_hint = msg1(element, cocoa_sel("setAccessibilityHelp:\x00"), hint)
+            cf_release(hint)
+        }
+        var enabled = 1i32
+        if node.flags & 1u16 != 0u16 { enabled = 0i32 }
+        let set_enabled = msg_flag(element, cocoa_sel("setAccessibilityEnabled:\x00"), enabled)
+        var focused = 0i32
+        if node.flags & 2u16 != 0u16 { focused = 1i32 }
+        let set_focused = msg_flag(element, cocoa_sel("setAccessibilityFocused:\x00"), focused)
+        let area = CgRect { x: frame.x + content.x + f64(node.x), y: frame.y + content.y + content.h - f64(node.y) - f64(node.height), w: f64(node.width), h: f64(node.height) }
+        let set_frame = msg_frame(element, cocoa_sel("setAccessibilityFrame:\x00"), area)
+        count += 1usize
+    }
+    ax_count = count
+    // Parents and children: a node whose parent is published hangs from it, any other from the view.
+    var index = 0usize
+    while index < count {
+        let node = nodes[index]
+        var parent_at = 0usize
+        var found = false
+        if node.has_parent {
+            while parent_at < count && !found {
+                if nodes[parent_at].id == node.parent && nodes[parent_at].generation == node.parent_generation { found = true } else { parent_at += 1usize }
+            }
+        }
+        if found {
+            let set_parent = msg1(ax_elements[index], cocoa_sel("setAccessibilityParent:\x00"), ax_elements[parent_at])
+        } else {
+            let set_parent = msg1(ax_elements[index], cocoa_sel("setAccessibilityParent:\x00"), view)
+        }
+        index += 1usize
+    }
+    // Each element's children, in the published order, as an array; the roots become the view's.
+    index = 0usize
+    while index < count {
+        var kids: [256]usize = zero
+        var kid_count = 0usize
+        var scan = 0usize
+        while scan < count {
+            if nodes[scan].has_parent && nodes[scan].parent == nodes[index].id && nodes[scan].parent_generation == nodes[index].generation {
+                kids[kid_count] = ax_elements[scan]
+                kid_count += 1usize
+            }
+            scan += 1usize
+        }
+        if kid_count != 0usize {
+            let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&kids[0usize]), kid_count)
+            let set_children = msg1(ax_elements[index], cocoa_sel("setAccessibilityChildren:\x00"), list)
+        }
+        index += 1usize
+    }
+    var tops: [256]usize = zero
+    var top_count = 0usize
+    index = 0usize
+    while index < count {
+        var has_parent_published = false
+        var scan = 0usize
+        if nodes[index].has_parent {
+            while scan < count && !has_parent_published {
+                if nodes[scan].id == nodes[index].parent && nodes[scan].generation == nodes[index].parent_generation { has_parent_published = true }
+                scan += 1usize
+            }
+        }
+        if !has_parent_published {
+            tops[top_count] = ax_elements[index]
+            top_count += 1usize
+        }
+        index += 1usize
+    }
+    if top_count != 0usize {
+        let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&tops[0usize]), top_count)
+        let set_children = msg1(view, cocoa_sel("setAccessibilityChildren:\x00"), list)
+    }
+    ax_view = view
+    objc_pool_pop(pool)
+    ret ok
+}
+
 fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
     var request: AccessibleRequest = zero
-    ret (request, false)
+    if ax_count != 0usize { cocoa_pump(0i64) }
+    if ax_head == ax_tail { ret (request, false) }
+    request = ax_requests[ax_head]
+    ax_head = (ax_head + 1usize) % AX_QUEUE
+    ret (request, true)
 }
