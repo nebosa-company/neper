@@ -2918,4 +2918,6 @@ D5760	2340	Threads in the browser host, as built (C192)
 D5761	1319	Where D5679 was short
 D5762	2611	C192 verified
 D5750	3940	Pipes on wasm32-wasi: D5677's `pipe` and `handle_*` calls, built ahead of the process calls
-D5751	2568	C189 landed: the `net_*` corpus on `--threads`, and what the sweeps say
+D5751	2569	C189 landed: the `net_*` corpus on `--threads`, and what the sweeps say
+D5790	4152	`e.ui` in a page, as built (C193): frames go to the page, not to an OffscreenCanvas
+D5791	2036	C193 verified

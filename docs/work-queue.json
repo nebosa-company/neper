@@ -1027,17 +1027,6 @@
       "evidence": "Design D5677. Needs C188 (the neper_host shims and host loop). Build: in scripts/run-wasm.mjs (lib/wasm/run-wasm.mjs once C194 has moved it) the imports proc_spawn, proc_wait, proc_kill, proc_group_kill, pipe, handle_read, handle_write, handle_close over node:child_process, with guest paths mapped through the runner's preopens and an argv[0] that is a guest path ending in .wasm run as process.execPath, the runner and that module's host path; neper-host.js answers ENOSYS if C191 has landed. os.wasi.e: `neper_os_spawn`, `neper_os_wait`, `spawn_with_options`, `wait_usage` (peak_memory 0), `kill`, `proc_group_spawn/terminate/close`, `pipe`, `pipe_read`; `neper_os_read`, `neper_os_write` and `neper_os_close` route a File whose raw is at least 0x40000000 to handle_read, handle_write and handle_close; `dup` of a host handle answers Unsupported. Acceptance: (1) os_process and os_group pass in `scripts/wasm-sweep.sh` (with --threads if they start threads) on Windows Node 24 and WSL Node 22. (2) os_shell, os_exchange, proc_sys, ui_activation, ui_file_access, ui_lifecycle, ui_notification, ui_permissions, ui_print and ui_shell_ops rerun: each passes or its remaining reason is recorded here (e.os.shell's wasi variant is D5623's and not this item). (3) Neither sweep gains a failure. Not yet: all of it."
     },
     {
-      "id": "C193",
-      "category": "library",
-      "group": "WebAssembly",
-      "order": 193,
-      "title": "e.ui in a browser: CPU frames on a canvas, input through a shared ring",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Design D5680. Needs C191; the page must be cross-origin isolated (D5680). Build: neper_host window_open, window_metrics, window_title, window_present, window_poll and window_cursor in neper-host.js (the page's canvas transferred to the module Worker with transferControlToOffscreen, frames by putImageData with the channel order of os.windows.e's present, input as 32-byte os.WindowEvent records in a 256-record SAB ring read by window_poll with Atomics.wait and its timeout); run-wasm.mjs answers ENOSYS to them; os.wasi.e's window functions call them and keep today's answers on ENOSYS. Acceptance: (1) an e.ui program built for wasm32-wasi (a gallery example, or a new tests/wasm/browser/ui_counter with a button and a label) renders in the Browser pane on a page served with --isolated: a screenshot of the first frame, then after a click on the button a screenshot showing the label changed, and typed text reaching a text field; the screenshots kept in the evidence (UI work is shown in screenshots). (2) The Node sweeps and the ui_* fixtures' wasm results are unchanged (the ENOSYS path). (3) On a page that is not isolated, run() with a canvas rejects with one sentence. Not yet: all of it."
-    },
-    {
       "id": "C194",
       "category": "tooling",
       "group": "WebAssembly",
@@ -1047,6 +1036,17 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Design D5681. Needs nothing. Build: `dispatch` (main.e:14104) also sends `run ... wasm32 wasi ...` to `wasm_command`, which after writing the module runs it with `run_program` as node --no-warnings RUNNER OUT ARGS (node found by walking PATH, node.exe on Windows, as shell.linux.e:118 walks it; NEPER_NODE overrides; neither: E-CLI-9999 `running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE`); `--threads` and `--release` reach the build. scripts/run-wasm.mjs moves to lib/wasm/run-wasm.mjs and `run` finds it under the toolchain root (`own_directory(args[0])`/lib/wasm); every caller (wasm-sweep.sh, check-fixture.sh, wasm-compiler.sh, wasm-bench.sh, the D5651 blocks of run.sh and run.ps1) moves to the new path in the same commit and nothing stays at the old one. Acceptance: (1) from build/windows, and build/linux in WSL, `neper run tests/selfhost/fixtures/link/wasm_basics/src/main.e --target wasm32-wasi` prints the program's output and reports its status; (2) with node off PATH and no NEPER_NODE it prints the diagnostic; (3) wasm_release run with --release and the argument `bounds` reports 134; (4) the D5651 blocks pass with the moved runner, check_suite_parity.py passes, v2 == v3. D5650 saw `neper build --target wasm32-wasi` from a worktree stop at `the program has no main` (toolchain root build/windows): run from the toolchain as the suites do, and fix it here if it is the short form's own bug. Not yet: all of it."
+    },
+    {
+      "id": "C197",
+      "category": "library",
+      "group": "WebAssembly",
+      "order": 197,
+      "title": "e.ui in a browser: text from a virtual keyboard, the clipboard, newest frame only, the gallery",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Left by C193 (D5791). Build: lib/wasm/window.js listens for beforeinput and compositionend and sends Text events (the pane's type action, a phone keyboard); clipboard_text and set_clipboard_text through neper_host (navigator.clipboard is async, so the page keeps a copy the Worker reads from the ring's side); the page draws only the newest posted frame per requestAnimationFrame; examples/ui builds for wasm32-wasi with its font read from the in-memory file system and runs on a page. Acceptance: each in the Browser pane with a screenshot. Not yet: all of it."
     }
   ]
 }
