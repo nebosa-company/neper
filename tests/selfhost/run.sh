@@ -10646,6 +10646,7 @@ if command -v node >/dev/null 2>&1; then
         wasm_written=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")
         [ "$wasm_written" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as WebAssembly" >&2; exit 1; }
         (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
+        (cd "$repo" && node --no-warnings lib/wasm/neper-host.js "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi through lib/wasm/neper-host.js" >&2; exit 1; }
     done
     wasm_release_source="$repo/tests/selfhost/fixtures/link/wasm_release/src/main.e"
     [ "$("$test_build/neper-self" emit-executable "$wasm_release_source" "$repo" wasm32 wasi "$wasm_build/release-debug.wasm")" = 'executable written' ]

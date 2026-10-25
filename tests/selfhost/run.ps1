@@ -10956,11 +10956,11 @@ if ($wasmNode) {
     New-Item -ItemType Directory -Force -Path $wasmBuild | Out-Null
     $wasmRunner = Join-Path $repo 'scripts\run-wasm.mjs'
     # A trap writes to standard error, which -ErrorAction Stop would turn into a terminating error.
-    function Invoke-Wasm([string]$module, [string[]]$arguments) {
+    function Invoke-Wasm([string]$module, [string[]]$arguments, [string]$runner = $wasmRunner) {
         Push-Location $repo
         $previous = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        try { $text = (& node --no-warnings $wasmRunner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
+        try { $text = (& node --no-warnings $runner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
         return @{ Status = $LASTEXITCODE; Output = $text }
     }
     foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment') {
@@ -10969,6 +10969,8 @@ if ($wasmNode) {
         if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
         $wasmRun = Invoke-Wasm $wasmPath @()
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+        $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
+        if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through lib/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
     $wasmReleaseSource = Join-Path $PSScriptRoot 'fixtures\link\wasm_release\src\main.e'
     $wasmDebugPath = Join-Path $wasmBuild 'release-debug.wasm'
