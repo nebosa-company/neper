@@ -556,6 +556,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !ok118 || !near(rect_of(p118, "a").y, 8.0f64) || !near(rect_of(p118, "b").y, 0.0f64) { os.exit(159) }
     // 119. A wrapping column flex container of fixed height is as wide as the columns its items fill.
     let (p119, ok119) = build(a, "<div id=f style=\"display:flex;flex-flow:column wrap;height:100px;width:max-content\"><div style=\"flex:0 0 100px;width:50px\"></div><div style=\"flex:0 0 100px;width:50px\"></div></div>", "")
+    // 120. An ideographic space that ends a line hangs: it is painted but adds nothing to the line's width.
+    let (p120, ok120) = build(a, "<div id=d style=\"width:max-content;font-size:10px\">\xe3\x81\x82\xe3\x81\x82<span>\xe3\x80\x80</span><br>\xe3\x81\x82</div>", "")
+    if !ok120 || !near(rect_of(p120, "d").w, 20.0f64) { os.exit(161) }
     if !ok119 || !near(rect_of(p119, "f").w, 100.0f64) { os.exit(160) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }

@@ -1435,6 +1435,32 @@ fn text_ascent(s: *const style.Style, fm: FontMetrics) -> f64 {
 
 type Flow = struct { base: usize, ox: f64, oy: f64 }
 
+// The byte length of the hanging space ending `s[..end]`: U+0020, or another space separator that does not break words
+// (U+3000, the U+2000 to U+200A spaces but U+2007, U+1680, U+205F); 0 when it ends otherwise.
+fn hang_tail_len(s: str, end: usize) -> usize {
+    if end >= 1usize && s[end - 1usize] == 32u8 { ret 1usize }
+    if end >= 3usize {
+        let a = s[end - 3usize]
+        let b = s[end - 2usize]
+        let c = s[end - 1usize]
+        if a == 227u8 && b == 128u8 && c == 128u8 { ret 3usize }
+        if a == 226u8 && b == 128u8 && c >= 128u8 && c <= 138u8 && c != 135u8 { ret 3usize }
+        if a == 225u8 && b == 154u8 && c == 128u8 { ret 3usize }
+        if a == 226u8 && b == 129u8 && c == 159u8 { ret 3usize }
+    }
+    ret 0usize
+}
+
+// Whether `s` holds a hanging space that is painted (anything but U+0020).
+fn has_painted_hang(s: str) -> bool {
+    var i = 0usize
+    while i < s.len {
+        if s[i] != 32u8 { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
 fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
     let l = bd.l
     let s = bstyle(l, b)
@@ -1514,7 +1540,11 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
             var content_end = seg_text.len
             // Collapsible spaces end a piece's content; so do the preserved ones of `pre-wrap`, which hang at the line end.
             if !preserve || s.white_space == .PreWrap {
-                while content_end > 0usize && seg_text[content_end - 1usize] == 32u8 { content_end -= 1usize }
+                var more = true
+                while more && content_end > 0usize {
+                    let hk = hang_tail_len(seg_text, content_end)
+                    if hk == 0usize { more = false } else { content_end -= hk }
+                }
             }
             let content = seg_text[..content_end]
             let trail_text = seg_text[content_end..]
@@ -1527,7 +1557,7 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
                 var soft = wrap && (k < n || true) && (opp[k] != 0u8 || all_here || bspace)
                 // The end of a text run is a break opportunity only after a space (atomics mark the piece before them).
                 if k == n { soft = wrap && (trail_text.len > 0usize || seg_text.len == 0usize) }
-                push_piece(bd, Piece { kind: .Text, box: b, text: seg_text, w: w, trail: tr, soft: soft, ink: content_end > 0usize || preserve, start: offs[seg], clen: content_end })
+                push_piece(bd, Piece { kind: .Text, box: b, text: seg_text, w: w, trail: tr, soft: soft, ink: content_end > 0usize || preserve || has_painted_hang(trail_text), start: offs[seg], clen: content_end })
             }
             if hard { push_piece(bd, Piece { kind: .Hard, box: b, text: "", w: 0.0f64, trail: 0.0f64, soft: false, ink: true, start: 0usize, clen: 0usize }) }
             seg = k
@@ -2608,6 +2638,14 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
         end = usize(i64(end) + x.shift)
         trim_end = new_tail
     }
+    // The last piece that takes room on the line: spaces that end it hang (boxes closing after it do not count).
+    var last_content = lead
+    var lcj = lead
+    while lcj < trim_end {
+        let lck = x.bd.pieces.items[lcj].kind
+        if lck == .Text || lck == .Atomic || lck == .Marker { last_content = lcj }
+        lcj += 1usize
+    }
     // Inline-box stack: the boxes carried in, then those opened on this line.
     var sbox: [64]u32 = zero
     var sshift: [64]f64 = zero
@@ -2721,9 +2759,9 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
             used_w += text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
         } else {
             used_w += p.w
-            if k + 1usize < trim_end || (tail_keep && p.trail > 0.0f64) { used_w -= shy_hyphen_w(l, p) }
+            if k < last_content || (tail_keep && p.trail > 0.0f64) { used_w -= shy_hyphen_w(l, p) }
         }
-        if k + 1usize < trim_end || (tail_keep && p.trail > 0.0f64) { used_w += p.trail }
+        if k < last_content || (tail_keep && p.trail > 0.0f64) { used_w += p.trail }
         k += 1usize
     }
     let last_line = end >= x.bd.pieces.len
@@ -2748,7 +2786,7 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
             }
         } else if k < trim_end {
             abs_off += ap.w
-            if k + 1usize < trim_end || (tail_keep && ap.trail > 0.0f64) { abs_off += ap.trail }
+            if k < last_content || (tail_keep && ap.trail > 0.0f64) { abs_off += ap.trail }
         }
         k += 1usize
     }
@@ -2757,7 +2795,7 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
         var gaps = 0usize
         k = lead
         while k < trim_end {
-            if (k + 1usize < trim_end || tail_keep) && x.bd.pieces.items[k].trail > 0.0f64 { gaps += 1usize }
+            if (k < last_content || tail_keep) && x.bd.pieces.items[k].trail > 0.0f64 { gaps += 1usize }
             k += 1usize
         }
         if gaps > 0usize { spread = (scan.avail - used_w) / f64(gaps) }
@@ -2796,12 +2834,18 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
             let proc = l.boxes.items[usize(p.box)].proc
             var this_to = p.start + p.text.len
             var this_w = p.w
-            if k + 1usize < trim_end || (tail_keep && p.trail > 0.0f64) {
+            if k < last_content || (tail_keep && p.trail > 0.0f64) {
                 this_w -= shy_hyphen_w(l, p)
                 this_w += p.trail
                 if p.trail > 0.0f64 { this_w += spread }
             } else {
                 this_to = p.start + p.clen
+                // A hanging space separator at the line end is painted but takes no room in the line.
+                let hang_text = proc[p.start + p.clen..p.start + p.text.len]
+                if has_painted_hang(hang_text) {
+                    this_to = p.start + p.text.len
+                    this_w += text_advance(l, bstyle(l, p.box), hang_text)
+                }
             }
             if tf_box == p.box && tf_to == p.start && cur_shift == tf_shift && spread == 0.0f64 && !tail_keep {
                 tf_to = this_to

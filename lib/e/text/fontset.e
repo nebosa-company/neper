@@ -188,11 +188,31 @@ fn width(s: *Set, families: str, weight: f64, italic: bool, size: f64, text: str
     }
     if missing {
         // Some character is not in the chosen face: lay the text out through the fallback chain.
+        // The text layout leaves trailing white space out of a line's width; a space separator that closes the text
+        // (U+3000, U+2000..U+200A, U+1680, U+205F) still has an advance, so it is measured before a visible letter.
+        var tail_space = false
+        if text.len >= 3usize {
+            let ta = text[text.len - 3usize]
+            let tb = text[text.len - 2usize]
+            let tc = text[text.len - 1usize]
+            tail_space = (ta == 227u8 && tb == 128u8 && tc == 128u8) || (ta == 226u8 && tb == 128u8 && tc >= 128u8 && tc <= 138u8) || (ta == 225u8 && tb == 154u8 && tc == 128u8) || (ta == 226u8 && tb == 129u8 && tc == 159u8)
+        }
         let (fonts, fe) = choices(s, s.a, idx, size)
         total = 0.0f64
         if fe == ok {
-            let (lay, le) = tl.layout(s.a, text, tl.Style { fonts: fonts, language: "", line_height: 0.0f32 }, opts(1000000000.0f32))
-            if le == ok { total = f64(lay.bounds.width) / size }
+            var measured = text
+            if tail_space {
+                let (padded, pe) = str.concat(s.a, text, "x")
+                if pe == ok { measured = padded } else { tail_space = false }
+            }
+            let (lay, le) = tl.layout(s.a, measured, tl.Style { fonts: fonts, language: "", line_height: 0.0f32 }, opts(1000000000.0f32))
+            if le == ok {
+                total = f64(lay.bounds.width) / size
+                if tail_space {
+                    let (lx, lxe) = tl.layout(s.a, "x", tl.Style { fonts: fonts, language: "", line_height: 0.0f32 }, opts(1000000000.0f32))
+                    if lxe == ok { total -= f64(lx.bounds.width) / size }
+                }
+            }
         }
     }
     mem.reset(s.a, mark)
