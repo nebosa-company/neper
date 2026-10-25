@@ -128,6 +128,7 @@ type Gen = struct {
     fr_vec: bool,
     // `--threads` (D5671): the module shape of wasm_threads.e and the atomics of D5672.
     threads: bool,
+    ftz: bool,
     // `--source-map` (C211, D5683): an entry per change of source line, offsets relative to
     // `bodies` once the function is finished; `map_done` entries are finished.
     map_on: bool,
@@ -1242,6 +1243,33 @@ fn from_float(g: *Gen, width: usize) {
     op(g, 189usize)
 }
 
+// FTZ and DAZ (D4203, spec section 11) for a program that switches them (a CPU launch of an `ftz` kernel): WebAssembly
+// floats always keep denormals, so while the module's `$ftz` global (each thread's own, like MXCSR) is 1, every float
+// operation reads its operands and writes its result as the x64 and arm64 builds do with the mode set. The float is
+// its bits on the stack; one whose exponent is zero is a denormal or a zero, and keeps only its sign. The bits go
+// through scratch local 1, and `$ftz` is the module's last global (D5834).
+fn ftz_global(g: *Gen) -> usize {
+    if g.threads { ret 3usize }
+    ret 2usize
+}
+
+fn flush_denormal(g: *Gen, width: usize) {
+    if !g.ftz { ret }
+    put(&g.code, 34usize)
+    put_uleb(&g.code, local_s(g, 1usize))
+    if width == 32usize { i64c(g, 2147483648usize) } else { i64c(g, 9223372036854775808usize) }
+    i64c(g, 0usize -% 1usize)
+    lget(g, local_s(g, 1usize))
+    if width == 32usize { i64c(g, 2139095040usize) } else { i64c(g, 9218868437227405312usize) }
+    op(g, 131usize)
+    op(g, 80usize)
+    put(&g.code, 35usize)
+    put_uleb(&g.code, ftz_global(g))
+    op(g, 113usize)
+    op(g, 27usize)
+    op(g, 131usize)
+}
+
 // Section 11's canonical NaN: a NaN result becomes the one quiet NaN of its width.
 fn canonicalize_float(g: *Gen, result: usize, width: usize) {
     i64c(g, codegen_x64.canonical_nan(width))
@@ -1261,8 +1289,10 @@ fn emit_float_compare(g: *Gen, instruction: nir.Instruction) -> err {
     let width = codegen_x64.float_width(value_ty(g, left))
     if width == 0usize { ret fail(g, "an f16 or bf16 comparison, which codegen_a64 does not have either") }
     vget(g, left)
+    flush_denormal(g, width)
     to_float(g, width)
     vget(g, operand(g, instruction, 1usize))
+    flush_denormal(g, width)
     to_float(g, width)
     var code = 91usize
     if instruction.opcode == .NotEqual { code = 92usize }
@@ -1353,9 +1383,11 @@ fn emit_float_cast(g: *Gen, instruction: nir.Instruction) -> err {
         if source_width == 0usize || target_width == 0usize { ret fail(g, "an f16 or bf16 conversion, which codegen_a64 does not have either") }
         vget(g, value)
         if source_width != target_width {
+            flush_denormal(g, source_width)
             to_float(g, source_width)
             if target_width == 64usize { op(g, 187usize) } else { op(g, 182usize) }
             from_float(g, target_width)
+            flush_denormal(g, target_width)
         }
         vset(g, instruction.result)
         if source_width != target_width { canonicalize_float(g, instruction.result, target_width) }
@@ -1394,6 +1426,7 @@ fn emit_float(g: *Gen, instruction: nir.Instruction) -> err {
         ret ok
     }
     vget(g, left)
+    flush_denormal(g, width)
     to_float(g, width)
     if opcode == .Sqrt {
         if width == 32usize { op(g, 145usize) } else { op(g, 159usize) }
@@ -1404,11 +1437,13 @@ fn emit_float(g: *Gen, instruction: nir.Instruction) -> err {
         if opcode == .Divide { code = 149usize }
         if instruction.operand_count != 2usize || (opcode != .Add && opcode != .Subtract && opcode != .Multiply && opcode != .Divide) { ret fail(g, "a float operation with the wrong operands") }
         vget(g, operand(g, instruction, 1usize))
+        flush_denormal(g, width)
         to_float(g, width)
         if width == 64usize { code += 14usize }
         op(g, code)
     }
     from_float(g, width)
+    flush_denormal(g, width)
     vset(g, instruction.result)
     canonicalize_float(g, instruction.result, width)
     ret ok
@@ -1732,6 +1767,7 @@ fn emit_vector(g: *Gen, instruction: nir.Instruction) -> err {
     let operation = nir.vector_binary_operation(instruction.immediate)
     let lane_bytes = codegen_x64.packed_lane_size(lane)
     let bytes = nir.vector_binary_lanes(instruction.immediate) * lane_bytes
+    if g.ftz && operation <= 3usize && lane >= 4usize { ret fail(g, "a packed float operation in a program that switches flush-to-zero, whose lanes simd128 cannot flush") }
     if bytes != 16usize && bytes != 8usize && bytes != 4usize && bytes != 2usize { ret fail(g, "a vector operation over a size simd128 has no load for") }
     let destination = operand(g, instruction, 0usize)
     let left = operand(g, instruction, 1usize)
@@ -1874,7 +1910,13 @@ fn emit_one(g: *Gen, instruction: nir.Instruction, at: usize) -> err {
         }
         ret ok
     }
-    if opcode == .AtomicFence { ret fail(g, "a flush-to-zero mode switch (a kernel launched with .Ftz), which WebAssembly floats cannot do: they keep denormals") }
+    if opcode == .AtomicFence {
+        // 100 sets FTZ and DAZ for an `ftz` kernel's CPU run and 101 clears them (see flush_denormal).
+        if instruction.immediate == 100usize { i32c(g, 1usize) } else { i32c(g, 0usize) }
+        put(&g.code, 36usize)
+        put_uleb(&g.code, ftz_global(g))
+        ret ok
+    }
     if opcode == .Switch { ret fail(g, "a switch instruction, which no lowering makes and no back end reads (it carries no case table)") }
     ret fail(g, "an instruction this target does not have")
 }

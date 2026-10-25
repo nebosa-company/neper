@@ -78,12 +78,14 @@ one() {
     source="$repo/tests/selfhost/fixtures/link/$name/src/main.e"
     host="$out/$name$ext"
     wasm="$out/$name.wasm"
+    # The fixtures that are given a path to work in (os_dup, os_seek) fail the same way on both sides without one, which is a pass that proves nothing.
+    case $name in os_dup|os_seek) work="np-sweep-$name.bin" ;; *) work= ;; esac
     rm -f "$out/$name".*
     if ! "$compiler" emit-executable "$source" "$repo" "$host_arch" "$host_os" "$host" $release > "$out/$name.host.build" 2>&1; then
         printf '%s\tskipped\thost build\n' "$name"
         return
     fi
-    limited 120 "$host" > "$out/$name.host.out" 2> "$out/$name.host.err" < /dev/null
+    limited 120 "$host" $work > "$out/$name.host.out" 2> "$out/$name.host.err" < /dev/null
     host_status=$?
     rm -f "$host"
     if ! "$compiler" emit-executable "$source" "$repo" wasm32 wasi "$wasm" $release $threads > "$out/$name.wasm.build" 2>&1; then
@@ -94,7 +96,7 @@ one() {
     first=1
     for run_with in $runners; do
         case $run_with in neper-host) runner_path="$repo/lib/wasm/neper-host.js" ;; *) runner_path="$repo/lib/wasm/run-wasm.mjs" ;; esac
-        limited 120 node --no-warnings "$runner_path" "$wasm" > "$out/$name.wasm.out" 2> "$out/$name.wasm.err" < /dev/null
+        limited 120 node --no-warnings "$runner_path" "$wasm" $work > "$out/$name.wasm.out" 2> "$out/$name.wasm.err" < /dev/null
         wasm_status=$?
         if [ "$wasm_status" -eq 125 ]; then
             verdict=$(printf '%s\tinvalid\t%s' "$name" "$(head -c 300 "$out/$name.wasm.err" | tr '\n' ' ')")
@@ -111,7 +113,7 @@ one() {
         fi
         if [ -n "$first" ]; then printf '%s\n' "$verdict"; first=; else printf '%s\n' "$verdict" >> "$out/results-second.tsv"; fi
     done
-    rm -f "$wasm"
+    rm -f "$wasm" "np-sweep-$name.bin"
 }
 export -f one limited plain
 export NEPER_WASM_STATS=${NEPER_WASM_STATS:-1}

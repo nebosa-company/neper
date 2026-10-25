@@ -544,6 +544,7 @@ fn neper_os_read(f: *File, buffer: *[]u8) -> (usize, err) {
 
 fn neper_os_close(f: *File) -> err {
     if f.raw <= 2usize { ret ok }
+    if dup_give_back(f) { ret ok }
     if is_host_file(f) {
         let route = host_file_close[0usize]
         ret route(f)
@@ -1943,10 +1944,9 @@ fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Uns
 // distinct on every other. Non-zero matters: a zero reads as "no owner" to a reentrant lock
 // (e.gpu's device lock), which would then re-lock a mutex it already holds and deadlock.
 fn current_thread_id() -> usize { ret usize(wasm_thread_id()) + 1usize }
-
-// (D2168/D2169, C110) The native-window surface e.ui.window compiles against, as os.neperos.e has it:
-// there is no window manager under WASI, so a window opens and presents nothing. The headless testing
-// harness touches none of these.
+// (D2168/D2169, C110) The native-window surface e.ui.window compiles against, as os.neperos.e has it. A window exists only
+// where the host has one (lib/wasm/window.js in a page, D5680); under Node, which answers ENOSYS to window_open, there is
+// none and open answers Unsupported, the answer the window fixtures print "unsupported" for.
 const SURFACE_W: usize = 1280usize
 const SURFACE_H: usize = 2856usize
 type Window = struct { raw: usize }
@@ -1965,8 +1965,7 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
         host_window_live = 1u32
         ret (Window { raw: usize(made[0usize]) }, ok)
     }
-    if status != 52u32 { ret (Window { raw: 0usize }, Unsupported) }
-    ret (Window { raw: 1usize }, ok)
+    ret (Window { raw: 0usize }, Unsupported)
 }
 fn window_close(w: Window) -> err { ret ok }
 fn window_metrics(w: Window) -> (WindowMetrics, err) {
@@ -2171,7 +2170,60 @@ fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
     if status != 0u32 { ret (0usize, net_error(status)) }
     ret (usize(taken[0usize]), ok)
 }
-fn dup(f: File) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
+// WASI preview 1 has no fd_dup, so a duplicate is the same descriptor number plus a count of the closes it still
+// owes: `dup_raw[i]` holds the descriptor and `dup_count[i]` how many more holders it has than the one `open`
+// made. `os.close` gives one back before it closes anything, so the descriptor ends with its last holder and
+// the holders share one offset, as a dup's do. 0 to 2 are never closed here and need no count.
+// ponytail: 64 descriptors with extra holders at once, OutOfMemory after; a longer table if a program duplicates more.
+const DUP_SLOTS: usize = 64usize
+var dup_raw: [64]usize = zero
+var dup_count: [64]u32 = zero
+
+fn dup(f: File) -> (File, err) {
+    if f.raw <= 2usize { ret (File { raw: f.raw }, ok) }
+    if f.raw < HOST_BASE {
+        // A descriptor that is open answers a zero seek (a pipe or a terminal answers ESPIPE, 70); a closed one is EBADF.
+        var position: [1]u64 = zero
+        let status = wasi_fd_seek(fd_of(f.raw), 0i64, 1u32, u32(mem.address_of(&position[0usize])))
+        if status != 0u32 && status != 70u32 { ret (File { raw: 0usize }, wasi_error(status)) }
+    }
+    rt_acquire()
+    var spare = DUP_SLOTS
+    var at = 0usize
+    while at < DUP_SLOTS {
+        if dup_count[at] != 0u32 && dup_raw[at] == f.raw {
+            dup_count[at] += 1u32
+            rt_release()
+            ret (File { raw: f.raw }, ok)
+        }
+        if dup_count[at] == 0u32 && spare == DUP_SLOTS { spare = at }
+        at += 1usize
+    }
+    if spare == DUP_SLOTS {
+        rt_release()
+        ret (File { raw: 0usize }, OutOfMemory)
+    }
+    dup_raw[spare] = f.raw
+    dup_count[spare] = 1u32
+    rt_release()
+    ret (File { raw: f.raw }, ok)
+}
+
+// True when `f` had a duplicate, which now owes one close fewer: the caller then closes nothing.
+fn dup_give_back(f: *File) -> bool {
+    rt_acquire()
+    var at = 0usize
+    while at < DUP_SLOTS {
+        if dup_count[at] != 0u32 && dup_raw[at] == f.raw {
+            dup_count[at] -= 1u32
+            rt_release()
+            ret true
+        }
+        at += 1usize
+    }
+    rt_release()
+    ret false
+}
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
     var child: Proc = zero
     let spawn_error = host_spawn(&child, a, options.argv, options.env, options.inherit_env, options.cwd, false, options.stdio)
@@ -2504,11 +2556,196 @@ fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
 fn mapping_flush(m: Mapping) -> err { ret Unsupported }
 fn mapping_close(m: own Mapping) -> err { ret ok }
 
+// A directory watch by polling: WASI preview 1 has no change notification, so a watch is a snapshot of the
+// directory (each entry's kind, size and modification time) taken when it opens, and `watch_read` takes a new
+// one every WATCH_POLL_NS until it differs, reports the difference and keeps the new snapshot. A change made by
+// anyone, another process included, shows at the next poll; one that undoes itself between two polls does not.
+// ponytail: an entry that changes twice inside one timestamp tick with the same size reads as unchanged; a rename
+// reads as a removal and an addition (`Renamed` is never reported); a directory entry is watched for existing, not
+// for what changes inside it; more changes than the caller's events hold end with an `Overflow` event; each reported
+// change leaves the previous snapshot behind in the arena the watch was opened with, so reopen a watch that has seen
+// thousands of changes; a recursive watch is refused, as on Linux. Upgrade path: the host reports changes (fs.watch).
+type WatchEntry = struct { name: str, kind: EntryKind, size: u64, modified_ns: i64 }
+type WatchState = struct { arena: *mem.Arena, base: str, entries: []WatchEntry }
+const WATCH_POLL_NS: i64 = 20000000i64
+var watch_idle: [1]u32 = zero
+
+fn watch_same(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var at = 0usize
+    while at < x.len {
+        if x[at] != y[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn watch_find(list: []const WatchEntry, name: str) -> usize {
+    var at = 0usize
+    while at < list.len {
+        if watch_same(list[at].name, name) { ret at }
+        at += 1usize
+    }
+    ret list.len
+}
+
+// The watched directory and a name joined, in `a`.
+fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
+    let (bytes, allocation_error) = mem.alloc[u8](a, base.len + 1usize + name.len)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < base.len {
+        bytes[at] = base[at]
+        at += 1usize
+    }
+    if at != 0usize && bytes[at - 1usize] != 47u8 {
+        bytes[at] = 47u8
+        at += 1usize
+    }
+    var offset = 0usize
+    while offset < name.len {
+        bytes[at + offset] = name[offset]
+        offset += 1usize
+    }
+    ret (bytes[0usize..at + name.len], ok)
+}
+
+// The directory as it is now. An entry that vanishes between the listing and its stat is left out.
+fn watch_snapshot(a: *mem.Arena, base: str) -> ([]WatchEntry, err) {
+    var listing: ReaddirResult = zero
+    var where_from = base
+    neper_os_readdir(&listing, a, &where_from)
+    if listing.failure != ok { ret (zero, listing.failure) }
+    let (out, allocation_error) = mem.alloc[WatchEntry](a, listing.entries.len + 1usize)
+    if allocation_error != ok { ret (zero, OutOfMemory) }
+    var count = 0usize
+    var at = 0usize
+    while at < listing.entries.len {
+        let (full, path_error) = watch_path(a, base, listing.entries[at].name)
+        if path_error != ok { ret (zero, path_error) }
+        let (info, stat_error) = stat_path(full, false)
+        if stat_error == ok {
+            out[count] = WatchEntry { name: listing.entries[at].name, kind: listing.entries[at].kind, size: info.size, modified_ns: info.modified_ns }
+            count += 1usize
+        }
+        at += 1usize
+    }
+    ret (out[0usize..count], ok)
+}
+
+// The snapshot in `a` with its names, which the listing borrowed from another arena.
+fn watch_keep(a: *mem.Arena, fresh: []const WatchEntry) -> ([]WatchEntry, err) {
+    let (out, allocation_error) = mem.alloc[WatchEntry](a, fresh.len + 1usize)
+    if allocation_error != ok { ret (zero, OutOfMemory) }
+    var at = 0usize
+    while at < fresh.len {
+        let (name, name_error) = mem.alloc[u8](a, fresh[at].name.len + 1usize)
+        if name_error != ok { ret (zero, OutOfMemory) }
+        var k = 0usize
+        while k < fresh[at].name.len {
+            name[k] = fresh[at].name[k]
+            k += 1usize
+        }
+        out[at] = WatchEntry { name: name[0usize..fresh[at].name.len], kind: fresh[at].kind, size: fresh[at].size, modified_ns: fresh[at].modified_ns }
+        at += 1usize
+    }
+    ret (out[0usize..fresh.len], ok)
+}
+
+fn watch_note(a: *mem.Arena, base: str, events: []WatchEvent, index: usize, action: WatchAction, name: str) -> err {
+    let (full, path_error) = watch_path(a, base, name)
+    if path_error != ok { ret path_error }
+    events[index] = WatchEvent { action: action, path: full, old_path: "" }
+    ret ok
+}
+
+// How many changes take the snapshot to `fresh`; the first `keep` of them are written to `events`, removals first.
+fn watch_diff(a: *mem.Arena, state: *WatchState, fresh: []const WatchEntry, events: []WatchEvent, keep: usize) -> (usize, err) {
+    var total = 0usize
+    var at = 0usize
+    while at < state.entries.len {
+        let found = watch_find(fresh, state.entries[at].name)
+        if found == fresh.len || fresh[found].kind != state.entries[at].kind {
+            if total < keep {
+                let noted = watch_note(a, state.base, events, total, WatchAction.Removed, state.entries[at].name)
+                if noted != ok { ret (total, noted) }
+            }
+            total += 1usize
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < fresh.len {
+        let found = watch_find(state.entries, fresh[at].name)
+        var action = WatchAction.Overflow
+        var changed = false
+        if found == state.entries.len || state.entries[found].kind != fresh[at].kind {
+            action = WatchAction.Added
+            changed = true
+        } else if fresh[at].kind != EntryKind.Dir && (state.entries[found].size != fresh[at].size || state.entries[found].modified_ns != fresh[at].modified_ns) {
+            action = WatchAction.Modified
+            changed = true
+        }
+        if changed {
+            if total < keep {
+                let noted = watch_note(a, state.base, events, total, action, fresh[at].name)
+                if noted != ok { ret (total, noted) }
+            }
+            total += 1usize
+        }
+        at += 1usize
+    }
+    ret (total, ok)
+}
+
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     var none: Watch = zero
-    ret (none, Unsupported)
+    if recursive { ret (none, Unsupported) }
+    let (entries, snapshot_error) = watch_snapshot(a, path)
+    if snapshot_error != ok { ret (none, snapshot_error) }
+    let (holder, holder_error) = mem.alloc[WatchState](a, 1usize)
+    if holder_error != ok { ret (none, OutOfMemory) }
+    let (kept, keep_error) = watch_keep(a, entries)
+    if keep_error != ok { ret (none, keep_error) }
+    holder[0usize].arena = a
+    holder[0usize].base = path
+    holder[0usize].entries = kept
+    none.state = mem.cast[*void](&holder[0usize])
+    ret (none, ok)
 }
-fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) { ret (0usize, Unsupported) }
+
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
+    if events.len == 0usize { ret (0usize, ok) }
+    let state = mem.cast[*WatchState](w.state)
+    while true {
+        let checkpoint = mem.mark(a)
+        let (fresh, snapshot_error) = watch_snapshot(a, state.base)
+        if snapshot_error != ok {
+            mem.reset(a, checkpoint)
+            ret (0usize, snapshot_error)
+        }
+        let (total, count_error) = watch_diff(a, state, fresh, events[0usize..0usize], 0usize)
+        if total != 0usize {
+            var keep = total
+            if keep > events.len { keep = events.len - 1usize }
+            let (written, write_error) = watch_diff(a, state, fresh, events, keep)
+            if write_error != ok { ret (0usize, write_error) }
+            var produced = keep
+            if total > events.len {
+                events[keep] = WatchEvent { action: WatchAction.Overflow, path: state.base, old_path: "" }
+                produced = keep + 1usize
+            }
+            let (kept, keep_error) = watch_keep(state.arena, fresh)
+            if keep_error != ok { ret (0usize, keep_error) }
+            state.entries = kept
+            ret (produced, ok)
+        }
+        mem.reset(a, checkpoint)
+        let slept = neper_os_wait_u32(mem.cast[*u8](&watch_idle[0usize]), 0u32, WATCH_POLL_NS)
+    }
+    ret (0usize, ok)
+}
+
 fn watch_close(w: own Watch) -> err { ret ok }
 
 // The mapping's bytes as the writable region e.fs.mmap hands out; no mapping is ever made here, so
