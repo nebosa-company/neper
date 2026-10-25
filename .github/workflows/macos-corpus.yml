@@ -79,7 +79,7 @@ jobs:
           runner=()
           if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
           icon=$(find docs -name '*.png' -size +8k | head -1)
-          if bash scripts/macos-bundle.sh --exe /tmp/corpus/hello --name "Neper Hello" --id com.neper.hello --version 1.2 ${icon:+--icon "$icon"} --agent --usage-camera "test" --out /tmp/bundles --zip > /tmp/bundle-out.txt 2>&1              && test -f "/tmp/bundles/Neper Hello.app/Contents/Info.plist"              && test -f "/tmp/bundles/Neper Hello.zip"              && /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "/tmp/bundles/Neper Hello.app/Contents/Info.plist" | grep -q com.neper.hello              && "${runner[@]}" "/tmp/bundles/Neper Hello.app/Contents/MacOS/Neper Hello" > /dev/null 2>&1; then
+          if bash scripts/macos-bundle.sh --exe /tmp/corpus/os_poller --name "Neper Hello" --id com.neper.hello --version 1.2 ${icon:+--icon "$icon"} --agent --usage-camera "test" --out /tmp/bundles --zip > /tmp/bundle-out.txt 2>&1              && test -f "/tmp/bundles/Neper Hello.app/Contents/Info.plist"              && test -f "/tmp/bundles/Neper Hello.zip"              && /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "/tmp/bundles/Neper Hello.app/Contents/Info.plist" | grep -q com.neper.hello              && "${runner[@]}" "/tmp/bundles/Neper Hello.app/Contents/MacOS/Neper Hello" > /dev/null 2>&1; then
             echo "BUNDLE PASS" >> /tmp/corpus-results.txt
           else
             echo "BUNDLE FAIL" >> /tmp/corpus-results.txt; tail -8 /tmp/bundle-out.txt | sed 's/^/    | /' >> /tmp/corpus-results.txt
