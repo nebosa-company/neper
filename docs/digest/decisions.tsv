@@ -2907,4 +2907,7 @@ D5722	1153	What C188 measured, and what it did not move
 D5710	2998	C186 landed: `--threads` writes the threaded module, and nothing a plain build writes changed
 D5711	1949	Threads: the atomics as built
 D5712	1482	Threads: the seven `wasm` instructions, and `wasm_thread_ops` outside `link/`
-D5713	1477	The runner for a threaded module until C187, and two findings for C187
+D5713	1478	The runner for a threaded module until C187, and two findings for C187
+D5730	2198	C187 landed: the thread runtime in `os.wasi.e`, as built
+D5731	3039	The Node thread host, as built (`scripts/run-wasm.mjs`)
+D5732	3796	What C187 measured, and the races and hangs it found
