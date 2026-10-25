@@ -101,4 +101,3 @@ L168	library	0	603	Browser M3: the real web without JavaScript	all of it.
 L169	library	0	640	Browser M4: JavaScript engine and DOM bindings	all of it.
 L170	library	0	541	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it.
 L171	library	0	623	Browser M6: beyond Vaper (gap items)	all of it.
-C200	compiler	0	1316	A launch's requirements depend on the worker count	Found by C184's differential (D5641): `emit-executable tests/selfhost/fixtures/link/gpu_tensor/src/main.e .

@@ -412,10 +412,6 @@ Plan docs/browser-progress.html. Needs L168 and L169. Acceptance: (1) every trac
 
 Plan docs/browser-progress.html. Needs L170; individual gap rows may start earlier when nothing blocks them. Acceptance: every tracker row with track gap or core is done or explicitly deferred with a decision: Shadow DOM and custom elements (6.16), Workers and Service Workers (6.18, 6.19), contenteditable and Selection (6.11, 6.12), process isolation and OS sandbox (8.1 to 8.3, N.6), DevTools (7.13), WebAssembly (5.17), vertical writing modes (2.16, N.5), audio (3.19), backdrop-filter and blend modes (N.3), colour emoji and CFF (N.4), HSTS and clickjacking protections (4.15, 4.16), fuzzing (8.4). Not yet: all of it.
 
-### C200 — A launch's requirements depend on the worker count (0%)
-
-Found by C184's differential (D5641): `emit-executable tests/selfhost/fixtures/link/gpu_tensor/src/main.e . x64 windows OUT` writes different bytes at the default worker count and at `-j 1` (offsets 50339, 51948 and 53420 for x64 windows: the `mov r8d` of `launch_run`'s requirements argument is 0 with eight workers and 4, 256, 256 with one). `lower.e` `lower_launcher_instance` emits `check.kernel_fact(c, template) & 511` as a constant, but the facts are a per-checker table filled by `check_kernel_profile` when the kernel's body is checked, so a launcher lowered by a worker that did not check the kernel (`tensor.add[i64]` instantiated in main, kernel `add_i64` in e.gpu.tensor) reads 0 and a device without Int64 would be launched anyway. Plan: make the requirements a companion of the kernel like `K$frame` and `K$shared` (`emit_kernel_size` beside the kernel, `emit_kernel_size_call` in the launcher, the suffix in `em.e`'s companion list), so the module that checked the kernel answers. Acceptance: (1) gpu_tensor emits the same bytes at -j 1, -j 2 and the default on x64 windows and x64 linux, and its requirements are the -j 1 values; (2) a fixture whose launcher and kernel live in different modules checks the requirement a launch reports; (3) `scripts/wasm-compiler.sh --all` reports no `differ` pair.
-
 ## Implemented
 
 ### C001 — Lexer over the closed token registry
