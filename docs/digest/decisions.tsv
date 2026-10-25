@@ -2880,3 +2880,18 @@ D5666	506	wasm32-wasi: the emitter fails where it used to guess
 D5667	885	The wasm scripts on macOS
 D5668	1152	The sweep compares standard error: the `stderr-differs` class
 D5669	1023	Coverage for the dispatch fallback and the narrow simd shapes
+D5670	5232	WebAssembly past one thread: what was measured, and the order of C186-C196
+D5671	3452	Threads on wasm32-wasi: a `--threads` build with its own module shape; the plain build does not change
+D5672	3615	Threads: NIR's atomics as wasm atomics, and seven instructions more in the "wasm" library
+D5673	4598	Threads: start, join and detach, and the per-thread state of `os.wasi.e`
+D5674	3980	Threads: the Node host; its main thread owns WASI, Workers are the threads, idle ones are reused
+D5675	2902	`neper_host`: one more import module, answered by the host thread, for what WASI preview 1 lacks
+D5676	5382	Sockets, resolution and the poller over `neper_host`
+D5677	2713	Processes over `neper_host`, in the Node runner only
+D5678	4788	A browser host, `lib/wasm/neper-host.js`, and no new target
+D5679	1088	Threads in the browser: cross-origin isolation, and the page is the host
+D5680	2749	`e.ui` in a browser: CPU frames onto a canvas through `neper_host`, input through a shared ring
+D5681	2257	`neper run` for wasm32-wasi, and the runner in the toolchain
+D5682	1367	A module with variants for other targets only says so
+D5683	1690	Source maps for wasm32-wasi, and line numbers for the engine's traps
+D5684	2536	WebAssembly gaps not queued, and why
