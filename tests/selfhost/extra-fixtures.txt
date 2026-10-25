@@ -57,6 +57,7 @@ wasm_exec
 wasm_flow
 wasm_irreducible
 wasm_mask
+wasm_net
 wasm_ops
 wasm_reserve
 wasm_threads

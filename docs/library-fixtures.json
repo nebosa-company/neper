@@ -2576,7 +2576,8 @@
     "ui_transient",
     "ui_widget",
     "ui_window",
-    "ui_workspace"
+    "ui_workspace",
+    "wasm_irreducible"
    ]
   },
   {
@@ -2606,8 +2607,8 @@
    "module": "e.gpu.metal",
    "milestone": "M3",
    "schedule": "scheduled",
-   "catalogue": 9,
-   "delivered": 9,
+   "catalogue": 0,
+   "delivered": 0,
    "pending": [],
    "fixtures": [
     "macos_metal_raw"
@@ -2761,7 +2762,8 @@
     "net_ssh",
     "net_tftp",
     "net_tls",
-    "net_zmtp"
+    "net_zmtp",
+    "wasm_net"
    ]
   },
   {
@@ -2874,6 +2876,7 @@
     "simd_lanes",
     "trap_align",
     "trap_arithmetic",
+    "wasm_mask",
     "wasm_ops"
    ]
   },
@@ -2890,6 +2893,7 @@
     "net_sp",
     "net_zmtp",
     "os_exit_threads",
+    "os_wait_timeout",
     "runtime_gaps",
     "sync_dataguard",
     "sync_flight",
@@ -2899,7 +2903,8 @@
     "sync_threads",
     "task_pool",
     "test_poll",
-    "thread_perturb"
+    "thread_perturb",
+    "wasm_threads"
    ]
   },
   {
@@ -3206,6 +3211,7 @@
     "net_tls",
     "net_tls_roots",
     "net_zmtp",
+    "os_wait_timeout",
     "proc_output",
     "sync_flight",
     "sync_semantics",
