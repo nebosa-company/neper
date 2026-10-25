@@ -6612,6 +6612,19 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
                 try bind_pattern(it, f, dn.a, undefv(), mode)
                 continue
             }
+            // Inside `with`, the target of a `var x = ...` is resolved before the initialiser runs (it may delete the binding).
+            if n.op == ast.D_VAR && f.prog.nodes[usize(dn.a)].kind == ast.N_IDENT {
+                let idn = f.prog.nodes[usize(dn.a)]
+                let (wh, whe) = resolve_scope(it, f, idn.text)
+                if whe != ok { ret (normal(), whe) }
+                if wh != null_env() && wh.has_with {
+                    let (wv, wve) = eval_named(it, f, dn.b, idn.text)
+                    if wve != ok { ret (normal(), wve) }
+                    let wpe = put_in_scope(it, f, wh, idn.text, wv)
+                    if wpe != ok { ret (normal(), wpe) }
+                    continue
+                }
+            }
             let (v, e) = eval_named(it, f, dn.b, target_name(f, dn.a))
             if e != ok { ret (normal(), e) }
             try bind_pattern(it, f, dn.a, v, mode)
