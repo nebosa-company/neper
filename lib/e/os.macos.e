@@ -2803,7 +2803,7 @@ fn cocoa_translate(event: usize) -> bool {
         if kind == 11usize { key.kind = .KeyUp }
         if kind == 10usize { key.repeat = msg_bool_ret(event, cocoa_sel("isARepeat\x00")) != 0u8 }
         cocoa_push(key)
-        if kind == 10usize { cocoa_text_events(window, modifiers, msg0(event, cocoa_sel("characters\x00"))) }
+        if kind == 10usize { cocoa_interpret(window, modifiers, event) }
         ret true
     }
     if kind == 12usize {
@@ -2889,6 +2889,155 @@ fn cocoa_pump(timeout_ns: i64) {
     }
     cocoa_poll_state()
     objc_pool_pop(pool)
+}
+
+// Text input (D5229). A key is handed to the window's content view through `interpretKeyEvents:` and the view answers the
+// text input protocol, so the system's input methods work: a Japanese, Chinese or Korean composition ends in `insertText:` with
+// the committed text, which becomes Text events, where the raw keystrokes of the composition used to. The view's class,
+// `NeperTextView`, is made at run time over the content view's own class and set on every window. What the composition looks
+// like while it is going (the marked text) is not shown, since a window event has no such kind (a preedit event is an API change
+// for every host), and the candidate window is placed at the window's top left.
+type CocoaRange = struct { location: usize, length: usize }
+type CocoaTextImp = union { function: fn(usize, usize, usize, usize, usize) -> usize, bits: usize }
+type CocoaTextImp6 = union { function: fn(usize, usize, usize, usize, usize, usize), bits: usize }
+type CocoaTextImp2 = union { function: fn(usize, usize) -> usize, bits: usize }
+type CocoaRangeImp = union { function: extern fn(usize, usize) -> CocoaRange, bits: usize }
+type CocoaRectImp = union { function: extern fn(usize, usize, usize, usize, usize) -> CgRect, bits: usize }
+
+@import("/usr/lib/libobjc.A.dylib", "object_getClass")
+extern fn cocoa_get_class(object: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "object_setClass")
+extern fn cocoa_set_class(object: usize, class: usize) -> usize
+
+var cocoa_text_class: usize = zero
+var cocoa_marked: [16]bool = zero
+
+fn cocoa_view_slot(view: usize) -> usize {
+    var at = 0usize
+    while at < COCOA_TABLE {
+        if cocoa_windows[at] != 0usize && msg0(cocoa_windows[at], cocoa_sel("contentView\x00")) == view { ret at }
+        at += 1usize
+    }
+    ret COCOA_TABLE
+}
+
+// Committed text, from an NSString or an NSAttributedString.
+@cc(c)
+fn view_insert_text(this: usize, command: usize, string: usize, location: usize, length: usize) -> usize {
+    let slot = cocoa_view_slot(this)
+    if slot >= COCOA_TABLE { ret 0usize }
+    cocoa_marked[slot] = false
+    var plain = string
+    let attributed = msg1(string, cocoa_sel("respondsToSelector:\x00"), cocoa_sel("string\x00"))
+    if attributed & 255usize != 0usize { plain = msg0(string, cocoa_sel("string\x00")) }
+    var window: Window = zero
+    window.raw = cocoa_windows[slot]
+    cocoa_text_events(window, 0u8, plain)
+    ret 0usize
+}
+
+@cc(c)
+fn view_set_marked(this: usize, command: usize, string: usize, selected: usize, length: usize, replaced: usize) {
+    let slot = cocoa_view_slot(this)
+    if slot < COCOA_TABLE { cocoa_marked[slot] = true }
+}
+
+@cc(c)
+fn view_unmark(this: usize, command: usize) -> usize {
+    let slot = cocoa_view_slot(this)
+    if slot < COCOA_TABLE { cocoa_marked[slot] = false }
+    ret 0usize
+}
+
+@cc(c)
+fn view_has_marked(this: usize, command: usize) -> usize {
+    let slot = cocoa_view_slot(this)
+    if slot < COCOA_TABLE && cocoa_marked[slot] { ret 1usize }
+    ret 0usize
+}
+
+@cc(c)
+fn view_marked_range(this: usize, command: usize) -> CocoaRange {
+    // NSNotFound when nothing is marked.
+    ret CocoaRange { location: 9223372036854775807usize, length: 0usize }
+}
+
+@cc(c)
+fn view_selected_range(this: usize, command: usize) -> CocoaRange {
+    ret CocoaRange { location: 0usize, length: 0usize }
+}
+
+@cc(c)
+fn view_nothing(this: usize, command: usize) -> usize { ret 0usize }
+
+@cc(c)
+fn view_not_found(this: usize, command: usize, a: usize, b: usize, c: usize) -> usize { ret 9223372036854775807usize }
+
+@cc(c)
+fn view_substring(this: usize, command: usize, location: usize, length: usize, actual: usize) -> usize { ret 0usize }
+
+@cc(c)
+fn view_first_rect(this: usize, command: usize, location: usize, length: usize, actual: usize) -> CgRect {
+    // The candidate window goes at the screen's lower left corner of the window's content: a point in the window's frame.
+    let slot = cocoa_view_slot(this)
+    var rect: CgRect = zero
+    if slot < COCOA_TABLE {
+        let frame = cocoa_rect(cocoa_windows[slot], "frame")
+        rect = CgRect { x: frame.x + 20.0f64, y: frame.y + frame.h - 40.0f64, w: 1.0f64, h: 20.0f64 }
+    }
+    ret rect
+}
+
+fn cocoa_make_text_class(view: usize) -> usize {
+    if cocoa_text_class != 0usize { ret cocoa_text_class }
+    let name = "NeperTextView\x00"
+    let class = cocoa_class_pair(cocoa_get_class(view), &name[0usize], 0usize)
+    if class == 0usize { ret 0usize }
+    var insert: CocoaTextImp = zero
+    insert.function = view_insert_text
+    var marked: CocoaTextImp6 = zero
+    marked.function = view_set_marked
+    var unmark: CocoaTextImp2 = zero
+    unmark.function = view_unmark
+    var has: CocoaTextImp2 = zero
+    has.function = view_has_marked
+    var marked_range: CocoaRangeImp = zero
+    marked_range.function = view_marked_range
+    var selected_range: CocoaRangeImp = zero
+    selected_range.function = view_selected_range
+    var nothing: CocoaTextImp2 = zero
+    nothing.function = view_nothing
+    var not_found: CocoaTextImp = zero
+    not_found.function = view_not_found
+    var substring: CocoaTextImp = zero
+    substring.function = view_substring
+    var first: CocoaRectImp = zero
+    first.function = view_first_rect
+    let object_types = "v@:@\x00"
+    let one = cocoa_class_method(class, cocoa_sel("insertText:replacementRange:\x00"), insert.bits, &object_types[0usize])
+    let two = cocoa_class_method(class, cocoa_sel("setMarkedText:selectedRange:replacementRange:\x00"), marked.bits, &object_types[0usize])
+    let three = cocoa_class_method(class, cocoa_sel("unmarkText\x00"), unmark.bits, &object_types[0usize])
+    let four = cocoa_class_method(class, cocoa_sel("hasMarkedText\x00"), has.bits, &object_types[0usize])
+    let five = cocoa_class_method(class, cocoa_sel("markedRange\x00"), marked_range.bits, &object_types[0usize])
+    let six = cocoa_class_method(class, cocoa_sel("selectedRange\x00"), selected_range.bits, &object_types[0usize])
+    let seven = cocoa_class_method(class, cocoa_sel("validAttributesForMarkedText\x00"), nothing.bits, &object_types[0usize])
+    let eight = cocoa_class_method(class, cocoa_sel("attributedSubstringForProposedRange:actualRange:\x00"), substring.bits, &object_types[0usize])
+    let nine = cocoa_class_method(class, cocoa_sel("characterIndexForPoint:\x00"), not_found.bits, &object_types[0usize])
+    let ten = cocoa_class_method(class, cocoa_sel("firstRectForCharacterRange:actualRange:\x00"), first.bits, &object_types[0usize])
+    let eleven = cocoa_class_method(class, cocoa_sel("doCommandBySelector:\x00"), nothing.bits, &object_types[0usize])
+    cocoa_class_register(class)
+    cocoa_text_class = class
+    ret class
+}
+
+// A key down, handed to the view's input method; true keys with a control or command modifier are shortcuts and carry no text.
+fn cocoa_interpret(window: Window, modifiers: u8, event: usize) {
+    if modifiers & 10u8 != 0u8 { ret }
+    let view = msg0(window.raw, cocoa_sel("contentView\x00"))
+    var one = event
+    let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&one), 1usize)
+    let interpreted = msg1(view, cocoa_sel("interpretKeyEvents:\x00"), list)
 }
 
 // The close button asks the window's delegate, and this delegate answers no and tells the program: a Close event is a request,
@@ -2985,6 +3134,8 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     cocoa_windows[slot] = window
     let delegate = cocoa_make_delegate()
     if delegate != 0usize { let delegated = msg1(window, cocoa_sel("setDelegate:\x00"), delegate) }
+    let text_class = cocoa_make_text_class(msg0(window, cocoa_sel("contentView\x00")))
+    if text_class != 0usize { let swapped = cocoa_set_class(msg0(window, cocoa_sel("contentView\x00")), text_class) }
     cocoa_layers[slot] = layer
     cocoa_scales[slot] = scale_percent
     cocoa_widths[slot] = options.width
