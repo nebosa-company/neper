@@ -53,10 +53,10 @@
       "group": "macOS",
       "order": 187,
       "title": "macOS biometrics (LocalAuthentication) and the photo picker (PHPicker)",
-      "score": 0,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "biometric_verify and photo_picker answer Unsupported and the record says so. LAContext canEvaluatePolicy and evaluatePolicy:localizedReason:reply: (reply is a block, as in C186) for Touch ID; PHPickerViewController is SwiftUI/AppKit-view based and needs a presented window and a result delegate, so check that NSOpenPanel with image types is not the honest answer instead. Verification needs a Mac with Touch ID and a Photos library; CI runners have neither."
+      "evidence": "Built 2026-10-25 (D5220): biometrics through LocalAuthentication, capabilities().biometrics is LAContext canEvaluatePolicy for Touch ID asked at every call (true only where enrolled), permission_status(Biometric) is Granted there, and biometric_verify shows the system sheet through evaluatePolicy:localizedReason:reply: with a hand-built global block and waits up to a minute; without biometrics it answers Unsupported. The photo picker is the open panel narrowed to image extensions (png, jpg, jpeg, gif, heic, tiff, bmp, webp), several files on request; PHPicker (the Photos library) is a SwiftUI view this library cannot present. ui_permissions now follows what the host offers (the fixture used to require biometrics to be off everywhere). tests/macos/probe/biometrics_photos.e on the runners: no biometrics, verify is Unsupported, the picker is shown and dismissed (Cancelled); the corpus is 1105. Open: a real Touch ID sheet and a confirmed photo selection need a person and a Mac with Touch ID (C192); Photos-library access (PHPicker) is not done. Done when those are checked."
     },
     {
       "id": "C188",

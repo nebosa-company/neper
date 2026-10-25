@@ -2851,4 +2851,5 @@ D5215	1236	the kqueue poller never lost a wakeup; the fixtures counted waits whe
 D5216	844	e.net knows macOS's errno numbers; four net fixtures run on a Mac
 D5217	1355	macOS associations are small bundles that LaunchServices starts, and the delegate receives what they were sent
 D5218	1294	macOS permissions: status is read, a request asks only where a device exists, through a global block
-D5219	964	macOS print dialogs run NSPrintPanel and NSPageLayout over the PDF printer
+D5219	965	macOS print dialogs run NSPrintPanel and NSPageLayout over the PDF printer
+D5220	1255	macOS biometrics are LocalAuthentication where Touch ID is enrolled; the photo picker is the open panel narrowed to images
