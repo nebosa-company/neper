@@ -168,6 +168,7 @@ fn scan_function(gen: *w.Gen, function_index: usize) -> err {
         let instruction = gen.b.instructions[at]
         if instruction.opcode == .Call { try scan_call(gen, function, instruction) }
         if instruction.opcode == .FunctionAddress { try scan_address(gen, function, instruction) }
+        if instruction.opcode == .AtomicFence && instruction.immediate == 100usize { gen.ftz = true }
         if instruction.opcode == .GlobalAddress {
             if instruction.immediate >= gen.b.global_count { ret fail_at(gen, "names a global that is not there", function.name) }
             gen.global_used[instruction.immediate] = true
@@ -649,7 +650,10 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
         put_section(&out, 5usize, &section)
         section.count = 0usize
     }
-    if gen.threads { w.put_uleb(&section, 3usize) } else { w.put_uleb(&section, 2usize) }
+    var global_count = 2usize
+    if gen.threads { global_count = 3usize }
+    if gen.ftz { global_count += 1usize }
+    w.put_uleb(&section, global_count)
     w.put(&section, 126usize)
     w.put(&section, 1usize)
     w.put(&section, 66usize)
@@ -663,6 +667,14 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
     w.put(&section, 11usize)
     if gen.threads {
         // `$tid`, set by wasi_thread_start.
+        w.put(&section, 127usize)
+        w.put(&section, 1usize)
+        w.put(&section, 65usize)
+        w.put(&section, 0usize)
+        w.put(&section, 11usize)
+    }
+    if gen.ftz {
+        // `$ftz`, the flush-to-zero mode (D5834): each thread's own in a threaded module, as MXCSR is.
         w.put(&section, 127usize)
         w.put(&section, 1usize)
         w.put(&section, 65usize)
