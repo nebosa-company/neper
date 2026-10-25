@@ -2935,4 +2935,5 @@ D5832	1203	Directory watches by polling
 D5833	1151	A thread's Worker gets the engine stack its thread asked for
 D5834	1923	Flush-to-zero on WebAssembly
 D5835	5193	What stays failing, and why
-D5836	1399	Where the sweep itself was blind
+D5836	1960	Where the sweep itself was blind
+D5837	1033	The `--release --threads` sweep: the same table
