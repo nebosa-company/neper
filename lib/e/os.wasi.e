@@ -94,6 +94,9 @@ extern fn wasi_proc_exit(code: u32)
 @import("wasi_snapshot_preview1", "fd_sync")
 extern fn wasi_fd_sync(fd: u32) -> u32
 
+@import("wasi_snapshot_preview1", "fd_filestat_get")
+extern fn wasi_fd_filestat_get(fd: u32, buffer: u32) -> u32
+
 @import("wasi_snapshot_preview1", "fd_readdir")
 extern fn wasi_fd_readdir(fd: u32, buffer: u32, buffer_len: u32, cookie: u64, used: u32) -> u32
 
@@ -544,6 +547,7 @@ fn neper_os_read(f: *File, buffer: *[]u8) -> (usize, err) {
 
 fn neper_os_close(f: *File) -> err {
     if f.raw <= 2usize { ret ok }
+    if dup_give_back(f) { ret ok }
     if is_host_file(f) {
         let route = host_file_close[0usize]
         ret route(f)
@@ -2171,7 +2175,59 @@ fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
     if status != 0u32 { ret (0usize, net_error(status)) }
     ret (usize(taken[0usize]), ok)
 }
-fn dup(f: File) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
+// WASI preview 1 has no fd_dup, so a duplicate is the same descriptor number plus a count of the closes it still
+// owes: `dup_raw[i]` holds the descriptor and `dup_count[i]` how many more holders it has than the one `open`
+// made. `os.close` gives one back before it closes anything, so the descriptor ends with its last holder and
+// the holders share one offset, as a dup's do. 0 to 2 are never closed here and need no count.
+// ponytail: 64 descriptors with extra holders at once, OutOfMemory after; a longer table if a program duplicates more.
+const DUP_SLOTS: usize = 64usize
+var dup_raw: [64]usize = zero
+var dup_count: [64]u32 = zero
+
+fn dup(f: File) -> (File, err) {
+    if f.raw <= 2usize { ret (File { raw: f.raw }, ok) }
+    if f.raw < HOST_BASE {
+        var raw_stat: [64]u8 = zero
+        let status = wasi_fd_filestat_get(fd_of(f.raw), u32(mem.address_of(&raw_stat[0usize])))
+        if status != 0u32 { ret (File { raw: 0usize }, wasi_error(status)) }
+    }
+    rt_acquire()
+    var spare = DUP_SLOTS
+    var at = 0usize
+    while at < DUP_SLOTS {
+        if dup_count[at] != 0u32 && dup_raw[at] == f.raw {
+            dup_count[at] += 1u32
+            rt_release()
+            ret (File { raw: f.raw }, ok)
+        }
+        if dup_count[at] == 0u32 && spare == DUP_SLOTS { spare = at }
+        at += 1usize
+    }
+    if spare == DUP_SLOTS {
+        rt_release()
+        ret (File { raw: 0usize }, OutOfMemory)
+    }
+    dup_raw[spare] = f.raw
+    dup_count[spare] = 1u32
+    rt_release()
+    ret (File { raw: f.raw }, ok)
+}
+
+// True when `f` had a duplicate, which now owes one close fewer: the caller then closes nothing.
+fn dup_give_back(f: *File) -> bool {
+    rt_acquire()
+    var at = 0usize
+    while at < DUP_SLOTS {
+        if dup_count[at] != 0u32 && dup_raw[at] == f.raw {
+            dup_count[at] -= 1u32
+            rt_release()
+            ret true
+        }
+        at += 1usize
+    }
+    rt_release()
+    ret false
+}
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
     var child: Proc = zero
     let spawn_error = host_spawn(&child, a, options.argv, options.env, options.inherit_env, options.cwd, false, options.stdio)
