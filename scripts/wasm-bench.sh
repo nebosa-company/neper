@@ -28,7 +28,7 @@ for name in "${names[@]}"; do
     best=
     for run in 1 2 3; do
         # The runner times compile, link and run itself (NEPER_WASM_TIME): `date +%s%N` is GNU's.
-        NEPER_WASM_TIME=1 node --no-warnings "$repo/scripts/run-wasm.mjs" "$wasm" > "$out/$name.$tag.out" 2> "$out/$name.$tag.err" < /dev/null
+        NEPER_WASM_TIME=1 node --no-warnings "$repo/lib/wasm/run-wasm.mjs" "$wasm" > "$out/$name.$tag.out" 2> "$out/$name.$tag.err" < /dev/null
         status=$?
         if [ "$status" -ne 0 ]; then best="exit $status"; break; fi
         elapsed=$(sed -n 's/^wasm time: \([0-9]*\) ms$/\1/p' "$out/$name.$tag.err" | tail -n 1)

@@ -93,7 +93,7 @@ one() {
     # With --host both the first runner's verdict goes to standard output, the second's to $out/results-second.tsv.
     first=1
     for run_with in $runners; do
-        case $run_with in neper-host) runner_path="$repo/lib/wasm/neper-host.js" ;; *) runner_path="$repo/scripts/run-wasm.mjs" ;; esac
+        case $run_with in neper-host) runner_path="$repo/lib/wasm/neper-host.js" ;; *) runner_path="$repo/lib/wasm/run-wasm.mjs" ;; esac
         limited 120 node --no-warnings "$runner_path" "$wasm" > "$out/$name.wasm.out" 2> "$out/$name.wasm.err" < /dev/null
         wasm_status=$?
         if [ "$wasm_status" -eq 125 ]; then
