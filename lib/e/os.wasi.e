@@ -151,6 +151,32 @@ extern fn wasm_memory_fill(destination: u32, value: u32, count: u32)
 @import("wasm", "memory.copy")
 extern fn wasm_memory_copy(destination: u32, source: u32, count: u32)
 
+// Threads (D5672): `threads` is 1 in a `--threads` module and 0 in a plain one, which then never
+// waits; the atomics work on either memory.
+@import("wasm", "threads")
+extern fn wasm_threads() -> u32
+
+@import("wasm", "thread.id")
+extern fn wasm_thread_id() -> u32
+
+@import("wasm", "thread.spawn")
+extern fn wasm_thread_spawn(record: u32) -> i32
+
+@import("wasm", "memory.atomic.wait32")
+extern fn wasm_wait32(address: u32, expected: u32, timeout_ns: i64) -> u32
+
+@import("wasm", "memory.atomic.notify")
+extern fn wasm_notify(address: u32, count: u32) -> u32
+
+@import("wasm", "i32.atomic.rmw.cmpxchg")
+extern fn wasm_cas32(address: u32, expected: u32, replacement: u32) -> u32
+
+@import("wasm", "i32.atomic.load")
+extern fn wasm_load32(address: u32) -> u32
+
+@import("wasm", "i32.atomic.store")
+extern fn wasm_store32(address: u32, value: u32)
+
 // The sockets, the resolver and the poller come from the host (D5675): one more import module, each
 // function answering a WASI errno and writing its outputs through the pointers it is given.
 @import("neper_host", "sock_open")
@@ -226,13 +252,16 @@ type ReaddirResult = struct { entries: []DirEntry, failure: err }
 
 // Room up to `end`, by growing the memory: the root arena and the reservations above it (D5640) are
 // what lies past the shadow stack, so growing is all that making room takes.
+// Two threads growing at once may grow more than needed, never less: a grow that fails is
+// looked at again, because the other thread's may have covered `end` (D5673).
 fn rt_grow(end: usize) -> bool {
     let have = usize(wasm_memory_size()) * 65536usize
     if end <= have { ret true }
     let need = (end - have + 65535usize) / 65536usize
     if need > 65535usize { ret false }
     let grown = wasm_memory_grow(u32(need))
-    ret grown != 4294967295u32
+    if grown != 4294967295u32 { ret true }
+    ret end <= usize(wasm_memory_size()) * 65536usize
 }
 
 // mem.alloc: the result {data, len, err} at `result`, `count` elements of `size` bytes aligned to
@@ -366,6 +395,7 @@ fn neper_trap(record_path: *str, site: usize, first: usize, second: usize, recor
 // first, with the root arena, whose end is where reservations begin (D5640).
 fn neper_start_args(out: *[]str, arena: *mem.Arena) {
     if rt_reserve_top == 0usize { rt_reserve_top = (mem.address_of(arena.base) + arena.cap + 65535usize) / 65536usize * 65536usize }
+    if wasm_threads() == 1u32 { load_mounts() }
     var none: []str = zero
     *out = none
     var sizes: [2]u32 = zero
@@ -486,16 +516,147 @@ fn neper_os_spawn(result: *SpawnResult, arena: *mem.Arena, argv: *[]const str, s
 
 fn neper_os_wait(p: *Proc) -> (i32, err) { ret (0i32, Unsupported) }
 
-// os.thread_create(result, entry, context, stack): a module has one thread and no way to start
-// another, so the answer is the one a refusing host gives and the thread handle is cleared.
+// ---- threads (D5673) ---------------------------------------------------------------------------------
+// A plain module has one thread and no way to start another, so it answers what a refusing host
+// gives. A `--threads` module starts each thread on a block of reserved memory that is its record
+// and its shadow stack (little-endian): u32 state at 0 (1 running, 2 detached, 0 finished), u32
+// tid at 4, u64 entry slot at 8, context at 16, stack top at 24, stack floor at 32, size at 40 and
+// the free list's link at 48. `wasi_thread_start` (src/wasm_threads.e) reads it, calls the entry,
+// then stores 0 over the state and wakes its joiners, its last touches of the block.
+//
+// `rt_lock` is Drepper's mutex (0 free, 1 held, 2 held and waited for) over the reservations and the
+// free list of finished blocks. It is an element, not a scalar `var`: the checker refuses the
+// address of a module-level scalar (D5713).
+var rt_lock: [1]u32 = zero
+var rt_free: [1]usize = zero
+
+fn rt_acquire() {
+    let lock = u32(mem.address_of(&rt_lock[0usize]))
+    if wasm_cas32(lock, 0u32, 1u32) == 0u32 { ret }
+    while true {
+        let seen = wasm_load32(lock)
+        if seen == 0u32 {
+            if wasm_cas32(lock, 0u32, 2u32) == 0u32 { ret }
+        } else if seen == 1u32 {
+            let marked = wasm_cas32(lock, 1u32, 2u32)
+        } else {
+            let woken = wasm_wait32(lock, 2u32, 0i64 - 1i64)
+        }
+    }
+}
+
+fn rt_release() {
+    let lock = u32(mem.address_of(&rt_lock[0usize]))
+    if wasm_cas32(lock, 1u32, 0u32) == 1u32 { ret }
+    wasm_store32(lock, 0u32)
+    let woken = wasm_notify(lock, 1u32)
+}
+
+fn rt_load64(address: usize) -> usize {
+    var word: [1]u64 = zero
+    wasm_memory_copy(u32(mem.address_of(&word[0usize])), u32(address), 8u32)
+    ret usize(word[0usize])
+}
+
+fn rt_store64(address: usize, value: usize) {
+    var word: [1]u64 = zero
+    word[0usize] = u64(value)
+    wasm_memory_copy(u32(address), u32(mem.address_of(&word[0usize])), 8u32)
+}
+
+// A finished block of at least `size` bytes from the free list (first fit), else 0.
+fn rt_block_take(size: usize) -> usize {
+    rt_acquire()
+    var previous = 0usize
+    var block = rt_free[0usize]
+    while block != 0usize {
+        let next = rt_load64(block + 48usize)
+        if rt_load64(block + 40usize) >= size {
+            if previous == 0usize { rt_free[0usize] = next } else { rt_store64(previous + 48usize, next) }
+            rt_release()
+            ret block
+        }
+        previous = block
+        block = next
+    }
+    rt_release()
+    ret 0usize
+}
+
+fn rt_block_give(block: usize) {
+    rt_acquire()
+    rt_store64(block + 48usize, rt_free[0usize])
+    rt_free[0usize] = block
+    rt_release()
+}
+
+// os.thread_create(result, entry, context, stack): `entry` is the function's table slot (D5604).
 fn neper_os_thread_create(result: *ThreadResult, entry: usize, context: usize, stack: usize) {
     result.thread = Thread { raw: 0usize }
     result.failure = Unsupported
+    if wasm_threads() == 0u32 { ret }
+    result.failure = Failed
+    var room = stack
+    if room < 65536usize { room = 65536usize }
+    if room > MEMORY_END { ret }
+    var size = (room + 64usize + 65535usize) / 65536usize * 65536usize
+    var block = rt_block_take(size)
+    if block != 0usize {
+        size = rt_load64(block + 40usize)
+    } else {
+        let (start, reserve_error) = neper_os_reserve(size)
+        if reserve_error != ok { ret }
+        block = mem.address_of(start)
+    }
+    // Only a fresh block can fail to grow (a free one was grown before); its addresses are lost.
+    if !rt_grow(block + size) { ret }
+    var record: [7]u64 = zero
+    record[0usize] = 1u64
+    record[1usize] = u64(entry)
+    record[2usize] = u64(context)
+    record[3usize] = u64(block + size)
+    record[4usize] = u64(block + 64usize)
+    record[5usize] = u64(size)
+    wasm_memory_copy(u32(block), u32(mem.address_of(&record[0usize])), 56u32)
+    let tid = wasm_thread_spawn(u32(block))
+    if tid <= 0i32 {
+        rt_block_give(block)
+        ret
+    }
+    wasm_store32(u32(block + 4usize), u32(tid))
+    result.thread = Thread { raw: block }
+    result.failure = ok
 }
 
-fn neper_os_thread_join(t: *Thread) -> err { ret Unsupported }
+fn neper_os_thread_join(t: *Thread) -> err {
+    if wasm_threads() == 0u32 { ret Unsupported }
+    let block = t.raw
+    if block == 0usize { ret Failed }
+    let state = u32(block)
+    var seen = wasm_load32(state)
+    while seen != 0u32 {
+        if seen == 2u32 { ret Failed }
+        let woken = wasm_wait32(state, seen, 0i64 - 1i64)
+        seen = wasm_load32(state)
+    }
+    t.raw = 0usize
+    rt_block_give(block)
+    ret ok
+}
 
-fn neper_os_thread_detach(t: *Thread) -> err { ret Unsupported }
+// A detached thread still running stores 0 over the 2 when it ends and its block is not
+// reclaimed, as the native runtimes leave a detached thread's stack.
+// ponytail: that block leaks; the host reporting finished detached blocks would reclaim it.
+fn neper_os_thread_detach(t: *Thread) -> err {
+    if wasm_threads() == 0u32 { ret Unsupported }
+    let block = t.raw
+    if block == 0usize { ret Failed }
+    let old = wasm_cas32(u32(block), 1u32, 2u32)
+    if old == 2u32 { ret Failed }
+    t.raw = 0usize
+    if old == 0u32 { rt_block_give(block) }
+    ret ok
+}
 
 // Reservations (D5640): address space above the root arena, handed out upward in 64 KiB steps.
 // Memory reaches a reservation when an allocation in it does (`rt_grow`), so `commit` only checks
@@ -517,9 +678,14 @@ fn rt_pointer(address: usize) -> *u8 {
 
 fn neper_os_reserve(n: usize) -> (*u8, err) {
     if rt_reserve_top == 0usize || n == 0usize { ret (nil, Unsupported) }
-    if rt_reserve_top >= MEMORY_END || n > MEMORY_END - rt_reserve_top { ret (nil, mem.Exhausted) }
+    rt_acquire()
+    if rt_reserve_top >= MEMORY_END || n > MEMORY_END - rt_reserve_top {
+        rt_release()
+        ret (nil, mem.Exhausted)
+    }
     let start = rt_reserve_top
     rt_reserve_top = start + (n + 65535usize) / 65536usize * 65536usize
+    rt_release()
     ret (rt_pointer(start), ok)
 }
 
@@ -534,7 +700,13 @@ fn neper_os_commit(p: *u8, n: usize) -> err {
 // timeout (sleep for it on the monotonic clock with a `poll_oneoff` clock subscription, then report
 // `Timeout`; zero polls once); no timeout (negative), which can never end and which every caller
 // of `wait_u32` would answer by waiting again, so the module stops with the deadlock named.
+// A `--threads` module waits for real: woken (0) and not equal (1) are `ok`, timed out (2) is
+// `Timeout`, the native contract, which allows a spurious wake.
 fn neper_os_wait_u32(p: *u8, expected: u32, timeout_ns: i64) -> err {
+    if wasm_threads() == 1u32 {
+        if wasm_wait32(u32(mem.address_of(p)), expected, timeout_ns) == 2u32 { ret Timeout }
+        ret ok
+    }
     var word: [1]u32 = zero
     wasm_memory_copy(u32(mem.address_of(&word[0usize])), u32(mem.address_of(p)), 4u32)
     if word[0usize] != expected { ret ok }
@@ -554,9 +726,9 @@ fn neper_os_wait_u32(p: *u8, expected: u32, timeout_ns: i64) -> err {
     ret Timeout
 }
 
-fn neper_os_wake_one_u32(p: *u8) {}
+fn neper_os_wake_one_u32(p: *u8) { let woken = wasm_notify(u32(mem.address_of(p)), 1u32) }
 
-fn neper_os_wake_all_u32(p: *u8) {}
+fn neper_os_wake_all_u32(p: *u8) { let woken = wasm_notify(u32(mem.address_of(p)), 4294967295u32) }
 
 // os.copy_bytes(dst: *[]u8, src: *[]const u8): the shorter length's worth.
 fn neper_os_copy_bytes(dst: *[]u8, src: *[]const u8) {
@@ -604,10 +776,16 @@ const FILE_WRITE_RIGHTS: u64 = 12583233u64
 const DIR_RIGHTS: u64 = 264240830u64
 const ALL_RIGHTS: u64 = 268435455u64
 
-// The host's errno, kept for last_error_detail: a single module-wide slot, since there is one thread.
-var error_code: i32 = 0i32
-var error_used: u8 = 0u8
-var error_fresh: u8 = 0u8
+// The host's errno, kept for last_error_detail in a slot per thread keyed by current_thread_id, as
+// os.linux.e keeps it: a read requires the identifier to match, so a thread never reads another's.
+// used: 0 unused, 1 the kind from the code, 2 a contextual `Denied`; fresh: recorded and not read.
+// ponytail: sixty-four slots, no eviction, no atomics; more live threads than that lose details,
+// a diagnostic and never a wrong answer. Real thread-local storage would replace it.
+const ERROR_SLOTS: usize = 64usize
+var error_slot_thread: [64]usize = zero
+var error_slot_code: [64]i32 = zero
+var error_slot_used: [64]u8 = zero
+var error_slot_fresh: [64]u8 = zero
 
 var mounts_loaded: bool = false
 var mount_count: usize = 0usize
@@ -623,14 +801,19 @@ var cwd_text: [1024]u8 = zero
 var cwd_len: usize = 1usize
 
 fn record_error_detail(code: i32) {
-    error_code = code
-    error_used = 1u8
-    error_fresh = 1u8
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    error_slot_code[slot] = code
+    error_slot_used[slot] = 1u8
+    error_slot_thread[slot] = thread
+    error_slot_fresh[slot] = 1u8
 }
 
 // A cleanup's failure is recorded only when no primary failure waits to be read.
 fn record_cleanup_error_detail(code: i32) {
-    if error_fresh == 1u8 && error_used != 0u8 { ret }
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread { ret }
     record_error_detail(code)
 }
 
@@ -688,10 +871,13 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     detail.kind = ErrorKind.Other
     detail.operation = operation
     detail.subject = subject
-    if error_used == 0u8 { ret detail }
-    error_fresh = 0u8
-    detail = detail_from_code(error_code, operation, subject)
-    if error_used == 2u8 { detail.kind = ErrorKind.Denied }
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    let used = error_slot_used[slot]
+    if used == 0u8 || error_slot_thread[slot] != thread { ret detail }
+    error_slot_fresh[slot] = 0u8
+    detail = detail_from_code(error_slot_code[slot], operation, subject)
+    if used == 2u8 { detail.kind = ErrorKind.Denied }
     ret detail
 }
 
@@ -1261,7 +1447,7 @@ fn open_parent(dir_fd: u32, relative_path: str) -> (u32, str, err) {
             if status != 0u32 {
                 if status == 32u32 || status == 54u32 {
                     record_error_detail(i32(status))
-                    error_used = 2u8
+                    error_slot_used[current_thread_id() % ERROR_SLOTS] = 2u8
                     ret (dir_fd, "", Denied)
                 }
                 ret (dir_fd, "", wasi_error(status))
@@ -1543,11 +1729,10 @@ fn dlclose(l: own Lib) -> err { ret ok }
 // Unsupported. NeperOS has no dynamic symbols, so it always answers not-found; the modules that use
 // dlsym (e.gpu's Vulkan backend) only run their CPU backend here, where this path is pruned.
 fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Unsupported) }
-// A NeperOS program runs on one thread here, so a fixed non-zero id identifies it. Non-zero
-// matters: a zero reads as "no owner" to a reentrant lock (e.gpu's device lock), which would then
-// re-lock a mutex it already holds on the same thread and deadlock. (A real per-thread id would be
-// a kernel query, for when a program's own threads each take the lock.)
-fn current_thread_id() -> usize { ret 1usize }
+// The wasi-threads tid plus one: 1 on the main thread (tid 0) and in a plain module, non-zero and
+// distinct on every other. Non-zero matters: a zero reads as "no owner" to a reentrant lock
+// (e.gpu's device lock), which would then re-lock a mutex it already holds and deadlock.
+fn current_thread_id() -> usize { ret usize(wasm_thread_id()) + 1usize }
 
 // (D2168/D2169, C110) The native-window surface e.ui.window compiles against, as os.neperos.e has it:
 // there is no window manager under WASI, so a window opens and presents nothing. The headless testing
@@ -1621,7 +1806,9 @@ type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes:
 fn page_size() -> usize { ret 4096usize }
 fn release(p: *u8, n: usize) -> err {
     let start = mem.address_of(p)
+    rt_acquire()
     if start + (n + 65535usize) / 65536usize * 65536usize == rt_reserve_top { rt_reserve_top = start }
+    rt_release()
     ret ok
 }
 // The memory never shrinks, so its size is the most the module has held (D5640).

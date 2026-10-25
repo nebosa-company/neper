@@ -59,7 +59,7 @@ fi
 if [ -n "$target" ]; then
     [ "$target" = wasm32-wasi ] || { printf '%s\n' "unknown target: $target" >&2; exit 2; }
     exe="${exe%.exe}.wasm"
-    written=$("$compiler" emit-executable "$source" "$repo" wasm32 wasi "$exe" $release)
+    written=$("$compiler" emit-executable "$source" "$repo" wasm32 wasi "$exe" $release $threads)
     [ "$written" = 'executable written' ] || { printf '%s\n' "$fixture did not emit: $written" >&2; exit 1; }
     status=0
     node --no-warnings "$repo/scripts/run-wasm.mjs" "$exe" || status=$?
