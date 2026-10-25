@@ -64,3 +64,4 @@ wasm_threads
 web_csp
 web_page_csp
 web_shell
+gpu_ftz_ops

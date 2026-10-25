@@ -10667,6 +10667,10 @@ if command -v node >/dev/null 2>&1; then
     [ "$wasm_plain_output" = "$(printf 'threads 0\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0')" ] || { printf '%s\n' "the plain module's thread instructions answered: $wasm_plain_output" >&2; exit 1; }
     wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/thread_ops.threads.wasm")
     [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
+    # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
+    # inotify watch hands events over differently).
+    "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/wasm/os_watch_modify/src/main.e" "$repo" wasm32 wasi "$wasm_build/os_watch_modify.wasm" > /dev/null
+    (cd "$repo" && timeout 60 node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/os_watch_modify.wasm" > /dev/null) || { printf '%s\n' 'os_watch_modify failed on wasm32-wasi' >&2; exit 1; }
     # (D5673, D5674, C202) Threads under the thread host: wasm_threads built with --threads writes what the native build
     # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
     wasm_fixture=wasm_threads

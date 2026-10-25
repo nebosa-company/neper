@@ -10992,6 +10992,12 @@ if ($wasmNode) {
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 0`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0") { throw "the plain module's thread instructions answered: $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmOpsThreads @()
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
+    # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
+    # inotify watch hands events over differently).
+    $wasmWatch = Join-Path $wasmBuild 'os_watch_modify.wasm'
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\wasm\os_watch_modify\src\main.e') $repo 'wasm32' 'wasi' $wasmWatch) -ne 'executable written') { throw 'os_watch_modify did not emit as WebAssembly' }
+    $wasmRun = Invoke-Wasm $wasmWatch @()
+    if ($wasmRun.Status -ne 0) { throw "os_watch_modify failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
     # (D5673, D5674, C202) Threads under the thread host: wasm_threads built with --threads writes what the native build
     # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
     $wasmThreadsPath = Join-Path $wasmBuild 'wasm_threads.threads.wasm'
