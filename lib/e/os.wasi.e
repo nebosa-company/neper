@@ -94,9 +94,6 @@ extern fn wasi_proc_exit(code: u32)
 @import("wasi_snapshot_preview1", "fd_sync")
 extern fn wasi_fd_sync(fd: u32) -> u32
 
-@import("wasi_snapshot_preview1", "fd_filestat_get")
-extern fn wasi_fd_filestat_get(fd: u32, buffer: u32) -> u32
-
 @import("wasi_snapshot_preview1", "fd_readdir")
 extern fn wasi_fd_readdir(fd: u32, buffer: u32, buffer_len: u32, cookie: u64, used: u32) -> u32
 
@@ -2185,9 +2182,10 @@ var dup_count: [64]u32 = zero
 fn dup(f: File) -> (File, err) {
     if f.raw <= 2usize { ret (File { raw: f.raw }, ok) }
     if f.raw < HOST_BASE {
-        var raw_stat: [64]u8 = zero
-        let status = wasi_fd_filestat_get(fd_of(f.raw), u32(mem.address_of(&raw_stat[0usize])))
-        if status != 0u32 { ret (File { raw: 0usize }, wasi_error(status)) }
+        // A descriptor that is open answers a zero seek (a pipe or a terminal answers ESPIPE, 70); a closed one is EBADF.
+        var position: [1]u64 = zero
+        let status = wasi_fd_seek(fd_of(f.raw), 0i64, 1u32, u32(mem.address_of(&position[0usize])))
+        if status != 0u32 && status != 70u32 { ret (File { raw: 0usize }, wasi_error(status)) }
     }
     rt_acquire()
     var spare = DUP_SLOTS
