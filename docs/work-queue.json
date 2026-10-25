@@ -130,10 +130,10 @@
       "group": "macOS",
       "order": 194,
       "title": "macOS corpus: the fixtures that are only reported (extern_many, freestanding, os_syscall, x_tds_integrated, gpu_*)",
-      "score": 0,
+      "score": 0.7,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Eight fixtures run on the Mac corpus but are not asserted: extern_many imports four glibc extensions (memrchr, rawmemchr, strchrnul, strverscmp) that libSystem lacks and dyld binds all or none (split the fixture by target, or import the BSD equivalents on a Mac); freestanding and os_syscall check the ELF and the Linux system call numbers (by design: write Mac counterparts that check the Mach-O and BSD numbers, or exclude them from the Mac set); x_tds_integrated needs SSPI (Windows); gpu_* need Vulkan (C193). Done when each is either asserted or listed as excluded with its reason in tests/macos/run-corpus.sh."
+      "evidence": "Done 2026-10-25 (D5225): the Mac corpus asserts every fixture that can run on a Mac (1108 pass, 0 fail, 0 info) and skips seven with the reason a Mac has by nature, as SKIP lines counted apart in the TOTAL: extern_many (four glibc extensions libSystem lacks, then it reads its own ELF header), freestanding and os_syscall (an ELF image, Linux system call numbers), gpu_vulkan_raw and gpu_fault_unchecked (Vulkan, which a Mac does not have; a Metal backend is C193), x_tds_integrated (SSPI, Windows), net_ssh (driven by the workflow's SSH step, reported as its SSH line). gpu_reshape is now asserted at 50, the sum its own comment gives. Open: Mac counterparts of the ELF and system-call fixtures (a Mach-O header check and BSD system call numbers) would turn three skips into asserted tests; ui_collections4_v2 failed once on x64 under Rosetta (exit 190, a gesture timing check at 50 ms after a release) and passed on rerun, so it is timing-sensitive on a loaded runner. Done when the three Mac counterparts exist or are decided against."
     },
     {
       "id": "C195",
