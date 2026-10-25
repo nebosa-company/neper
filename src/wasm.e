@@ -93,7 +93,7 @@ fn register_import(gen: *w.Gen, reference_index: usize) -> err {
         item.inline_op = inline_operation(reference.symbol)
         if item.inline_op == 0usize { ret fail_at(gen, "imports an instruction the \"wasm\" library does not have", reference.symbol) }
     } else {
-        if !w.same(reference.library, "wasi_snapshot_preview1") { ret fail_at(gen, "imports from a library this target does not have (only wasi_snapshot_preview1 and \"wasm\")", reference.library) }
+        if !w.same(reference.library, "wasi_snapshot_preview1") && !w.same(reference.library, "neper_host") { ret fail_at(gen, "imports from a library this target does not have (only wasi_snapshot_preview1, neper_host and \"wasm\")", reference.library) }
     }
     let (declared_at, declared) = check.find_function(gen.c, reference.module_index, reference.name)
     if !declared { ret fail_at(gen, "imports a function the checker does not know", reference.symbol) }

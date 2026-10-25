@@ -12,6 +12,9 @@
 //     NO_COLOR, SystemRoot and NEPER_*, with TMPDIR, TMP, TEMP, HOME and USERPROFILE pointed at
 //     the two directories above. `--env=all` (or NEPER_WASM_ENV=all) hands over the whole
 //     environment, as before; the module can read and write the working directory either way.
+// A module that imports `neper_host` (sockets, name resolution and the poller, D5675, D5676) gets
+// them from scripts/run-wasm-host.mjs: each call blocks the module's worker while this process's
+// main thread does it over node:net, node:dgram and node:dns. NEPER_HOST_TRACE=1 prints each call.
 // NEPER_WASM_MEMORY=1 and NEPER_WASM_TIME=1 add `wasm memory: N MiB` and `wasm time: N ms`
 // (compile, link and run, as scripts/wasm-bench.sh reads it) to standard error at the end.
 // The first argument is the module's path inside the preopens (relative to `.`, else under /exe), so
@@ -37,6 +40,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { WASI } from 'node:wasi'
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { argv, env as hostEnv, stderr } from 'node:process'
+import { hostImports, serve } from './run-wasm-host.mjs'
 
 // Node's WASI answers fd_readdir with ENOSYS on Windows (uvwasi has no directory listing there). Where
 // it does, the call is answered here: the directory descriptors the module opens are followed
@@ -105,7 +109,11 @@ async function run({ args, env, preopens }) {
   let instance
   const began = performance.now()
   try {
-    ;({ instance } = await WebAssembly.instantiate(await readFile(workerData.file), withReaddir(wasi.getImportObject(), preopens, () => instance.exports.memory)))
+    const module = await WebAssembly.compile(await readFile(workerData.file))
+    const imports = withReaddir(wasi.getImportObject(), preopens, () => instance.exports.memory)
+    const names = WebAssembly.Module.imports(module).filter((item) => item.module === 'neper_host').map((item) => item.name)
+    if (names.length) imports.neper_host = hostImports(names, () => instance.exports.memory, workerData.box, workerData.data)
+    instance = await WebAssembly.instantiate(module, imports)
   } catch (error) {
     return { code: 125, note: `${error}\n` }
   }
@@ -149,8 +157,14 @@ if (isMainThread) {
   preopens['/home'] = home
   const inherited = everything ? { ...hostEnv } : Object.fromEntries(Object.entries(hostEnv).filter(([name]) => ALLOWED.test(name.toUpperCase())))
   const env = { ...inherited, PATH: hostEnv.PATH, TMPDIR: '/tmp', TMP: '/tmp', TEMP: '/tmp', HOME: '/home', USERPROFILE: '/home' }
-  const worker = new Worker(new URL(import.meta.url), { workerData: { file: absolute, args: [guest, ...moduleArgs], env, preopens }, resourceLimits: { stackSizeMb: 256 } })
-  const clean = () => rmSync(scratch, { recursive: true, force: true })
+  const box = new SharedArrayBuffer(128)
+  const data = new SharedArrayBuffer(65536)
+  const host = serve(box, data)
+  const worker = new Worker(new URL(import.meta.url), { workerData: { file: absolute, args: [guest, ...moduleArgs], env, preopens, box, data }, resourceLimits: { stackSizeMb: 256 } })
+  const clean = () => {
+    host.stop()
+    rmSync(scratch, { recursive: true, force: true })
+  }
   let answered = false
   worker.on('message', (result) => {
     answered = true

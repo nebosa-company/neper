@@ -10963,7 +10963,7 @@ if ($wasmNode) {
         try { $text = (& node --no-warnings $runner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
         return @{ Status = $LASTEXITCODE; Output = $text }
     }
-    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask') {
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask', 'os_socket', 'os_resolve', 'async_io', 'macos_poller_loss', 'net', 'wasm_net') {
         $wasmPath = Join-Path $wasmBuild "$wasmFixture.wasm"
         $wasmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPath
         if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }

@@ -2900,4 +2900,7 @@ D5685	2165	`lib/wasm/neper-host.js` as built (C191)
 D5686	1842	The sweep through `neper-host.js`, next to run-wasm.mjs's
 D5687	782	The browser host in a real browser
 D5688	806	What is registered, and how it is run
-D5689	674	Where D5678 was short
+D5689	675	Where D5678 was short
+D5720	1962	`neper_host` in the plain build: a function table, a mailbox, and one request in flight
+D5721	1779	The host's socket semantics, as built
+D5722	1152	What C188 measured, and what it did not move
