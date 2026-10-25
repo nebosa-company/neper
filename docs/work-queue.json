@@ -1038,17 +1038,6 @@
       "evidence": "Design D5677. Needs C188 (the neper_host shims and host loop). Build: in scripts/run-wasm.mjs (lib/wasm/run-wasm.mjs once C194 has moved it) the imports proc_spawn, proc_wait, proc_kill, proc_group_kill, pipe, handle_read, handle_write, handle_close over node:child_process, with guest paths mapped through the runner's preopens and an argv[0] that is a guest path ending in .wasm run as process.execPath, the runner and that module's host path; neper-host.js answers ENOSYS if C191 has landed. os.wasi.e: `neper_os_spawn`, `neper_os_wait`, `spawn_with_options`, `wait_usage` (peak_memory 0), `kill`, `proc_group_spawn/terminate/close`, `pipe`, `pipe_read`; `neper_os_read`, `neper_os_write` and `neper_os_close` route a File whose raw is at least 0x40000000 to handle_read, handle_write and handle_close; `dup` of a host handle answers Unsupported. Acceptance: (1) os_process and os_group pass in `scripts/wasm-sweep.sh` (with --threads if they start threads) on Windows Node 24 and WSL Node 22. (2) os_shell, os_exchange, proc_sys, ui_activation, ui_file_access, ui_lifecycle, ui_notification, ui_permissions, ui_print and ui_shell_ops rerun: each passes or its remaining reason is recorded here (e.os.shell's wasi variant is D5623's and not this item). (3) Neither sweep gains a failure. Not yet: all of it."
     },
     {
-      "id": "C192",
-      "category": "tooling",
-      "group": "WebAssembly",
-      "order": 192,
-      "title": "Threads in the browser host: cross-origin isolation, the page as host",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Design D5679 (on D5674's protocol). Needs C187 and C191. Build: neper-host.js for a module importing env.memory: rejects with one sentence when crossOriginIsolated is false; the calling thread (the page's main thread; under Node the importing thread) is the host, owning the in-memory file system and WASI over the shared memory; every thread a Worker whose WASI imports are mailbox proxies (D5674's 128-byte layout), answered through Atomics.waitAsync or, where it is missing, postMessage; thread-spawn a host call that reuses or makes Workers (measured: a Worker made by a blocked Worker never starts in Chrome, D5670); the end as D5674. A plain module keeps its file system inside its one Worker. Acceptance: (1) wasm_threads and the fifteen thread fixtures of C187's acceptance pass through neper-host.js under Node 24 (`wasm-sweep.sh --host neper-host --threads`). (2) Browser pane, page served with --isolated: wasm_threads gives exit 0 and the native stdout; served without --isolated the page reports the isolation sentence; both recorded here. (3) C191's acceptance still holds for plain modules. Not yet: all of it."
-    },
-    {
       "id": "C193",
       "category": "library",
       "group": "WebAssembly",

@@ -2913,4 +2913,7 @@ D5741	1256	Lines in the engine's traps: `lib/wasm/source-map.js`
 D5742	698	C196 verified
 D5730	2198	C187 landed: the thread runtime in `os.wasi.e`, as built
 D5731	3039	The Node thread host, as built (`scripts/run-wasm.mjs`)
-D5732	3796	What C187 measured, and the races and hangs it found
+D5732	3797	What C187 measured, and the races and hangs it found
+D5760	2340	Threads in the browser host, as built (C192)
+D5761	1319	Where D5679 was short
+D5762	2611	C192 verified

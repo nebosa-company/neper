@@ -61,8 +61,8 @@ fn outer(n: *Nested) {
 }
 
 fn fail_mkdir(f: *Failing) {
-    if os.mkdir(f.arena, "tests") == ok { ret }
-    f.kind = os.last_error_detail("mkdir", "tests").kind
+    if os.mkdir(f.arena, "np-wasm-threads-dir") == ok { ret }
+    f.kind = os.last_error_detail("mkdir", "np-wasm-threads-dir").kind
 }
 
 fn nothing(s: *Sleeper) {}
@@ -158,6 +158,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var sleeper: Sleeper = zero
     if os.wait_u32(&sleeper.word, 0u32, 10000000i64) == os.Timeout { say("wait timeout\n") }
 
+    let made = os.mkdir(a, "np-wasm-threads-dir")
     let (info, stat_error) = os.stat(a, "np-wasm-threads-no-such-file")
     var failing = Failing { arena: a, kind: os.ErrorKind.Other }
     let (failer, failer_error) = thread.spawn[Failing](fail_mkdir, &failing, 0usize)
@@ -167,6 +168,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if stat_error == os.NotFound && mine.kind == os.ErrorKind.NotFound && failing.kind == os.ErrorKind.Exists {
         say("details per thread\n")
     }
+    let removed = os.remove_dir(a, "np-wasm-threads-dir")
 
     if cycles() { say("200 cycles\n") }
 
