@@ -100,5 +100,4 @@ C191	tooling	0	1805	A browser host for wasm32-wasi modules: lib/wasm/neper-host.
 C192	tooling	0	1125	Threads in the browser host: cross-origin isolation, the page as host	all of it.
 C193	library	0	1198	e.ui in a browser: CPU frames on a canvas, input through a shared ring	all of it.
 C194	tooling	0	1452	neper run for wasm32-wasi, and the runner moved into the toolchain	all of it.
-C195	compiler	0	989	A module with variants for other targets only names them	all of it.
 C196	compiler	0	1130	wasm32-wasi source maps, and line numbers for the engine's traps	all of it.

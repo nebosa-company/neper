@@ -9098,11 +9098,16 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
                 if load_error == project.ModuleNotFound {
                     try write_all(&message, "` names no module under the source root or the toolchain")
                 } else {
-                    code = "E-MODULE-9999"
-                    if load_error == project.AmbiguousVariant {
-                        try write_all(&message, "` has more than one source variant for the target")
+                    if load_error == project.NoVariant {
+                        try write_all(&message, "` ")
+                        try write_all(&message, loaded.variant_note)
                     } else {
-                        try write_all(&message, "` cannot be resolved")
+                        code = "E-MODULE-9999"
+                        if load_error == project.AmbiguousVariant {
+                            try write_all(&message, "` has more than one source variant for the target")
+                        } else {
+                            try write_all(&message, "` cannot be resolved")
+                        }
                     }
                 }
             }

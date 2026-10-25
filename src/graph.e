@@ -226,6 +226,8 @@ type Graph = struct {
     // and the name, for the E-MODULE diagnostics (D215).
     failure_import: str,
     has_import_failure: bool,
+    // The variants a refused `use` found for other targets only (D5682).
+    variant_note: str,
     // Dependency order (D304): `visit`'s post-order, so every module follows the ones
     // it imports and the root is last. Recorded when `order` has room.
     order: []usize,
@@ -789,26 +791,33 @@ fn resolve_source(a: *mem.Arena, g: *Graph, name: str) -> (str, err) {
     var src_path = ""
     var has_lib = false
     var has_src = false
+    g.variant_note = ""
     if g.project.has_sources {
         let (candidate_lib, lib_error) = project.select_source(a, &g.listings, g.project.root, "lib", name, g.arch, g.os)
         if lib_error == ok {
             lib_path = candidate_lib
             has_lib = true
         } else {
-            if lib_error != project.ModuleNotFound { ret ("", lib_error) }
+            if lib_error == project.NoVariant { g.variant_note = candidate_lib }
+            if lib_error != project.ModuleNotFound && lib_error != project.NoVariant { ret ("", lib_error) }
         }
         let (candidate_src, src_error) = project.select_source(a, &g.listings, g.project.root, "src", name, g.arch, g.os)
         if src_error == ok {
             src_path = candidate_src
             has_src = true
         } else {
-            if src_error != project.ModuleNotFound { ret ("", src_error) }
+            if src_error == project.NoVariant && g.variant_note.len == 0usize { g.variant_note = candidate_src }
+            if src_error != project.ModuleNotFound && src_error != project.NoVariant { ret ("", src_error) }
         }
     }
     if has_lib && has_src { ret ("", DuplicateModule) }
     if has_lib { ret (lib_path, ok) }
     if has_src { ret (src_path, ok) }
     let (toolchain_path, toolchain_error) = project.select_source(a, &g.listings, g.toolchain_root, "lib", name, g.arch, g.os)
+    if toolchain_error == project.NoVariant && g.variant_note.len == 0usize { g.variant_note = toolchain_path }
+    if toolchain_error == project.ModuleNotFound || toolchain_error == project.NoVariant {
+        if g.variant_note.len > 0usize { ret ("", project.NoVariant) }
+    }
     if toolchain_error != ok { ret ("", toolchain_error) }
     ret (toolchain_path, ok)
 }

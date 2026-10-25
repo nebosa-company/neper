@@ -8085,7 +8085,7 @@ for closer_case in 'accept safety_resource_closer 0' 'reject safety_cleanup_posi
 done
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
-for reject_project in module_cycle module_variants safety_opaque; do
+for reject_project in module_cycle module_variants module_variants_other safety_opaque; do
     reject_project_status=0
     $test_build/neper-self check-file "$conformance_root/reject/$reject_project/src/main.e" "$repo" x64 linux --json > "$test_build/conformance-reject-$reject_project.jsonl" || reject_project_status=$?
     [ "$reject_project_status" -eq 1 ]

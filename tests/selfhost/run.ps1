@@ -8363,7 +8363,7 @@ foreach ($closerCase in @(@('accept', 'safety_resource_closer', 0), @('reject', 
 }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
-foreach ($rejectProject in @('module_cycle', 'module_variants', 'safety_opaque')) {
+foreach ($rejectProject in @('module_cycle', 'module_variants', 'module_variants_other', 'safety_opaque')) {
     $rejectProjectActual = Join-Path $testBuild "conformance-reject-$rejectProject.jsonl"
     cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot "reject\$rejectProject\src\main.e")`" `"$repo`" x64 windows --json > `"$rejectProjectActual`""
     if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/$rejectProject exited $LASTEXITCODE, not 1" }
