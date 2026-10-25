@@ -2857,4 +2857,5 @@ D5221	1225	macOS notices use the notification center for a bundled, authorized p
 D5222	979	macOS: the close button is a request, answered through a window delegate
 D5223	1379	macOS accessibility: the published tree is NSAccessibilityElements under the content view
 D5224	1326	macOS application bundles are made by a script, and the corpus job checks one
-D5225	902	the Mac corpus asserts everything a Mac can run and skips the rest with a reason
+D5225	903	the Mac corpus asserts everything a Mac can run and skips the rest with a reason
+D5226	1122	macOS drag out takes files and images, and the Dock overlay is drawn over the program's own icon

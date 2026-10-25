@@ -141,10 +141,10 @@
       "group": "macOS",
       "order": 195,
       "title": "macOS shell polish: drag files and images out, session restore, Dock overlay image",
-      "score": 0,
+      "score": 0.7,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "drag_start offers text and bytes only (D5214): add file URLs (NSPasteboardItem with public.file-url) and images (png data), and promised files; session restore (restart_register) is Unsupported because a Mac restores through the system (NSApplication restorable state, a LaunchAgent with RunAtLoad for a relaunch after a crash is the nearest honest answer); taskbar_overlay replaces the whole Dock icon (a Dock tile has no overlay slot): draw the overlay into the icon image so the original shows. Each needs its own probe on a runner."
+      "evidence": "Built 2026-10-25 (D5226): drag_start now drags files (each path as an NSURL file URL, one dragging item per file, up to 16) and images (TIFF data under public.tiff) as well as text and bytes; taskbar_overlay draws the overlay into the lower right quarter of the program's own Dock icon (the first icon is kept so a second overlay replaces the first, and a picture with no area puts the system's back). tests/macos/probe/polish.e on the runners: the overlay is seen in the Dock screenshot over the folder icon, replaced and cleared without error, and a drag of two files and an image out of a window ends Cancelled when a mouse up is posted, on aarch64 and x64; ui_drag_drop and ui_taskbar pass and the corpus is 1108. Not done: session restore (restart_register) stays Unsupported, because a launchd job with KeepAlive starts at once and a Mac restores a program's windows through the system's own saved state, which is not a command line to register; promised files (a file made at the drop's destination) and a real pointer drag with the files landing in Finder (C192)."
     },
     {
       "id": "C107",
