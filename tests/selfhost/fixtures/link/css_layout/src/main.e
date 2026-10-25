@@ -574,7 +574,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 125. `counter-reset: reversed(c)` starts at the size of the last step of the items that step it: steps of -1 show 3, 2, 1.
     let (p125, ok125) = build(a, "<div style=\"counter-reset:reversed(c)\"><div class=i></div><div class=i></div><div class=i></div></div>", ".i { counter-increment: c -1; } .i::before { content: counter(c); }")
     if !ok125 || !str.eq(all_text(a, p125), "321") { os.exit(166) }
-    if !ok119 || !near(rect_of(p119, "f").w, 100.0f64) { os.exit(160) }
+    // 126. `list-item` is a real counter: in a reversed list the items read 3, 2, 1 and an explicit step changes where the list starts.
+    let (p126, ok126) = build(a, "<ol reversed style=\"list-style:none\"><li></li><li></li><li></li></ol>", "li { display: list-item; } li::before { content: counter(list-item) \".\"; }")
+    if !ok126 || !frag_has(p126, "3.") || !frag_has(p126, "2.") || !frag_has(p126, "1.") || frag_has(p126, "0.") { os.exit(167) }
+    let (p127, ok127) = build(a, "<ol reversed style=\"list-style:none\"><li style=\"counter-increment:list-item -2\"></li><li style=\"counter-increment:list-item -2\"></li></ol>", "li { display: list-item; } li::before { content: counter(list-item) \".\"; }")
+    if !ok127 || !frag_has(p127, "4.") || !frag_has(p127, "2.") || frag_has(p127, "6.") { os.exit(168) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok

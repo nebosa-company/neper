@@ -767,6 +767,16 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     let s = &l.styles[usize(node)]
     if s.display == .None { ret }
     apply_counter_props(l, s, node)
+    // The implicit `list-item` counter: a list starts one and each item steps it (see `list_ordinal`).
+    if n.namespace == .Html && (str.eq(n.name, "ol") || str.eq(n.name, "ul") || str.eq(n.name, "menu")) { counter_instantiate(l, "list-item", 0i64) }
+    if s.display == .ListItem {
+        var li_at = find_counter(l, "list-item")
+        if li_at < 0i64 {
+            counter_instantiate(l, "list-item", 0i64)
+            li_at = i64(l.counters.len) - 1i64
+        }
+        l.counters.items[usize(li_at)].value = list_ordinal(l, node)
+    }
     if s.display == .Contents {
         // The element has no box of its own, but its ::before and ::after still generate boxes in its parent.
         gen_pseudo(l, node, parent_box, 0usize)
@@ -830,50 +840,81 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     fix_anonymous(l, b)
 }
 
-// The value of a list item's counter: `value`, else the previous sibling item's plus one, from `start` (or 1).
-fn list_ordinal(l: *Layout, node: u32) -> i64 {
-    let (value, has_value) = dom.get_attribute(l.d, node, "value")
-    if has_value {
-        let (n, good) = str.parse_i64(value)
-        if good == ok { ret n }
+// The step of a list item: its own `counter-increment` of `list-item`, else 1 (-1 in a reversed list).
+fn list_step(l: *Layout, kid: u32, reversed: bool) -> i64 {
+    let (incr, has) = extra_text(&l.styles[usize(kid)], "counter-increment")
+    if has {
+        let (v, found) = incr_of(l, incr, "list-item")
+        if found { ret v }
     }
+    if reversed { ret 0i64 - 1i64 }
+    ret 1i64
+}
+
+// The value of a list item's counter: a `value` attribute sets it, every other item steps it from the list's start (or, in a
+// reversed list without `start`, from where the last step lands on its own size).
+fn list_ordinal(l: *Layout, node: u32) -> i64 {
     let parent = l.d.nodes[usize(node)].parent
     var reversed = false
     var start = 1i64
-    var count = 0i64
-    if parent != html.NONE {
-        if dom.is_html_named(l.d, parent, "ol") {
-            let (rev, has_rev) = dom.get_attribute(l.d, parent, "reversed")
-            reversed = has_rev
-            let (sv, has_start) = dom.get_attribute(l.d, parent, "start")
-            if has_start {
-                let (n, good) = str.parse_i64(sv)
-                if good == ok { start = n }
+    var has_start = false
+    if parent != html.NONE && dom.is_html_named(l.d, parent, "ol") {
+        let (rev, has_rev) = dom.get_attribute(l.d, parent, "reversed")
+        reversed = has_rev
+        let (sv, hs) = dom.get_attribute(l.d, parent, "start")
+        if hs {
+            let (n, good) = str.parse_i64(sv)
+            if good == ok {
+                start = n
+                has_start = true
             }
-        }
-        var kid = l.d.nodes[usize(parent)].first_child
-        while kid != html.NONE && kid != node {
-            if l.d.nodes[usize(kid)].kind == .Element && l.styles[usize(kid)].display == .ListItem { count += 1i64 }
-            kid = l.d.nodes[usize(kid)].next_sibling
-        }
-        if reversed {
-            var total = 0i64
-            var k2 = l.d.nodes[usize(parent)].first_child
-            while k2 != html.NONE {
-                if l.d.nodes[usize(k2)].kind == .Element && l.styles[usize(k2)].display == .ListItem { total += 1i64 }
-                k2 = l.d.nodes[usize(k2)].next_sibling
-            }
-            var first = total
-            if has_start_attr(l, parent) { first = start }
-            ret first - count
         }
     }
-    ret start + count
-}
-
-fn has_start_attr(l: *Layout, parent: u32) -> bool {
-    let (_, has) = dom.get_attribute(l.d, parent, "start")
-    ret has
+    if parent == html.NONE {
+        let (value, has_value) = dom.get_attribute(l.d, node, "value")
+        if has_value {
+            let (n, good) = str.parse_i64(value)
+            if good == ok { ret n }
+        }
+        ret 1i64
+    }
+    var init = start - 1i64
+    if reversed {
+        if has_start {
+            init = start + 1i64
+        } else {
+            var sum = 0i64
+            var last = 0i64
+            var k2 = l.d.nodes[usize(parent)].first_child
+            while k2 != html.NONE {
+                if l.d.nodes[usize(k2)].kind == .Element && l.styles[usize(k2)].display == .ListItem {
+                    last = list_step(l, k2, true)
+                    sum += last
+                }
+                k2 = l.d.nodes[usize(k2)].next_sibling
+            }
+            init = 0i64 - sum - last
+        }
+    }
+    var cur = init
+    var kid = l.d.nodes[usize(parent)].first_child
+    while kid != html.NONE {
+        if l.d.nodes[usize(kid)].kind == .Element && l.styles[usize(kid)].display == .ListItem {
+            let (value, has_value) = dom.get_attribute(l.d, kid, "value")
+            var set = false
+            if has_value {
+                let (n, good) = str.parse_i64(value)
+                if good == ok {
+                    cur = n
+                    set = true
+                }
+            }
+            if !set { cur += list_step(l, kid, reversed) }
+            if kid == node { ret cur }
+        }
+        kid = l.d.nodes[usize(kid)].next_sibling
+    }
+    ret cur
 }
 
 fn is_ws_only(s: str) -> bool {
