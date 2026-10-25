@@ -1,5 +1,5 @@
 // `e.net.fetch` over a loopback TLS server whose certificate is for example.com: a client that does not trust the issuer, and a
-// client that does but reached the server as 127.0.0.1, both fail with CertificateError, not the generic network error.
+// client that does but reached the server as 127.0.0.1, fail with CertificateError (no trusted roots) and CertificateName (a trusted issuer, another host), not the generic network error.
 use e.mem
 use e.net
 use e.net.fetch as fetch
@@ -69,7 +69,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ce1 != ok { os.exit(7i32) }
     var wrong_host = c1
     let (r2, e2) = fetch.fetch(&wrong_host, request(address))
-    if e2 != fetch.CertificateError { os.exit(8i32) }
+    if e2 != fetch.CertificateName { os.exit(8i32) }
     if thread.join(worker) != ok { os.exit(9i32) }
     ret ok
 }

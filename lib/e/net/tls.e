@@ -30,6 +30,9 @@ type HandshakeSecrets = struct { client: [32]u8, server: [32]u8, master: [32]u8 
 type Aead = struct { ctx: *void, seal: fn(ctx: *void, dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err), open: fn(ctx: *void, dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) }
 
 error InvalidCertificate
+error CertificateExpired
+error CertificateName
+error CertificateUntrusted
 error Handshake
 error Protocol
 error Closed
@@ -688,6 +691,9 @@ fn verify_certificate_set(a: *mem.Arena, set: CertificateSet, config: ClientConf
     options.usage = .ServerAuth
     options.max_depth = 8u16
     let (_, verify_error) = x509.verify(a, set.leaf, options)
+    if verify_error == x509.Expired { ret CertificateExpired }
+    if verify_error == x509.NameMismatch { ret CertificateName }
+    if verify_error == x509.UnknownAuthority { ret CertificateUntrusted }
     if verify_error != ok { ret InvalidCertificate }
     ret ok
 }

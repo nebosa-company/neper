@@ -1032,10 +1032,10 @@
       "group": "Library",
       "order": 174,
       "title": "Browser: certificate validation result and error page",
-      "score": 0.75,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "PART: e.net.fetch reports a certificate failure from the TLS handshake (HTTP/1.1 and HTTP/2 paths) as CertificateError instead of the generic network error, the shell shows a not-private message on the error page, and net_fetch_cert runs a loopback TLS server to pin an untrusted issuer and a wrong host. Still open: the reason (expired, self-signed) is not separated, the page does not name the reason, and a valid chain is not exercised end to end. Vaper classified a TLS handshake failure (expired, self-signed, host mismatch, untrusted CA) and showed a 'Your connection is not private' page instead of the generic error. Acceptance: the fetch layer reports a distinct certificate error kind with the reason, e.web.page turns it into an about: error document naming the host and reason and never loads the page body, a valid chain loads normally, and a fixture covers expired, self-signed, wrong host and untrusted root against local test servers. A proceed-anyway bypass is out of scope until the TLS hardening work."
+      "evidence": "PART: e.net.fetch reports a certificate failure from the TLS handshake (HTTP/1.1 and HTTP/2 paths) as CertificateError instead of the generic network error, the shell shows a not-private message on the error page, and net_fetch_cert runs a loopback TLS server to pin an untrusted issuer and a wrong host. e.net.tls separates CertificateExpired, CertificateName and CertificateUntrusted from the generic InvalidCertificate, fetch passes them on, and the shell error text names each; net_fetch_cert pins no roots and a wrong host. Still open: self-signed is reported as untrusted, an expired certificate has no fixture, and a valid chain is not exercised end to end. Vaper classified a TLS handshake failure (expired, self-signed, host mismatch, untrusted CA) and showed a 'Your connection is not private' page instead of the generic error. Acceptance: the fetch layer reports a distinct certificate error kind with the reason, e.web.page turns it into an about: error document naming the host and reason and never loads the page body, a valid chain loads normally, and a fixture covers expired, self-signed, wrong host and untrusted root against local test servers. A proceed-anyway bypass is out of scope until the TLS hardening work."
     }
   ]
 }

@@ -37,6 +37,9 @@ error BadUrl
 error BlockedPort
 error BlockedByFilter
 error CertificateError
+error CertificateExpired
+error CertificateName
+error CertificateUntrusted
 error UnsupportedScheme
 error TooManyRedirects
 error RedirectRefused
@@ -459,6 +462,9 @@ fn exchange(c: *Client, u: *const url.Url, method: http.Method, headers: []const
                 let (resp2, re2) = h2client.request(c.a, eps[i], cfg2, http.method_text(method), host_header(c.a, u), path_and_query(c.a, u), headers, body, c.cfg.body_limit)
                 if re2 == ok { ret (resp2, ok) }
                 if re2 == tls.InvalidCertificate { ret (zero, CertificateError) }
+                if re2 == tls.CertificateExpired { ret (zero, CertificateExpired) }
+                if re2 == tls.CertificateName { ret (zero, CertificateName) }
+                if re2 == tls.CertificateUntrusted { ret (zero, CertificateUntrusted) }
                 if re2 == h2client.NotH2 { remember_h1(c, bare) }
                 try_h2 = false
             }
@@ -466,6 +472,9 @@ fn exchange(c: *Client, u: *const url.Url, method: http.Method, headers: []const
             let (resp, re) = http.request_tls(c.a, eps[i], cfg, &req, limits)
             if re == ok { ret (resp, ok) }
             if re == tls.InvalidCertificate { ret (zero, CertificateError) }
+            if re == tls.CertificateExpired { ret (zero, CertificateExpired) }
+            if re == tls.CertificateName { ret (zero, CertificateName) }
+            if re == tls.CertificateUntrusted { ret (zero, CertificateUntrusted) }
         } else {
             let (resp2, re2) = http.request(c.a, eps[i], &req, limits)
             if re2 == ok { ret (resp2, ok) }

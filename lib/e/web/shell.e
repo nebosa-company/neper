@@ -224,6 +224,9 @@ fn reason_text(e: err) -> str {
     if e == fetch.BlockedPort { ret "The port is blocked." }
     if e == fetch.BlockedByFilter { ret "A filter list blocks this address." }
     if e == fetch.CertificateError { ret "Your connection is not private: the server certificate is not valid for this address, so the page was not loaded." }
+    if e == fetch.CertificateExpired { ret "Your connection is not private: the server certificate has expired, so the page was not loaded." }
+    if e == fetch.CertificateName { ret "Your connection is not private: the server certificate is for a different host name, so the page was not loaded." }
+    if e == fetch.CertificateUntrusted { ret "Your connection is not private: the server certificate was issued by an authority this browser does not trust, so the page was not loaded." }
     if e == fetch.TooManyRedirects { ret "The server redirected too many times." }
     ret "The page could not be loaded."
 }
