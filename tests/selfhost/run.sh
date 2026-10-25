@@ -10668,6 +10668,9 @@ if command -v node >/dev/null 2>&1; then
         *) printf '%s\n' "the bounds row did not trap in a wasm32-wasi release build: $wasm_output" >&2; exit 1 ;;
     esac
     [ "$(wc -c < "$wasm_build/release.wasm")" -lt "$(wc -c < "$wasm_build/release-debug.wasm")" ]
+    # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/host_files/src/main.e" "$repo" wasm32 wasi "$wasm_build/host_files.wasm")" = 'executable written' ]
+    (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
     NEPER_COMPILER="$test_build/neper-self" "$repo/scripts/wasm-compiler.sh" || { printf '%s\n' 'neper.wasm emits something the native compiler does not' >&2; exit 1; }
 else
     printf '%s\n' 'node is not on PATH: the wasm32-wasi checks were skipped'

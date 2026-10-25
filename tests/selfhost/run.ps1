@@ -10984,6 +10984,11 @@ if ($wasmNode) {
     $wasmRun = Invoke-Wasm $wasmReleasePath @('bounds')
     if ($wasmRun.Status -ne 134 -or $wasmRun.Output -notmatch [regex]::Escape('main.e:35:9: trap[bounds]: index 8 out of bounds for len 8')) { throw "the bounds row did not trap in a wasm32-wasi release build: $($wasmRun.Output)" }
     if ((Get-Item $wasmReleasePath).Length -ge (Get-Item $wasmDebugPath).Length) { throw 'the wasm32-wasi release module is not smaller than the debug one' }
+    # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
+    $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'
+    if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
+    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath) (Join-Path $repo 'tests\wasm\host.mjs')
+    if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
     # scripts/wasm-compiler.sh is bash: Git's, never WSL's, which cannot read a Windows path.
     $wasmGit = Get-Command git -ErrorAction SilentlyContinue
     $wasmBash = $null
