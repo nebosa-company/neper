@@ -2558,11 +2558,196 @@ fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
 fn mapping_flush(m: Mapping) -> err { ret Unsupported }
 fn mapping_close(m: own Mapping) -> err { ret ok }
 
+// A directory watch by polling: WASI preview 1 has no change notification, so a watch is a snapshot of the
+// directory (each entry's kind, size and modification time) taken when it opens, and `watch_read` takes a new
+// one every WATCH_POLL_NS until it differs, reports the difference and keeps the new snapshot. A change made by
+// anyone, another process included, shows at the next poll; one that undoes itself between two polls does not.
+// ponytail: an entry that changes twice inside one timestamp tick with the same size reads as unchanged; a rename
+// reads as a removal and an addition (`Renamed` is never reported); a directory entry is watched for existing, not
+// for what changes inside it; more changes than the caller's events hold end with an `Overflow` event; each reported
+// change leaves the previous snapshot behind in the arena the watch was opened with, so reopen a watch that has seen
+// thousands of changes; a recursive watch is refused, as on Linux. Upgrade path: the host reports changes (fs.watch).
+type WatchEntry = struct { name: str, kind: EntryKind, size: u64, modified_ns: i64 }
+type WatchState = struct { arena: *mem.Arena, base: str, entries: []WatchEntry }
+const WATCH_POLL_NS: i64 = 20000000i64
+var watch_idle: [1]u32 = zero
+
+fn watch_same(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var at = 0usize
+    while at < x.len {
+        if x[at] != y[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn watch_find(list: []const WatchEntry, name: str) -> usize {
+    var at = 0usize
+    while at < list.len {
+        if watch_same(list[at].name, name) { ret at }
+        at += 1usize
+    }
+    ret list.len
+}
+
+// The watched directory and a name joined, in `a`.
+fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
+    let (bytes, allocation_error) = mem.alloc[u8](a, base.len + 1usize + name.len)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < base.len {
+        bytes[at] = base[at]
+        at += 1usize
+    }
+    if at != 0usize && bytes[at - 1usize] != 47u8 {
+        bytes[at] = 47u8
+        at += 1usize
+    }
+    var offset = 0usize
+    while offset < name.len {
+        bytes[at + offset] = name[offset]
+        offset += 1usize
+    }
+    ret (bytes[0usize..at + name.len], ok)
+}
+
+// The directory as it is now. An entry that vanishes between the listing and its stat is left out.
+fn watch_snapshot(a: *mem.Arena, base: str) -> ([]WatchEntry, err) {
+    var listing: ReaddirResult = zero
+    var where_from = base
+    neper_os_readdir(&listing, a, &where_from)
+    if listing.failure != ok { ret (zero, listing.failure) }
+    let (out, allocation_error) = mem.alloc[WatchEntry](a, listing.entries.len + 1usize)
+    if allocation_error != ok { ret (zero, OutOfMemory) }
+    var count = 0usize
+    var at = 0usize
+    while at < listing.entries.len {
+        let (full, path_error) = watch_path(a, base, listing.entries[at].name)
+        if path_error != ok { ret (zero, path_error) }
+        let (info, stat_error) = stat_path(full, false)
+        if stat_error == ok {
+            out[count] = WatchEntry { name: listing.entries[at].name, kind: listing.entries[at].kind, size: info.size, modified_ns: info.modified_ns }
+            count += 1usize
+        }
+        at += 1usize
+    }
+    ret (out[0usize..count], ok)
+}
+
+// The snapshot in `a` with its names, which the listing borrowed from another arena.
+fn watch_keep(a: *mem.Arena, fresh: []const WatchEntry) -> ([]WatchEntry, err) {
+    let (out, allocation_error) = mem.alloc[WatchEntry](a, fresh.len + 1usize)
+    if allocation_error != ok { ret (zero, OutOfMemory) }
+    var at = 0usize
+    while at < fresh.len {
+        let (name, name_error) = mem.alloc[u8](a, fresh[at].name.len + 1usize)
+        if name_error != ok { ret (zero, OutOfMemory) }
+        var k = 0usize
+        while k < fresh[at].name.len {
+            name[k] = fresh[at].name[k]
+            k += 1usize
+        }
+        out[at] = WatchEntry { name: name[0usize..fresh[at].name.len], kind: fresh[at].kind, size: fresh[at].size, modified_ns: fresh[at].modified_ns }
+        at += 1usize
+    }
+    ret (out[0usize..fresh.len], ok)
+}
+
+fn watch_note(a: *mem.Arena, base: str, events: []WatchEvent, index: usize, action: WatchAction, name: str) -> err {
+    let (full, path_error) = watch_path(a, base, name)
+    if path_error != ok { ret path_error }
+    events[index] = WatchEvent { action: action, path: full, old_path: "" }
+    ret ok
+}
+
+// How many changes take the snapshot to `fresh`; the first `keep` of them are written to `events`, removals first.
+fn watch_diff(a: *mem.Arena, state: *WatchState, fresh: []const WatchEntry, events: []WatchEvent, keep: usize) -> (usize, err) {
+    var total = 0usize
+    var at = 0usize
+    while at < state.entries.len {
+        let found = watch_find(fresh, state.entries[at].name)
+        if found == fresh.len || fresh[found].kind != state.entries[at].kind {
+            if total < keep {
+                let noted = watch_note(a, state.base, events, total, WatchAction.Removed, state.entries[at].name)
+                if noted != ok { ret (total, noted) }
+            }
+            total += 1usize
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < fresh.len {
+        let found = watch_find(state.entries, fresh[at].name)
+        var action = WatchAction.Overflow
+        var changed = false
+        if found == state.entries.len || state.entries[found].kind != fresh[at].kind {
+            action = WatchAction.Added
+            changed = true
+        } else if fresh[at].kind != EntryKind.Dir && (state.entries[found].size != fresh[at].size || state.entries[found].modified_ns != fresh[at].modified_ns) {
+            action = WatchAction.Modified
+            changed = true
+        }
+        if changed {
+            if total < keep {
+                let noted = watch_note(a, state.base, events, total, action, fresh[at].name)
+                if noted != ok { ret (total, noted) }
+            }
+            total += 1usize
+        }
+        at += 1usize
+    }
+    ret (total, ok)
+}
+
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     var none: Watch = zero
-    ret (none, Unsupported)
+    if recursive { ret (none, Unsupported) }
+    let (entries, snapshot_error) = watch_snapshot(a, path)
+    if snapshot_error != ok { ret (none, snapshot_error) }
+    let (holder, holder_error) = mem.alloc[WatchState](a, 1usize)
+    if holder_error != ok { ret (none, OutOfMemory) }
+    let (kept, keep_error) = watch_keep(a, entries)
+    if keep_error != ok { ret (none, keep_error) }
+    holder[0usize].arena = a
+    holder[0usize].base = path
+    holder[0usize].entries = kept
+    none.state = mem.cast[*void](&holder[0usize])
+    ret (none, ok)
 }
-fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) { ret (0usize, Unsupported) }
+
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
+    if events.len == 0usize { ret (0usize, ok) }
+    let state = mem.cast[*WatchState](w.state)
+    while true {
+        let checkpoint = mem.mark(a)
+        let (fresh, snapshot_error) = watch_snapshot(a, state.base)
+        if snapshot_error != ok {
+            mem.reset(a, checkpoint)
+            ret (0usize, snapshot_error)
+        }
+        let (total, count_error) = watch_diff(a, state, fresh, events[0usize..0usize], 0usize)
+        if total != 0usize {
+            var keep = total
+            if keep > events.len { keep = events.len - 1usize }
+            let (written, write_error) = watch_diff(a, state, fresh, events, keep)
+            if write_error != ok { ret (0usize, write_error) }
+            var produced = keep
+            if total > events.len {
+                events[keep] = WatchEvent { action: WatchAction.Overflow, path: state.base, old_path: "" }
+                produced = keep + 1usize
+            }
+            let (kept, keep_error) = watch_keep(state.arena, fresh)
+            if keep_error != ok { ret (0usize, keep_error) }
+            state.entries = kept
+            ret (produced, ok)
+        }
+        mem.reset(a, checkpoint)
+        let slept = neper_os_wait_u32(mem.cast[*u8](&watch_idle[0usize]), 0u32, WATCH_POLL_NS)
+    }
+    ret (0usize, ok)
+}
+
 fn watch_close(w: own Watch) -> err { ret ok }
 
 // The mapping's bytes as the writable region e.fs.mmap hands out; no mapping is ever made here, so
