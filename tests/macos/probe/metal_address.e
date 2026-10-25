@@ -8,6 +8,13 @@ fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
 }
 
+fn number(value: usize) {
+    if value >= 10usize { number(value / 10usize) }
+    var one: [1]u8 = zero
+    one[0usize] = u8(48usize + value % 10usize)
+    let (written, write_error) = os.write(os.stdout(), one[..])
+}
+
 fn main(a: *mem.Arena) -> err {
     if !mtl.available() { os.exit(2i32) }
     let (context, open_error) = mtl.open(a)
@@ -51,6 +58,9 @@ fn main(a: *mem.Arena) -> err {
     var result: [1]f32 = zero
     let c4 = os.raw_memcpy(mem.address_of(&result[0usize]), mem.address_of(&y.bytes[1023usize * 4usize]), 4usize)
     if result[0usize] != 5.0f32 {
+        say("y[1023] was ")
+        number(usize(result[0usize]))
+        say(" (3 untouched, 5 right)\n")
         say("wrong answer through addresses\n")
         os.exit(7i32)
     }
