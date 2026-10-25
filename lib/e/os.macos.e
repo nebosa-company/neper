@@ -2972,6 +2972,9 @@ fn view_selected_range(this: usize, command: usize) -> CocoaRange {
 fn view_nothing(this: usize, command: usize) -> usize { ret 0usize }
 
 @cc(c)
+fn view_accepts_first(this: usize, command: usize) -> usize { ret 1usize }
+
+@cc(c)
 fn view_not_found(this: usize, command: usize, a: usize, b: usize, c: usize) -> usize { ret 9223372036854775807usize }
 
 @cc(c)
@@ -3026,18 +3029,43 @@ fn cocoa_make_text_class(view: usize) -> usize {
     let nine = cocoa_class_method(class, cocoa_sel("characterIndexForPoint:\x00"), not_found.bits, &object_types[0usize])
     let ten = cocoa_class_method(class, cocoa_sel("firstRectForCharacterRange:actualRange:\x00"), first.bits, &object_types[0usize])
     let eleven = cocoa_class_method(class, cocoa_sel("doCommandBySelector:\x00"), nothing.bits, &object_types[0usize])
+    var accepts: CocoaTextImp2 = zero
+    accepts.function = view_accepts_first
+    let twelve = cocoa_class_method(class, cocoa_sel("acceptsFirstResponder\x00"), accepts.bits, &object_types[0usize])
     cocoa_class_register(class)
     cocoa_text_class = class
     ret class
 }
 
-// A key down, handed to the view's input method; true keys with a control or command modifier are shortcuts and carry no text.
+// A key down. With an input method selected (its source id has "inputmethod" in it, as com.apple.inputmethod.Kotoeri.Japanese does)
+// the key goes to the view's input context through `interpretKeyEvents:`, which commits text with insertText:; with a plain keyboard
+// layout the key's own characters are the text, as before. Keys with a control or command modifier are shortcuts and carry no text.
+// ponytail: the layout path is not routed through the input context because synthetic key events (a runner has no one typing) do not
+// come back from it synchronously.
 fn cocoa_interpret(window: Window, modifiers: u8, event: usize) {
     if modifiers & 10u8 != 0u8 { ret }
-    let view = msg0(window.raw, cocoa_sel("contentView\x00"))
-    var one = event
-    let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&one), 1usize)
-    let interpreted = msg1(view, cocoa_sel("interpretKeyEvents:\x00"), list)
+    var use_input_method = false
+    let context = msg0(cocoa_class("NSTextInputContext\x00"), cocoa_sel("currentInputContext\x00"))
+    if context != 0usize {
+        let source = msg0(context, cocoa_sel("selectedKeyboardInputSource\x00"))
+        if source != 0usize {
+            var name: [96]u8 = zero
+            let length = cocoa_read_text(source, name[0usize..95usize])
+            var at = 0usize
+            while at + 11usize < length && at < 85usize {
+                if name[at] == 105u8 && name[at + 1usize] == 110u8 && name[at + 2usize] == 112u8 && name[at + 3usize] == 117u8 && name[at + 4usize] == 116u8 && name[at + 5usize] == 109u8 && name[at + 6usize] == 101u8 && name[at + 7usize] == 116u8 && name[at + 8usize] == 104u8 && name[at + 9usize] == 111u8 && name[at + 10usize] == 100u8 { use_input_method = true }
+                at += 1usize
+            }
+        }
+    }
+    if use_input_method {
+        let view = msg0(window.raw, cocoa_sel("contentView\x00"))
+        var one = event
+        let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&one), 1usize)
+        let interpreted = msg1(view, cocoa_sel("interpretKeyEvents:\x00"), list)
+    } else {
+        cocoa_text_events(window, modifiers, msg0(event, cocoa_sel("characters\x00")))
+    }
 }
 
 // The close button asks the window's delegate, and this delegate answers no and tells the program: a Close event is a request,
@@ -3135,7 +3163,11 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     let delegate = cocoa_make_delegate()
     if delegate != 0usize { let delegated = msg1(window, cocoa_sel("setDelegate:\x00"), delegate) }
     let text_class = cocoa_make_text_class(msg0(window, cocoa_sel("contentView\x00")))
-    if text_class != 0usize { let swapped = cocoa_set_class(msg0(window, cocoa_sel("contentView\x00")), text_class) }
+    if text_class != 0usize {
+        let swapped = cocoa_set_class(msg0(window, cocoa_sel("contentView\x00")), text_class)
+        // The view takes the keys, so the system has a text input context for the window.
+        let responder = msg1(window, cocoa_sel("makeFirstResponder:\x00"), msg0(window, cocoa_sel("contentView\x00")))
+    }
     cocoa_layers[slot] = layer
     cocoa_scales[slot] = scale_percent
     cocoa_widths[slot] = options.width
