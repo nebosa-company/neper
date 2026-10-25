@@ -6224,7 +6224,7 @@ type Grid = struct {
 // A laid-out grid's track geometry, kept so absolutely positioned children can use their grid area as containing block.
 type GridGeom = struct {
     box: u32, nc: usize, nr: usize, cpos: []f64, csz: []f64, rpos: []f64, rsz: []f64,
-    cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32
+    cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32, w: f64, rtl: bool
 }
 
 fn occ_free(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize) -> bool {
@@ -7267,6 +7267,16 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     // Row contributions are the items' heights at their column widths.
     let (row_made, ree) = list.init[GItem](l.a, 8usize)
     var row_extra = row_made
+    // Items aligned on their first baseline line up with the lowest one of their row.
+    let (bl_up, bl_e1) = mem.alloc[f64](l.a, g.n + 1usize)
+    let (bl_on, bl_e2) = mem.alloc[bool](l.a, g.n + 1usize)
+    let (grp, bl_e3) = mem.alloc[f64](l.a, g.nr + 1usize)
+    if bl_e1 != ok || bl_e2 != ok || bl_e3 != ok { ret 0.0f64 }
+    var gk = 0usize
+    while gk <= g.nr {
+        grp[gk] = 0.0f64
+        gk += 1usize
+    }
     if ree != ok { ret 0.0f64 }
     var i = 0usize
     while i < g.n {
@@ -7285,6 +7295,18 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let outer = ib.h + ib.margin[0usize] + ib.margin[2usize]
         g.items[i].rmin = outer
         g.items[i].rmax = outer
+        bl_on[i] = false
+        var al0 = is0.align_self
+        if al0 == .Auto { al0 = cs.align_items }
+        if al0 == .Baseline || al0 == .FirstBaseline {
+            let (bfound, bby) = first_baseline(l, id)
+            var bup = ib.h
+            if bfound { bup = bby }
+            bl_up[i] = ib.margin[0usize] + bup
+            bl_on[i] = true
+            let brow = usize(g.items[i].rs)
+            if brow < g.nr && bl_up[i] > grp[brow] { grp[brow] = bl_up[i] }
+        }
         // A subgrid in the rows has no height of its own to give: its own rows (sized by its content) stand in for it.
         if bx(l, id).inner == .Grid && g.items[i].rn > 0i32 && subgrid_axes_match(l, id) {
             let (rt0, hrt0) = extra_text(is0, "grid-template-rows")
@@ -7321,6 +7343,16 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
                     }
                 }
             }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < g.n {
+        if bl_on[i] && usize(g.items[i].rs) < g.nr {
+            let bb1 = bx(l, g.items[i].box)
+            let bouter = bb1.h + bb1.margin[0usize] + bb1.margin[2usize] + (grp[usize(g.items[i].rs)] - bl_up[i])
+            g.items[i].rmin = bouter
+            g.items[i].rmax = bouter
         }
         i += 1usize
     }
@@ -7395,6 +7427,7 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         }
         let free_h = area_h - pb.h - pb.margin[0usize] - pb.margin[2usize]
         var dy = grid_axis_offset(align, free_h)
+        if bl_on[i] && usize(g.items[i].rs) < g.nr { dy = grp[usize(g.items[i].rs)] - bl_up[i] }
         if is.margin[0usize].kind == .Auto || is.margin[2usize].kind == .Auto {
             dy = 0.0f64
             if is.margin[0usize].kind == .Auto && is.margin[2usize].kind == .Auto { dy = maxf(0.0f64, free_h) / 2.0f64 } else if is.margin[0usize].kind == .Auto { dy = maxf(0.0f64, free_h) }
@@ -7428,7 +7461,7 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             rsz[q] = g.rows[q].base
             q += 1usize
         }
-        let gg = GridGeom { box: b, nc: g.nc, nr: g.nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: g.ec, er: g.er }
+        let gg = GridGeom { box: b, nc: g.nc, nr: g.nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: g.ec, er: g.er, w: cw, rtl: rtl }
         let gp2 = list.push[GridGeom](&l.grids, gg)
     }
     ret total
@@ -7952,6 +7985,15 @@ fn grid_abs_area(l: *Layout, gb: u32, child: u32, pw: f64, ph: f64, ox: f64, oy:
     if r1 >= 1i32 && usize(r1) <= geom.nr + 1usize {
         let j1 = usize(r1 - 1i32)
         if j1 < geom.nr { y1 = geom.rpos[j1] } else { y1 = geom.rpos[geom.nr - 1usize] + geom.rsz[geom.nr - 1usize] }
+    }
+    // A right-to-left grid lays its columns out from the right edge: the lines named are mirrored across the content box.
+    if geom.rtl {
+        var nx0 = -ox
+        var nx1 = pw - ox
+        if c1 >= 1i32 && usize(c1) <= geom.nc + 1usize { nx0 = geom.w - x1 }
+        if c0 >= 1i32 && usize(c0) <= geom.nc + 1usize { nx1 = geom.w - x0 }
+        x0 = nx0
+        x1 = nx1
     }
     ret (true, x0, x1, y0, y1)
 }
