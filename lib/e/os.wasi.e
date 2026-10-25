@@ -248,6 +248,26 @@ extern fn host_handle_write(handle: u32, bytes: u32, length: u32, sent: u32) -> 
 @import("neper_host", "handle_close")
 extern fn host_handle_close(handle: u32) -> u32
 
+// The window of a page (D5680, C193): a canvas the host draws frames on, input from a ring. A host without a
+// window answers ENOSYS (52) to each, and every window function then answers what it answered before.
+@import("neper_host", "window_open")
+extern fn host_window_open(width: u32, height: u32, made: u32) -> u32
+
+@import("neper_host", "window_metrics")
+extern fn host_window_metrics(handle: u32, out: u32) -> u32
+
+@import("neper_host", "window_title")
+extern fn host_window_title(handle: u32, bytes: u32, length: u32) -> u32
+
+@import("neper_host", "window_present")
+extern fn host_window_present(handle: u32, pixels: u32, width: u32, height: u32) -> u32
+
+@import("neper_host", "window_poll")
+extern fn host_window_poll(out: u32, timeout_ns: i64, has: u32) -> u32
+
+@import("neper_host", "window_cursor")
+extern fn host_window_cursor(handle: u32, shape: u32) -> u32
+
 @import("wasi_snapshot_preview1", "fd_pread")
 extern fn wasi_fd_pread(fd: u32, iovs: u32, iovs_len: u32, offset: u64, read_count: u32) -> u32
 
@@ -1786,14 +1806,54 @@ type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focus
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
 type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
 type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
-fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) { ret (Window { raw: 1usize }, ok) }
+// A page's window is one: the host's handle is 1 once window_open has been answered (0 is no host window).
+var host_window_live: u32 = 0u32
+fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
+    var made: [1]u32 = zero
+    let status = host_window_open(options.width, options.height, u32(mem.address_of(&made[0usize])))
+    if status == 0u32 {
+        host_window_live = 1u32
+        ret (Window { raw: usize(made[0usize]) }, ok)
+    }
+    if status != 52u32 { ret (Window { raw: 0usize }, Unsupported) }
+    ret (Window { raw: 1usize }, ok)
+}
 fn window_close(w: Window) -> err { ret ok }
-fn window_metrics(w: Window) -> (WindowMetrics, err) { ret (WindowMetrics { width: u32(SURFACE_W), height: u32(SURFACE_H), scale_percent: 100u32, focused: true, visible: true }, ok) }
-fn window_title(w: Window, value: str) -> err { ret ok }
+fn window_metrics(w: Window) -> (WindowMetrics, err) {
+    if host_window_live != 0u32 {
+        var words: [5]u32 = zero
+        if host_window_metrics(u32(w.raw), u32(mem.address_of(&words[0usize]))) == 0u32 {
+            ret (WindowMetrics { width: words[0usize], height: words[1usize], scale_percent: words[2usize], focused: words[3usize] != 0u32, visible: words[4usize] != 0u32 }, ok)
+        }
+    }
+    ret (WindowMetrics { width: u32(SURFACE_W), height: u32(SURFACE_H), scale_percent: 100u32, focused: true, visible: true }, ok)
+}
+fn window_title(w: Window, value: str) -> err {
+    if host_window_live != 0u32 && value.len != 0usize {
+        let status = host_window_title(u32(w.raw), address_of_str(value), u32(value.len))
+    }
+    ret ok
+}
 fn window_visible(w: Window, value: bool) -> err { ret ok }
-fn window_cursor(w: Window, shape: CursorShape) -> err { ret ok }
+fn window_cursor(w: Window, shape: CursorShape) -> err {
+    if host_window_live != 0u32 {
+        var code = 0u32
+        if shape == CursorShape.Text { code = 1u32 }
+        if shape == CursorShape.Hand { code = 2u32 }
+        if shape == CursorShape.Crosshair { code = 3u32 }
+        if shape == CursorShape.ResizeHorizontal { code = 4u32 }
+        if shape == CursorShape.ResizeVertical { code = 5u32 }
+        if shape == CursorShape.Hidden { code = 6u32 }
+        let status = host_window_cursor(u32(w.raw), code)
+    }
+    ret ok
+}
 // No window manager here: a program presents nothing.
-fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err { ret Unsupported }
+fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    if host_window_live == 0u32 || width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
+    if host_window_present(u32(w.raw), u32(mem.address_of(&pixels[0usize])), width, height) != 0u32 { ret Unsupported }
+    ret ok
+}
 fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
     var none: []const MonitorInfo = zero
     ret (none, Unsupported)
@@ -1805,11 +1865,52 @@ fn set_clipboard_text(value: str) -> err { ret Unsupported }
 // app loop would treat the poll as a failure.
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
+fn window_event_kind(code: u32) -> WindowEventKind {
+    if code == 1u32 { ret WindowEventKind.Resize }
+    if code == 2u32 { ret WindowEventKind.Focus }
+    if code == 3u32 { ret WindowEventKind.Blur }
+    if code == 4u32 { ret WindowEventKind.PointerMove }
+    if code == 5u32 { ret WindowEventKind.PointerDown }
+    if code == 6u32 { ret WindowEventKind.PointerUp }
+    if code == 7u32 { ret WindowEventKind.Scroll }
+    if code == 8u32 { ret WindowEventKind.KeyDown }
+    if code == 9u32 { ret WindowEventKind.KeyUp }
+    if code == 10u32 { ret WindowEventKind.Text }
+    if code == 11u32 { ret WindowEventKind.Paint }
+    ret WindowEventKind.Close
+}
+// A page's window gives one record of eight u32s (the ring of lib/wasm/window.js): kind | button << 8 |
+// modifiers << 16 | repeat << 24, x, y, width, height, key, delta, codepoint.
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
     var event: WindowEvent = zero
+    if host_window_live != 0u32 {
+        var record: [8]u32 = zero
+        var has: [1]u32 = zero
+        if host_window_poll(u32(mem.address_of(&record[0usize])), timeout_ns, u32(mem.address_of(&has[0usize]))) == 0u32 {
+            if has[0usize] == 0u32 { ret (event, false, ok) }
+            let head = record[0usize]
+            event.kind = window_event_kind(head & 255u32)
+            event.window = Window { raw: 1usize }
+            event.button = u8((head >> 8u32) & 255u32)
+            event.modifiers = u8((head >> 16u32) & 255u32)
+            event.repeat = ((head >> 24u32) & 255u32) != 0u32
+            event.x = mem.bitcast[i32](record[1usize])
+            event.y = mem.bitcast[i32](record[2usize])
+            event.width = record[3usize]
+            event.height = record[4usize]
+            event.key = record[5usize]
+            event.delta = mem.bitcast[i32](record[6usize])
+            event.codepoint = record[7usize]
+            ret (event, true, ok)
+        }
+    }
     ret (event, false, ok)
 }
-fn window_capture(w: Window, on: bool) -> err { ret Unsupported }
+// The page captures the pointer itself, from the press to the release.
+fn window_capture(w: Window, on: bool) -> err {
+    if host_window_live != 0u32 { ret ok }
+    ret Unsupported
+}
 // The accessibility-bridge surface e.ui.accessibility compiles against -- no window, no AT client.
 type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
 fn accessibility_listening(w: Window) -> bool { ret false }

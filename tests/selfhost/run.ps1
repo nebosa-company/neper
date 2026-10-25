@@ -11053,6 +11053,14 @@ if ($wasmNode) {
     if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
     $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath) (Join-Path $repo 'tests\wasm\host.mjs')
     if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
+    # (C193, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
+    $wasmCounterPath = Join-Path $wasmBuild 'ui_counter.wasm'
+    $wasmCounterThreads = Join-Path $wasmBuild 'ui_counter.threads.wasm'
+    $wasmCounterSource = Join-Path $repo 'tests\wasm\browser\ui_counter\src\main.e'
+    if ((& $compiler emit-executable $wasmCounterSource $repo 'wasm32' 'wasi' $wasmCounterPath) -ne 'executable written') { throw 'ui_counter did not emit as WebAssembly' }
+    if ((& $compiler emit-executable $wasmCounterSource $repo 'wasm32' 'wasi' $wasmCounterThreads --threads) -ne 'executable written') { throw 'ui_counter did not emit as a threaded WebAssembly module' }
+    $wasmWindow = Invoke-Wasm $wasmCounterPath @($wasmCounterThreads) (Join-Path $repo 'tests\wasm\window.mjs')
+    if ($wasmWindow.Status -ne 0) { throw "the lib/wasm/window.js check failed: $($wasmWindow.Output)" }
     # (C196, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
     $wasmNullSource = Join-Path $repo 'tests\wasm\null_call\src\main.e'

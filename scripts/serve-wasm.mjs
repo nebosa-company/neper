@@ -1,4 +1,4 @@
-// Serve lib/wasm, tests/wasm/browser and build/wasm-sweep read-only on 127.0.0.1 for the browser host (D5678):
+// Serve lib/wasm, tests/wasm/browser, build/wasm-sweep and neperos/assets/fonts read-only on 127.0.0.1 for the browser host (D5678):
 //   node scripts/serve-wasm.mjs [--isolated] [--port N]
 // URLs are repository paths (/tests/wasm/browser/index.html?module=/build/wasm-sweep/NAME.wasm). --isolated adds
 // Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp, which makes the page
@@ -9,7 +9,7 @@ import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const roots = ['lib/wasm', 'tests/wasm/browser', 'build/wasm-sweep'].map((r) => resolve(repo, r))
+const roots = ['lib/wasm', 'tests/wasm/browser', 'build/wasm-sweep', 'neperos/assets/fonts'].map((r) => resolve(repo, r))
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.png': 'image/png' }
 const args = process.argv.slice(2)
 const isolated = args.includes('--isolated')
