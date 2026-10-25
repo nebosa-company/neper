@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: true, permissions: true, credentials: has_tool("security"), screen_capture: true, biometrics: biometric_available(), photo_picker: true }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: bundled() && un_state != 2usize, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: true, permissions: true, credentials: has_tool("security"), screen_capture: true, biometrics: biometric_available(), photo_picker: true }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -712,6 +712,181 @@ fn notice_permission(a: *mem.Arena) -> NoticePermission {
     ret .Granted
 }
 
+// Notices through UNUserNotificationCenter (D5221), for a program that runs in an application bundle (it has a bundle
+// identifier; the center refuses to exist otherwise, and raises). Such a program asks for authorization once, posts a request
+// whose identifier is the notice's id (posting the same id again replaces it, which is an update) and can remove a delivered
+// notice. Every answer comes through a block, built by hand as the permission block is (D5218). A program with no bundle, or
+// one the person has not authorized, keeps `osascript` banners, which cannot be removed.
+var un_words: [8]u64 = zero
+var un_done: bool = zero
+var un_flag: bool = zero
+var un_count: usize = zero
+var un_state: usize = zero
+type UnInvoke = union { function: fn(usize, usize, usize), bits: usize }
+
+fn bundled() -> bool {
+    if os.cocoa_start() != ok { ret false }
+    let bundle = os.msg0(os.cocoa_class("NSBundle\x00"), os.cocoa_sel("mainBundle\x00"))
+    ret os.msg0(bundle, os.cocoa_sel("bundleIdentifier\x00")) != 0usize
+}
+
+@cc(c)
+fn un_auth_done(block: usize, granted: usize, problem: usize) {
+    un_flag = granted & 255usize != 0usize
+    un_done = true
+}
+
+@cc(c)
+fn un_add_done(block: usize, problem: usize, unused: usize) {
+    un_flag = problem == 0usize
+    un_done = true
+}
+
+@cc(c)
+fn un_list_done(block: usize, list: usize, unused: usize) {
+    un_count = 0usize
+    if list != 0usize { un_count = os.msg0(list, os.cocoa_sel("count\x00")) }
+    un_done = true
+}
+
+// The address of a global block calling `invoke`, kept in `un_words` until the answer has come.
+fn un_block(invoke: UnInvoke) -> usize {
+    let symbol = "_NSConcreteGlobalBlock\x00"
+    un_words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    un_words[1usize] = 268435456u64
+    un_words[2usize] = u64(invoke.bits)
+    un_words[3usize] = u64(mem.address_of(&un_words[4usize]))
+    un_words[4usize] = 0u64
+    un_words[5usize] = 32u64
+    un_done = false
+    un_flag = false
+    ret mem.address_of(&un_words[0usize])
+}
+
+fn un_wait(seconds: usize) -> bool {
+    var waited = 0usize
+    while !un_done && waited < seconds * 10usize {
+        os.cocoa_pump(100000000i64)
+        waited += 1usize
+    }
+    ret un_done
+}
+
+fn un_center() -> usize {
+    let framework = "/System/Library/Frameworks/UserNotifications.framework/UserNotifications\x00"
+    let handle = os.raw_dlopen(mem.address_of(&framework[0usize]), 2i32)
+    if handle == 0usize { ret 0usize }
+    ret os.msg0(os.cocoa_class("UNUserNotificationCenter\x00"), os.cocoa_sel("currentNotificationCenter\x00"))
+}
+
+// Authorized for alerts and sounds, asked once per run: 1 yes, 2 no.
+fn un_authorized() -> bool {
+    if un_state != 0usize { ret un_state == 1usize }
+    if !bundled() {
+        un_state = 2usize
+        ret false
+    }
+    let pool = os.objc_pool_push()
+    let center = un_center()
+    var granted = false
+    if center != 0usize {
+        var invoke: UnInvoke = zero
+        invoke.function = un_auth_done
+        let block = un_block(invoke)
+        // alert and sound
+        let asked = os.msg2(center, os.cocoa_sel("requestAuthorizationWithOptions:completionHandler:\x00"), 6usize, block)
+        if un_wait(60usize) { granted = un_flag }
+    }
+    os.objc_pool_pop(pool)
+    un_state = 2usize
+    if granted { un_state = 1usize }
+    ret granted
+}
+
+fn un_identifier(a: *mem.Arena, id: u32) -> (str, err) {
+    var digits: [10]u8 = zero
+    var count = 0usize
+    var value = id
+    if value == 0u32 {
+        digits[9usize] = 48u8
+        count = 1usize
+    }
+    while value > 0u32 {
+        digits[9usize - count] = u8(48u32 + value % 10u32)
+        value /= 10u32
+        count += 1usize
+    }
+    let (named, named_error) = str.concat(a, "neper-", digits[10usize - count..10usize])
+    ret (named, named_error)
+}
+
+// Posts (or replaces) the notice `id`; false when the center would not take it.
+fn un_post(a: *mem.Arena, id: u32, title: str, body: str, silent: bool) -> bool {
+    let (name, name_error) = un_identifier(a, id)
+    if name_error != ok { ret false }
+    let pool = os.objc_pool_push()
+    let center = un_center()
+    var posted = false
+    if center != 0usize {
+        let content = os.msg0(os.msg0(os.cocoa_class("UNMutableNotificationContent\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+        let text_title = os.cocoa_text(title)
+        let text_body = os.cocoa_text(body)
+        let one = os.msg1(content, os.cocoa_sel("setTitle:\x00"), text_title)
+        let two = os.msg1(content, os.cocoa_sel("setBody:\x00"), text_body)
+        if !silent {
+            let sound = os.msg0(os.cocoa_class("UNNotificationSound\x00"), os.cocoa_sel("defaultSound\x00"))
+            let three = os.msg1(content, os.cocoa_sel("setSound:\x00"), sound)
+        }
+        let identifier = os.cocoa_text(name)
+        let request = os.msg4(os.cocoa_class("UNNotificationRequest\x00"), os.cocoa_sel("requestWithIdentifier:content:trigger:\x00"), identifier, content, 0usize, 0usize)
+        var invoke: UnInvoke = zero
+        invoke.function = un_add_done
+        let block = un_block(invoke)
+        let added = os.msg2(center, os.cocoa_sel("addNotificationRequest:withCompletionHandler:\x00"), request, block)
+        if un_wait(10usize) { posted = un_flag }
+        os.cf_release(identifier)
+        os.cf_release(text_body)
+        os.cf_release(text_title)
+        let released = os.msg0(content, os.cocoa_sel("release\x00"))
+    }
+    os.objc_pool_pop(pool)
+    ret posted
+}
+
+fn un_remove(a: *mem.Arena, id: u32) -> err {
+    let (name, name_error) = un_identifier(a, id)
+    if name_error != ok { ret name_error }
+    let pool = os.objc_pool_push()
+    let center = un_center()
+    if center == 0usize {
+        os.objc_pool_pop(pool)
+        ret Unsupported
+    }
+    let identifier = os.cocoa_text(name)
+    var one = identifier
+    let list = os.msg2(os.cocoa_class("NSArray\x00"), os.cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&one), 1usize)
+    let delivered = os.msg1(center, os.cocoa_sel("removeDeliveredNotificationsWithIdentifiers:\x00"), list)
+    let pending = os.msg1(center, os.cocoa_sel("removePendingNotificationRequestsWithIdentifiers:\x00"), list)
+    os.cf_release(identifier)
+    os.objc_pool_pop(pool)
+    ret ok
+}
+
+// How many notices of this program are on the screen now (for the probe).
+fn un_delivered_count() -> usize {
+    let pool = os.objc_pool_push()
+    let center = un_center()
+    var counted = 0usize
+    if center != 0usize {
+        var invoke: UnInvoke = zero
+        invoke.function = un_list_done
+        let block = un_block(invoke)
+        let asked = os.msg1(center, os.cocoa_sel("getDeliveredNotificationsWithCompletionHandler:\x00"), block)
+        if un_wait(10usize) { counted = un_count }
+    }
+    os.objc_pool_pop(pool)
+    ret counted
+}
 // A banner from `osascript`, the text passed as arguments so no quoting reaches the script. The system gives a
 // notice no id to hand back, so the id is the clock's, never zero; an update is a fresh banner under the same id.
 // ponytail: a banner is attributed to Script Editor and cannot be removed from here.
@@ -744,21 +919,28 @@ fn send_notice(a: *mem.Arena, title: str, body: str) -> err {
 fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> (u32, err) {
     if body.len == 0usize { ret (0u32, Invalid) }
     if tray_id != 0u32 && tray_slot(tray_id) == TRAYS { ret (0u32, NotFound) }
+    var id = tray_id
+    if id == 0u32 {
+        let (stamp, clock_error) = os.clock(.Monotonic)
+        id = 1u32
+        if clock_error == ok { id = u32(stamp & 2147483647i64) | 1u32 }
+    }
+    if un_authorized() && un_post(a, id, title, body, silent) { ret (id, ok) }
     let sent = send_notice(a, title, body)
     if sent != ok { ret (0u32, sent) }
-    if tray_id != 0u32 { ret (tray_id, ok) }
-    let (stamp, clock_error) = os.clock(.Monotonic)
-    if clock_error != ok { ret (1u32, ok) }
-    ret (u32(stamp & 2147483647i64) | 1u32, ok)
+    ret (id, ok)
 }
 
 fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: str, silent: bool) -> err {
     if body.len == 0usize || notice_id == 0u32 { ret Invalid }
     if tray_id != 0u32 && tray_slot(tray_id) == TRAYS { ret NotFound }
+    if un_authorized() && un_post(a, notice_id, title, body, silent) { ret ok }
     ret send_notice(a, title, body)
 }
 
 fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
+    if notice_id == 0u32 { ret Invalid }
+    if un_authorized() { ret un_remove(a, notice_id) }
     ret Unsupported
 }
 
