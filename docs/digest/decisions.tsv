@@ -2903,4 +2903,8 @@ D5688	806	What is registered, and how it is run
 D5689	675	Where D5678 was short
 D5720	1962	`neper_host` in the plain build: a function table, a mailbox, and one request in flight
 D5721	1779	The host's socket semantics, as built
-D5722	1152	What C188 measured, and what it did not move
+D5722	1153	What C188 measured, and what it did not move
+D5710	2998	C186 landed: `--threads` writes the threaded module, and nothing a plain build writes changed
+D5711	1949	Threads: the atomics as built
+D5712	1482	Threads: the seven `wasm` instructions, and `wasm_thread_ops` outside `link/`
+D5713	1477	The runner for a threaded module until C187, and two findings for C187

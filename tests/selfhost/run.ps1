@@ -10963,7 +10963,7 @@ if ($wasmNode) {
         try { $text = (& node --no-warnings $runner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
         return @{ Status = $LASTEXITCODE; Output = $text }
     }
-    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask', 'os_socket', 'os_resolve', 'async_io', 'macos_poller_loss', 'net', 'wasm_net') {
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask', 'os_socket', 'os_resolve', 'async_io', 'macos_poller_loss', 'net', 'wasm_net', 'wasm_atomics') {
         $wasmPath = Join-Path $wasmBuild "$wasmFixture.wasm"
         $wasmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPath
         if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
@@ -10972,6 +10972,24 @@ if ($wasmNode) {
         $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through lib/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
+    # (D5671, D5672, C186) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
+    # and the seven instructions of the "wasm" library answer as a plain and as a threaded module should.
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_atomics', 'wasm_ops') {
+        $wasmThreadsPath = Join-Path $wasmBuild "$wasmFixture.threads.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmThreadsPath --threads) -ne 'executable written') { throw "$wasmFixture did not emit as a threaded WebAssembly module" }
+        $wasmPlainRun = Invoke-Wasm (Join-Path $wasmBuild "$wasmFixture.wasm") @()
+        $wasmThreadsRun = Invoke-Wasm $wasmThreadsPath @()
+        if ($wasmThreadsRun.Status -ne 0 -or $wasmPlainRun.Output -ne $wasmThreadsRun.Output) { throw "$wasmFixture writes something else as a threaded module: exit $($wasmThreadsRun.Status) $($wasmThreadsRun.Output)" }
+    }
+    $wasmOpsSource = Join-Path $PSScriptRoot 'fixtures\wasm\wasm_thread_ops\src\main.e'
+    $wasmOpsPlain = Join-Path $wasmBuild 'thread_ops.wasm'
+    $wasmOpsThreads = Join-Path $wasmBuild 'thread_ops.threads.wasm'
+    if ((& $compiler emit-executable $wasmOpsSource $repo 'wasm32' 'wasi' $wasmOpsPlain) -ne 'executable written') { throw 'wasm_thread_ops did not emit as WebAssembly' }
+    if ((& $compiler emit-executable $wasmOpsSource $repo 'wasm32' 'wasi' $wasmOpsThreads --threads) -ne 'executable written') { throw 'wasm_thread_ops did not emit as a threaded WebAssembly module' }
+    $wasmRun = Invoke-Wasm $wasmOpsPlain @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 0`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0") { throw "the plain module's thread instructions answered: $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmOpsThreads @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     $wasmFallback = 'wasm_irreducible'
     $wasmForced = 'wasm_flow'
