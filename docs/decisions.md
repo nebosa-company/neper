@@ -42515,3 +42515,9 @@ A `--threads` module in a page needs `SharedArrayBuffer`, so the page must be cr
 - **File mappings, watches and locks** (`os_mapping`, `os_watch`, `fs_mmap_watch`, `os_lock`, `debug_dump`). A copy cannot keep a mapping's one promise (other writers' bytes are visible), Node has no `flock`, and `fs.watch` over `neper_host` would serve those fixtures alone; all stay `Unsupported`, which is the honest answer.
 - **Preview 1's `sock_accept`, `sock_recv`, `sock_send`** on preopened sockets: no connect, bind or resolution, and Node's WASI preopens no sockets.
 - **OPFS persistence in `neper-host.js`**, a **`wasm32-browser` target** (D5678) and a **`wasm32-wasi-threads` target name** (D5671).
+
+## D5690 — NoVariant carries its sentence, and the target is named by what the variants are
+
+**Problem.** D5682 left open how the loader learns which suffixes `project.select_source` saw, and which target to name in "none for ...": a fixture's expected diagnostic must read the same on the Linux and Windows hosts.
+
+**Decision.** `select_source` answers `NoVariant` with the finished tail ("has variants for linux, macos and windows and none for wasi") in its string slot; `graph.resolve_source` keeps the first root's tail in `Graph.variant_note` (project lib, then project src, then toolchain) and answers `NoVariant` when no root has the module; `main.e` prints `` `use X` `` and the tail under E-MODULE-0001. The target named is the os when any os variant was seen, the arch when every variant is an arch variant, so `reject/module_variants_other` (host.aarch64.e, host.x86.e; "none for x64") reads the same on both hosts. `module_missing` is unchanged.

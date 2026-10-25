@@ -2894,4 +2894,5 @@ D5680	2749	`e.ui` in a browser: CPU frames onto a canvas through `neper_host`, i
 D5681	2257	`neper run` for wasm32-wasi, and the runner in the toolchain
 D5682	1367	A module with variants for other targets only says so
 D5683	1690	Source maps for wasm32-wasi, and line numbers for the engine's traps
-D5684	2536	WebAssembly gaps not queued, and why
+D5684	2537	WebAssembly gaps not queued, and why
+D5690	960	NoVariant carries its sentence, and the target is named by what the variants are
