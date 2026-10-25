@@ -26,10 +26,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (microphone, microphone_error) = app.microphone_access(a)
     let (location, location_error) = app.location_access(a)
     if camera_error != ok || microphone_error != ok || location_error != ok { os.exit(1i32) }
-    if app.permission_status(a, .Biometric) != .Unavailable { os.exit(2i32) }
-    if app.biometrics_supported() { os.exit(3i32) }
-    let (no_verdict, verify_error) = app.biometric_verify(a, "the fixture asks")
-    if verify_error != shell.Unsupported { os.exit(4i32) }
+    // A host with biometrics says so and answers the status; the verification itself waits for a person, so it is only
+    // asked of a host without them, where it must say Unsupported.
+    if app.biometrics_supported() {
+        if app.permission_status(a, .Biometric) != .Granted { os.exit(2i32) }
+    } else {
+        if app.permission_status(a, .Biometric) != .Unavailable { os.exit(3i32) }
+        let (no_verdict, verify_error) = app.biometric_verify(a, "the fixture asks")
+        if verify_error != shell.Unsupported { os.exit(4i32) }
+    }
     var nobody: *app.App = zero
     if !app.photo_picker_supported() {
         let (no_photos, picker_error) = app.pick_photos(a, nobody, false)

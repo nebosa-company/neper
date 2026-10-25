@@ -122,6 +122,7 @@
     "e.gpu",
     "e.gpu.vulkan",
     "e.gpu.cuda",
+    "e.gpu.metal",
     "e.test.coverage",
     "e.test.fuzz",
     "e.debug",
@@ -4357,6 +4358,18 @@
   },
   {
    "name": "e.gpu.cuda",
+   "layer": 5,
+   "surface": "partial",
+   "milestone": "M3",
+   "schedule": "scheduled",
+   "direct_dependencies": [
+    "e.mem",
+    "e.os"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gpu.metal",
    "layer": 5,
    "surface": "partial",
    "milestone": "M3",

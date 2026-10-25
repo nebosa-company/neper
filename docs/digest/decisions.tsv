@@ -2849,4 +2849,19 @@ D5213	13206	The WebAssembly target's design: wasm32-wasi, a whole-program emitte
 D5214	1373	macOS drag and drop: a run-time subclass of the window's view, and a dragging session from the first window
 D5215	1236	the kqueue poller never lost a wakeup; the fixtures counted waits where a level-triggered wait needs a clock
 D5216	844	e.net knows macOS's errno numbers; four net fixtures run on a Mac
-D5700	2976	A launch reads its kernel's facts whoever checked the kernel; C185 closes
+D5700	2976	A launch reads its kernel's facts whoever checked the kernel; C200 closes
+D5217	1355	macOS associations are small bundles that LaunchServices starts, and the delegate receives what they were sent
+D5218	1294	macOS permissions: status is read, a request asks only where a device exists, through a global block
+D5219	965	macOS print dialogs run NSPrintPanel and NSPageLayout over the PDF printer
+D5220	1256	macOS biometrics are LocalAuthentication where Touch ID is enrolled; the photo picker is the open panel narrowed to images
+D5221	1225	macOS notices use the notification center for a bundled, authorized program; everything else keeps osascript
+D5222	979	macOS: the close button is a request, answered through a window delegate
+D5223	1379	macOS accessibility: the published tree is NSAccessibilityElements under the content view
+D5224	1326	macOS application bundles are made by a script, and the corpus job checks one
+D5225	903	the Mac corpus asserts everything a Mac can run and skips the rest with a reason
+D5226	1123	macOS drag out takes files and images, and the Dock overlay is drawn over the program's own icon
+D5227	969	no GPU backend for macOS yet: MoltenVK loads but dies on the CI runner's virtual GPU
+D5228	828	the checks a CI runner cannot do are a program a person runs on a real Mac
+D5229	1487	macOS input methods commit text through the content view's text input protocol
+D5230	942	correction: the compiler has declaration capacity; D5224 and D5227 said it had none
+D5231	1305	e.gpu.metal: Metal compute as a runtime of its own, kernels as MSL text
