@@ -128,6 +128,20 @@ type Gen = struct {
     fr_vec: bool,
     // `--threads` (D5671): the module shape of wasm_threads.e and the atomics of D5672.
     threads: bool,
+    // `--source-map` (C196, D5683): an entry per change of source line, offsets relative to
+    // `bodies` once the function is finished; `map_done` entries are finished.
+    map_on: bool,
+    map_name: str,
+    map_offset: []usize,
+    map_line: []usize,
+    map_column: []usize,
+    map_source: []usize,
+    map_count: usize,
+    map_done: usize,
+    map_paths: []str,
+    map_path_count: usize,
+    map_full: bool,
+    map_text: []u8,
 }
 
 // ---- bytes ---------------------------------------------------------------------
@@ -2224,6 +2238,7 @@ fn emit_condition(g: *Gen, instruction: nir.Instruction) -> err {
 // value the plan wants kept on the stack stays there when the instruction's code ends with
 // the one write of its local and never reads it.
 fn emit_folded(g: *Gen, instruction: nir.Instruction, at: usize, mode: usize) -> err {
+    if g.map_on { map_note(g, instruction.site, instruction.path, g.code.count) }
     var held = 0usize
     while held < g.fold_count && g.fr_user[g.fold_stack[g.fold_count - 1usize - held]] == at { held += 1usize }
     let base = g.fold_count - held
@@ -2284,6 +2299,42 @@ fn emit_folded(g: *Gen, instruction: nir.Instruction, at: usize, mode: usize) ->
     ret ok
 }
 
+// ---- the source map (C196) ------------------------------------------------------
+
+// An entry at `offset` of the function being written when its line or file is not the last
+// entry's; an entry at the same offset (an instruction that wrote nothing) is replaced.
+fn map_note(g: *Gen, site: nir.Site, path: str, offset: usize) {
+    if site.line == 0usize { ret }
+    var source = 0usize
+    var found = false
+    while source < g.map_path_count && !found {
+        if g.map_paths[source].len == path.len && check.same(g.map_paths[source], path) { found = true } else { source += 1usize }
+    }
+    if !found {
+        if g.map_path_count >= g.map_paths.len || g.map_count >= g.map_line.len {
+            g.map_full = true
+            ret
+        }
+        g.map_paths[g.map_path_count] = path
+        g.map_path_count += 1usize
+    }
+    var at = g.map_count
+    if at != g.map_done {
+        let last = at - 1usize
+        if g.map_line[last] == site.line && g.map_source[last] == source { ret }
+        if g.map_offset[last] == offset { at = last }
+    }
+    if at >= g.map_line.len {
+        g.map_full = true
+        ret
+    }
+    g.map_offset[at] = offset
+    g.map_line[at] = site.line
+    g.map_column[at] = site.column
+    g.map_source[at] = source
+    g.map_count = at + 1usize
+}
+
 // ---- a function ----------------------------------------------------------------
 
 // The function's locals and prologue are written; its blocks follow (`emit_blocks` or the
@@ -2307,6 +2358,13 @@ fn begin_function(g: *Gen, function_index: usize) -> err {
         put_uleb(&g.code, 3usize)
         put(&g.code, 123usize)
     }
+    if g.map_on {
+        g.map_count = g.map_done
+        if function.instruction_count != 0usize {
+            let first = g.b.instructions[function.first_instruction]
+            map_note(g, first.site, first.path, 0usize)
+        }
+    }
     prologue(g, function)
     ret ok
 }
@@ -2318,6 +2376,14 @@ fn finish_function(g: *Gen) -> err {
     op(g, 0usize)
     block_end(g)
     if g.code.full || g.data.full { ret fail(g, "the module outgrew the back end's storage") }
+    if g.map_on {
+        // From here an entry's offset is its byte in the code section's bodies.
+        let base = g.bodies.count + uleb_size(g.code.count)
+        while g.map_done < g.map_count {
+            g.map_offset[g.map_done] = g.map_offset[g.map_done] + base
+            g.map_done += 1usize
+        }
+    }
     put_uleb(&g.bodies, g.code.count)
     put_bytes(&g.bodies, &g.code)
     ret ok

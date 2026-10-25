@@ -1210,6 +1210,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var has_output = false
     var release = false
     var threads = false
+    var source_map = false
     var unchecked = false
     var json = false
     var check_only = false
@@ -1248,6 +1249,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
                             }
                             if same(args[at], "--release") { release = true }
                             if same(args[at], "--threads") { threads = true }
+                            if same(args[at], "--source-map") { source_map = true }
                             if same(args[at], "--unchecked") { unchecked = true }
                             if same(args[at], "--json") { json = true }
                             if same(args[at], "--check") { check_only = true }
@@ -1302,6 +1304,10 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         }
         if threads {
             long_form[count] = "--threads"
+            count += 1usize
+        }
+        if source_map {
+            long_form[count] = "--source-map"
             count += 1usize
         }
         if unchecked {
@@ -1745,7 +1751,19 @@ fn wasm_command(a: *mem.Arena, args: []str) -> err {
     let (stats_switch, stats_error) = os.env(a, "NEPER_WASM_STATS")
     var flow_options = ""
     if stats_error == ok { flow_options = stats_switch }
-    let (module_bytes, emit_error) = wasm.emit(a, &checker, &loaded, &builder, arena_flag(args), &failure, &flow_stats, flow_options, has_flag(args, "--threads"))
+    // `--source-map` (C196, D5683): OUT.map beside the module, named by its last segment.
+    var map_name = ""
+    var map_bytes: []u8 = zero
+    var map_path = ""
+    if has_flag(args, "--source-map") {
+        let (full_map_path, map_path_error) = with_suffix(a, args[6usize], ".map")
+        if map_path_error != ok { ret map_path_error }
+        map_path = full_map_path
+        var name_at = map_path.len
+        while name_at > 0usize && map_path[name_at - 1usize] != 47u8 && map_path[name_at - 1usize] != 92u8 { name_at = name_at - 1usize }
+        map_name = map_path[name_at..map_path.len]
+    }
+    let (module_bytes, emit_error) = wasm.emit(a, &checker, &loaded, &builder, arena_flag(args), &failure, &flow_stats, flow_options, has_flag(args, "--threads"), map_name, &map_bytes)
     if emit_error != ok {
         if emit_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
         try emit_command_diagnostic(&report, "E-WASM-9999", failure)
@@ -1753,6 +1771,7 @@ fn wasm_command(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     try save_bytes(a, args[6usize], module_bytes)
+    if map_name.len != 0usize { try save_bytes(a, map_path, map_bytes) }
     if flow_options.len != 0usize {
         let (stats_written, stats_write_error) = os.write(os.stderr(), flow_stats)
         if stats_write_error != ok { ret stats_write_error }

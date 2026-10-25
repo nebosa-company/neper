@@ -2907,4 +2907,7 @@ D5722	1153	What C188 measured, and what it did not move
 D5710	2998	C186 landed: `--threads` writes the threaded module, and nothing a plain build writes changed
 D5711	1949	Threads: the atomics as built
 D5712	1482	Threads: the seven `wasm` instructions, and `wasm_thread_ops` outside `link/`
-D5713	1477	The runner for a threaded module until C187, and two findings for C187
+D5713	1478	The runner for a threaded module until C187, and two findings for C187
+D5740	2323	`--source-map` as built: the flag, the map, and where entries are made
+D5741	1256	Lines in the engine's traps: `lib/wasm/source-map.js`
+D5742	698	C196 verified

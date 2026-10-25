@@ -38,13 +38,14 @@
 // `process.exit` while the engine is still finishing a background compile aborts Node
 // ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)", exit 127).
 import { readFile } from 'node:fs/promises'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { WASI } from 'node:wasi'
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { argv, env as hostEnv, stderr } from 'node:process'
 import { hostImports, serve } from './run-wasm-host.mjs'
+import { addLines } from '../lib/wasm/source-map.js'
 
 // Node's WASI answers fd_readdir with ENOSYS on Windows (uvwasi has no directory listing there). Where
 // it does, the call is answered here: the directory descriptors the module opens are followed
@@ -241,7 +242,9 @@ if (isMainThread) {
   })
   worker.on('error', (error) => {
     answered = true
-    stderr.write(`${error.stack ?? error}\n`)
+    let text = `${error.stack ?? error}\n`
+    try { text = addLines(text, readFileSync(`${absolute}.map`, 'utf8')) } catch {} // OUT.map beside the module (C196)
+    stderr.write(text)
     process.exitCode = 1
   })
   worker.on('exit', (code) => {

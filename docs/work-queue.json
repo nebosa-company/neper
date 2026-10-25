@@ -1080,17 +1080,6 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Design D5681. Needs nothing. Build: `dispatch` (main.e:14104) also sends `run ... wasm32 wasi ...` to `wasm_command`, which after writing the module runs it with `run_program` as node --no-warnings RUNNER OUT ARGS (node found by walking PATH, node.exe on Windows, as shell.linux.e:118 walks it; NEPER_NODE overrides; neither: E-CLI-9999 `running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE`); `--threads` and `--release` reach the build. scripts/run-wasm.mjs moves to lib/wasm/run-wasm.mjs and `run` finds it under the toolchain root (`own_directory(args[0])`/lib/wasm); every caller (wasm-sweep.sh, check-fixture.sh, wasm-compiler.sh, wasm-bench.sh, the D5651 blocks of run.sh and run.ps1) moves to the new path in the same commit and nothing stays at the old one. Acceptance: (1) from build/windows, and build/linux in WSL, `neper run tests/selfhost/fixtures/link/wasm_basics/src/main.e --target wasm32-wasi` prints the program's output and reports its status; (2) with node off PATH and no NEPER_NODE it prints the diagnostic; (3) wasm_release run with --release and the argument `bounds` reports 134; (4) the D5651 blocks pass with the moved runner, check_suite_parity.py passes, v2 == v3. D5650 saw `neper build --target wasm32-wasi` from a worktree stop at `the program has no main` (toolchain root build/windows): run from the toolchain as the suites do, and fix it here if it is the short form's own bug. Not yet: all of it."
-    },
-    {
-      "id": "C196",
-      "category": "compiler",
-      "group": "WebAssembly",
-      "order": 196,
-      "title": "wasm32-wasi source maps, and line numbers for the engine's traps",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Design D5683. Needs nothing (if C194 has moved the runner, change lib/wasm/run-wasm.mjs). Build: `--source-map` on emit-executable wasm32 wasi writes OUT.map (Source Map v3: sources as trap records spell paths, names empty, one generated line whose columns are byte offsets in the module file; an entry at the first byte of each NIR instruction whose `site.line` differs from the previous entry's) and a `sourceMappingURL` custom section after the name section; off by default. The runner, and neper-host.js when present, adds path:line from the map to each `wasm-function[N]:0xOFFSET` frame of an engine error when OUT.map lies beside the module. Acceptance: (1) tests/wasm/null_call (not a link fixture: native ends it with an access violation, D5604), a null function value called two frames deep, built with --source-map: the runner's error names the call's src/main.e line in its first frame; checked by the D5651 blocks of run.sh and run.ps1. (2) `wasm-tools validate` passes on that module. (3) Without the flag every sweep module is byte-identical to the compiler before. DWARF stays unwritten (D5684). Not yet: all of it."
     }
   ]
 }
