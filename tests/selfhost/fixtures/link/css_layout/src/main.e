@@ -568,6 +568,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 123. An aspect-ratio is physical: a vertical box stretched to 100px wide with 2/1 is 50px tall.
     let (p123, ok123) = build(a, "<div style=\"width:100px;height:300px;position:relative\"><div id=a style=\"aspect-ratio:2/1;position:absolute;left:0;right:0;top:0;writing-mode:vertical-lr\"></div></div>", "")
     if !ok123 || !near(rect_of(p123, "a").w, 100.0f64) || !near(rect_of(p123, "a").h, 50.0f64) { os.exit(164) }
+    // 124. `lh` is the line height, and `line-clamp: auto` keeps the lines that fit `max-height`.
+    let (p124, ok124) = build(a, "<div id=a style=\"line-clamp:auto;max-height:2lh;font:10px/20px serif;white-space:pre\">1\n2\n3\n4</div>", "")
+    if !ok124 || !near(rect_of(p124, "a").h, 40.0f64) { os.exit(165) }
     if !ok119 || !near(rect_of(p119, "f").w, 100.0f64) { os.exit(160) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }

@@ -2092,7 +2092,22 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
     // `line-clamp` / `-webkit-line-clamp`: only the first N lines stay, the last one marked to end with an ellipsis.
     var n_own = x.own.len
     var end_y = x.y
-    let clamp_n = line_clamp_count(cs)
+    var clamp_n = line_clamp_count(cs)
+    if clamp_n == 0usize && n_own > 1usize && line_clamp_is_auto(cs) {
+        // `line-clamp: auto` keeps the lines that fit the container's `max-height`, and at least one.
+        let (mxv, has_mx) = resolve_len(cs.max_height, cbh)
+        if cs.max_height.kind == .Px && has_mx {
+            let room = to_content_h(l, cont, mxv)
+            let top = l.lines.items[usize(x.own.items[0usize])].y
+            var fit = 1usize
+            while fit < n_own {
+                let nl = &l.lines.items[usize(x.own.items[fit])]
+                if nl.y + nl.h - top > room + 0.001f64 { break }
+                fit += 1usize
+            }
+            if fit < n_own { clamp_n = fit }
+        }
+    }
     if clamp_n > 0usize && n_own > clamp_n {
         n_own = clamp_n
         let kept = &l.lines.items[usize(x.own.items[clamp_n - 1usize])]
@@ -2117,6 +2132,17 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
         l.boxes.items[usize(cont)].line_count = u32(n_own)
     }
     ret end_y
+}
+
+// Whether `line-clamp` is `auto` (the lines that fit `max-height`).
+fn line_clamp_is_auto(s: *const style.Style) -> bool {
+    var i = 0usize
+    var auto = false
+    while i < s.extras.len {
+        if str.eq(s.extras[i].name, "line-clamp") { auto = str.eq(str.trim(s.extras[i].value), "auto") }
+        i += 1usize
+    }
+    ret auto
 }
 
 // The line count of `line-clamp` (or `-webkit-line-clamp`), 0 when there is none.

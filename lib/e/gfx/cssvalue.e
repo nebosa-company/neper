@@ -16,7 +16,7 @@ use e.math
 use e.mem
 use e.str
 
-type LengthUnit = enum u8 { Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax, Ch }
+type LengthUnit = enum u8 { Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax, Ch, Lh }
 
 type LengthOp = enum u8 { None, Min, Max, Clamp, Abs, Hypot, Mod, Rem, RoundNearest, RoundUp, RoundDown, RoundToZero }
 
@@ -24,10 +24,10 @@ type LengthOp = enum u8 { None, Min, Max, Clamp, Abs, Hypot, Mod, Rem, RoundNear
 type CssLength = struct { value: f64, unit: LengthUnit, px_offset: f64, op: LengthOp, terms: []const CssLength }
 
 // The bases a relative unit resolves against; a base that is not present leaves its units indefinite.
-type Bases = struct { has_em: bool, em: f64, has_rem: bool, rem: f64, has_percent: bool, percent: f64, has_viewport_width: bool, viewport_width: f64, has_viewport_height: bool, viewport_height: f64, ch: f64, ex: f64 }
+type Bases = struct { has_em: bool, em: f64, has_rem: bool, rem: f64, has_percent: bool, percent: f64, has_viewport_width: bool, viewport_width: f64, has_viewport_height: bool, viewport_height: f64, ch: f64, ex: f64, lh: f64 }
 
 fn no_bases() -> Bases {
-    ret Bases { has_em: false, em: 0.0f64, has_rem: false, rem: 0.0f64, has_percent: false, percent: 0.0f64, has_viewport_width: false, viewport_width: 0.0f64, has_viewport_height: false, viewport_height: 0.0f64, ch: 0.5f64, ex: 0.5f64 }
+    ret Bases { has_em: false, em: 0.0f64, has_rem: false, rem: 0.0f64, has_percent: false, percent: 0.0f64, has_viewport_width: false, viewport_width: 0.0f64, has_viewport_height: false, viewport_height: 0.0f64, ch: 0.5f64, ex: 0.5f64, lh: 0.0f64 }
 }
 
 fn pi() -> f64 { ret 3.141592653589793f64 }
@@ -910,6 +910,8 @@ fn to_px(l: CssLength, b: Bases) -> (f64, bool) {
         if b.has_viewport_height { base = l.value / 100.0f64 * b.viewport_height } else { have = false }
     case .Vmin:
         if b.has_viewport_width && b.has_viewport_height { base = l.value / 100.0f64 * dart_min(b.viewport_width, b.viewport_height) } else { have = false }
+    case .Lh:
+        if b.lh > 0.0f64 { base = l.value * b.lh } else if b.has_em { base = l.value * b.em * 1.2f64 } else { have = false }
     case .Vmax:
         if b.has_viewport_width && b.has_viewport_height { base = l.value / 100.0f64 * dart_max(b.viewport_width, b.viewport_height) } else { have = false }
     }
@@ -941,7 +943,7 @@ fn match_length(s: str) -> (str, str, bool) {
 }
 
 fn length_unit_known(u: str) -> bool {
-    ret str.eq(u, "px") || str.eq(u, "pt") || str.eq(u, "pc") || str.eq(u, "em") || str.eq(u, "rem") || str.eq(u, "ex") || str.eq(u, "ch") || str.eq(u, "ic") || str.eq(u, "cap") || str.eq(u, "vw") || str.eq(u, "vh") || str.eq(u, "vmin") || str.eq(u, "vmax") || str.eq(u, "dvh") || str.eq(u, "svh") || str.eq(u, "lvh") || str.eq(u, "dvw") || str.eq(u, "svw") || str.eq(u, "lvw") || str.eq(u, "vi") || str.eq(u, "vb") || str.eq(u, "cm") || str.eq(u, "mm") || str.eq(u, "in") || str.eq(u, "q") || str.eq(u, "%")
+    ret str.eq(u, "px") || str.eq(u, "pt") || str.eq(u, "pc") || str.eq(u, "em") || str.eq(u, "rem") || str.eq(u, "ex") || str.eq(u, "ch") || str.eq(u, "ic") || str.eq(u, "cap") || str.eq(u, "lh") || str.eq(u, "rlh") || str.eq(u, "vw") || str.eq(u, "vh") || str.eq(u, "vmin") || str.eq(u, "vmax") || str.eq(u, "dvh") || str.eq(u, "svh") || str.eq(u, "lvh") || str.eq(u, "dvw") || str.eq(u, "svw") || str.eq(u, "lvw") || str.eq(u, "vi") || str.eq(u, "vb") || str.eq(u, "cm") || str.eq(u, "mm") || str.eq(u, "in") || str.eq(u, "q") || str.eq(u, "%")
 }
 
 fn unit_length(value: f64, unit: str) -> (CssLength, bool) {
@@ -968,6 +970,8 @@ fn unit_length(value: f64, unit: str) -> (CssLength, bool) {
     if str.eq(unit, "vh") || str.eq(unit, "dvh") || str.eq(unit, "svh") || str.eq(unit, "lvh") || str.eq(unit, "vb") { ret (plain_length(value, .Vh), true) }
     if str.eq(unit, "vmin") { ret (plain_length(value, .Vmin), true) }
     if str.eq(unit, "vmax") { ret (plain_length(value, .Vmax), true) }
+    if str.eq(unit, "lh") { ret (plain_length(value, .Lh), true) }
+    if str.eq(unit, "rlh") { ret (plain_length(value * 1.2f64, .Rem), true) }
     ret (zero_length(), false)
 }
 
@@ -1115,7 +1119,7 @@ fn parse_calc(a: *mem.Arena, expr: str, b: Bases) -> (CssLength, bool) {
         if !prod_ok { ret (zero_length(), false) }
         let signed = terms[i].sign * prod.coeff
         if prod.has_length && prod.length.op != .None {
-            let (px, px_ok) = to_px(prod.length, Bases { has_em: b.has_em, em: b.em, has_rem: b.has_rem, rem: b.rem, has_percent: false, percent: 0.0f64, has_viewport_width: b.has_viewport_width, viewport_width: b.viewport_width, has_viewport_height: b.has_viewport_height, viewport_height: b.viewport_height, ch: b.ch, ex: b.ex })
+            let (px, px_ok) = to_px(prod.length, Bases { has_em: b.has_em, em: b.em, has_rem: b.has_rem, rem: b.rem, has_percent: false, percent: 0.0f64, has_viewport_width: b.has_viewport_width, viewport_width: b.viewport_width, has_viewport_height: b.has_viewport_height, viewport_height: b.viewport_height, ch: b.ch, ex: b.ex, lh: b.lh })
             if !px_ok { ret (zero_length(), false) }
             px_acc = px_acc + signed * px
         } else if !prod.has_length {
@@ -1128,7 +1132,7 @@ fn parse_calc(a: *mem.Arena, expr: str, b: Bases) -> (CssLength, bool) {
             var px = 0.0f64
             var px_ok = false
             if prod.length.unit != .Percent {
-                let (v, v_ok) = to_px(prod.length, Bases { has_em: b.has_em, em: b.em, has_rem: b.has_rem, rem: b.rem, has_percent: false, percent: 0.0f64, has_viewport_width: b.has_viewport_width, viewport_width: b.viewport_width, has_viewport_height: b.has_viewport_height, viewport_height: b.viewport_height, ch: b.ch, ex: b.ex })
+                let (v, v_ok) = to_px(prod.length, Bases { has_em: b.has_em, em: b.em, has_rem: b.has_rem, rem: b.rem, has_percent: false, percent: 0.0f64, has_viewport_width: b.has_viewport_width, viewport_width: b.viewport_width, has_viewport_height: b.has_viewport_height, viewport_height: b.viewport_height, ch: b.ch, ex: b.ex, lh: b.lh })
                 px = v
                 px_ok = v_ok
             }
