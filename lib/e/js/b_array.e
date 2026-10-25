@@ -548,6 +548,10 @@ fn array_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) -
         let (r, re) = js.call_function(it, j, js.obj_value(o), js.zero_args())
         ret (r, re)
     }
+    if it.obj_to_string_fn != js.null_obj() {
+        let (r3, re3) = js.call_function(it, js.obj_value(it.obj_to_string_fn), js.obj_value(o), js.zero_args())
+        ret (r3, re3)
+    }
     let (ts, tse) = js.get_prop(it, it.protos.object, js.key_of("toString"), js.obj_value(it.protos.object))
     if tse != ok { ret (js.undefv(), tse) }
     let (r2, re2) = js.call_function(it, ts, js.obj_value(o), js.zero_args())
@@ -888,13 +892,17 @@ fn array_copy_within(it: *js.Interp, this_val: js.Value, args: []const js.Value)
     }
     while count > 0.0f64 {
         try js.tick(it)
-        if js.has_property(it, o, js.key_of(js.number_to_string(it.a, f2))) {
+        let (has_from, hfe) = js.has_property_e(it, o, js.key_of(js.number_to_string(it.a, f2)))
+        if hfe != ok { ret (js.undefv(), hfe) }
+        if has_from {
             let (v, ve) = js.get_index(it, o, f2)
             if ve != ok { ret (js.undefv(), ve) }
             let se = js.set_index(it, o, t2, v)
             if se != ok { ret (js.undefv(), se) }
         } else {
-            if !js.delete_prop(it, o, js.key_of(js.number_to_string(it.a, t2))) { ret (js.undefv(), js.throw_type(it, "Cannot delete property")) }
+            let (deleted, dele) = js.delete_prop_e(it, o, js.key_of(js.number_to_string(it.a, t2)))
+            if dele != ok { ret (js.undefv(), dele) }
+            if !deleted { ret (js.undefv(), js.throw_type(it, "Cannot delete property")) }
         }
         f2 += dir
         t2 += dir
@@ -1027,7 +1035,13 @@ fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, m
                 if mve != ok { ret (0.0f64, mve) }
                 v = mv
             }
-            if depth > 0.0f64 && js.is_array(v) {
+            var flatten_v = false
+            if depth > 0.0f64 {
+                let (isa, isae) = js.is_array_e(it, v)
+                if isae != ok { ret (0.0f64, isae) }
+                flatten_v = isa
+            }
+            if flatten_v {
                 let (n2, ne2) = flatten_into(it, target_arr, js.as_object(v), depth - 1.0f64, js.undefv(), js.undefv(), n, -1.0f64)
                 if ne2 != ok { ret (0.0f64, ne2) }
                 n = n2
@@ -1120,6 +1134,10 @@ fn array_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Valu
     }
     let iter = js.as_object(this_val)
     if iter.aux == js.null_obj() { ret (iter_result(it, js.undefv(), true), ok) }
+    // Iterating a typed array whose buffer shrank under it (or was detached) is a TypeError, not an empty array.
+    if iter.aux.class == js.C_TYPEDARRAY && js.ta_out_of_bounds(iter.aux) {
+        ret (js.undefv(), js.throw_type(it, "Cannot iterate a typed array that is out of bounds"))
+    }
     let (len, le) = js.length_of(it, iter.aux)
     if le != ok { ret (js.undefv(), le) }
     let idx = iter.num

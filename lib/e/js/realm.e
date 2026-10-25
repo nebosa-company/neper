@@ -621,6 +621,8 @@ fn install_object(it: *js.Interp) {
     let ctor = make_ctor(it, "Object", 1u32, object_ctor, proto)
     js.add_method(it, proto, "hasOwnProperty", 1u32, object_proto_has_own)
     js.add_method(it, proto, "toString", 0u32, object_proto_to_string)
+    let (ots, otse) = js.get_prop(it, proto, js.key_of("toString"), js.obj_value(proto))
+    if otse == ok && js.is_object(ots) { it.obj_to_string_fn = js.as_object(ots) }
     js.add_method(it, proto, "toLocaleString", 0u32, object_to_locale_string)
     js.add_method(it, proto, "valueOf", 0u32, object_proto_value_of)
     js.add_method(it, proto, "isPrototypeOf", 1u32, object_proto_is_prototype_of)
