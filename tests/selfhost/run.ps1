@@ -10989,7 +10989,15 @@ if ($wasmNode) {
     $wasmRun = Invoke-Wasm $wasmOpsPlain @()
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 0`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0") { throw "the plain module's thread instructions answered: $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmOpsThreads @()
-    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
+    # (D5673, D5674, C187) Threads under the thread host: wasm_threads built with --threads writes what the native build
+    # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
+    $wasmThreadsPath = Join-Path $wasmBuild 'wasm_threads.threads.wasm'
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\wasm_threads\src\main.e') $repo 'wasm32' 'wasi' $wasmThreadsPath --threads) -ne 'executable written') { throw 'wasm_threads did not emit as a threaded WebAssembly module' }
+    $wasmRun = Invoke-Wasm $wasmThreadsPath @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "atomic 8000`nmutex 8000`nids distinct`nmain id 1`na thread started a thread`ndetached`nwait timeout`ndetails per thread`n200 cycles`nmain returns") { throw "wasm_threads answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmThreadsPath @('exit')
+    if ($wasmRun.Status -ne 7) { throw "wasm_threads exit answered $($wasmRun.Status), not 7" }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     $wasmFallback = 'wasm_irreducible'
     $wasmForced = 'wasm_flow'
