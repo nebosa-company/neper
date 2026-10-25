@@ -1,6 +1,7 @@
 // The seven instructions the pseudo-library "wasm" gains for threads (D5672, C186), run on one
 // thread: `threads` and `thread.id` differ between a plain and a `--threads` module, a spawn
-// is refused by a host with no threads (-1), and the atomics on a word work in both shapes.
+// is refused by a plain module (-1; only that one tries, since the thread host of a threaded
+// one would start a real thread on the record), and the atomics on a word work in both shapes.
 // `wait32` runs only where `threads` says the memory is shared. This fixture is wasm-only, so it
 // is outside link/ and the sweep; the wasm block of run.sh builds it both ways and compares.
 use e.mem
@@ -60,7 +61,7 @@ fn main() -> err {
     let address = u32(mem.address_of(&word[0usize]))
     number("threads", i64(wasm_threads()))
     number("thread.id", i64(wasm_thread_id()))
-    number("spawn", i64(wasm_thread_spawn(0u32)))
+    if wasm_threads() == 0u32 { number("spawn", i64(wasm_thread_spawn(0u32))) }
     wasm_store32(address, 7u32)
     number("load", i64(wasm_load32(address)))
     number("cas hit", i64(wasm_cas32(address, 7u32, 4000000000u32)))

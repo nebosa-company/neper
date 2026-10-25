@@ -10662,7 +10662,15 @@ if command -v node >/dev/null 2>&1; then
     wasm_plain_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/thread_ops.wasm")
     [ "$wasm_plain_output" = "$(printf 'threads 0\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0')" ] || { printf '%s\n' "the plain module's thread instructions answered: $wasm_plain_output" >&2; exit 1; }
     wasm_threads_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/thread_ops.threads.wasm")
-    [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
+    [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
+    # (D5673, D5674, C187) Threads under the thread host: wasm_threads built with --threads writes what the native build
+    # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/wasm_threads/src/main.e" "$repo" wasm32 wasi "$wasm_build/wasm_threads.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "wasm_threads did not emit as a threaded WebAssembly module" >&2; exit 1; }
+    wasm_threads_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/wasm_threads.threads.wasm")
+    [ "$wasm_threads_output" = "$(printf 'atomic 8000\nmutex 8000\nids distinct\nmain id 1\na thread started a thread\ndetached\nwait timeout\ndetails per thread\n200 cycles\nmain returns')" ] || { printf '%s\n' "wasm_threads answered: $wasm_threads_output" >&2; exit 1; }
+    wasm_status=0
+    (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/wasm_threads.threads.wasm" exit > /dev/null) || wasm_status=$?
+    [ "$wasm_status" -eq 7 ] || { printf '%s\n' "wasm_threads exit answered $wasm_status, not 7" >&2; exit 1; }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     wasm_fallback=wasm_irreducible
     wasm_forced=wasm_flow

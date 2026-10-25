@@ -120,12 +120,19 @@ export function hostImports(names, memory, box, data) {
 // ---- the main thread's side ------------------------------------------------------------------------
 
 // Answers the mailbox until `stop` is called. One request is served at a time; a blocking call is a
-// promise that settles when the socket changes, so the event loop keeps running meanwhile.
-export function serve(box, data) {
+// promise that settles when the socket changes, so the event loop keeps running meanwhile. A
+// threaded module has a mailbox per thread, all served over one `shared` NetHost (one table of
+// handles): each mailbox's calls see that NetHost through a view of their own data buffer.
+export function serve(box, data, shared) {
   const bytesView = new Uint8Array(data)
   const state = new Int32Array(box)
   const args = new BigInt64Array(box, 8, 12)
-  const host = new NetHost(new Uint8Array(data))
+  let host = new NetHost(bytesView)
+  if (shared) {
+    host = Object.create(shared)
+    host.data = bytesView
+    host.view = new DataView(data)
+  }
   let stopped = false
   const waitWhile = async (value) => {
     while (!stopped && Atomics.load(state, 0) === value) {
@@ -156,7 +163,7 @@ export function serve(box, data) {
     stop() {
       stopped = true
       Atomics.notify(state, 0)
-      host.closeAll()
+      if (!shared) host.closeAll()
     },
   }
 }
@@ -376,11 +383,11 @@ class Poller {
   }
 }
 
-class NetHost {
+export class NetHost {
   constructor(data) {
     this.data = data
     this.view = new DataView(data.buffer, data.byteOffset, data.length)
-    this.next = BASE
+    this.ids = { next: BASE }
     this.socks = new Map()
     this.pollers = new Map()
   }
@@ -403,8 +410,8 @@ class NetHost {
     const name = FUNCTIONS[index][0]
     switch (name) {
       case 'poll_open': {
-        this.pollers.set(this.next, new Poller())
-        this.slot(0, this.next++)
+        this.pollers.set(this.ids.next, new Poller())
+        this.slot(0, this.ids.next++)
         return 0
       }
       case 'poll_ctl': return this.pollCtl(...a)
@@ -426,9 +433,9 @@ class NetHost {
       }
       case 'sock_open': {
         const sock = new Sock(a[0], a[1])
-        sock.id = this.next
-        this.socks.set(this.next, sock)
-        this.slot(0, this.next++)
+        sock.id = this.ids.next
+        this.socks.set(this.ids.next, sock)
+        this.slot(0, this.ids.next++)
         return 0
       }
       case 'resolve': return this.resolve(a[1], a[2], a[3], a[5])
@@ -545,12 +552,12 @@ class NetHost {
     }
     const conn = sock.queue.shift()
     const accepted = new Sock(sock.family, 'stream')
-    accepted.id = this.next
+    accepted.id = this.ids.next
     accepted.state = 'connected'
     accepted.attach(conn)
     conn.resume()
-    this.socks.set(this.next, accepted)
-    this.slot(0, this.next++)
+    this.socks.set(this.ids.next, accepted)
+    this.slot(0, this.ids.next++)
     const view = new DataView(this.data.buffer, this.data.byteOffset + 32, 32)
     for (let k = 0; k < 32; k++) view.setUint8(k, 0)
     writeAddress(view, 0, conn.remoteAddress, conn.remotePort, conn.remoteFamily)

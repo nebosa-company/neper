@@ -58,6 +58,7 @@ wasm_irreducible
 wasm_mask
 wasm_ops
 wasm_reserve
+wasm_threads
 web_csp
 web_page_csp
 web_shell

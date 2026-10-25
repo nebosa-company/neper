@@ -2911,3 +2911,6 @@ D5713	1478	The runner for a threaded module until C187, and two findings for C18
 D5740	2323	`--source-map` as built: the flag, the map, and where entries are made
 D5741	1256	Lines in the engine's traps: `lib/wasm/source-map.js`
 D5742	698	C196 verified
+D5730	2198	C187 landed: the thread runtime in `os.wasi.e`, as built
+D5731	3039	The Node thread host, as built (`scripts/run-wasm.mjs`)
+D5732	3796	What C187 measured, and the races and hangs it found
