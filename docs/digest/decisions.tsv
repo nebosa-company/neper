@@ -2896,3 +2896,8 @@ D5682	1367	A module with variants for other targets only says so
 D5683	1690	Source maps for wasm32-wasi, and line numbers for the engine's traps
 D5684	2537	WebAssembly gaps not queued, and why
 D5690	960	NoVariant carries its sentence, and the target is named by what the variants are
+D5685	2165	`lib/wasm/neper-host.js` as built (C191)
+D5686	1842	The sweep through `neper-host.js`, next to run-wasm.mjs's
+D5687	782	The browser host in a real browser
+D5688	806	What is registered, and how it is run
+D5689	674	Where D5678 was short

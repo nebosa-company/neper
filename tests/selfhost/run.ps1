@@ -10956,11 +10956,11 @@ if ($wasmNode) {
     New-Item -ItemType Directory -Force -Path $wasmBuild | Out-Null
     $wasmRunner = Join-Path $repo 'scripts\run-wasm.mjs'
     # A trap writes to standard error, which -ErrorAction Stop would turn into a terminating error.
-    function Invoke-Wasm([string]$module, [string[]]$arguments) {
+    function Invoke-Wasm([string]$module, [string[]]$arguments, [string]$runner = $wasmRunner) {
         Push-Location $repo
         $previous = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        try { $text = (& node --no-warnings $wasmRunner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
+        try { $text = (& node --no-warnings $runner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
         return @{ Status = $LASTEXITCODE; Output = $text }
     }
     foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask') {
@@ -10969,6 +10969,8 @@ if ($wasmNode) {
         if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
         $wasmRun = Invoke-Wasm $wasmPath @()
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+        $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
+        if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through lib/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     $wasmFallback = 'wasm_irreducible'
@@ -11001,6 +11003,11 @@ if ($wasmNode) {
     $wasmRun = Invoke-Wasm $wasmReleasePath @('address')
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the 32-bit address row was not left out of the wasm32-wasi release build: exit $($wasmRun.Status) $($wasmRun.Output)" }
     if ((Get-Item $wasmReleasePath).Length -ge (Get-Item $wasmDebugPath).Length) { throw 'the wasm32-wasi release module is not smaller than the debug one' }
+    # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
+    $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'
+    if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
+    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath) (Join-Path $repo 'tests\wasm\host.mjs')
+    if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
     # scripts/wasm-compiler.sh is bash: Git's, never WSL's, which cannot read a Windows path.
     $wasmGit = Get-Command git -ErrorAction SilentlyContinue
     $wasmBash = $null

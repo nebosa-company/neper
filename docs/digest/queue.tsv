@@ -96,7 +96,6 @@ C187	library	0	2522	wasm32-wasi threads: the thread runtime in os.wasi.e and the
 C188	library	0	1766	wasm32-wasi sockets, resolution and the poller through neper_host	all of it.
 C189	library	0	802	wasm32-wasi: the net_* corpus on --threads	all of it.
 C190	library	0	1310	wasm32-wasi processes and pipes through neper_host (Node only)	all of it.
-C191	tooling	0	1805	A browser host for wasm32-wasi modules: lib/wasm/neper-host.js	all of it.
 C192	tooling	0	1125	Threads in the browser host: cross-origin isolation, the page as host	all of it.
 C193	library	0	1198	e.ui in a browser: CPU frames on a canvas, input through a shared ring	all of it.
 C194	tooling	0	1452	neper run for wasm32-wasi, and the runner moved into the toolchain	all of it.

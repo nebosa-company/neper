@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>neper-host</title>
+<h1>neper-host</h1>
+<p id="status">running</p>
+<pre id="stdout"></pre>
+<pre id="stderr"></pre>
+<script type="module">
+  // ?module=URL&args=A,B runs the module and sets window.neperResult = {exitCode, stdout, stderr} (D5678).
+  import { run } from '../../../lib/wasm/neper-host.js'
+  const query = new URLSearchParams(location.search)
+  const out = { exitCode: null, stdout: '', stderr: '', isolated: crossOriginIsolated }
+  const sink = (key) => { const d = new TextDecoder(); return (bytes) => { if (bytes) out[key] += d.decode(bytes, { stream: true }) } }
+  try {
+    const args = query.get('args') ? query.get('args').split(',') : []
+    out.exitCode = (await run(query.get('module'), { args, stdout: sink('stdout'), stderr: sink('stderr') })).exitCode
+  } catch (error) {
+    out.exitCode = -1
+    out.stderr += `${error.stack ?? error}\n`
+  }
+  document.getElementById('status').textContent = `exit ${out.exitCode}, isolated ${out.isolated}`
+  document.getElementById('stdout').textContent = out.stdout
+  document.getElementById('stderr').textContent = out.stderr
+  window.neperResult = out
+</script>
