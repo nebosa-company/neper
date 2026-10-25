@@ -2928,4 +2928,11 @@ D5800	3288	`e.ui` in a page: text, the clipboard, newest frame, the gallery (C21
 D5801	1821	C212 verified
 D5820	1313	Newest frame only, measured in the Browser pane (C212)
 D5821	1760	The virtual-keyboard path under the mobile preset (C212)
-D5822	542	C212 closed, the device check moved to C213
+D5822	543	C212 closed, the device check moved to C213
+D5830	3395	The `--threads` triage: every failure and refusal, one by one
+D5831	2770	Five things WASI was answering wrongly: `dup`, a core dump, the shell's arguments, a window under Node, an image
+D5832	1203	Directory watches by polling
+D5833	1151	A thread's Worker gets the engine stack its thread asked for
+D5834	1923	Flush-to-zero on WebAssembly
+D5835	5193	What stays failing, and why
+D5836	1399	Where the sweep itself was blind
