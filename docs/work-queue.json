@@ -42,10 +42,10 @@
       "group": "macOS",
       "order": 186,
       "title": "macOS permissions: camera, microphone and location status and request",
-      "score": 0,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "permission_status answers Granted only for the screen; permission_request answers Unavailable. Needs: AVCaptureDevice authorizationStatusForMediaType and requestAccessForMediaType, CLLocationManager authorizationStatus and requestWhenInUseAuthorization (Foundation/AVFoundation/CoreLocation by dlopen); the shell.Permission enum has no not-determined state (Granted, Denied, Unavailable), so a request that has not been answered needs one or a Prompting answer; a request completes through an Objective-C block, which Neper builds as a global block (isa _NSConcreteGlobalBlock, flags BLOCK_IS_GLOBAL, an @cc invoke function, a descriptor). Prompts need a user: the ui_permissions fixture calls camera_access, so the fixture must not prompt on a runner (honour a test switch or answer from status). Hardware is needed to verify."
+      "evidence": "Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationStatusForMediaType (camera, microphone) and CLLocationManager authorizationStatus (location); a status that is not decided or is restricted is Unavailable because shell.Permission has no not-determined state. permission_request asks for the camera and microphone through AVCaptureDevice requestAccessForMediaType with a global Objective-C block (isa from dlsym _NSConcreteGlobalBlock, BLOCK_IS_GLOBAL, an @cc invoke), only when a capture device exists, and waits for the answer (up to five minutes). tests/macos/probe/permissions.e on the runners: camera unavailable, microphone granted, location unavailable, requests return at once, no crash; ui_permissions passes and the corpus is 1105. Open: a location request (CLLocationManager requestWhenInUseAuthorization with a delegate callback on the shell target), a not-determined state in shell.Permission (shared by every host), and a real prompt on a Mac with a camera, which only a person can answer (C192). Done when those three are checked."
     },
     {
       "id": "C187",
