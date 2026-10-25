@@ -128,6 +128,8 @@ fn dispatch(context: Context, pipeline: Pipeline, buffers: []const Buffer, group
     var at = 0usize
     while at < buffers.len {
         let bound = msg_buffer(encoder, os.cocoa_sel("setBuffer:offset:atIndex:\x00"), buffers[at].handle, 0usize, at)
+        // A device address inside a buffer is only good for memory the encoder was told to keep resident (read and write).
+        let resident = os.msg2(encoder, os.cocoa_sel("useResource:usage:\x00"), buffers[at].handle, 3usize)
         at += 1usize
     }
     if shared_bytes != 0usize {
