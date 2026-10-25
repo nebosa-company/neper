@@ -71,7 +71,7 @@ fn has_tool(name: str) -> bool {
 }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: false, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: false, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: has_tool("caffeinate"), lifecycle_events: true, restart: false, printing: true, print_dialogs: false, permissions: true, credentials: has_tool("security"), screen_capture: true, biometrics: false, photo_picker: false }
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
@@ -2219,17 +2219,125 @@ fn page_setup_dialog(a: *mem.Arena, w: os.Window, current: PageSetup) -> (PageSe
 // `Unsupported` and the record says so; a credential is `secret-tool` (libsecret)
 // where it is installed, the same tool-shaped path as the rest.
 
-// The screen is always capturable; without the Screen Recording permission the picture leaves out other applications' windows, which is a
-// difference in content and not a refusal. The other capabilities have no answer here.
-fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
-    if c == .Screen { ret .Granted }
+// Camera, microphone and location (D5218). The status is what the system last decided, read without asking: AVFoundation's
+// `authorizationStatusForMediaType:` for the camera ('vide') and the microphone ('soun'), CoreLocation's authorization status
+// for the location. `Permission` has no "not decided" state, so a status the user has not answered, like a restricted one that
+// cannot be changed, is `Unavailable` and `permission_request` is what asks: it is made for the camera and the microphone, needs a device that
+// could be used (none on a virtual machine, so it answers at once there) and waits for the answer, which the system delivers
+// through a block (a global block of this file); a location request is not made, only its status is read.
+type PermissionInvoke = union { function: fn(usize, usize), bits: usize }
+
+// An Objective-C global block in words: isa, flags (and a reserved word), the function, the descriptor's address, then the
+// descriptor itself (reserved, size).
+var permission_words: [8]u64 = zero
+var permission_done: bool = zero
+var permission_granted: bool = zero
+var permission_frameworks: bool = zero
+
+// The completion handler: its second argument is the BOOL, in the low byte.
+@cc(c)
+fn permission_answered(block: usize, granted: usize) {
+    permission_granted = granted & 255usize != 0usize
+    permission_done = true
+}
+
+fn permission_load() {
+    if permission_frameworks { ret }
+    let av = "/System/Library/Frameworks/AVFoundation.framework/AVFoundation\x00"
+    let location = "/System/Library/Frameworks/CoreLocation.framework/CoreLocation\x00"
+    let a = os.raw_dlopen(mem.address_of(&av[0usize]), 2i32)
+    let b = os.raw_dlopen(mem.address_of(&location[0usize]), 2i32)
+    permission_frameworks = true
+}
+
+// 0 not decided, 1 restricted, 2 denied, 3 authorized (AVFoundation's numbering; CoreLocation's 3 and 4 are authorized too).
+fn permission_media_status(kind: str) -> usize {
+    permission_load()
+    let name = os.cocoa_text(kind)
+    let status = os.msg1(os.cocoa_class("AVCaptureDevice\x00"), os.cocoa_sel("authorizationStatusForMediaType:\x00"), name)
+    os.cf_release(name)
+    ret status
+}
+
+fn permission_location_status() -> usize {
+    permission_load()
+    ret os.msg0(os.cocoa_class("CLLocationManager\x00"), os.cocoa_sel("authorizationStatus\x00"))
+}
+
+fn permission_of(code: usize, authorized_from: usize) -> Permission {
+    if code >= authorized_from && code <= 4usize { ret .Granted }
+    if code == 2usize || code == 1usize { ret .Denied }
     ret .Unavailable
 }
 
-fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
-    ret (.Unavailable, ok)
+// The screen is always capturable; without the Screen Recording permission the picture leaves out other applications' windows,
+// which is a difference in content and not a refusal.
+fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
+    if c == .Screen { ret .Granted }
+    if os.cocoa_start() != ok { ret .Unavailable }
+    let pool = os.objc_pool_push()
+    var answer = Permission.Unavailable
+    if c == .Camera { answer = permission_of(permission_media_status("vide"), 3usize) }
+    if c == .Microphone { answer = permission_of(permission_media_status("soun"), 3usize) }
+    if c == .Location { answer = permission_of(permission_location_status(), 3usize) }
+    os.objc_pool_pop(pool)
+    ret answer
 }
 
+fn permission_media_request(kind: str) -> (Permission, err) {
+    permission_load()
+    let name = os.cocoa_text(kind)
+    let device = os.msg1(os.cocoa_class("AVCaptureDevice\x00"), os.cocoa_sel("defaultDeviceWithMediaType:\x00"), name)
+    if device == 0usize {
+        os.cf_release(name)
+        ret (.Unavailable, ok)
+    }
+    var invoke: PermissionInvoke = zero
+    invoke.function = permission_answered
+    let symbol = "_NSConcreteGlobalBlock\x00"
+    permission_words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    permission_words[1usize] = 268435456u64
+    permission_words[2usize] = u64(invoke.bits)
+    permission_words[3usize] = u64(mem.address_of(&permission_words[4usize]))
+    permission_words[4usize] = 0u64
+    permission_words[5usize] = 32u64
+    permission_done = false
+    let asked = os.msg2(os.cocoa_class("AVCaptureDevice\x00"), os.cocoa_sel("requestAccessForMediaType:completionHandler:\x00"), name, mem.address_of(&permission_words[0usize]))
+    os.cf_release(name)
+    var waited = 0usize
+    while !permission_done && waited < 3000usize {
+        os.cocoa_pump(100000000i64)
+        waited += 1usize
+    }
+    if !permission_done { ret (.Unavailable, Failed) }
+    if permission_granted { ret (.Granted, ok) }
+    ret (.Denied, ok)
+}
+
+fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
+    if c == .Screen { ret (.Granted, ok) }
+    if c != .Camera && c != .Microphone && c != .Location { ret (.Unavailable, ok) }
+    let started = os.cocoa_start()
+    if started != ok { ret (.Unavailable, ok) }
+    let decided = permission_status(a, c)
+    if decided != .Unavailable { ret (decided, ok) }
+    // Unavailable is also "restricted": only a not-decided status is worth asking about.
+    let pool = os.objc_pool_push()
+    var result = Permission.Unavailable
+    var failure = ok
+    if c == .Camera {
+        let (answer, answer_error) = permission_media_request("vide")
+        result = answer
+        failure = answer_error
+    }
+    if c == .Microphone {
+        let (answer, answer_error) = permission_media_request("soun")
+        result = answer
+        failure = answer_error
+    }
+    os.objc_pool_pop(pool)
+    ret (result, failure)
+}
 // The login keychain through `security`: a generic password whose service is the name and whose account is the user.
 // ponytail: the secret travels in the tool's arguments, which a process listing shows for the moment it runs; the Keychain
 // API (SecItemAdd) takes it as a CFData and is the way to close that.
