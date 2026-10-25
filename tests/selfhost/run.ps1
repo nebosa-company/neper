@@ -10947,14 +10947,14 @@ foreach ($extraFixture in (Get-Content (Join-Path $PSScriptRoot 'extra-fixtures.
     try { & $extraPath | Out-Null } finally { Pop-Location }
     if ($LASTEXITCODE -ne 0) { throw "a $extraFixture check failed: exit $LASTEXITCODE" }
 }
-# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by scripts/run-wasm.mjs from the repo
+# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by lib/wasm/run-wasm.mjs from the repo
 # root; `--release` drops the debug-only rows and keeps the bounds row; neper.wasm emits what this compiler emits.
 $wasmNode = Get-Command node -ErrorAction SilentlyContinue
 if ($wasmNode) {
     $wasmBuild = Join-Path $testBuild 'wasm'
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $wasmBuild
     New-Item -ItemType Directory -Force -Path $wasmBuild | Out-Null
-    $wasmRunner = Join-Path $repo 'scripts\run-wasm.mjs'
+    $wasmRunner = Join-Path $repo 'lib\wasm\run-wasm.mjs'
     # A trap writes to standard error, which -ErrorAction Stop would turn into a terminating error.
     function Invoke-Wasm([string]$module, [string[]]$arguments, [string]$runner = $wasmRunner) {
         Push-Location $repo
@@ -11037,6 +11037,16 @@ if ($wasmNode) {
     }
     $wasmRun = Invoke-Wasm $wasmReleasePath @('address')
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the 32-bit address row was not left out of the wasm32-wasi release build: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    # (C194, D5681) `neper run --target wasm32-wasi` from a toolchain with lib\wasm beside it runs the module under node and
+    # reports as a native run does; with no node it says what to install.
+    $env:NEPER_NODE = ''
+    $wasmRunPath = Join-Path $wasmBuild 'run_release.wasm'
+    $wasmRunText = (cmd /c "`"$shortCompiler`" run `"$wasmReleaseSource`" --target wasm32-wasi --release -o `"$wasmRunPath`" -- bounds") -join "`n"
+    if ($wasmRunText -notmatch '"process_exit_code":134,' -or $wasmRunText -notmatch [regex]::Escape('trap[bounds]: index 8 out of bounds for len 8')) { throw "neper run --target wasm32-wasi did not report the bounds trap: $wasmRunText" }
+    $previousPath = $env:PATH
+    $env:PATH = Join-Path $env:SystemRoot 'System32'
+    try { $wasmRunText = (cmd /c "`"$shortCompiler`" run `"$wasmReleaseSource`" --target wasm32-wasi -o `"$wasmRunPath`"") -join "`n"; $wasmRunStatus = $LASTEXITCODE } finally { $env:PATH = $previousPath }
+    if ($wasmRunStatus -ne 2 -or $wasmRunText -notmatch [regex]::Escape('running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE')) { throw "neper run --target wasm32-wasi without node did not say what to install: $wasmRunText" }
     if ((Get-Item $wasmReleasePath).Length -ge (Get-Item $wasmDebugPath).Length) { throw 'the wasm32-wasi release module is not smaller than the debug one' }
     # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'

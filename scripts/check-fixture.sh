@@ -62,7 +62,7 @@ if [ -n "$target" ]; then
     written=$("$compiler" emit-executable "$source" "$repo" wasm32 wasi "$exe" $release $threads)
     [ "$written" = 'executable written' ] || { printf '%s\n' "$fixture did not emit: $written" >&2; exit 1; }
     status=0
-    node --no-warnings "$repo/scripts/run-wasm.mjs" "$exe" || status=$?
+    node --no-warnings "$repo/lib/wasm/run-wasm.mjs" "$exe" || status=$?
     [ -n "$keep" ] || rm -f "$exe"
     if [ "$status" -eq 0 ]; then
         printf '%s\n' "$fixture passed on wasm32-wasi"
