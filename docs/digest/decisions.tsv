@@ -2854,4 +2854,5 @@ D5218	1294	macOS permissions: status is read, a request asks only where a device
 D5219	965	macOS print dialogs run NSPrintPanel and NSPageLayout over the PDF printer
 D5220	1256	macOS biometrics are LocalAuthentication where Touch ID is enrolled; the photo picker is the open panel narrowed to images
 D5221	1225	macOS notices use the notification center for a bundled, authorized program; everything else keeps osascript
-D5222	978	macOS: the close button is a request, answered through a window delegate
+D5222	979	macOS: the close button is a request, answered through a window delegate
+D5223	1378	macOS accessibility: the published tree is NSAccessibilityElements under the content view
