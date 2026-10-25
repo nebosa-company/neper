@@ -1632,7 +1632,7 @@ Design D5213, D5603-D5607; src/wasm_code.e, src/wasm.e, fixture link/wasm_ops (w
 
 ### C182 — wasm32-wasi 3: the WASI surface (files, readdir, clock, random, environment) and .wasi.e variants
 
-Design D5213, D5620-D5623; lib/e/os.wasi.e (files over path_open on the preopens, readdir, clock, random, environment, working directory, symlinks, canonical, *_at; threads, spawn, wait, reserve, commit Unsupported; wait_u32/wake_* return at once), .wasi.e variants of e.os.ident, e.os.shell, e.proc.sys.host, e.debug.dump.host, scripts/run-wasm.mjs (preopens, environment, readdir for Windows Node). fs_basics, os_clock_random and os_environment pass on x64-windows, wasm32-wasi under Windows Node and WSL Node; os_* pass as ELF under WSL. fs_basics skips three blocks WASI cannot do on wasm32-wasi (D5622).
+Design D5213, D5620-D5623; lib/e/os.wasi.e (files over path_open on the preopens, readdir, clock, random, environment, working directory, symlinks, canonical, *_at; threads, spawn, wait, reserve, commit Unsupported; wait_u32 sleeps out a finite timeout and stops a wait nothing can end (D5664), wake_* do nothing), .wasi.e variants of e.os.ident, e.os.shell, e.proc.sys.host, e.debug.dump.host, scripts/run-wasm.mjs (preopens, environment, readdir for Windows Node). fs_basics, os_clock_random and os_environment pass on x64-windows, wasm32-wasi under Windows Node and WSL Node; os_* pass as ELF under WSL. fs_basics skips three blocks WASI cannot do on wasm32-wasi (D5622).
 
 ### C183 — wasm32-wasi 4: structured control flow, operand folding, name section
 
