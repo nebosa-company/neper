@@ -67,10 +67,10 @@ jobs:
         # net_ssh is driven by a Python SSH server (asyncssh), as the Linux suite does with drive.py; its result is a line of
         # the results file, SSH PASS or SSH FAIL, with the driver's last lines.
         run: |
-          python3 -m pip install --quiet --user asyncssh cryptography 2>&1 | tail -2
+          python3 -m venv /tmp/sshenv && /tmp/sshenv/bin/pip install --quiet asyncssh cryptography 2>&1 | tail -2
           printf '#!/bin/sh\nexec %s /tmp/corpus/net_ssh "$@"\n' "$([ "${{ matrix.arch }}" = "x64" ] && echo 'arch -x86_64' || echo '')" > /tmp/net_ssh_run.sh
           chmod +x /tmp/net_ssh_run.sh
-          if NEPER_PYLIB="$(python3 -c 'import site;print(site.getusersitepackages())')" perl -e 'alarm 240; exec @ARGV' python3 tests/selfhost/fixtures/link/net_ssh/drive.py /tmp/net_ssh_run.sh > /tmp/ssh-out.txt 2>&1; then echo "SSH PASS" >> /tmp/corpus-results.txt; else echo "SSH FAIL" >> /tmp/corpus-results.txt; tail -8 /tmp/ssh-out.txt | sed 's/^/    | /' >> /tmp/corpus-results.txt; fi
+          if perl -e 'alarm 240; exec @ARGV' /tmp/sshenv/bin/python tests/selfhost/fixtures/link/net_ssh/drive.py /tmp/net_ssh_run.sh > /tmp/ssh-out.txt 2>&1; then echo "SSH PASS" >> /tmp/corpus-results.txt; else echo "SSH FAIL" >> /tmp/corpus-results.txt; tail -8 /tmp/ssh-out.txt | sed 's/^/    | /' >> /tmp/corpus-results.txt; fi
           tail -3 /tmp/ssh-out.txt
       - uses: actions/upload-artifact@v4
         if: always()
