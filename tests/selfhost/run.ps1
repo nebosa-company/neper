@@ -10969,6 +10969,8 @@ if ($wasmNode) {
         if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
         $wasmRun = Invoke-Wasm $wasmPath @()
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+        # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
+        if ($wasmFixture -in 'os_socket', 'os_resolve', 'macos_poller_loss', 'net', 'wasm_net') { continue }
         $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through lib/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
@@ -10993,7 +10995,8 @@ if ($wasmNode) {
     # (D5673, D5674, C202) Threads under the thread host: wasm_threads built with --threads writes what the native build
     # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
     $wasmThreadsPath = Join-Path $wasmBuild 'wasm_threads.threads.wasm'
-    if ((& $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\wasm_threads\src\main.e') $repo 'wasm32' 'wasi' $wasmThreadsPath --threads) -ne 'executable written') { throw 'wasm_threads did not emit as a threaded WebAssembly module' }
+    $wasmFixture = 'wasm_threads'
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmThreadsPath --threads) -ne 'executable written') { throw 'wasm_threads did not emit as a threaded WebAssembly module' }
     $wasmRun = Invoke-Wasm $wasmThreadsPath @()
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "atomic 8000`nmutex 8000`nids distinct`nmain id 1`na thread started a thread`ndetached`nwait timeout`ndetails per thread`n200 cycles`nmain returns") { throw "wasm_threads answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmThreadsPath @('exit')
