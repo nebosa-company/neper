@@ -236,6 +236,18 @@ extern fn host_poll_wake(poller: u32) -> u32
 @import("neper_host", "poll_close")
 extern fn host_poll_close(poller: u32) -> u32
 
+@import("neper_host", "pipe")
+extern fn host_pipe(read_end: u32, write_end: u32) -> u32
+
+@import("neper_host", "handle_read")
+extern fn host_handle_read(handle: u32, bytes: u32, length: u32, taken: u32, nonblocking: u32) -> u32
+
+@import("neper_host", "handle_write")
+extern fn host_handle_write(handle: u32, bytes: u32, length: u32, sent: u32) -> u32
+
+@import("neper_host", "handle_close")
+extern fn host_handle_close(handle: u32) -> u32
+
 @import("wasi_snapshot_preview1", "fd_pread")
 extern fn wasi_fd_pread(fd: u32, iovs: u32, iovs_len: u32, offset: u64, read_count: u32) -> u32
 
@@ -433,12 +445,31 @@ fn neper_os_exit(code: i32) {
 
 // ---- files: the standard streams ---------------------------------------------------------------------
 
+// A File whose raw is a host handle (the end of a pipe, D5677) is read, written and closed through the
+// functions `pipe` stores here, so a program that makes no pipe does not import the host's handle calls
+// (D5675: a module imports only what it reaches, and every program reaches these three).
+var host_file_read: [1]fn(*File, *[]u8) -> (usize, err)
+var host_file_write: [1]fn(*File, *str) -> (usize, err)
+var host_file_close: [1]fn(*File) -> err
+var host_file_armed: [1]u32
+
+// A raw below HOST_BASE is a WASI descriptor, and the largest number (the deliberate invalid handle of
+// error_detail, NO_FD) is no host handle either; before the first pipe nothing is routed.
+fn is_host_file(f: *File) -> bool {
+    ret host_file_armed[0usize] != 0u32 && f.raw >= HOST_BASE && f.raw < 4294967295usize
+}
+
 fn neper_os_stdout(out: *File) { out.raw = 1usize }
 
 fn neper_os_stderr(out: *File) { out.raw = 2usize }
 
 // os.write(file: *File, bytes: *str) -> (usize, err).
 fn neper_os_write(f: *File, text: *str) -> (usize, err) {
+    if is_host_file(f) {
+        let route = host_file_write[0usize]
+        let (done, route_error) = route(f, text)
+        ret (done, route_error)
+    }
     let content: []const u8 = *text
     var done = 0usize
     var iov: [2]u32 = zero
@@ -459,6 +490,11 @@ fn neper_os_write(f: *File, text: *str) -> (usize, err) {
 fn neper_os_read(f: *File, buffer: *[]u8) -> (usize, err) {
     let target_bytes = *buffer
     if target_bytes.len == 0usize { ret (0usize, ok) }
+    if is_host_file(f) {
+        let route = host_file_read[0usize]
+        let (taken, route_error) = route(f, buffer)
+        ret (taken, route_error)
+    }
     var iov: [2]u32 = zero
     var taken: [1]u32 = zero
     iov[0usize] = u32(mem.address_of(&target_bytes[0usize]))
@@ -470,6 +506,10 @@ fn neper_os_read(f: *File, buffer: *[]u8) -> (usize, err) {
 
 fn neper_os_close(f: *File) -> err {
     if f.raw <= 2usize { ret ok }
+    if is_host_file(f) {
+        let route = host_file_close[0usize]
+        ret route(f)
+    }
     ret wasi_cleanup(wasi_fd_close(fd_of(f.raw)))
 }
 
@@ -1821,8 +1861,52 @@ fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err) {
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) { ret (detail.operation, ok) }
 fn window_native(w: Window) -> (usize, usize, err) { ret (0usize, 0usize, Unsupported) }
 
-fn pipe() -> (File, File, err) { ret (File { raw: 0usize }, File { raw: 0usize }, Unsupported) }
-fn pipe_read(f: File, buffer: []u8) -> (usize, err) { ret (0usize, Unsupported) }
+// Pipes (D5677's pipe, handle_read, handle_write and handle_close; the process calls are C190's): the
+// ends are host handles, a read blocks the calling thread's mailbox only, so a server thread may wait
+// on one while main writes it.
+fn pipe_read_end(f: *File, buffer: *[]u8) -> (usize, err) {
+    let target_bytes = *buffer
+    var taken: [1]u32 = zero
+    let status = host_handle_read(host_handle(f.raw), u32(mem.address_of(&target_bytes[0usize])), u32(target_bytes.len), u32(mem.address_of(&taken[0usize])), 0u32)
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(taken[0usize]), ok)
+}
+
+fn pipe_write_end(f: *File, text: *str) -> (usize, err) {
+    let content: []const u8 = *text
+    var done = 0usize
+    var sent: [1]u32 = zero
+    while done < content.len {
+        let status = host_handle_write(host_handle(f.raw), u32(mem.address_of(&content[done])), u32(content.len - done), u32(mem.address_of(&sent[0usize])))
+        if status != 0u32 { ret (done, net_error(status)) }
+        if sent[0usize] == 0u32 { ret (done, Failed) }
+        done += usize(sent[0usize])
+    }
+    ret (done, ok)
+}
+
+fn pipe_close_end(f: *File) -> err {
+    ret net_cleanup(host_handle_close(host_handle(f.raw)))
+}
+
+fn pipe() -> (File, File, err) {
+    var made: [2]u32 = zero
+    let status = host_pipe(u32(mem.address_of(&made[0usize])), u32(mem.address_of(&made[1usize])))
+    if status != 0u32 { ret (File { raw: 0usize }, File { raw: 0usize }, net_error(status)) }
+    host_file_read[0usize] = pipe_read_end
+    host_file_write[0usize] = pipe_write_end
+    host_file_close[0usize] = pipe_close_end
+    host_file_armed[0usize] = 1u32
+    ret (File { raw: usize(made[0usize]) }, File { raw: usize(made[1usize]) }, ok)
+}
+
+fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    var taken: [1]u32 = zero
+    let status = host_handle_read(host_handle(f.raw), u32(mem.address_of(&buffer[0usize])), u32(buffer.len), u32(mem.address_of(&taken[0usize])), 1u32)
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(taken[0usize]), ok)
+}
 fn dup(f: File) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) { ret (Proc { raw: 0usize }, Unsupported) }
 fn wait_usage(p: own Proc) -> (ProcUsage, err) {

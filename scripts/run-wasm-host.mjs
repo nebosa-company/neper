@@ -42,6 +42,7 @@ export const FUNCTIONS = [
   ['sock_recv', 'vqnc'], ['sock_send_to', 'vipnc'], ['sock_recv_from', 'vqnco'], ['sock_shutdown', 'vv'],
   ['sock_close', 'v'], ['resolve', 'pnvvrnc'], ['poll_open', 'c'], ['poll_ctl', 'vvvlv'],
   ['poll_wait', 'vsnlc'], ['poll_wake', 'v'], ['poll_close', 'v'],
+  ['pipe', 'cc'], ['handle_read', 'vqncv'], ['handle_write', 'vpnc'], ['handle_close', 'v'],
 ]
 const SIZE = { q: 1, r: 32, s: 16 }
 
@@ -360,6 +361,25 @@ class Sock {
   }
 }
 
+// A host pipe (D5677 as built by C189): bytes written to the write end wait here for the read end. It
+// borrows Sock's queue (`rx`, `take`) and its waiting, so a blocked read is a promise like a socket's.
+class Pipe {
+  constructor() {
+    this.listeners = new Set()
+    this.rx = []
+    this.rxBytes = 0
+    this.paused = false
+    this.writers = 1
+    this.reader = true
+  }
+
+  changed() {
+    for (const listener of [...this.listeners]) listener()
+  }
+}
+Pipe.prototype.waitUntil = Sock.prototype.waitUntil
+Pipe.prototype.take = Sock.prototype.take
+
 class Poller {
   constructor() {
     this.entries = new Map()
@@ -390,6 +410,7 @@ export class NetHost {
     this.ids = { next: BASE }
     this.socks = new Map()
     this.pollers = new Map()
+    this.ends = new Map()
   }
 
   closeAll() {
@@ -439,6 +460,14 @@ export class NetHost {
         return 0
       }
       case 'resolve': return this.resolve(a[1], a[2], a[3], a[5])
+      case 'pipe': return this.pipeOpen()
+    }
+    if (name.startsWith('handle_')) {
+      const end = this.ends.get(a[0])
+      if (!end) return E.BADF
+      if (name === 'handle_read') return this.pipeRead(end, a[2], a[4] !== 0)
+      if (name === 'handle_write') return this.pipeWrite(end, a[2])
+      return this.pipeClose(a[0], end)
     }
     const sock = this.socks.get(a[0])
     if (!sock) return E.BADF
@@ -460,6 +489,49 @@ export class NetHost {
         return 0
     }
     return E.NOSYS
+  }
+
+  // A pipe's ends are handles of their own (`ends`: the pipe and which end); a read waits for bytes or
+  // for the last writer to close, a write waits below 1 MiB unread and fails with EPIPE once the reader
+  // is gone. A nonblocking read answers EAGAIN: the bytes of every earlier write are already here.
+  pipeOpen() {
+    const pipe = new Pipe()
+    this.ends.set(this.ids.next, { pipe, writing: false })
+    this.slot(0, this.ids.next++)
+    this.ends.set(this.ids.next, { pipe, writing: true })
+    this.slot(1, this.ids.next++)
+    return 0
+  }
+
+  async pipeRead(end, capacity, nonblocking) {
+    if (end.writing) return E.BADF
+    const { pipe } = end
+    while (pipe.rxBytes === 0 && pipe.writers > 0) {
+      if (nonblocking) return E.AGAIN
+      await pipe.waitUntil(() => pipe.rxBytes > 0 || pipe.writers === 0)
+    }
+    this.slot(0, pipe.take(this.data.subarray(PAYLOAD), capacity))
+    return 0
+  }
+
+  async pipeWrite(end, length) {
+    if (!end.writing) return E.BADF
+    const { pipe } = end
+    while (pipe.reader && pipe.rxBytes >= MARK) await pipe.waitUntil(() => pipe.rxBytes < MARK || !pipe.reader)
+    if (!pipe.reader) return E.PIPE
+    pipe.rx.push(Buffer.from(this.data.subarray(PAYLOAD, PAYLOAD + length)))
+    pipe.rxBytes += length
+    pipe.changed()
+    this.slot(0, length)
+    return 0
+  }
+
+  pipeClose(id, end) {
+    this.ends.delete(id)
+    if (end.writing) end.pipe.writers--
+    else end.pipe.reader = false
+    end.pipe.changed()
+    return 0
   }
 
   ensureDatagram(sock) {

@@ -2917,3 +2917,5 @@ D5732	3797	What C187 measured, and the races and hangs it found
 D5760	2340	Threads in the browser host, as built (C192)
 D5761	1319	Where D5679 was short
 D5762	2611	C192 verified
+D5750	3940	Pipes on wasm32-wasi: D5677's `pipe` and `handle_*` calls, built ahead of the process calls
+D5751	2568	C189 landed: the `net_*` corpus on `--threads`, and what the sweeps say
