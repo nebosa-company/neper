@@ -3,8 +3,8 @@
 // a separate path), a narrowing cast truncates, a shift count is masked, a float outside its
 // target saturates -- while the rows that trap in every mode stay. Built without the flag the
 // first `+` traps (exit 134) on every target; built with it the program exits 0. With the
-// argument `bounds` the always-on index check traps in both. The values come from a variable
-// the compiler cannot fold.
+// argument `bounds` the always-on index check traps in both; `address` is the 32-bit address
+// row (D5663). The values come from a variable the compiler cannot fold.
 use e.mem
 use e.os
 
@@ -30,9 +30,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if i64(nan) != 0i64 { os.exit(8i32) }
     let under = u32(0.0f64 - f64(n))
     if under != 0u32 { os.exit(9i32) }
-    if args.len > 1usize {
+    if args.len > 1usize && args[1usize].len == 6usize {
         var buffer: [8]u8 = zero
         buffer[n + 2usize] = 1u8
+    }
+    if args.len > 1usize && args[1usize].len == 7usize {
+        var cell: [8]u8 = zero
+        var window = mem.Arena { base: &cell[0usize], cap: 1099511627784usize, off: 0usize }
+        let far = mem.view(&window, 1099511627776usize, 1usize)
+        let forged = &far[0usize]
+        *forged = 1u8
+        if cell[0usize] != 1u8 { os.exit(10i32) }
     }
     ret ok
 }

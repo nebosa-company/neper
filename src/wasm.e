@@ -163,6 +163,7 @@ fn scan_function(gen: *w.Gen, function_index: usize) -> err {
             gen.global_used[instruction.immediate] = true
         }
         if instruction.opcode == .Return {
+            gen.returns[function_index] = true
             if instruction.operand_count > 2usize { ret fail_at(gen, "returns more than two values", function.name) }
             if instruction.operand_count > results { results = instruction.operand_count }
         }
@@ -198,6 +199,8 @@ fn init_gen(a: *mem.Arena, gen: *w.Gen, c: *check.Checker, loaded: *graph.Graph,
     if order_error != ok { ret order_error }
     let (results, results_error) = mem.alloc[u8](a, count)
     if results_error != ok { ret results_error }
+    let (returns, returns_error) = mem.alloc[bool](a, count)
+    if returns_error != ok { ret returns_error }
     var clear_at = 0usize
     var most_instructions = 0usize
     var most_values = 0usize
@@ -206,6 +209,7 @@ fn init_gen(a: *mem.Arena, gen: *w.Gen, c: *check.Checker, loaded: *graph.Graph,
         reach[clear_at] = false
         position[clear_at] = 0usize
         results[clear_at] = 0u8
+        returns[clear_at] = false
         if clear_at < builder.function_count {
             let candidate = builder.functions[clear_at]
             if candidate.instruction_count > most_instructions { most_instructions = candidate.instruction_count }
@@ -217,6 +221,7 @@ fn init_gen(a: *mem.Arena, gen: *w.Gen, c: *check.Checker, loaded: *graph.Graph,
     gen.position = position
     gen.order = order
     gen.results = results
+    gen.returns = returns
     let (slot_of, slot_of_error) = mem.alloc[usize](a, count)
     if slot_of_error != ok { ret slot_of_error }
     let (slot_list, slot_list_error) = mem.alloc[usize](a, count)

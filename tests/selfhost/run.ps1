@@ -10963,13 +10963,24 @@ if ($wasmNode) {
         try { $text = (& node --no-warnings $wasmRunner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
         return @{ Status = $LASTEXITCODE; Output = $text }
     }
-    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout') {
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask') {
         $wasmPath = Join-Path $wasmBuild "$wasmFixture.wasm"
         $wasmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPath
         if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
         $wasmRun = Invoke-Wasm $wasmPath @()
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
+    # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $env:NEPER_WASM_STATS = '1'
+    try { $wasmStats = (& $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\wasm_irreducible\src\main.e') $repo 'wasm32' 'wasi' (Join-Path $wasmBuild 'irreducible-stats.wasm') 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { Remove-Item Env:NEPER_WASM_STATS }
+    $env:NEPER_WASM_STATS = 'dispatch'
+    try { & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\wasm_flow\src\main.e') $repo 'wasm32' 'wasi' (Join-Path $wasmBuild 'flow-dispatch.wasm') 2>&1 | Out-Null } finally { Remove-Item Env:NEPER_WASM_STATS }
+    $ErrorActionPreference = $previousPreference
+    if ($wasmStats -notmatch [regex]::Escape('dispatch 1 (irreducible 1)')) { throw "wasm_irreducible did not fall back to the dispatch loop: $wasmStats" }
+    $wasmRun = Invoke-Wasm (Join-Path $wasmBuild 'flow-dispatch.wasm') @()
+    if ($wasmRun.Status -ne 0) { throw "wasm_flow failed with every function on the dispatch loop: exit $($wasmRun.Status) $($wasmRun.Output)" }
     $wasmReleaseSource = Join-Path $PSScriptRoot 'fixtures\link\wasm_release\src\main.e'
     $wasmDebugPath = Join-Path $wasmBuild 'release-debug.wasm'
     $wasmReleasePath = Join-Path $wasmBuild 'release.wasm'
@@ -10981,6 +10992,12 @@ if ($wasmNode) {
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the release fixture failed with --release on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmReleasePath @('bounds')
     if ($wasmRun.Status -ne 134 -or $wasmRun.Output -notmatch [regex]::Escape('main.e:35:9: trap[bounds]: index 8 out of bounds for len 8')) { throw "the bounds row did not trap in a wasm32-wasi release build: $($wasmRun.Output)" }
+    foreach ($wasmAccess in 'load', 'store', 'copy') {
+        $wasmRun = Invoke-Wasm (Join-Path $wasmBuild 'wasm_address.wasm') @($wasmAccess)
+        if ($wasmRun.Status -ne 134 -or $wasmRun.Output -notmatch 'trap\[bounds\]: address \d+ is outside the 32-bit memory') { throw "a $wasmAccess through a pointer with high bits did not trap on wasm32-wasi: $($wasmRun.Output)" }
+    }
+    $wasmRun = Invoke-Wasm $wasmReleasePath @('address')
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the 32-bit address row was not left out of the wasm32-wasi release build: exit $($wasmRun.Status) $($wasmRun.Output)" }
     if ((Get-Item $wasmReleasePath).Length -ge (Get-Item $wasmDebugPath).Length) { throw 'the wasm32-wasi release module is not smaller than the debug one' }
     # scripts/wasm-compiler.sh is bash: Git's, never WSL's, which cannot read a Windows path.
     $wasmGit = Get-Command git -ErrorAction SilentlyContinue

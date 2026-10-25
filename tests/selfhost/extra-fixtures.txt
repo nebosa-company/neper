@@ -48,10 +48,13 @@ os_wait_timeout
 text_dwmask
 ui_tabs_rtl
 ui_windows_looks
+wasm_address
 wasm_basics
 wasm_decode
 wasm_exec
 wasm_flow
+wasm_irreducible
+wasm_mask
 wasm_ops
 wasm_reserve
 web_csp

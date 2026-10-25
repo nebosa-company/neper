@@ -55,6 +55,7 @@ type Gen = struct {
     order: []usize,
     order_count: usize,
     results: []u8,
+    returns: []bool,
     imports: []Import,
     import_count: usize,
     wasm_imports: usize,
@@ -783,6 +784,62 @@ fn emit_bitcast(g: *Gen, instruction: nir.Instruction) -> err {
 
 // ---- addresses and memory ------------------------------------------------------
 
+// Whether the value is an address that lies inside the module's memory by construction: a
+// frame slot, a global, a string or a field of one of those. Every other address, a pointer
+// parameter, an element of a slice (its base is a stored pointer) or one loaded or cast from an
+// integer, can carry bits above 31, which `i32.wrap_i64` would drop.
+fn address_in_memory(g: *Gen, value: usize) -> bool {
+    var at = value
+    var steps = 0usize
+    while steps < 16usize {
+        if at >= g.current.value_count || g.pl_def_block[at] == 0usize { ret false }
+        let definition = g.b.instructions[g.pl_def_pos[at]]
+        let opcode = definition.opcode
+        if opcode == .Stack || opcode == .GlobalAddress || opcode == .ConstString { ret true }
+        if opcode != .FieldAddress || definition.operand_count != 1usize { ret false }
+        at = operand(g, definition, 0usize)
+        steps += 1usize
+    }
+    ret false
+}
+
+// Whether a debug build checks this address for bits above 31 (`@nocheck` code and `--release`
+// leave the row out, as for every other debug-only row).
+fn wants_address_check(g: *Gen, instruction: nir.Instruction, value: usize) -> bool {
+    ret !instruction.nocheck && !g.b.release && !address_in_memory(g, value)
+}
+
+// An address or a function value on its way into memory or a table: the `i32` the engine
+// takes. A debug build traps on a value of 2^32 or more (`bounds`, the closest row: native
+// faults on a pointer outside every object, with no record) rather than let the wrap drop its
+// high bits. The value is read once, through a scratch local, so operand folding still holds.
+fn wrap_checked(g: *Gen, instruction: nir.Instruction, value: usize, first: str, second: str) {
+    vget(g, value)
+    if wants_address_check(g, instruction, value) {
+        put(&g.code, 34usize)
+        put_uleb(&g.code, local_s(g, 1usize))
+        i64c(g, 4294967296usize)
+        op(g, 90usize)
+        trap_if(g, instruction.site, instruction.path, "bounds", first, second, "", 1usize, false, local_s(g, 1usize), 0usize, "")
+        lget(g, local_s(g, 1usize))
+    }
+    wrap(g)
+}
+
+fn address_wrap(g: *Gen, instruction: nir.Instruction, value: usize) {
+    wrap_checked(g, instruction, value, "address ", " is outside the 32-bit memory")
+}
+
+// The check alone, for an address that is read again afterwards.
+fn check_address(g: *Gen, instruction: nir.Instruction, value: usize) {
+    if wants_address_check(g, instruction, value) {
+        vget(g, value)
+        i64c(g, 4294967296usize)
+        op(g, 90usize)
+        trap_if(g, instruction.site, instruction.path, "bounds", "address ", " is outside the 32-bit memory", "", 1usize, false, local_value(g, value), 0usize, "")
+    }
+}
+
 fn emit_index_address(g: *Gen, instruction: nir.Instruction) -> err {
     if !instruction.has_result || instruction.operand_count != 3usize || instruction.immediate == 0usize { ret fail(g, "an index with the wrong operands") }
     let base = operand(g, instruction, 0usize)
@@ -820,6 +877,7 @@ fn emit_slice(g: *Gen, instruction: nir.Instruction) -> err {
         op(g, 86usize)
         trap_if(g, instruction.site, instruction.path, "bounds", "slice end ", " out of bounds for len ", "", 2usize, false, local_value(g, end), local_value(g, length), "")
     }
+    check_address(g, instruction, destination)
     vget(g, destination)
     wrap(g)
     vget(g, base)
@@ -844,8 +902,7 @@ fn emit_memory(g: *Gen, instruction: nir.Instruction) -> err {
     if opcode == .Load || opcode == .Store {
         let width = codegen_x64.storage_width(instruction)
         if width != 8usize && width != 16usize && width != 32usize && width != 64usize { ret fail(g, "a load or store of a width this target does not have") }
-        vget(g, operand(g, instruction, 0usize))
-        wrap(g)
+        address_wrap(g, instruction, operand(g, instruction, 0usize))
         if opcode == .Store {
             if instruction.has_result || instruction.operand_count != 2usize { ret fail(g, "a store with the wrong operands") }
             vget(g, operand(g, instruction, 1usize))
@@ -874,10 +931,8 @@ fn emit_memory(g: *Gen, instruction: nir.Instruction) -> err {
     }
     if opcode == .Copy {
         if instruction.has_result || instruction.operand_count != 2usize { ret fail(g, "a copy with the wrong operands") }
-        vget(g, operand(g, instruction, 0usize))
-        wrap(g)
-        vget(g, operand(g, instruction, 1usize))
-        wrap(g)
+        address_wrap(g, instruction, operand(g, instruction, 0usize))
+        address_wrap(g, instruction, operand(g, instruction, 1usize))
         i32c(g, instruction.immediate)
         op(g, 252usize)
         op(g, 10usize)
@@ -893,8 +948,7 @@ fn emit_memory(g: *Gen, instruction: nir.Instruction) -> err {
         ret ok
     }
     if instruction.operand_count != 1usize { ret fail(g, "a zero with the wrong operands") }
-    vget(g, operand(g, instruction, 0usize))
-    wrap(g)
+    address_wrap(g, instruction, operand(g, instruction, 0usize))
     i32c(g, 0usize)
     i32c(g, instruction.immediate)
     op(g, 252usize)
@@ -914,7 +968,7 @@ fn expected_results(instruction: nir.Instruction) -> usize {
 }
 
 // The values the call left on the stack, into the result's locals or dropped.
-fn store_call_results(g: *Gen, instruction: nir.Instruction, expected: usize, produced: usize) -> err {
+fn store_call_results(g: *Gen, instruction: nir.Instruction, expected: usize, produced: usize, never_returns: bool) -> err {
     if expected == 0usize {
         var dropped = 0usize
         while dropped < produced {
@@ -924,7 +978,8 @@ fn store_call_results(g: *Gen, instruction: nir.Instruction, expected: usize, pr
         ret ok
     }
     if produced == 0usize {
-        // A callee that never returns: nothing to read.
+        // Only a callee with no `Return` at all (it traps, exits or loops for ever) leaves nothing to read.
+        if !never_returns { ret fail(g, "a call that expects a value from a callee that returns none") }
         op(g, 0usize)
         ret ok
     }
@@ -971,7 +1026,7 @@ fn finish_import_call(g: *Gen, instruction: nir.Instruction, item: Import) -> er
     if item.result_kind == 2usize { extend_unsigned(g) }
     if item.result_kind == 3usize { extend_signed(g) }
     if expected_results(instruction) == 2usize { ret fail(g, "an import that returns a pair") }
-    ret store_call_results(g, instruction, expected_results(instruction), produced)
+    ret store_call_results(g, instruction, expected_results(instruction), produced, false)
 }
 
 fn emit_call(g: *Gen, instruction: nir.Instruction) -> err {
@@ -999,15 +1054,16 @@ fn emit_call(g: *Gen, instruction: nir.Instruction) -> err {
     }
     op(g, 16usize)
     put_uleb(&g.code, function_wasm_index(g, reference.target))
-    ret store_call_results(g, instruction, expected_results(instruction), usize(g.results[reference.target]))
+    ret store_call_results(g, instruction, expected_results(instruction), usize(g.results[reference.target]), !g.returns[reference.target])
 }
 
 fn emit_extract(g: *Gen, instruction: nir.Instruction) -> err {
     if !instruction.has_result || instruction.operand_count != 1usize || instruction.immediate >= 2usize { ret fail(g, "an extract with the wrong operands") }
     let source = operand(g, instruction, 0usize)
-    if instruction.immediate == 0usize || g.fr_aux[source] == 0usize {
+    if instruction.immediate == 0usize {
         vget(g, source)
     } else {
+        if g.fr_aux[source] == 0usize { ret fail(g, "an extract of a second result the value does not have") }
         lget(g, local_aux(g, source))
     }
     vset(g, instruction.result)
@@ -1096,15 +1152,14 @@ fn emit_indirect_call(g: *Gen, instruction: nir.Instruction) -> err {
         vget(g, operand(g, instruction, at))
         at += 1usize
     }
-    vget(g, operand(g, instruction, 0usize))
-    wrap(g)
+    wrap_checked(g, instruction, operand(g, instruction, 0usize), "function value ", " is outside the function table")
     let expected = expected_results(instruction)
     let signature = intern_signature(g, instruction.operand_count - 1usize, 0usize, expected)
     if g.failure.len != 0usize { ret Unsupported }
     op(g, 17usize)
     put_uleb(&g.code, signature)
     put_uleb(&g.code, 0usize)
-    ret store_call_results(g, instruction, expected, expected)
+    ret store_call_results(g, instruction, expected, expected, false)
 }
 
 // ---- floats --------------------------------------------------------------------
@@ -1336,16 +1391,14 @@ fn emit_atomic(g: *Gen, instruction: nir.Instruction) -> err {
     let address = operand(g, instruction, 0usize)
     if opcode == .AtomicStore {
         if instruction.operand_count != 2usize { ret fail(g, "an atomic store with the wrong operands") }
-        vget(g, address)
-        wrap(g)
+        address_wrap(g, instruction, address)
         vget(g, operand(g, instruction, 1usize))
         store_for(g, width)
         ret ok
     }
     if !instruction.has_result { ret fail(g, "an atomic without a result") }
     let result = instruction.result
-    vget(g, address)
-    wrap(g)
+    address_wrap(g, instruction, address)
     load_for(g, width, signed)
     vset(g, result)
     if opcode == .AtomicLoad { ret ok }
@@ -1365,8 +1418,7 @@ fn emit_atomic(g: *Gen, instruction: nir.Instruction) -> err {
     if instruction.operand_count != 2usize { ret fail(g, "a read-modify-write with the wrong operands") }
     let operand_value = operand(g, instruction, 1usize)
     let kind = instruction.immediate / 8usize
-    vget(g, address)
-    wrap(g)
+    address_wrap(g, instruction, address)
     if kind == 0usize { vget(g, operand_value) }
     if kind >= 1usize && kind <= 5usize {
         vget(g, result)
@@ -1404,9 +1456,8 @@ fn simd(g: *Gen, code: usize) {
 fn local_vec(g: *Gen, k: usize) -> usize { ret g.fr_params + 6usize + g.fr_slots + g.fr_aux_count + k }
 
 // The 16, 8, 4 or 2 bytes at an address as a `v128`, the rest zero.
-fn vec_load(g: *Gen, address: usize, bytes: usize) {
-    vget(g, address)
-    wrap(g)
+fn vec_load(g: *Gen, instruction: nir.Instruction, address: usize, bytes: usize) {
+    address_wrap(g, instruction, address)
     if bytes == 16usize {
         simd(g, 0usize)
         memarg(g, 0usize)
@@ -1434,9 +1485,8 @@ fn vec_load(g: *Gen, address: usize, bytes: usize) {
 }
 
 // The low `bytes` of the `v128` local `k` to an address.
-fn vec_store(g: *Gen, address: usize, bytes: usize, k: usize) {
-    vget(g, address)
-    wrap(g)
+fn vec_store(g: *Gen, instruction: nir.Instruction, address: usize, bytes: usize, k: usize) {
+    address_wrap(g, instruction, address)
     lget(g, local_vec(g, k))
     if bytes == 16usize {
         simd(g, 11usize)
@@ -1451,7 +1501,10 @@ fn vec_store(g: *Gen, address: usize, bytes: usize, k: usize) {
 }
 
 // simd128 has no `i8x16.mul`: that shape goes byte by byte through memory.
-fn emit_byte_multiply(g: *Gen, destination: usize, left: usize, right: usize, bytes: usize) {
+fn emit_byte_multiply(g: *Gen, instruction: nir.Instruction, destination: usize, left: usize, right: usize, bytes: usize) {
+    check_address(g, instruction, destination)
+    check_address(g, instruction, left)
+    check_address(g, instruction, right)
     var at = 0usize
     while at < bytes {
         vget(g, destination)
@@ -1512,15 +1565,15 @@ fn emit_vector(g: *Gen, instruction: nir.Instruction) -> err {
     let left = operand(g, instruction, 1usize)
     let right = operand(g, instruction, 2usize)
     if operation == 6usize && lane == 0usize {
-        emit_byte_multiply(g, destination, left, right, bytes)
+        emit_byte_multiply(g, instruction, destination, left, right, bytes)
         ret ok
     }
-    vec_load(g, left, bytes)
+    vec_load(g, instruction, left, bytes)
     if operation >= 12usize {
         if lane > 3usize { ret fail(g, "a packed shift of float lanes") }
         emit_vector_shift(g, instruction, lane, operation, right)
     } else {
-        if operation < 10usize { vec_load(g, right, bytes) }
+        if operation < 10usize { vec_load(g, instruction, right, bytes) }
         if operation == 10usize { simd(g, 77usize) }
         if operation == 11usize {
             i32c(g, 1usize)
@@ -1554,7 +1607,7 @@ fn emit_vector(g: *Gen, instruction: nir.Instruction) -> err {
         simd(g, 82usize)
         lset(g, local_vec(g, 0usize))
     }
-    vec_store(g, destination, bytes, 0usize)
+    vec_store(g, instruction, destination, bytes, 0usize)
     ret ok
 }
 
