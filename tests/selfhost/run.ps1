@@ -10998,6 +10998,15 @@ if ($wasmNode) {
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "atomic 8000`nmutex 8000`nids distinct`nmain id 1`na thread started a thread`ndetached`nwait timeout`ndetails per thread`n200 cycles`nmain returns") { throw "wasm_threads answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmThreadsPath @('exit')
     if ($wasmRun.Status -ne 7) { throw "wasm_threads exit answered $($wasmRun.Status), not 7" }
+    # (D5750, C189) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
+    # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
+    foreach ($wasmFixture in 'os_pipe_threads', 'net_pop3') {
+        $wasmPipePath = Join-Path $wasmBuild "$wasmFixture.threads.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPipePath --threads) -ne 'executable written') { throw "$wasmFixture did not emit as a threaded WebAssembly module" }
+        $wasmRun = Invoke-Wasm $wasmPipePath @()
+        $wasmWant = if ($wasmFixture -eq 'net_pop3') { 'net pop3 ok' } else { "write then read`nempty probe would block`n300000 bytes across threads`nend of stream after close`na blocked reader woke" }
+        if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne $wasmWant) { throw "$wasmFixture answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     $wasmFallback = 'wasm_irreducible'
     $wasmForced = 'wasm_flow'

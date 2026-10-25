@@ -44,6 +44,7 @@ js_generator_shutdown
 net_h2client
 os_clock_random
 os_environment
+os_pipe_threads
 os_wait_timeout
 text_dwmask
 ui_tabs_rtl
