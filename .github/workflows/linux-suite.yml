@@ -2,12 +2,19 @@ name: linux-suite
 # The Linux side of the suites, which do not finish on a developer's Windows machine (run.ps1 trips on PowerShell's
 # stderr handling; the Linux build exhausts WSL's memory). Two jobs, both manual:
 #   wasm   the wasm32-wasi checks on their own: the compiler built as neper.wasm against the native one, the
-#          curated fixtures plain and with --threads, and the whole wasm block of tests/selfhost/run.sh (D5651).
-#   suite  tests/selfhost/run.sh whole, which includes that block.
+#          curated fixtures plain and with --threads (D5651).
+#   suite  tests/selfhost/run.sh whole, which includes the whole wasm32-wasi block.
+# `only` picks one job; empty runs both.
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: "wasm, suite, or empty for both"
+        required: false
+        default: ""
 jobs:
   wasm:
+    if: ${{ inputs.only == '' || inputs.only == 'wasm' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -26,7 +33,9 @@ jobs:
           build/linux/stage2 emit-executable src/main.e . x64 linux build/linux/stage3 --arena 1g
           cmp build/linux/stage2 build/linux/stage3 && echo "stage 2 == stage 3"
       - name: neper.wasm against the native compiler
-        run: NEPER_COMPILER=$PWD/build/linux/stage2 bash scripts/wasm-compiler.sh
+        run: |
+          free -m; node --version; ulimit -a | head -20
+          NEPER_COMPILER=$PWD/build/linux/stage2 bash scripts/wasm-compiler.sh
       - name: wasm sweep, plain and threaded (the fixtures that need no window, device or foreign library)
         run: |
           export NEPER_COMPILER=$PWD/build/linux/stage2
@@ -37,6 +46,7 @@ jobs:
           bash scripts/wasm-sweep.sh --threads -j 2 $names os_pipe_threads wasm_threads net_pop3 net_smtp net_tls
           clean
   suite:
+    if: ${{ inputs.only == '' || inputs.only == 'suite' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -44,5 +54,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Scripts are executable (they were committed from Windows)
+        run: chmod +x scripts/*.sh tests/selfhost/*.sh
       - name: Whole suite
         run: bash tests/selfhost/run.sh
