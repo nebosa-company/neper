@@ -42896,3 +42896,6 @@ The macOS-hosted wasm sweep (workflow `macos-wasm`) ran wasm_net natively on a M
 
 ## D5871 — A kqueue poller tracks its registrations so a duplicate answers Exists
 Reverses D5870's dropped check. `os.macos.e` keeps up to 32 (handle, token, filters) entries per poller; a second registration of a tracked handle deletes its filters to prove they are live, restores them with the original token and answers Exists, and a stale entry (descriptor closed and its number reused) is discarded. The wasm_net duplicate check is back, and passes natively on a Mac.
+
+## D5872 — The sweep knows which differences the platform imposes
+D5835 listed 28 fixtures that stay `fail` in the wasm sweep, each for a limit of WASI, Node or the fixture's own path, so every run printed them again and a new regression in one of them looked the same. `tests/wasm/sweep-expected.tsv` now lists them as (fixture, host OS or `*`, host exit, wasm exit, cause); `wasm-sweep.sh` reports a failing run as `expected` when all four match and leaves any other exit code `fail`. The Linux rows come from a CI run of the named fixtures (linux-suite `names` input); the Windows rows from D5835. Ceiling: a stdout-only difference with matching exits (the window, GPU and font fixtures) is expected as a class, not byte for byte.

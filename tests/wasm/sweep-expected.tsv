@@ -1,0 +1,34 @@
+# A fixture whose wasm32-wasi run differs from the host's for a reason the platform imposes (D5835, D5870+). wasm-sweep.sh reports such a
+# run as `expected` only when the host OS (or *) and both exit statuses match a row, so a different exit code is still a `fail`.
+# name	host_os	host_exit	wasm_exit	cause
+os_mapping	*	0	12	map_file answers Unsupported: a copy cannot keep a mapping's promise
+fs_mmap_watch	*	0	12	mmap.map answers Unsupported
+runtime_gaps	*	0	62	mmap.map answers Unsupported (threads)
+runtime_gaps	linux	0	42	mmap.map answers Unsupported (plain)
+os_lock	*	0	20	file_lock answers Unsupported: a WASI module reaches no other process
+os_gaps	*	0	41	signal, signal_raise and sandbox are Unsupported under WASI
+os_dl	*	0	10	dlopen is Unsupported: a module cannot load a library
+os_fs	*	0	82	WASI has no permission bits: set_mode has no effect
+proc_sys	*	0	102	system information (CPU times, memory, disks, process table) is not visible to WASI
+proc_output	windows	0	112	Node on Windows cannot kill a descendant that outlived its root
+proc_output	linux	0	20	two pipes need two threads; the plain module has one
+os_shell	*	0	1	open_uri, reveal and trash are a desktop's services
+ui_shell_ops	*	0	1	open_uri, reveal and trash are a desktop's services
+ui_selection3_v2	*	0	30	reads a font by a Linux path off the module's reach
+when_target	windows	73	232	the exit code is the target's own arithmetic
+when_target	linux	115	232	the exit code is the target's own arithmetic
+gpu_device_lock	linux	0	1	no device from a module (plain build); the threaded build passes
+os_window	windows	0	0	no window under Node: prints its unsupported line
+ui_window	windows	0	0	no window under Node: prints its unsupported line
+ui_host	windows	0	0	no window under Node: prints its unsupported line
+ui_app	windows	0	0	no window under Node: prints its unsupported line
+gpu_device_helpers	windows	0	0	the host has a Vulkan device and the module has none
+gpu_device_lock	windows	0	0	the host has a Vulkan device and the module has none
+gpu_f64	windows	0	0	the host has a Vulkan device and the module has none
+gpu_staging	windows	0	0	the host has a Vulkan device and the module has none
+gpu_vulkan_float	windows	0	0	the host has a Vulkan device and the module has none
+gpu_vulkan_loop	windows	0	0	the host has a Vulkan device and the module has none
+gpu_vulkan_sync	windows	0	0	the host has a Vulkan device and the module has none
+gpu_float_modes	windows	0	0	the host has a Vulkan device and the module has none
+text_dwmask	windows	0	0	reads C:/Windows/Fonts, which a module cannot reach
+text_tthint	windows	0	0	reads C:/Windows/Fonts, which a module cannot reach
