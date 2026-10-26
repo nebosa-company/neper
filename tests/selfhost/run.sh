@@ -6417,6 +6417,22 @@ struct_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$struct_written" = 'executable written' ]
 chmod +x "$struct_path"
 LD_LIBRARY_PATH="$test_build" "$struct_path"
+# Three- and four-member HFAs coming back from C (C178, D5854): v0-v3 on AAPCS64, stored by the call into its slot; the same
+# program on x86-64 takes the memory and register classes. The aarch64 build runs under qemu-user when it and a cross cc exist.
+hfa_dir="$test_build/hfa-return"
+mkdir -p "$hfa_dir/x64" "$hfa_dir/a64"
+${CC:-cc} -std=c99 -Wall -Wextra -O2 -fPIC -shared -o "$hfa_dir/x64/nepercabi" "$repo/tests/selfhost/fixtures/link/hfa_return/cabi.c"
+hfa_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/hfa_return/src/main.e" "$repo" x64 linux "$hfa_dir/hfa-x64")
+[ "$hfa_written" = 'executable written' ]
+chmod +x "$hfa_dir/hfa-x64"
+LD_LIBRARY_PATH="$hfa_dir/x64" "$hfa_dir/hfa-x64"
+hfa_a64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/hfa_return/src/main.e" "$repo" aarch64 linux "$hfa_dir/hfa-a64")
+[ "$hfa_a64_written" = 'executable written' ]
+if command -v qemu-aarch64 >/dev/null 2>&1 && command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then
+    aarch64-linux-gnu-gcc -std=c99 -Wall -Wextra -O2 -fPIC -shared -o "$hfa_dir/a64/nepercabi" "$repo/tests/selfhost/fixtures/link/hfa_return/cabi.c"
+    chmod +x "$hfa_dir/hfa-a64"
+    QEMU_LD_PREFIX=/usr/aarch64-linux-gnu LD_LIBRARY_PATH="$hfa_dir/a64" qemu-aarch64 "$hfa_dir/hfa-a64"
+fi
 # Over a struct by value a function type's convention is part of it (D1676): a neper `fn`
 # is refused where an `extern fn(Key)` is expected, spelled whole so the two differ.
 require_fixture check/extern_fn_convention
