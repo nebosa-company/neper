@@ -45,6 +45,32 @@ jobs:
           clean
           bash scripts/wasm-sweep.sh --threads -j 2 $names os_pipe_threads wasm_threads net_pop3 net_smtp net_tls
           clean
+  probe:
+    # A node segmentation fault (exit 139) came up in about one run of eight in `wasm`; this repeats one compile with
+    # different Worker stack sizes to see what it depends on.
+    if: ${{ inputs.only == 'probe' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bootstrap compiler
+        run: sh scripts/build-bootstrap.sh
+      - name: Self-hosted compiler
+        run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: neper.wasm
+        run: build/linux/neper-self emit-executable src/main.e . wasm32 wasi build/linux/neper.wasm
+      - name: Repeat one compile per stack size
+        run: |
+          for mb in 256 64 16 8; do
+            bad=0
+            for i in $(seq 1 24); do
+              NEPER_WASM_STACK_MB=$mb node --no-warnings lib/wasm/run-wasm.mjs build/linux/neper.wasm emit-executable tests/selfhost/fixtures/link/wasm_reserve/src/main.e . x64 linux /tmp/out.$mb.$i > /tmp/log.$mb.$i 2>&1 || { bad=$((bad+1)); echo "stack $mb run $i exit $?"; head -c 300 /tmp/log.$mb.$i; }
+            done
+            echo "stack ${mb}MB: $bad failures of 24"
+          done
   suite:
     if: ${{ inputs.only == '' || inputs.only == 'suite' }}
     runs-on: ubuntu-latest
