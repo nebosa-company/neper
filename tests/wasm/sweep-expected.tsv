@@ -8,7 +8,6 @@ runtime_gaps	linux	0	42	mmap.map answers Unsupported (plain)
 os_lock	*	0	20	file_lock answers Unsupported: a WASI module reaches no other process
 os_gaps	*	0	41	signal, signal_raise and sandbox are Unsupported under WASI
 os_dl	*	0	10	dlopen is Unsupported: a module cannot load a library
-os_fs	*	0	82	WASI has no permission bits: set_mode has no effect
 proc_sys	*	0	102	system information (CPU times, memory, disks, process table) is not visible to WASI
 proc_output	windows	0	112	Node on Windows cannot kill a descendant that outlived its root
 proc_output	linux	0	20	two pipes need two threads; the plain module has one

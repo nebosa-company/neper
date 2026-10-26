@@ -286,6 +286,12 @@ extern fn host_proc_kill(handle: u32) -> u32
 @import("neper_host", "proc_group_kill")
 extern fn host_proc_group_kill(handle: u32, force: u32) -> u32
 
+@import("neper_host", "fs_mode")
+extern fn host_fs_mode(dirfd: u32, path: u32, path_len: u32, mode: u32) -> u32
+
+@import("neper_host", "fs_chmod")
+extern fn host_fs_chmod(dirfd: u32, path: u32, path_len: u32, mode: u32) -> u32
+
 @import("wasi_snapshot_preview1", "fd_pread")
 extern fn wasi_fd_pread(fd: u32, iovs: u32, iovs_len: u32, offset: u64, read_count: u32) -> u32
 
@@ -924,7 +930,7 @@ fn neper_os_ghash_blocks(features: usize, state: *[]u8, h: *[]const u8, data: *[
 // name is its longest prefix, a relative one against the working directory. `.` -- what scripts/
 // run-wasm.mjs preopens -- stands for `/`, so `/np-fs` and `np-fs` are one file. WASI has no working
 // directory, so `set_current_dir` holds a descriptor and the text of its path. It also has no
-// permission bits, no creation time and no atomic no-replace rename: `stat` reports 0644 for a file
+// permission bits (the Node runner supplies them through neper_host fs_mode / fs_chmod), no creation time and no atomic no-replace rename: without a host that does, `stat` reports 0644 for a file
 // and 0755 for a directory, `set_mode` only checks that the path exists, and `replace` without
 // `overwrite` looks before it renames.
 
@@ -1248,6 +1254,11 @@ fn stat_path(path: str, follow: bool) -> (FileInfo, err) {
     info.mode = 420u32
     if info.kind == EntryKind.Dir { info.mode = 493u32 }
     if info.kind == EntryKind.Symlink { info.mode = 511u32 }
+    // The host knows the real bits (a Node runner does; a page's host answers ENOSYS and the guess stays).
+    if info.kind != EntryKind.Symlink {
+        var host_mode: [1]u32 = zero
+        if host_fs_mode(fd, address_of_str(rel), u32(rel.len), u32(mem.address_of(&host_mode[0usize]))) == 0u32 { info.mode = host_mode[0usize] }
+    }
     ret (info, ok)
 }
 
@@ -1652,6 +1663,15 @@ fn open_parent(dir_fd: u32, relative_path: str) -> (u32, str, err) {
         while stop < cut && relative_path[stop] != 47u8 { stop += 1usize }
         let step = relative_path[position..stop]
         if step.len != 0usize && !(step.len == 1usize && step[0usize] == 46u8) {
+            // A host's open may follow a link whatever the lookup flags say (Node's), so the step is
+            // looked at without following it first.
+            var seen: [8]u64 = zero
+            if wasi_path_filestat_get(current, 0u32, address_of_str(step), u32(step.len), u32(mem.address_of(&seen[0usize]))) == 0u32 && (seen[2usize] & 255u64) == 7u64 {
+                if current != dir_fd { let closed = wasi_fd_close(current) }
+                record_error_detail(32i32)
+                error_slot_used[current_thread_id() % ERROR_SLOTS] = 2u8
+                ret (dir_fd, "", Denied)
+            }
             var opened: [1]u32 = zero
             let status = wasi_path_open(current, 0u32, address_of_str(step), u32(step.len), 2u32, DIR_RIGHTS, ALL_RIGHTS, 0u32, u32(mem.address_of(&opened[0usize])))
             if current != dir_fd { let closed = wasi_fd_close(current) }
@@ -1733,10 +1753,15 @@ fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path:
 
 // ---- modes, times, the environment, random bytes -------------------------------------------------------------
 
-// WASI has no chmod: the path is checked to exist and nothing changes (see the note at the top).
+// WASI has no chmod, so the host does it; a host without one (ENOSYS) leaves the path checked to exist and nothing changed.
 fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err {
     let (info, stat_error) = stat_path(path, true)
-    ret stat_error
+    if stat_error != ok { ret stat_error }
+    let (fd, rel, resolve_error) = resolve(path)
+    if resolve_error != ok { ret resolve_error }
+    let status = host_fs_chmod(fd, address_of_str(rel), u32(rel.len), mode)
+    if status == 0u32 || status == 52u32 { ret ok }
+    ret net_error(status)
 }
 
 // A negative stamp is left as it is; the host keeps the precision its filesystem has.
