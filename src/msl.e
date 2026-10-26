@@ -31,6 +31,7 @@ const KIND_SCALAR: u8 = 1u8
 const KIND_PRIVATE: u8 = 2u8
 const KIND_BUILTIN: u8 = 3u8
 const KIND_SHARED: u8 = 4u8
+const KIND_INPUT: u8 = 5u8
 
 // How a scalar is held: 1 bool, 2 u8, 3 i8, 4 u16, 5 i16, 6 u32, 7 i32, 8 u64, 9 i64, 10 f32, 11 f64 (not on Metal).
 const T_BOOL: u8 = 1u8
@@ -373,7 +374,7 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     // The kernel: signature, variables, then the dispatch.
     put(&m.body, "kernel void ")
     put_entry_name(&m.body, g, kernel)
-    put(&m.body, "(device const uchar* args [[buffer(0)]], device uchar* heap [[buffer(1)]], uint3 gid3 [[thread_position_in_grid]], uint3 lid3 [[thread_position_in_threadgroup]], uint3 wgid3 [[threadgroup_position_in_grid]]")
+    put(&m.body, "(device const uchar* args [[buffer(0)]], device uchar* heap [[buffer(1)]], uint3 gid3 [[thread_position_in_grid]], uint3 lid3 [[thread_position_in_threadgroup]], uint3 wgid3 [[threadgroup_position_in_grid]], uint sid [[thread_index_in_simdgroup]], uint sgw [[threads_per_simdgroup]]")
     if m.has_shared { put(&m.body, ", threadgroup uchar* tg [[threadgroup(0)]]") }
     put(&m.body, ") {\n")
     if m.frame_bytes != 0usize {
@@ -589,7 +590,8 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         ret ok
     }
     if opcode == .AtomicLoad || opcode == .AtomicStore || opcode == .AtomicRmw || opcode == .AtomicCas { ret emit_atomic(m, builder, instruction, values) }
-    if opcode == .Extract || opcode == .Bitcast || opcode == .AtomicFence || opcode == .MemoryBarrier || opcode == .Subgroup { ret fail(m, "an operation in this kernel is not yet written as MSL") }
+    if opcode == .Subgroup { ret emit_subgroup(m, builder, instruction, values) }
+    if opcode == .Extract || opcode == .Bitcast || opcode == .AtomicFence || opcode == .MemoryBarrier { ret fail(m, "an operation in this kernel is not yet written as MSL") }
     ret fail(m, "an operation in this kernel is not yet written as MSL")
 }
 
@@ -654,6 +656,16 @@ fn emit_global_address(m: *Module, builder: *nir.Builder, instruction: nir.Instr
     if same(global.name, "gid") { which = 1usize }
     if same(global.name, "lid") { which = 2usize }
     if same(global.name, "wgid") { which = 3usize }
+    if same(global.name, "sid") {
+        values.kind[instruction.result] = KIND_INPUT
+        values.offset[instruction.result] = 1usize
+        ret ok
+    }
+    if same(global.name, "subgroup_width") {
+        values.kind[instruction.result] = KIND_INPUT
+        values.offset[instruction.result] = 2usize
+        ret ok
+    }
     if which == 0usize { ret fail(m, "a kernel reads a module-scope variable other than the invocation ids") }
     values.kind[instruction.result] = KIND_BUILTIN
     values.offset[instruction.result] = which
@@ -823,6 +835,14 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     }
     let ty = value_type(instruction.ty)
     if ty == 0u8 { ret fail(m, "a load of this type is not yet written as MSL") }
+    if (values.kind[address] == KIND_INPUT) {
+        if ty != 6u8 { ret fail(m, "a subgroup input is read in an unexpected shape") }
+        scalar(values, result, ty)
+        put(t, "      v")
+        put_number(t, result)
+        if values.offset[address] == 1usize { put(t, " = sid;\n") } else { put(t, " = sgw;\n") }
+        ret ok
+    }
     if (values.kind[address] == KIND_BUILTIN) {
         let which = values.offset[address]
         // `which` is the builtin number for the bare address and number plus component for a field of it.
@@ -1172,5 +1192,67 @@ fn emit_atomic_operation(m: *Module, builder: *nir.Builder, instruction: nir.Ins
     put(t, ", v")
     put_number(t, value)
     put(t, ", memory_order_relaxed);\n")
+    ret ok
+}
+
+// ---- subgroups ---------------------------------------------------------------------
+// Metal's simd_* functions over the active threads of a simdgroup (D5852). Operations on 64-bit values are `Unsupported`.
+
+fn emit_subgroup(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let t = &m.code
+    let kind = instruction.immediate
+    if kind > 10usize { ret fail(m, "a subgroup operation is unknown") }
+    if kind <= 2usize {
+        if instruction.operand_count != 1usize { ret fail(m, "a subgroup operation has the wrong argument count") }
+        let predicate = operand(builder, instruction, 0usize)
+        if (values.kind[predicate] != KIND_SCALAR || values.ty[predicate] != T_BOOL) { ret fail(m, "a subgroup predicate is not bool") }
+        if kind == 2usize {
+            scalar(values, instruction.result, 8u8)
+            put(t, "      v")
+            put_number(t, instruction.result)
+            put(t, " = (ulong)static_cast<simd_vote::vote_t>(simd_ballot(v")
+            put_number(t, predicate)
+            put(t, "));\n")
+            ret ok
+        }
+        scalar(values, instruction.result, T_BOOL)
+        put(t, "      v")
+        put_number(t, instruction.result)
+        if kind == 0usize { put(t, " = simd_all(v") } else { put(t, " = simd_any(v") }
+        put_number(t, predicate)
+        put(t, ");\n")
+        ret ok
+    }
+    let ty = value_type(instruction.ty)
+    let value = operand(builder, instruction, 0usize)
+    if (ty == 0u8 || ty == T_BOOL || type_bytes(ty) == 8usize || values.kind[value] != KIND_SCALAR || values.ty[value] != ty) { ret fail(m, "a subgroup operation on this type is not written as MSL") }
+    if (is_float(ty) && kind >= 8usize) { ret fail(m, "a subgroup bitwise reduction is not integer") }
+    scalar(values, instruction.result, ty)
+    put(t, "      v")
+    put_number(t, instruction.result)
+    put(t, " = ")
+    if kind == 3usize || kind == 4usize {
+        let lane = operand(builder, instruction, 1usize)
+        if (values.kind[lane] != KIND_SCALAR || values.ty[lane] != 6u8) { ret fail(m, "a subgroup exchange lane is not u32") }
+        if kind == 3usize { put(t, "simd_broadcast(v") } else { put(t, "simd_shuffle(v") }
+        put_number(t, value)
+        put(t, ", (ushort)v")
+        put_number(t, lane)
+        put(t, ");\n")
+        ret ok
+    }
+    var name = "simd_sum"
+    if kind == 6usize { name = "simd_min" }
+    if kind == 7usize { name = "simd_max" }
+    if kind == 8usize { name = "simd_and" }
+    if kind == 9usize { name = "simd_or" }
+    if kind == 10usize { name = "simd_xor" }
+    put(t, "(")
+    put(t, type_name(ty))
+    put(t, ")")
+    put(t, name)
+    put(t, "(v")
+    put_number(t, value)
+    put(t, ");\n")
     ret ok
 }
