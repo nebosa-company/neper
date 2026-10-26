@@ -108,7 +108,7 @@ jobs:
           curl -sSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
           sudo apt-get update
           sudo env ACCEPT_EULA=Y apt-get install -y mssql-server msodbcsql18 unixodbc
-          bash tests/selfhost/sqlserver.sh setup
+          bash tests/selfhost/sqlserver.sh setup || { echo "setup failed, forcing the server down and trying once more"; sudo pkill -9 -x sqlservr || true; sudo systemctl stop mssql-server || true; sleep 10; bash tests/selfhost/sqlserver.sh setup; }
       - name: Scripts are executable (they were committed from Windows)
         run: chmod +x scripts/*.sh tests/selfhost/*.sh
       - name: Python packages the fixtures drive (net_ssh talks to an asyncssh server)
