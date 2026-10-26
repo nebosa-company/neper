@@ -26,7 +26,9 @@ error Unsupported
 type Out = struct { bytes: []u8, count: usize, full: bool }
 
 // An import (a WASI function) or one of the pseudo-library "wasm"'s instructions, which
-// are written inline (`inline_op`: 1 memory.grow, 2 memory.size, 3 memory.fill, 4 memory.copy).
+// are written inline (`inline_op`: 1 memory.grow, 2 memory.size, 3 memory.fill, 4 memory.copy,
+// and D5672's threads: 5 threads, 6 thread.id, 7 thread.spawn, 8 memory.atomic.wait32,
+// 9 memory.atomic.notify, 10 i32.atomic.rmw.cmpxchg, 11 i32.atomic.load, 12 i32.atomic.store).
 // `mask32` marks the parameters that are `i32`; `result_kind` is 0 none, 1 `i64`, 2 an
 // unsigned `i32` and 3 a signed one.
 type Import = struct {
@@ -124,6 +126,23 @@ type Gen = struct {
     fr_blocks: usize,
     fr_block: usize,
     fr_vec: bool,
+    // `--threads` (D5671): the module shape of wasm_threads.e and the atomics of D5672.
+    threads: bool,
+    ftz: bool,
+    // `--source-map` (C211, D5683): an entry per change of source line, offsets relative to
+    // `bodies` once the function is finished; `map_done` entries are finished.
+    map_on: bool,
+    map_name: str,
+    map_offset: []usize,
+    map_line: []usize,
+    map_column: []usize,
+    map_source: []usize,
+    map_count: usize,
+    map_done: usize,
+    map_paths: []str,
+    map_path_count: usize,
+    map_full: bool,
+    map_text: []u8,
 }
 
 // ---- bytes ---------------------------------------------------------------------
@@ -991,13 +1010,53 @@ fn store_call_results(g: *Gen, instruction: nir.Instruction, expected: usize, pr
     ret ok
 }
 
+// A threads-proposal instruction (the 0xFE prefix) with its memarg: the alignment as a power
+// of two, offset 0.
+fn atomic_instruction(g: *Gen, code: usize, align: usize) {
+    op(g, 254usize)
+    put_uleb(&g.code, code)
+    put(&g.code, align)
+    put(&g.code, 0usize)
+}
+
+// The `wasm` library's threads instructions (D5672); `inline_op` 5 to 12. The plain module
+// has the atomics and a thread id of 0, and answers a spawn with -1.
+fn emit_thread_import(g: *Gen, item: Import) {
+    if item.inline_op == 5usize {
+        if g.threads { i32c(g, 1usize) } else { i32c(g, 0usize) }
+    }
+    if item.inline_op == 6usize {
+        if g.threads {
+            op(g, 35usize)
+            put_uleb(&g.code, 2usize)
+        } else {
+            i32c(g, 0usize)
+        }
+    }
+    if item.inline_op == 7usize {
+        if g.threads {
+            op(g, 16usize)
+            put_uleb(&g.code, g.imports[0usize].wasm_index)
+        } else {
+            op(g, 26usize)
+            i32c(g, 4294967295usize)
+        }
+    }
+    if item.inline_op == 8usize { atomic_instruction(g, 1usize, 2usize) }
+    if item.inline_op == 9usize { atomic_instruction(g, 0usize, 2usize) }
+    if item.inline_op == 10usize { atomic_instruction(g, 72usize, 2usize) }
+    if item.inline_op == 11usize { atomic_instruction(g, 16usize, 2usize) }
+    if item.inline_op == 12usize { atomic_instruction(g, 23usize, 2usize) }
+}
+
 fn emit_inline_import(g: *Gen, instruction: nir.Instruction, item: Import) -> err {
     var at = 0usize
     while at < instruction.operand_count {
         vget(g, operand(g, instruction, at))
-        wrap(g)
+        if item.inline_op <= 4usize || (item.mask32 >> at) & 1usize == 1usize { wrap(g) }
         at += 1usize
     }
+    if item.inline_op >= 5usize { emit_thread_import(g, item) }
     if item.inline_op == 1usize {
         op(g, 64usize)
         op(g, 0usize)
@@ -1184,6 +1243,33 @@ fn from_float(g: *Gen, width: usize) {
     op(g, 189usize)
 }
 
+// FTZ and DAZ (D4203, spec section 11) for a program that switches them (a CPU launch of an `ftz` kernel): WebAssembly
+// floats always keep denormals, so while the module's `$ftz` global (each thread's own, like MXCSR) is 1, every float
+// operation reads its operands and writes its result as the x64 and arm64 builds do with the mode set. The float is
+// its bits on the stack; one whose exponent is zero is a denormal or a zero, and keeps only its sign. The bits go
+// through scratch local 1, and `$ftz` is the module's last global (D5834).
+fn ftz_global(g: *Gen) -> usize {
+    if g.threads { ret 3usize }
+    ret 2usize
+}
+
+fn flush_denormal(g: *Gen, width: usize) {
+    if !g.ftz { ret }
+    put(&g.code, 34usize)
+    put_uleb(&g.code, local_s(g, 1usize))
+    if width == 32usize { i64c(g, 2147483648usize) } else { i64c(g, 9223372036854775808usize) }
+    i64c(g, 0usize -% 1usize)
+    lget(g, local_s(g, 1usize))
+    if width == 32usize { i64c(g, 2139095040usize) } else { i64c(g, 9218868437227405312usize) }
+    op(g, 131usize)
+    op(g, 80usize)
+    put(&g.code, 35usize)
+    put_uleb(&g.code, ftz_global(g))
+    op(g, 113usize)
+    op(g, 27usize)
+    op(g, 131usize)
+}
+
 // Section 11's canonical NaN: a NaN result becomes the one quiet NaN of its width.
 fn canonicalize_float(g: *Gen, result: usize, width: usize) {
     i64c(g, codegen_x64.canonical_nan(width))
@@ -1203,8 +1289,10 @@ fn emit_float_compare(g: *Gen, instruction: nir.Instruction) -> err {
     let width = codegen_x64.float_width(value_ty(g, left))
     if width == 0usize { ret fail(g, "an f16 or bf16 comparison, which codegen_a64 does not have either") }
     vget(g, left)
+    flush_denormal(g, width)
     to_float(g, width)
     vget(g, operand(g, instruction, 1usize))
+    flush_denormal(g, width)
     to_float(g, width)
     var code = 91usize
     if instruction.opcode == .NotEqual { code = 92usize }
@@ -1295,9 +1383,11 @@ fn emit_float_cast(g: *Gen, instruction: nir.Instruction) -> err {
         if source_width == 0usize || target_width == 0usize { ret fail(g, "an f16 or bf16 conversion, which codegen_a64 does not have either") }
         vget(g, value)
         if source_width != target_width {
+            flush_denormal(g, source_width)
             to_float(g, source_width)
             if target_width == 64usize { op(g, 187usize) } else { op(g, 182usize) }
             from_float(g, target_width)
+            flush_denormal(g, target_width)
         }
         vset(g, instruction.result)
         if source_width != target_width { canonicalize_float(g, instruction.result, target_width) }
@@ -1336,6 +1426,7 @@ fn emit_float(g: *Gen, instruction: nir.Instruction) -> err {
         ret ok
     }
     vget(g, left)
+    flush_denormal(g, width)
     to_float(g, width)
     if opcode == .Sqrt {
         if width == 32usize { op(g, 145usize) } else { op(g, 159usize) }
@@ -1346,11 +1437,13 @@ fn emit_float(g: *Gen, instruction: nir.Instruction) -> err {
         if opcode == .Divide { code = 149usize }
         if instruction.operand_count != 2usize || (opcode != .Add && opcode != .Subtract && opcode != .Multiply && opcode != .Divide) { ret fail(g, "a float operation with the wrong operands") }
         vget(g, operand(g, instruction, 1usize))
+        flush_denormal(g, width)
         to_float(g, width)
         if width == 64usize { code += 14usize }
         op(g, code)
     }
     from_float(g, width)
+    flush_denormal(g, width)
     vset(g, instruction.result)
     canonicalize_float(g, instruction.result, width)
     ret ok
@@ -1380,6 +1473,119 @@ fn store_for(g: *Gen, width: usize) {
     memarg(g, 0usize)
 }
 
+// A threaded module's atomic (D5672): the `i64` form of the instruction whose base opcode is
+// `base`, B+1 for 64 bits and B+4, B+5, B+6 for 8, 16 and 32, with the natural alignment.
+fn atomic_for(g: *Gen, base: usize, width: usize) {
+    var code = base + 1usize
+    var align = 3usize
+    if width == 8usize {
+        code = base + 4usize
+        align = 0usize
+    }
+    if width == 16usize {
+        code = base + 5usize
+        align = 1usize
+    }
+    if width == 32usize {
+        code = base + 6usize
+        align = 2usize
+    }
+    atomic_instruction(g, code, align)
+}
+
+// The old value an instruction gave back zero-extended, as the type holds it.
+fn atomic_old_value(g: *Gen, width: usize, signed: bool) {
+    if signed { normalize_bits(g, width, true) }
+}
+
+// Section 8's five instructions as the threads proposal's: load, store, the six
+// read-modify-writes that have an instruction and compare-and-swap. `min` and `max` have none;
+// they are a loop of the load and a compare-and-swap of the chosen value.
+fn emit_atomic_threads(g: *Gen, instruction: nir.Instruction, width: usize, signed: bool) -> err {
+    let opcode = instruction.opcode
+    let address = operand(g, instruction, 0usize)
+    if opcode == .AtomicStore {
+        if instruction.operand_count != 2usize { ret fail(g, "an atomic store with the wrong operands") }
+        address_wrap(g, instruction, address)
+        vget(g, operand(g, instruction, 1usize))
+        atomic_for(g, 23usize, width)
+        ret ok
+    }
+    if !instruction.has_result { ret fail(g, "an atomic without a result") }
+    let result = instruction.result
+    if opcode == .AtomicLoad {
+        address_wrap(g, instruction, address)
+        atomic_for(g, 16usize, width)
+        atomic_old_value(g, width, signed)
+        vset(g, result)
+        ret ok
+    }
+    if opcode == .AtomicCas {
+        if instruction.operand_count != 3usize { ret fail(g, "a compare-and-swap with the wrong operands") }
+        address_wrap(g, instruction, address)
+        vget(g, operand(g, instruction, 1usize))
+        vget(g, operand(g, instruction, 2usize))
+        atomic_for(g, 72usize, width)
+        atomic_old_value(g, width, signed)
+        vset(g, result)
+        ret ok
+    }
+    if instruction.operand_count != 2usize { ret fail(g, "a read-modify-write with the wrong operands") }
+    let operand_value = operand(g, instruction, 1usize)
+    let kind = instruction.immediate / 8usize
+    if kind > 7usize { ret fail(g, "a read-modify-write of a kind that is not there") }
+    if kind <= 5usize {
+        // xchg, add, sub, and, or, xor
+        var base = 65usize
+        if kind == 1usize { base = 30usize }
+        if kind == 2usize { base = 37usize }
+        if kind == 3usize { base = 44usize }
+        if kind == 4usize { base = 51usize }
+        if kind == 5usize { base = 58usize }
+        address_wrap(g, instruction, address)
+        vget(g, operand_value)
+        atomic_for(g, base, width)
+        atomic_old_value(g, width, signed)
+        vset(g, result)
+        ret ok
+    }
+    check_address(g, instruction, address)
+    vget(g, address)
+    wrap(g)
+    atomic_for(g, 16usize, width)
+    atomic_old_value(g, width, signed)
+    vset(g, result)
+    op(g, 3usize)
+    op(g, 64usize)
+    vget(g, address)
+    wrap(g)
+    vget(g, result)
+    vget(g, result)
+    vget(g, operand_value)
+    vget(g, result)
+    vget(g, operand_value)
+    if kind == 6usize {
+        if signed { op(g, 83usize) } else { op(g, 84usize) }
+    } else {
+        if signed { op(g, 85usize) } else { op(g, 86usize) }
+    }
+    op(g, 27usize)
+    atomic_for(g, 72usize, width)
+    atomic_old_value(g, width, signed)
+    lset(g, local_s(g, 2usize))
+    lget(g, local_s(g, 2usize))
+    vget(g, result)
+    op(g, 82usize)
+    block_if(g)
+    lget(g, local_s(g, 2usize))
+    vset(g, result)
+    op(g, 12usize)
+    put_uleb(&g.code, 1usize)
+    block_end(g)
+    block_end(g)
+    ret ok
+}
+
 // Section 8's five instructions as plain memory operations: this target has one thread,
 // so a read-modify-write needs no lock. Each gives back the value that was there.
 fn emit_atomic(g: *Gen, instruction: nir.Instruction) -> err {
@@ -1388,6 +1594,7 @@ fn emit_atomic(g: *Gen, instruction: nir.Instruction) -> err {
     if width != 8usize && width != 16usize && width != 32usize && width != 64usize { ret fail(g, "an atomic of a width this target does not have") }
     if instruction.operand_count == 0usize { ret fail(g, "an atomic without an address") }
     let signed = codegen_x64.signed_integer(instruction.ty)
+    if g.threads { ret emit_atomic_threads(g, instruction, width, signed) }
     let address = operand(g, instruction, 0usize)
     if opcode == .AtomicStore {
         if instruction.operand_count != 2usize { ret fail(g, "an atomic store with the wrong operands") }
@@ -1560,6 +1767,7 @@ fn emit_vector(g: *Gen, instruction: nir.Instruction) -> err {
     let operation = nir.vector_binary_operation(instruction.immediate)
     let lane_bytes = codegen_x64.packed_lane_size(lane)
     let bytes = nir.vector_binary_lanes(instruction.immediate) * lane_bytes
+    if g.ftz && operation <= 3usize && lane >= 4usize { ret fail(g, "a packed float operation in a program that switches flush-to-zero, whose lanes simd128 cannot flush") }
     if bytes != 16usize && bytes != 8usize && bytes != 4usize && bytes != 2usize { ret fail(g, "a vector operation over a size simd128 has no load for") }
     let destination = operand(g, instruction, 0usize)
     let left = operand(g, instruction, 1usize)
@@ -1694,8 +1902,21 @@ fn emit_one(g: *Gen, instruction: nir.Instruction, at: usize) -> err {
     if opcode == .BranchIf { ret emit_branch_if(g, instruction) }
     if opcode == .Trap || opcode == .Unreachable { ret emit_trap_instruction(g, instruction) }
     if opcode == .Return { ret emit_return(g, instruction) }
-    if opcode == .AtomicFence && instruction.immediate != 100usize && instruction.immediate != 101usize { ret ok }
-    if opcode == .AtomicFence { ret fail(g, "a flush-to-zero mode switch (a kernel launched with .Ftz), which WebAssembly floats cannot do: they keep denormals") }
+    if opcode == .AtomicFence && instruction.immediate != 100usize && instruction.immediate != 101usize {
+        if g.threads {
+            op(g, 254usize)
+            op(g, 3usize)
+            op(g, 0usize)
+        }
+        ret ok
+    }
+    if opcode == .AtomicFence {
+        // 100 sets FTZ and DAZ for an `ftz` kernel's CPU run and 101 clears them (see flush_denormal).
+        if instruction.immediate == 100usize { i32c(g, 1usize) } else { i32c(g, 0usize) }
+        put(&g.code, 36usize)
+        put_uleb(&g.code, ftz_global(g))
+        ret ok
+    }
     if opcode == .Switch { ret fail(g, "a switch instruction, which no lowering makes and no back end reads (it carries no case table)") }
     ret fail(g, "an instruction this target does not have")
 }
@@ -2059,6 +2280,7 @@ fn emit_condition(g: *Gen, instruction: nir.Instruction) -> err {
 // value the plan wants kept on the stack stays there when the instruction's code ends with
 // the one write of its local and never reads it.
 fn emit_folded(g: *Gen, instruction: nir.Instruction, at: usize, mode: usize) -> err {
+    if g.map_on { map_note(g, instruction.site, instruction.path, g.code.count) }
     var held = 0usize
     while held < g.fold_count && g.fr_user[g.fold_stack[g.fold_count - 1usize - held]] == at { held += 1usize }
     let base = g.fold_count - held
@@ -2119,6 +2341,42 @@ fn emit_folded(g: *Gen, instruction: nir.Instruction, at: usize, mode: usize) ->
     ret ok
 }
 
+// ---- the source map (C211) ------------------------------------------------------
+
+// An entry at `offset` of the function being written when its line or file is not the last
+// entry's; an entry at the same offset (an instruction that wrote nothing) is replaced.
+fn map_note(g: *Gen, site: nir.Site, path: str, offset: usize) {
+    if site.line == 0usize { ret }
+    var source = 0usize
+    var found = false
+    while source < g.map_path_count && !found {
+        if g.map_paths[source].len == path.len && check.same(g.map_paths[source], path) { found = true } else { source += 1usize }
+    }
+    if !found {
+        if g.map_path_count >= g.map_paths.len || g.map_count >= g.map_line.len {
+            g.map_full = true
+            ret
+        }
+        g.map_paths[g.map_path_count] = path
+        g.map_path_count += 1usize
+    }
+    var at = g.map_count
+    if at != g.map_done {
+        let last = at - 1usize
+        if g.map_line[last] == site.line && g.map_source[last] == source { ret }
+        if g.map_offset[last] == offset { at = last }
+    }
+    if at >= g.map_line.len {
+        g.map_full = true
+        ret
+    }
+    g.map_offset[at] = offset
+    g.map_line[at] = site.line
+    g.map_column[at] = site.column
+    g.map_source[at] = source
+    g.map_count = at + 1usize
+}
+
 // ---- a function ----------------------------------------------------------------
 
 // The function's locals and prologue are written; its blocks follow (`emit_blocks` or the
@@ -2142,6 +2400,13 @@ fn begin_function(g: *Gen, function_index: usize) -> err {
         put_uleb(&g.code, 3usize)
         put(&g.code, 123usize)
     }
+    if g.map_on {
+        g.map_count = g.map_done
+        if function.instruction_count != 0usize {
+            let first = g.b.instructions[function.first_instruction]
+            map_note(g, first.site, first.path, 0usize)
+        }
+    }
     prologue(g, function)
     ret ok
 }
@@ -2153,6 +2418,14 @@ fn finish_function(g: *Gen) -> err {
     op(g, 0usize)
     block_end(g)
     if g.code.full || g.data.full { ret fail(g, "the module outgrew the back end's storage") }
+    if g.map_on {
+        // From here an entry's offset is its byte in the code section's bodies.
+        let base = g.bodies.count + uleb_size(g.code.count)
+        while g.map_done < g.map_count {
+            g.map_offset[g.map_done] = g.map_offset[g.map_done] + base
+            g.map_done += 1usize
+        }
+    }
     put_uleb(&g.bodies, g.code.count)
     put_bytes(&g.bodies, &g.code)
     ret ok

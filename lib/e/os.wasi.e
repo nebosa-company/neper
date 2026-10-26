@@ -151,6 +151,144 @@ extern fn wasm_memory_fill(destination: u32, value: u32, count: u32)
 @import("wasm", "memory.copy")
 extern fn wasm_memory_copy(destination: u32, source: u32, count: u32)
 
+// Threads (D5672): `threads` is 1 in a `--threads` module and 0 in a plain one, which then never
+// waits; the atomics work on either memory.
+@import("wasm", "threads")
+extern fn wasm_threads() -> u32
+
+@import("wasm", "thread.id")
+extern fn wasm_thread_id() -> u32
+
+@import("wasm", "thread.spawn")
+extern fn wasm_thread_spawn(record: u32) -> i32
+
+@import("wasm", "memory.atomic.wait32")
+extern fn wasm_wait32(address: u32, expected: u32, timeout_ns: i64) -> u32
+
+@import("wasm", "memory.atomic.notify")
+extern fn wasm_notify(address: u32, count: u32) -> u32
+
+@import("wasm", "i32.atomic.rmw.cmpxchg")
+extern fn wasm_cas32(address: u32, expected: u32, replacement: u32) -> u32
+
+@import("wasm", "i32.atomic.load")
+extern fn wasm_load32(address: u32) -> u32
+
+@import("wasm", "i32.atomic.store")
+extern fn wasm_store32(address: u32, value: u32)
+
+// The sockets, the resolver and the poller come from the host (D5675): one more import module, each
+// function answering a WASI errno and writing its outputs through the pointers it is given.
+@import("neper_host", "sock_open")
+extern fn host_sock_open(family: u32, kind: u32, made: u32) -> u32
+
+@import("neper_host", "sock_set_nonblocking")
+extern fn host_sock_set_nonblocking(handle: u32, enabled: u32) -> u32
+
+@import("neper_host", "sock_bind")
+extern fn host_sock_bind(handle: u32, address: u32) -> u32
+
+@import("neper_host", "sock_local_address")
+extern fn host_sock_local_address(handle: u32, address: u32) -> u32
+
+@import("neper_host", "sock_listen")
+extern fn host_sock_listen(handle: u32, backlog: u32) -> u32
+
+@import("neper_host", "sock_accept")
+extern fn host_sock_accept(handle: u32, made: u32, address: u32) -> u32
+
+@import("neper_host", "sock_connect")
+extern fn host_sock_connect(handle: u32, address: u32) -> u32
+
+@import("neper_host", "sock_send")
+extern fn host_sock_send(handle: u32, bytes: u32, length: u32, sent: u32) -> u32
+
+@import("neper_host", "sock_recv")
+extern fn host_sock_recv(handle: u32, bytes: u32, length: u32, taken: u32) -> u32
+
+@import("neper_host", "sock_send_to")
+extern fn host_sock_send_to(handle: u32, address: u32, bytes: u32, length: u32, sent: u32) -> u32
+
+@import("neper_host", "sock_recv_from")
+extern fn host_sock_recv_from(handle: u32, bytes: u32, length: u32, taken: u32, address: u32) -> u32
+
+@import("neper_host", "sock_shutdown")
+extern fn host_sock_shutdown(handle: u32, how: u32) -> u32
+
+@import("neper_host", "sock_close")
+extern fn host_sock_close(handle: u32) -> u32
+
+@import("neper_host", "resolve")
+extern fn host_resolve(host: u32, host_length: u32, port: u32, family: u32, out: u32, capacity: u32, found: u32) -> u32
+
+@import("neper_host", "poll_open")
+extern fn host_poll_open(made: u32) -> u32
+
+@import("neper_host", "poll_ctl")
+extern fn host_poll_ctl(poller: u32, operation: u32, handle: u32, token: i64, interest: u32) -> u32
+
+@import("neper_host", "poll_wait")
+extern fn host_poll_wait(poller: u32, events: u32, capacity: u32, timeout_ns: i64, count: u32) -> u32
+
+@import("neper_host", "poll_wake")
+extern fn host_poll_wake(poller: u32) -> u32
+
+@import("neper_host", "poll_close")
+extern fn host_poll_close(poller: u32) -> u32
+
+@import("neper_host", "pipe")
+extern fn host_pipe(read_end: u32, write_end: u32) -> u32
+
+@import("neper_host", "handle_read")
+extern fn host_handle_read(handle: u32, bytes: u32, length: u32, taken: u32, nonblocking: u32) -> u32
+
+@import("neper_host", "handle_write")
+extern fn host_handle_write(handle: u32, bytes: u32, length: u32, sent: u32) -> u32
+
+@import("neper_host", "handle_close")
+extern fn host_handle_close(handle: u32) -> u32
+
+// The window of a page (D5680, C208): a canvas the host draws frames on, input from a ring. A host without a
+// window answers ENOSYS (52) to each, and every window function then answers what it answered before.
+@import("neper_host", "window_open")
+extern fn host_window_open(width: u32, height: u32, made: u32) -> u32
+
+@import("neper_host", "clipboard_text")
+extern fn host_clipboard_text(out: u32, capacity: u32, used: u32) -> u32
+
+@import("neper_host", "set_clipboard_text")
+extern fn host_set_clipboard_text(bytes: u32, length: u32) -> u32
+
+@import("neper_host", "window_metrics")
+extern fn host_window_metrics(handle: u32, out: u32) -> u32
+
+@import("neper_host", "window_title")
+extern fn host_window_title(handle: u32, bytes: u32, length: u32) -> u32
+
+@import("neper_host", "window_present")
+extern fn host_window_present(handle: u32, pixels: u32, width: u32, height: u32) -> u32
+
+@import("neper_host", "window_poll")
+extern fn host_window_poll(out: u32, timeout_ns: i64, has: u32) -> u32
+
+@import("neper_host", "window_cursor")
+extern fn host_window_cursor(handle: u32, shape: u32) -> u32
+
+@import("neper_host", "proc_spawn")
+extern fn host_proc_spawn(bytes: u32, length: u32, argv_count: u32, env_count: u32, flags: u32, cwd_length: u32, input: u32, output: u32, errors: u32, made: u32) -> u32
+
+@import("neper_host", "proc_wait")
+extern fn host_proc_wait(handle: u32, status: u32) -> u32
+
+@import("neper_host", "proc_kill")
+extern fn host_proc_kill(handle: u32) -> u32
+
+@import("neper_host", "proc_group_kill")
+extern fn host_proc_group_kill(handle: u32, force: u32) -> u32
+
+@import("wasi_snapshot_preview1", "fd_pread")
+extern fn wasi_fd_pread(fd: u32, iovs: u32, iovs_len: u32, offset: u64, read_count: u32) -> u32
+
 // ---- the results the convention returns through a slot ---------------------------------------------
 
 type AllocResult = struct { data: []u8, failure: err }
@@ -164,13 +302,16 @@ type ReaddirResult = struct { entries: []DirEntry, failure: err }
 
 // Room up to `end`, by growing the memory: the root arena and the reservations above it (D5640) are
 // what lies past the shadow stack, so growing is all that making room takes.
+// Two threads growing at once may grow more than needed, never less: a grow that fails is
+// looked at again, because the other thread's may have covered `end` (D5673).
 fn rt_grow(end: usize) -> bool {
     let have = usize(wasm_memory_size()) * 65536usize
     if end <= have { ret true }
     let need = (end - have + 65535usize) / 65536usize
     if need > 65535usize { ret false }
     let grown = wasm_memory_grow(u32(need))
-    ret grown != 4294967295u32
+    if grown != 4294967295u32 { ret true }
+    ret end <= usize(wasm_memory_size()) * 65536usize
 }
 
 // mem.alloc: the result {data, len, err} at `result`, `count` elements of `size` bytes aligned to
@@ -304,6 +445,7 @@ fn neper_trap(record_path: *str, site: usize, first: usize, second: usize, recor
 // first, with the root arena, whose end is where reservations begin (D5640).
 fn neper_start_args(out: *[]str, arena: *mem.Arena) {
     if rt_reserve_top == 0usize { rt_reserve_top = (mem.address_of(arena.base) + arena.cap + 65535usize) / 65536usize * 65536usize }
+    if wasm_threads() == 1u32 { load_mounts() }
     var none: []str = zero
     *out = none
     var sizes: [2]u32 = zero
@@ -341,12 +483,31 @@ fn neper_os_exit(code: i32) {
 
 // ---- files: the standard streams ---------------------------------------------------------------------
 
+// A File whose raw is a host handle (the end of a pipe, D5677) is read, written and closed through the
+// functions `pipe` stores here, so a program that makes no pipe does not import the host's handle calls
+// (D5675: a module imports only what it reaches, and every program reaches these three).
+var host_file_read: [1]fn(*File, *[]u8) -> (usize, err)
+var host_file_write: [1]fn(*File, *str) -> (usize, err)
+var host_file_close: [1]fn(*File) -> err
+var host_file_armed: [1]u32
+
+// A raw below HOST_BASE is a WASI descriptor, and the largest number (the deliberate invalid handle of
+// error_detail, NO_FD) is no host handle either; before the first pipe nothing is routed.
+fn is_host_file(f: *File) -> bool {
+    ret host_file_armed[0usize] != 0u32 && f.raw >= HOST_BASE && f.raw < 4294967295usize
+}
+
 fn neper_os_stdout(out: *File) { out.raw = 1usize }
 
 fn neper_os_stderr(out: *File) { out.raw = 2usize }
 
 // os.write(file: *File, bytes: *str) -> (usize, err).
 fn neper_os_write(f: *File, text: *str) -> (usize, err) {
+    if is_host_file(f) {
+        let route = host_file_write[0usize]
+        let (done, route_error) = route(f, text)
+        ret (done, route_error)
+    }
     let content: []const u8 = *text
     var done = 0usize
     var iov: [2]u32 = zero
@@ -367,6 +528,11 @@ fn neper_os_write(f: *File, text: *str) -> (usize, err) {
 fn neper_os_read(f: *File, buffer: *[]u8) -> (usize, err) {
     let target_bytes = *buffer
     if target_bytes.len == 0usize { ret (0usize, ok) }
+    if is_host_file(f) {
+        let route = host_file_read[0usize]
+        let (taken, route_error) = route(f, buffer)
+        ret (taken, route_error)
+    }
     var iov: [2]u32 = zero
     var taken: [1]u32 = zero
     iov[0usize] = u32(mem.address_of(&target_bytes[0usize]))
@@ -378,6 +544,11 @@ fn neper_os_read(f: *File, buffer: *[]u8) -> (usize, err) {
 
 fn neper_os_close(f: *File) -> err {
     if f.raw <= 2usize { ret ok }
+    if dup_give_back(f) { ret ok }
+    if is_host_file(f) {
+        let route = host_file_close[0usize]
+        ret route(f)
+    }
     ret wasi_cleanup(wasi_fd_close(fd_of(f.raw)))
 }
 
@@ -417,23 +588,239 @@ fn neper_os_clock(kind: Clock) -> (i64, err) {
 
 // ---- what WASI cannot do, and what a build answers "nothing done" ------------------------------------
 
-fn neper_os_spawn(result: *SpawnResult, arena: *mem.Arena, argv: *[]const str, stdio: *Stdio) {
-    result.proc = Proc { raw: 0usize }
-    result.failure = Unsupported
+// ---- processes (D5677): the host starts them, in the Node runner only ---------------------------------------
+// A child whose argv[0] is a guest path ending in .wasm runs through the runner, because its image is a
+// module; the cwd and that path go to the host as absolute guest paths. The request is one buffer: the argv
+// strings, then the env strings (each NUL-terminated), then the cwd.
+const SPAWN_BYTES: usize = 60000usize
+
+fn ends_in_wasm(text: str) -> bool {
+    if text.len < 5usize { ret false }
+    let tail = ".wasm"
+    var k = 0usize
+    while k < 5usize {
+        if text[text.len - 5usize + k] != tail[k] { ret false }
+        k += 1usize
+    }
+    ret true
 }
 
-fn neper_os_wait(p: *Proc) -> (i32, err) { ret (0i32, Unsupported) }
+// A stream the child is given: 0-2 are the runner's own, a pipe end is a host handle, a WASI descriptor
+// goes as it is and the host answers ENOTSUP.
+fn stdio_word(f: File) -> u32 {
+    if f.raw < HOST_BASE { ret u32(f.raw) }
+    ret host_handle(f.raw)
+}
 
-// os.thread_create(result, entry, context, stack): a module has one thread and no way to start
-// another, so the answer is the one a refusing host gives and the thread handle is cleared.
+fn push_terminated(buffer: []u8, at: usize, text: str) -> usize {
+    let end = push_text(buffer, at, text)
+    if end < buffer.len { buffer[end] = 0u8 }
+    ret end + 1usize
+}
+
+fn host_spawn_in(child: *Proc, a: *mem.Arena, argv: []const str, extra: []const str, inherit: bool, cwd: str, grouped: bool, stdio: Stdio) -> err {
+    if argv.len == 0usize { ret Failed }
+    var directory = cwd
+    if cwd.len == 0usize {
+        let (here, here_error) = current_dir(a)
+        if here_error != ok { ret here_error }
+        directory = here
+    } else {
+        let (resolved, resolved_error) = canonical(a, cwd)
+        if resolved_error != ok { ret resolved_error }
+        directory = resolved
+    }
+    var first = argv[0usize]
+    if ends_in_wasm(first) {
+        let (resolved, resolved_error) = canonical(a, first)
+        if resolved_error != ok { ret resolved_error }
+        first = resolved
+    }
+    let (bytes, alloc_error) = mem.alloc[u8](a, SPAWN_BYTES)
+    if alloc_error != ok { ret OutOfMemory }
+    var at = push_terminated(bytes, 0usize, first)
+    var k = 1usize
+    while k < argv.len {
+        at = push_terminated(bytes, at, argv[k])
+        k += 1usize
+    }
+    k = 0usize
+    while k < extra.len {
+        at = push_terminated(bytes, at, extra[k])
+        k += 1usize
+    }
+    at = push_text(bytes, at, directory)
+    if at > bytes.len { ret Failed }
+    var flags = 0u32
+    if inherit { flags = flags | 1u32 }
+    if grouped { flags = flags | 2u32 }
+    var made: [1]u32 = zero
+    let status = host_proc_spawn(address_of_bytes(bytes), u32(at), u32(argv.len), u32(extra.len), flags, u32(directory.len), stdio_word(stdio.stdin), stdio_word(stdio.stdout), stdio_word(stdio.stderr), u32(mem.address_of(&made[0usize])))
+    if status != 0u32 { ret wasi_error(status) }
+    child.raw = usize(made[0usize])
+    ret ok
+}
+fn host_spawn(child: *Proc, a: *mem.Arena, argv: []const str, extra: []const str, inherit: bool, cwd: str, grouped: bool, stdio: Stdio) -> err {
+    let checkpoint = mem.mark(a)
+    let spawn_error = host_spawn_in(child, a, argv, extra, inherit, cwd, grouped, stdio)
+    mem.reset(a, checkpoint)
+    ret spawn_error
+}
+
+fn neper_os_spawn(result: *SpawnResult, arena: *mem.Arena, argv: *[]const str, stdio: *Stdio) {
+    var none: [1]str = zero
+    result.proc = Proc { raw: 0usize }
+    result.failure = host_spawn(&result.proc, arena, *argv, none[0usize..0usize], true, "", false, *stdio)
+}
+
+fn neper_os_wait(p: *Proc) -> (i32, err) {
+    var status: [1]u32 = zero
+    let code = host_proc_wait(host_handle(p.raw), u32(mem.address_of(&status[0usize])))
+    if code != 0u32 { ret (0i32, wasi_error(code)) }
+    ret (i32(status[0usize]), ok)
+}
+
+// ---- threads (D5673) ---------------------------------------------------------------------------------
+// A plain module has one thread and no way to start another, so it answers what a refusing host
+// gives. A `--threads` module starts each thread on a block of reserved memory that is its record
+// and its shadow stack (little-endian): u32 state at 0 (1 running, 2 detached, 0 finished), u32
+// tid at 4, u64 entry slot at 8, context at 16, stack top at 24, stack floor at 32, size at 40 and
+// the free list's link at 48. `wasi_thread_start` (src/wasm_threads.e) reads it, calls the entry,
+// then stores 0 over the state and wakes its joiners, its last touches of the block.
+//
+// `rt_lock` is Drepper's mutex (0 free, 1 held, 2 held and waited for) over the reservations and the
+// free list of finished blocks. It is an element, not a scalar `var`: the checker refuses the
+// address of a module-level scalar (D5713).
+var rt_lock: [1]u32 = zero
+var rt_free: [1]usize = zero
+
+fn rt_acquire() {
+    let lock = u32(mem.address_of(&rt_lock[0usize]))
+    if wasm_cas32(lock, 0u32, 1u32) == 0u32 { ret }
+    while true {
+        let seen = wasm_load32(lock)
+        if seen == 0u32 {
+            if wasm_cas32(lock, 0u32, 2u32) == 0u32 { ret }
+        } else if seen == 1u32 {
+            let marked = wasm_cas32(lock, 1u32, 2u32)
+        } else {
+            let woken = wasm_wait32(lock, 2u32, 0i64 - 1i64)
+        }
+    }
+}
+
+fn rt_release() {
+    let lock = u32(mem.address_of(&rt_lock[0usize]))
+    if wasm_cas32(lock, 1u32, 0u32) == 1u32 { ret }
+    wasm_store32(lock, 0u32)
+    let woken = wasm_notify(lock, 1u32)
+}
+
+fn rt_load64(address: usize) -> usize {
+    var word: [1]u64 = zero
+    wasm_memory_copy(u32(mem.address_of(&word[0usize])), u32(address), 8u32)
+    ret usize(word[0usize])
+}
+
+fn rt_store64(address: usize, value: usize) {
+    var word: [1]u64 = zero
+    word[0usize] = u64(value)
+    wasm_memory_copy(u32(address), u32(mem.address_of(&word[0usize])), 8u32)
+}
+
+// A finished block of at least `size` bytes from the free list (first fit), else 0.
+fn rt_block_take(size: usize) -> usize {
+    rt_acquire()
+    var previous = 0usize
+    var block = rt_free[0usize]
+    while block != 0usize {
+        let next = rt_load64(block + 48usize)
+        if rt_load64(block + 40usize) >= size {
+            if previous == 0usize { rt_free[0usize] = next } else { rt_store64(previous + 48usize, next) }
+            rt_release()
+            ret block
+        }
+        previous = block
+        block = next
+    }
+    rt_release()
+    ret 0usize
+}
+
+fn rt_block_give(block: usize) {
+    rt_acquire()
+    rt_store64(block + 48usize, rt_free[0usize])
+    rt_free[0usize] = block
+    rt_release()
+}
+
+// os.thread_create(result, entry, context, stack): `entry` is the function's table slot (D5604).
 fn neper_os_thread_create(result: *ThreadResult, entry: usize, context: usize, stack: usize) {
     result.thread = Thread { raw: 0usize }
     result.failure = Unsupported
+    if wasm_threads() == 0u32 { ret }
+    result.failure = Failed
+    var room = stack
+    if room < 65536usize { room = 65536usize }
+    if room > MEMORY_END { ret }
+    var size = (room + 64usize + 65535usize) / 65536usize * 65536usize
+    var block = rt_block_take(size)
+    if block != 0usize {
+        size = rt_load64(block + 40usize)
+    } else {
+        let (start, reserve_error) = neper_os_reserve(size)
+        if reserve_error != ok { ret }
+        block = mem.address_of(start)
+    }
+    // Only a fresh block can fail to grow (a free one was grown before); its addresses are lost.
+    if !rt_grow(block + size) { ret }
+    var record: [7]u64 = zero
+    record[0usize] = 1u64
+    record[1usize] = u64(entry)
+    record[2usize] = u64(context)
+    record[3usize] = u64(block + size)
+    record[4usize] = u64(block + 64usize)
+    record[5usize] = u64(size)
+    wasm_memory_copy(u32(block), u32(mem.address_of(&record[0usize])), 56u32)
+    let tid = wasm_thread_spawn(u32(block))
+    if tid <= 0i32 {
+        rt_block_give(block)
+        ret
+    }
+    wasm_store32(u32(block + 4usize), u32(tid))
+    result.thread = Thread { raw: block }
+    result.failure = ok
 }
 
-fn neper_os_thread_join(t: *Thread) -> err { ret Unsupported }
+fn neper_os_thread_join(t: *Thread) -> err {
+    if wasm_threads() == 0u32 { ret Unsupported }
+    let block = t.raw
+    if block == 0usize { ret Failed }
+    let state = u32(block)
+    var seen = wasm_load32(state)
+    while seen != 0u32 {
+        if seen == 2u32 { ret Failed }
+        let woken = wasm_wait32(state, seen, 0i64 - 1i64)
+        seen = wasm_load32(state)
+    }
+    t.raw = 0usize
+    rt_block_give(block)
+    ret ok
+}
 
-fn neper_os_thread_detach(t: *Thread) -> err { ret Unsupported }
+// A detached thread still running stores 0 over the 2 when it ends and its block is not
+// reclaimed, as the native runtimes leave a detached thread's stack.
+// ponytail: that block leaks; the host reporting finished detached blocks would reclaim it.
+fn neper_os_thread_detach(t: *Thread) -> err {
+    if wasm_threads() == 0u32 { ret Unsupported }
+    let block = t.raw
+    if block == 0usize { ret Failed }
+    let old = wasm_cas32(u32(block), 1u32, 2u32)
+    if old == 2u32 { ret Failed }
+    t.raw = 0usize
+    if old == 0u32 { rt_block_give(block) }
+    ret ok
+}
 
 // Reservations (D5640): address space above the root arena, handed out upward in 64 KiB steps.
 // Memory reaches a reservation when an allocation in it does (`rt_grow`), so `commit` only checks
@@ -455,9 +842,14 @@ fn rt_pointer(address: usize) -> *u8 {
 
 fn neper_os_reserve(n: usize) -> (*u8, err) {
     if rt_reserve_top == 0usize || n == 0usize { ret (nil, Unsupported) }
-    if rt_reserve_top >= MEMORY_END || n > MEMORY_END - rt_reserve_top { ret (nil, mem.Exhausted) }
+    rt_acquire()
+    if rt_reserve_top >= MEMORY_END || n > MEMORY_END - rt_reserve_top {
+        rt_release()
+        ret (nil, mem.Exhausted)
+    }
     let start = rt_reserve_top
     rt_reserve_top = start + (n + 65535usize) / 65536usize * 65536usize
+    rt_release()
     ret (rt_pointer(start), ok)
 }
 
@@ -472,7 +864,13 @@ fn neper_os_commit(p: *u8, n: usize) -> err {
 // timeout (sleep for it on the monotonic clock with a `poll_oneoff` clock subscription, then report
 // `Timeout`; zero polls once); no timeout (negative), which can never end and which every caller
 // of `wait_u32` would answer by waiting again, so the module stops with the deadlock named.
+// A `--threads` module waits for real: woken (0) and not equal (1) are `ok`, timed out (2) is
+// `Timeout`, the native contract, which allows a spurious wake.
 fn neper_os_wait_u32(p: *u8, expected: u32, timeout_ns: i64) -> err {
+    if wasm_threads() == 1u32 {
+        if wasm_wait32(u32(mem.address_of(p)), expected, timeout_ns) == 2u32 { ret Timeout }
+        ret ok
+    }
     var word: [1]u32 = zero
     wasm_memory_copy(u32(mem.address_of(&word[0usize])), u32(mem.address_of(p)), 4u32)
     if word[0usize] != expected { ret ok }
@@ -492,9 +890,9 @@ fn neper_os_wait_u32(p: *u8, expected: u32, timeout_ns: i64) -> err {
     ret Timeout
 }
 
-fn neper_os_wake_one_u32(p: *u8) {}
+fn neper_os_wake_one_u32(p: *u8) { let woken = wasm_notify(u32(mem.address_of(p)), 1u32) }
 
-fn neper_os_wake_all_u32(p: *u8) {}
+fn neper_os_wake_all_u32(p: *u8) { let woken = wasm_notify(u32(mem.address_of(p)), 4294967295u32) }
 
 // os.copy_bytes(dst: *[]u8, src: *[]const u8): the shorter length's worth.
 fn neper_os_copy_bytes(dst: *[]u8, src: *[]const u8) {
@@ -542,10 +940,16 @@ const FILE_WRITE_RIGHTS: u64 = 12583233u64
 const DIR_RIGHTS: u64 = 264240830u64
 const ALL_RIGHTS: u64 = 268435455u64
 
-// The host's errno, kept for last_error_detail: a single module-wide slot, since there is one thread.
-var error_code: i32 = 0i32
-var error_used: u8 = 0u8
-var error_fresh: u8 = 0u8
+// The host's errno, kept for last_error_detail in a slot per thread keyed by current_thread_id, as
+// os.linux.e keeps it: a read requires the identifier to match, so a thread never reads another's.
+// used: 0 unused, 1 the kind from the code, 2 a contextual `Denied`; fresh: recorded and not read.
+// ponytail: sixty-four slots, no eviction, no atomics; more live threads than that lose details,
+// a diagnostic and never a wrong answer. Real thread-local storage would replace it.
+const ERROR_SLOTS: usize = 64usize
+var error_slot_thread: [64]usize = zero
+var error_slot_code: [64]i32 = zero
+var error_slot_used: [64]u8 = zero
+var error_slot_fresh: [64]u8 = zero
 
 var mounts_loaded: bool = false
 var mount_count: usize = 0usize
@@ -561,14 +965,19 @@ var cwd_text: [1024]u8 = zero
 var cwd_len: usize = 1usize
 
 fn record_error_detail(code: i32) {
-    error_code = code
-    error_used = 1u8
-    error_fresh = 1u8
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    error_slot_code[slot] = code
+    error_slot_used[slot] = 1u8
+    error_slot_thread[slot] = thread
+    error_slot_fresh[slot] = 1u8
 }
 
 // A cleanup's failure is recorded only when no primary failure waits to be read.
 fn record_cleanup_error_detail(code: i32) {
-    if error_fresh == 1u8 && error_used != 0u8 { ret }
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread { ret }
     record_error_detail(code)
 }
 
@@ -626,10 +1035,13 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     detail.kind = ErrorKind.Other
     detail.operation = operation
     detail.subject = subject
-    if error_used == 0u8 { ret detail }
-    error_fresh = 0u8
-    detail = detail_from_code(error_code, operation, subject)
-    if error_used == 2u8 { detail.kind = ErrorKind.Denied }
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    let used = error_slot_used[slot]
+    if used == 0u8 || error_slot_thread[slot] != thread { ret detail }
+    error_slot_fresh[slot] = 0u8
+    detail = detail_from_code(error_slot_code[slot], operation, subject)
+    if used == 2u8 { detail.kind = ErrorKind.Denied }
     ret detail
 }
 
@@ -698,6 +1110,53 @@ fn load_mounts() {
         fd += 1u32
     }
     if root_mount < MOUNT_MAX { cwd_fd = mount_fds[root_mount] }
+    start_directory()
+}
+
+// The directory a spawned child starts in (D5677): the runner puts the parent's `cwd`, a guest path, in
+// NEPER_PWD. Anything that is not a directory here leaves the root.
+fn start_directory() {
+    var sizes: [2]u32 = zero
+    if wasi_environ_sizes_get(u32(mem.address_of(&sizes[0usize])), u32(mem.address_of(&sizes[1usize]))) != 0u32 { ret }
+    let count = usize(sizes[0usize])
+    let block_size = usize(sizes[1usize])
+    if count == 0usize || count > 128usize || block_size > 8192usize { ret }
+    var pointers: [129]u32 = zero
+    var block: [8193]u8 = zero
+    let base = u32(mem.address_of(&block[0usize]))
+    if wasi_environ_get(u32(mem.address_of(&pointers[0usize])), base) != 0u32 { ret }
+    var entry = 0usize
+    while entry < count {
+        let at = usize(pointers[entry] - base)
+        var matched = at + 10usize < block_size
+        if matched {
+            let prefix = "NEPER_PWD="
+            var k = 0usize
+            while k < prefix.len {
+                if block[at + k] != prefix[k] { matched = false }
+                k += 1usize
+            }
+        }
+        if matched {
+            var end = at + 10usize
+            while end < block_size && block[end] != 0u8 { end += 1usize }
+            let value = block[at + 10usize..end]
+            if value.len > 1usize && value.len < 1024usize && value[0usize] == 47u8 {
+                let (fd, open_error) = open_directory(value)
+                if open_error != ok { ret }
+                cwd_fd = fd
+                cwd_owned = true
+                var copied = 0usize
+                while copied < value.len {
+                    cwd_text[copied] = value[copied]
+                    copied += 1usize
+                }
+                cwd_len = value.len
+            }
+            ret
+        }
+        entry += 1usize
+    }
 }
 
 fn mount_matches(path: str, index: usize) -> bool {
@@ -1199,7 +1658,7 @@ fn open_parent(dir_fd: u32, relative_path: str) -> (u32, str, err) {
             if status != 0u32 {
                 if status == 32u32 || status == 54u32 {
                     record_error_detail(i32(status))
-                    error_used = 2u8
+                    error_slot_used[current_thread_id() % ERROR_SLOTS] = 2u8
                     ret (dir_fd, "", Denied)
                 }
                 ret (dir_fd, "", wasi_error(status))
@@ -1481,15 +1940,13 @@ fn dlclose(l: own Lib) -> err { ret ok }
 // Unsupported. NeperOS has no dynamic symbols, so it always answers not-found; the modules that use
 // dlsym (e.gpu's Vulkan backend) only run their CPU backend here, where this path is pruned.
 fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Unsupported) }
-// A NeperOS program runs on one thread here, so a fixed non-zero id identifies it. Non-zero
-// matters: a zero reads as "no owner" to a reentrant lock (e.gpu's device lock), which would then
-// re-lock a mutex it already holds on the same thread and deadlock. (A real per-thread id would be
-// a kernel query, for when a program's own threads each take the lock.)
-fn current_thread_id() -> usize { ret 1usize }
-
-// (D2168/D2169, C110) The native-window surface e.ui.window compiles against, as os.neperos.e has it:
-// there is no window manager under WASI, so a window opens and presents nothing. The headless testing
-// harness touches none of these.
+// The wasi-threads tid plus one: 1 on the main thread (tid 0) and in a plain module, non-zero and
+// distinct on every other. Non-zero matters: a zero reads as "no owner" to a reentrant lock
+// (e.gpu's device lock), which would then re-lock a mutex it already holds and deadlock.
+fn current_thread_id() -> usize { ret usize(wasm_thread_id()) + 1usize }
+// (D2168/D2169, C110) The native-window surface e.ui.window compiles against, as os.neperos.e has it. A window exists only
+// where the host has one (lib/wasm/window.js in a page, D5680); under Node, which answers ENOSYS to window_open, there is
+// none and open answers Unsupported, the answer the window fixtures print "unsupported" for.
 const SURFACE_W: usize = 1280usize
 const SURFACE_H: usize = 2856usize
 type Window = struct { raw: usize }
@@ -1499,30 +1956,123 @@ type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focus
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
 type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
 type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
-fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) { ret (Window { raw: 1usize }, ok) }
+// A page's window is one: the host's handle is 1 once window_open has been answered (0 is no host window).
+var host_window_live: u32 = 0u32
+fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
+    var made: [1]u32 = zero
+    let status = host_window_open(options.width, options.height, u32(mem.address_of(&made[0usize])))
+    if status == 0u32 {
+        host_window_live = 1u32
+        ret (Window { raw: usize(made[0usize]) }, ok)
+    }
+    ret (Window { raw: 0usize }, Unsupported)
+}
 fn window_close(w: Window) -> err { ret ok }
-fn window_metrics(w: Window) -> (WindowMetrics, err) { ret (WindowMetrics { width: u32(SURFACE_W), height: u32(SURFACE_H), scale_percent: 100u32, focused: true, visible: true }, ok) }
-fn window_title(w: Window, value: str) -> err { ret ok }
+fn window_metrics(w: Window) -> (WindowMetrics, err) {
+    if host_window_live != 0u32 {
+        var words: [5]u32 = zero
+        if host_window_metrics(u32(w.raw), u32(mem.address_of(&words[0usize]))) == 0u32 {
+            ret (WindowMetrics { width: words[0usize], height: words[1usize], scale_percent: words[2usize], focused: words[3usize] != 0u32, visible: words[4usize] != 0u32 }, ok)
+        }
+    }
+    ret (WindowMetrics { width: u32(SURFACE_W), height: u32(SURFACE_H), scale_percent: 100u32, focused: true, visible: true }, ok)
+}
+fn window_title(w: Window, value: str) -> err {
+    if host_window_live != 0u32 && value.len != 0usize {
+        let status = host_window_title(u32(w.raw), address_of_str(value), u32(value.len))
+    }
+    ret ok
+}
 fn window_visible(w: Window, value: bool) -> err { ret ok }
-fn window_cursor(w: Window, shape: CursorShape) -> err { ret ok }
+fn window_cursor(w: Window, shape: CursorShape) -> err {
+    if host_window_live != 0u32 {
+        var code = 0u32
+        if shape == CursorShape.Text { code = 1u32 }
+        if shape == CursorShape.Hand { code = 2u32 }
+        if shape == CursorShape.Crosshair { code = 3u32 }
+        if shape == CursorShape.ResizeHorizontal { code = 4u32 }
+        if shape == CursorShape.ResizeVertical { code = 5u32 }
+        if shape == CursorShape.Hidden { code = 6u32 }
+        let status = host_window_cursor(u32(w.raw), code)
+    }
+    ret ok
+}
 // No window manager here: a program presents nothing.
-fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err { ret Unsupported }
+fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    if host_window_live == 0u32 || width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
+    if host_window_present(u32(w.raw), u32(mem.address_of(&pixels[0usize])), width, height) != 0u32 { ret Unsupported }
+    ret ok
+}
 fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
     var none: []const MonitorInfo = zero
     ret (none, Unsupported)
 }
-fn clipboard_text(a: *mem.Arena) -> (str, err) { ret ("", Unsupported) }
-fn set_clipboard_text(value: str) -> err { ret Unsupported }
+// A page's clipboard is the copy the page keeps (navigator.clipboard is asynchronous, so the page refreshes it on
+// a paste and a focus and the module reads it from the ring); a host without one answers Unsupported.
+fn clipboard_text(a: *mem.Arena) -> (str, err) {
+    if host_window_live == 0u32 { ret ("", Unsupported) }
+    let (buffer, allocation_error) = mem.alloc[u8](a, 65536usize)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var used: [1]u32 = zero
+    if host_clipboard_text(address_of_bytes(buffer), 65536u32, u32(mem.address_of(&used[0usize]))) != 0u32 { ret ("", Unsupported) }
+    ret (buffer[0usize..usize(used[0usize])], ok)
+}
+fn set_clipboard_text(value: str) -> err {
+    if host_window_live == 0u32 { ret Unsupported }
+    if host_set_clipboard_text(address_of_str(value), u32(value.len)) != 0u32 { ret Failed }
+    ret ok
+}
 // e.ui.input polls this; a NeperOS app gets input over the compositor's routed endpoint instead, so
 // there is never a window event here -- but it answers ok (no event), not Unsupported, or the e.ui
 // app loop would treat the poll as a failure.
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
+fn window_event_kind(code: u32) -> WindowEventKind {
+    if code == 1u32 { ret WindowEventKind.Resize }
+    if code == 2u32 { ret WindowEventKind.Focus }
+    if code == 3u32 { ret WindowEventKind.Blur }
+    if code == 4u32 { ret WindowEventKind.PointerMove }
+    if code == 5u32 { ret WindowEventKind.PointerDown }
+    if code == 6u32 { ret WindowEventKind.PointerUp }
+    if code == 7u32 { ret WindowEventKind.Scroll }
+    if code == 8u32 { ret WindowEventKind.KeyDown }
+    if code == 9u32 { ret WindowEventKind.KeyUp }
+    if code == 10u32 { ret WindowEventKind.Text }
+    if code == 11u32 { ret WindowEventKind.Paint }
+    ret WindowEventKind.Close
+}
+// A page's window gives one record of eight u32s (the ring of lib/wasm/window.js): kind | button << 8 |
+// modifiers << 16 | repeat << 24, x, y, width, height, key, delta, codepoint.
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
     var event: WindowEvent = zero
+    if host_window_live != 0u32 {
+        var record: [8]u32 = zero
+        var has: [1]u32 = zero
+        if host_window_poll(u32(mem.address_of(&record[0usize])), timeout_ns, u32(mem.address_of(&has[0usize]))) == 0u32 {
+            if has[0usize] == 0u32 { ret (event, false, ok) }
+            let head = record[0usize]
+            event.kind = window_event_kind(head & 255u32)
+            event.window = Window { raw: 1usize }
+            event.button = u8((head >> 8u32) & 255u32)
+            event.modifiers = u8((head >> 16u32) & 255u32)
+            event.repeat = ((head >> 24u32) & 255u32) != 0u32
+            event.x = mem.bitcast[i32](record[1usize])
+            event.y = mem.bitcast[i32](record[2usize])
+            event.width = record[3usize]
+            event.height = record[4usize]
+            event.key = record[5usize]
+            event.delta = mem.bitcast[i32](record[6usize])
+            event.codepoint = record[7usize]
+            ret (event, true, ok)
+        }
+    }
     ret (event, false, ok)
 }
-fn window_capture(w: Window, on: bool) -> err { ret Unsupported }
+// The page captures the pointer itself, from the press to the release.
+fn window_capture(w: Window, on: bool) -> err {
+    if host_window_live != 0u32 { ret ok }
+    ret Unsupported
+}
 // The accessibility-bridge surface e.ui.accessibility compiles against -- no window, no AT client.
 type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
 fn accessibility_listening(w: Window) -> bool { ret false }
@@ -1559,7 +2109,9 @@ type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes:
 fn page_size() -> usize { ret 4096usize }
 fn release(p: *u8, n: usize) -> err {
     let start = mem.address_of(p)
+    rt_acquire()
     if start + (n + 65535usize) / 65536usize * 65536usize == rt_reserve_top { rt_reserve_top = start }
+    rt_release()
     ret ok
 }
 // The memory never shrinks, so its size is the most the module has held (D5640).
@@ -1572,21 +2124,157 @@ fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err) {
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) { ret (detail.operation, ok) }
 fn window_native(w: Window) -> (usize, usize, err) { ret (0usize, 0usize, Unsupported) }
 
-fn pipe() -> (File, File, err) { ret (File { raw: 0usize }, File { raw: 0usize }, Unsupported) }
-fn pipe_read(f: File, buffer: []u8) -> (usize, err) { ret (0usize, Unsupported) }
-fn dup(f: File) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
-fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) { ret (Proc { raw: 0usize }, Unsupported) }
+// Pipes (D5677's pipe, handle_read, handle_write and handle_close; the process calls are C205's): the
+// ends are host handles, a read blocks the calling thread's mailbox only, so a server thread may wait
+// on one while main writes it.
+fn pipe_read_end(f: *File, buffer: *[]u8) -> (usize, err) {
+    let target_bytes = *buffer
+    var taken: [1]u32 = zero
+    let status = host_handle_read(host_handle(f.raw), u32(mem.address_of(&target_bytes[0usize])), u32(target_bytes.len), u32(mem.address_of(&taken[0usize])), 0u32)
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(taken[0usize]), ok)
+}
+
+fn pipe_write_end(f: *File, text: *str) -> (usize, err) {
+    let content: []const u8 = *text
+    var done = 0usize
+    var sent: [1]u32 = zero
+    while done < content.len {
+        let status = host_handle_write(host_handle(f.raw), u32(mem.address_of(&content[done])), u32(content.len - done), u32(mem.address_of(&sent[0usize])))
+        if status != 0u32 { ret (done, net_error(status)) }
+        if sent[0usize] == 0u32 { ret (done, Failed) }
+        done += usize(sent[0usize])
+    }
+    ret (done, ok)
+}
+
+fn pipe_close_end(f: *File) -> err {
+    ret net_cleanup(host_handle_close(host_handle(f.raw)))
+}
+
+fn pipe() -> (File, File, err) {
+    var made: [2]u32 = zero
+    let status = host_pipe(u32(mem.address_of(&made[0usize])), u32(mem.address_of(&made[1usize])))
+    if status != 0u32 { ret (File { raw: 0usize }, File { raw: 0usize }, net_error(status)) }
+    host_file_read[0usize] = pipe_read_end
+    host_file_write[0usize] = pipe_write_end
+    host_file_close[0usize] = pipe_close_end
+    host_file_armed[0usize] = 1u32
+    ret (File { raw: usize(made[0usize]) }, File { raw: usize(made[1usize]) }, ok)
+}
+
+fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    var taken: [1]u32 = zero
+    let status = host_handle_read(host_handle(f.raw), u32(mem.address_of(&buffer[0usize])), u32(buffer.len), u32(mem.address_of(&taken[0usize])), 1u32)
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(taken[0usize]), ok)
+}
+// WASI preview 1 has no fd_dup, so a duplicate is the same descriptor number plus a count of the closes it still
+// owes: `dup_raw[i]` holds the descriptor and `dup_count[i]` how many more holders it has than the one `open`
+// made. `os.close` gives one back before it closes anything, so the descriptor ends with its last holder and
+// the holders share one offset, as a dup's do. 0 to 2 are never closed here and need no count.
+// ponytail: 64 descriptors with extra holders at once, OutOfMemory after; a longer table if a program duplicates more.
+const DUP_SLOTS: usize = 64usize
+var dup_raw: [64]usize = zero
+var dup_count: [64]u32 = zero
+
+fn dup(f: File) -> (File, err) {
+    if f.raw <= 2usize { ret (File { raw: f.raw }, ok) }
+    if f.raw < HOST_BASE {
+        // A descriptor that is open answers a zero seek (a pipe or a terminal answers ESPIPE, 70); a closed one is EBADF.
+        var position: [1]u64 = zero
+        let status = wasi_fd_seek(fd_of(f.raw), 0i64, 1u32, u32(mem.address_of(&position[0usize])))
+        if status != 0u32 && status != 70u32 { ret (File { raw: 0usize }, wasi_error(status)) }
+    }
+    rt_acquire()
+    var spare = DUP_SLOTS
+    var at = 0usize
+    while at < DUP_SLOTS {
+        if dup_count[at] != 0u32 && dup_raw[at] == f.raw {
+            dup_count[at] += 1u32
+            rt_release()
+            ret (File { raw: f.raw }, ok)
+        }
+        if dup_count[at] == 0u32 && spare == DUP_SLOTS { spare = at }
+        at += 1usize
+    }
+    if spare == DUP_SLOTS {
+        rt_release()
+        ret (File { raw: 0usize }, OutOfMemory)
+    }
+    dup_raw[spare] = f.raw
+    dup_count[spare] = 1u32
+    rt_release()
+    ret (File { raw: f.raw }, ok)
+}
+
+// True when `f` had a duplicate, which now owes one close fewer: the caller then closes nothing.
+fn dup_give_back(f: *File) -> bool {
+    rt_acquire()
+    var at = 0usize
+    while at < DUP_SLOTS {
+        if dup_count[at] != 0u32 && dup_raw[at] == f.raw {
+            dup_count[at] -= 1u32
+            rt_release()
+            ret true
+        }
+        at += 1usize
+    }
+    rt_release()
+    ret false
+}
+fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
+    var child: Proc = zero
+    let spawn_error = host_spawn(&child, a, options.argv, options.env, options.inherit_env, options.cwd, false, options.stdio)
+    ret (child, spawn_error)
+}
 fn wait_usage(p: own Proc) -> (ProcUsage, err) {
     let (code, wait_error) = wait(p)
     ret (ProcUsage { exit_code: code, peak_memory: 0usize }, wait_error)
 }
-fn kill(p: Proc) -> err { ret Unsupported }
-fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) { ret (ProcGroup { raw: 0usize }, Proc { raw: 0usize }, Unsupported) }
-fn proc_group_terminate(group: ProcGroup, force: bool) -> err { ret Unsupported }
+fn kill(p: Proc) -> err { ret wasi_error(host_proc_kill(host_handle(p.raw))) }
+fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) {
+    var child: Proc = zero
+    let spawn_error = host_spawn(&child, a, options.argv, options.env, options.inherit_env, options.cwd, true, options.stdio)
+    ret (ProcGroup { raw: child.raw }, child, spawn_error)
+}
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
+    var flag = 0u32
+    if force { flag = 1u32 }
+    ret wasi_error(host_proc_group_kill(host_handle(group.raw), flag))
+}
 fn proc_group_close(group: own ProcGroup) -> err { ret ok }
 fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) { ret (FileLock { raw: 0usize }, Unsupported) }
 fn file_unlock(lock: own FileLock) -> err { ret ok }
-fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) { ret (0usize, Unsupported) }
+// The file's bytes at `offset`, read in pieces and sent; the file's own position stays where it was.
+// A socket that takes no more answers the count so far, as sendfile does.
+fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) {
+    var piece: [32768]u8 = zero
+    var iov: [2]u32 = zero
+    var taken: [1]u32 = zero
+    var total = 0usize
+    while total < count {
+        var want = count - total
+        if want > piece.len { want = piece.len }
+        iov[0usize] = u32(mem.address_of(&piece[0usize]))
+        iov[1usize] = u32(want)
+        taken[0usize] = 0u32
+        let status = wasi_fd_pread(fd_of(source.raw), u32(mem.address_of(&iov[0usize])), 1u32, offset + u64(total), u32(mem.address_of(&taken[0usize])))
+        if status != 0u32 { ret (total, wasi_error(status)) }
+        let got = usize(taken[0usize])
+        if got == 0usize { ret (total, ok) }
+        var sent_so_far = 0usize
+        while sent_so_far < got {
+            let (sent, send_error) = socket_send(destination, piece[sent_so_far..got])
+            if send_error == WouldBlock { ret (total + sent_so_far, ok) }
+            if send_error != ok { ret (total + sent_so_far, send_error) }
+            sent_so_far += sent
+        }
+        total += got
+    }
+    ret (total, ok)
+}
 fn signal(which: Signal, handler: fn(Signal)) -> err { ret Unsupported }
 fn signal_default(which: Signal) -> err { ret Unsupported }
 fn signal_raise(which: Signal) -> err { ret Unsupported }
@@ -1594,43 +2282,264 @@ fn sandbox(policy: *const SandboxPolicy) -> err { ret Unsupported }
 
 fn file_handle(f: File) -> Handle { ret Handle { raw: f.raw } }
 fn socket_handle(s: Socket) -> Handle { ret Handle { raw: s.raw } }
-fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) { ret (Socket { raw: 0usize }, Unsupported) }
-fn socket_set_nonblocking(s: Socket, enabled: bool) -> err { ret Unsupported }
-fn socket_bind(s: Socket, address: SocketAddress) -> err { ret Unsupported }
-fn socket_local_address(s: Socket) -> (SocketAddress, err) {
-    var none: SocketAddress = zero
-    ret (none, Unsupported)
-}
-fn socket_listen(s: Socket, backlog: u32) -> err { ret Unsupported }
-fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
-    var none: SocketAddress = zero
-    ret (Socket { raw: 0usize }, none, Unsupported)
-}
-fn socket_connect(s: Socket, address: SocketAddress) -> err { ret Unsupported }
-fn socket_receive(s: Socket, dst: []u8) -> (usize, err) { ret (0usize, Unsupported) }
-fn socket_send(s: Socket, src: []const u8) -> (usize, err) { ret (0usize, Unsupported) }
-fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
-    var none: SocketAddress = zero
-    ret (0usize, none, Unsupported)
-}
-fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) { ret (0usize, Unsupported) }
-fn socket_shutdown(s: Socket, how: SocketShutdown) -> err { ret Unsupported }
-fn socket_close(s: own Socket) -> err { ret ok }
-fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
-    var none: []SocketAddress = zero
-    ret (none, Unsupported)
+// ---- sockets, name resolution and the poller: the `neper_host` imports (D5675, D5676) ---------------------
+// The host answers a WASI errno for each; a handle is a number the host counts up from 0x40000000. The
+// address record is 32 bytes written byte by byte: family at 0 (0 Ip4, 1 Ip6), port at 2 (u16) and scope
+// at 4 (u32), both little-endian, the address at 8.
+
+const HOST_BASE: usize = 1073741824usize
+const ADDRESS_RECORD: usize = 32usize
+const RESOLVE_MAX: usize = 8usize
+const POLL_RECORD: usize = 16usize
+const POLL_BATCH: usize = 32usize
+
+type WasiPoller = struct { host: u32 }
+
+// The error for a status; EINPROGRESS and EALREADY are a call that has started and must be asked again.
+fn net_error(status: u32) -> err {
+    if status == 0u32 { ret ok }
+    record_error_detail(i32(status))
+    if status == 26u32 || status == 7u32 { ret WouldBlock }
+    ret error_of_status(status)
 }
 
-fn poller_open(a: *mem.Arena) -> (Poller, err) {
-    var none: Poller = zero
-    ret (none, Unsupported)
+fn net_cleanup(status: u32) -> err {
+    if status == 0u32 { ret ok }
+    record_cleanup_error_detail(i32(status))
+    ret error_of_status(status)
 }
-fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err { ret Unsupported }
-fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err { ret Unsupported }
-fn poller_unregister(p: Poller, handle: Handle) -> err { ret Unsupported }
-fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) { ret (0usize, Unsupported) }
-fn poller_wake(p: Poller) -> err { ret Unsupported }
-fn poller_close(p: own Poller) -> err { ret ok }
+
+// A handle no host would have made is the one number that is never open, so the host answers EBADF.
+fn host_handle(raw: usize) -> u32 {
+    if raw < HOST_BASE || raw > 4294967295usize { ret NO_FD }
+    ret u32(raw)
+}
+
+fn put_address(record: []u8, address: SocketAddress) {
+    var at = 0usize
+    while at < ADDRESS_RECORD {
+        record[at] = 0u8
+        at += 1usize
+    }
+    if address.family == .Ip6 { record[0usize] = 1u8 }
+    record[2usize] = u8(usize(address.port) % 256usize)
+    record[3usize] = u8(usize(address.port) / 256usize)
+    record[4usize] = u8(address.scope % 256u32)
+    record[5usize] = u8(address.scope / 256u32 % 256u32)
+    record[6usize] = u8(address.scope / 65536u32 % 256u32)
+    record[7usize] = u8(address.scope / 16777216u32)
+    at = 0usize
+    while at < 16usize {
+        record[8usize + at] = address.bytes[at]
+        at += 1usize
+    }
+}
+
+fn get_address(record: []u8, base: usize) -> SocketAddress {
+    var address: SocketAddress = zero
+    if record[base] == 1u8 { address.family = .Ip6 }
+    address.port = u16(usize(record[base + 2usize]) + usize(record[base + 3usize]) * 256usize)
+    address.scope = u32(record[base + 4usize]) + u32(record[base + 5usize]) * 256u32 + u32(record[base + 6usize]) * 65536u32 + u32(record[base + 7usize]) * 16777216u32
+    var at = 0usize
+    while at < 16usize {
+        address.bytes[at] = record[base + 8usize + at]
+        at += 1usize
+    }
+    ret address
+}
+
+fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
+    var made: [1]u32 = zero
+    var family_value = 0u32
+    if family == .Ip6 { family_value = 1u32 }
+    var kind_value = 0u32
+    if kind == .Datagram { kind_value = 1u32 }
+    let status = host_sock_open(family_value, kind_value, u32(mem.address_of(&made[0usize])))
+    if status != 0u32 { ret (Socket { raw: 0usize }, net_error(status)) }
+    ret (Socket { raw: usize(made[0usize]) }, ok)
+}
+
+fn socket_set_nonblocking(s: Socket, enabled: bool) -> err {
+    var flag = 0u32
+    if enabled { flag = 1u32 }
+    ret net_error(host_sock_set_nonblocking(host_handle(s.raw), flag))
+}
+
+fn socket_bind(s: Socket, address: SocketAddress) -> err {
+    var record: [32]u8 = zero
+    put_address(record[..], address)
+    ret net_error(host_sock_bind(host_handle(s.raw), u32(mem.address_of(&record[0usize]))))
+}
+
+fn socket_local_address(s: Socket) -> (SocketAddress, err) {
+    var record: [32]u8 = zero
+    let status = host_sock_local_address(host_handle(s.raw), u32(mem.address_of(&record[0usize])))
+    if status != 0u32 {
+        var none: SocketAddress = zero
+        ret (none, net_error(status))
+    }
+    ret (get_address(record[..], 0usize), ok)
+}
+
+fn socket_listen(s: Socket, backlog: u32) -> err {
+    ret net_error(host_sock_listen(host_handle(s.raw), backlog))
+}
+
+fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
+    var made: [1]u32 = zero
+    var record: [32]u8 = zero
+    var none: SocketAddress = zero
+    let status = host_sock_accept(host_handle(s.raw), u32(mem.address_of(&made[0usize])), u32(mem.address_of(&record[0usize])))
+    if status != 0u32 { ret (Socket { raw: 0usize }, none, net_error(status)) }
+    ret (Socket { raw: usize(made[0usize]) }, get_address(record[..], 0usize), ok)
+}
+
+fn socket_connect(s: Socket, address: SocketAddress) -> err {
+    var record: [32]u8 = zero
+    put_address(record[..], address)
+    ret net_error(host_sock_connect(host_handle(s.raw), u32(mem.address_of(&record[0usize]))))
+}
+
+fn socket_receive(s: Socket, dst: []u8) -> (usize, err) {
+    if dst.len == 0usize { ret (0usize, ok) }
+    var taken: [1]u32 = zero
+    let status = host_sock_recv(host_handle(s.raw), u32(mem.address_of(&dst[0usize])), u32(dst.len), u32(mem.address_of(&taken[0usize])))
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(taken[0usize]), ok)
+}
+
+fn socket_send(s: Socket, src: []const u8) -> (usize, err) {
+    if src.len == 0usize { ret (0usize, ok) }
+    var sent: [1]u32 = zero
+    let status = host_sock_send(host_handle(s.raw), u32(mem.address_of(&src[0usize])), u32(src.len), u32(mem.address_of(&sent[0usize])))
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(sent[0usize]), ok)
+}
+
+fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
+    var peer: SocketAddress = zero
+    if dst.len == 0usize { ret (0usize, peer, ok) }
+    var taken: [1]u32 = zero
+    var record: [32]u8 = zero
+    let status = host_sock_recv_from(host_handle(s.raw), u32(mem.address_of(&dst[0usize])), u32(dst.len), u32(mem.address_of(&taken[0usize])), u32(mem.address_of(&record[0usize])))
+    if status != 0u32 { ret (0usize, peer, net_error(status)) }
+    ret (usize(taken[0usize]), get_address(record[..], 0usize), ok)
+}
+
+fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) {
+    var record: [32]u8 = zero
+    put_address(record[..], dst)
+    var sent: [1]u32 = zero
+    var source_address = 0u32
+    if src.len != 0usize { source_address = u32(mem.address_of(&src[0usize])) }
+    let status = host_sock_send_to(host_handle(s.raw), u32(mem.address_of(&record[0usize])), source_address, u32(src.len), u32(mem.address_of(&sent[0usize])))
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    ret (usize(sent[0usize]), ok)
+}
+
+fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {
+    var how_value = 2u32
+    if how == .Read { how_value = 0u32 }
+    if how == .Write { how_value = 1u32 }
+    ret net_error(host_sock_shutdown(host_handle(s.raw), how_value))
+}
+
+fn socket_close(s: own Socket) -> err {
+    ret net_cleanup(host_sock_close(host_handle(s.raw)))
+}
+
+fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
+    var nothing: []SocketAddress = zero
+    if host.len == 0usize { ret (nothing, NotFound) }
+    let (results, results_error) = mem.alloc[SocketAddress](a, RESOLVE_MAX)
+    if results_error != ok { ret (nothing, OutOfMemory) }
+    var records: [256]u8 = zero
+    var found: [1]u32 = zero
+    var family_value = 0u32
+    if family == .Ip6 { family_value = 1u32 }
+    let status = host_resolve(address_of_str(host), u32(host.len), u32(port), family_value, u32(mem.address_of(&records[0usize])), u32(RESOLVE_MAX), u32(mem.address_of(&found[0usize])))
+    if status != 0u32 { ret (nothing, net_error(status)) }
+    let count = usize(found[0usize])
+    if count == 0usize || count > RESOLVE_MAX { ret (nothing, NotFound) }
+    var at = 0usize
+    while at < count {
+        results[at] = get_address(records[..], at * ADDRESS_RECORD)
+        at += 1usize
+    }
+    ret (results[0usize..count], ok)
+}
+
+// A poller's state is the host's handle for it, kept in the arena it was opened with.
+fn poller_open(a: *mem.Arena) -> (Poller, err) {
+    var poller: Poller = zero
+    let (holder, holder_error) = mem.alloc[WasiPoller](a, 1usize)
+    if holder_error != ok { ret (poller, OutOfMemory) }
+    var made: [1]u32 = zero
+    let status = host_poll_open(u32(mem.address_of(&made[0usize])))
+    if status != 0u32 { ret (poller, net_error(status)) }
+    holder[0usize].host = made[0usize]
+    poller.state = mem.cast[*void](&holder[0usize])
+    ret (poller, ok)
+}
+
+fn poller_interest(interest: PollInterest) -> u32 {
+    var mask = 0u32
+    if interest.readable { mask = mask | 1u32 }
+    if interest.writable { mask = mask | 2u32 }
+    ret mask
+}
+
+fn poller_control(p: Poller, operation: u32, handle: Handle, token: usize, interest: PollInterest) -> err {
+    let state = mem.cast[*WasiPoller](p.state)
+    ret net_error(host_poll_ctl(state.host, operation, host_handle(handle.raw), mem.bitcast[i64](u64(token)), poller_interest(interest)))
+}
+
+fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret poller_control(p, 0u32, handle, token, interest)
+}
+
+fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret poller_control(p, 1u32, handle, token, interest)
+}
+
+fn poller_unregister(p: Poller, handle: Handle) -> err {
+    var nothing: PollInterest = zero
+    ret poller_control(p, 2u32, handle, 0usize, nothing)
+}
+
+fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) {
+    let state = mem.cast[*WasiPoller](p.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    var capacity = events.len
+    if capacity > POLL_BATCH { capacity = POLL_BATCH }
+    var raw: [512]u8 = zero
+    var count: [1]u32 = zero
+    let status = host_poll_wait(state.host, u32(mem.address_of(&raw[0usize])), u32(capacity), timeout_ns, u32(mem.address_of(&count[0usize])))
+    if status != 0u32 { ret (0usize, net_error(status)) }
+    let ready = usize(count[0usize])
+    var at = 0usize
+    while at < ready && at < capacity {
+        let base = at * POLL_RECORD
+        let flags = le32(raw[..], base + 8usize)
+        events[at].token = le32(raw[..], base) + le32(raw[..], base + 4usize) * 4294967296usize
+        events[at].readable = flags & 1usize != 0usize
+        events[at].writable = flags & 2usize != 0usize
+        events[at].closed = flags & 4usize != 0usize
+        events[at].failed = flags & 8usize != 0usize
+        at += 1usize
+    }
+    ret (at, ok)
+}
+
+fn poller_wake(p: Poller) -> err {
+    let state = mem.cast[*WasiPoller](p.state)
+    ret net_error(host_poll_wake(state.host))
+}
+
+fn poller_close(p: own Poller) -> err {
+    let state = mem.cast[*WasiPoller](p.state)
+    ret net_cleanup(host_poll_close(state.host))
+}
 
 fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err) {
     var none: Mapping = zero
@@ -1647,11 +2556,196 @@ fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
 fn mapping_flush(m: Mapping) -> err { ret Unsupported }
 fn mapping_close(m: own Mapping) -> err { ret ok }
 
+// A directory watch by polling: WASI preview 1 has no change notification, so a watch is a snapshot of the
+// directory (each entry's kind, size and modification time) taken when it opens, and `watch_read` takes a new
+// one every WATCH_POLL_NS until it differs, reports the difference and keeps the new snapshot. A change made by
+// anyone, another process included, shows at the next poll; one that undoes itself between two polls does not.
+// ponytail: an entry that changes twice inside one timestamp tick with the same size reads as unchanged; a rename
+// reads as a removal and an addition (`Renamed` is never reported); a directory entry is watched for existing, not
+// for what changes inside it; more changes than the caller's events hold end with an `Overflow` event; each reported
+// change leaves the previous snapshot behind in the arena the watch was opened with, so reopen a watch that has seen
+// thousands of changes; a recursive watch is refused, as on Linux. Upgrade path: the host reports changes (fs.watch).
+type WatchEntry = struct { name: str, kind: EntryKind, size: u64, modified_ns: i64 }
+type WatchState = struct { arena: *mem.Arena, base: str, entries: []WatchEntry }
+const WATCH_POLL_NS: i64 = 20000000i64
+var watch_idle: [1]u32 = zero
+
+fn watch_same(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var at = 0usize
+    while at < x.len {
+        if x[at] != y[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn watch_find(list: []const WatchEntry, name: str) -> usize {
+    var at = 0usize
+    while at < list.len {
+        if watch_same(list[at].name, name) { ret at }
+        at += 1usize
+    }
+    ret list.len
+}
+
+// The watched directory and a name joined, in `a`.
+fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
+    let (bytes, allocation_error) = mem.alloc[u8](a, base.len + 1usize + name.len)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < base.len {
+        bytes[at] = base[at]
+        at += 1usize
+    }
+    if at != 0usize && bytes[at - 1usize] != 47u8 {
+        bytes[at] = 47u8
+        at += 1usize
+    }
+    var offset = 0usize
+    while offset < name.len {
+        bytes[at + offset] = name[offset]
+        offset += 1usize
+    }
+    ret (bytes[0usize..at + name.len], ok)
+}
+
+// The directory as it is now. An entry that vanishes between the listing and its stat is left out.
+fn watch_snapshot(a: *mem.Arena, base: str) -> ([]WatchEntry, err) {
+    var listing: ReaddirResult = zero
+    var where_from = base
+    neper_os_readdir(&listing, a, &where_from)
+    if listing.failure != ok { ret (zero, listing.failure) }
+    let (out, allocation_error) = mem.alloc[WatchEntry](a, listing.entries.len + 1usize)
+    if allocation_error != ok { ret (zero, OutOfMemory) }
+    var count = 0usize
+    var at = 0usize
+    while at < listing.entries.len {
+        let (full, path_error) = watch_path(a, base, listing.entries[at].name)
+        if path_error != ok { ret (zero, path_error) }
+        let (info, stat_error) = stat_path(full, false)
+        if stat_error == ok {
+            out[count] = WatchEntry { name: listing.entries[at].name, kind: listing.entries[at].kind, size: info.size, modified_ns: info.modified_ns }
+            count += 1usize
+        }
+        at += 1usize
+    }
+    ret (out[0usize..count], ok)
+}
+
+// The snapshot in `a` with its names, which the listing borrowed from another arena.
+fn watch_keep(a: *mem.Arena, fresh: []const WatchEntry) -> ([]WatchEntry, err) {
+    let (out, allocation_error) = mem.alloc[WatchEntry](a, fresh.len + 1usize)
+    if allocation_error != ok { ret (zero, OutOfMemory) }
+    var at = 0usize
+    while at < fresh.len {
+        let (name, name_error) = mem.alloc[u8](a, fresh[at].name.len + 1usize)
+        if name_error != ok { ret (zero, OutOfMemory) }
+        var k = 0usize
+        while k < fresh[at].name.len {
+            name[k] = fresh[at].name[k]
+            k += 1usize
+        }
+        out[at] = WatchEntry { name: name[0usize..fresh[at].name.len], kind: fresh[at].kind, size: fresh[at].size, modified_ns: fresh[at].modified_ns }
+        at += 1usize
+    }
+    ret (out[0usize..fresh.len], ok)
+}
+
+fn watch_note(a: *mem.Arena, base: str, events: []WatchEvent, index: usize, action: WatchAction, name: str) -> err {
+    let (full, path_error) = watch_path(a, base, name)
+    if path_error != ok { ret path_error }
+    events[index] = WatchEvent { action: action, path: full, old_path: "" }
+    ret ok
+}
+
+// How many changes take the snapshot to `fresh`; the first `keep` of them are written to `events`, removals first.
+fn watch_diff(a: *mem.Arena, state: *WatchState, fresh: []const WatchEntry, events: []WatchEvent, keep: usize) -> (usize, err) {
+    var total = 0usize
+    var at = 0usize
+    while at < state.entries.len {
+        let found = watch_find(fresh, state.entries[at].name)
+        if found == fresh.len || fresh[found].kind != state.entries[at].kind {
+            if total < keep {
+                let noted = watch_note(a, state.base, events, total, WatchAction.Removed, state.entries[at].name)
+                if noted != ok { ret (total, noted) }
+            }
+            total += 1usize
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < fresh.len {
+        let found = watch_find(state.entries, fresh[at].name)
+        var action = WatchAction.Overflow
+        var changed = false
+        if found == state.entries.len || state.entries[found].kind != fresh[at].kind {
+            action = WatchAction.Added
+            changed = true
+        } else if fresh[at].kind != EntryKind.Dir && (state.entries[found].size != fresh[at].size || state.entries[found].modified_ns != fresh[at].modified_ns) {
+            action = WatchAction.Modified
+            changed = true
+        }
+        if changed {
+            if total < keep {
+                let noted = watch_note(a, state.base, events, total, action, fresh[at].name)
+                if noted != ok { ret (total, noted) }
+            }
+            total += 1usize
+        }
+        at += 1usize
+    }
+    ret (total, ok)
+}
+
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     var none: Watch = zero
-    ret (none, Unsupported)
+    if recursive { ret (none, Unsupported) }
+    let (entries, snapshot_error) = watch_snapshot(a, path)
+    if snapshot_error != ok { ret (none, snapshot_error) }
+    let (holder, holder_error) = mem.alloc[WatchState](a, 1usize)
+    if holder_error != ok { ret (none, OutOfMemory) }
+    let (kept, keep_error) = watch_keep(a, entries)
+    if keep_error != ok { ret (none, keep_error) }
+    holder[0usize].arena = a
+    holder[0usize].base = path
+    holder[0usize].entries = kept
+    none.state = mem.cast[*void](&holder[0usize])
+    ret (none, ok)
 }
-fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) { ret (0usize, Unsupported) }
+
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
+    if events.len == 0usize { ret (0usize, ok) }
+    let state = mem.cast[*WatchState](w.state)
+    while true {
+        let checkpoint = mem.mark(a)
+        let (fresh, snapshot_error) = watch_snapshot(a, state.base)
+        if snapshot_error != ok {
+            mem.reset(a, checkpoint)
+            ret (0usize, snapshot_error)
+        }
+        let (total, count_error) = watch_diff(a, state, fresh, events[0usize..0usize], 0usize)
+        if total != 0usize {
+            var keep = total
+            if keep > events.len { keep = events.len - 1usize }
+            let (written, write_error) = watch_diff(a, state, fresh, events, keep)
+            if write_error != ok { ret (0usize, write_error) }
+            var produced = keep
+            if total > events.len {
+                events[keep] = WatchEvent { action: WatchAction.Overflow, path: state.base, old_path: "" }
+                produced = keep + 1usize
+            }
+            let (kept, keep_error) = watch_keep(state.arena, fresh)
+            if keep_error != ok { ret (0usize, keep_error) }
+            state.entries = kept
+            ret (produced, ok)
+        }
+        mem.reset(a, checkpoint)
+        let slept = neper_os_wait_u32(mem.cast[*u8](&watch_idle[0usize]), 0u32, WATCH_POLL_NS)
+    }
+    ret (0usize, ok)
+}
+
 fn watch_close(w: own Watch) -> err { ret ok }
 
 // The mapping's bytes as the writable region e.fs.mmap hands out; no mapping is ever made here, so

@@ -1179,7 +1179,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     let command = args[1usize]
     let is_build = same(command, "build")
     // The positional `run FILE ROOT ARCH OS OUT ...` has an architecture fourth.
-    let is_run = same(command, "run") && !(args.len >= 7usize && same(args[4usize], "x64"))
+    let is_run = same(command, "run") && !(args.len >= 7usize && (same(args[4usize], "x64") || same(args[4usize], "wasm32")))
     let is_check = same(command, "check")
     let is_fmt = same(command, "fmt")
     let is_index = same(command, "index")
@@ -1209,6 +1209,8 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var output = ""
     var has_output = false
     var release = false
+    var threads = false
+    var source_map = false
     var unchecked = false
     var json = false
     var check_only = false
@@ -1246,6 +1248,8 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
                                 at += 1usize
                             }
                             if same(args[at], "--release") { release = true }
+                            if same(args[at], "--threads") { threads = true }
+                            if same(args[at], "--source-map") { source_map = true }
                             if same(args[at], "--unchecked") { unchecked = true }
                             if same(args[at], "--json") { json = true }
                             if same(args[at], "--check") { check_only = true }
@@ -1296,6 +1300,14 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         count += 5usize
         if release {
             long_form[count] = "--release"
+            count += 1usize
+        }
+        if threads {
+            long_form[count] = "--threads"
+            count += 1usize
+        }
+        if source_map {
+            long_form[count] = "--source-map"
             count += 1usize
         }
         if unchecked {
@@ -1647,11 +1659,106 @@ fn wasm_barrier_oracle(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, check
     ret ok
 }
 
+// `node` for a wasm32-wasi `run` (C209, D5681): NEPER_NODE when set, else the first PATH
+// directory that holds `node` (`node.exe` on Windows). Empty when neither does.
+fn find_node(a: *mem.Arena) -> (str, err) {
+    let (named, named_error) = os.env(a, "NEPER_NODE")
+    if named_error == ok && named.len != 0usize { ret (named, ok) }
+    let (path, path_error) = os.env(a, "PATH")
+    if path_error != ok { ret ("", ok) }
+    var separator = 58u8
+    var program = "/node"
+    if same(host_target(a), "x64-windows") {
+        separator = 59u8
+        program = "/node.exe"
+    }
+    var start = 0usize
+    var at = 0usize
+    while at <= path.len {
+        if at == path.len || path[at] == separator {
+            if at > start {
+                let (candidate, join_error) = with_suffix(a, path[start..at], program)
+                if join_error != ok { ret ("", join_error) }
+                let (probe, probe_size, probe_error) = source.load_prefix(a, candidate, 1usize)
+                if probe_error == ok { ret (candidate, ok) }
+            }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret ("", ok)
+}
+
+// `run ... wasm32 wasi OUT`: the module just written, run by the runner under the toolchain's
+// `lib/wasm/` and reported as a native run is (the `run` record, then the result).
+fn wasm_run(a: *mem.Arena, report: *Sink, args: []str, node: str, loaded: *graph.Graph, checker: *check.Checker) -> err {
+    let (runner, runner_error) = with_suffix(a, args[3usize], "/lib/wasm/run-wasm.mjs")
+    if runner_error != ok { ret runner_error }
+    let program = program_arguments(args)
+    let (arguments, arguments_error) = mem.alloc[str](a, program.len + 3usize)
+    if arguments_error != ok { ret arguments_error }
+    arguments[0usize] = "--no-warnings"
+    arguments[1usize] = runner
+    arguments[2usize] = args[6usize]
+    var copy = 0usize
+    while copy < program.len {
+        arguments[3usize + copy] = program[copy]
+        copy += 1usize
+    }
+    report.build.capture_limit = capture_flag(args)
+    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, report, node, arguments, args, args[6usize])
+    if run_error != ok {
+        try emit_command_diagnostic(report, "E-CLI-9999", "the module could not be run")
+        try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
+        os.exit(2i32)
+        ret ok
+    }
+    try chunk_output(a, report, args, stdout_captured, stderr_captured)
+    try tool.run_record(a, loaded, checker.functions[0usize..checker.signature_function_count], status, unless_chunked(args, stdout_captured), unless_chunked(args, stderr_captured), loaded.modules[0usize].name, basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].spelling)
+    try write_all(report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
+    try write_json_string(report, args[6usize])
+    try write_all(report, ",\"process_exit_code\":")
+    if status < 0i32 {
+        try write_all(report, "-")
+        try write_usize(report, usize(0i32 - status))
+    } else {
+        try write_usize(report, usize(status))
+    }
+    try write_all(report, ",\"stdout_bytes\":")
+    try write_usize(report, report.build.stdout_bytes)
+    try write_all(report, ",\"stderr_bytes\":")
+    try write_usize(report, report.build.stderr_bytes)
+    try write_all(report, ",\"capture_limit\":")
+    try write_usize(report, report.build.capture_limit)
+    if report.build.stdout_bytes > report.build.capture_limit || report.build.stderr_bytes > report.build.capture_limit {
+        try write_all(report, ",\"captured_complete\":false")
+    } else {
+        try write_all(report, ",\"captured_complete\":true")
+    }
+    ret write_all(report, ",\"diagnostics\":0}}\n")
+}
+
 // `emit-executable FILE ROOT wasm32 wasi OUT` (D5213): the program checked against
 // wasm32-wasi, every module lowered into one builder, and the whole program written as one
 // WebAssembly module that `node:wasi` runs.
 fn wasm_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
+    let running = same(args[1usize], "run")
+    var node = ""
+    if running {
+        report.json = true
+        report.file = os.stdout()
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"run\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
+        let (found, found_error) = find_node(a)
+        if found_error != ok { ret found_error }
+        if found.len == 0usize {
+            try emit_command_diagnostic(&report, "E-CLI-9999", "running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE")
+            try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
+            os.exit(2i32)
+            ret ok
+        }
+        node = found
+    }
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
     let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], "wasm32", "wasi")
@@ -1739,7 +1846,19 @@ fn wasm_command(a: *mem.Arena, args: []str) -> err {
     let (stats_switch, stats_error) = os.env(a, "NEPER_WASM_STATS")
     var flow_options = ""
     if stats_error == ok { flow_options = stats_switch }
-    let (module_bytes, emit_error) = wasm.emit(a, &checker, &loaded, &builder, arena_flag(args), &failure, &flow_stats, flow_options)
+    // `--source-map` (C211, D5683): OUT.map beside the module, named by its last segment.
+    var map_name = ""
+    var map_bytes: []u8 = zero
+    var map_path = ""
+    if has_flag(args, "--source-map") {
+        let (full_map_path, map_path_error) = with_suffix(a, args[6usize], ".map")
+        if map_path_error != ok { ret map_path_error }
+        map_path = full_map_path
+        var name_at = map_path.len
+        while name_at > 0usize && map_path[name_at - 1usize] != 47u8 && map_path[name_at - 1usize] != 92u8 { name_at = name_at - 1usize }
+        map_name = map_path[name_at..map_path.len]
+    }
+    let (module_bytes, emit_error) = wasm.emit(a, &checker, &loaded, &builder, arena_flag(args), &failure, &flow_stats, flow_options, has_flag(args, "--threads"), map_name, &map_bytes)
     if emit_error != ok {
         if emit_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
         try emit_command_diagnostic(&report, "E-WASM-9999", failure)
@@ -1747,10 +1866,12 @@ fn wasm_command(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     try save_bytes(a, args[6usize], module_bytes)
+    if map_name.len != 0usize { try save_bytes(a, map_path, map_bytes) }
     if flow_options.len != 0usize {
         let (stats_written, stats_write_error) = os.write(os.stderr(), flow_stats)
         if stats_write_error != ok { ret stats_write_error }
     }
+    if running { ret wasm_run(a, &report, args, node, &loaded, &checker) }
     let (written, written_error) = os.write(os.stdout(), "executable written\n")
     ret written_error
 }
@@ -1823,10 +1944,10 @@ fn program_arguments(args: []str) -> []str {
 // The child's peak working set comes from the same wait as its exit code (D311), and
 // goes straight to the build record: `--stats` is its one reader, and `fn main` has no
 // local to spare for it.
-fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str, command_args: []str) -> (i32, str, str, err) {
-    let (stdout_path, stdout_path_error) = with_suffix(a, path, ".stdout")
+fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str, command_args: []str, files: str) -> (i32, str, str, err) {
+    let (stdout_path, stdout_path_error) = with_suffix(a, files, ".stdout")
     if stdout_path_error != ok { ret (0i32, "", "", stdout_path_error) }
-    let (stderr_path, stderr_path_error) = with_suffix(a, path, ".stderr")
+    let (stderr_path, stderr_path_error) = with_suffix(a, files, ".stderr")
     if stderr_path_error != ok { ret (0i32, "", "", stderr_path_error) }
     // A bare name is the file beside the current directory, not a search of PATH.
     var launched = path
@@ -9098,11 +9219,16 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
                 if load_error == project.ModuleNotFound {
                     try write_all(&message, "` names no module under the source root or the toolchain")
                 } else {
-                    code = "E-MODULE-9999"
-                    if load_error == project.AmbiguousVariant {
-                        try write_all(&message, "` has more than one source variant for the target")
+                    if load_error == project.NoVariant {
+                        try write_all(&message, "` ")
+                        try write_all(&message, loaded.variant_note)
                     } else {
-                        try write_all(&message, "` cannot be resolved")
+                        code = "E-MODULE-9999"
+                        if load_error == project.AmbiguousVariant {
+                            try write_all(&message, "` has more than one source variant for the target")
+                        } else {
+                            try write_all(&message, "` cannot be resolved")
+                        }
                     }
                 }
             }
@@ -14101,7 +14227,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `emit-executable FILE ROOT spv none OUT` (D1610): the program's kernels as one
     // SPIR-V module, and no executable.
     if args.len == 7usize && same(args[1usize], "emit-executable") && same(args[4usize], "spv") { ret spirv_command(a, args) }
-    if args.len >= 7usize && same(args[1usize], "emit-executable") && same(args[4usize], "wasm32") && same(args[5usize], "wasi") { ret wasm_command(a, args) }
+    if args.len >= 7usize && (same(args[1usize], "emit-executable") || same(args[1usize], "run")) && same(args[4usize], "wasm32") && same(args[5usize], "wasi") { ret wasm_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner
@@ -14853,7 +14979,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 if running {
                     report.build.capture_limit = capture_flag(args)
                     report.build.started = nptest_now()
-                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, &report, args[6usize], program_arguments(args), args)
+                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, &report, args[6usize], program_arguments(args), args, args[6usize])
                     report.build.ran = true
                     report.build.run_ms = (nptest_now() - report.build.started) / 1000000usize
                     report.build.exit_code = status

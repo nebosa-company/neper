@@ -341,6 +341,13 @@ fn map_error_with_code(source_error: err, code: i32) -> err {
         if code == 51i32 || code == 65i32 { ret Unreachable }
         if code == 48i32 { ret AddressInUse }
     }
+    // WASI's errno numbers (D5676): refused 14, reset 15, no route 23 and 40, address in use 3.
+    when target.os == .Wasi {
+        if code == 14i32 { ret Refused }
+        if code == 15i32 { ret Reset }
+        if code == 23i32 || code == 40i32 { ret Unreachable }
+        if code == 3i32 { ret AddressInUse }
+    }
     ret Failed
 }
 
@@ -619,6 +626,9 @@ fn already_connected(code: i32) -> bool {
     if code == 106i32 || code == 10056i32 { ret true }
     when target.os == .Macos {
         if code == 56i32 { ret true }
+    }
+    when target.os == .Wasi {
+        if code == 30i32 { ret true }
     }
     ret false
 }

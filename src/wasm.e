@@ -14,6 +14,8 @@ use graph
 use nir
 use wasm_code as w
 use wasm_flow as wf
+use wasm_map as wm
+use wasm_threads as wt
 
 const DATA_START: usize = 4096usize
 const STACK_BYTES: usize = 8388608usize
@@ -72,6 +74,14 @@ fn inline_operation(symbol: str) -> usize {
     if w.same(symbol, "memory.size") { ret 2usize }
     if w.same(symbol, "memory.fill") { ret 3usize }
     if w.same(symbol, "memory.copy") { ret 4usize }
+    if w.same(symbol, "threads") { ret 5usize }
+    if w.same(symbol, "thread.id") { ret 6usize }
+    if w.same(symbol, "thread.spawn") { ret 7usize }
+    if w.same(symbol, "memory.atomic.wait32") { ret 8usize }
+    if w.same(symbol, "memory.atomic.notify") { ret 9usize }
+    if w.same(symbol, "i32.atomic.rmw.cmpxchg") { ret 10usize }
+    if w.same(symbol, "i32.atomic.load") { ret 11usize }
+    if w.same(symbol, "i32.atomic.store") { ret 12usize }
     ret 0usize
 }
 
@@ -93,7 +103,7 @@ fn register_import(gen: *w.Gen, reference_index: usize) -> err {
         item.inline_op = inline_operation(reference.symbol)
         if item.inline_op == 0usize { ret fail_at(gen, "imports an instruction the \"wasm\" library does not have", reference.symbol) }
     } else {
-        if !w.same(reference.library, "wasi_snapshot_preview1") { ret fail_at(gen, "imports from a library this target does not have (only wasi_snapshot_preview1 and \"wasm\")", reference.library) }
+        if !w.same(reference.library, "wasi_snapshot_preview1") && !w.same(reference.library, "neper_host") { ret fail_at(gen, "imports from a library this target does not have (only wasi_snapshot_preview1, neper_host and \"wasm\")", reference.library) }
     }
     let (declared_at, declared) = check.find_function(gen.c, reference.module_index, reference.name)
     if !declared { ret fail_at(gen, "imports a function the checker does not know", reference.symbol) }
@@ -158,6 +168,7 @@ fn scan_function(gen: *w.Gen, function_index: usize) -> err {
         let instruction = gen.b.instructions[at]
         if instruction.opcode == .Call { try scan_call(gen, function, instruction) }
         if instruction.opcode == .FunctionAddress { try scan_address(gen, function, instruction) }
+        if instruction.opcode == .AtomicFence && instruction.immediate == 100usize { gen.ftz = true }
         if instruction.opcode == .GlobalAddress {
             if instruction.immediate >= gen.b.global_count { ret fail_at(gen, "names a global that is not there", function.name) }
             gen.global_used[instruction.immediate] = true
@@ -389,8 +400,8 @@ fn write_types(gen: *w.Gen, body: *w.Out) {
     }
 }
 
-fn write_imports(gen: *w.Gen, body: *w.Out) {
-    w.put_uleb(body, gen.wasm_imports)
+fn write_imports(gen: *w.Gen, body: *w.Out, memory_pages: usize) {
+    if gen.threads { w.put_uleb(body, gen.wasm_imports + 1usize) } else { w.put_uleb(body, gen.wasm_imports) }
     var at = 0usize
     while at < gen.import_count {
         let item = gen.imports[at]
@@ -402,35 +413,35 @@ fn write_imports(gen: *w.Gen, body: *w.Out) {
         }
         at += 1usize
     }
+    if gen.threads { wt.write_memory_import(body, memory_pages) }
+}
+
+// A segment's header: active at `address`, or passive in a threaded module (D5671).
+fn put_segment_start(gen: *w.Gen, body: *w.Out, address: usize) {
+    if gen.threads {
+        w.put(body, 1usize)
+        ret
+    }
+    w.put(body, 0usize)
+    w.put(body, 65usize)
+    w.put_sleb(body, address)
+    w.put(body, 11usize)
 }
 
 fn write_data(gen: *w.Gen, body: *w.Out) {
-    var segments = 0usize
-    if gen.data.count != 0usize { segments = 1usize }
-    var global_at = 0usize
-    while global_at < gen.b.global_count {
-        if gen.global_used[global_at] && gen.b.globals[global_at].has_initial && gen.b.globals[global_at].initial != 0usize { segments += 1usize }
-        global_at += 1usize
-    }
-    w.put_uleb(body, segments)
+    w.put_uleb(body, wt.segment_count(gen))
     if gen.data.count != 0usize {
-        w.put(body, 0usize)
-        w.put(body, 65usize)
-        w.put_sleb(body, gen.data_base)
-        w.put(body, 11usize)
+        put_segment_start(gen, body, gen.data_base)
         w.put_uleb(body, gen.data.count)
         w.put_bytes(body, &gen.data)
     }
-    global_at = 0usize
+    var global_at = 0usize
     while global_at < gen.b.global_count {
         let item = gen.b.globals[global_at]
         if gen.global_used[global_at] && item.has_initial && item.initial != 0usize {
             var width = item.size
             if width > 8usize { width = 8usize }
-            w.put(body, 0usize)
-            w.put(body, 65usize)
-            w.put_sleb(body, gen.global_address[global_at])
-            w.put(body, 11usize)
+            put_segment_start(gen, body, gen.global_address[global_at])
             w.put_uleb(body, width)
             var byte_at = 0usize
             while byte_at < width {
@@ -465,7 +476,7 @@ fn write_names(gen: *w.Gen, body: *w.Out, start_index: usize) {
     var names: w.Out = zero
     let init_error = w.init_out(gen.a, &names, 65536usize + (gen.order_count + gen.import_count) * 512usize)
     if init_error != ok { ret }
-    w.put_uleb(&names, gen.wasm_imports + gen.order_count + 1usize)
+    if gen.threads { w.put_uleb(&names, gen.wasm_imports + gen.order_count + 2usize) } else { w.put_uleb(&names, gen.wasm_imports + gen.order_count + 1usize) }
     var at = 0usize
     while at < gen.import_count {
         if gen.imports[at].inline_op == 0usize {
@@ -482,6 +493,10 @@ fn write_names(gen: *w.Gen, body: *w.Out, start_index: usize) {
     }
     w.put_uleb(&names, start_index)
     w.put_name(&names, "_start")
+    if gen.threads {
+        w.put_uleb(&names, start_index + 1usize)
+        w.put_name(&names, "wasi_thread_start")
+    }
     w.put_name(body, "name")
     w.put(body, 1usize)
     w.put_uleb(body, names.count)
@@ -497,6 +512,7 @@ fn write_start(gen: *w.Gen, main_index: usize, main_parameters: usize, exit_inde
     gen.code.count = 0usize
     gen.current = gen.b.functions[main_index]
     w.put_uleb(&gen.code, 0usize)
+    if gen.threads { wt.write_segment_init(gen) }
     w.i32c(gen, arena_cell)
     w.i64c(gen, arena_base)
     w.op(gen, 55usize)
@@ -582,9 +598,12 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
     if arena_bytes != 0usize { arena_cap = arena_bytes }
     if arena_base + arena_cap > 4294901760usize { arena_cap = 4294901760usize - arena_base }
     write_start(gen, main_index, main_parameters, exit_index, args_index, arena_cell, args_cell, arena_base, arena_cap)
+    if gen.threads { wt.write_thread_start(gen, intern_signature(gen, 1usize, 0usize, 0usize)) }
     if gen.bodies.full { ret (no_bytes, fail_at(gen, "the code outgrew the back end's storage", "")) }
     // Every signature before the first section is written.
     let start_signature = intern_signature(gen, 0usize, 0usize, 0usize)
+    var thread_signature = 0usize
+    if gen.threads { thread_signature = intern_signature(gen, 2usize, 3usize, 0usize) }
     intern_all_signatures(gen)
     if gen.failure.len != 0usize { ret (no_bytes, w.Unsupported) }
     var out: w.Out = zero
@@ -604,16 +623,17 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
     write_types(gen, &section)
     put_section(&out, 1usize, &section)
     section.count = 0usize
-    write_imports(gen, &section)
+    write_imports(gen, &section, arena_base / PAGE_BYTES)
     put_section(&out, 2usize, &section)
     section.count = 0usize
-    w.put_uleb(&section, gen.order_count + 1usize)
+    if gen.threads { w.put_uleb(&section, gen.order_count + 2usize) } else { w.put_uleb(&section, gen.order_count + 1usize) }
     var typed_at = 0usize
     while typed_at < gen.order_count {
         w.put_uleb(&section, function_signature(gen, gen.order[typed_at]))
         typed_at += 1usize
     }
     w.put_uleb(&section, start_signature)
+    if gen.threads { w.put_uleb(&section, thread_signature) }
     put_section(&out, 3usize, &section)
     section.count = 0usize
     w.put_uleb(&section, 1usize)
@@ -622,32 +642,60 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
     w.put_uleb(&section, gen.slot_count + 1usize)
     put_section(&out, 4usize, &section)
     section.count = 0usize
-    w.put_uleb(&section, 1usize)
-    w.put(&section, 0usize)
-    w.put_uleb(&section, arena_base / PAGE_BYTES)
-    put_section(&out, 5usize, &section)
-    section.count = 0usize
-    w.put_uleb(&section, 2usize)
+    // A threaded module imports its memory (write_imports), so it defines none.
+    if !gen.threads {
+        w.put_uleb(&section, 1usize)
+        w.put(&section, 0usize)
+        w.put_uleb(&section, arena_base / PAGE_BYTES)
+        put_section(&out, 5usize, &section)
+        section.count = 0usize
+    }
+    var global_count = 2usize
+    if gen.threads { global_count = 3usize }
+    if gen.ftz { global_count += 1usize }
+    w.put_uleb(&section, global_count)
     w.put(&section, 126usize)
     w.put(&section, 1usize)
     w.put(&section, 66usize)
     w.put_sleb(&section, stack_top)
     w.put(&section, 11usize)
+    // `$floor` is each thread's own in a threaded module, so it is set.
     w.put(&section, 126usize)
-    w.put(&section, 0usize)
+    if gen.threads { w.put(&section, 1usize) } else { w.put(&section, 0usize) }
     w.put(&section, 66usize)
     w.put_sleb(&section, stack_base)
     w.put(&section, 11usize)
+    if gen.threads {
+        // `$tid`, set by wasi_thread_start.
+        w.put(&section, 127usize)
+        w.put(&section, 1usize)
+        w.put(&section, 65usize)
+        w.put(&section, 0usize)
+        w.put(&section, 11usize)
+    }
+    if gen.ftz {
+        // `$ftz`, the flush-to-zero mode (D5834): each thread's own in a threaded module, as MXCSR is.
+        w.put(&section, 127usize)
+        w.put(&section, 1usize)
+        w.put(&section, 65usize)
+        w.put(&section, 0usize)
+        w.put(&section, 11usize)
+    }
     put_section(&out, 6usize, &section)
     section.count = 0usize
     let start_index = gen.wasm_imports + gen.order_count
-    w.put_uleb(&section, 2usize)
+    if gen.threads { w.put_uleb(&section, 3usize) } else { w.put_uleb(&section, 2usize) }
     w.put_name(&section, "memory")
     w.put(&section, 2usize)
     w.put_uleb(&section, 0usize)
     w.put_name(&section, "_start")
     w.put(&section, 0usize)
     w.put_uleb(&section, start_index)
+    if gen.threads {
+        w.put_name(&section, "wasi_thread_start")
+        w.put(&section, 0usize)
+        w.put_uleb(&section, start_index + 1usize)
+    }
     put_section(&out, 7usize, &section)
     section.count = 0usize
     if gen.slot_count != 0usize {
@@ -665,8 +713,18 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
         put_section(&out, 9usize, &section)
         section.count = 0usize
     }
-    w.put_uleb(&section, gen.order_count + 1usize)
+    // The data count section (12) comes before the code that uses `memory.init` (D5671).
+    if gen.threads {
+        w.put_uleb(&section, wt.segment_count(gen))
+        put_section(&out, 12usize, &section)
+        section.count = 0usize
+        w.put_uleb(&section, gen.order_count + 2usize)
+    } else {
+        w.put_uleb(&section, gen.order_count + 1usize)
+    }
     w.put_bytes(&section, &gen.bodies)
+    // The section's id, its size, then the count: where the bodies begin in the file.
+    let bodies_start = out.count + 1usize + w.uleb_size(section.count) + section.count - gen.bodies.count
     put_section(&out, 10usize, &section)
     section.count = 0usize
     write_data(gen, &section)
@@ -674,6 +732,15 @@ fn emit_module(gen: *w.Gen, main_index: usize, exit_index: usize, args_index: us
     section.count = 0usize
     write_names(gen, &section, start_index)
     put_section(&out, 0usize, &section)
+    if gen.map_on {
+        if gen.map_full { ret (no_bytes, fail_at(gen, "the source map outgrew its storage", "")) }
+        let (map_bytes, map_error) = wm.map_text(gen, bodies_start)
+        if map_error != ok { ret (no_bytes, map_error) }
+        gen.map_text = map_bytes
+        section.count = 0usize
+        wm.write_url(&section, gen.map_name)
+        put_section(&out, 0usize, &section)
+    }
     if out.full || section.full { ret (no_bytes, fail_at(gen, "the module outgrew the back end's storage", "")) }
     ret (out.bytes[0usize..out.count], ok)
 }
@@ -700,11 +767,45 @@ fn describe_flow(a: *mem.Arena, gen: *w.Gen) -> str {
 // The module for the program lowered into `builder`; `message` says why when it cannot and
 // `stats` says how the functions were written (`options` is NEPER_WASM_STATS: any text asks
 // for the report, and "dispatch" keeps every function on the dispatch loop, to test it).
-fn emit(a: *mem.Arena, c: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, arena_bytes: usize, message: *str, stats: *str, options: str) -> ([]u8, err) {
+// `map_name` (C211) is the source map's file name beside the module, empty for none; the map's
+// text is left in `map_bytes`.
+fn emit(a: *mem.Arena, c: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, arena_bytes: usize, message: *str, stats: *str, options: str, threads: bool, map_name: str, map_bytes: *[]u8) -> ([]u8, err) {
     var no_bytes: []u8 = zero
     var gen: w.Gen = zero
     let init_error = init_gen(a, &gen, c, loaded, builder)
     if init_error != ok { ret (no_bytes, init_error) }
+    gen.threads = threads
+    if map_name.len != 0usize {
+        let entries = builder.instruction_count + builder.function_count + 16usize
+        let (offsets, offsets_error) = mem.alloc[usize](a, entries)
+        if offsets_error != ok { ret (no_bytes, offsets_error) }
+        let (lines, lines_error) = mem.alloc[usize](a, entries)
+        if lines_error != ok { ret (no_bytes, lines_error) }
+        let (columns, columns_error) = mem.alloc[usize](a, entries)
+        if columns_error != ok { ret (no_bytes, columns_error) }
+        let (sources, sources_error) = mem.alloc[usize](a, entries)
+        if sources_error != ok { ret (no_bytes, sources_error) }
+        let (paths, paths_error) = mem.alloc[str](a, 4096usize)
+        if paths_error != ok { ret (no_bytes, paths_error) }
+        gen.map_on = true
+        gen.map_name = map_name
+        gen.map_offset = offsets
+        gen.map_line = lines
+        gen.map_column = columns
+        gen.map_source = sources
+        gen.map_paths = paths
+    }
+    if threads {
+        // `wasi.thread-spawn` is import 0 of every threaded module (D5671); `thread.spawn` calls it.
+        var spawn_import: w.Import = zero
+        spawn_import.library = "wasi"
+        spawn_import.symbol = "thread-spawn"
+        spawn_import.param_count = 1usize
+        spawn_import.mask32 = 1usize
+        spawn_import.result_kind = 3usize
+        gen.imports[0usize] = spawn_import
+        gen.import_count = 1usize
+    }
     let (os_module, has_os) = graph.find_module(loaded, "e.os")
     if !has_os {
         *message = "the program has no e.os, which holds the runtime"
@@ -740,6 +841,7 @@ fn emit(a: *mem.Arena, c: *check.Checker, loaded: *graph.Graph, builder: *nir.Bu
         ret (no_bytes, module_error)
     }
     *stats = describe_flow(a, &gen)
+    *map_bytes = gen.map_text
     ret (emitted, ok)
 }
 

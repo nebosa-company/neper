@@ -13,6 +13,9 @@
 #   scripts/wasm-sweep.sh                 # every fixture
 #   scripts/wasm-sweep.sh -j 4 NAME...    # these, four at a time
 #   scripts/wasm-sweep.sh --release       # both builds with --release
+#   scripts/wasm-sweep.sh --host neper-host   # run the modules through lib/wasm/neper-host.js (D5678), not run-wasm.mjs
+#   scripts/wasm-sweep.sh --host both         # through both, building once; the second runner's verdicts go to results-second.tsv
+#   scripts/wasm-sweep.sh --threads       # the WebAssembly build as the threaded module shape (D5671)
 #
 # The compiler is build/<host>/neper-try, or the one NEPER_COMPILER names (required on macOS).
 # Results go to build/wasm-sweep/results.tsv (or WASM_SWEEP_OUT) and the counts to the end of the
@@ -20,11 +23,15 @@
 set -u
 jobs=1
 release=
+runner=run-wasm
+threads=
 names=()
 while [ $# -gt 0 ]; do
     case "$1" in
         -j) shift; jobs=${1:?-j needs a number} ;;
         --release) release=--release ;;
+        --host) shift; runner=${1:?--host needs run-wasm, neper-host or both} ;;
+        --threads) threads=--threads ;;
         *) names+=("$1") ;;
     esac
     shift
@@ -40,6 +47,7 @@ esac
 compiler=${NEPER_COMPILER:-$compiler}
 out=${WASM_SWEEP_OUT:-$repo/build/wasm-sweep}
 mkdir -p "$out"
+rm -f "$out/results-second.tsv"
 if [ ${#names[@]} -eq 0 ]; then
     for dir in "$repo"/tests/selfhost/fixtures/link/*/; do
         [ -f "${dir}src/main.e" ] && names+=("$(basename "$dir")")
@@ -70,38 +78,48 @@ one() {
     source="$repo/tests/selfhost/fixtures/link/$name/src/main.e"
     host="$out/$name$ext"
     wasm="$out/$name.wasm"
+    # The fixtures that are given a path to work in (os_dup, os_seek) fail the same way on both sides without one, which is a pass that proves nothing.
+    case $name in os_dup|os_seek) work="np-sweep-$name.bin" ;; *) work= ;; esac
     rm -f "$out/$name".*
     if ! "$compiler" emit-executable "$source" "$repo" "$host_arch" "$host_os" "$host" $release > "$out/$name.host.build" 2>&1; then
         printf '%s\tskipped\thost build\n' "$name"
         return
     fi
-    limited 120 "$host" > "$out/$name.host.out" 2> "$out/$name.host.err" < /dev/null
+    limited 120 "$host" $work > "$out/$name.host.out" 2> "$out/$name.host.err" < /dev/null
     host_status=$?
     rm -f "$host"
-    if ! "$compiler" emit-executable "$source" "$repo" wasm32 wasi "$wasm" $release > "$out/$name.wasm.build" 2>&1; then
+    if ! "$compiler" emit-executable "$source" "$repo" wasm32 wasi "$wasm" $release $threads > "$out/$name.wasm.build" 2>&1; then
         printf '%s\trefused\t%s\n' "$name" "$(grep -m1 -o 'E-[A-Z]*-[0-9]*.*' "$out/$name.wasm.build" | cut -c1-200)"
         return
     fi
-    limited 120 node --no-warnings "$repo/scripts/run-wasm.mjs" "$wasm" > "$out/$name.wasm.out" 2> "$out/$name.wasm.err" < /dev/null
-    wasm_status=$?
-    rm -f "$wasm"
-    if [ "$wasm_status" -eq 125 ]; then
-        printf '%s\tinvalid\t%s\n' "$name" "$(head -c 300 "$out/$name.wasm.err" | tr '\n' ' ')"
-    elif [ "$wasm_status" -eq "$host_status" ] && cmp -s "$out/$name.host.out" "$out/$name.wasm.out"; then
-        plain "$out/$name.host.err" > "$out/$name.host.plain"
-        plain "$out/$name.wasm.err" > "$out/$name.wasm.plain"
-        if cmp -s "$out/$name.host.plain" "$out/$name.wasm.plain"; then
-            printf '%s\tpass\t\n' "$name"
+    # With --host both the first runner's verdict goes to standard output, the second's to $out/results-second.tsv.
+    first=1
+    for run_with in $runners; do
+        case $run_with in neper-host) runner_path="$repo/lib/wasm/neper-host.js" ;; *) runner_path="$repo/lib/wasm/run-wasm.mjs" ;; esac
+        limited 120 node --no-warnings "$runner_path" "$wasm" $work > "$out/$name.wasm.out" 2> "$out/$name.wasm.err" < /dev/null
+        wasm_status=$?
+        if [ "$wasm_status" -eq 125 ]; then
+            verdict=$(printf '%s\tinvalid\t%s' "$name" "$(head -c 300 "$out/$name.wasm.err" | tr '\n' ' ')")
+        elif [ "$wasm_status" -eq "$host_status" ] && cmp -s "$out/$name.host.out" "$out/$name.wasm.out"; then
+            plain "$out/$name.host.err" > "$out/$name.host.plain"
+            plain "$out/$name.wasm.err" > "$out/$name.wasm.plain"
+            if cmp -s "$out/$name.host.plain" "$out/$name.wasm.plain"; then
+                verdict=$(printf '%s\tpass\t' "$name")
+            else
+                verdict=$(printf '%s\tstderr-differs\t%s' "$name" "$(diff "$out/$name.host.plain" "$out/$name.wasm.plain" | grep -m1 '^[<>]' | cut -c1-200)")
+            fi
         else
-            printf '%s\tstderr-differs\t%s\n' "$name" "$(diff "$out/$name.host.plain" "$out/$name.wasm.plain" | grep -m1 '^[<>]' | cut -c1-200)"
+            verdict=$(printf '%s\tfail\thost exit %s, wasm exit %s' "$name" "$host_status" "$wasm_status")
         fi
-    else
-        printf '%s\tfail\thost exit %s, wasm exit %s\n' "$name" "$host_status" "$wasm_status"
-    fi
+        if [ -n "$first" ]; then printf '%s\n' "$verdict"; first=; else printf '%s\n' "$verdict" >> "$out/results-second.tsv"; fi
+    done
+    rm -f "$wasm" "np-sweep-$name.bin"
 }
 export -f one limited plain
 export NEPER_WASM_STATS=${NEPER_WASM_STATS:-1}
-export repo host_os host_arch compiler out ext release
+case $runner in both) runners="neper-host run-wasm" ;; *) runners=$runner ;; esac
+export runners
+export repo host_os host_arch compiler out ext release threads
 
 printf '%s\n' "${names[@]}" | xargs -P "$jobs" -I{} bash -c 'one {}' | tee "$out/results.tsv"
 printf '\n'

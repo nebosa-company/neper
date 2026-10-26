@@ -8363,7 +8363,7 @@ foreach ($closerCase in @(@('accept', 'safety_resource_closer', 0), @('reject', 
 }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
-foreach ($rejectProject in @('module_cycle', 'module_variants', 'safety_opaque')) {
+foreach ($rejectProject in @('module_cycle', 'module_variants', 'module_variants_other', 'safety_opaque')) {
     $rejectProjectActual = Join-Path $testBuild "conformance-reject-$rejectProject.jsonl"
     cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot "reject\$rejectProject\src\main.e")`" `"$repo`" x64 windows --json > `"$rejectProjectActual`""
     if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/$rejectProject exited $LASTEXITCODE, not 1" }
@@ -10947,28 +10947,83 @@ foreach ($extraFixture in (Get-Content (Join-Path $PSScriptRoot 'extra-fixtures.
     try { & $extraPath | Out-Null } finally { Pop-Location }
     if ($LASTEXITCODE -ne 0) { throw "a $extraFixture check failed: exit $LASTEXITCODE" }
 }
-# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by scripts/run-wasm.mjs from the repo
+# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by lib/wasm/run-wasm.mjs from the repo
 # root; `--release` drops the debug-only rows and keeps the bounds row; neper.wasm emits what this compiler emits.
 $wasmNode = Get-Command node -ErrorAction SilentlyContinue
 if ($wasmNode) {
     $wasmBuild = Join-Path $testBuild 'wasm'
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $wasmBuild
     New-Item -ItemType Directory -Force -Path $wasmBuild | Out-Null
-    $wasmRunner = Join-Path $repo 'scripts\run-wasm.mjs'
+    $wasmRunner = Join-Path $repo 'lib\wasm\run-wasm.mjs'
     # A trap writes to standard error, which -ErrorAction Stop would turn into a terminating error.
-    function Invoke-Wasm([string]$module, [string[]]$arguments) {
+    function Invoke-Wasm([string]$module, [string[]]$arguments, [string]$runner = $wasmRunner) {
         Push-Location $repo
         $previous = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        try { $text = (& node --no-warnings $wasmRunner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
+        try { $text = (& node --no-warnings $runner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
         return @{ Status = $LASTEXITCODE; Output = $text }
     }
-    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask') {
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask', 'os_socket', 'os_resolve', 'async_io', 'macos_poller_loss', 'net', 'wasm_net', 'wasm_atomics') {
         $wasmPath = Join-Path $wasmBuild "$wasmFixture.wasm"
         $wasmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPath
         if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
         $wasmRun = Invoke-Wasm $wasmPath @()
         if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+        # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
+        if ($wasmFixture -in 'os_socket', 'os_resolve', 'macos_poller_loss', 'net', 'wasm_net') { continue }
+        $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
+        if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through lib/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    }
+    # (D5671, D5672, C201) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
+    # and the seven instructions of the "wasm" library answer as a plain and as a threaded module should.
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_atomics', 'wasm_ops') {
+        $wasmThreadsPath = Join-Path $wasmBuild "$wasmFixture.threads.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmThreadsPath --threads) -ne 'executable written') { throw "$wasmFixture did not emit as a threaded WebAssembly module" }
+        $wasmPlainRun = Invoke-Wasm (Join-Path $wasmBuild "$wasmFixture.wasm") @()
+        $wasmThreadsRun = Invoke-Wasm $wasmThreadsPath @()
+        if ($wasmThreadsRun.Status -ne 0 -or $wasmPlainRun.Output -ne $wasmThreadsRun.Output) { throw "$wasmFixture writes something else as a threaded module: exit $($wasmThreadsRun.Status) $($wasmThreadsRun.Output)" }
+    }
+    $wasmOpsSource = Join-Path $PSScriptRoot 'fixtures\wasm\wasm_thread_ops\src\main.e'
+    $wasmOpsPlain = Join-Path $wasmBuild 'thread_ops.wasm'
+    $wasmOpsThreads = Join-Path $wasmBuild 'thread_ops.threads.wasm'
+    if ((& $compiler emit-executable $wasmOpsSource $repo 'wasm32' 'wasi' $wasmOpsPlain) -ne 'executable written') { throw 'wasm_thread_ops did not emit as WebAssembly' }
+    if ((& $compiler emit-executable $wasmOpsSource $repo 'wasm32' 'wasi' $wasmOpsThreads --threads) -ne 'executable written') { throw 'wasm_thread_ops did not emit as a threaded WebAssembly module' }
+    $wasmRun = Invoke-Wasm $wasmOpsPlain @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 0`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0") { throw "the plain module's thread instructions answered: $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmOpsThreads @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
+    # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
+    # inotify watch hands events over differently).
+    $wasmWatch = Join-Path $wasmBuild 'os_watch_modify.wasm'
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\wasm\os_watch_modify\src\main.e') $repo 'wasm32' 'wasi' $wasmWatch) -ne 'executable written') { throw 'os_watch_modify did not emit as WebAssembly' }
+    $wasmRun = Invoke-Wasm $wasmWatch @()
+    if ($wasmRun.Status -ne 0) { throw "os_watch_modify failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    # (D5673, D5674, C202) Threads under the thread host: wasm_threads built with --threads writes what the native build
+    # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
+    $wasmThreadsPath = Join-Path $wasmBuild 'wasm_threads.threads.wasm'
+    $wasmFixture = 'wasm_threads'
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmThreadsPath --threads) -ne 'executable written') { throw 'wasm_threads did not emit as a threaded WebAssembly module' }
+    $wasmRun = Invoke-Wasm $wasmThreadsPath @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "atomic 8000`nmutex 8000`nids distinct`nmain id 1`na thread started a thread`ndetached`nwait timeout`ndetails per thread`n200 cycles`nmain returns") { throw "wasm_threads answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmThreadsPath @('exit')
+    if ($wasmRun.Status -ne 7) { throw "wasm_threads exit answered $($wasmRun.Status), not 7" }
+    # (D5750, C204) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
+    # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
+    foreach ($wasmFixture in 'os_pipe_threads', 'net_pop3') {
+        $wasmPipePath = Join-Path $wasmBuild "$wasmFixture.threads.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPipePath --threads) -ne 'executable written') { throw "$wasmFixture did not emit as a threaded WebAssembly module" }
+        $wasmRun = Invoke-Wasm $wasmPipePath @()
+        $wasmWant = if ($wasmFixture -eq 'net_pop3') { 'net pop3 ok' } else { "write then read`nempty probe would block`n300000 bytes across threads`nend of stream after close`na blocked reader woke" }
+        if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne $wasmWant) { throw "$wasmFixture answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    }
+    # (D5770, C205) Processes through neper_host: each fixture spawns its own image, which the runner starts again as a child (os_process:
+    # kill, a pipe handed to the child, wait_usage; os_group: environment, cwd, a group terminated). proc_output is not run here: its
+    # last checks hold an orphan in a process group, which taskkill /T cannot reach once the group's leader has exited (run.sh runs it).
+    foreach ($wasmFixture in 'os_process', 'os_group') {
+        $wasmProcPath = Join-Path $wasmBuild "$wasmFixture.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmProcPath) -ne 'executable written') { throw "$wasmFixture did not emit as a WebAssembly module" }
+        $wasmRun = Invoke-Wasm $wasmProcPath @()
+        if ($wasmRun.Status -ne 0) { throw "$wasmFixture answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
     }
     # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
     $wasmFallback = 'wasm_irreducible'
@@ -11000,7 +11055,51 @@ if ($wasmNode) {
     }
     $wasmRun = Invoke-Wasm $wasmReleasePath @('address')
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the 32-bit address row was not left out of the wasm32-wasi release build: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    # (C209, D5681) `neper run --target wasm32-wasi` from a toolchain with lib\wasm beside it runs the module under node and
+    # reports as a native run does; with no node it says what to install.
+    $env:NEPER_NODE = ''
+    $wasmRunPath = Join-Path $wasmBuild 'run_release.wasm'
+    $wasmRunText = (cmd /c "`"$shortCompiler`" run `"$wasmReleaseSource`" --target wasm32-wasi --release -o `"$wasmRunPath`" -- bounds") -join "`n"
+    if ($wasmRunText -notmatch '"process_exit_code":134,' -or $wasmRunText -notmatch [regex]::Escape('trap[bounds]: index 8 out of bounds for len 8')) { throw "neper run --target wasm32-wasi did not report the bounds trap: $wasmRunText" }
+    $previousPath = $env:PATH
+    $env:PATH = Join-Path $env:SystemRoot 'System32'
+    try { $wasmRunText = (cmd /c "`"$shortCompiler`" run `"$wasmReleaseSource`" --target wasm32-wasi -o `"$wasmRunPath`"") -join "`n"; $wasmRunStatus = $LASTEXITCODE } finally { $env:PATH = $previousPath }
+    if ($wasmRunStatus -ne 2 -or $wasmRunText -notmatch [regex]::Escape('running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE')) { throw "neper run --target wasm32-wasi without node did not say what to install: $wasmRunText" }
     if ((Get-Item $wasmReleasePath).Length -ge (Get-Item $wasmDebugPath).Length) { throw 'the wasm32-wasi release module is not smaller than the debug one' }
+    # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
+    $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'
+    if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
+    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath) (Join-Path $repo 'tests\wasm\host.mjs')
+    if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
+    # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
+    $wasmCounterPath = Join-Path $wasmBuild 'ui_counter.wasm'
+    $wasmCounterThreads = Join-Path $wasmBuild 'ui_counter.threads.wasm'
+    $wasmCounterSource = Join-Path $repo 'tests\wasm\browser\ui_counter\src\main.e'
+    if ((& $compiler emit-executable $wasmCounterSource $repo 'wasm32' 'wasi' $wasmCounterPath) -ne 'executable written') { throw 'ui_counter did not emit as WebAssembly' }
+    if ((& $compiler emit-executable $wasmCounterSource $repo 'wasm32' 'wasi' $wasmCounterThreads --threads) -ne 'executable written') { throw 'ui_counter did not emit as a threaded WebAssembly module' }
+    $wasmGalleryPath = Join-Path $wasmBuild 'ui_gallery.wasm'
+    if ((& $compiler emit-executable (Join-Path $repo 'examples\ui\main.e') $repo 'wasm32' 'wasi' $wasmGalleryPath) -ne 'executable written') { throw 'examples/ui did not emit as WebAssembly' }
+    $wasmWindow = Invoke-Wasm $wasmCounterPath @($wasmCounterThreads, $wasmGalleryPath) (Join-Path $repo 'tests\wasm\window.mjs')
+    if ($wasmWindow.Status -ne 0) { throw "the lib/wasm/window.js check failed: $($wasmWindow.Output)" }
+    # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
+    # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
+    $wasmNullSource = Join-Path $repo 'tests\wasm\null_call\src\main.e'
+    $wasmNullPath = Join-Path $wasmBuild 'null_call.wasm'
+    $wasmNullPlain = Join-Path $wasmBuild 'null_call_plain.wasm'
+    if ((& $compiler emit-executable $wasmNullSource $repo 'wasm32' 'wasi' $wasmNullPath '--source-map') -ne 'executable written') { throw 'null_call did not emit with a source map' }
+    if ((& $compiler emit-executable $wasmNullSource $repo 'wasm32' 'wasi' $wasmNullPlain) -ne 'executable written') { throw 'null_call did not emit' }
+    if (-not (Test-Path "$wasmNullPath.map") -or (Test-Path "$wasmNullPlain.map")) { throw 'the source map was not written exactly when asked for' }
+    if (Get-Command wasm-tools -ErrorAction SilentlyContinue) {
+        & wasm-tools validate $wasmNullPath
+        if ($LASTEXITCODE -ne 0) { throw 'the module with a source map does not validate' }
+    }
+    foreach ($wasmNullRunner in $wasmRunner, (Join-Path $repo 'lib\wasm\neper-host.js')) {
+        $wasmRun = Invoke-Wasm $wasmNullPath @() $wasmNullRunner
+        $wasmFirst = ($wasmRun.Output -split "`n" | Where-Object { $_ -match '^\s*at ' } | Select-Object -First 1)
+        if ($wasmFirst -notmatch 'main\.fire.*\[src/main\.e:13\]') { throw "$wasmNullRunner did not name the null call's line: $($wasmRun.Output)" }
+        $wasmRun = Invoke-Wasm $wasmNullPlain @() $wasmNullRunner
+        if ($wasmRun.Output -match '\[src/main\.e:') { throw "$wasmNullRunner named a line without a source map: $($wasmRun.Output)" }
+    }
     # scripts/wasm-compiler.sh is bash: Git's, never WSL's, which cannot read a Windows path.
     $wasmGit = Get-Command git -ErrorAction SilentlyContinue
     $wasmBash = $null

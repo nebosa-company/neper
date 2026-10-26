@@ -13,17 +13,20 @@
 #   scripts/check-fixture.sh game_core --keep                   # leave the executable behind
 #   scripts/check-fixture.sh game_core --target wasm32-wasi     # a WebAssembly module under Node
 #   scripts/check-fixture.sh wasm_release --target wasm32-wasi --release   # built with --release
+#   scripts/check-fixture.sh wasm_atomics --target wasm32-wasi --threads   # the threaded module shape (D5671)
 set -eu
 
 fixture=${1:?usage: check-fixture.sh <fixture-name> [--keep] [--target wasm32-wasi] [--release]}
 shift
 keep=
 release=
+threads=
 target=
 while [ $# -gt 0 ]; do
     case "$1" in
         --keep) keep=1 ;;
         --release) release=--release ;;
+        --threads) threads=--threads ;;
         --target) shift; target=${1:?--target needs a value} ;;
         *) printf '%s\n' "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -56,10 +59,10 @@ fi
 if [ -n "$target" ]; then
     [ "$target" = wasm32-wasi ] || { printf '%s\n' "unknown target: $target" >&2; exit 2; }
     exe="${exe%.exe}.wasm"
-    written=$("$compiler" emit-executable "$source" "$repo" wasm32 wasi "$exe" $release)
+    written=$("$compiler" emit-executable "$source" "$repo" wasm32 wasi "$exe" $release $threads)
     [ "$written" = 'executable written' ] || { printf '%s\n' "$fixture did not emit: $written" >&2; exit 1; }
     status=0
-    node --no-warnings "$repo/scripts/run-wasm.mjs" "$exe" || status=$?
+    node --no-warnings "$repo/lib/wasm/run-wasm.mjs" "$exe" || status=$?
     [ -n "$keep" ] || rm -f "$exe"
     if [ "$status" -eq 0 ]; then
         printf '%s\n' "$fixture passed on wasm32-wasi"

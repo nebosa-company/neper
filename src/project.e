@@ -7,6 +7,7 @@ error InvalidPath
 error InvalidTarget
 error ModuleNotFound
 error AmbiguousVariant
+error NoVariant
 
 type Project = struct {
     root: str,
@@ -373,6 +374,79 @@ fn list_directory(a: *mem.Arena, listings: *Listings, directory: str) -> ([]os.D
     ret (listed, missing, ok)
 }
 
+fn push_text(buffer: []u8, at: usize, text: str) -> usize {
+    var cursor = at
+    var i = 0usize
+    while i < text.len {
+        buffer[cursor] = text[i]
+        cursor += 1usize
+        i += 1usize
+    }
+    ret cursor
+}
+
+// The variants the directory has for other targets, "linux, macos and windows and none
+// for wasi" (D5682); empty when it has none. The target named is its os, or its arch
+// when every variant seen is an arch.
+fn variants_seen(a: *mem.Arena, entries: []os.DirEntry, stem: str, arch: str, target_os: str) -> (str, err) {
+    var names: [12]str = zero
+    names[0usize] = "aarch64"
+    names[1usize] = "linux"
+    names[2usize] = "macos"
+    names[3usize] = "neperos"
+    names[4usize] = "none"
+    names[5usize] = "ptx"
+    names[6usize] = "spv"
+    names[7usize] = "wasi"
+    names[8usize] = "wasm32"
+    names[9usize] = "windows"
+    names[10usize] = "x64"
+    names[11usize] = "x86"
+    var found: [12]bool = zero
+    var total = 0usize
+    var os_seen = false
+    var n = 0usize
+    while n < 12usize {
+        for entry in entries {
+            if entry.kind == .File || entry.kind == .Symlink {
+                if variant_source(entry.name, stem, names[n]) { found[n] = true }
+            }
+        }
+        if found[n] {
+            total += 1usize
+            if valid_os(names[n]) { os_seen = true }
+        }
+        n += 1usize
+    }
+    if total == 0usize { ret ("", ok) }
+    let (buffer, buffer_error) = mem.alloc[u8](a, 256usize)
+    if buffer_error != ok { ret ("", buffer_error) }
+    var at = push_text(buffer, 0usize, "has variants for ")
+    var listed = 0usize
+    n = 0usize
+    while n < 12usize {
+        if found[n] {
+            if listed > 0usize {
+                if listed + 1usize == total {
+                    at = push_text(buffer, at, " and ")
+                } else {
+                    at = push_text(buffer, at, ", ")
+                }
+            }
+            at = push_text(buffer, at, names[n])
+            listed += 1usize
+        }
+        n += 1usize
+    }
+    at = push_text(buffer, at, " and none for ")
+    if os_seen {
+        at = push_text(buffer, at, target_os)
+    } else {
+        at = push_text(buffer, at, arch)
+    }
+    ret (buffer[0usize..at], ok)
+}
+
 fn select_source(a: *mem.Arena, listings: *Listings, root: str, source_root: str, module: str, arch: str, target_os: str) -> (str, err) {
     if !valid_arch(arch) || !valid_os(target_os) || !valid_target(arch, target_os) { ret ("", InvalidTarget) }
     let (prefix, stem, parts_error) = module_parts(module)
@@ -393,7 +467,12 @@ fn select_source(a: *mem.Arena, listings: *Listings, root: str, source_root: str
         }
     }
     if has_arch && has_os { ret ("", AmbiguousVariant) }
-    if !has_arch && !has_os && !has_plain { ret ("", ModuleNotFound) }
+    if !has_arch && !has_os && !has_plain {
+        let (seen, seen_error) = variants_seen(a, entries, stem, arch, target_os)
+        if seen_error != ok { ret ("", seen_error) }
+        if seen.len > 0usize { ret (seen, NoVariant) }
+        ret ("", ModuleNotFound)
+    }
     let (stable_prefix, stable_stem, stable_parts_error) = module_parts(module)
     if stable_parts_error != ok { ret ("", stable_parts_error) }
     let (stable_directory, stable_path_error) = source_directory(a, root, source_root, stable_prefix)

@@ -1124,6 +1124,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Plan docs/browser-progress.html. Needs L170; individual gap rows may start earlier when nothing blocks them. Acceptance: every tracker row with track gap or core is done or explicitly deferred with a decision: Shadow DOM and custom elements (6.16), Workers and Service Workers (6.18, 6.19), contenteditable and Selection (6.11, 6.12), process isolation and OS sandbox (8.1 to 8.3, N.6), DevTools (7.13), WebAssembly (5.17), vertical writing modes (2.16, N.5), audio (3.19), backdrop-filter and blend modes (N.3), colour emoji and CFF (N.4), HSTS and clickjacking protections (4.15, 4.16), fuzzing (8.4). Not yet: all of it."
+    },
+    {
+      "id": "C213",
+      "category": "library",
+      "group": "WebAssembly",
+      "order": 213,
+      "title": "e.ui in a browser: a real phone's virtual keyboard and IME",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Needs a device; D5821 lists what the mobile preset did and did not show (synthetic composition events, the textarea at 16 px not scrolling or zooming). Serve tests/wasm/browser/ui_counter.html over HTTPS or a LAN address with scripts/serve-wasm.mjs --isolated (a secure context is needed for crossOriginIsolated and the clipboard) and check on iOS Safari and Android Chrome: (1) tapping the Name field opens the keyboard and neither zooms nor scrolls the page; (2) typed letters, Backspace and Enter arrive once each; (3) composition with a CJK keyboard (pinyin or kana) delivers the committed text once, with no duplicate after compositionend and none while composing; (4) the clipboard: paste from the system menu reaches the program, and Ctrl+C in the program writes navigator.clipboard, with the permission prompt answered either way; (5) visualViewport resizes when the keyboard opens and the canvas stays usable (decide whether the window follows it); (6) a physical keyboard on a tablet still works. Fix what fails in lib/wasm/window.js; window_visible is separate."
     }
   ]
 }

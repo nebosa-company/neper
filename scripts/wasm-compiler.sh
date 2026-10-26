@@ -83,7 +83,7 @@ one() {
     rm -f "$native" "$wasm"
     native_said=$("$compiler" emit-executable "$source" . "$arch" "$os" "$native" 2>&1)
     start=$(date +%s)
-    wasm_said=$(node --no-warnings scripts/run-wasm.mjs "$out/neper.wasm" emit-executable "$source" . "$arch" "$os" "$wasm" 2>&1)
+    wasm_said=$(node --no-warnings lib/wasm/run-wasm.mjs "$out/neper.wasm" emit-executable "$source" . "$arch" "$os" "$wasm" 2>&1)
     seconds=$(( $(date +%s) - start ))
     if [ -f "$native" ] && [ -f "$wasm" ]; then
         if cmp -s "$native" "$wasm"; then
