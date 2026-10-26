@@ -107,7 +107,7 @@ fn put_hex(t: *Text, value: usize) {
         one[0usize] = digits[nibble]
         put(t, one[0usize..1usize])
         if shift == 0usize { break }
-        shift -= 4usize
+        shift = shift - 4usize
     }
 }
 
@@ -386,7 +386,7 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     }
     var value_at = 0usize
     while value_at < function.value_count + 1usize {
-        if values.kind[value_at] == KIND_SCALAR {
+        if (values.kind[value_at] == KIND_SCALAR) {
             put(&m.body, "  ")
             put(&m.body, type_name(values.ty[value_at]))
             put(&m.body, " v")
@@ -422,7 +422,7 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
 // A private or shared address as `base + constant + dynamic`, the base `fr` or `tg`.
 fn put_private_address(t: *Text, values: *Values, address: usize, extra: usize) {
     var base = "fr"
-    if values.kind[address] == KIND_SHARED { base = "tg" }
+    if (values.kind[address] == KIND_SHARED) { base = "tg" }
     put(t, "(")
     put(t, base)
     put(t, " + ")
@@ -436,7 +436,7 @@ fn put_private_address(t: *Text, values: *Values, address: usize, extra: usize) 
 }
 
 fn space_of(values: *Values, address: usize) -> str {
-    if values.kind[address] == KIND_SHARED { ret "threadgroup" }
+    if (values.kind[address] == KIND_SHARED) { ret "threadgroup" }
     ret "thread"
 }
 
@@ -495,7 +495,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         put(t, " = ")
         var bits = instruction.immediate
         if opcode == .Zero { bits = 0usize }
-        if ty == T_BOOL {
+        if (ty == T_BOOL) {
             if bits != 0usize { put(t, "true") } else { put(t, "false") }
         } else if is_float(ty) {
             put(t, "as_type<float>(")
@@ -513,7 +513,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     }
     if opcode == .Zero {
         let address = operand(builder, instruction, 0usize)
-        if values.kind[address] != KIND_PRIVATE && values.kind[address] != KIND_SHARED { ret fail(m, "an aggregate zero has no private or shared destination") }
+        if (values.kind[address] != KIND_PRIVATE && values.kind[address] != KIND_SHARED) { ret fail(m, "an aggregate zero has no private or shared destination") }
         put(t, "      for (uint z = 0u; z < ")
         put_number(t, instruction.immediate)
         put(t, "u; z += 1u) *(")
@@ -548,12 +548,12 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     if opcode == .BranchIf {
         let condition = operand(builder, instruction, 0usize)
         put(t, "      if (")
-        if values.kind[condition] == KIND_SHARED {
+        if (values.kind[condition] == KIND_SHARED) {
             put(t, "true")
-        } else if values.kind[condition] == KIND_SCALAR {
+        } else if (values.kind[condition] == KIND_SCALAR) {
             put(t, "v")
             put_number(t, condition)
-            if values.ty[condition] != T_BOOL { put(t, " != 0") }
+            if (values.ty[condition] != T_BOOL) { put(t, " != 0") }
         } else {
             ret fail(m, "a branch has no condition value")
         }
@@ -599,7 +599,7 @@ fn emit_parameter(m: *Module, c: *check.Checker, kernel: check.Function, instruc
             if ty.kind != .Slice { ret fail(m, "a kernel parameter of this type is not yet written as MSL") }
         } else {
             let held = value_type(ty)
-            if held == 0u8 || held == T_BOOL { ret fail(m, "a kernel parameter of this type is not yet written as MSL") }
+            if (held == 0u8 || held == T_BOOL) { ret fail(m, "a kernel parameter of this type is not yet written as MSL") }
             size = type_bytes(held)
             align = size
         }
@@ -621,7 +621,7 @@ fn emit_parameter(m: *Module, c: *check.Checker, kernel: check.Function, instruc
         put(t, "u);\n")
         ret ok
     }
-    if values.kind[instruction.result] != KIND_PRIVATE { ret fail(m, "a slice parameter has no frame slot") }
+    if (values.kind[instruction.result] != KIND_PRIVATE) { ret fail(m, "a slice parameter has no frame slot") }
     let slot = values.offset[instruction.result]
     put(t, "      *(thread ulong*)(fr + ")
     put_number(t, slot)
@@ -654,19 +654,19 @@ fn emit_global_address(m: *Module, builder: *nir.Builder, instruction: nir.Instr
 fn emit_field_address(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let base = operand(builder, instruction, 0usize)
     let result = instruction.result
-    if values.kind[base] == KIND_PRIVATE || values.kind[base] == KIND_SHARED {
+    if (values.kind[base] == KIND_PRIVATE || values.kind[base] == KIND_SHARED) {
         values.kind[result] = values.kind[base]
         values.offset[result] = values.offset[base] + instruction.immediate
         values.dynamic[result] = values.dynamic[base]
         ret ok
     }
-    if values.kind[base] == KIND_BUILTIN {
+    if (values.kind[base] == KIND_BUILTIN) {
         // A builtin's component: the offset is kept beside the builtin's number.
         values.kind[result] = KIND_BUILTIN
         values.offset[result] = values.offset[base] + instruction.immediate * 4usize
         ret ok
     }
-    if values.kind[base] != KIND_SCALAR { ret fail(m, "a field address has no base") }
+    if (values.kind[base] != KIND_SCALAR) { ret fail(m, "a field address has no base") }
     scalar(values, result, 8u8)
     put(&m.code, "      v")
     put_number(&m.code, result)
@@ -683,12 +683,12 @@ fn emit_index_address(m: *Module, builder: *nir.Builder, instruction: nir.Instru
     let base = operand(builder, instruction, 0usize)
     let index = operand(builder, instruction, 1usize)
     let result = instruction.result
-    if values.kind[index] != KIND_SCALAR { ret fail(m, "an index has no value") }
+    if (values.kind[index] != KIND_SCALAR) { ret fail(m, "an index has no value") }
     if instruction.operand_count >= 3usize && !instruction.nocheck {
         let length = operand(builder, instruction, 2usize)
         guard(m, "<", index, length, 0usize, instruction.site.line)
     }
-    if values.kind[base] == KIND_PRIVATE || values.kind[base] == KIND_SHARED {
+    if (values.kind[base] == KIND_PRIVATE || values.kind[base] == KIND_SHARED) {
         m.dynamics += 1usize
         put(t, "      d")
         put_number(t, m.dynamics)
@@ -708,7 +708,7 @@ fn emit_index_address(m: *Module, builder: *nir.Builder, instruction: nir.Instru
         values.dynamic[result] = m.dynamics
         ret ok
     }
-    if values.kind[base] != KIND_SCALAR { ret fail(m, "an indexed address has no base") }
+    if (values.kind[base] != KIND_SCALAR) { ret fail(m, "an indexed address has no base") }
     if value_bytes_of(values, index) != 4usize { ret fail(m, "an index wider than 32 bits is not yet written as MSL") }
     scalar(values, result, 8u8)
     put(t, "      v")
@@ -735,14 +735,14 @@ fn emit_slice(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     let length = operand(builder, instruction, 2usize)
     let lower = operand(builder, instruction, 3usize)
     let upper = operand(builder, instruction, 4usize)
-    if values.kind[destination] != KIND_PRIVATE { ret fail(m, "a slice has no private header") }
-    if values.kind[length] != KIND_SCALAR || values.kind[lower] != KIND_SCALAR || values.kind[upper] != KIND_SCALAR { ret fail(m, "a slice has no bounds") }
+    if (values.kind[destination] != KIND_PRIVATE) { ret fail(m, "a slice has no private header") }
+    if (values.kind[length] != KIND_SCALAR || values.kind[lower] != KIND_SCALAR || values.kind[upper] != KIND_SCALAR) { ret fail(m, "a slice has no bounds") }
     if !instruction.nocheck {
         guard(m, "<=", lower, upper, 0usize, instruction.site.line)
         guard(m, "<=", upper, length, 0usize, instruction.site.line)
     }
     let slot = values.offset[destination] + 0usize
-    if values.kind[data] == KIND_SHARED {
+    if (values.kind[data] == KIND_SHARED) {
         put(t, "      *(thread uint*)(fr + ")
         put_number(t, slot)
         put(t, "u) = ")
@@ -755,7 +755,7 @@ fn emit_slice(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
         put_number(t, slot + 4usize)
         put(t, "u) = 0u;\n")
     } else {
-        if values.kind[data] != KIND_SCALAR { ret fail(m, "a slice has no device or shared base") }
+        if (values.kind[data] != KIND_SCALAR) { ret fail(m, "a slice has no device or shared base") }
         put(t, "      *(thread ulong*)(fr + ")
         put_number(t, slot)
         put(t, "u) = v")
@@ -814,7 +814,7 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     }
     let ty = value_type(instruction.ty)
     if ty == 0u8 { ret fail(m, "a load of this type is not yet written as MSL") }
-    if values.kind[address] == KIND_BUILTIN {
+    if (values.kind[address] == KIND_BUILTIN) {
         let which = values.offset[address]
         // `which` is the builtin number for the bare address and number plus component for a field of it.
         if ty != 6u8 { ret fail(m, "an invocation id is read in an unexpected shape") }
@@ -834,12 +834,12 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         put(t, ";\n")
         ret ok
     }
-    if values.kind[address] == KIND_PRIVATE || values.kind[address] == KIND_SHARED {
+    if (values.kind[address] == KIND_PRIVATE || values.kind[address] == KIND_SHARED) {
         scalar(values, result, ty)
         put(t, "      v")
         put_number(t, result)
         put(t, " = ")
-        if ty == T_BOOL {
+        if (ty == T_BOOL) {
             put(t, "(*(")
             put(t, space_of(values, address))
             put(t, " uchar*)")
@@ -856,8 +856,8 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         put(t, ";\n")
         ret ok
     }
-    if values.kind[address] != KIND_SCALAR { ret fail(m, "a load has no address") }
-    if ty == T_BOOL { ret fail(m, "a bool in device memory is not a device storage type") }
+    if (values.kind[address] != KIND_SCALAR) { ret fail(m, "a load has no address") }
+    if (ty == T_BOOL) { ret fail(m, "a bool in device memory is not a device storage type") }
     scalar(values, result, ty)
     put(t, "      v")
     put_number(t, result)
@@ -873,7 +873,7 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     let t = &m.code
     let address = operand(builder, instruction, 0usize)
     let value = operand(builder, instruction, 1usize)
-    if values.kind[value] == KIND_SHARED && values.kind[address] == KIND_PRIVATE {
+    if (values.kind[value] == KIND_SHARED && values.kind[address] == KIND_PRIVATE) {
         put(t, "      *(thread uint*)")
         put_private_address(t, values, address, 0usize)
         put(t, " = ")
@@ -881,10 +881,10 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
         put(t, ";\n")
         ret ok
     }
-    if values.kind[value] != KIND_SCALAR { ret fail(m, "a store of an aggregate is not yet written as MSL") }
+    if (values.kind[value] != KIND_SCALAR) { ret fail(m, "a store of an aggregate is not yet written as MSL") }
     let ty = values.ty[value]
-    if values.kind[address] == KIND_PRIVATE || values.kind[address] == KIND_SHARED {
-        if ty == T_BOOL {
+    if (values.kind[address] == KIND_PRIVATE || values.kind[address] == KIND_SHARED) {
+        if (ty == T_BOOL) {
             put(t, "      *(")
             put(t, space_of(values, address))
             put(t, " uchar*)")
@@ -905,8 +905,8 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
         put(t, ";\n")
         ret ok
     }
-    if values.kind[address] != KIND_SCALAR { ret fail(m, "a store has no address") }
-    if ty == T_BOOL { ret fail(m, "a bool in device memory is not a device storage type") }
+    if (values.kind[address] != KIND_SCALAR) { ret fail(m, "a store has no address") }
+    if (ty == T_BOOL) { ret fail(m, "a bool in device memory is not a device storage type") }
     put(t, "      *(device ")
     put(t, type_name(ty))
     put(t, "*)(heap + v")
@@ -939,14 +939,14 @@ fn emit_copy(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
 fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let source = operand(builder, instruction, 0usize)
     let ty = value_type(instruction.ty)
-    if ty == 0u8 || values.kind[source] != KIND_SCALAR { ret fail(m, "a conversion of this type is not yet written as MSL") }
+    if (ty == 0u8 || values.kind[source] != KIND_SCALAR) { ret fail(m, "a conversion of this type is not yet written as MSL") }
     let from = values.ty[source]
     if (from == 8u8 || ty == 8u8) && from != ty && (instruction.ty.kind == .Pointer || from == 8u8 && false) { ret fail(m, "a conversion between an address and an integer is not written as MSL") }
     scalar(values, instruction.result, ty)
     put(&m.code, "      v")
     put_number(&m.code, instruction.result)
     put(&m.code, " = ")
-    if ty == T_BOOL {
+    if (ty == T_BOOL) {
         put(&m.code, "v")
         put_number(&m.code, source)
         put(&m.code, " != 0")
@@ -964,8 +964,8 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     let left = operand(builder, instruction, 0usize)
     let right = operand(builder, instruction, 1usize)
     let ty = value_type(instruction.ty)
-    if ty == 0u8 || values.kind[left] != KIND_SCALAR || values.kind[right] != KIND_SCALAR { ret fail(m, "an arithmetic operation of this type is not yet written as MSL") }
-    if ty == T_BOOL { ret fail(m, "an integer operation is not yet written as MSL") }
+    if (ty == 0u8 || values.kind[left] != KIND_SCALAR || values.kind[right] != KIND_SCALAR) { ret fail(m, "an arithmetic operation of this type is not yet written as MSL") }
+    if (ty == T_BOOL) { ret fail(m, "an integer operation is not yet written as MSL") }
     let opcode = instruction.opcode
     var symbol = ""
     if opcode == .Add || opcode == .AddWrap { symbol = "+" }
@@ -1002,8 +1002,8 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
 fn emit_compare(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let left = operand(builder, instruction, 0usize)
     let right = operand(builder, instruction, 1usize)
-    if values.kind[left] != KIND_SCALAR || values.kind[right] != KIND_SCALAR { ret fail(m, "a comparison has no operands") }
-    if values.ty[left] == T_BOOL { ret fail(m, "a bool comparison is not yet written as MSL") }
+    if (values.kind[left] != KIND_SCALAR || values.kind[right] != KIND_SCALAR) { ret fail(m, "a comparison has no operands") }
+    if (values.ty[left] == T_BOOL) { ret fail(m, "a bool comparison is not yet written as MSL") }
     let opcode = instruction.opcode
     var symbol = "=="
     if opcode == .NotEqual { symbol = "!=" }
@@ -1026,13 +1026,13 @@ fn emit_compare(m: *Module, builder: *nir.Builder, instruction: nir.Instruction,
 
 fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let source = operand(builder, instruction, 0usize)
-    if values.kind[source] != KIND_SCALAR { ret fail(m, "a unary operation has no operand") }
+    if (values.kind[source] != KIND_SCALAR) { ret fail(m, "a unary operation has no operand") }
     let ty = values.ty[source]
     scalar(values, instruction.result, ty)
     put(&m.code, "      v")
     put_number(&m.code, instruction.result)
     put(&m.code, " = ")
-    if ty == T_BOOL {
+    if (ty == T_BOOL) {
         if instruction.opcode != .BitNot { ret fail(m, "a bool operation is not yet written as MSL") }
         put(&m.code, "!v")
     } else if instruction.opcode == .Negate {
