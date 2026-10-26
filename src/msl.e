@@ -497,17 +497,20 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         if opcode == .Zero { bits = 0usize }
         if (ty == T_BOOL) {
             if bits != 0usize { put(t, "true") } else { put(t, "false") }
-        } else if is_float(ty) {
+            put(t, ";\n")
+            ret ok
+        }
+        if is_float(ty) {
             put(t, "as_type<float>(")
             put_hex(t, bits)
-            put(t, "u)")
-        } else {
-            put(t, "(")
-            put(t, type_name(ty))
-            put(t, ")")
-            put_number(t, bits)
-            if type_bytes(ty) == 8usize { put(t, "ul") } else { put(t, "u") }
+            put(t, "u);\n")
+            ret ok
         }
+        put(t, "(")
+        put(t, type_name(ty))
+        put(t, ")")
+        put_number(t, bits)
+        if type_bytes(ty) == 8usize { put(t, "ul") } else { put(t, "u") }
         put(t, ";\n")
         ret ok
     }
@@ -548,15 +551,10 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     if opcode == .BranchIf {
         let condition = operand(builder, instruction, 0usize)
         put(t, "      if (")
-        if (values.kind[condition] == KIND_SHARED) {
-            put(t, "true")
-        } else if (values.kind[condition] == KIND_SCALAR) {
-            put(t, "v")
-            put_number(t, condition)
-            if (values.ty[condition] != T_BOOL) { put(t, " != 0") }
-        } else {
-            ret fail(m, "a branch has no condition value")
-        }
+        if (values.kind[condition] != KIND_SCALAR) { ret fail(m, "a branch has no condition value") }
+        put(t, "v")
+        put_number(t, condition)
+        if (values.ty[condition] != T_BOOL) { put(t, " != 0") }
         put(t, ") { pc = ")
         put_number(t, instruction.target - function.first_block)
         put(t, "u; } else { pc = ")
@@ -1035,22 +1033,14 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     if (ty == T_BOOL) {
         if instruction.opcode != .BitNot { ret fail(m, "a bool operation is not yet written as MSL") }
         put(&m.code, "!v")
-    } else if instruction.opcode == .Negate {
-        put(&m.code, "(")
-        put(&m.code, type_name(ty))
-        put(&m.code, ")(-v")
         put_number(&m.code, source)
-        put(&m.code, ");\n")
-        ret ok
-    } else {
-        put(&m.code, "(")
-        put(&m.code, type_name(ty))
-        put(&m.code, ")(~v")
-        put_number(&m.code, source)
-        put(&m.code, ");\n")
+        put(&m.code, ";\n")
         ret ok
     }
+    put(&m.code, "(")
+    put(&m.code, type_name(ty))
+    if instruction.opcode == .Negate { put(&m.code, ")(-v") } else { put(&m.code, ")(~v") }
     put_number(&m.code, source)
-    put(&m.code, ";\n")
+    put(&m.code, ");\n")
     ret ok
 }
