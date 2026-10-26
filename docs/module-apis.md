@@ -25055,6 +25055,7 @@ fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: [
 fn column_rule_of(l: *Layout, s: *const style.Style) -> (f64, u32, bool)
 fn edge_of(l: *const Layout, b: u32, side: usize, prio: u8) -> Edge
 fn edge_wins(a: Edge, b: Edge) -> bool
+fn fixed_block_size(l: *const Layout, b: u32) -> f64
 fn flex_baseline(l: *const Layout, b: u32) -> (bool, f64)
 fn frame_side(code: u8, i: usize) -> usize
 fn gaps_of(tr: []GTrack, n: usize, gap: f64) -> f64
@@ -25078,6 +25079,7 @@ fn line_clamp_count(s: *const style.Style) -> usize
 fn mode_code(s: *const style.Style) -> u8
 fn order_items(l: *Layout, b: u32)
 fn orphan_display(l: *const Layout, parent: u32) -> style.Display
+fn orthogonal_room(l: *const Layout, c: u32, pch: f64) -> f64
 fn overflow_propagated(l: *const Layout, b: u32) -> bool
 fn put_edge(arr: []Edge, at: usize, e: Edge)
 fn ratio_height(l: *const Layout, b: u32, cw: f64) -> (f64, bool)
