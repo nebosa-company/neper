@@ -897,15 +897,25 @@ fn list_ordinal(l: *Layout, node: u32) -> i64 {
         } else {
             var sum = 0i64
             var last = 0i64
+            var anchored = false
             var k2 = l.d.nodes[usize(parent)].first_child
-            while k2 != html.NONE {
+            while k2 != html.NONE && !anchored {
                 if l.d.nodes[usize(k2)].kind == .Element && l.styles[usize(k2)].display == .ListItem {
                     last = list_step(l, k2, true)
                     sum += last
+                    // The first `value` fixes the count: the items before it step down to it.
+                    let (kv, has_kv) = dom.get_attribute(l.d, k2, "value")
+                    if has_kv {
+                        let (kn, kgood) = str.parse_i64(kv)
+                        if kgood == ok {
+                            init = kn - sum
+                            anchored = true
+                        }
+                    }
                 }
                 k2 = l.d.nodes[usize(k2)].next_sibling
             }
-            init = 0i64 - sum - last
+            if !anchored { init = 0i64 - sum - last }
         }
     }
     var cur = init
