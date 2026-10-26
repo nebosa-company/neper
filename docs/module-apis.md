@@ -12367,6 +12367,7 @@ fn window_visible(w: Window, value: bool) -> err
 fn window_cursor(w: Window, shape: CursorShape) -> err
 fn window_capture(w: Window, on: bool) -> err
 fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err
+fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err
 fn window_native(w: Window) -> (usize, usize, err)
 fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)
 fn clipboard_text(a: *mem.Arena) -> (str, err)

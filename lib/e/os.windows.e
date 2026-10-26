@@ -3593,6 +3593,9 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
 }
 
 // The handle and its module, for a `gpu.Surface` of kind `.Win32`.
+// Live resize is the macOS host's: a poll-model host sees every size as a Resize event (D5856).
+fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
+
 fn window_native(w: Window) -> (usize, usize, err) {
     if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret (0usize, 0usize, NotFound) }
     ret (w.raw, raw_module_handle(0usize), ok)

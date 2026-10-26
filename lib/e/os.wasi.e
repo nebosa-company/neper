@@ -2122,6 +2122,9 @@ fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err) {
     ret (file, create_error)
 }
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) { ret (detail.operation, ok) }
+// Live resize is the macOS host's: a poll-model host sees every size as a Resize event (D5856).
+fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
+
 fn window_native(w: Window) -> (usize, usize, err) { ret (0usize, 0usize, Unsupported) }
 
 // Pipes (D5677's pipe, handle_read, handle_write and handle_close; the process calls are C205's): the

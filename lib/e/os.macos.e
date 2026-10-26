@@ -3113,6 +3113,27 @@ fn cocoa_should_close(this: usize, command: usize, sender: usize) -> usize {
     ret 0usize
 }
 
+// The handlers `window_on_resize` registered, one a window; AppKit calls `windowDidResize:` from inside its tracking loop while
+// an edge is dragged, where the poll model gets no turn, so the handler is where a program repaints live (D5856).
+type CocoaResizeHandler = union { function: fn(Window, u32, u32), bits: usize }
+type CocoaDidResize = union { function: fn(usize, usize, usize), bits: usize }
+var cocoa_resize_handlers: [16]usize = zero
+
+@cc(c)
+fn cocoa_did_resize(this: usize, command: usize, notification: usize) {
+    let window = msg0(notification, cocoa_sel("object\x00"))
+    let slot = cocoa_slot_of(window)
+    if slot >= COCOA_TABLE || cocoa_resize_handlers[slot] == 0usize { ret }
+    cocoa_scales[slot] = cocoa_scale_percent(window)
+    let (width, height) = cocoa_content_pixels(slot)
+    if width == 0u32 || height == 0u32 { ret }
+    var handler: CocoaResizeHandler = zero
+    handler.bits = cocoa_resize_handlers[slot]
+    var handle: Window = zero
+    handle.raw = window
+    handler.function(handle, width, height)
+}
+
 fn cocoa_make_delegate() -> usize {
     if cocoa_delegate != 0usize { ret cocoa_delegate }
     let name = "NeperWindowDelegate\x00"
@@ -3122,6 +3143,10 @@ fn cocoa_make_delegate() -> usize {
     should.function = cocoa_should_close
     let types = "c@:@\x00"
     let added = cocoa_class_method(class, cocoa_sel("windowShouldClose:\x00"), should.bits, &types[0usize])
+    var resized: CocoaDidResize = zero
+    resized.function = cocoa_did_resize
+    let resize_types = "v@:@\x00"
+    let added_resize = cocoa_class_method(class, cocoa_sel("windowDidResize:\x00"), resized.bits, &resize_types[0usize])
     cocoa_class_register(class)
     cocoa_delegate = msg0(msg0(class, cocoa_sel("alloc\x00")), cocoa_sel("init\x00"))
     ret cocoa_delegate
@@ -3212,6 +3237,7 @@ fn window_close(w: Window) -> err {
     let released = msg0(window, cocoa_sel("release\x00"))
     cocoa_windows[slot] = 0usize
     cocoa_layers[slot] = 0usize
+    cocoa_resize_handlers[slot] = 0usize
     objc_pool_pop(pool)
     ret ok
 }
@@ -3325,6 +3351,16 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
 }
 
 // The view and the window, for a gpu surface of kind Cocoa.
+// Calls `handler` with the new client size in physical pixels each time the window is resized, including while an edge is dragged.
+fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    var holder: CocoaResizeHandler = zero
+    holder.function = handler
+    cocoa_resize_handlers[slot] = holder.bits
+    ret ok
+}
+
 fn window_native(w: Window) -> (usize, usize, err) {
     let slot = cocoa_slot(w)
     if slot >= COCOA_TABLE { ret (0usize, 0usize, NotFound) }
