@@ -6,6 +6,7 @@
 #                    Native frame lines (`  at f (file:line)`), which WebAssembly cannot walk, and
 #                    carriage returns are left out of the comparison
 #   fail             it ran and the status or stdout differed
+#   expected         a fail that tests/wasm/sweep-expected.tsv lists for this host OS and these two exit statuses (a limit the platform imposes)
 #   refused          the WebAssembly emitter did not write a module (the reason is the second column)
 #   invalid          the module was written and Node would not compile or link it
 #   skipped          the host build does not run clean either, so there is nothing to compare with
@@ -110,6 +111,9 @@ one() {
             fi
         else
             verdict=$(printf '%s\tfail\thost exit %s, wasm exit %s' "$name" "$host_status" "$wasm_status")
+            cause=$(awk -F'\t' -v n="$name" -v o="$host_os" -v h="$host_status" -v w="$wasm_status" \
+                '$1 == n && ($2 == o || $2 == "*") && $3 == h && $4 == w { print $5; exit }' "$repo/tests/wasm/sweep-expected.tsv")
+            if [ -n "$cause" ]; then verdict=$(printf '%s\texpected\t%s' "$name" "$cause"); fi
         fi
         if [ -n "$first" ]; then printf '%s\n' "$verdict"; first=; else printf '%s\n' "$verdict" >> "$out/results-second.tsv"; fi
     done
@@ -123,7 +127,7 @@ export repo host_os host_arch compiler out ext release threads
 
 printf '%s\n' "${names[@]}" | xargs -P "$jobs" -I{} bash -c 'one {}' | tee "$out/results.tsv"
 printf '\n'
-for kind in pass stderr-differs fail refused invalid skipped; do
+for kind in pass stderr-differs expected fail refused invalid skipped; do
     printf '%s %s\n' "$kind" "$(grep -c "	$kind	" "$out/results.tsv")"
 done
 printf 'fixtures %s\n' "${#names[@]}"
