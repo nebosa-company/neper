@@ -103,7 +103,7 @@ jobs:
           node-version: 24
       - name: SQL Server 2025 Developer edition (x.microsoft.tds talks to it; ACCEPT_EULA=Y accepts Microsoft's license terms)
         run: |
-          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --batch --yes --no-tty --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
           curl -sSL https://packages.microsoft.com/config/ubuntu/24.04/mssql-server-2025.list | sudo tee /etc/apt/sources.list.d/mssql-server-2025.list
           curl -sSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
           sudo apt-get update
