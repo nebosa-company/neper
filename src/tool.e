@@ -2208,8 +2208,7 @@ fn fmt_list_plan(a: *mem.Arena, source: str, tokens: []const lex.Token) -> ([]us
                     // After `ret`, only a tuple: a grouping broken with a trailing comma
                     // is `(x,)`, which does not parse (vision.e's `grad_x`).
                     if fmt_value_end(lead) || (lead == .KwRet && comma_inside[open_count]) || lead == .KwFn { action = 1usize }
-                    // `@import("library", "symbol")`: an attribute has no multi-line form and no trailing comma, so it
-                    // only joins.
+                    // An attribute's arguments (`@import("lib", "symbol")`) stay on the attribute's line: a wrapped one does not parse again.
                     if opener >= 2usize && tokens[opener - 2usize].kind == .PunctAt { action = 2usize }
                 }
                 plan[opener] = at * 4usize + action

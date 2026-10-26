@@ -5710,6 +5710,19 @@ $loopSpirv = Join-Path $testBuild 'loop.spv'
 $loopSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\loop.e') $repo 'spv' 'none' $loopSpirv
 if ($LASTEXITCODE -ne 0 -or $loopSpirvWritten -ne 'spir-v written') { throw 'loop SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $loopSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\loop.spv')).Hash) { throw 'the loop SPIR-V module differs from the conformance corpus' }
+# (D5838) The MSL emitter's kernels, pinned byte for byte: saxpy, the loops and the exact float operations.
+$mslSaxpy = Join-Path $testBuild 'saxpy.metal'
+$mslSaxpyWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'msl' 'none' $mslSaxpy
+if ($LASTEXITCODE -ne 0 -or $mslSaxpyWritten -ne 'msl written') { throw 'saxpy MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslSaxpy).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\saxpy.metal')).Hash) { throw 'the saxpy MSL differs from the conformance corpus' }
+$mslLoop = Join-Path $testBuild 'loop.metal'
+$mslLoopWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\loop.e') $repo 'msl' 'none' $mslLoop
+if ($LASTEXITCODE -ne 0 -or $mslLoopWritten -ne 'msl written') { throw 'loop MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslLoop).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\loop.metal')).Hash) { throw 'the loop MSL differs from the conformance corpus' }
+$mslFloat = Join-Path $testBuild 'float.metal'
+$mslFloatWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\float.e') $repo 'msl' 'none' $mslFloat
+if ($LASTEXITCODE -ne 0 -or $mslFloatWritten -ne 'msl written') { throw 'float MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslFloat).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\float.metal')).Hash) { throw 'the float MSL differs from the conformance corpus' }
 $gpuVulkanLoopPath = Join-Path $testBuild 'gpu-vulkan-loop-selfhost.exe'
 $gpuVulkanLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $gpuVulkanLoopPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { throw 'gpu_vulkan_loop emission failed' }
@@ -6897,6 +6910,20 @@ $structWritten = & $compiler emit-executable (Join-Path $structFixture 'src\main
 if ($LASTEXITCODE -ne 0 -or $structWritten -ne 'executable written') { throw "struct-by-value extern executable emission failed: $structWritten" }
 $structRun = & $structPath 2>&1
 if ($LASTEXITCODE -ne 0) { throw "a struct crossed the C ABI wrongly: $structRun" }
+# Three- and four-member HFAs coming back from C (C178, D5854), against a DLL cl builds from the fixture's cabi.c: Win64 returns
+# them through a hidden pointer. The AAPCS64 build is only emitted here; run.sh runs it under qemu-aarch64.
+$hfaFixture = Join-Path $PSScriptRoot 'fixtures\link\hfa_return'
+$hfaDir = Join-Path $testBuild 'hfa-return'
+New-Item -ItemType Directory -Force -Path $hfaDir | Out-Null
+cmd.exe /d /s /c ('call "{0}" -arch=x64 -host_arch=x64 >nul && cl /nologo /W4 /O2 /LD /Fo:"{1}" /Fe:"{2}" "{3}"' -f $vsDevCmd, (Join-Path $hfaDir 'nepercabi.obj'), (Join-Path $hfaDir 'nepercabi.dll'), (Join-Path $hfaFixture 'cabi.c')) | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the hfa_return C library did not build' }
+$hfaPath = Join-Path $hfaDir 'hfa-return.exe'
+$hfaWritten = & $compiler emit-executable (Join-Path $hfaFixture 'src\main.e') $repo 'x64' 'windows' $hfaPath
+if ($LASTEXITCODE -ne 0 -or $hfaWritten -ne 'executable written') { throw "hfa_return executable emission failed: $hfaWritten" }
+$hfaRun = & $hfaPath 2>&1
+if ($LASTEXITCODE -ne 0) { throw "an HFA came back from C wrongly: exit $LASTEXITCODE, $hfaRun" }
+$hfaA64Written = & $compiler emit-executable (Join-Path $hfaFixture 'src\main.e') $repo 'aarch64' 'linux' (Join-Path $hfaDir 'hfa-a64')
+if ($LASTEXITCODE -ne 0 -or $hfaA64Written -ne 'executable written') { throw "hfa_return aarch64 emission failed: $hfaA64Written" }
 # Over a struct by value a function type's convention is part of it (D1676): a neper `fn`
 # is refused where an `extern fn(Key)` is expected, spelled whole so the two differ.
 Require-Fixture 'check/extern_fn_convention'

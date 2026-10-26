@@ -28,8 +28,10 @@ expected() {
     # Skipped, each for a reason a Mac has by nature: net_ssh needs the server the workflow's SSH step starts and is reported as that
     # step's SSH line; x_tds_integrated is SSPI (Windows); gpu_vulkan_raw and gpu_fault_unchecked call Vulkan, which a Mac does not
     # have (a Metal backend is C193); freestanding and os_syscall check an ELF image and Linux system call numbers; extern_many
-    # imports four glibc extensions that libSystem lacks (dyld binds all or none) and then reads its own ELF header.
-    net_ssh|x_tds_integrated|gpu_vulkan_raw|gpu_fault_unchecked|freestanding|os_syscall|extern_many) echo skip ;;
+    # imports four glibc extensions that libSystem lacks (dyld binds all or none) and then reads its own ELF header; wasm_net and
+    # wasm_release are the wasm32-wasi suite's (they need that target's sockets and its --release build); hfa_return needs the shared object cc builds from its cabi.c
+    # and is the Linux twin of macos_hfa_return.
+    net_ssh|x_tds_integrated|gpu_vulkan_raw|gpu_fault_unchecked|freestanding|os_syscall|extern_many|wasm_net|wasm_release|hfa_return) echo skip ;;
     *) echo 0 ;;
   esac
 }

@@ -2,16 +2,22 @@
 # Makes an application bundle of a Neper program built for macOS, on a Mac (it uses sips, iconutil, plutil and codesign).
 #   macos-bundle.sh --exe PROGRAM --name NAME --id com.example.name --out DIR
 #                   [--version 1.0] [--icon icon.png] [--agent]
-#                   [--usage-camera TEXT] [--usage-microphone TEXT] [--usage-location TEXT] [--zip]
+#                   [--usage-camera TEXT] [--usage-microphone TEXT] [--usage-location TEXT] [--zip] [--dmg]
+#                   [--url-scheme SCHEME]... [--doc-type EXTENSION]... [--sign IDENTITY]
 # DIR/NAME.app holds Contents/Info.plist, Contents/MacOS/NAME (the program), Contents/Resources/NAME.icns (from the png, a square
 # of 1024 pixels or more is best) and an ad-hoc signature. --agent leaves the program out of the Dock (LSUIElement). The usage texts
 # are what the system shows when the program first asks for the camera, the microphone or the location, and without them the system
-# ends a program that asks. --zip also writes DIR/NAME.zip with ditto, the form a download takes.
+# ends a program that asks. --zip also writes DIR/NAME.zip with ditto, the form a download takes; --dmg writes DIR/NAME.dmg (a
+# compressed disk image holding the app, made with hdiutil). --url-scheme and --doc-type (each may repeat) declare the URL schemes
+# and the file extensions the app opens (CFBundleURLTypes, CFBundleDocumentTypes); a program that registers them itself at run
+# time with associate_file does not need them. --sign IDENTITY signs with that identity and the hardened runtime instead of
+# ad hoc (a Developer ID Application identity from the keychain), which is what notarization wants.
 # Not done here: a Developer ID signature with the hardened runtime and notarization, which need an Apple developer identity;
 # run `codesign --force --options runtime --sign "Developer ID Application: ..." DIR/NAME.app` and `xcrun notarytool submit` on the
 # result.
 set -eu
-exe=""; name=""; id=""; out=""; version="1.0"; icon=""; agent=0; zip=0
+exe=""; name=""; id=""; out=""; version="1.0"; icon=""; agent=0; zip=0; dmg=0; sign=""
+schemes=""; doctypes=""
 camera=""; microphone=""; location=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -26,6 +32,10 @@ while [ $# -gt 0 ]; do
     --usage-microphone) microphone=$2; shift 2 ;;
     --usage-location) location=$2; shift 2 ;;
     --zip) zip=1; shift ;;
+    --dmg) dmg=1; shift ;;
+    --sign) sign=$2; shift 2 ;;
+    --url-scheme) schemes="$schemes $2"; shift 2 ;;
+    --doc-type) doctypes="$doctypes $2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -59,16 +69,35 @@ extra=""
 [ -n "$camera" ] && extra="$extra<key>NSCameraUsageDescription</key><string>$camera</string>"
 [ -n "$microphone" ] && extra="$extra<key>NSMicrophoneUsageDescription</key><string>$microphone</string>"
 [ -n "$location" ] && extra="$extra<key>NSLocationWhenInUseUsageDescription</key><string>$location</string>"
+if [ -n "$schemes" ]; then
+  extra="$extra<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>$id</string><key>CFBundleURLSchemes</key><array>"
+  for scheme in $schemes; do extra="$extra<string>$scheme</string>"; done
+  extra="$extra</array></dict></array>"
+fi
+if [ -n "$doctypes" ]; then
+  extra="$extra<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>$name document</string><key>CFBundleTypeRole</key><string>Editor</string><key>CFBundleTypeExtensions</key><array>"
+  for extension in $doctypes; do extra="$extra<string>$extension</string>"; done
+  extra="$extra</array></dict></array>"
+fi
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict><key>CFBundleIdentifier</key><string>$id</string><key>CFBundleName</key><string>$name</string><key>CFBundleDisplayName</key><string>$name</string><key>CFBundleExecutable</key><string>$name</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>$version</string><key>CFBundleVersion</key><string>$version</string><key>NSHighResolutionCapable</key><true/>$icon_key$extra</dict></plist>
 PLIST
 plutil -lint "$app/Contents/Info.plist" >/dev/null
-codesign --force --sign - --deep "$app" 2>/dev/null
+if [ -n "$sign" ]; then
+  codesign --force --options runtime --timestamp --sign "$sign" --deep "$app"
+else
+  codesign --force --sign - --deep "$app" 2>/dev/null
+fi
 codesign --verify --deep --strict "$app"
 if [ "$zip" = 1 ]; then
   rm -f "$out/$name.zip"
   ditto -c -k --keepParent "$app" "$out/$name.zip"
+fi
+if [ "$dmg" = 1 ]; then
+  rm -f "$out/$name.dmg"
+  hdiutil create -quiet -volname "$name" -srcfolder "$app" -ov -format UDZO "$out/$name.dmg"
+  hdiutil verify -quiet "$out/$name.dmg"
 fi
 echo "$app"
