@@ -1,6 +1,5 @@
 id	category	score	evidence_bytes	title	status
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
-C178	compiler	0.8	737	AAPCS64: an extern fn that returns an HFA of three or four doubles (CGRect, NSRect)	Built and verified 2026-10-26 (D5854): a call into C that returns a 3- or 4-double HFA gets a c-hfa-slot slot (lower.e big_hfa) and codegen_a64.select_call stores v0-v3 into it after the call;
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU
 C186	library	0.6	1073	macOS permissions: camera, microphone and location status and request	Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationStatusForMediaType (camera, microphone) and CLLocationManager authorizationStatus (location);
 C187	library	0.5	1084	macOS biometrics (LocalAuthentication) and the photo picker (PHPicker)	Built 2026-10-25 (D5220): biometrics through LocalAuthentication, capabilities().biometrics is LAContext canEvaluatePolicy for Touch ID asked at every call (true only where enrolled), permission_statu
