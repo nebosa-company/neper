@@ -103,5 +103,7 @@ jobs:
           node-version: 24
       - name: Scripts are executable (they were committed from Windows)
         run: chmod +x scripts/*.sh tests/selfhost/*.sh
+      - name: Python packages the fixtures drive (net_ssh talks to an asyncssh server)
+        run: python3 -m pip install --user asyncssh
       - name: Whole suite
         run: bash tests/selfhost/run.sh
