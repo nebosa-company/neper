@@ -869,6 +869,9 @@ fn apply_misc(ap: *Ap, prop: str, v: str) -> bool {
         if good {
             s.display = dv
             s.lanes = false
+            var wk = ""
+            if str.eq(low, "-webkit-box") || str.eq(low, "-webkit-inline-box") { wk = "1" }
+            put_extra(ap, "x-webkit-box", wk)
         } else if str.eq(low, "grid-lanes") || str.eq(low, "masonry") || str.eq(low, "block grid-lanes") || str.eq(low, "grid-lanes block") {
             s.display = .Grid
             s.lanes = true

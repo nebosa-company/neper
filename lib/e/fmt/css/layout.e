@@ -2330,15 +2330,21 @@ fn line_clamp_is_auto(s: *const style.Style) -> bool {
 fn line_clamp_count(s: *const style.Style) -> usize {
     var text: str = ""
     var found = false
+    var webkit = false
+    var boxed = false
     var i = 0usize
     while i < s.extras.len {
-        if str.eq(s.extras[i].name, "line-clamp") || str.eq(s.extras[i].name, "-webkit-line-clamp") {
+        let nm = s.extras[i].name
+        if str.eq(nm, "line-clamp") || str.eq(nm, "-webkit-line-clamp") {
             text = s.extras[i].value
             found = true
+            webkit = str.eq(nm, "-webkit-line-clamp")
         }
+        if str.eq(nm, "x-webkit-box") && str.eq(s.extras[i].value, "1") { boxed = true }
         i += 1usize
     }
-    if !found { ret 0usize }
+    // The legacy property only applies to a `-webkit-box`.
+    if !found || (webkit && !boxed) { ret 0usize }
     let t = str.trim(text)
     let (n, ne) = str.parse_i64(t)
     if ne == ok && n > 0i64 { ret usize(n) }
