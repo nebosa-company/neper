@@ -101,9 +101,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: SQL Server 2025 Developer edition (x.microsoft.tds talks to it; ACCEPT_EULA=Y accepts Microsoft's license terms)
+        run: |
+          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --batch --yes --no-tty --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+          curl -sSL https://packages.microsoft.com/config/ubuntu/24.04/mssql-server-2025.list | sudo tee /etc/apt/sources.list.d/mssql-server-2025.list
+          curl -sSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo env ACCEPT_EULA=Y apt-get install -y mssql-server msodbcsql18 unixodbc
+          bash tests/selfhost/sqlserver.sh setup || { echo "setup failed, forcing the server down and trying once more"; sudo pkill -9 -x sqlservr || true; sudo systemctl stop mssql-server || true; sleep 10; bash tests/selfhost/sqlserver.sh setup; }
       - name: Scripts are executable (they were committed from Windows)
         run: chmod +x scripts/*.sh tests/selfhost/*.sh
       - name: Python packages the fixtures drive (net_ssh talks to an asyncssh server)
         run: python3 -m pip install --user asyncssh
-      - name: Whole suite
-        run: bash tests/selfhost/run.sh
+      - name: Database servers and client libraries (tests/selfhost/db_servers.sh starts throwaway servers from these)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql mysql-server unixodbc odbc-postgresql libpq5 libmysqlclient21 xvfb xauth mesa-vulkan-drivers libvulkan1 vulkan-tools
+          ls -d /usr/lib/postgresql/*/bin /usr/sbin/mysqld /usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so
+      - name: Whole suite (traced, and the last commands it ran are printed when it stops)
+        run: |
+          status=0
+          Xvfb :99 -screen 0 1280x1024x24 -ac > /tmp/xvfb.log 2>&1 &
+          export DISPLAY=:99
+          sleep 3
+          bash -x tests/selfhost/run.sh 2> /tmp/suite-trace.log || status=$?
+          if [ "$status" -ne 0 ]; then echo "---- the last commands the suite ran ----"; tail -n 120 /tmp/suite-trace.log | cut -c1-300; fi
+          exit $status
