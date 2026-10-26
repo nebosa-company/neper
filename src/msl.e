@@ -1069,7 +1069,7 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
 
 // ---- atomics -----------------------------------------------------------------------
 // Metal's atomics are 32 bits and relaxed (D5840): an operation on 64 bits is `Unsupported`, and the kernel runs on the CPU. A
-// stronger order is a relaxed operation between two sequentially consistent fences, which is at least as strong.
+// stronger order is `Unsupported` too: Metal 3.1 has memory_order_relaxed only, and no fence to build one from.
 
 fn atomic_type(ty: u8) -> str {
     if ty == 7u8 { ret "atomic_int" }
@@ -1103,10 +1103,8 @@ fn atomic_ready(m: *Module, values: *Values, ty: u8, ordering: usize) -> err {
 fn emit_atomic(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     var ordering = instruction.immediate % 8usize
     if instruction.opcode == .AtomicCas { ordering = (instruction.immediate / 8usize % 8usize) + (instruction.immediate % 8usize) }
-    if ordering != 0usize { line(&m.code, "atomic_thread_fence(mem_flags::mem_device | mem_flags::mem_threadgroup, memory_order::memory_order_seq_cst, thread_scope::thread_scope_device);") }
-    try emit_atomic_operation(m, builder, instruction, values)
-    if ordering != 0usize { line(&m.code, "atomic_thread_fence(mem_flags::mem_device | mem_flags::mem_threadgroup, memory_order::memory_order_seq_cst, thread_scope::thread_scope_device);") }
-    ret ok
+    if ordering != 0usize { ret fail(m, "an atomic operation with an order stronger than relaxed is not written as MSL: the runners' Metal has no fence to give it") }
+    ret emit_atomic_operation(m, builder, instruction, values)
 }
 
 fn emit_atomic_operation(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {

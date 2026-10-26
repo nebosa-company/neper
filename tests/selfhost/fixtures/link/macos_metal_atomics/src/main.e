@@ -1,5 +1,5 @@
-// 32-bit atomics and workgroup memory through the MSL emitter (C193, D5840): every invocation adds to one device word and to one
-// workgroup word under acquire-release, a workgroup barrier, and the totals must be exact. The kernel is the program's own, written
+// 32-bit relaxed atomics and workgroup memory through the MSL emitter (C193, D5840): every invocation adds to one device word and
+// to one workgroup word, a workgroup barrier, and the totals must be exact. The kernel is the program's own, written
 // as MSL by the compiler and run through `gpu.launch` on a Metal device. A machine with no Metal device says so and passes. macOS only.
 use e.mem
 use e.os
@@ -14,10 +14,15 @@ fn count(words: []Atomic[u32], output: []u32) {
     if lane == 0u32 { gpu.atomic_store(&local, 0u32, .Relaxed, .Workgroup) }
     gpu.barrier()
     tile[usize(lane)] = lane + 1u32
-    let before = gpu.atomic_add(&local, 1u32, .AcqRel, .Workgroup)
-    let device_before = gpu.atomic_add(&words[0usize], 2u32, .AcqRel, .Device)
+    let before = gpu.atomic_add(&local, 1u32, .Relaxed, .Workgroup)
+    let device_before = gpu.atomic_add(&words[0usize], 2u32, .Relaxed, .Device)
     gpu.barrier()
-    if lane == 0u32 { output[usize(gpu.wgid.x)] = tile[63usize] + gpu.atomic_load(&local, .Acquire, .Workgroup) }
+    if lane == 0u32 { output[usize(gpu.wgid.x)] = tile[63usize] + gpu.atomic_load(&local, .Relaxed, .Workgroup) }
+}
+
+@gpu(64, ftz)
+fn ordered(words: []Atomic[u32]) {
+    let before = gpu.atomic_add(&words[0usize], 1u32, .AcqRel, .Device)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -43,6 +48,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if output[at] != 64u32 + 64u32 { os.exit(9i32) }
         at += 1usize
     }
+    // An order stronger than relaxed has no MSL here: the launch is refused, not run weaker (spec section 12).
+    if gpu.launch[ordered](q, gpu.grid1(64usize), dw) != gpu.Unsupported { os.exit(10i32) }
     let closed = gpu.close(dev)
     ret ok
 }
