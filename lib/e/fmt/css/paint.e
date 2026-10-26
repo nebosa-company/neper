@@ -697,6 +697,17 @@ fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
         dh = bb.h - td.cap_t - td.cap_b
     }
     paint_box_shadow(p, s, x, dy, bb.w, dh)
+    if bb.cf_count > 0u32 && bb.inner != .Table && bb.inner != .Row && bb.inner != .RowGroup {
+        // A box a multicol container breaks paints each column's slice of it.
+        var ci = 0usize
+        while ci < usize(bb.cf_count) {
+            let cf = p.l.cfrags.items[usize(bb.cf_first) + ci]
+            paint_background(p, b, s, x + cf.dx, y + cf.dy, bb.w, cf.h)
+            paint_borders(p, s, x + cf.dx, y + cf.dy, bb.w, cf.h)
+            ci += 1usize
+        }
+        ret
+    }
     if (bb.inner == .Row || bb.inner == .RowGroup) && !bb.coll {
         paint_row_background(p, b, s, x, y, bb.w, bb.h)
     } else {

@@ -56,8 +56,11 @@ type Box = struct {
     overflow_w: f64, overflow_h: f64,
     aux: u32, aux2: u32,
     min_c: f64, max_c: f64, has_c: bool, in_layout: bool, proc: str,
-    coll: bool, cbd: [4]f64
+    coll: bool, cbd: [4]f64, cf_first: u32, cf_count: u32
 }
+
+// One column's slice of a box that a multicol container breaks: offset from the box's border-box origin, and height.
+type ColFrag = struct { dx: f64, dy: f64, h: f64 }
 
 type FragKind = enum u8 { Text, Segment, Atomic, Marker }
 
@@ -75,7 +78,7 @@ type Layout = struct {
     floats: list.List[FloatRec], tables: list.List[TableData],
     counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
     orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule],
-    sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64
+    sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64, cfrags: list.List[ColFrag]
 }
 
 // A column rule: a filled rectangle in the border box of multicol container `box` (see `layout_multicol`).
@@ -8327,7 +8330,11 @@ fn column_of(y: f64, colh: f64) -> usize {
 
 fn unbreakable(l: *const Layout, b: u32) -> bool {
     let bb = &l.boxes.items[usize(b)]
-    ret bb.inner == .Replaced || bb.inner == .Table || bb.inner == .Flex || bb.inner == .Grid || bb.inner == .Marker || bb.inner == .Text || bb.inner == .Break
+    if bb.inner == .Replaced || bb.inner == .Table || bb.inner == .Flex || bb.inner == .Grid || bb.inner == .Marker || bb.inner == .Text || bb.inner == .Break { ret true }
+    let us = st(l, bb.style)
+    if us.overflow_x != .Visible || us.overflow_y != .Visible { ret true }
+    let (bi, has_bi) = extra_text(us, "break-inside")
+    ret has_bi && str.starts_with(str.trim(bi), "avoid")
 }
 
 // Where column `k` of a multicol container sits: across a row of `mc_count` columns (a wrapping container, `column-wrap: wrap`) or in one row.
@@ -8339,6 +8346,23 @@ fn col_dx(l: *const Layout, k: usize, stride: f64) -> f64 {
 fn col_dy(l: *const Layout, k: usize, colh: f64) -> f64 {
     if l.mc_count > 0usize { ret f64(k) * colh - f64(k / l.mc_count) * (colh + l.mc_rgap) }
     ret f64(k) * colh
+}
+
+// Records the slices of box `kid` (top at `ky` in the one-column layout, columns of height `colh`) that fall in each column it crosses.
+fn record_col_frags(l: *Layout, kid: u32, ky: f64, k0: usize, k1: usize, colh: f64, stride: f64) {
+    let kb = &l.boxes.items[usize(kid)]
+    kb.cf_first = u32(l.cfrags.len)
+    kb.cf_count = 0u32
+    var k = k0
+    while k <= k1 {
+        let s0 = maxf(ky, f64(k) * colh)
+        let s1 = minf(ky + kb.h, f64(k + 1usize) * colh)
+        if s1 > s0 + 0.01f64 {
+            let pushed = list.push[ColFrag](&l.cfrags, ColFrag { dx: col_dx(l, k, stride), dy: s0 - col_dy(l, k, colh) - ky, h: s1 - s0 })
+            l.boxes.items[usize(kid)].cf_count += 1u32
+        }
+        k += 1usize
+    }
 }
 
 // Moves the lines and blocks of `b` into columns of height `colh` (apply) or only finds the last column used.
@@ -8386,14 +8410,17 @@ fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -
                 let ky = abs_y + kb.y
                 let k0 = column_of(ky, colh)
                 let k1 = column_of(ky + kb.h - 0.02f64, colh)
-                if k0 == k1 || unbreakable(l, kid) || (kb.first == NONE && kb.line_count == 0u32) {
+                if k0 == k1 || unbreakable(l, kid) {
                     if k0 > maxk { maxk = k0 }
+                    if apply { l.boxes.items[usize(kid)].cf_count = 0u32 }
                     if apply && k0 > 0usize {
                         l.boxes.items[usize(kid)].x += col_dx(l, k0, stride)
                         l.boxes.items[usize(kid)].y -= col_dy(l, k0, colh)
                     }
                 } else {
-                    let m = colify(l, kid, ky, colh, stride, apply)
+                    if apply { record_col_frags(l, kid, ky, k0, k1, colh, stride) }
+                    var m = k1
+                    if l.boxes.items[usize(kid)].first != NONE || l.boxes.items[usize(kid)].line_count != 0u32 { m = colify(l, kid, ky, colh, stride, apply) }
                     if m > maxk { maxk = m }
                 }
             }
@@ -8490,14 +8517,17 @@ fn colify_run(l: *Layout, first: u32, stop: u32, origin: f64, base: f64, colh: f
                 let k0 = column_of(ky, colh)
                 let k1 = column_of(ky + kb.h - 0.02f64, colh)
                 var k = k0
-                if k0 == k1 || unbreakable(l, kid) || (kb.first == NONE && kb.line_count == 0u32) {
+                if k0 == k1 || unbreakable(l, kid) {
                     if k0 > maxk { maxk = k0 }
+                    if apply { l.boxes.items[usize(kid)].cf_count = 0u32 }
                     if apply && k0 > 0usize {
                         l.boxes.items[usize(kid)].x += f64(k0) * stride
                         l.boxes.items[usize(kid)].y -= f64(k0) * colh
                     }
                 } else {
-                    let m = colify(l, kid, ky, colh, stride, apply)
+                    if apply { record_col_frags(l, kid, ky, k0, k1, colh, stride) }
+                    var m = k1
+                    if l.boxes.items[usize(kid)].first != NONE || l.boxes.items[usize(kid)].line_count != 0u32 { m = colify(l, kid, ky, colh, stride, apply) }
                     if m > maxk { maxk = m }
                 }
                 if apply { l.boxes.items[usize(kid)].y += shift }
@@ -9322,8 +9352,9 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (counters, e7) = list.init[CounterInst](a, 16usize)
     let (grids, e8) = list.init[GridGeom](a, 4usize)
     let (rules_made, e9r) = list.init[ColRule](a, 8usize)
+    let (cfrags_made, e9c) = list.init[ColFrag](a, 8usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9r != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false, mc_count: 0usize, mc_rgap: 0.0f64 }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false, mc_count: 0usize, mc_rgap: 0.0f64, cfrags: cfrags_made }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))

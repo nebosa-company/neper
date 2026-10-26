@@ -585,6 +585,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 129. The containing block of an absolute box in an inline that holds a block starts on the line where the inline began.
     let (p129, ok129) = build(a, "<div style=\"width:100px;font:20px/1 serif\"><div style=\"height:60px\"></div>B<span style=\"position:relative\"><div></div>AA<div id=a style=\"position:absolute;top:-60px;width:10px;height:10px\"></div></span></div>", "")
     if !ok129 || !near(rect_of(p129, "a").y, 0.0f64) { os.exit(170) }
+    // 130. A block that crosses a column boundary is painted as one slice per column.
+    let (p130, ok130) = build(a, "<div style=\"columns:2;column-gap:0;column-fill:auto;width:100px;height:50px\"><div style=\"height:80px;background:green\"></div></div>", "")
+    if !ok130 || p130.lay.cfrags.len != 2usize || !near(p130.lay.cfrags.items[1usize].dx, 50.0f64) || !near(p130.lay.cfrags.items[1usize].h, 30.0f64) { os.exit(171) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
