@@ -62,24 +62,36 @@ jobs:
         run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
       - name: neper.wasm
         run: build/linux/neper-self emit-executable src/main.e . wasm32 wasi build/linux/neper.wasm
-      - name: Repeat one compile per node option set
+      - name: Probe script
         run: |
-          probe() {
-            label=$1; shift
-            bad=0
-            for i in $(seq 1 24); do
-              node "$@" lib/wasm/run-wasm.mjs build/linux/neper.wasm emit-executable tests/selfhost/fixtures/link/wasm_reserve/src/main.e . x64 linux /tmp/out.$i > /tmp/log.$i 2>&1
-              status=$?
-              if [ $status -ne 0 ]; then bad=$((bad+1)); echo "[$label] run $i exit $status: $(head -c 200 /tmp/log.$i | tr -s '[:space:]' ' ')"; fi
-            done
-            echo "RESULT [$label]: $bad failures of 24"
-          }
-          uname -r; cat /proc/sys/vm/overcommit_memory /proc/sys/vm/max_map_count
-          probe default --no-warnings
-          probe no-trap-handler --no-warnings --disable-wasm-trap-handler
-          probe liftoff-only --no-warnings --liftoff-only
-          probe no-tier-up --no-warnings --no-wasm-tier-up
-          probe single-threaded-gc --no-warnings --single-threaded-gc
+          cat > /tmp/probe.sh <<'SH'
+          label=$1
+          bad=0
+          for i in $(seq 1 30); do
+            node --no-warnings lib/wasm/run-wasm.mjs build/linux/neper.wasm emit-executable tests/selfhost/fixtures/link/wasm_reserve/src/main.e . x64 linux /tmp/out.$i > /tmp/log.$i 2>&1
+            status=$?
+            if [ $status -ne 0 ]; then bad=$((bad+1)); echo "[$label] run $i exit $status"; fi
+          done
+          echo "RESULT [$label] node $(node --version): $bad failures of 30"
+          SH
+          uname -r
+      - name: Node as installed
+        run: bash /tmp/probe.sh default || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+      - name: Node 22.23.1
+        run: bash /tmp/probe.sh n22.23.1 || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+      - name: Node 24.19.0
+        run: bash /tmp/probe.sh n24.19.0 || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Node 20 (the wasm host needs Node 22 for some features; this only compiles)
+        run: bash /tmp/probe.sh n20 || true
   suite:
     if: ${{ inputs.only == '' || inputs.only == 'suite' }}
     runs-on: ubuntu-latest
