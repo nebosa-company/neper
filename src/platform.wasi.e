@@ -9,7 +9,8 @@ fn jobs(asked: usize) -> usize { ret 1usize }
 // quarter of what the root leaves, so they fit with a quarter to spare for the modules' fronts.
 fn reservation(root_capacity: usize) -> usize {
     if root_capacity >= 4294901760usize { ret 0usize }
-    ret (4294901760usize - root_capacity) / 4usize
+    let left = 4294901760usize - root_capacity
+    ret left / 4usize
 }
 
 fn triple() -> str { ret "wasm32-wasi" }

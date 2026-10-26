@@ -84,6 +84,7 @@ one() {
     native_said=$("$compiler" emit-executable "$source" . "$arch" "$os" "$native" 2>&1)
     start=$(date +%s)
     wasm_said=$(node --no-warnings lib/wasm/run-wasm.mjs "$out/neper.wasm" emit-executable "$source" . "$arch" "$os" "$wasm" 2>&1)
+    wasm_status=$?
     seconds=$(( $(date +%s) - start ))
     if [ -f "$native" ] && [ -f "$wasm" ]; then
         if cmp -s "$native" "$wasm"; then
@@ -94,7 +95,7 @@ one() {
             result="differ	$(cmp "$native" "$wasm" 2>&1 | head -1)"
         fi
     elif [ -f "$native" ]; then
-        result="wasm-failed	$(printf '%s' "$wasm_said" | tr '\n\t' '  ' | cut -c1-240)"
+        result="wasm-failed	exit $wasm_status: $(printf '%s' "$wasm_said" | tr '\n\t' '  ' | cut -c1-240)"
     elif [ "$native_said" = "$wasm_said" ]; then
         result=refused-same
     else

@@ -2940,4 +2940,5 @@ D5836	1960	Where the sweep itself was blind
 D5837	1034	The `--release --threads` sweep: the same table
 D5838	1327	The MSL emitter: one kernel as a state machine over a heap offset
 D5839	1493	e.gpu on Metal: buffers carved from one heap, MSL in K$spirv, ftz only
-D5840	975	MSL atomics: 32-bit and relaxed, anything stronger stays on the CPU
+D5840	976	MSL atomics: 32-bit and relaxed, anything stronger stays on the CPU
+D5850	1187	The wasm host needs Node 24: Node 20 and 22 segfault now and then

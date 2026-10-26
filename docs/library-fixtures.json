@@ -2461,8 +2461,10 @@
     "gpu_fault_unchecked",
     "gpu_float_modes",
     "gpu_frame_many",
+    "gpu_ftz_ops",
     "gpu_gaps",
     "gpu_inventory",
+    "gpu_launch_facts",
     "gpu_present",
     "gpu_reshape",
     "gpu_shared",
@@ -2476,6 +2478,8 @@
     "gpu_vulkan_loop",
     "gpu_vulkan_sync",
     "gpu_vulkan_types",
+    "macos_gpu_metal",
+    "macos_metal_atomics",
     "text_math",
     "ui_a11y_controls",
     "ui_accessibility",
@@ -2607,15 +2611,13 @@
    "module": "e.gpu.metal",
    "milestone": "M3",
    "schedule": "scheduled",
-   "catalogue": 9,
-   "delivered": 9,
+   "catalogue": 0,
+   "delivered": 0,
    "pending": [],
    "fixtures": [
-    "macos_metal_raw",
     "macos_metal_emitted",
     "macos_metal_exact",
-    "macos_gpu_metal",
-    "macos_metal_atomics"
+    "macos_metal_raw"
    ]
   },
   {
@@ -2687,7 +2689,9 @@
     "gfx_vision",
     "gpu_f64",
     "gpu_float_modes",
+    "gpu_ftz_ops",
     "gpu_vulkan_float",
+    "macos_metal_exact",
     "math_exact",
     "math_exp_log",
     "math_fft_filter_plan",
