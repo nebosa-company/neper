@@ -2480,6 +2480,7 @@
     "gpu_vulkan_types",
     "macos_gpu_metal",
     "macos_metal_atomics",
+    "macos_metal_subgroup",
     "text_math",
     "ui_a11y_controls",
     "ui_accessibility",
