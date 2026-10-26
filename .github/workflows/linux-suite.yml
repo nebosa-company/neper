@@ -121,6 +121,9 @@ jobs:
       - name: Whole suite (traced, and the last commands it ran are printed when it stops)
         run: |
           status=0
-          xvfb-run -a -s "-screen 0 1280x1024x24" bash -x tests/selfhost/run.sh 2> /tmp/suite-trace.log || status=$?
+          Xvfb :99 -screen 0 1280x1024x24 -ac > /tmp/xvfb.log 2>&1 &
+          export DISPLAY=:99
+          sleep 3
+          bash -x tests/selfhost/run.sh 2> /tmp/suite-trace.log || status=$?
           if [ "$status" -ne 0 ]; then echo "---- the last commands the suite ran ----"; tail -n 120 /tmp/suite-trace.log | cut -c1-300; fi
           exit $status
