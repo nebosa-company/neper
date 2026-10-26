@@ -118,7 +118,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends postgresql mysql-server unixodbc odbc-postgresql libpq5 libmysqlclient21
           ls -d /usr/lib/postgresql/*/bin /usr/sbin/mysqld /usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so
-      - name: Whole suite (traced: the last commands it ran are printed when it stops)
+      - name: Whole suite (traced, and the last commands it ran are printed when it stops)
         run: |
           status=0
           bash -x tests/selfhost/run.sh 2> /tmp/suite-trace.log || status=$?
