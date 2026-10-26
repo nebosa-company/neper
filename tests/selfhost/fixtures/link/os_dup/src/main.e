@@ -40,5 +40,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if written != 6usize || start != 0u64 { ret Failed }
     if n != 4usize || m != 2usize { ret Failed }
     if buffer[0usize] != 111u8 || buffer[1usize] != 33u8 { ret Failed }
+
+    // The other order: the original is closed first and the duplicate still reads, from the start of a fresh open.
+    let (g, reopen_error) = os.open(a, args[1usize], os.OpenFlags { read: true, write: false, create: false, truncate: false, append: false })
+    if reopen_error != ok { ret reopen_error }
+    let (h, dup_again_error) = os.dup(g)
+    if dup_again_error != ok {
+        let _ = os.close(g)
+        ret dup_again_error
+    }
+    let closed_original = os.close(g)
+    let (n2, last_read_error) = os.read(h, buffer[..])
+    let closed_duplicate = os.close(h)
+    if closed_original != ok || closed_duplicate != ok { ret closed_original }
+    if last_read_error != ok { ret last_read_error }
+    if n2 != 4usize || buffer[0usize] != 104u8 { ret Failed }
     ret ok
 }

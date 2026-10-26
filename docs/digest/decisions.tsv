@@ -2849,19 +2849,92 @@ D5213	13206	The WebAssembly target's design: wasm32-wasi, a whole-program emitte
 D5214	1373	macOS drag and drop: a run-time subclass of the window's view, and a dragging session from the first window
 D5215	1236	the kqueue poller never lost a wakeup; the fixtures counted waits where a level-triggered wait needs a clock
 D5216	844	e.net knows macOS's errno numbers; four net fixtures run on a Mac
-D5700	2976	A launch reads its kernel's facts whoever checked the kernel; C200 closes
-D5217	1355	macOS associations are small bundles that LaunchServices starts, and the delegate receives what they were sent
-D5218	1294	macOS permissions: status is read, a request asks only where a device exists, through a global block
-D5219	965	macOS print dialogs run NSPrintPanel and NSPageLayout over the PDF printer
-D5220	1256	macOS biometrics are LocalAuthentication where Touch ID is enrolled; the photo picker is the open panel narrowed to images
-D5221	1225	macOS notices use the notification center for a bundled, authorized program; everything else keeps osascript
-D5222	979	macOS: the close button is a request, answered through a window delegate
-D5223	1379	macOS accessibility: the published tree is NSAccessibilityElements under the content view
-D5224	1326	macOS application bundles are made by a script, and the corpus job checks one
-D5225	903	the Mac corpus asserts everything a Mac can run and skips the rest with a reason
-D5226	1123	macOS drag out takes files and images, and the Dock overlay is drawn over the program's own icon
-D5227	969	no GPU backend for macOS yet: MoltenVK loads but dies on the CI runner's virtual GPU
-D5228	828	the checks a CI runner cannot do are a program a person runs on a real Mac
-D5229	1487	macOS input methods commit text through the content view's text input protocol
-D5230	942	correction: the compiler has declaration capacity; D5224 and D5227 said it had none
-D5231	1305	e.gpu.metal: Metal compute as a runtime of its own, kernels as MSL text
+D5600	4540	wasm32-wasi as built (C180): every value an `i64`, and where it departs from D5213
+D5601	1011	`graph.load` adds `e.os` to every wasi graph
+D5602	911	The first sweep, and what stands between it and the rest
+D5603	1502	Floats on wasm32-wasi: bits in `i64`, reinterpreted at the operation
+D5604	1069	Function values: one funcref table, `call_indirect` by the call's own signature
+D5605	566	Atomics are plain memory operations
+D5606	1080	simd128: the table of D5213, three `v128` locals, canonical NaN by `bitselect`
+D5607	444	`Switch` is refused
+D5620	1159	The runner's world: preopens, environment, the module's own path, and a readdir where Node has none
+D5621	1488	The file system in `os.wasi.e`
+D5622	921	`target.Os.Wasi` and `target.Arch.Wasm32`, and what the fixtures skip on them
+D5623	1177	Wasi variants of four per-os modules, and C181 closed
+D5635	3416	Structured control flow on wasm32-wasi: Ramsey's translation in `src/wasm_flow.e`
+D5636	2032	Operand folding: a plan, checked against the code written
+D5637	908	Value locals are shared within a block: `gfx_vision`
+D5638	571	The name section, and a runner that prints the engine's stack
+D5639	2034	Measured: the sweep and the CPU benchmarks against the dispatch loop
+D5640	3154	The compiler as neper.wasm: one worker, reservations above the root arena, a `platform` variant
+D5641	2555	neper.wasm emits what the native compiler emits, and emits itself
+D5650	1915	`--release` on wasm32-wasi leaves out what codegen_a64 leaves out
+D5651	1542	The wasm32-wasi block in the main suites
+D5660	2605	wasm32-wasi: the type table and the builder's pools out of a reservation
+D5661	941	wasm32-wasi: the barrier oracle before lowering
+D5662	1441	The wasm32-wasi refusals that stay, and why
+D5663	2034	wasm32-wasi: a debug build traps on an address past 32 bits
+D5664	1267	wasm32-wasi: `wait_u32` on one thread, and a clock past `i64`
+D5665	1560	The wasm runner: environment allowlist, RangeError classes, interrupts, readdir snapshots
+D5666	506	wasm32-wasi: the emitter fails where it used to guess
+D5667	885	The wasm scripts on macOS
+D5668	1152	The sweep compares standard error: the `stderr-differs` class
+D5669	1023	Coverage for the dispatch fallback and the narrow simd shapes
+D5670	5232	WebAssembly past one thread: what was measured, and the order of C201-C211
+D5671	3452	Threads on wasm32-wasi: a `--threads` build with its own module shape; the plain build does not change
+D5672	3615	Threads: NIR's atomics as wasm atomics, and seven instructions more in the "wasm" library
+D5673	4598	Threads: start, join and detach, and the per-thread state of `os.wasi.e`
+D5674	3980	Threads: the Node host; its main thread owns WASI, Workers are the threads, idle ones are reused
+D5675	2902	`neper_host`: one more import module, answered by the host thread, for what WASI preview 1 lacks
+D5676	5382	Sockets, resolution and the poller over `neper_host`
+D5677	2713	Processes over `neper_host`, in the Node runner only
+D5678	4788	A browser host, `lib/wasm/neper-host.js`, and no new target
+D5679	1088	Threads in the browser: cross-origin isolation, and the page is the host
+D5680	2749	`e.ui` in a browser: CPU frames onto a canvas through `neper_host`, input through a shared ring
+D5681	2257	`neper run` for wasm32-wasi, and the runner in the toolchain
+D5682	1367	A module with variants for other targets only says so
+D5683	1690	Source maps for wasm32-wasi, and line numbers for the engine's traps
+D5684	2537	WebAssembly gaps not queued, and why
+D5690	960	NoVariant carries its sentence, and the target is named by what the variants are
+D5685	2165	`lib/wasm/neper-host.js` as built (C206)
+D5686	1842	The sweep through `neper-host.js`, next to run-wasm.mjs's
+D5687	782	The browser host in a real browser
+D5688	806	What is registered, and how it is run
+D5689	675	Where D5678 was short
+D5720	1962	`neper_host` in the plain build: a function table, a mailbox, and one request in flight
+D5721	1779	The host's socket semantics, as built
+D5722	1153	What C203 measured, and what it did not move
+D5700	2977	A launch reads its kernel's facts whoever checked the kernel; C200 closes
+D5710	2998	C201 landed: `--threads` writes the threaded module, and nothing a plain build writes changed
+D5711	1949	Threads: the atomics as built
+D5712	1482	Threads: the seven `wasm` instructions, and `wasm_thread_ops` outside `link/`
+D5713	1478	The runner for a threaded module until C202, and two findings for C202
+D5740	2323	`--source-map` as built: the flag, the map, and where entries are made
+D5741	1256	Lines in the engine's traps: `lib/wasm/source-map.js`
+D5742	698	C211 verified
+D5730	2198	C202 landed: the thread runtime in `os.wasi.e`, as built
+D5731	3039	The Node thread host, as built (`scripts/run-wasm.mjs`)
+D5732	3797	What C202 measured, and the races and hangs it found
+D5760	2340	Threads in the browser host, as built (C207)
+D5761	1319	Where D5679 was short
+D5762	2611	C207 verified
+D5750	3940	Pipes on wasm32-wasi: D5677's `pipe` and `handle_*` calls, built ahead of the process calls
+D5751	2569	C204 landed: the `net_*` corpus on `--threads`, and what the sweeps say
+D5780	2976	`neper run --target wasm32-wasi` as built (C209)
+D5790	4152	`e.ui` in a page, as built (C208): frames go to the page, not to an OffscreenCanvas
+D5791	2036	C208 verified
+D5770	4774	Processes on wasm32-wasi, as built (C205): D5677 over `neper_host`
+D5771	2781	C205 landed: what the fixtures say, and what the design could not do
+D5800	3288	`e.ui` in a page: text, the clipboard, newest frame, the gallery (C212)
+D5801	1821	C212 verified
+D5820	1313	Newest frame only, measured in the Browser pane (C212)
+D5821	1760	The virtual-keyboard path under the mobile preset (C212)
+D5822	543	C212 closed, the device check moved to C213
+D5830	3395	The `--threads` triage: every failure and refusal, one by one
+D5831	2770	Five things WASI was answering wrongly: `dup`, a core dump, the shell's arguments, a window under Node, an image
+D5832	1203	Directory watches by polling
+D5833	1151	A thread's Worker gets the engine stack its thread asked for
+D5834	1923	Flush-to-zero on WebAssembly
+D5835	5193	What stays failing, and why
+D5836	1960	Where the sweep itself was blind
+D5837	1033	The `--release --threads` sweep: the same table
