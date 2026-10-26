@@ -34,6 +34,7 @@ use regalloc
 use resolve
 use source
 use spirv
+use msl
 use wasm
 use syntax
 use tool
@@ -1553,6 +1554,14 @@ fn ensure_dir(a: *mem.Arena, path: str) -> err {
 // The device build (D1610): the program checked against the host, every module lowered
 // with kernels as plain functions, and the kernels written as one SPIR-V module.
 fn spirv_command(a: *mem.Arena, args: []str) -> err {
+    ret device_command(a, args, false)
+}
+
+fn msl_command(a: *mem.Arena, args: []str) -> err {
+    ret device_command(a, args, true)
+}
+
+fn device_command(a: *mem.Arena, args: []str, as_msl: bool) -> err {
     var report = stderr_sink()
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
@@ -1603,6 +1612,18 @@ fn spirv_command(a: *mem.Arena, args: []str) -> err {
     }
     var failure = "the kernels cannot be written as SPIR-V"
     var checked = false
+    if as_msl {
+        failure = "the kernels cannot be written as MSL"
+        let (text, source_error) = msl.emit(a, &checker, &loaded, &builder, &signatures, 0usize, &failure, &checked)
+        if source_error != ok {
+            try emit_command_diagnostic(&report, "E-GPU-9999", failure)
+            os.exit(1i32)
+            ret ok
+        }
+        try save_bytes(a, args[6usize], text)
+        let (done, done_error) = os.write(os.stdout(), "msl written\n")
+        ret done_error
+    }
     let (words, emit_error) = spirv.emit(a, &checker, &loaded, &builder, &signatures, 0usize, &failure, &checked)
     if emit_error != ok {
         try emit_command_diagnostic(&report, "E-GPU-9999", failure)
@@ -14246,6 +14267,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `emit-executable FILE ROOT spv none OUT` (D1610): the program's kernels as one
     // SPIR-V module, and no executable.
     if args.len == 7usize && same(args[1usize], "emit-executable") && same(args[4usize], "spv") { ret spirv_command(a, args) }
+    if args.len == 7usize && same(args[1usize], "emit-executable") && same(args[4usize], "msl") { ret msl_command(a, args) }
     if args.len >= 7usize && (same(args[1usize], "emit-executable") || same(args[1usize], "run")) && same(args[4usize], "wasm32") && same(args[5usize], "wasi") { ret wasm_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
