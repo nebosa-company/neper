@@ -113,7 +113,7 @@ type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: At
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
 const METAL_HEAP_BYTES: usize = 268435456usize
 const METAL_HEAP_FIRST: usize = 256usize
-const METAL_CAPABILITIES: usize = 7usize
+const METAL_CAPABILITIES: usize = 263usize
 
 type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
@@ -1929,7 +1929,7 @@ fn metal_pipeline(device: *DeviceState, module_code: str, entry: str) -> (mtl.Pi
     var none: mtl.Pipeline = zero
     if device.pipeline_count >= 16usize { ret (none, TooLarge) }
     let (text, text_error) = hex_bytes(device.arena, module_code)
-    if text_error != ok { ret (none, OutOfMemory) }
+    if text_error != ok { ret (none, Unsupported) }
     let (name_bytes, name_error) = mem.alloc[u8](device.arena, entry.len)
     if name_error != ok { ret (none, name_error) }
     var copied = 0usize
@@ -1939,7 +1939,7 @@ fn metal_pipeline(device: *DeviceState, module_code: str, entry: str) -> (mtl.Pi
         copied += 1usize
     }
     let (made, made_error) = mtl.compile(device.metal, text, name_bytes)
-    if made_error != ok { ret (none, Lost) }
+    if made_error != ok { ret (none, Unsupported) }
     device.pipeline_modules[device.pipeline_count] = key
     device.pipeline_entries[device.pipeline_count] = entry
     device.metal_pipelines[device.pipeline_count] = made
