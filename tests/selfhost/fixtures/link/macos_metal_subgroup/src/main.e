@@ -72,8 +72,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < 360usize {
         if cpu_a[at] != gpu_a[at] {
-            try io.printf["a[{}] cpu {} gpu {}
-"](at, cpu_a[at], gpu_a[at])
+            try io.printf["a[{}] cpu {} gpu {}\n"](at, cpu_a[at], gpu_a[at])
             bad = 1i32
         }
         at += 1usize
@@ -81,8 +80,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     at = 0usize
     while at < 40usize {
         if cpu_b[at] != gpu_b[at] {
-            try io.printf["b[{}] cpu {} gpu {}
-"](at, cpu_b[at], gpu_b[at])
+            try io.printf["b[{}] cpu {} gpu {}\n"](at, cpu_b[at], gpu_b[at])
             bad = 1i32
         }
         at += 1usize
@@ -90,8 +88,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     at = 0usize
     while at < 80usize {
         if cpu_c[at] != gpu_c[at] {
-            try io.printf["c[{}] cpu {} gpu {}
-"](at, cpu_c[at], gpu_c[at])
+            try io.printf["c[{}] cpu {} gpu {}\n"](at, cpu_c[at], gpu_c[at])
             bad = 1i32
         }
         at += 1usize
