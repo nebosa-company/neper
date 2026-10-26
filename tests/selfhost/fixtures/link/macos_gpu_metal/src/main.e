@@ -13,6 +13,18 @@ fn saxpy(n: u32, a: f32, x: []const f32, y: []f32) {
     y[k] = a*x[k] + y[k]
 }
 
+@gpu(64)
+fn outside(y: []u32) {
+    let k = usize(gpu.gid.x) + 1000usize
+    y[k] = 1u32
+}
+
+@gpu(64)
+fn keep(x: []const f32, y: []f32) {
+    let i = usize(gpu.gid.x)
+    y[i] = x[i] + 0.0
+}
+
 fn run(q: *gpu.Queue, x: []const f32, y: []f32) -> err {
     let (dx, dx_error) = gpu.upload[f32](q, x)
     if dx_error != ok { os.exit(51i32) }
@@ -56,6 +68,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if y[at] != 2.0*f32(at) + 3.0 { os.exit(5i32) }
         at += 1usize
     }
+    // A checked build's bounds fault comes back once, from the download, and the queue goes on working.
+    var small: [64]u32 = zero
+    let (bad, bad_error) = gpu.upload[u32](q, small[0..])
+    if bad_error != ok { os.exit(6i32) }
+    let faulted = gpu.launch[outside](q, gpu.grid1(64usize), bad)
+    if faulted != ok { os.exit(7i32) }
+    if gpu.download(q, bad, small[0..]) != gpu.Fault { os.exit(8i32) }
+    let (record, had) = gpu.last_fault(q)
+    if !had || record.kind != .Bounds { os.exit(9i32) }
+    y[0] = 0.0
+    let again = run(q, x[0..], y[0..])
+    if again != ok { os.exit(10i32) }
+    if y[1] != 7.0 { os.exit(11i32) }
+    // A subnormal passes through an add of zero: the device preserves denormals, as the CPU does.
+    var tiny: [64]f32 = zero
+    var out: [64]f32 = zero
+    tiny[3] = 0.00000000000000000000000000000000000001
+    let (dt, dt_error) = gpu.upload[f32](q, tiny[0..])
+    let (dout, dout_error) = gpu.upload[f32](q, out[0..])
+    if dt_error != ok || dout_error != ok { os.exit(12i32) }
+    let kept = gpu.launch[keep](q, gpu.grid1(64usize), dt, dout)
+    if kept != ok { os.exit(13i32) }
+    if gpu.download(q, dout, out[0..]) != ok { os.exit(14i32) }
+    if out[3] != tiny[3] || out[3] == 0.0 { os.exit(15i32) }
     let closed = gpu.close(dev)
     ret ok
 }
