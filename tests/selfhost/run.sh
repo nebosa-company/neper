@@ -10636,6 +10636,62 @@ while read -r extra_fixture; do
     chmod +x "$test_build/extra-$extra_fixture"
     (cd "$repo" && "$test_build/extra-$extra_fixture" > /dev/null) || { printf '%s\n' "a $extra_fixture check failed" >&2; exit 1; }
 done < "$repo/tests/selfhost/extra-fixtures.txt"
+# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by scripts/run-wasm.mjs from the repo
+# root; `--release` drops the debug-only rows and keeps the bounds row; neper.wasm emits what this compiler emits.
+if command -v node >/dev/null 2>&1; then
+    wasm_build="$test_build/wasm"
+    rm -rf "$wasm_build"
+    mkdir -p "$wasm_build"
+    for wasm_fixture in wasm_basics wasm_ops wasm_flow wasm_reserve fs_basics os_clock_random os_environment os_wait_timeout wasm_address wasm_irreducible wasm_mask; do
+        wasm_written=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")
+        [ "$wasm_written" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as WebAssembly" >&2; exit 1; }
+        (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
+    done
+    # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
+    wasm_fallback=wasm_irreducible
+    wasm_forced=wasm_flow
+    wasm_stats=$(NEPER_WASM_STATS=1 "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fallback/src/main.e" "$repo" wasm32 wasi "$wasm_build/irreducible-stats.wasm" 2>&1)
+    case "$wasm_stats" in
+        *'dispatch 1 (irreducible 1)'*) ;;
+        *) printf '%s\n' "wasm_irreducible did not fall back to the dispatch loop: $wasm_stats" >&2; exit 1 ;;
+    esac
+    NEPER_WASM_STATS=dispatch "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_forced/src/main.e" "$repo" wasm32 wasi "$wasm_build/flow-dispatch.wasm" > /dev/null 2>&1
+    (cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/flow-dispatch.wasm" > /dev/null) || { printf '%s\n' 'wasm_flow failed with every function on the dispatch loop' >&2; exit 1; }
+    wasm_release_source="$repo/tests/selfhost/fixtures/link/wasm_release/src/main.e"
+    [ "$("$test_build/neper-self" emit-executable "$wasm_release_source" "$repo" wasm32 wasi "$wasm_build/release-debug.wasm")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$wasm_release_source" "$repo" wasm32 wasi "$wasm_build/release.wasm" --release)" = 'executable written' ]
+    wasm_status=0
+    wasm_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/release-debug.wasm" 2>&1) || wasm_status=$?
+    [ "$wasm_status" -eq 134 ]
+    case "$wasm_output" in
+        *'main.e:14:19: trap[overflow]: u8 + overflows'*) ;;
+        *) printf '%s\n' "the release fixture did not trap in debug on wasm32-wasi: $wasm_output" >&2; exit 1 ;;
+    esac
+    wasm_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/release.wasm" 2>&1)
+    [ "$wasm_output" = '' ]
+    wasm_status=0
+    wasm_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/release.wasm" bounds 2>&1) || wasm_status=$?
+    [ "$wasm_status" -eq 134 ]
+    case "$wasm_output" in
+        *'main.e:35:9: trap[bounds]: index 8 out of bounds for len 8'*) ;;
+        *) printf '%s\n' "the bounds row did not trap in a wasm32-wasi release build: $wasm_output" >&2; exit 1 ;;
+    esac
+    for wasm_access in load store copy; do
+        wasm_status=0
+        wasm_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/wasm_address.wasm" "$wasm_access" 2>&1) || wasm_status=$?
+        [ "$wasm_status" -eq 134 ]
+        case "$wasm_output" in
+            *'trap[bounds]: address '*' is outside the 32-bit memory'*) ;;
+            *) printf '%s\n' "a $wasm_access through a pointer with high bits did not trap on wasm32-wasi: $wasm_output" >&2; exit 1 ;;
+        esac
+    done
+    wasm_output=$(cd "$repo" && node --no-warnings scripts/run-wasm.mjs "$wasm_build/release.wasm" address 2>&1)
+    [ "$wasm_output" = '' ]
+    [ "$(wc -c < "$wasm_build/release.wasm")" -lt "$(wc -c < "$wasm_build/release-debug.wasm")" ]
+    NEPER_COMPILER="$test_build/neper-self" "$repo/scripts/wasm-compiler.sh" || { printf '%s\n' 'neper.wasm emits something the native compiler does not' >&2; exit 1; }
+else
+    printf '%s\n' 'node is not on PATH: the wasm32-wasi checks were skipped'
+fi
 if [ "${NEPER_NEPEROS:-}" = 1 ]; then
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
 # finds its console, firmware and memory in the device tree, turns translation on, takes a

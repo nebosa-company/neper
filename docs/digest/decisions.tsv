@@ -2849,6 +2849,37 @@ D5213	13206	The WebAssembly target's design: wasm32-wasi, a whole-program emitte
 D5214	1373	macOS drag and drop: a run-time subclass of the window's view, and a dragging session from the first window
 D5215	1236	the kqueue poller never lost a wakeup; the fixtures counted waits where a level-triggered wait needs a clock
 D5216	844	e.net knows macOS's errno numbers; four net fixtures run on a Mac
+D5600	4540	wasm32-wasi as built (C180): every value an `i64`, and where it departs from D5213
+D5601	1011	`graph.load` adds `e.os` to every wasi graph
+D5602	911	The first sweep, and what stands between it and the rest
+D5603	1502	Floats on wasm32-wasi: bits in `i64`, reinterpreted at the operation
+D5604	1069	Function values: one funcref table, `call_indirect` by the call's own signature
+D5605	566	Atomics are plain memory operations
+D5606	1080	simd128: the table of D5213, three `v128` locals, canonical NaN by `bitselect`
+D5607	444	`Switch` is refused
+D5620	1159	The runner's world: preopens, environment, the module's own path, and a readdir where Node has none
+D5621	1488	The file system in `os.wasi.e`
+D5622	921	`target.Os.Wasi` and `target.Arch.Wasm32`, and what the fixtures skip on them
+D5623	1177	Wasi variants of four per-os modules, and C181 closed
+D5635	3416	Structured control flow on wasm32-wasi: Ramsey's translation in `src/wasm_flow.e`
+D5636	2032	Operand folding: a plan, checked against the code written
+D5637	908	Value locals are shared within a block: `gfx_vision`
+D5638	571	The name section, and a runner that prints the engine's stack
+D5639	2034	Measured: the sweep and the CPU benchmarks against the dispatch loop
+D5640	3154	The compiler as neper.wasm: one worker, reservations above the root arena, a `platform` variant
+D5641	2555	neper.wasm emits what the native compiler emits, and emits itself
+D5650	1915	`--release` on wasm32-wasi leaves out what codegen_a64 leaves out
+D5651	1542	The wasm32-wasi block in the main suites
+D5660	2605	wasm32-wasi: the type table and the builder's pools out of a reservation
+D5661	941	wasm32-wasi: the barrier oracle before lowering
+D5662	1441	The wasm32-wasi refusals that stay, and why
+D5663	2034	wasm32-wasi: a debug build traps on an address past 32 bits
+D5664	1267	wasm32-wasi: `wait_u32` on one thread, and a clock past `i64`
+D5665	1560	The wasm runner: environment allowlist, RangeError classes, interrupts, readdir snapshots
+D5666	506	wasm32-wasi: the emitter fails where it used to guess
+D5667	885	The wasm scripts on macOS
+D5668	1152	The sweep compares standard error: the `stderr-differs` class
+D5669	1023	Coverage for the dispatch fallback and the narrow simd shapes
 D5217	1355	macOS associations are small bundles that LaunchServices starts, and the delegate receives what they were sent
 D5218	1294	macOS permissions: status is read, a request asks only where a device exists, through a global block
 D5219	965	macOS print dialogs run NSPrintPanel and NSPageLayout over the PDF printer

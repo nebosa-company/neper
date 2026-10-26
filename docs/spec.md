@@ -1769,8 +1769,8 @@ Both branches must parse and type-check, so dead configurations cannot rot.
 
 `target` is a builtin comptime namespace: it needs no `use` and cannot be shadowed
 (§2). `target.arch` is a `target.Arch`, an enum with members `.X64`, `.Aarch64`,
-`.X86`, `.Spv`, `.Ptx`; `target.os` is a `target.Os` with members `.Windows`,
-`.Linux`, `.Macos`, `.Neperos` (the NeperOS microkernel, `os.neperos.e`, D4704), and `.None` on the GPU targets — one member per `e.os`
+`.X86`, `.Spv`, `.Ptx`, `.Wasm32` (D5622); `target.os` is a `target.Os` with members `.Windows`,
+`.Linux`, `.Macos`, `.Neperos` (the NeperOS microkernel, `os.neperos.e`, D4704), `.Wasi` (WebAssembly System Interface, `os.wasi.e`, D5622), and `.None` on the GPU targets — one member per `e.os`
 target (§5), so an Android host is deferred with its `os.android.e` (§17).
 
 `when` is a **statement**, legal only inside a function body. It cannot wrap a

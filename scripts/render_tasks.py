@@ -441,7 +441,7 @@ def decl_names(body):
     return out
 
 
-VARIANTS = {"linux", "windows", "macos", "none", "x64", "x86", "aarch64", "spv", "ptx"}
+VARIANTS = {"linux", "windows", "macos", "none", "wasi", "x64", "x86", "aarch64", "wasm32", "spv", "ptx"}
 
 
 def implemented_names():
