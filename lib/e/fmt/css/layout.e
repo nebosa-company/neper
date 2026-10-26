@@ -1204,7 +1204,7 @@ fn is_bfc_root(l: *const Layout, b: u32) -> bool {
     if bb.inner == .FlowRoot || bb.inner == .Flex || bb.inner == .Grid || bb.inner == .Table || bb.inner == .Cell || bb.inner == .Replaced { ret true }
     if s.floating != .None || s.position == .Absolute || s.position == .Fixed { ret true }
     if (s.overflow_x != .Visible || s.overflow_y != .Visible) && !overflow_propagated(l, b) { ret true }
-    if has_columns(s) { ret true }
+    if has_columns(s) || line_clamp_is_auto(s) { ret true }
     if s.display == .FlowRoot || s.display == .InlineBlock { ret true }
     ret false
 }
@@ -4038,10 +4038,11 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     var scan_c = ClampScan { seen: 0usize, n: clamp_n, tail: false }
     if clamp_n > 0usize { clamp_scan(l, b, &scan_c) }
     if clamp_n > 0usize && (scan_c.seen > clamp_n || scan_c.tail) {
-        var ctr = Counter { n: clamp_n }
+        var ctr = Counter { n: clamp_n, mb: 0.0f64 }
         let cut = clamp_children(l, b, &ctr)
         if cut >= 0.0f64 {
             y = cut - oy0
+            if is_bfc_root(l, b) { y += ctr.mb }
             acc = no_margin()
         }
     }
@@ -4056,7 +4057,7 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     ret (y, acc)
 }
 
-type Counter = struct { n: usize }
+type Counter = struct { n: usize, mb: f64 }
 
 // Empties a box and everything in it: it takes no room and paints nothing.
 fn clamp_hide(l: *Layout, b: u32) {
@@ -4120,6 +4121,7 @@ fn clamp_scan(l: *Layout, b: u32, sc: *ClampScan) {
 
 fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64 {
     var cut = -1.0f64
+    var cut_margin = 0.0f64
     var kid = bx(l, b).first
     while kid != NONE {
         let kb = &l.boxes.items[usize(kid)]
@@ -4134,12 +4136,16 @@ fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64 {
             // Its lines belong to a formatting context of its own and are not counted.
         } else {
             let r = clamp_walk(l, kid, ctr)
-            if r >= 0.0f64 { cut = l.boxes.items[usize(kid)].y + l.boxes.items[usize(kid)].h }
+            if r >= 0.0f64 {
+                cut = l.boxes.items[usize(kid)].y + l.boxes.items[usize(kid)].h
+                cut_margin = margin_value(margin_of(l.boxes.items[usize(kid)].margin[2usize]))
+            }
         }
         kid = nxt
     }
     if cut >= 0.0f64 {
         let bb = bx(l, b)
+        ctr.mb = cut_margin
         bb.h = cut + bb.padding[2usize] + bb.border[2usize]
     }
     ret cut
