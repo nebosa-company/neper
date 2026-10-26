@@ -6910,6 +6910,20 @@ $structWritten = & $compiler emit-executable (Join-Path $structFixture 'src\main
 if ($LASTEXITCODE -ne 0 -or $structWritten -ne 'executable written') { throw "struct-by-value extern executable emission failed: $structWritten" }
 $structRun = & $structPath 2>&1
 if ($LASTEXITCODE -ne 0) { throw "a struct crossed the C ABI wrongly: $structRun" }
+# Three- and four-member HFAs coming back from C (C178, D5854), against a DLL cl builds from the fixture's cabi.c: Win64 returns
+# them through a hidden pointer. The AAPCS64 build is only emitted here; run.sh runs it under qemu-aarch64.
+$hfaFixture = Join-Path $PSScriptRoot 'fixtures\link\hfa_return'
+$hfaDir = Join-Path $testBuild 'hfa-return'
+New-Item -ItemType Directory -Force -Path $hfaDir | Out-Null
+cmd.exe /d /s /c ('call "{0}" -arch=x64 -host_arch=x64 >nul && cl /nologo /W4 /O2 /LD /Fo:"{1}" /Fe:"{2}" "{3}"' -f $vsDevCmd, (Join-Path $hfaDir 'nepercabi.obj'), (Join-Path $hfaDir 'nepercabi.dll'), (Join-Path $hfaFixture 'cabi.c')) | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the hfa_return C library did not build' }
+$hfaPath = Join-Path $hfaDir 'hfa-return.exe'
+$hfaWritten = & $compiler emit-executable (Join-Path $hfaFixture 'src\main.e') $repo 'x64' 'windows' $hfaPath
+if ($LASTEXITCODE -ne 0 -or $hfaWritten -ne 'executable written') { throw "hfa_return executable emission failed: $hfaWritten" }
+$hfaRun = & $hfaPath 2>&1
+if ($LASTEXITCODE -ne 0) { throw "an HFA came back from C wrongly: exit $LASTEXITCODE, $hfaRun" }
+$hfaA64Written = & $compiler emit-executable (Join-Path $hfaFixture 'src\main.e') $repo 'aarch64' 'linux' (Join-Path $hfaDir 'hfa-a64')
+if ($LASTEXITCODE -ne 0 -or $hfaA64Written -ne 'executable written') { throw "hfa_return aarch64 emission failed: $hfaA64Written" }
 # Over a struct by value a function type's convention is part of it (D1676): a neper `fn`
 # is refused where an `extern fn(Key)` is expected, spelled whole so the two differ.
 Require-Fixture 'check/extern_fn_convention'
