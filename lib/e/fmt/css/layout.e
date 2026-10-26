@@ -7511,6 +7511,14 @@ fn grid_item_width(l: *Layout, id: u32, cs: *const style.Style, area_w: f64) -> 
     let avail = area_w - ib.margin[3usize] - ib.margin[1usize] - extras
     let (wv, has_w) = resolve_len(is.width, area_w)
     if is.width.kind == .Px && has_w { ret maxf(0.0f64, clamp_width(l, id, to_content_w(l, id, wv), area_w)) }
+    // An item with a preferred ratio and a definite height takes its width from the ratio rather than stretching.
+    if just == .Normal && is.height.kind == .Px && ib.inner != .Replaced && has_box_ratio(l, id) {
+        let (hv2, has_h2) = resolve_len(is.height, area_w)
+        if has_h2 {
+            let (rw2, has_rw2) = ratio_width(l, id, to_content_h(l, id, hv2))
+            if has_rw2 { ret maxf(0.0f64, clamp_width(l, id, rw2, area_w)) }
+        }
+    }
     let stretch = (just == .Normal || just == .Stretch) && is.margin[3usize].kind != .Auto && is.margin[1usize].kind != .Auto
     if ib.inner == .Replaced {
         let (rw, _rh) = used_replaced_size(l, id, area_w, -1.0f64)
@@ -7791,6 +7799,9 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let (hv, has_h) = resolve_len(is.height, area_h)
         if is.height.kind == .Px && has_h {
             hspec = to_content_h(l, id, hv)
+        } else if align == .Normal && is.height.kind == .Auto && ib.inner != .Replaced && has_box_ratio(l, id) {
+            let (rh2, has_rh2) = ratio_height(l, id, w)
+            if has_rh2 { hspec = rh2 }
         } else if (align == .Normal || align == .Stretch) && is.height.kind == .Auto && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced {
             hspec = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
         }

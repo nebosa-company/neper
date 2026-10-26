@@ -597,6 +597,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 133. `contain: size` ignores the content: the height is the `contain-intrinsic-height`, the width of a max-content box its width.
     let (p133, ok133) = build(a, "<div id=a style=\"contain:size;contain-intrinsic-size:50px 30px;width:max-content\"><div style=\"height:100px;width:200px\"></div></div>", "")
     if !ok133 || !near(rect_of(p133, "a").h, 30.0f64) || !near(rect_of(p133, "a").w, 50.0f64) { os.exit(174) }
+    // 134. A grid item with a preferred ratio and a definite height takes its width from the ratio instead of stretching.
+    let (p134, ok134) = build(a, "<div style=\"display:grid;width:300px\"><div id=a style=\"height:100px;aspect-ratio:1/1\"></div></div>", "")
+    if !ok134 || !near(rect_of(p134, "a").w, 100.0f64) { os.exit(175) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
