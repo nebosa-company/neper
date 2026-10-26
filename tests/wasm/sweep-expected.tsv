@@ -12,7 +12,6 @@ os_fs	*	0	82	WASI has no permission bits: set_mode has no effect
 proc_sys	*	0	102	system information (CPU times, memory, disks, process table) is not visible to WASI
 proc_output	windows	0	112	Node on Windows cannot kill a descendant that outlived its root
 proc_output	linux	0	20	two pipes need two threads; the plain module has one
-proc_output	linux	0	113	the orphan run took 0.5 s or more on a loaded runner (passes on Node 22 under WSL)
 os_shell	*	0	1	open_uri, reveal and trash are a desktop's services
 ui_shell_ops	*	0	1	open_uri, reveal and trash are a desktop's services
 ui_selection3_v2	*	0	30	reads a font by a Linux path off the module's reach
