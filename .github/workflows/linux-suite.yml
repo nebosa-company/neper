@@ -12,6 +12,10 @@ on:
         description: "wasm, suite, or empty for both"
         required: false
         default: ""
+      refresh:
+        description: "yes: refresh the x64-linux tool goldens that differ only in their snapshot hash; all: refresh whatever differs; the changes are saved as an artifact"
+        required: false
+        default: ""
 jobs:
   wasm:
     if: ${{ inputs.only == '' || inputs.only == 'wasm' }}
@@ -119,6 +123,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends postgresql mysql-server unixodbc odbc-postgresql libpq5 libmysqlclient21 xvfb xauth mesa-vulkan-drivers libvulkan1 vulkan-tools
           ls -d /usr/lib/postgresql/*/bin /usr/sbin/mysqld /usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so
       - name: Whole suite (traced, and the last commands it ran are printed when it stops)
+        env:
+          NEPER_REFRESH_GOLDENS: ${{ inputs.refresh == 'yes' && '1' || (inputs.refresh == 'all' && 'all' || '') }}
         run: |
           status=0
           Xvfb :99 -screen 0 1280x1024x24 -ac > /tmp/xvfb.log 2>&1 &
@@ -127,3 +133,13 @@ jobs:
           bash -x tests/selfhost/run.sh 2> /tmp/suite-trace.log || status=$?
           if [ "$status" -ne 0 ]; then echo "---- the last commands the suite ran ----"; tail -n 120 /tmp/suite-trace.log | cut -c1-300; fi
           exit $status
+      - name: The goldens the suite refreshed
+        if: ${{ always() && inputs.refresh != '' }}
+        run: |
+          git --no-pager diff --stat -- tests docs
+          git --no-pager diff -- tests docs > /tmp/refreshed-goldens.patch
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.refresh != '' }}
+        with:
+          name: refreshed-goldens
+          path: /tmp/refreshed-goldens.patch

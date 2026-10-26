@@ -1,10 +1,13 @@
 # Sourced by run.sh. With NEPER_REFRESH_GOLDENS=1, an x64 tool golden that differs from the actual output only in
 # its "snapshot" hashes is overwritten instead of failing the comparison. Each hash folds the text of every module
 # the subject reaches, so any library edit moves it; any other difference still fails.
+# With NEPER_REFRESH_GOLDENS=all, a tool golden is overwritten whatever differs (an interface hash a library edit
+# moved, say): for a run whose changes are then read as a patch (the linux-suite workflow saves it), never for
+# a run that is meant to catch a regression.
 cmp() {
-    if [ "${NEPER_REFRESH_GOLDENS:-}" = 1 ] && [ "$#" -eq 3 ] && [ "$1" = -s ]; then
+    if { [ "${NEPER_REFRESH_GOLDENS:-}" = 1 ] || [ "${NEPER_REFRESH_GOLDENS:-}" = all ]; } && [ "$#" -eq 3 ] && [ "$1" = -s ]; then
         golden_actual=$2 golden_path=$3
-    elif [ "${NEPER_REFRESH_GOLDENS:-}" = 1 ] && [ "$#" -eq 2 ]; then
+    elif { [ "${NEPER_REFRESH_GOLDENS:-}" = 1 ] || [ "${NEPER_REFRESH_GOLDENS:-}" = all ]; } && [ "$#" -eq 2 ]; then
         golden_actual=$1 golden_path=$2
     else
         command cmp "$@"
@@ -15,6 +18,11 @@ cmp() {
         */tests/conformance/tools/*.expected.jsonl) ;;
         *) command cmp "$@"; return ;;
     esac
+    if [ "${NEPER_REFRESH_GOLDENS:-}" = all ]; then
+        cp "$golden_actual" "$golden_path"
+        printf 'refreshed (whatever differed) %s\n' "$golden_path"
+        return 0
+    fi
     golden_masked=$(mktemp) && actual_masked=$(mktemp) || return 1
     sed 's/"snapshot":"[0-9a-f]*"/"snapshot":"-"/g' "$golden_path" > "$golden_masked"
     sed 's/"snapshot":"[0-9a-f]*"/"snapshot":"-"/g' "$golden_actual" > "$actual_masked"
