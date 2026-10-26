@@ -3707,12 +3707,19 @@ fn c_result_type(crossing: Crossing, module_index: usize) -> check.Type {
 fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: usize, slot: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     let module_index = returned_type.module_index
     let u64_type = check.make_type(.Integer, "u64", module_index)
-    // An HFA's members arrive packed into eightbytes (D2124); three or four doubles would
-    // need more than the two a pair carries.
-    // ponytail: refused; an HFA of three or four f64 crossing back from C wants a third result.
+    // An HFA's members arrive packed into eightbytes (D2124); three or four doubles are stored by the call itself.
     var eightbytes = crossing.count
     if crossing.hfa != 0usize { eightbytes = (crossing.hfa * crossing.hfa_width + 7usize) / 8usize }
-    if eightbytes > 2usize { ret check.Unsupported }
+    if eightbytes > 2usize {
+        // The call stored the members into the slot (`c-hfa-slot`); only the address is left to hand on.
+        if crossing.hfa == 0usize { ret check.Unsupported }
+        let (big_address_instruction, big_address, big_address_error) = nir.emit(builder, .FieldAddress, returned_type, true, 0usize, token)
+        if big_address_error != ok { ret big_address_error }
+        try nir.add_operand(builder, big_address_instruction, slot)
+        results.values[0usize] = big_address
+        results.addresses[0usize] = true
+        ret ok
+    }
     var low = call_result
     var high = 0usize
     if eightbytes == 2usize {
@@ -4006,13 +4013,17 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
             function_ref = interned
         }
     }
+    // Three or four doubles come back in v0 to v3, more than the pair of eightbytes a call result holds: the call stores them into the
+    // slot itself (`c-hfa-slot`) and has no result of its own.
+    let big_hfa = returned.count != 0usize && returned.hfa != 0usize && (returned.hfa * returned.hfa_width + 7usize) / 8usize > 2usize
     var slot = 0usize
     if (return_layout.via_slot || returned.count != 0usize) && results.count != 0usize {
         let (slots_aligned, slots_error) = layout.align_up(return_layout.size, 8usize)
         if slots_error != ok { ret slots_error }
         var slots = slots_aligned / 8usize
         if slots == 0usize { slots = 1usize }
-        let slot_type = call_slot_type(c, call, return_layout.via_slot)
+        var slot_type = call_slot_type(c, call, return_layout.via_slot)
+        if big_hfa { slot_type = check.make_type(.Other, "c-hfa-slot", call.function.module_index) }
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, slot_type, true, slots, token)
         if stack_error != ok { ret stack_error }
         slot = stack
@@ -4044,6 +4055,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         }
     }
     if returned.count != 0usize { call_type = c_result_type(returned, call.function.module_index) }
+    if big_hfa { call_has_result = false }
     var call_opcode: nir.Opcode = .Call
     if call.indirect { call_opcode = .IndirectCall }
     let (instruction, call_result, emit_error) = nir.emit(builder, call_opcode, call_type, call_has_result, function_ref, token)
@@ -4052,7 +4064,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         let callee_operand_error = nir.add_operand(builder, instruction, callee)
         if callee_operand_error != ok { ret callee_operand_error }
     }
-    if return_layout.via_slot && results.count != 0usize {
+    if (return_layout.via_slot || big_hfa) && results.count != 0usize {
         let slot_operand_error = nir.add_operand(builder, instruction, slot)
         if slot_operand_error != ok { ret slot_operand_error }
     }

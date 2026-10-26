@@ -1087,6 +1087,12 @@ fn c_result_slot(ty: check.Type) -> bool {
     ret ty.kind == .Other && check.same(ty.name, "c-return-slot")
 }
 
+// The slot a three- or four-double HFA result is stored into after the call (`c-hfa-slot`): v0 to v3 are four eightbytes, more
+// than the pair the result model carries, so the call writes them where lowering says and takes no register for it.
+fn c_hfa_slot(ty: check.Type) -> bool {
+    ret ty.kind == .Other && check.same(ty.name, "c-hfa-slot")
+}
+
 fn c_stack_kind(ty: check.Type) -> usize {
     if ty.kind != .Other { ret 0usize }
     if check.same(ty.name, "c-stack") { ret 1usize }
@@ -1107,6 +1113,7 @@ fn place_argument(ty: check.Type, integers: *usize, floats: *usize, stacked: *us
         *index = 8usize
         ret 3usize
     }
+    if c_hfa_slot(ty) { ret 4usize }
     let stack_kind = c_stack_kind(ty)
     if stack_kind != 0usize {
         if stack_kind == 1usize { *integers = 8usize } else { *floats = 8usize }
@@ -1183,6 +1190,10 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
         if argument_type.kind == .Float && width == 0usize { ret codegen_x64.Unsupported }
         variadic_to_stack(builder, instruction, at - first_argument, &integers, &floats)
         let place = place_argument(argument_type, &integers, &floats, &stacked, &index)
+        if place == 4usize {
+            at += 1usize
+            continue
+        }
         if place == 0usize || place == 3usize {
             try read_into(allocations, value, index, output)
         } else {
@@ -1314,6 +1325,22 @@ fn select_call(builder: *nir.Builder, current: nir.Function, instruction: nir.In
         }
     }
     try restore_masked(output, live_mask, preserve_base)
+    if instruction.operand_count > first_argument {
+        let slot_value = builder.operands[instruction.first_operand + first_argument]
+        let (slot_type, slot_type_error) = codegen_x64.value_type(builder, current, slot_value)
+        if slot_type_error != ok { ret slot_type_error }
+        if c_hfa_slot(slot_type) {
+            // Vector registers are never allocated, so v0 to v3 are still the callee's after the general ones are restored.
+            let (slot_register, slot_error) = read_value(allocations, slot_value, A64_S1, output)
+            if slot_error != ok { ret slot_error }
+            var member = 0usize
+            while member < hfa_members {
+                try emit_a64.move_from_float(output, A64_S0, member, true)
+                try emit_a64.store_offset(output, A64_S0, slot_register, member * 8usize, 8usize)
+                member += 1usize
+            }
+        }
+    }
     if instruction.has_result && !multiple_results {
         let (destination, destination_error) = result_register(allocations, instruction.result, A64_S0)
         if destination_error != ok { ret destination_error }
