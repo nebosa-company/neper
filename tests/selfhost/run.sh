@@ -7220,6 +7220,32 @@ device_edit_perturb_written=$($test_build/neper-self emit-executable "$device_ed
 [ "$device_edit_perturb_written" = 'executable written' ]
 cmp "$test_build/gpu-device-edit-clean" "$test_build/gpu-device-edit-j1"
 cmp "$test_build/gpu-device-edit-clean" "$test_build/gpu-device-edit-perturb"
+# A launch carries its kernel's requirements whoever checked the kernel (D5700): another
+# worker, or in a warm build the kernel module's Interface. One image hot and clean at
+# one worker, and at every worker count, for `gpu_launch_facts` and for `gpu_tensor`,
+# whose launches are in generic instances its `main` makes.
+launch_facts_fixture="$repo/tests/selfhost/fixtures/link/gpu_launch_facts"
+launch_facts_scratch="$test_build/gpu-launch-facts-scratch"
+rm -rf "$launch_facts_scratch"
+mkdir -p "$launch_facts_scratch/src"
+cp "$launch_facts_fixture"/src/*.e "$launch_facts_scratch/src/"
+launch_facts_main="$launch_facts_scratch/src/main.e"
+[ "$($test_build/neper-self emit-executable "$launch_facts_main" "$repo" x64 linux "$test_build/gpu-launch-facts-hot" --incremental -j 1 2>/dev/null)" = 'executable written' ]
+cp "$launch_facts_fixture/edits/main_body.e" "$launch_facts_main"
+[ "$($test_build/neper-self emit-executable "$launch_facts_main" "$repo" x64 linux "$test_build/gpu-launch-facts-hot" --incremental -j 1 2>/dev/null)" = 'executable written' ]
+[ "$($test_build/neper-self emit-executable "$launch_facts_main" "$repo" x64 linux "$test_build/gpu-launch-facts-j1" -j 1 2>/dev/null)" = 'executable written' ]
+cmp "$test_build/gpu-launch-facts-hot" "$test_build/gpu-launch-facts-j1"
+chmod +x "$test_build/gpu-launch-facts-j1"
+"$test_build/gpu-launch-facts-j1" | grep -q '^gpu launch facts ok again$'
+launch_tensor="$repo/tests/selfhost/fixtures/link/gpu_tensor/src/main.e"
+[ "$($test_build/neper-self emit-executable "$launch_tensor" "$repo" x64 linux "$test_build/gpu-tensor-j1" -j 1 2>/dev/null)" = 'executable written' ]
+for launch_facts_jobs in '-j 2' '-j 3 --perturb' '-j 8' ''; do
+    launch_facts_tag=$(echo "$launch_facts_jobs" | tr -d ' ')
+    [ "$($test_build/neper-self emit-executable "$launch_facts_main" "$repo" x64 linux "$test_build/gpu-launch-facts$launch_facts_tag" $launch_facts_jobs 2>/dev/null)" = 'executable written' ]
+    cmp "$test_build/gpu-launch-facts-j1" "$test_build/gpu-launch-facts$launch_facts_tag"
+    [ "$($test_build/neper-self emit-executable "$launch_tensor" "$repo" x64 linux "$test_build/gpu-tensor$launch_facts_tag" $launch_facts_jobs 2>/dev/null)" = 'executable written' ]
+    cmp "$test_build/gpu-tensor-j1" "$test_build/gpu-tensor$launch_facts_tag"
+done
 # (D1667) The counts a cold build takes as each block goes back are a warm no-edit
 # build's, on a program whose `@gpus` and `@tests` rows are not zero.
 front_scratch="$test_build/front-counts"

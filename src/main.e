@@ -12578,6 +12578,25 @@ fn crew_errors(crew: *Crew, values: []usize, spellings: []str, count: usize) {
     }
 }
 
+// (D5700) Every worker's kernel facts in every worker's checker and the program's,
+// after the bodies: a launch's requirements are the kernel's, whoever checked it.
+fn crew_kernel_facts(crew: *Crew, checker: *check.Checker) {
+    var worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            check.adopt_kernel_facts(checker, &crew.workers[worker_at].checker)
+        }
+        worker_at += 1usize
+    }
+    worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            check.adopt_kernel_facts(&crew.workers[worker_at].checker, checker)
+        }
+        worker_at += 1usize
+    }
+}
+
 // Every worker's entries in one table, worker-major, each worker's in its own module
 // order: a cursor from a worker's offset walks its own entries as the sweep recorded
 // them, and a search by key finds any worker's.
@@ -14554,7 +14573,10 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         checker.error_values = error_values
         checker.error_spellings = error_spellings
         checker.error_count = error_count
-        if with_crew { crew_errors(&crew, error_values, error_spellings, error_count) }
+        if with_crew {
+            crew_errors(&crew, error_values, error_spellings, error_count)
+            crew_kernel_facts(&crew, &checker)
+        }
         checker.arena = a
         var builder: nir.Builder = zero
         var signatures: nir.Signatures = zero
