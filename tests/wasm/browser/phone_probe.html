@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>phone probe</title>
+<style>body{font:16px system-ui;margin:12px}textarea,input{width:100%;font-size:16px;box-sizing:border-box}pre{white-space:pre-wrap;background:#eee;padding:8px;max-height:40vh;overflow:auto}</style>
+<h3>Phone probe (C213)</h3>
+<p>Tap the field, type letters, Backspace, Enter; compose with a CJK keyboard; paste; then press Report.</p>
+<input id="field" placeholder="Name" autocomplete="off">
+<p><button id="copy">Copy text</button> <button id="report">Report</button></p>
+<pre id="out"></pre>
+<script>
+const log = [], out = document.getElementById('out'), field = document.getElementById('field')
+const note = (s) => { log.push(s); out.textContent = log.slice(-40).join('\n') }
+for (const t of ['keydown', 'beforeinput', 'input', 'compositionstart', 'compositionupdate', 'compositionend', 'paste'])
+  field.addEventListener(t, (e) => note(`${t} key=${e.key ?? ''} data=${JSON.stringify(e.data ?? '')} inputType=${e.inputType ?? ''} composing=${e.isComposing ?? ''}`))
+window.visualViewport?.addEventListener('resize', () => note(`visualViewport ${Math.round(visualViewport.width)}x${Math.round(visualViewport.height)} scale=${visualViewport.scale}`))
+window.addEventListener('scroll', () => note(`page scrolled to ${scrollY}`))
+document.getElementById('copy').onclick = () => navigator.clipboard?.writeText(field.value).then(() => note('clipboard write ok'), (e) => note('clipboard write ' + e.name))
+document.getElementById('report').onclick = () => {
+  const text = `ua=${navigator.userAgent}\nsecure=${isSecureContext} isolated=${crossOriginIsolated} dpr=${devicePixelRatio} value=${JSON.stringify(field.value)}\n` + log.join('\n')
+  navigator.clipboard?.writeText(text).catch(() => {})
+  out.textContent = text
+}
+</script>
