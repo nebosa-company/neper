@@ -1,0 +1,47 @@
+name: macos-wasm
+# The wasm32-wasi checks with the compiler and Node running on a Mac (D5213 left macOS unverified). Stage 1 is
+# cross-built on Linux as in macos-selfhost; the Mac then compiles the curated fixtures to wasm and runs them.
+on:
+  workflow_dispatch:
+jobs:
+  stage1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap compiler
+        run: sh scripts/build-bootstrap.sh
+      - name: Self-hosted compiler
+        run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: Cross-build for the Mac
+        run: |
+          mkdir -p /tmp/stage1
+          build/linux/neper-self emit-executable src/main.e . aarch64 macos /tmp/stage1/neper-aarch64-macos --arena 1g
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage1
+          path: /tmp/stage1
+  wasm:
+    needs: stage1
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: stage1
+          path: /tmp
+      - name: wasm sweep, plain and threaded
+        run: |
+          chmod +x /tmp/neper-aarch64-macos scripts/*.sh tests/selfhost/*.sh
+          export NEPER_COMPILER=/tmp/neper-aarch64-macos
+          sw_vers; node --version; bash --version | head -1
+          names="wasm_basics wasm_ops wasm_flow wasm_irreducible wasm_mask wasm_atomics wasm_reserve wasm_address fs_basics os_clock_random os_environment os_wait_timeout os_process os_group os_socket os_resolve async_io net wasm_net"
+          clean() { ! grep -qE '	(fail|invalid|refused|stderr-differs|skipped)	' build/wasm-sweep/results.tsv; }
+          bash scripts/wasm-sweep.sh -j 2 $names
+          clean
+          bash scripts/wasm-sweep.sh --threads -j 2 $names os_pipe_threads wasm_threads net_pop3 net_smtp net_tls
+          clean
