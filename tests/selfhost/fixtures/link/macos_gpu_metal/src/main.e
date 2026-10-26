@@ -91,7 +91,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let kept = gpu.launch[keep](q, gpu.grid1(64usize), dt, dout)
     if kept != ok { os.exit(13i32) }
     if gpu.download(q, dout, out[0..]) != ok { os.exit(14i32) }
-    if out[3] != tiny[3] || out[3] == 0.0 { os.exit(15i32) }
+    if tiny[3] == 0.0 { os.exit(16i32) }
+    if out[3] == 0.0 { os.exit(17i32) }
+    if out[3] != tiny[3] { os.exit(18i32) }
     let closed = gpu.close(dev)
     ret ok
 }
