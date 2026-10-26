@@ -62,15 +62,25 @@ jobs:
         run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
       - name: neper.wasm
         run: build/linux/neper-self emit-executable src/main.e . wasm32 wasi build/linux/neper.wasm
-      - name: Repeat one compile per stack size
+      - name: Repeat one compile per node option set
         run: |
-          for mb in 256 64 16 8; do
+          probe() {
+            label=$1; shift
             bad=0
             for i in $(seq 1 24); do
-              NEPER_WASM_STACK_MB=$mb node --no-warnings lib/wasm/run-wasm.mjs build/linux/neper.wasm emit-executable tests/selfhost/fixtures/link/wasm_reserve/src/main.e . x64 linux /tmp/out.$mb.$i > /tmp/log.$mb.$i 2>&1 || { bad=$((bad+1)); echo "stack $mb run $i exit $?"; head -c 300 /tmp/log.$mb.$i; }
+              node "$@" lib/wasm/run-wasm.mjs build/linux/neper.wasm emit-executable tests/selfhost/fixtures/link/wasm_reserve/src/main.e . x64 linux /tmp/out.$i > /tmp/log.$i 2>&1
+              status=$?
+              if [ $status -ne 0 ]; then bad=$((bad+1)); echo "[$label] run $i exit $status: $(head -c 200 /tmp/log.$i | tr '
+' ' ')"; fi
             done
-            echo "stack ${mb}MB: $bad failures of 24"
-          done
+            echo "RESULT [$label]: $bad failures of 24"
+          }
+          uname -r; cat /proc/sys/vm/overcommit_memory /proc/sys/vm/max_map_count
+          probe default --no-warnings
+          probe no-trap-handler --no-warnings --disable-wasm-trap-handler
+          probe liftoff-only --no-warnings --liftoff-only
+          probe no-tier-up --no-warnings --no-wasm-tier-up
+          probe single-threaded-gc --no-warnings --single-threaded-gc
   suite:
     if: ${{ inputs.only == '' || inputs.only == 'suite' }}
     runs-on: ubuntu-latest
