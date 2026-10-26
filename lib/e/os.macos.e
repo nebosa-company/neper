@@ -2493,15 +2493,28 @@ fn cocoa_read_text(string: usize, out: []u8) -> usize {
     ret length
 }
 
+// A rect an AppKit object answers for the selector `key` (`frame`, `bounds`, ...): called directly, it comes back in v0 to v3 on
+// arm64 (C178) and through memory, by `objc_msgSend_stret`, on x86-64.
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_rect_a64(receiver: usize, selector: usize) -> CgRect
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend_stret")
+extern fn msg_rect_x64(receiver: usize, selector: usize) -> CgRect
+
 fn cocoa_rect(object: usize, key: str) -> CgRect {
     var rect: CgRect = zero
-    let name = cocoa_text(key)
-    let boxed = msg1(object, cocoa_sel("valueForKey:\x00"), name)
-    cf_release(name)
-    if boxed != 0usize {
-        let copied = msg1(boxed, cocoa_sel("getValue:\x00"), mem.address_of(&rect))
+    if object == 0usize || key.len > 30usize { ret rect }
+    var name: [32]u8 = zero
+    var at = 0usize
+    while at < key.len {
+        name[at] = key[at]
+        at += 1usize
     }
-    ret rect
+    let selector = objc_sel_register(&name[0usize])
+    when target.arch == .Aarch64 {
+        ret msg_rect_a64(object, selector)
+    }
+    ret msg_rect_x64(object, selector)
 }
 
 fn cocoa_start() -> err {
