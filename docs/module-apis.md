@@ -25102,6 +25102,8 @@ fn trim_flags(l: *Layout, p: u32) -> u8
 fn va_edge_owner(l: *const Layout, b: u32, cont: u32) -> u32
 fn visible_tracks(tr: []GTrack, from: usize, to: usize) -> usize
 fn wrap_orphan_table_parts(l: *Layout, b: u32)
+fn fixed_block_size(l: *const Layout, b: u32) -> f64
+fn orthogonal_room(l: *const Layout, c: u32, pch: f64) -> f64
 ```
 
 ### `e.fmt.css.geom`
