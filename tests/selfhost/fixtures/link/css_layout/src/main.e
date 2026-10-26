@@ -594,6 +594,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 132. A transformed box is the containing block of its fixed descendants.
     let (p132, ok132) = build(a, "<div style=\"height:50px\"></div><div id=t style=\"transform:scale(1);height:40px\"><div id=a style=\"position:fixed;top:5px;left:7px;width:10px;height:10px\"></div></div>", "")
     if !ok132 || !near(rect_of(p132, "a").y, 55.0f64) || !near(rect_of(p132, "a").x, 7.0f64) { os.exit(173) }
+    // 133. `contain: size` ignores the content: the height is the `contain-intrinsic-height`, the width of a max-content box its width.
+    let (p133, ok133) = build(a, "<div id=a style=\"contain:size;contain-intrinsic-size:50px 30px;width:max-content\"><div style=\"height:100px;width:200px\"></div></div>", "")
+    if !ok133 || !near(rect_of(p133, "a").h, 30.0f64) || !near(rect_of(p133, "a").w, 50.0f64) { os.exit(174) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok

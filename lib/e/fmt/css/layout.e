@@ -3235,9 +3235,62 @@ fn outer_content_widths(l: *Layout, c: u32) -> (f64, f64) {
 }
 
 // The min-content and max-content widths of the content box of `b`.
+// Size containment (`contain: size` or `strict`) with the `contain-intrinsic-*` lengths that stand in for the content: (contained, width, height).
+fn size_contained(l: *const Layout, b: u32) -> (bool, f64, f64) {
+    let s = st(l, l.boxes.items[usize(b)].style)
+    let (cv0, has_c) = extra_text(s, "contain")
+    if !has_c { ret (false, 0.0f64, 0.0f64) }
+    let ct = cv.lower(l.a, cv.trim_ws(cv0))
+    if !str.contains(ct, "size") && !str.eq(ct, "strict") { ret (false, 0.0f64, 0.0f64) }
+    var w = 0.0f64
+    var h = 0.0f64
+    let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
+    let (isz, has_i) = extra_text(s, "contain-intrinsic-size")
+    if has_i {
+        let toks = cv.split_top_level_spaces(l.a, cv.lower(l.a, cv.trim_ws(isz)))
+        var vals: [2]f64 = zero
+        var n = 0usize
+        var k = 0usize
+        while k < toks.len && n < 2usize {
+            if !str.eq(toks[k], "auto") && !str.eq(toks[k], "none") {
+                let (len, good) = style.parse_len(&ctx, toks[k], s.font_size, 0u32)
+                if good && len.kind == .Px && len.pct == 0.0f64 {
+                    vals[n] = len.px
+                    n += 1usize
+                }
+            }
+            k += 1usize
+        }
+        if n >= 1usize {
+            w = vals[0usize]
+            h = vals[0usize]
+        }
+        if n >= 2usize { h = vals[1usize] }
+    }
+    let (iw, has_iw) = extra_text(s, "contain-intrinsic-width")
+    if has_iw {
+        let (len, good) = style.parse_len(&ctx, cv.lower(l.a, cv.trim_ws(strip_auto_kw(iw))), s.font_size, 0u32)
+        if good && len.kind == .Px { w = len.px }
+    }
+    let (ih, has_ih) = extra_text(s, "contain-intrinsic-height")
+    if has_ih {
+        let (len, good) = style.parse_len(&ctx, cv.lower(l.a, cv.trim_ws(strip_auto_kw(ih))), s.font_size, 0u32)
+        if good && len.kind == .Px { h = len.px }
+    }
+    ret (true, w, h)
+}
+
+fn strip_auto_kw(t: str) -> str {
+    let u = str.trim(t)
+    if str.starts_with(u, "auto ") { ret str.trim(u[5usize..]) }
+    ret u
+}
+
 fn content_widths(l: *Layout, b: u32) -> (f64, f64) {
     let bb = &l.boxes.items[usize(b)]
     if bb.has_c { ret (bb.min_c, bb.max_c) }
+    let (sc, scw, sch) = size_contained(l, b)
+    if sc { ret (scw, scw) }
     var mn = 0.0f64
     var mx = 0.0f64
     if bb.inner == .Table {
@@ -4169,6 +4222,8 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
         out_margin = m2
     }
     var ch_used = auto_h
+    let (sc4, scw4, sch4) = size_contained(l, c)
+    if sc4 { ch_used = sch4 }
     if spec_h >= 0.0f64 { ch_used = spec_h }
     if cb4.inner == .Table && spec_h >= 0.0f64 {
         // A table's height is the height of its grid; the captions come on top of it.
@@ -9006,6 +9061,8 @@ fn layout_abs(l: *Layout, b: u32) {
         content_h = layout_in_new_bfc(l, b, cw, spec_h)
     }
     var h = content_h
+    let (sc9, scw9, sch9) = size_contained(l, b)
+    if sc9 && spec_h < 0.0f64 { h = sch9 }
     if spec_h >= 0.0f64 { h = spec_h }
     if ratio_h_abs >= 0.0f64 && s.overflow_x == .Visible && s.overflow_y == .Visible { h = maxf(ratio_h_abs, content_h) }
     h = maxf(0.0f64, clamp_height_auto(l, b, h, cb_h, content_h))
