@@ -8725,11 +8725,28 @@ fn abs_origin(l: *const Layout, b: u32) -> (f64, f64) {
     ret (x, y)
 }
 
+// Whether a box is a containing block for absolute descendants and, when `fixed`, for fixed ones: a transform, perspective or
+// layout/paint containment makes any box one.
+fn transform_cb(l: *const Layout, b: u32) -> bool {
+    let ts = st(l, l.boxes.items[usize(b)].style)
+    let (tv, has_t) = extra_text(ts, "transform")
+    if has_t {
+        let t = cv.lower(l.a, cv.trim_ws(tv))
+        if t.len > 0usize && !str.eq(t, "none") { ret true }
+    }
+    let (pv, has_p) = extra_text(ts, "perspective")
+    if has_p {
+        let p = cv.lower(l.a, cv.trim_ws(pv))
+        if p.len > 0usize && !str.eq(p, "none") { ret true }
+    }
+    ret false
+}
+
 fn containing_block_of(l: *const Layout, b: u32, fixed: bool) -> u32 {
-    if fixed { ret l.root }
     var cur = l.boxes.items[usize(b)].parent
     while cur != NONE && cur != l.root {
-        if st(l, l.boxes.items[usize(cur)].style).position != .Static { ret cur }
+        if transform_cb(l, cur) { ret cur }
+        if !fixed && st(l, l.boxes.items[usize(cur)].style).position != .Static { ret cur }
         cur = l.boxes.items[usize(cur)].parent
     }
     ret l.root

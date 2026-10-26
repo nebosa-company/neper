@@ -591,6 +591,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 131. `line-clamp: auto` clamps lines inside child blocks to the box's max-height, which min-height can raise.
     let (p131, ok131) = build(a, "<div id=c style=\"line-clamp:auto;max-height:60px;font:10px/20px serif;white-space:pre\"><div id=i>1\n2\n3\n4\n5</div></div>", "")
     if !ok131 || !near(rect_of(p131, "i").h, 60.0f64) { os.exit(172) }
+    // 132. A transformed box is the containing block of its fixed descendants.
+    let (p132, ok132) = build(a, "<div style=\"height:50px\"></div><div id=t style=\"transform:scale(1);height:40px\"><div id=a style=\"position:fixed;top:5px;left:7px;width:10px;height:10px\"></div></div>", "")
+    if !ok132 || !near(rect_of(p132, "a").y, 55.0f64) || !near(rect_of(p132, "a").x, 7.0f64) { os.exit(173) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
