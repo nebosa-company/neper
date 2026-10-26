@@ -2943,4 +2943,5 @@ D5839	1493	e.gpu on Metal: buffers carved from one heap, MSL in K$spirv, ftz onl
 D5840	976	MSL atomics: 32-bit and relaxed, anything stronger stays on the CPU
 D5850	1188	The wasm host needs Node 24: Node 20 and 22 segfault now and then
 D5851	749	macOS wait_u32 polls on a zero timeout
-D5852	1133	MSL subgroups, and a state machine that reconverges by lowest block
+D5852	1134	MSL subgroups, and a state machine that reconverges by lowest block
+D5853	802	The Metal heap stays 256 MiB: a larger one read back wrong on the runners
