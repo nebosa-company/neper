@@ -42,6 +42,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (q, q_error) = gpu.queue(dev)
     if q_error != ok { os.exit(3i32) }
     let ran = run(q, x[0..], y[0..])
+    if ran == gpu.Unsupported { os.exit(41i32) }
+    if ran == gpu.Lost { os.exit(42i32) }
+    if ran == gpu.TooLarge { os.exit(43i32) }
+    if ran == gpu.OutOfMemory { os.exit(44i32) }
+    if ran == gpu.InvalidHandle { os.exit(45i32) }
+    if ran == gpu.Fault { os.exit(46i32) }
     if ran != ok { os.exit(4i32) }
     at = 0usize
     while at < 1000usize {
