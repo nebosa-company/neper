@@ -4,6 +4,7 @@
 use e.mem
 use e.os
 use e.gpu
+use e.io
 
 const N: usize = 40usize
 
@@ -67,20 +68,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let ran = run(q, gpu_a[0..], gpu_b[0..], gpu_c[0..])
     if ran == gpu.Unsupported { os.exit(7i32) }
     if ran != ok { os.exit(8i32) }
+    var bad = 0i32
     var at = 0usize
     while at < 360usize {
-        if cpu_a[at] != gpu_a[at] { os.exit(i32(cpu_a[at] % 16u32) * 16i32 + i32(gpu_a[at] % 16u32)) }
+        if cpu_a[at] != gpu_a[at] {
+            try io.printf["a[{}] cpu {} gpu {}
+"](at, cpu_a[at], gpu_a[at])
+            bad = 1i32
+        }
         at += 1usize
     }
     at = 0usize
     while at < 40usize {
-        if cpu_b[at] != gpu_b[at] { os.exit(40i32) }
+        if cpu_b[at] != gpu_b[at] {
+            try io.printf["b[{}] cpu {} gpu {}
+"](at, cpu_b[at], gpu_b[at])
+            bad = 1i32
+        }
         at += 1usize
     }
     at = 0usize
     while at < 80usize {
-        if cpu_c[at] != gpu_c[at] { os.exit(41i32) }
+        if cpu_c[at] != gpu_c[at] {
+            try io.printf["c[{}] cpu {} gpu {}
+"](at, cpu_c[at], gpu_c[at])
+            bad = 1i32
+        }
         at += 1usize
     }
+    if bad != 0i32 { os.exit(40i32) }
     ret ok
 }
