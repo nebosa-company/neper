@@ -1103,9 +1103,9 @@ fn atomic_ready(m: *Module, values: *Values, ty: u8, ordering: usize) -> err {
 fn emit_atomic(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     var ordering = instruction.immediate % 8usize
     if instruction.opcode == .AtomicCas { ordering = (instruction.immediate / 8usize % 8usize) + (instruction.immediate % 8usize) }
-    if ordering != 0usize { line(&m.code, "atomic_thread_fence(mem_flags::mem_device | mem_flags::mem_threadgroup, memory_order_seq_cst, thread_scope_device);") }
+    if ordering != 0usize { line(&m.code, "atomic_thread_fence(mem_flags::mem_device | mem_flags::mem_threadgroup, memory_order::memory_order_seq_cst, thread_scope::thread_scope_device);") }
     try emit_atomic_operation(m, builder, instruction, values)
-    if ordering != 0usize { line(&m.code, "atomic_thread_fence(mem_flags::mem_device | mem_flags::mem_threadgroup, memory_order_seq_cst, thread_scope_device);") }
+    if ordering != 0usize { line(&m.code, "atomic_thread_fence(mem_flags::mem_device | mem_flags::mem_threadgroup, memory_order::memory_order_seq_cst, thread_scope::thread_scope_device);") }
     ret ok
 }
 
