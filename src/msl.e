@@ -403,7 +403,9 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
         put(&m.body, ";\n")
         dynamic_at += 1usize
     }
-    put(&m.body, "  uint pc = 0u;\n  while (true) {\n    switch (pc) {\n")
+    // Only the lanes of a simdgroup at the lowest block run a round, so the lanes that took different branches meet again at the
+    // join (blocks are in program order, a join after its branches) and a subgroup operation sees the lanes the source says.
+    put(&m.body, "  uint pc = 0u;\n  while (true) {\n    if (pc != simd_min(pc)) { continue; }\n    switch (pc) {\n")
     var copied = 0usize
     while copied < m.code.count {
         if m.body.count >= m.body.data.len {
