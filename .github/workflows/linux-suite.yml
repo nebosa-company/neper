@@ -12,6 +12,10 @@ on:
         description: "wasm, suite, or empty for both"
         required: false
         default: ""
+      names:
+        description: "wasm job only: sweep just these fixtures (space separated) instead of the curated list"
+        required: false
+        default: ""
       refresh:
         description: "yes: refresh the x64-linux tool goldens that differ only in their snapshot hash; all: refresh whatever differs; the changes are saved as an artifact"
         required: false
@@ -40,7 +44,16 @@ jobs:
         run: |
           free -m; node --version; ulimit -a | head -20
           NEPER_COMPILER=$PWD/build/linux/stage2 bash scripts/wasm-compiler.sh
+      - name: Named fixtures (the `names` input), plain and threaded; prints the verdict table and the exit codes
+        if: ${{ inputs.names != '' }}
+        run: |
+          export NEPER_COMPILER=$PWD/build/linux/stage2
+          for mode in "" "--threads"; do
+            bash scripts/wasm-sweep.sh $mode -j 2 ${{ inputs.names }} || true
+            for n in ${{ inputs.names }}; do grep -h "^$n	" build/wasm-sweep/results.tsv; done
+          done
       - name: wasm sweep, plain and threaded (the fixtures that need no window, device or foreign library)
+        if: ${{ inputs.names == '' }}
         run: |
           export NEPER_COMPILER=$PWD/build/linux/stage2
           names="wasm_basics wasm_ops wasm_flow wasm_irreducible wasm_mask wasm_atomics wasm_reserve wasm_address fs_basics os_clock_random os_environment os_wait_timeout os_process os_group os_socket os_resolve async_io net wasm_net"
