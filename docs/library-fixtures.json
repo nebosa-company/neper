@@ -2478,6 +2478,8 @@
     "gpu_vulkan_loop",
     "gpu_vulkan_sync",
     "gpu_vulkan_types",
+    "macos_gpu_metal",
+    "macos_metal_atomics",
     "text_math",
     "ui_a11y_controls",
     "ui_accessibility",
@@ -2613,11 +2615,9 @@
    "delivered": 0,
    "pending": [],
    "fixtures": [
-    "macos_metal_raw",
     "macos_metal_emitted",
     "macos_metal_exact",
-    "macos_gpu_metal",
-    "macos_metal_atomics"
+    "macos_metal_raw"
    ]
   },
   {
@@ -2691,6 +2691,7 @@
     "gpu_float_modes",
     "gpu_ftz_ops",
     "gpu_vulkan_float",
+    "macos_metal_exact",
     "math_exact",
     "math_exp_log",
     "math_fft_filter_plan",
