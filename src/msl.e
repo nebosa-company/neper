@@ -1079,7 +1079,7 @@ fn atomic_type(ty: u8) -> str {
 // `((device atomic_uint*)(heap + vN))` or the threadgroup equivalent.
 fn put_atomic_pointer(m: *Module, values: *Values, address: usize, ty: u8) -> err {
     let t = &m.code
-    if values.kind[address] == KIND_SCALAR {
+    if (values.kind[address] == KIND_SCALAR) {
         put(t, "(device ")
         put(t, atomic_type(ty))
         put(t, "*)(heap + v")
@@ -1087,7 +1087,7 @@ fn put_atomic_pointer(m: *Module, values: *Values, address: usize, ty: u8) -> er
         put(t, ")")
         ret ok
     }
-    if values.kind[address] != KIND_SHARED { ret fail(m, "an atomic operation has no device or shared address") }
+    if (values.kind[address] != KIND_SHARED) { ret fail(m, "an atomic operation has no device or shared address") }
     put(t, "(threadgroup ")
     put(t, atomic_type(ty))
     put(t, "*)")
@@ -1117,7 +1117,7 @@ fn emit_atomic_operation(m: *Module, builder: *nir.Builder, instruction: nir.Ins
     if opcode == .AtomicCas {
         let expected = operand(builder, instruction, 1usize)
         let desired = operand(builder, instruction, 2usize)
-        if values.kind[expected] != KIND_SCALAR || values.kind[desired] != KIND_SCALAR { ret fail(m, "an atomic compare-and-swap has no value") }
+        if (values.kind[expected] != KIND_SCALAR || values.kind[desired] != KIND_SCALAR) { ret fail(m, "an atomic compare-and-swap has no value") }
         try atomic_ready(m, values, ty, (instruction.immediate / 8usize % 8usize) + (instruction.immediate % 8usize))
         // compare_exchange_strong answers whether it swapped and leaves the old value in `expected`.
         put(t, "      { ")
@@ -1146,7 +1146,7 @@ fn emit_atomic_operation(m: *Module, builder: *nir.Builder, instruction: nir.Ins
         ret ok
     }
     let value = operand(builder, instruction, 1usize)
-    if values.kind[value] != KIND_SCALAR { ret fail(m, "an atomic operation has no value") }
+    if (values.kind[value] != KIND_SCALAR) { ret fail(m, "an atomic operation has no value") }
     if opcode == .AtomicStore {
         put(t, "      atomic_store_explicit(")
         try put_atomic_pointer(m, values, address, ty)
