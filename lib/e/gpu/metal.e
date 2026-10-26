@@ -12,6 +12,8 @@ type Buffer = struct { handle: usize, bytes: []u8 }
 type Pipeline = struct { state: usize, max_threads: usize }
 type Size = struct { width: usize, height: usize, depth: usize }
 
+fn last_problem(out: []u8) -> usize { ret 0usize }
+
 fn available() -> bool { ret false }
 
 fn name(context: Context, out: []u8) -> usize { ret 0usize }

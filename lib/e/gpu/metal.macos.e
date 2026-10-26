@@ -20,6 +20,19 @@ type Buffer = struct { handle: usize, bytes: []u8 }
 type Pipeline = struct { state: usize, max_threads: usize }
 type Size = struct { width: usize, height: usize, depth: usize }
 
+var problem_text: [512]u8 = zero
+var problem_length: usize = zero
+
+// Why the last `compile` was refused, as the system said it (the first 512 bytes), copied into `out`; the length it had.
+fn last_problem(out: []u8) -> usize {
+    var at = 0usize
+    while at < problem_length && at < out.len {
+        out[at] = problem_text[at]
+        at += 1usize
+    }
+    ret at
+}
+
 @import("/System/Library/Frameworks/Metal.framework/Metal", "MTLCreateSystemDefaultDevice")
 extern fn default_device() -> usize
 
@@ -97,11 +110,9 @@ fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
     let released_options = os.msg0(options, os.cocoa_sel("release\x00"))
     os.cf_release(text)
     if library == 0usize {
-        var report: [1500]u8 = zero
-        var reported = os.cocoa_read_text(os.msg0(problem, os.cocoa_sel("localizedDescription\x00")), report[0usize..1500usize])
-        if reported > 1500usize { reported = 1500usize }
-        let (printed, printed_error) = os.write(os.stdout(), "metal compile: ")
-        let (printed2, printed2_error) = os.write(os.stdout(), report[0usize..reported])
+        var reported = os.cocoa_read_text(os.msg0(problem, os.cocoa_sel("localizedDescription\x00")), problem_text[0usize..512usize])
+        if reported > 512usize { reported = 512usize }
+        problem_length = reported
         os.objc_pool_pop(pool)
         ret (none, CompileFailed)
     }
