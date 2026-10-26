@@ -2938,4 +2938,5 @@ D5834	1923	Flush-to-zero on WebAssembly
 D5835	5193	What stays failing, and why
 D5836	1960	Where the sweep itself was blind
 D5837	1034	The `--release --threads` sweep: the same table
-D5838	1326	The MSL emitter: one kernel as a state machine over a heap offset
+D5838	1327	The MSL emitter: one kernel as a state machine over a heap offset
+D5839	1492	e.gpu on Metal: buffers carved from one heap, MSL in K$spirv, ftz only

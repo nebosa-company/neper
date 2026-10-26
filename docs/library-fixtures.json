@@ -2611,7 +2611,10 @@
    "delivered": 9,
    "pending": [],
    "fixtures": [
-    "macos_metal_raw"
+    "macos_metal_raw",
+    "macos_metal_emitted",
+    "macos_metal_exact",
+    "macos_gpu_metal"
    ]
   },
   {
