@@ -588,7 +588,8 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         put(t, ");\n")
         ret ok
     }
-    if opcode == .Extract || opcode == .Bitcast || opcode == .AtomicLoad || opcode == .AtomicStore || opcode == .AtomicRmw || opcode == .AtomicCas || opcode == .AtomicFence || opcode == .MemoryBarrier || opcode == .Subgroup { ret fail(m, "an operation in this kernel is not yet written as MSL") }
+    if opcode == .AtomicLoad || opcode == .AtomicStore || opcode == .AtomicRmw || opcode == .AtomicCas { ret emit_atomic(m, builder, instruction, values) }
+    if opcode == .Extract || opcode == .Bitcast || opcode == .AtomicFence || opcode == .MemoryBarrier || opcode == .Subgroup { ret fail(m, "an operation in this kernel is not yet written as MSL") }
     ret fail(m, "an operation in this kernel is not yet written as MSL")
 }
 
@@ -1063,5 +1064,115 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     if instruction.opcode == .Negate { put(&m.code, ")(-v") } else { put(&m.code, ")(~v") }
     put_number(&m.code, source)
     put(&m.code, ");\n")
+    ret ok
+}
+
+// ---- atomics -----------------------------------------------------------------------
+// Metal's atomics are 32 bits and relaxed (D5840): an operation on 64 bits is `Unsupported`, and the kernel runs on the CPU. A
+// stronger order is a relaxed operation between two sequentially consistent fences, which is at least as strong.
+
+fn atomic_type(ty: u8) -> str {
+    if ty == 7u8 { ret "atomic_int" }
+    ret "atomic_uint"
+}
+
+// `((device atomic_uint*)(heap + vN))` or the threadgroup equivalent.
+fn put_atomic_pointer(m: *Module, values: *Values, address: usize, ty: u8) -> err {
+    let t = &m.code
+    if values.kind[address] == KIND_SCALAR {
+        put(t, "(device ")
+        put(t, atomic_type(ty))
+        put(t, "*)(heap + v")
+        put_number(t, address)
+        put(t, ")")
+        ret ok
+    }
+    if values.kind[address] != KIND_SHARED { ret fail(m, "an atomic operation has no device or shared address") }
+    put(t, "(threadgroup ")
+    put(t, atomic_type(ty))
+    put(t, "*)")
+    put_private_address(t, values, address, 0usize)
+    ret ok
+}
+
+fn atomic_ready(m: *Module, values: *Values, ty: u8, ordering: usize) -> err {
+    if ty != 6u8 && ty != 7u8 { ret fail(m, "an atomic operation of this width is not written as MSL: Metal's atomics are 32 bits") }
+    ret ok
+}
+
+fn emit_atomic(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    var ordering = instruction.immediate % 8usize
+    if instruction.opcode == .AtomicCas { ordering = (instruction.immediate / 8usize % 8usize) + (instruction.immediate % 8usize) }
+    if ordering != 0usize { line(&m.code, "atomic_thread_fence(mem_flags::mem_device | mem_flags::mem_threadgroup, memory_order_seq_cst, thread_scope_device);") }
+    try emit_atomic_operation(m, builder, instruction, values)
+    if ordering != 0usize { line(&m.code, "atomic_thread_fence(mem_flags::mem_device | mem_flags::mem_threadgroup, memory_order_seq_cst, thread_scope_device);") }
+    ret ok
+}
+
+fn emit_atomic_operation(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let t = &m.code
+    let address = operand(builder, instruction, 0usize)
+    let ty = value_type(instruction.ty)
+    let opcode = instruction.opcode
+    if opcode == .AtomicCas {
+        let expected = operand(builder, instruction, 1usize)
+        let desired = operand(builder, instruction, 2usize)
+        if values.kind[expected] != KIND_SCALAR || values.kind[desired] != KIND_SCALAR { ret fail(m, "an atomic compare-and-swap has no value") }
+        try atomic_ready(m, values, ty, (instruction.immediate / 8usize % 8usize) + (instruction.immediate % 8usize))
+        // compare_exchange_strong answers whether it swapped and leaves the old value in `expected`.
+        put(t, "      { ")
+        put(t, type_name(ty))
+        put(t, " cmp = v")
+        put_number(t, expected)
+        put(t, "; atomic_compare_exchange_weak_explicit(")
+        try put_atomic_pointer(m, values, address, ty)
+        put(t, ", &cmp, v")
+        put_number(t, desired)
+        put(t, ", memory_order_relaxed, memory_order_relaxed); ")
+        scalar(values, instruction.result, ty)
+        put(t, "v")
+        put_number(t, instruction.result)
+        put(t, " = cmp; }\n")
+        ret ok
+    }
+    try atomic_ready(m, values, ty, instruction.immediate % 8usize)
+    if opcode == .AtomicLoad {
+        scalar(values, instruction.result, ty)
+        put(t, "      v")
+        put_number(t, instruction.result)
+        put(t, " = atomic_load_explicit(")
+        try put_atomic_pointer(m, values, address, ty)
+        put(t, ", memory_order_relaxed);\n")
+        ret ok
+    }
+    let value = operand(builder, instruction, 1usize)
+    if values.kind[value] != KIND_SCALAR { ret fail(m, "an atomic operation has no value") }
+    if opcode == .AtomicStore {
+        put(t, "      atomic_store_explicit(")
+        try put_atomic_pointer(m, values, address, ty)
+        put(t, ", v")
+        put_number(t, value)
+        put(t, ", memory_order_relaxed);\n")
+        ret ok
+    }
+    let kind = instruction.immediate / 16usize
+    var name = "exchange"
+    if kind == 1usize { name = "fetch_add" }
+    if kind == 2usize { name = "fetch_sub" }
+    if kind == 3usize { name = "fetch_and" }
+    if kind == 4usize { name = "fetch_or" }
+    if kind == 5usize { name = "fetch_xor" }
+    if kind == 6usize { name = "fetch_min" }
+    if kind == 7usize { name = "fetch_max" }
+    scalar(values, instruction.result, ty)
+    put(t, "      v")
+    put_number(t, instruction.result)
+    put(t, " = atomic_")
+    put(t, name)
+    put(t, "_explicit(")
+    try put_atomic_pointer(m, values, address, ty)
+    put(t, ", v")
+    put_number(t, value)
+    put(t, ", memory_order_relaxed);\n")
     ret ok
 }
