@@ -5200,6 +5200,16 @@ saxpy_output=$("$test_build/saxpy-selfhost")
 loop_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" spv none "$test_build/loop.spv")
 [ "$loop_spirv_written" = 'spir-v written' ]
 cmp "$test_build/loop.spv" "$repo/tests/conformance/spirv/loop.spv"
+# (D5838) The MSL emitter's kernels, pinned byte for byte: saxpy, the loops and the exact float operations.
+msl_saxpy_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" msl none "$test_build/saxpy.metal")
+[ "$msl_saxpy_written" = 'msl written' ]
+cmp "$test_build/saxpy.metal" "$repo/tests/conformance/msl/saxpy.metal"
+msl_loop_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" msl none "$test_build/loop.metal")
+[ "$msl_loop_written" = 'msl written' ]
+cmp "$test_build/loop.metal" "$repo/tests/conformance/msl/loop.metal"
+msl_float_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float.e" "$repo" msl none "$test_build/float.metal")
+[ "$msl_float_written" = 'msl written' ]
+cmp "$test_build/float.metal" "$repo/tests/conformance/msl/float.metal"
 gpu_vulkan_loop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-loop-selfhost")
 [ "$gpu_vulkan_loop_written" = 'executable written' ]
 chmod +x "$test_build/gpu-vulkan-loop-selfhost"

@@ -5710,6 +5710,19 @@ $loopSpirv = Join-Path $testBuild 'loop.spv'
 $loopSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\loop.e') $repo 'spv' 'none' $loopSpirv
 if ($LASTEXITCODE -ne 0 -or $loopSpirvWritten -ne 'spir-v written') { throw 'loop SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $loopSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\loop.spv')).Hash) { throw 'the loop SPIR-V module differs from the conformance corpus' }
+# (D5838) The MSL emitter's kernels, pinned byte for byte: saxpy, the loops and the exact float operations.
+$mslSaxpy = Join-Path $testBuild 'saxpy.metal'
+$mslSaxpyWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'msl' 'none' $mslSaxpy
+if ($LASTEXITCODE -ne 0 -or $mslSaxpyWritten -ne 'msl written') { throw 'saxpy MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslSaxpy).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\saxpy.metal')).Hash) { throw 'the saxpy MSL differs from the conformance corpus' }
+$mslLoop = Join-Path $testBuild 'loop.metal'
+$mslLoopWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\loop.e') $repo 'msl' 'none' $mslLoop
+if ($LASTEXITCODE -ne 0 -or $mslLoopWritten -ne 'msl written') { throw 'loop MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslLoop).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\loop.metal')).Hash) { throw 'the loop MSL differs from the conformance corpus' }
+$mslFloat = Join-Path $testBuild 'float.metal'
+$mslFloatWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\float.e') $repo 'msl' 'none' $mslFloat
+if ($LASTEXITCODE -ne 0 -or $mslFloatWritten -ne 'msl written') { throw 'float MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslFloat).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\float.metal')).Hash) { throw 'the float MSL differs from the conformance corpus' }
 $gpuVulkanLoopPath = Join-Path $testBuild 'gpu-vulkan-loop-selfhost.exe'
 $gpuVulkanLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $gpuVulkanLoopPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { throw 'gpu_vulkan_loop emission failed' }
