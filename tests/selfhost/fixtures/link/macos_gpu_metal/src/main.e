@@ -5,7 +5,7 @@ use e.mem
 use e.os
 use e.gpu
 
-@gpu(256)
+@gpu(256, ftz)
 fn saxpy(n: u32, a: f32, x: []const f32, y: []f32) {
     let i = gpu.gid.x
     if i >= n { ret }
@@ -13,7 +13,7 @@ fn saxpy(n: u32, a: f32, x: []const f32, y: []f32) {
     y[k] = a*x[k] + y[k]
 }
 
-@gpu(64)
+@gpu(64, ftz)
 fn outside(y: []u32) {
     let k = usize(gpu.gid.x) + 1000usize
     y[k] = 1u32
@@ -81,19 +81,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let again = run(q, x[0..], y[0..])
     if again != ok { os.exit(10i32) }
     if y[1] != 7.0 { os.exit(11i32) }
-    // A subnormal passes through an add of zero: the device preserves denormals, as the CPU does.
+    // Metal flushes subnormals, so a kernel that does not say `ftz` is refused rather than run flushed (spec section 11).
     var tiny: [64]f32 = zero
     var out: [64]f32 = zero
-    tiny[3] = 0.00000000000000000000000000000000000001
     let (dt, dt_error) = gpu.upload[f32](q, tiny[0..])
     let (dout, dout_error) = gpu.upload[f32](q, out[0..])
     if dt_error != ok || dout_error != ok { os.exit(12i32) }
-    let kept = gpu.launch[keep](q, gpu.grid1(64usize), dt, dout)
-    if kept != ok { os.exit(13i32) }
-    if gpu.download(q, dout, out[0..]) != ok { os.exit(14i32) }
-    if tiny[3] == 0.0 { os.exit(16i32) }
-    if out[3] == 0.0 { os.exit(17i32) }
-    if out[3] != tiny[3] { os.exit(18i32) }
+    if gpu.launch[keep](q, gpu.grid1(64usize), dt, dout) != gpu.Unsupported { os.exit(13i32) }
     let closed = gpu.close(dev)
     ret ok
 }

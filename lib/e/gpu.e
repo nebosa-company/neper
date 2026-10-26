@@ -113,7 +113,7 @@ type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: At
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
 const METAL_HEAP_BYTES: usize = 268435456usize
 const METAL_HEAP_FIRST: usize = 256usize
-const METAL_CAPABILITIES: usize = 263usize
+const METAL_CAPABILITIES: usize = 135usize
 
 type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
