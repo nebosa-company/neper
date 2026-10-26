@@ -15,11 +15,13 @@ fn saxpy(n: u32, a: f32, x: []const f32, y: []f32) {
 
 fn run(q: *gpu.Queue, x: []const f32, y: []f32) -> err {
     let (dx, dx_error) = gpu.upload[f32](q, x)
-    if dx_error != ok { ret dx_error }
+    if dx_error != ok { os.exit(51i32) }
     let (dy, dy_error) = gpu.upload[f32](q, y)
-    if dy_error != ok { ret dy_error }
-    try gpu.launch[saxpy](q, gpu.grid1(x.len), u32(x.len), 2.0, dx, dy)
-    try gpu.download(q, dy, y)
+    if dy_error != ok { os.exit(52i32) }
+    let launched = gpu.launch[saxpy](q, gpu.grid1(x.len), u32(x.len), 2.0, dx, dy)
+    if launched != ok { os.exit(53i32) }
+    let downloaded = gpu.download(q, dy, y)
+    if downloaded != ok { os.exit(54i32) }
     let r1 = gpu.release(q, dx)
     let r2 = gpu.release(q, dy)
     ret ok
