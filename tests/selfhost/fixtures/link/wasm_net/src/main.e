@@ -91,6 +91,7 @@ fn polling() -> i32 {
     var readable: os.PollInterest = zero
     readable.readable = true
     if os.poller_register(poller, os.socket_handle(served), 7usize, readable) != ok { ret 29i32 }
+    if os.poller_register(poller, os.socket_handle(served), 8usize, readable) == ok { ret 30i32 }
     var events: [4]os.PollEvent = zero
     let (quiet, quiet_error) = os.poller_wait(poller, events[..], 1000000i64)
     if quiet_error != ok || quiet != 0usize { ret 31i32 }
