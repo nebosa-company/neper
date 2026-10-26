@@ -2246,6 +2246,14 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
         let kept = &l.lines.items[usize(x.own.items[clamp_n - 1usize])]
         kept.overflow_ellipsis = true
         end_y = kept.y + kept.h
+        // Floats that sit after the clamp point are hidden.
+        let ctop = l.boxes.items[usize(cont)].border[0usize] + l.boxes.items[usize(cont)].padding[0usize]
+        var fk = l.boxes.items[usize(cont)].first
+        while fk != NONE {
+            let fnx = l.boxes.items[usize(fk)].next
+            if st(l, l.boxes.items[usize(fk)].style).floating != .None && l.boxes.items[usize(fk)].y >= end_y + ctop - 0.01f64 { clamp_hide(l, fk) }
+            fk = fnx
+        }
     }
     // The container's own lines, contiguous: lines of inline-blocks laid out in between are not part of its range.
     if n_own > 0usize {
