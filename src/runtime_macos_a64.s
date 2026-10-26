@@ -1139,13 +1139,18 @@ neper_os_thread_detach:
 // Section 8's blocking primitives, __ulock_wait (515) and __ulock_wake (516) with
 // UL_COMPARE_AND_WAIT (1) and ULF_WAKE_ALL (0x100). wait_u32(p, expected, timeout_ns) -> err:
 // a wake, a value that already differs and a signal are all `ok` -- the fence promises
-// spurious wakes -- a negative timeout waits for ever, and a zero one times out at once.
+// spurious wakes -- a negative timeout waits for ever, and a zero one polls once: a value that differs is `ok`, the same one times out.
 // The kernel's timeout is in microseconds, rounded up and capped at 32 bits.
 .global neper_os_wait_u32
 neper_os_wait_u32:
     mov x3, #0
     tbnz x2, #63, .Lwait_u32_go
-    cbz x2, .Lwait_u32_timeout
+    cbnz x2, .Lwait_u32_pos
+    ldr w9, [x0]
+    cmp w9, w1
+    b.ne .Lwait_u32_ok
+    b .Lwait_u32_timeout
+.Lwait_u32_pos:
     mov x9, #1000
     add x2, x2, x9
     sub x2, x2, #1
