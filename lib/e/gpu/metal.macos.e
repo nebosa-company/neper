@@ -99,8 +99,8 @@ fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
     if library == 0usize {
         var report: [1500]u8 = zero
         let reported = os.cocoa_read_text(os.msg0(problem, os.cocoa_sel("localizedDescription\x00")), report[0usize..1500usize])
-        let printed = os.write(os.stdout(), "metal compile: ")
-        let printed2 = os.write(os.stdout(), report[0usize..reported])
+        let (printed, printed_error) = os.write(os.stdout(), "metal compile: ")
+        let (printed2, printed2_error) = os.write(os.stdout(), report[0usize..reported])
         os.objc_pool_pop(pool)
         ret (none, CompileFailed)
     }
