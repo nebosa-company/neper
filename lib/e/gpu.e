@@ -1929,7 +1929,7 @@ fn metal_pipeline(device: *DeviceState, module_code: str, entry: str) -> (mtl.Pi
     var none: mtl.Pipeline = zero
     if device.pipeline_count >= 16usize { ret (none, TooLarge) }
     let (text, text_error) = hex_bytes(device.arena, module_code)
-    if text_error != ok { ret (none, Unsupported) }
+    if text_error != ok { ret (none, OutOfMemory) }
     let (name_bytes, name_error) = mem.alloc[u8](device.arena, entry.len)
     if name_error != ok { ret (none, name_error) }
     var copied = 0usize
@@ -1939,7 +1939,7 @@ fn metal_pipeline(device: *DeviceState, module_code: str, entry: str) -> (mtl.Pi
         copied += 1usize
     }
     let (made, made_error) = mtl.compile(device.metal, text, name_bytes)
-    if made_error != ok { ret (none, Unsupported) }
+    if made_error != ok { ret (none, Lost) }
     device.pipeline_modules[device.pipeline_count] = key
     device.pipeline_entries[device.pipeline_count] = entry
     device.metal_pipelines[device.pipeline_count] = made
