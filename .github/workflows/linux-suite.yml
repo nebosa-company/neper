@@ -105,5 +105,10 @@ jobs:
         run: chmod +x scripts/*.sh tests/selfhost/*.sh
       - name: Python packages the fixtures drive (net_ssh talks to an asyncssh server)
         run: python3 -m pip install --user asyncssh
+      - name: Database servers and client libraries (tests/selfhost/db_servers.sh starts throwaway servers from these)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql mysql-server unixodbc odbc-postgresql libpq5 libmysqlclient21
+          ls -d /usr/lib/postgresql/*/bin /usr/sbin/mysqld /usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so
       - name: Whole suite
         run: bash tests/selfhost/run.sh
