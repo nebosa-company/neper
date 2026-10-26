@@ -4015,7 +4015,7 @@ fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64 {
             // Its lines belong to a formatting context of its own and are not counted.
         } else {
             let r = clamp_walk(l, kid, ctr)
-            if r >= 0.0f64 { cut = l.boxes.items[usize(kid)].y + r }
+            if r >= 0.0f64 { cut = l.boxes.items[usize(kid)].y + l.boxes.items[usize(kid)].h }
         }
         kid = nxt
     }
