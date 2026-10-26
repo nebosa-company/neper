@@ -1,0 +1,48 @@
+name: linux-suite
+# The Linux side of the suites, which do not finish on a developer's Windows machine (run.ps1 trips on PowerShell's
+# stderr handling; the Linux build exhausts WSL's memory). Two jobs, both manual:
+#   wasm   the wasm32-wasi checks on their own: the compiler built as neper.wasm against the native one, the
+#          curated fixtures plain and with --threads, and the whole wasm block of tests/selfhost/run.sh (D5651).
+#   suite  tests/selfhost/run.sh whole, which includes that block.
+on:
+  workflow_dispatch:
+jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bootstrap compiler
+        run: sh scripts/build-bootstrap.sh
+      - name: Self-hosted compiler
+        run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: Stage 2 and stage 3
+        run: |
+          build/linux/neper-self emit-executable src/main.e . x64 linux build/linux/stage2 --arena 1g
+          chmod +x build/linux/stage2
+          build/linux/stage2 emit-executable src/main.e . x64 linux build/linux/stage3 --arena 1g
+          cmp build/linux/stage2 build/linux/stage3 && echo "stage 2 == stage 3"
+      - name: neper.wasm against the native compiler
+        run: NEPER_COMPILER=$PWD/build/linux/stage2 bash scripts/wasm-compiler.sh
+      - name: wasm sweep, plain and threaded (the fixtures that need no window, device or foreign library)
+        run: |
+          export NEPER_COMPILER=$PWD/build/linux/stage2
+          names="wasm_basics wasm_ops wasm_flow wasm_irreducible wasm_mask wasm_atomics wasm_reserve wasm_address fs_basics os_clock_random os_environment os_wait_timeout os_process os_group os_socket os_resolve async_io net wasm_net"
+          clean() { ! grep -qP '\t(fail|invalid|refused|stderr-differs|skipped)\t' build/wasm-sweep/results.tsv; }
+          bash scripts/wasm-sweep.sh -j 2 $names
+          clean
+          bash scripts/wasm-sweep.sh --threads -j 2 $names os_pipe_threads wasm_threads net_pop3 net_smtp net_tls
+          clean
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Whole suite
+        run: bash tests/selfhost/run.sh
