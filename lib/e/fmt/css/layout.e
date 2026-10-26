@@ -2229,9 +2229,8 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
     var clamp_n = line_clamp_count(cs)
     if clamp_n == 0usize && n_own > 1usize && line_clamp_is_auto(cs) {
         // `line-clamp: auto` keeps the lines that fit the container's `max-height`, and at least one.
-        let (mxv, has_mx) = resolve_len(cs.max_height, cbh)
-        if cs.max_height.kind == .Px && has_mx {
-            let room = to_content_h(l, cont, mxv)
+        let (room, has_room) = line_clamp_room(l, cont, cbh)
+        if has_room {
             let top = l.lines.items[usize(x.own.items[0usize])].y
             var fit = 1usize
             while fit < n_own {
@@ -2266,6 +2265,46 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
         l.boxes.items[usize(cont)].line_count = u32(n_own)
     }
     ret end_y
+}
+
+// The block size `line-clamp: auto` fits lines into: the content height (`height`, else `max-height`), at least `min-height`.
+fn line_clamp_room(l: *Layout, b: u32, cbh: f64) -> (f64, bool) {
+    let s = bstyle(l, b)
+    var room = -1.0f64
+    let (hv, has_h) = resolve_len(s.height, cbh)
+    let (mv, has_m) = resolve_len(s.max_height, cbh)
+    if s.height.kind == .Px && has_h { room = to_content_h(l, b, hv) } else if s.max_height.kind == .Px && has_m { room = to_content_h(l, b, mv) }
+    if room < 0.0f64 { ret (0.0f64, false) }
+    let (nv, has_n) = resolve_len(s.min_height, cbh)
+    if s.min_height.kind == .Px && has_n { room = maxf(room, to_content_h(l, b, nv)) }
+    ret (room, true)
+}
+
+// How many lines under `b` (in document order, not entering formatting contexts of their own) end within `room` of the container's content top.
+// `oy` is `b`'s border-box top relative to that. Stops counting at the first line that does not fit: `done` is then set.
+fn auto_fit_lines(l: *Layout, b: u32, oy: f64, room: f64, done: *bool) -> usize {
+    var n = 0usize
+    let bb = &l.boxes.items[usize(b)]
+    var li = 0usize
+    while li < usize(bb.line_count) && !*done {
+        let ln = l.lines.items[usize(bb.line_first) + li]
+        if oy + bb.border[0usize] + bb.padding[0usize] + ln.y + ln.h > room + 0.001f64 {
+            *done = true
+        } else {
+            n += 1usize
+        }
+        li += 1usize
+    }
+    var kid = bb.first
+    while kid != NONE && !*done {
+        let kb = &l.boxes.items[usize(kid)]
+        let nxt = kb.next
+        if !(kb.inner == .Marker || kb.inner == .Text || kb.inline_level || is_out_of_flow(st(l, kb.style)) || is_bfc_root(l, kid)) {
+            n += auto_fit_lines(l, kid, oy + kb.y, room, done)
+        }
+        kid = nxt
+    }
+    ret n
 }
 
 // Whether `line-clamp` is `auto` (the lines that fit `max-height`).
@@ -3854,7 +3893,19 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     }
     position_markers(l, b)
     // `line-clamp` over the lines of the block children (the container's own inline content is clamped with its lines).
-    let clamp_n = line_clamp_count(bstyle(l, b))
+    var clamp_n = line_clamp_count(bstyle(l, b))
+    if clamp_n == 0usize && line_clamp_is_auto(bstyle(l, b)) {
+        // `line-clamp: auto`: the lines that end within the block size the box is limited to, and at least one.
+        let (room, has_room) = line_clamp_room(l, b, ch)
+        if has_room {
+            var done = false
+            let fit = auto_fit_lines(l, b, 0.0f64 - bb.border[0usize] - bb.padding[0usize], room, &done)
+            if done {
+                clamp_n = fit
+                if clamp_n == 0usize { clamp_n = 1usize }
+            }
+        }
+    }
     var scan_c = ClampScan { seen: 0usize, n: clamp_n, tail: false }
     if clamp_n > 0usize { clamp_scan(l, b, &scan_c) }
     if clamp_n > 0usize && (scan_c.seen > clamp_n || scan_c.tail) {

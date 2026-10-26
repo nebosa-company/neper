@@ -588,6 +588,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 130. A block that crosses a column boundary is painted as one slice per column.
     let (p130, ok130) = build(a, "<div style=\"columns:2;column-gap:0;column-fill:auto;width:100px;height:50px\"><div style=\"height:80px;background:green\"></div></div>", "")
     if !ok130 || p130.lay.cfrags.len != 2usize || !near(p130.lay.cfrags.items[1usize].dx, 50.0f64) || !near(p130.lay.cfrags.items[1usize].h, 30.0f64) { os.exit(171) }
+    // 131. `line-clamp: auto` clamps lines inside child blocks to the box's max-height, which min-height can raise.
+    let (p131, ok131) = build(a, "<div id=c style=\"line-clamp:auto;max-height:60px;font:10px/20px serif;white-space:pre\"><div id=i>1\n2\n3\n4\n5</div></div>", "")
+    if !ok131 || !near(rect_of(p131, "i").h, 60.0f64) { os.exit(172) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
     ret ok
