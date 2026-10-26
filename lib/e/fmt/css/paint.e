@@ -713,7 +713,7 @@ fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
     } else {
         paint_background(p, b, s, x, dy, bb.w, dh)
     }
-    if !bb.coll { paint_borders(p, s, x, dy, bb.w, dh) }
+    if !bb.coll && dh > 0.001f64 { paint_borders(p, s, x, dy, bb.w, dh) }
 }
 
 // The columns a column box covers, as (first, end) over the table's column indices; (0, 0) when it is not found.

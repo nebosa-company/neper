@@ -3948,6 +3948,10 @@ fn clamp_hide(l: *Layout, b: u32) {
     let bb = bx(l, b)
     bb.h = 0.0f64
     bb.line_count = 0u32
+    var zero_edges: [4]f64 = zero
+    bb.border = zero_edges
+    bb.padding = zero_edges
+    bb.margin = zero_edges
     var kid = bb.first
     while kid != NONE {
         clamp_hide(l, kid)
