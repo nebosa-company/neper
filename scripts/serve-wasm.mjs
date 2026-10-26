@@ -1,5 +1,5 @@
 // Serve lib/wasm, tests/wasm/browser, build/wasm-sweep and neperos/assets/fonts read-only on 127.0.0.1 for the browser host (D5678):
-//   node scripts/serve-wasm.mjs [--isolated] [--port N]
+//   node scripts/serve-wasm.mjs [--isolated] [--port N] [--host ADDR]  (0.0.0.0 for a phone on the LAN)
 // URLs are repository paths (/tests/wasm/browser/index.html?module=/build/wasm-sweep/NAME.wasm). --isolated adds
 // Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp, which makes the page
 // cross-origin isolated (SharedArrayBuffer, needed by threads and by e.ui input).
@@ -13,6 +13,7 @@ const roots = ['lib/wasm', 'tests/wasm/browser', 'build/wasm-sweep', 'neperos/as
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.png': 'image/png' }
 const args = process.argv.slice(2)
 const isolated = args.includes('--isolated')
+const host = args.includes('--host') ? args[args.indexOf('--host') + 1] : '127.0.0.1'
 const port = args.includes('--port') ? Number(args[args.indexOf('--port') + 1]) : 8765
 
 createServer(async (request, response) => {
@@ -34,4 +35,4 @@ createServer(async (request, response) => {
   } catch {
     response.writeHead(404, headers).end('not found')
   }
-}).listen(port, '127.0.0.1', () => console.log(`serving http://127.0.0.1:${port}/${isolated ? ' (cross-origin isolated)' : ''}`))
+}).listen(port, host, () => console.log(`serving http://${host}:${port}/${isolated ? ' (cross-origin isolated)' : ''}`))
