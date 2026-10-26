@@ -1293,6 +1293,12 @@ fn box_ratio(l: *const Layout, b: u32) -> (f64, bool) {
     ret (num / den, true)
 }
 
+// Whether the `aspect-ratio` of a box begins with `auto` (its natural ratio wins when it has one).
+fn ratio_has_auto(l: *const Layout, b: u32) -> bool {
+    let (v, has) = extra_text(bstyle(l, b), "aspect-ratio")
+    ret has && str.starts_with(str.trim(v), "auto")
+}
+
 fn has_box_ratio(l: *const Layout, b: u32) -> bool {
     let (r, has) = box_ratio(l, b)
     ret has
@@ -3441,6 +3447,10 @@ fn used_replaced_size(l: *Layout, b: u32, cbw: f64, cbh: f64) -> (f64, f64) {
     var ih = ih0
     var ratio = intr.ratio
     if ratio <= 0.0f64 && iw > 0.0f64 && ih > 0.0f64 { ratio = iw / ih }
+    // An `aspect-ratio` without `auto` replaces the natural ratio.
+    let (rov, has_rov) = box_ratio(l, b)
+    let ratio_forced = has_rov && !ratio_has_auto(l, b)
+    if ratio_forced { ratio = rov }
     let (w_css, has_w) = resolve_len(s.width, cbw)
     let (h_css, has_h) = resolve_len(s.height, cbh)
     var w = iw
@@ -3452,8 +3462,16 @@ fn used_replaced_size(l: *Layout, b: u32, cbw: f64, cbh: f64) -> (f64, f64) {
     if known_w && !known_h {
         if ratio > 0.0f64 { h = w / ratio } else { h = ih }
     }
+    if ratio_forced && !known_w && !known_h { h = w / ratio }
     if !known_w && known_h {
         if ratio > 0.0f64 { w = h * ratio } else { w = iw }
+    }
+    if ratio_forced && s.box_sizing == .BorderBox && ratio > 0.0f64 {
+        // The ratio relates border boxes here.
+        let rb = bx(l, b)
+        let hx = horizontal_extras(rb)
+        let vx = vertical_extras(rb)
+        if !known_h { h = maxf(0.0f64, (w + hx) / ratio - vx) } else if !known_w { w = maxf(0.0f64, (h + vx) * ratio - hx) }
     }
     // min and max constraints, keeping the ratio when only one axis is constrained.
     let wc = clamp_width(l, b, w, cbw)
