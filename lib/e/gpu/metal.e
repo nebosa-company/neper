@@ -90,7 +90,11 @@ fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
     let pool = os.objc_pool_push()
     let text = os.cocoa_text(source)
     var problem = 0usize
-    let library = os.msg4(context.device, os.cocoa_sel("newLibraryWithSource:options:error:\x00"), text, 0usize, mem.address_of(&problem), 0usize)
+    // Fast math off: a float operation is IEEE, as on the CPU (spec section 11).
+    let options = os.msg0(os.msg0(os.cocoa_class("MTLCompileOptions\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+    let slow = os.msg1(options, os.cocoa_sel("setFastMathEnabled:\x00"), 0usize)
+    let library = os.msg4(context.device, os.cocoa_sel("newLibraryWithSource:options:error:\x00"), text, options, mem.address_of(&problem), 0usize)
+    let released_options = os.msg0(options, os.cocoa_sel("release\x00"))
     os.cf_release(text)
     if library == 0usize {
         os.objc_pool_pop(pool)

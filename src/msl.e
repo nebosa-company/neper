@@ -577,7 +577,17 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     if opcode == .Phi { ret fail(m, "a phi operation is not yet written as MSL") }
     if opcode == .Switch { ret fail(m, "a switch is not yet written as MSL") }
     if opcode == .Unreachable { ret fail(m, "an unreachable operation is not yet written as MSL") }
-    if opcode == .Sqrt { ret fail(m, "a square root is not yet written as MSL: it must match the CPU to the last bit") }
+    if opcode == .Sqrt {
+        let source = operand(builder, instruction, 0usize)
+        if values.kind[source] != KIND_SCALAR || !is_float(values.ty[source]) { ret fail(m, "a square root has no f32 operand") }
+        scalar(values, instruction.result, values.ty[source])
+        put(t, "      v")
+        put_number(t, instruction.result)
+        put(t, " = precise::sqrt(v")
+        put_number(t, source)
+        put(t, ");\n")
+        ret ok
+    }
     if opcode == .Extract || opcode == .Bitcast || opcode == .AtomicLoad || opcode == .AtomicStore || opcode == .AtomicRmw || opcode == .AtomicCas || opcode == .AtomicFence || opcode == .MemoryBarrier || opcode == .Subgroup { ret fail(m, "an operation in this kernel is not yet written as MSL") }
     ret fail(m, "an operation in this kernel is not yet written as MSL")
 }
@@ -971,6 +981,17 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     if opcode == .Multiply || opcode == .MultiplyWrap { symbol = "*" }
     if is_float(ty) {
         // Division and the other exact float sequences are the CPU's until they are written.
+        if opcode == .Divide {
+            scalar(values, instruction.result, ty)
+            put(&m.code, "      v")
+            put_number(&m.code, instruction.result)
+            put(&m.code, " = precise::divide(v")
+            put_number(&m.code, left)
+            put(&m.code, ", v")
+            put_number(&m.code, right)
+            put(&m.code, ");\n")
+            ret ok
+        }
         if symbol.len == 0usize { ret fail(m, "a float operation is not yet written as MSL") }
     } else {
         if opcode == .Divide { symbol = "/" }
