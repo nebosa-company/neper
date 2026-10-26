@@ -69,7 +69,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ran != ok { os.exit(8i32) }
     var at = 0usize
     while at < 360usize {
-        if cpu_a[at] != gpu_a[at] { os.exit(100i32 + i32(at)) }
+        if cpu_a[at] != gpu_a[at] { os.exit(i32(cpu_a[at] % 16u32) * 16i32 + i32(gpu_a[at] % 16u32)) }
         at += 1usize
     }
     at = 0usize
