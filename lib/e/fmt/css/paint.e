@@ -990,16 +990,25 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
     var ew = 0.0f64
     if mem.address_of(dl) != 0usize { ew = p.l.measure.width(p.l.measure.ctx, ts, dots) }
     // Fragments after the one that reaches the end are not drawn.
-    let is_last = fr.x + fr.w >= ln.x + ln.w - 0.01f64
+    // The text fragment that ends the line (inline box edges after it do not count) and where the line's content ends.
+    var is_last = true
+    var tail_end = fr.x + fr.w
+    var li2 = 0usize
+    while li2 < usize(ln.frag_count) {
+        let of = p.l.frags.items[usize(ln.frag_first) + li2]
+        li2 += 1usize
+        if of.kind == .Text && of.x > fr.x + 0.01f64 { is_last = false }
+        if (of.kind == .Segment || of.kind == .Text) && of.x + of.w > tail_end { tail_end = of.x + of.w }
+    }
     if fr.x >= content_w - ew && !is_last { ret }
     if !is_last && fr.x + fr.w + ew <= content_w + 0.01f64 {
         paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
         ret
     }
     if !is_last { ret }
-    if fr.x + fr.w + ew <= content_w + 0.01f64 {
+    if tail_end + ew <= content_w + 0.01f64 {
         paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
-        paint_text_run(p, owner, dots, cx + fr.x + fr.w, dots_y, ew)
+        paint_text_run(p, owner, dots, cx + tail_end, dots_y, ew)
         ret
     }
     // Cut at the longest prefix that leaves room.
