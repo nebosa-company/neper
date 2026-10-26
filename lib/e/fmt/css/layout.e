@@ -268,7 +268,7 @@ fn apply_first_letter(l: *Layout, b: u32, ps: *const style.Style) {
 
 // --- Generated content: counters, quotes and the `content` property of ::before, ::after and ::marker.
 
-type CounterInst = struct { name: str, value: i64, depth: usize }
+type CounterInst = struct { name: str, value: i64, depth: usize, nested: bool }
 
 fn find_counter(l: *const Layout, name: str) -> i64 {
     var i = l.counters.len
@@ -282,6 +282,7 @@ fn find_counter(l: *const Layout, name: str) -> i64 {
 fn counter_instantiate(l: *Layout, name: str, value: i64) {
     // A reset by a sibling of the element that made the counter replaces it rather than nesting.
     var i = l.counters.len
+    var nested = false
     while i > 0usize {
         i -= 1usize
         if str.eq(l.counters.items[i].name, name) {
@@ -289,10 +290,11 @@ fn counter_instantiate(l: *Layout, name: str, value: i64) {
                 l.counters.items[i].value = value
                 ret
             }
+            nested = true
             break
         }
     }
-    let pushed = list.push[CounterInst](&l.counters, CounterInst { name: name, value: value, depth: l.gen_depth })
+    let pushed = list.push[CounterInst](&l.counters, CounterInst { name: name, value: value, depth: l.gen_depth, nested: nested })
 }
 
 type RevAcc = struct { sum: i64, last: i64 }
@@ -431,6 +433,7 @@ fn format_counter(l: *Layout, value: i64, kind: str) -> str {
     if str.eq(kind, "decimal-leading-zero") { ret number_text(l, value, 2usize) }
     if str.eq(kind, "lower-alpha") || str.eq(kind, "lower-latin") { ret alpha_text(l, value, false) }
     if str.eq(kind, "upper-alpha") || str.eq(kind, "upper-latin") { ret alpha_text(l, value, true) }
+    if str.eq(kind, "georgian") { ret georgian_text(l, value) }
     if str.eq(kind, "lower-roman") { ret roman_text(l, value, false) }
     if str.eq(kind, "upper-roman") { ret roman_text(l, value, true) }
     ret number_text(l, value, 0usize)
@@ -578,6 +581,10 @@ fn eval_content(l: *Layout, s: *const style.Style, node: u32) -> (str, bool) {
                 }
             }
             let fname = cv.lower(l.a, t.value)
+            if (str.eq(fname, "counter") || str.eq(fname, "counters")) && n >= 1usize {
+                let cn = cv.lower(l.a, args[0usize])
+                if str.eq(cn, "inherit") || str.eq(cn, "initial") || str.eq(cn, "unset") || str.eq(cn, "revert") || str.eq(cn, "default") || str.eq(cn, "none") { ret ("", false) }
+            }
             if str.eq(fname, "attr") && n >= 1usize {
                 let (v, got) = dom.get_attribute(l.d, node, cv.lower(l.a, args[0usize]))
                 if got {
@@ -696,6 +703,8 @@ fn gen_children(l: *Layout, node: u32, parent_box: u32) {
     var kid = l.d.nodes[usize(node)].first_child
     while kid != html.NONE {
         gen_node(l, kid, parent_box, node)
+        // A counter nested under an ancestor's of the same name does not reach the following siblings.
+        while l.counters.len > 0usize && l.counters.items[l.counters.len - 1usize].nested && l.counters.items[l.counters.len - 1usize].depth == l.gen_depth { l.counters.len -= 1usize }
         kid = l.d.nodes[usize(kid)].next_sibling
     }
     // The counters the children made go out of scope with their parent's contents.
@@ -1786,6 +1795,31 @@ fn alpha_text(l: *const Layout, n: i64, upper: bool) -> str {
     let (out, e) = mem.alloc[u8](l.a, 16usize - at)
     if e != ok { ret "" }
     mem.copy[u8](out, buf[at..])
+    ret out
+}
+
+fn georgian_text(l: *const Layout, n: i64) -> str {
+    if n <= 0i64 || n >= 20000i64 { ret "" }
+    let vals = [_]i64{ 10000i64, 9000i64, 8000i64, 7000i64, 6000i64, 5000i64, 4000i64, 3000i64, 2000i64, 1000i64, 900i64, 800i64, 700i64, 600i64, 500i64, 400i64, 300i64, 200i64, 100i64, 90i64, 80i64, 70i64, 60i64, 50i64, 40i64, 30i64, 20i64, 10i64, 9i64, 8i64, 7i64, 6i64, 5i64, 4i64, 3i64, 2i64, 1i64 }
+    // The low byte of each letter's code point after U+10C0, in the order of `vals`.
+    let low = [_]u8{ 0x35u8, 0x30u8, 0x2fu8, 0x34u8, 0x2eu8, 0x2du8, 0x2cu8, 0x2bu8, 0x2au8, 0x29u8, 0x28u8, 0x27u8, 0x26u8, 0x25u8, 0x24u8, 0x33u8, 0x22u8, 0x21u8, 0x20u8, 0x1fu8, 0x1eu8, 0x1du8, 0x32u8, 0x1cu8, 0x1bu8, 0x1au8, 0x19u8, 0x18u8, 0x17u8, 0x31u8, 0x16u8, 0x15u8, 0x14u8, 0x13u8, 0x12u8, 0x11u8, 0x10u8 }
+    var buf: [60]u8 = zero
+    var at = 0usize
+    var v = n
+    var i = 0usize
+    while i < 37usize {
+        while v >= vals[i] && at + 3usize <= 60usize {
+            buf[at] = 0xe1u8
+            buf[at + 1usize] = 0x83u8
+            buf[at + 2usize] = 0x80u8 + low[i]
+            at += 3usize
+            v -= vals[i]
+        }
+        i += 1usize
+    }
+    let (out, e) = mem.alloc[u8](l.a, at)
+    if e != ok { ret "" }
+    mem.copy[u8](out, buf[0usize..at])
     ret out
 }
 
