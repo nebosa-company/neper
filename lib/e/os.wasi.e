@@ -1663,6 +1663,15 @@ fn open_parent(dir_fd: u32, relative_path: str) -> (u32, str, err) {
         while stop < cut && relative_path[stop] != 47u8 { stop += 1usize }
         let step = relative_path[position..stop]
         if step.len != 0usize && !(step.len == 1usize && step[0usize] == 46u8) {
+            // A host's open may follow a link whatever the lookup flags say (Node's), so the step is
+            // looked at without following it first.
+            var seen: [8]u64 = zero
+            if wasi_path_filestat_get(current, 0u32, address_of_str(step), u32(step.len), u32(mem.address_of(&seen[0usize]))) == 0u32 && (seen[2usize] & 255u64) == 7u64 {
+                if current != dir_fd { let closed = wasi_fd_close(current) }
+                record_error_detail(32i32)
+                error_slot_used[current_thread_id() % ERROR_SLOTS] = 2u8
+                ret (dir_fd, "", Denied)
+            }
             var opened: [1]u32 = zero
             let status = wasi_path_open(current, 0u32, address_of_str(step), u32(step.len), 2u32, DIR_RIGHTS, ALL_RIGHTS, 0u32, u32(mem.address_of(&opened[0usize])))
             if current != dir_fd { let closed = wasi_fd_close(current) }
