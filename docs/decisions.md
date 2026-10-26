@@ -42893,3 +42893,6 @@ While a window's edge is dragged AppKit runs its own tracking loop, so a poll-mo
 
 ## D5870 — A duplicate poller registration is not part of the portable contract
 The macOS-hosted wasm sweep (workflow `macos-wasm`) ran wasm_net natively on a Mac: 18 of 19 fixtures passed and wasm_net stopped at its check that registering a handle twice fails, which epoll and the wasm host answer with Exists and kqueue's EV_ADD does not (it replaces the filter). An EV_ENABLE probe to emulate Exists left the knote returning no events on macOS 14, so the check is dropped from the fixture rather than faked; the rest of wasm_net passes on a Mac plain and with --threads.
+
+## D5871 — A kqueue poller tracks its registrations so a duplicate answers Exists
+Reverses D5870's dropped check. `os.macos.e` keeps up to 32 (handle, token, filters) entries per poller; a second registration of a tracked handle deletes its filters to prove they are live, restores them with the original token and answers Exists, and a stale entry (descriptor closed and its number reused) is discarded. The wasm_net duplicate check is back, and passes natively on a Mac.

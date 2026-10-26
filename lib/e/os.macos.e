@@ -2050,7 +2050,12 @@ const NOTE_TRIGGER: u32 = 16777216u32
 const WAKE_IDENT: u64 = 1u64
 const POLL_BATCH: usize = 64usize
 
-type PollerState = struct { queue: usize }
+const POLL_TRACKED: usize = 32usize
+
+// What this poller registered, so a second registration of a handle answers Exists as epoll does
+// (EV_ADD silently replaces). flags: 1 read, 2 write, 0 a free slot. Handles past the 32nd go
+// untracked and keep kqueue's replace-on-register.
+type PollerState = struct { queue: usize, fds: [32]u64, tokens: [32]usize, flags: [32]u8 }
 
 // One change to the queue; an error from a delete (the filter was never added) is the caller's
 // to ignore, so the result is returned as it came.
@@ -2074,6 +2079,11 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
         ret (poller, OutOfMemory)
     }
     holder[0usize].queue = usize(queue)
+    var clear = 0usize
+    while clear < POLL_TRACKED {
+        holder[0usize].flags[clear] = 0u8
+        clear += 1usize
+    }
     // The wake is a user event, cleared as it is delivered.
     let added = poller_change(usize(queue), WAKE_IDENT, EVFILT_USER, EV_ADD | EV_CLEAR, 0u32, 0usize)
     if added < 0isize {
@@ -2084,22 +2094,71 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
     ret (poller, ok)
 }
 
+fn poller_slot(state: *PollerState, fd: u64) -> usize {
+    var at = 0usize
+    while at < POLL_TRACKED {
+        if state.flags[at] != 0u8 && state.fds[at] == fd { ret at }
+        at += 1usize
+    }
+    ret POLL_TRACKED
+}
+
 fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
     let state = mem.cast[*PollerState](p.state)
+    let fd = u64(handle.raw)
+    let known = poller_slot(state, fd)
+    if known < POLL_TRACKED {
+        // A closed descriptor leaves the kernel's table without telling this one, so the entry is
+        // only believed if the kernel still has the filter: deleting it proves that, and it goes
+        // straight back as it was.
+        var live = false
+        let had = state.flags[known]
+        let kept = state.tokens[known]
+        if had & 1u8 != 0u8 && poller_change(state.queue, fd, EVFILT_READ, EV_DELETE, 0u32, 0usize) >= 0isize {
+            live = true
+            let restored = poller_change(state.queue, fd, EVFILT_READ, EV_ADD, 0u32, kept)
+        }
+        if had & 2u8 != 0u8 && poller_change(state.queue, fd, EVFILT_WRITE, EV_DELETE, 0u32, 0usize) >= 0isize {
+            live = true
+            let restored = poller_change(state.queue, fd, EVFILT_WRITE, EV_ADD, 0u32, kept)
+        }
+        if live { ret Exists }
+        state.flags[known] = 0u8
+    }
+    var mark = 0u8
     // Level-triggered, as epoll is without EPOLLET: no EV_CLEAR.
     if interest.readable {
-        let added = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_ADD, 0u32, token)
+        let added = poller_change(state.queue, fd, EVFILT_READ, EV_ADD, 0u32, token)
         if added < 0isize { ret from_errno(added) }
+        mark = mark | 1u8
     }
     if interest.writable {
-        let added = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_ADD, 0u32, token)
+        let added = poller_change(state.queue, fd, EVFILT_WRITE, EV_ADD, 0u32, token)
         if added < 0isize { ret from_errno(added) }
+        mark = mark | 2u8
+    }
+    let free = poller_slot_free(state)
+    if free < POLL_TRACKED && mark != 0u8 {
+        state.fds[free] = fd
+        state.tokens[free] = token
+        state.flags[free] = mark
     }
     ret ok
 }
 
+fn poller_slot_free(state: *PollerState) -> usize {
+    var at = 0usize
+    while at < POLL_TRACKED {
+        if state.flags[at] == 0u8 { ret at }
+        at += 1usize
+    }
+    ret POLL_TRACKED
+}
+
 fn poller_unregister(p: Poller, handle: Handle) -> err {
     let state = mem.cast[*PollerState](p.state)
+    let known = poller_slot(state, u64(handle.raw))
+    if known < POLL_TRACKED { state.flags[known] = 0u8 }
     // Either filter may never have been added, so ENOENT from one is not a failure; both gone
     // is what the caller asked for.
     let read_removed = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_DELETE, 0u32, 0usize)
