@@ -9,6 +9,7 @@ use decimal
 use graph
 use layout
 use lex
+use msl
 use nir
 use parse
 use resolve
@@ -8713,7 +8714,18 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     if lowered == ok {
         var message = ""
         var checked = false
-        let (bytes, emit_error) = spirv.emit(c.arena, c, g, builder, signatures, at.function_count, &message, &checked)
+        // A Mac has no Vulkan driver: its `K$spirv` carries the kernel as MSL text (D5838) for the Metal launcher.
+        var emit_error = ok
+        var bytes: []u8 = zero
+        if check.same(g.os, "macos") {
+            let (text, text_error) = msl.emit(c.arena, c, g, builder, signatures, at.function_count, &message, &checked)
+            emit_error = text_error
+            bytes = text
+        } else {
+            let (words, words_error) = spirv.emit(c.arena, c, g, builder, signatures, at.function_count, &message, &checked)
+            emit_error = words_error
+            bytes = words
+        }
         if emit_error == ok {
             let (escaped, escaped_error) = hex_string(c.arena, bytes, checked, g.compiler_identity)
             if escaped_error != ok { ret escaped_error }

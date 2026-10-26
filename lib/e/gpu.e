@@ -54,8 +54,9 @@ use e.sync as locks
 use e.atomic
 use e.gpu.vulkan
 use e.gpu.cuda
+use e.gpu.metal as mtl
 
-type Backend = enum u8 { Cpu, Vulkan, Cuda }
+type Backend = enum u8 { Cpu, Vulkan, Cuda, Metal }
 type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
 type DeviceKey = struct { backend: Backend, uuid: [16]u8 }
 type DeviceInfo = struct { key: DeviceKey, key_valid: bool, index: u32, name: str, kind: DeviceKind, memory_bytes: u64, memory_known: bool, capabilities: []const Cap, supported: bool }
@@ -102,11 +103,17 @@ const CPU_CAPABILITIES: usize = 503usize
 // generation a handle has to carry.
 // A Vulkan device's buffer is mapped host memory (D1611): `bytes` is the mapping, so a
 // write, an upload and a download are the CPU's copies, and `device` is what frees it.
-type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool, device: vulkan.Buffer }
+type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool, device: vulkan.Buffer, heap_offset: usize }
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline }
+
+// A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
+// address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
+const METAL_HEAP_BYTES: usize = 268435456usize
+const METAL_HEAP_FIRST: usize = 256usize
+const METAL_CAPABILITIES: usize = 7usize
 
 type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
@@ -527,6 +534,82 @@ fn vulkan_info(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (DeviceI
     ret (record, ok)
 }
 
+// The Mac's Metal device as `devices` and `info` report it (D5838). It has no UUID to key it by.
+fn metal_info(a: *mem.Arena) -> (DeviceInfo, err) {
+    var record: DeviceInfo = zero
+    let (context, context_error) = mtl.open(a)
+    if context_error != ok { ret (record, NoDevice) }
+    let (text, text_error) = mem.alloc[u8](a, 128usize)
+    if text_error != ok {
+        mtl.close(context)
+        ret (record, text_error)
+    }
+    let length = mtl.name(context, text)
+    mtl.close(context)
+    let (caps, caps_error) = capability_list(a, METAL_CAPABILITIES)
+    if caps_error != ok { ret (record, caps_error) }
+    record.key.backend = .Metal
+    record.key_valid = false
+    record.index = 0u32
+    record.name = text[0usize..length]
+    record.kind = .Other
+    record.memory_known = false
+    record.capabilities = caps
+    record.supported = true
+    ret (record, ok)
+}
+
+// A Metal device opened, with its heap (D5838).
+fn open_metal(a: *mem.Arena, index: u32) -> (*Device, err) {
+    if index != 0u32 { ret (zero, NoDevice) }
+    if !mtl.available() { ret (zero, NoDevice) }
+    let (context, context_error) = mtl.open(a)
+    if context_error != ok { ret (zero, NoDevice) }
+    let (heap, heap_error) = mtl.buffer(context, METAL_HEAP_BYTES)
+    if heap_error != ok {
+        mtl.close(context)
+        ret (zero, OutOfMemory)
+    }
+    let (device, device_error) = open_state(a, .Metal)
+    if device_error != ok {
+        mtl.free(heap)
+        mtl.close(context)
+        ret (zero, device_error)
+    }
+    let (state, state_error) = state_of(device)
+    if state_error != ok { ret (zero, state_error) }
+    defer unlock_state(state)
+    state.metal = context
+    state.heap = heap
+    ret (device, ok)
+}
+
+// `bytes` of the heap: the offset of the first gap that holds them, 256-byte aligned (the fault block sits below), or
+// `OutOfMemory`. Every live buffer is a candidate's neighbour, so the search is the buffers squared.
+fn metal_carve(state: *DeviceState, bytes: usize) -> (usize, err) {
+    let need = (bytes + 255usize) / 256usize * 256usize
+    var candidate = METAL_HEAP_FIRST
+    var settled = false
+    while !settled {
+        if candidate + need > METAL_HEAP_BYTES { ret (0usize, OutOfMemory) }
+        settled = true
+        var at = 0usize
+        while at < state.buffers.len {
+            let held = state.buffers[at]
+            if held.live && held.count != 0usize {
+                let start = state.buffers[at].heap_offset
+                let end = start + (held.count * held.elem + 255usize) / 256usize * 256usize
+                if candidate < end && start < candidate + need {
+                    candidate = end
+                    settled = false
+                }
+            }
+            at += 1usize
+        }
+    }
+    ret (candidate, ok)
+}
+
 // The mock inventory (C093, the contract's `--gpu-inventory FILE`, which `neper run` hands the
 // program as NEPER_GPU_INVENTORY): a text file, one device per line,
 //     <vulkan|cuda> <1|0: key valid> <32 hex digits, or - for no key> <name>
@@ -722,6 +805,16 @@ fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo
         }
         ret (records, ok)
     }
+    if backend == .Metal {
+        if !mtl.available() { ret (zero, Unsupported) }
+        if limit < 1usize { ret (zero, TooLarge) }
+        let (records, records_error) = mem.alloc[DeviceInfo](a, 1usize)
+        if records_error != ok { ret (zero, records_error) }
+        let (record, record_error) = metal_info(a)
+        if record_error != ok { ret (zero, record_error) }
+        records[0usize] = record
+        ret (records, ok)
+    }
     if backend == .Cuda {
         // The driver's devices (D4705), reported and not openable: there is no CUDA compute
         // backend yet. The same bounded, complete snapshot as Vulkan's.
@@ -802,6 +895,10 @@ fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
         let (device, device_error) = open_vulkan(a, index)
         ret (device, device_error)
     }
+    if backend == .Metal {
+        let (device, device_error) = open_metal(a, index)
+        ret (device, device_error)
+    }
     if backend != .Cpu { ret (zero, Unsupported) }
     if index != 0u32 { ret (zero, NoDevice) }
     locks.mutex_lock(&cpu_launch_locks[0usize])
@@ -871,7 +968,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     var empty: []u8 = zero
     var i = 0usize
     while i < MAX_BUFFERS {
-        buffers[i] = Buffer { bytes: empty, count: 0usize, elem: 0usize, generation: 1u32, live: false, device: zero }
+        buffers[i] = Buffer { bytes: empty, count: 0usize, elem: 0usize, generation: 1u32, live: false, device: zero, heap_offset: 0usize }
         i += 1usize
     }
     let state = &states[0usize]
@@ -897,6 +994,11 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     var no_mock: DeviceInfo = zero
     state.mock = no_mock
     state.has_mock = false
+    var no_metal: mtl.Context = zero
+    var no_heap: mtl.Buffer = zero
+    state.metal = no_metal
+    state.heap = no_heap
+    state.heap_ends = 0usize
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Device { state: mem.cast[*void](state) }
@@ -1025,6 +1127,10 @@ fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
         let (record, record_error) = vulkan_info(a, state.physical, state.ordinal)
         ret (record, record_error)
     }
+    if state.backend == .Metal {
+        let (record, record_error) = metal_info(a)
+        ret (record, record_error)
+    }
     let (record, record_error) = cpu_info(a)
     ret (record, record_error)
 }
@@ -1042,6 +1148,15 @@ fn close(device: *Device) -> err {
             state.buffers[i].generation += 1u32
         }
         i += 1usize
+    }
+    if state.backend == .Metal {
+        var made_metal = 0usize
+        while made_metal < state.pipeline_count {
+            mtl.destroy(state.metal_pipelines[made_metal])
+            made_metal += 1usize
+        }
+        mtl.free(state.heap)
+        mtl.close(state.metal)
     }
     if state.backend == .Vulkan {
         var made = 0usize
@@ -1080,6 +1195,7 @@ fn has(device: *Device, capability: Cap) -> bool {
     defer unlock_state(state)
     var available = CPU_CAPABILITIES
     if state.backend == .Vulkan { available = state.physical.caps }
+    if state.backend == .Metal { available = METAL_CAPABILITIES }
     ret (available & capability_bit(capability)) != 0usize
 }
 
@@ -1140,7 +1256,23 @@ fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
     if state.device.backend == .Vulkan {
         let (made, made_error) = vulkan.buffer(a, state.device.context, n * elem)
         if made_error != ok { ret (zero, OutOfMemory) }
-        state.device.buffers[slot] = Buffer { bytes: made.bytes, count: n, elem: elem, generation: generation, live: true, device: made }
+        state.device.buffers[slot] = Buffer { bytes: made.bytes, count: n, elem: elem, generation: generation, live: true, device: made, heap_offset: 0usize }
+        ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
+    }
+    // A Metal buffer is a piece of the device's heap: its bytes are the heap's mapping there (D5838).
+    if state.device.backend == .Metal {
+        let (offset, carve_error) = metal_carve(state.device, n * elem)
+        if carve_error != ok { ret (zero, OutOfMemory) }
+        var held: []u8 = zero
+        if n > 0usize {
+            held = state.device.heap.bytes[offset..offset + n * elem]
+            var clear_at = 0usize
+            while clear_at < held.len {
+                held[clear_at] = 0u8
+                clear_at += 1usize
+            }
+        }
+        state.device.buffers[slot] = Buffer { bytes: held, count: n, elem: elem, generation: generation, live: true, device: zero, heap_offset: offset }
         ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
     }
     let (storage, storage_error) = mem.alloc[T](a, n)
@@ -1148,7 +1280,7 @@ fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
     // The storage is the arena's top: its bytes are the last `n * elem` allocated.
     var bytes: []u8 = zero
     if n > 0usize { bytes = mem.view(a, a.off - n * elem, n * elem) }
-    state.device.buffers[slot] = Buffer { bytes: bytes, count: n, elem: elem, generation: generation, live: true, device: zero }
+    state.device.buffers[slot] = Buffer { bytes: bytes, count: n, elem: elem, generation: generation, live: true, device: zero, heap_offset: 0usize }
     ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
 }
 
@@ -1560,6 +1692,8 @@ fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usi
     let buffer = state.device.buffers[index]
     // A Vulkan buffer crosses as its device address (D1611).
     if state.device.backend == .Vulkan { ret (usize(buffer.device.address), buffer.count, ok) }
+    // A Metal buffer crosses as its offset in the heap (D5838).
+    if state.device.backend == .Metal { ret (buffer.heap_offset, buffer.count, ok) }
     if buffer.count == 0usize { ret (0usize, 0usize, ok) }
     ret (mem.address_of(&buffer.bytes[0usize]), buffer.count, ok)
 }
@@ -1571,7 +1705,7 @@ fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usi
 // hex after it.
 // A kernel the emitter could not
 // write has no module and is `Unsupported` here; the CPU still runs it.
-fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, ctx: *void, module: str, entry: str, layout: str) -> err {
+fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, shared_bytes: usize, ctx: *void, module: str, entry: str, layout: str) -> err {
     if module.len == 0usize { ret Unsupported }
     let (gx, gx_error) = groups_along(grid.x, x)
     if gx_error != ok { ret gx_error }
@@ -1596,6 +1730,7 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
         identity_at += 1usize
     }
     let module_code = module[module_at + 17usize..]
+    if device.backend == .Metal { ret launch_metal(state, gx, gy, gz, x, y, z, shared_bytes, ctx, module_code, entry, layout, checked) }
     let parameter_count = layout.len
     var over: mem.Arena = zero
     over.base = mem.cast[*u8](ctx)
@@ -1684,6 +1819,132 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, c
     }
     state.serial += 1u64
     ret ok
+}
+
+// A launch on a Metal device (D5838): the same argument block as a Vulkan launch, in a buffer of its own, over the device's
+// heap, whose first 32 bytes are the checked build's fault block. The embedded text is MSL, as hex.
+fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y: usize, z: usize, shared_bytes: usize, ctx: *void, module_code: str, entry: str, layout: str, checked: bool) -> err {
+    let device = state.device
+    let a = device.arena
+    let parameter_count = layout.len
+    var over: mem.Arena = zero
+    over.base = mem.cast[*u8](ctx)
+    over.cap = 16usize * parameter_count
+    over.off = 16usize * parameter_count
+    let source = mem.view(&over, 0usize, 16usize * parameter_count)
+    let (block, block_error) = mtl.buffer(device.metal, 16usize * parameter_count + 24usize)
+    if block_error != ok { ret OutOfMemory }
+    var offset = 0usize
+    if checked {
+        var clear_at = 0usize
+        while clear_at < 32usize {
+            device.heap.bytes[clear_at] = 0u8
+            clear_at += 1usize
+        }
+        *mem.cast[*u64](&block.bytes[0usize]) = 0u64
+        *mem.cast[*u32](&device.heap.bytes[4usize]) = u32(state.serial)
+        offset = 8usize
+    }
+    var at = 0usize
+    while at < layout.len {
+        if layout[at] != 115u8 && (layout[at] < 49u8 || layout[at] > 56u8) {
+            mtl.free(block)
+            ret Unsupported
+        }
+        let code = usize(layout[at]) - 48usize
+        if layout[at] == 115u8 {
+            offset = (offset + 7usize) / 8usize * 8usize
+            copy_bytes(block.bytes[offset..offset + 8usize], source[16usize * at..16usize * at + 8usize])
+            copy_bytes(block.bytes[offset + 8usize..offset + 12usize], source[16usize * at + 8usize..16usize * at + 12usize])
+            offset += 16usize
+        } else {
+            offset = (offset + code - 1usize) / code * code
+            copy_bytes(block.bytes[offset..offset + code], source[16usize * at..16usize * at + code])
+            offset += code
+        }
+        at += 1usize
+    }
+    let (pipeline, pipeline_error) = metal_pipeline(device, module_code, entry)
+    if pipeline_error != ok {
+        mtl.free(block)
+        ret pipeline_error
+    }
+    if x * y * z > pipeline.max_threads {
+        mtl.free(block)
+        ret TooLarge
+    }
+    var buffers: [2]mtl.Buffer = zero
+    buffers[0usize] = block
+    buffers[1usize] = device.heap
+    let dispatch_error = mtl.dispatch(device.metal, pipeline, buffers[0usize..2usize], mtl.Size { width: gx, height: gy, depth: gz }, mtl.Size { width: x, height: y, depth: z }, shared_bytes)
+    mtl.free(block)
+    if dispatch_error != ok { ret Lost }
+    if checked {
+        let fault_bytes = device.heap.bytes
+        let count = *mem.cast[*u32](&fault_bytes[0usize])
+        if count != 0u32 {
+            if state.fault_count == 0u32 {
+                var kind: FaultKind = .Bounds
+                let kind_value = fault_bytes[8usize]
+                if kind_value == 1u8 { kind = .Null }
+                if kind_value == 2u8 { kind = .Tag }
+                if kind_value == 3u8 { kind = .Alignment }
+                if kind_value == 4u8 { kind = .Overflow }
+                if kind_value == 5u8 { kind = .DivideByZero }
+                state.fault = FaultRecord {
+                    kernel: *mem.cast[*u32](&fault_bytes[4usize]),
+                    kind: kind,
+                    site: *mem.cast[*u32](&fault_bytes[12usize]),
+                    gid: Id {
+                        x: *mem.cast[*u32](&fault_bytes[16usize]),
+                        y: *mem.cast[*u32](&fault_bytes[20usize]),
+                        z: *mem.cast[*u32](&fault_bytes[24usize]),
+                    },
+                }
+            }
+            state.fault_count += count
+        }
+    }
+    state.serial += 1u64
+    ret ok
+}
+
+// The Metal pipeline for a kernel's module and entry, compiled the first time. The entry is `module.kernel`; the MSL
+// emitter writes the dot as an underscore.
+fn metal_pipeline(device: *DeviceState, module_code: str, entry: str) -> (mtl.Pipeline, err) {
+    let key = mem.address_of(&module_code[0usize])
+    var at = 0usize
+    while at < device.pipeline_count {
+        if device.pipeline_modules[at] == key && device.pipeline_entries[at].len == entry.len {
+            var same = true
+            var k = 0usize
+            while k < entry.len {
+                if device.pipeline_entries[at][k] != entry[k] { same = false }
+                k += 1usize
+            }
+            if same { ret (device.metal_pipelines[at], ok) }
+        }
+        at += 1usize
+    }
+    var none: mtl.Pipeline = zero
+    if device.pipeline_count >= 16usize { ret (none, TooLarge) }
+    let (text, text_error) = hex_bytes(device.arena, module_code)
+    if text_error != ok { ret (none, Unsupported) }
+    let (name_bytes, name_error) = mem.alloc[u8](device.arena, entry.len)
+    if name_error != ok { ret (none, name_error) }
+    var copied = 0usize
+    while copied < entry.len {
+        name_bytes[copied] = entry[copied]
+        if entry[copied] == 46u8 { name_bytes[copied] = 95u8 }
+        copied += 1usize
+    }
+    let (made, made_error) = mtl.compile(device.metal, text, name_bytes)
+    if made_error != ok { ret (none, Unsupported) }
+    device.pipeline_modules[device.pipeline_count] = key
+    device.pipeline_entries[device.pipeline_count] = entry
+    device.metal_pipelines[device.pipeline_count] = made
+    device.pipeline_count += 1usize
+    ret (made, ok)
 }
 
 // The pipeline for a kernel's module and entry on this device, made the first time.
@@ -2021,8 +2282,9 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     defer unlock_state(state.device)
     var available = CPU_CAPABILITIES
     if state.device.backend == .Vulkan { available = state.device.physical.caps }
+    if state.device.backend == .Metal { available = METAL_CAPABILITIES }
     if (requirements & available) != requirements { ret Unsupported }
-    if state.device.backend == .Vulkan { ret launch_device(state, grid, x, y, z, ctx, module, entry, layout) }
+    if state.device.backend == .Vulkan || state.device.backend == .Metal { ret launch_device(state, grid, x, y, z, shared_bytes, ctx, module, entry, layout) }
     // A CPU run under `ftz` sets MXCSR's FTZ and DAZ (D4203), which flush `f64` as well:
     // a kernel that is both `ftz` and `f64` cannot keep section 11's "`f64` is not
     // flushed" there, so it is refused rather than run flushed.
