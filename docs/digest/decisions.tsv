@@ -2986,4 +2986,5 @@ D5904	1092	OpenGL ES 3.1 devices where `gpu_shader5` gives them `precise`
 D5905	1833	The GL presenter uploads only the box the renderer changed
 D5906	2646	The gpu fixtures on `.Gl`, and what running them fixed in GLSL
 D5907	1041	One call presents every window through GL
-D5908	2298	`@export("Name")` and `emit-shared-library`
+D5908	2299	`@export("Name")` and `emit-shared-library`
+D5909	1341	A neper NativeActivity app, packed into an APK

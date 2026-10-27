@@ -432,17 +432,9 @@ Verify-only turn, no edits. Needs T047. Run the full suites on both hosts for th
 
 Done 2026-10-27 (D5896, D5900): emit-executable ... x64 android and aarch64 android write the Linux image typed ET_DYN for /system/bin/linker64, with Bionic library names (libc.so) plus libdl.so and liblog.so; arm64 Android images always carry a dynamic segment, and arm64 atomics are LDAXR/STLXR loops (ARMv8.0). Android is linux to every module and variant, so no os.android.e was needed (neither Bionic nor SELinux refused anything run so far). scripts/run-android.ps1 [-Arch aarch64] runs hello, advanced, gpu_cpu, gpu_fault_bounds, x_khronos_gl_load, x_khronos_gl_headless, atomic_ops, atomic_threads and channel_threads on the SDK's Android 15 x86_64 emulator for both architectures, all passing, with GLES 3.0 drawing and reading back. Remaining: e.gpu compute on a device with GLES 3.1+. The emulator stops at 3.0 on this host: SwiftShader, -gpu host on the Iris Xe (draws there too) and -feature GLESDynamicVersion all report ro.opengles.version 196608, and -feature GuestAngle does not boot, so this needs a real phone. Design docs/opengl-plan.md, D5884. Needs T047. Acceptance: --target android-x64 and android-a64 emit a PIE ELF for /system/bin/linker64 with DT_NEEDED libc.so, libdl.so and liblog.so; os.android.e is os.linux.e without what Bionic and SELinux refuse; the executable runs under adb shell on the x86_64 emulator, and T047's fixtures pass there on GLES.
 
-### C220 — OpenGL 17: the Android target, app form (needs @export) (40%)
-
-Done 2026-10-27 (D5908): the user chose `@export("Name")` on a `@cc(c)` function; `emit-shared-library` writes an ET_DYN ELF shared object for linux and android, x64 and aarch64, with the exports in .dynsym and the .dynstr/.dynsym/.dynamic section headers Bionic requires. shared_library loads into C hosts through dlopen on Linux x64 (suite), Linux arm64 (qemu), and Android x64 and arm64 (emulator, NDK hosts). Remaining: ANativeActivity_onCreate exported from an app library and the process started as a NativeActivity, which needs T044's APK. Design docs/opengl-plan.md, D5884. Blocked on an @export (C-facing shared library) proposal (spec line 1238). Acceptance: ET_DYN output that exports ANativeActivity_onCreate; the process starts as a NativeActivity.
-
 ### L182 — OpenGL 18: os.android windows and input (0%)
 
 Design docs/opengl-plan.md, D5884. Needs C220. Acceptance: an ANativeWindow window; events from AInputQueue/ALooper; the EGL surface is recreated across pause and resume; ui_counter runs with present: .Gl.
-
-### T044 — OpenGL 19: APK packaging and signing (0%)
-
-Design docs/opengl-plan.md, D5884. Needs C220. Acceptance: a script drives the SDK's aapt2, zipalign and apksigner, and the resulting APK installs and launches on the emulator.
 
 ### T049 — OpenGL verify 5 (verify-only): Android emulator (0%)
 
@@ -1833,3 +1825,11 @@ Closed 2026-10-27 (D5906): scripts/run-gl-fixtures.py runs every gpu_* fixture t
 ### T046 — OpenGL verify 2 (verify-only): ui fixtures presented through GL
 
 Closed 2026-10-27 (D5907): x.khronos.present.install() (install_es() for GLES) makes every e.ui.window opened afterwards present through GL, an e.ui.app's included. scripts/run-gl-fixtures.py --ui runs every ui_* fixture that opens a host window (ui_algorithms, ui_app, ui_drag_drop, ui_host, ui_taskbar, ui_window; the other ui_* fixtures draw offscreen and present nothing) with it: all six pass on Windows through Intel GL 3.3 and ANGLE GLES 3.0, and on Linux (WSLg) through llvmpipe GL 3.3 and GLES 3.0. A scratch ui_app confirmed window.presenting is true after its frames, so the GL path ran rather than the software fallback.
+
+### C220 — OpenGL 17: the Android target, app form (needs @export)
+
+Closed 2026-10-27 (D5908, D5909): `@export("Name")` on a `@cc(c)` function and `emit-shared-library` (ET_DYN for linux and android, x64 and aarch64, exports in .dynsym, the section headers Bionic requires). examples/android/native_activity exports ANativeActivity_onCreate; packed by scripts/build-apk.ps1, it installs and launches cold on the x86_64 Android 15 emulator as android.app.NativeActivity, and logcat shows its neper code running. shared_library loads through dlopen on Linux x64 (suite) and arm64 (qemu) and on Android x64 and arm64.
+
+### T044 — OpenGL 19: APK packaging and signing
+
+Closed 2026-10-27 (D5909): scripts/build-apk.ps1 builds the program as x86_64 and arm64-v8a libapp.so, writes a NativeActivity manifest, links it with aapt2 against android-35, stores the libraries uncompressed, page-aligns with zipalign -P 16 and signs with apksigner (WSL OpenJDK 17) and the debug keystore. The example APK installs (adb install) and launches on the emulator.

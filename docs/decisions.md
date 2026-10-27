@@ -43241,3 +43241,17 @@ The user's decision (2026-10-27), resolving spec section 13's open `@export` que
 The command is `emit-executable` with `--shared-library` appended. The rewrite happens in `run_arguments`, not in `dispatch`: calling `dispatch` from itself doubles its very large frame and overflowed the stack (D1605).
 
 `shared_library` holds two exports, one looping and one reading a module-scope `var` the other writes. The Linux suite builds it, builds `host.c` beside it with `cc`, and checks what `dlopen` and `dlsym` find. The same library also loads into C hosts as arm64 Linux under qemu, and as x64 and arm64 Android on the emulator, with hosts built by the NDK's clang. This is what Android's NativeActivity form needs (C220): `libapp.so` exporting `ANativeActivity_onCreate`.
+
+## D5909 — A neper NativeActivity app, packed into an APK
+
+An Android app with no Java is `android.app.NativeActivity` naming a native library in its manifest (`android.app.lib_name`). Android loads that library from the APK and calls its `ANativeActivity_onCreate` on the activity's main thread. With D5908's `@export`, that library is a neper program: `examples/android/native_activity` exports `ANativeActivity_onCreate` as a `@cc(c)` function and writes to the log through `liblog`'s `__android_log_write`.
+
+`scripts/build-apk.ps1` packs one:
+1. It builds the program twice with `emit-shared-library`, as x86_64 and arm64-v8a `libapp.so`.
+2. It writes the manifest: NativeActivity, `hasCode="false"`, a launcher intent, minimum SDK 26, target 35.
+3. `aapt2 link` links the manifest against the platform's `android.jar`.
+4. The two libraries go in stored, not deflated, because `extractNativeLibs="false"` makes Android map them from the APK.
+5. `zipalign -P 16` page-aligns them.
+6. `apksigner` signs with the debug keystore. It runs under WSL's OpenJDK 17, which the user allowed installing; Windows has no Java.
+
+On the x86_64 Android 15 emulator the APK installs and launches cold. The process is alive as the top resumed activity, and `logcat` shows the neper code's line. The app draws nothing yet: its window and input are L182.
