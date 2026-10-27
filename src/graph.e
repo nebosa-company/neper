@@ -1195,6 +1195,8 @@ fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: st
     g.toolchain_root = toolchain_root
     g.arch = arch
     g.os = host_os
+    // (C219, D5896) Android is Linux to every module and variant; only the ELF writer is told.
+    if same(host_os, "android") { g.os = "linux" }
     g.count = 0usize
     g.import_count = 0usize
     g.scanned = 0usize

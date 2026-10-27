@@ -23,9 +23,10 @@ const MAX_PRESENTS: usize = 16usize
 
 var presents: [16]Present = zero
 
+// The triangle's corners come from a vertex buffer: the Android emulator's GLES draws nothing without a vertex attribute (D5896).
 fn vertex_source(es: bool) -> str {
-    if es { ret "#version 300 es\nvoid main() { vec2 p = vec2(float((gl_VertexID & 1) * 4 - 1), float((gl_VertexID & 2) * 2 - 1)); gl_Position = vec4(p, 0.0, 1.0); }\n" }
-    ret "#version 330 core\nvoid main() { vec2 p = vec2(float((gl_VertexID & 1) * 4 - 1), float((gl_VertexID & 2) * 2 - 1)); gl_Position = vec4(p, 0.0, 1.0); }\n"
+    if es { ret "#version 300 es\nlayout(location = 0) in vec2 corner;\nvoid main() { gl_Position = vec4(corner, 0.0, 1.0); }\n" }
+    ret "#version 330 core\nlayout(location = 0) in vec2 corner;\nvoid main() { gl_Position = vec4(corner, 0.0, 1.0); }\n"
 }
 
 // `origin` is the window row the frame's bottom row lands on; `height` the frame's height.
@@ -95,6 +96,20 @@ fn open(a: *mem.Arena, host: os.Window, options: context.Options) -> (usize, err
     p.origin_slot = uniform_slot(p.program, "origin")
     gl.gen_vertex_arrays(1i32, &p.vertex_array)
     gl.bind_vertex_array(p.vertex_array)
+    // One triangle past every edge of the clip square: (-1, -1), (3, -1), (-1, 3).
+    var corners: [6]f32 = zero
+    corners[0usize] = -1.0f32
+    corners[1usize] = -1.0f32
+    corners[2usize] = 3.0f32
+    corners[3usize] = -1.0f32
+    corners[4usize] = -1.0f32
+    corners[5usize] = 3.0f32
+    var corner_buffer = 0u32
+    gl.gen_buffers(1i32, &corner_buffer)
+    gl.bind_buffer(gl.ARRAY_BUFFER, corner_buffer)
+    gl.buffer_data(gl.ARRAY_BUFFER, 24isize, context.as_pointer(mem.address_of(&corners[0usize])), gl.STATIC_DRAW)
+    gl.enable_vertex_attrib_array(0u32)
+    gl.vertex_attrib_pointer(0u32, 2i32, gl.FLOAT, 0u8, 8i32, nil)
     gl.gen_textures(1i32, &p.texture)
     gl.active_texture(gl.TEXTURE0)
     gl.bind_texture(gl.TEXTURE_2D, p.texture)

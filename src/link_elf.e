@@ -101,8 +101,42 @@ fn find_main(builder: *nir.Builder) -> (usize, err) {
 // is the same `call qword ptr [rip + disp32]` the PE side emits and leaves nothing to
 // bind lazily. Lazy binding would buy a shorter start-up and cost a PLT, a second GOT
 // convention and `DT_PLTGOT`; none of that is worth having here.
-fn interpreter_path() -> str {
+fn interpreter_path(builder: *nir.Builder) -> str {
+    if builder.android { ret "/system/bin/linker64" }
     ret "/lib64/ld-linux-x86-64.so.2"
+}
+
+// (C219, D5896) `x64 android`: the Linux image for Android's loader. Android runs only position-independent executables
+// through `/system/bin/linker64`; neper's code needs no relocation to move, so the image is the Linux one typed ET_DYN.
+// Bionic's libraries carry no version suffix (`libc.so`, not `libc.so.6`) and keep dlopen in `libdl.so`, which an image that
+// imports anything also needs; with no symbol versions the loader looks each symbol up in every library named.
+fn library_count(builder: *nir.Builder) -> usize {
+    let count = nir.import_library_count(builder)
+    if builder.android && count != 0usize { ret count + 1usize }
+    ret count
+}
+
+fn library_name(builder: *nir.Builder, library: usize) -> str {
+    if library >= nir.import_library_count(builder) { ret "libdl.so" }
+    let name = nir.import_library_name(builder, library)
+    if !builder.android { ret name }
+    // `libc.so.6` is `libc.so`: the name up to its `.so`.
+    var at = 0usize
+    while at + 3usize <= name.len {
+        if name[at] == 46u8 && name[at + 1usize] == 115u8 && name[at + 2usize] == 111u8 { ret name[0usize..at + 3usize] }
+        at += 1usize
+    }
+    ret name
+}
+
+fn symbol_count(builder: *nir.Builder, library: usize) -> usize {
+    if library >= nir.import_library_count(builder) { ret 0usize }
+    ret nir.import_symbol_count(builder, library)
+}
+
+fn executable_type(builder: *nir.Builder) -> usize {
+    if builder.android { ret 3usize }
+    ret 2usize
 }
 
 fn align_up_to(value: usize, alignment: usize) -> usize {
@@ -116,10 +150,10 @@ fn align_up_to(value: usize, alignment: usize) -> usize {
 fn dynamic_string_size(builder: *nir.Builder) -> usize {
     var size = 1usize
     var library = 0usize
-    while library < nir.import_library_count(builder) {
-        size += nir.import_library_name(builder, library).len + 1usize
+    while library < library_count(builder) {
+        size += library_name(builder, library).len + 1usize
         var entry = 0usize
-        while entry < nir.import_symbol_count(builder, library) {
+        while entry < symbol_count(builder, library) {
             size += nir.import_symbol_name(builder, library, entry).len + 1usize
             entry += 1usize
         }
@@ -132,10 +166,10 @@ fn library_string_offset(builder: *nir.Builder, library: usize) -> usize {
     var offset = 1usize
     var at = 0usize
     while at < library {
-        let library_text = nir.import_library_name(builder, at)
+        let library_text = library_name(builder, at)
         offset += library_text.len + 1usize
         var entry = 0usize
-        while entry < nir.import_symbol_count(builder, at) {
+        while entry < symbol_count(builder, at) {
             let symbol_text = nir.import_symbol_name(builder, at, entry)
             offset += symbol_text.len + 1usize
             entry += 1usize
@@ -146,7 +180,7 @@ fn library_string_offset(builder: *nir.Builder, library: usize) -> usize {
 }
 
 fn symbol_string_offset(builder: *nir.Builder, library: usize, entry: usize) -> usize {
-    let library_text = nir.import_library_name(builder, library)
+    let library_text = library_name(builder, library)
     var offset = library_string_offset(builder, library) + library_text.len + 1usize
     var at = 0usize
     while at < entry {
@@ -160,11 +194,11 @@ fn symbol_string_offset(builder: *nir.Builder, library: usize, entry: usize) -> 
 fn append_dynamic_strings(builder: *nir.Builder, output: *emit_x64.Buffer) -> err {
     try emit_x64.byte(output, 0usize)
     var library = 0usize
-    while library < nir.import_library_count(builder) {
-        try append_text(output, nir.import_library_name(builder, library))
+    while library < library_count(builder) {
+        try append_text(output, library_name(builder, library))
         try emit_x64.byte(output, 0usize)
         var entry = 0usize
-        while entry < nir.import_symbol_count(builder, library) {
+        while entry < symbol_count(builder, library) {
             try append_text(output, nir.import_symbol_name(builder, library, entry))
             try emit_x64.byte(output, 0usize)
             entry += 1usize
@@ -193,9 +227,9 @@ fn append_dynamic_symbols(builder: *nir.Builder, output: *emit_x64.Buffer) -> er
         at += 1usize
     }
     var library = 0usize
-    while library < nir.import_library_count(builder) {
+    while library < library_count(builder) {
         var entry = 0usize
-        while entry < nir.import_symbol_count(builder, library) {
+        while entry < symbol_count(builder, library) {
             try emit_x64.little_u32(output, symbol_string_offset(builder, library, entry))
             // STB_GLOBAL | STT_FUNC, no visibility bits, SHN_UNDEF.
             try emit_x64.byte(output, 18usize)
@@ -242,9 +276,9 @@ fn dynamic_hash_size(builder: *nir.Builder) -> usize {
 // reads, which is ahead of the code, while the slots it names are behind it.
 fn patch_dynamic_relocations(builder: *nir.Builder, output: *emit_x64.Buffer, rela_offset: usize, got_address: usize) -> err {
     var library = 0usize
-    while library < nir.import_library_count(builder) {
+    while library < library_count(builder) {
         var entry = 0usize
-        while entry < nir.import_symbol_count(builder, library) {
+        while entry < symbol_count(builder, library) {
             let flat = nir.import_flat_index(builder, library, entry)
             let at = rela_offset + flat * 24usize
             try patch_little_u64(output, at, got_address + flat * 8usize)
@@ -264,12 +298,12 @@ fn append_dynamic_entry(output: *emit_x64.Buffer, tag: usize, value: usize) -> e
 }
 
 fn dynamic_entry_count(builder: *nir.Builder) -> usize {
-    ret nir.import_library_count(builder) + 10usize
+    ret library_count(builder) + 10usize
 }
 
 fn append_dynamic(builder: *nir.Builder, output: *emit_x64.Buffer, dynstr_address: usize, dynsym_address: usize, hash_address: usize, rela_address: usize) -> err {
     var library = 0usize
-    while library < nir.import_library_count(builder) {
+    while library < library_count(builder) {
         try append_dynamic_entry(output, 1usize, library_string_offset(builder, library))
         library += 1usize
     }
@@ -321,7 +355,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     let phdr_offset = 64usize
     let phdr_count = 5usize
     let interp_offset = phdr_offset + phdr_count * 56usize
-    let interpreter = interpreter_path()
+    let interpreter = interpreter_path(builder)
     let interp_size = interpreter.len + 1usize
     let dynstr_offset = interp_offset + interp_size
     let dynstr_size = dynamic_string_size(builder)
@@ -349,7 +383,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try emit_x64.byte(output, 0usize)
     try emit_x64.byte(output, 0usize)
     try pad_to(output, 16usize)
-    try little_u16(output, 2usize)
+    try little_u16(output, executable_type(builder))
     try little_u16(output, 62usize)
     try emit_x64.little_u32(output, 1usize)
     try emit_x64.little_u64(output, base + code_offset)
@@ -412,7 +446,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try emit_x64.little_u64(output, 8usize)
 
     try pad_to(output, interp_offset)
-    try append_text(output, interpreter_path())
+    try append_text(output, interpreter_path(builder))
     try emit_x64.byte(output, 0usize)
     try pad_to(output, dynstr_offset)
     try append_dynamic_strings(builder, output)
@@ -583,7 +617,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.byte(output, 0usize)
     try emit_x64.byte(output, 0usize)
     try pad_to(output, 16usize)
-    try little_u16(output, 2usize)
+    try little_u16(output, executable_type(builder))
     try little_u16(output, 62usize)
     try emit_x64.little_u32(output, 1usize)
     try emit_x64.little_u64(output, 4194304usize + code_offset)

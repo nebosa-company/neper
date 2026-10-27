@@ -473,6 +473,8 @@ type Builder = struct {
     // The instruction level (D765, `--cpu`): 1 for x64-v1, the SSE2 baseline, 2 for
     // x64-v2, 3 for x64-v3, whose AVX2 lowers a thirty-two-byte vector as one chunk.
     cpu_level: usize,
+    // (C219, D5896) `x64 android`: the ELF image is typed ET_DYN for /system/bin/linker64, with Bionic's library names.
+    android: bool,
     explain: bool,
     // Where the explanations go (D408, H20): appended here by the oracle's worker,
     // written out by the driver after the phase in worker order -- as records of the

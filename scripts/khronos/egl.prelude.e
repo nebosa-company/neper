@@ -33,6 +33,20 @@ fn default_library() -> str {
     ret "libEGL.so.1"
 }
 
+// `name`, or the platform's default; Android names the default without its version, `libEGL.so`.
+fn open_library(a: *mem.Arena, name: str) -> (os.Lib, err) {
+    var path = name
+    if path.len == 0usize { path = default_library() }
+    let (opened, open_error) = os.dlopen(a, path)
+    if open_error != ok {
+        var none: os.Lib = zero
+        if name.len != 0usize || os.NATIVE_SEPARATOR == 92u8 { ret (none, open_error) }
+        let (unversioned, unversioned_error) = os.dlopen(a, "libEGL.so")
+        ret (unversioned, unversioned_error)
+    }
+    ret (opened, ok)
+}
+
 fn fetch(a: *mem.Arena, resolve: Resolve, context: usize, index: usize, name: str, required: u8) -> err {
     let address = resolve(a, context, name)
     procs[index] = address
@@ -70,9 +84,7 @@ fn load(a: *mem.Arena, name: str) -> err {
         if load_code != 0u8 { ret Unsupported }
         ret ok
     }
-    var path = name
-    if path.len == 0usize { path = default_library() }
-    let (opened, open_error) = os.dlopen(a, path)
+    let (opened, open_error) = open_library(a, name)
     if open_error != ok { ret NoLoader }
     let (lookup, lookup_error) = os.dlsym[GetProc](a, opened, "eglGetProcAddress")
     if lookup_error != ok {

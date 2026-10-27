@@ -43080,3 +43080,19 @@ With this, GL 4.6 core draws and computes on Intel (`x_khronos_gl_headless`), an
 - **Choice.** A canvas keeps whichever context it got first.
 
 `tests/wasm/browser/webgl2_present.html` draws random frames at 64x48, 97x61 and 480x320 and reads them back with `readPixels`. It printed "webgl2 present ok" in the app's Chromium pane. `ui_counter.html` ran and repainted through it (the count went to 2), and `tests/wasm/window.mjs` still passes under Node's shim. The suites have no headless browser, so the page is run by hand.
+
+## D5896 — `x64 android`: the Linux image, typed ET_DYN for /system/bin/linker64
+
+An experiment settled the shape: a neper Linux x64 image with only its `e_type` changed to `ET_DYN` runs at a randomised base under Linux, imports included. Neper's code is position-independent: calls go through the slots the loader fills, and nothing holds an absolute address that would have to move. Static images already run on Android 15 x86_64 as they are. The dynamic ones failed only because they named glibc's loader.
+
+So `x64 android` is `x64 linux` to everything but the ELF writer:
+- **Validation and loading.** `project.e` accepts the OS name, and `graph.load` stores it as `linux`, so every module, variant, seed and runtime is Linux's.
+- **Linking.** `nir.Builder.android`, set where `main.e` links an ELF, makes `link_elf.e` type the image `ET_DYN` and name `/system/bin/linker64` as its interpreter.
+- **Library names.** Bionic names (`libc.so.6` becomes `libc.so`; a name keeps everything up to its `.so`), plus a `libdl.so` entry for `dlopen`. Neper emits no symbol versions, so the loader looks each symbol up in every library named.
+- **EGL.** `x.khronos.egl` falls back from `libEGL.so.1` to Android's `libEGL.so`.
+
+`scripts/run-android.ps1` builds fixtures for `x64 android`, pushes them with adb and runs them from `/data/local/tmp`. On the SDK's Android 15 x86_64 emulator, `hello`, `advanced`, `gpu_cpu`, `gpu_fault_bounds`, `x_khronos_gl_load` and `x_khronos_gl_headless` pass. In the last, GLES 3.0 draws and reads back through the emulator's GLES translator (SwiftShader).
+
+The same run explained D5886's open question. The emulator's GLES, and the SwiftShader `libEGL.dll` it ships for Windows, draw nothing when a draw has no vertex attributes. That is the `gl_VertexID`-only shaders the fixtures used. `x_khronos_gl_headless` and `x.khronos.present` now take their corners from a vertex buffer, and SwiftShader draws on Windows too. The emulator offers no GLES 3.1, so `e.gpu` compute has no device there and `gpu_gl` reports that it checked nothing.
+
+`aarch64 android` (`link_elf_a64.e`, real phones) is not done: whether the a64 code is position-independent too is untested.

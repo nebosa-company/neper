@@ -65,9 +65,11 @@ fn link(shaders: []const u32) -> (u32, err) {
     ret (program, ok)
 }
 
+// The corners come from a vertex buffer rather than gl_VertexID: the Android emulator's GLES draws nothing for a draw
+// with no vertex attributes.
 fn vertex_source(es: bool) -> str {
-    if es { ret "#version 300 es\nconst vec2 p[3] = vec2[3](vec2(-0.5, -0.5), vec2(0.5, -0.5), vec2(0.0, 0.5));\nvoid main() { gl_Position = vec4(p[gl_VertexID], 0.0, 1.0); }\n" }
-    ret "#version 330 core\nconst vec2 p[3] = vec2[3](vec2(-0.5, -0.5), vec2(0.5, -0.5), vec2(0.0, 0.5));\nvoid main() { gl_Position = vec4(p[gl_VertexID], 0.0, 1.0); }\n"
+    if es { ret "#version 300 es\nlayout(location = 0) in vec2 corner;\nvoid main() { gl_Position = vec4(corner, 0.0, 1.0); }\n" }
+    ret "#version 330 core\nlayout(location = 0) in vec2 corner;\nvoid main() { gl_Position = vec4(corner, 0.0, 1.0); }\n"
 }
 
 fn fragment_source(es: bool) -> str {
@@ -123,6 +125,19 @@ fn draw(a: *mem.Arena, options: context.Options, base: i32) -> err {
     var vertex_array = 0u32
     gl.gen_vertex_arrays(1i32, &vertex_array)
     gl.bind_vertex_array(vertex_array)
+    var corners: [6]f32 = zero
+    corners[0usize] = -0.5f32
+    corners[1usize] = -0.5f32
+    corners[2usize] = 0.5f32
+    corners[3usize] = -0.5f32
+    corners[4usize] = 0.0f32
+    corners[5usize] = 0.5f32
+    var vertex_buffer = 0u32
+    gl.gen_buffers(1i32, &vertex_buffer)
+    gl.bind_buffer(gl.ARRAY_BUFFER, vertex_buffer)
+    gl.buffer_data(gl.ARRAY_BUFFER, 24isize, context.as_pointer(mem.address_of(&corners[0usize])), gl.STATIC_DRAW)
+    gl.enable_vertex_attrib_array(0u32)
+    gl.vertex_attrib_pointer(0u32, 2i32, gl.FLOAT, 0u8, 8i32, nil)
     gl.use_program(program)
     gl.draw_arrays(gl.TRIANGLES, 0i32, 3i32)
     if gl.get_error() != gl.NO_ERROR { os.exit(base + 6i32) }

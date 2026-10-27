@@ -132,7 +132,7 @@ fn without_extension(path: str) -> (str, err) {
 }
 
 fn target_suffix(value: str) -> bool {
-    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "neperos") || same(value, "wasi") || same(value, "x64") || same(value, "x86") || same(value, "aarch64") || same(value, "wasm32") || same(value, "spv") || same(value, "ptx")
+    ret same(value, "windows") || same(value, "linux") || same(value, "android") || same(value, "macos") || same(value, "none") || same(value, "neperos") || same(value, "wasi") || same(value, "x64") || same(value, "x86") || same(value, "aarch64") || same(value, "wasm32") || same(value, "spv") || same(value, "ptx")
 }
 
 fn without_target_suffix(stem: str) -> str {
@@ -196,7 +196,7 @@ fn valid_arch(arch: str) -> bool {
 }
 
 fn valid_os(value: str) -> bool {
-    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "neperos") || same(value, "wasi")
+    ret same(value, "windows") || same(value, "linux") || same(value, "android") || same(value, "macos") || same(value, "none") || same(value, "neperos") || same(value, "wasi")
 }
 
 fn valid_target(arch: str, target_os: str) -> bool {
