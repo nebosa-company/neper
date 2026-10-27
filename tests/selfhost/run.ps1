@@ -3725,6 +3725,12 @@ $gpuGlF64Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $gpuGlF64Written -ne 'executable written') { throw 'gpu_gl_f64 emission failed' }
 & $gpuGlF64Path
 if ($LASTEXITCODE -ne 0) { throw "f64 on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5914) f16 and bf16 on the GL device, word-equal to the CPU backend's (D5913).
+$gpuGlNarrowPath = Join-Path $testBuild 'gpu-gl-narrow-selfhost.exe'
+$gpuGlNarrowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_narrow\src\main.e') $repo 'x64' 'windows' $gpuGlNarrowPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlNarrowWritten -ne 'executable written') { throw 'gpu_gl_narrow emission failed' }
+& $gpuGlNarrowPath
+if ($LASTEXITCODE -ne 0) { throw "f16 or bf16 on OpenGL answered wrongly: exit $LASTEXITCODE" }
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 $gpuGlThreadsPath = Join-Path $testBuild 'gpu-gl-threads-selfhost.exe'
 $gpuGlThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_threads\src\main.e') $repo 'x64' 'windows' $gpuGlThreadsPath --gpu glsl

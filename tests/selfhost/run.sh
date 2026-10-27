@@ -3255,6 +3255,11 @@ gpu_gl_f64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$gpu_gl_f64_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-f64-selfhost"
 "$test_build/gpu-gl-f64-selfhost"
+# (D5914) f16 and bf16 on the GL device, word-equal to the CPU backend's (D5913).
+gpu_gl_narrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_narrow/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-narrow-selfhost" --gpu glsl)
+[ "$gpu_gl_narrow_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-narrow-selfhost"
+"$test_build/gpu-gl-narrow-selfhost"
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 gpu_gl_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_threads/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-threads-selfhost" --gpu glsl)
 [ "$gpu_gl_threads_written" = 'executable written' ]

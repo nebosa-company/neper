@@ -39,6 +39,10 @@ const T_BOOL: u8 = 1u8
 const T_F32: u8 = 10u8
 // (L181, D5903) f64: a GLSL `double`, core since 4.00; its words cross memory through packDouble2x32, so no int64 is needed.
 const T_F64: u8 = 11u8
+// (C216, D5914) f16 and bf16: the sixteen bits in a `uint`, widened to f32, operated on, and rounded back once to nearest-even in
+// integer code (so no driver conversion or rounding mode is in the answer), as the CPU code generators do (D5913).
+const T_F16: u8 = 13u8
+const T_BF16: u8 = 14u8
 const T_ADDRESS: u8 = 12u8
 
 type Values = struct {
@@ -84,14 +88,27 @@ type Module = struct {
     // (D5906) The function being written, or any helper, calls `math.fma[f64]`: `f64_fma` goes into the shader.
     needs_dfma: bool,
     helper_dfma: bool,
+    needs_narrow: bool,
+    helper_narrow: bool,
+    needs_narrow64: bool,
+    helper_narrow64: bool,
     signatures: *nir.Signatures,
     in_helper: bool,
     signature: nir.Signature,
 }
 
-// f32 division and square root on the bits, correctly rounded to nearest-even as section 11 requires; every NaN result is
-// the canonical positive quiet NaN, 0x7FC00000. With FTZ set (an `ftz` kernel), subnormal operands count as zero and a
-// result tiny after rounding is a zero.
+// (C216, D5914) f16 and bf16 as `uint` bits: widening is exact, narrowing is one round-to-nearest-even in integer code,
+// a NaN is the width's canonical one, and int_to_* takes a magnitude and a sign (an integer of 32 bits or fewer is exact in
+// f64, so converting it through f64 is the one rounding of its value).
+fn narrow_source() -> str {
+    ret "uint h_bits_to_f32(uint h) {\n  uint s = (h & 0x8000u) << 16u; uint e = (h >> 10u) & 31u; uint m = h & 1023u;\n  if (e == 0u) { if (m == 0u) return s; int k = findMSB(m); return s | (uint(k + 103) << 23u) | ((m << uint(23 - k)) & 0x7FFFFFu); }\n  if (e == 31u) { if (m != 0u) return 0x7FC00000u; return s | 0x7F800000u; }\n  return s | ((e + 112u) << 23u) | (m << 13u);\n}\nuint bf_bits_to_f32(uint b) {\n  if (((b >> 7u) & 255u) == 255u && (b & 127u) != 0u) return 0x7FC00000u;\n  return b << 16u;\n}\nuint f32_bits_to_h(uint x) {\n  uint s = (x >> 16u) & 0x8000u; uint e = (x >> 23u) & 255u; uint m = x & 0x7FFFFFu;\n  if (e == 255u) return m != 0u ? 0x7E00u : (s | 0x7C00u);\n  int ex = int(e) - 112;\n  if (ex >= 31) return s | 0x7C00u;\n  if (ex <= 0) {\n    if (ex < -10) return s;\n    m |= 0x800000u;\n    uint sh = uint(14 - ex);\n    uint mant = m >> sh; uint rem = m & ((1u << sh) - 1u); uint hl = 1u << (sh - 1u);\n    if (rem > hl || (rem == hl && (mant & 1u) != 0u)) mant += 1u;\n    return s | mant;\n  }\n  uint mant = (uint(ex) << 10u) | (m >> 13u); uint rem = m & 0x1FFFu;\n  if (rem > 0x1000u || (rem == 0x1000u && (mant & 1u) != 0u)) mant += 1u;\n  return s | mant;\n}\nuint f32_bits_to_bf(uint x) {\n  if (((x >> 23u) & 255u) == 255u && (x & 0x7FFFFFu) != 0u) return 0x7FC0u;\n  return (x + 0x7FFFu + ((x >> 16u) & 1u)) >> 16u;\n}\nuint int_to_h(uint mag, uint sign) {\n  if (mag == 0u) return 0u;\n  int k = findMSB(mag);\n  if (k > 15) return sign | 0x7C00u;\n  uint mant = mag << uint(10 - min(k, 10));\n  if (k > 10) { uint sh = uint(k - 10); mant = mag >> sh; uint rem = mag & ((1u << sh) - 1u); uint hl = 1u << (sh - 1u); if (rem > hl || (rem == hl && (mant & 1u) != 0u)) mant += 1u; }\n  uint r = (uint(k + 14) << 10u) + mant;\n  if (r >= 0x7C00u) r = 0x7C00u;\n  return sign | r;\n}\nuint int_to_bf(uint mag, uint sign) {\n  if (mag == 0u) return 0u;\n  int k = findMSB(mag);\n  uint mant = mag << uint(7 - min(k, 7));\n  if (k > 7) { uint sh = uint(k - 7); mant = mag >> sh; uint rem = mag & ((1u << sh) - 1u); uint hl = 1u << (sh - 1u); if (rem > hl || (rem == hl && (mant & 1u) != 0u)) mant += 1u; }\n  return sign | ((uint(k + 126) << 7u) + mant);\n}\n"
+}
+
+// f64 to narrow: one rounding of the 53-bit significand, shifted with its lost bits jammed into bit 0 (needs w_shr).
+fn narrow64_source() -> str {
+    ret "uint f64_bits_to_narrow(uvec2 b, int p, int emin, int emax) {\n  uint s = (b.y >> 16u) & 0x8000u; int e = int((b.y >> 20u) & 2047u);\n  uint infp = uint(emax - emin + 2) << uint(p); uint nan = infp | (1u << uint(p - 1));\n  uint mhi = b.y & 0xFFFFFu;\n  if (e == 2047) return (mhi | b.x) != 0u ? nan : (s | infp);\n  if (e == 0) return s;\n  int ex = e - 1023;\n  if (ex > emax) return s | infp;\n  uvec2 sig = uvec2(mhi | 0x100000u, b.x);\n  int sh = 52 - p; uint base = 0u;\n  if (ex >= emin) base = uint(ex - emin) << uint(p); else sh += emin - ex;\n  if (sh > 54) return s;\n  uvec2 q = w_shr(sig, sh - 2);\n  uint mant = q.y >> 2u; uint guard = (q.y >> 1u) & 1u; uint sticky = q.y & 1u;\n  uint r = base + mant + ((guard == 1u && (sticky == 1u || (mant & 1u) == 1u)) ? 1u : 0u);\n  if (r >= infp) r = infp;\n  return s | r;\n}\n"
+}
+
 // (D5906) `math.fma[f64]` rounded once, after Boldo and Melquiond: the product exact as two doubles (Dekker's split), the
 // addend's sum with its low part exact, the low parts added rounding to odd, and one round to nearest at the end. Every
 // step is a `precise` double operation GLSL leaves to the driver, as D5903 does for + - * /.
@@ -101,8 +118,11 @@ fn dfma_source() -> str {
     ret "dvec2 f64_two_sum(double a, double b) {\n  precise double s = a + b; precise double bb = s - a; precise double e = (a - (s - bb)) + (b - bb);\n  return dvec2(s, e);\n}\ndvec2 f64_split(double a) {\n  precise double c = 134217729.0 * a; precise double h = c - (c - a); precise double l = a - h;\n  return dvec2(h, l);\n}\ndouble f64_add_odd(double x, double y) {\n  dvec2 s = f64_two_sum(x, y);\n  uvec2 w = unpackDouble2x32(s.x);\n  if (s.y == 0.0 || (w.x & 1u) != 0u) return s.x;\n  if ((s.y > 0.0) == (s.x > 0.0)) { w.x += 1u; if (w.x == 0u) w.y += 1u; } else { if (w.x == 0u) w.y -= 1u; w.x -= 1u; }\n  return packDouble2x32(w);\n}\ndouble f64_fma(double a, double b, double c) {\n  precise double p = a * b;\n  precise double plain = p + c;\n  if (isnan(plain) || isinf(plain) || isinf(p) || p == 0.0 || abs(a) > 1.0e297 || abs(b) > 1.0e297 || abs(p) < 1.0e-290) return plain;\n  dvec2 sa = f64_split(a); dvec2 sb = f64_split(b);\n  precise double pe = ((sa.x * sb.x - p) + sa.x * sb.y + sa.y * sb.x) + sa.y * sb.y;\n  dvec2 t = f64_two_sum(c, pe);\n  dvec2 v = f64_two_sum(p, t.x);\n  precise double r = v.x + f64_add_odd(v.y, t.y);\n  return r;\n}\n"
 }
 
+// f32 division and square root on the bits, correctly rounded to nearest-even as section 11 requires; every NaN result is
+// the canonical positive quiet NaN, 0x7FC00000. With FTZ set (an `ftz` kernel), subnormal operands count as zero and a
+// result tiny after rounding is a zero.
 fn exact_source() -> str {
-    ret "uint f32_round(uint s, int e, uint q, bool sticky) {\n  // q: 26 bits, the leading one at bit 25; e: the biased exponent of that one.\n  if (e <= 0) {\n    if (FTZ) {\n      uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n      if (e == 0 && m == 16777216u) return s | 0x00800000u;\n      return s;\n    }\n    int shift = 1 - e;\n    if (shift > 26) { sticky = sticky || q != 0u; q = 0u; } else { sticky = sticky || (q & ((1u << uint(shift)) - 1u)) != 0u; q >>= uint(shift); }\n    uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n    return s | m;\n  }\n  uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n  if (m == 16777216u) { m = 8388608u; e += 1; }\n  if (e >= 255) return s | 0x7F800000u;\n  return s | (uint(e) << 23u) | (m & 0x7FFFFFu);\n}\nuint f32_div(uint a, uint b) {\n  uint s = (a ^ b) & 0x80000000u; uint ea = (a >> 23u) & 255u; uint eb = (b >> 23u) & 255u; uint ma = a & 0x7FFFFFu; uint mb = b & 0x7FFFFFu;\n  if (FTZ) { if (ea == 0u) ma = 0u; if (eb == 0u) mb = 0u; }\n  if (ea == 255u && ma != 0u) return 0x7FC00000u;\n  if (eb == 255u && mb != 0u) return 0x7FC00000u;\n  bool az = ea == 0u && ma == 0u; bool bz = eb == 0u && mb == 0u;\n  if ((ea == 255u && eb == 255u) || (az && bz)) return 0x7FC00000u;\n  if (ea == 255u || bz) return s | 0x7F800000u;\n  if (eb == 255u || az) return s;\n  int xa = int(ea); int xb = int(eb);\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); xa = 1 - k; } else { ma |= 0x800000u; }\n  if (eb == 0u) { int k = 23 - findMSB(mb); mb <<= uint(k); xb = 1 - k; } else { mb |= 0x800000u; }\n  int e = xa - xb + 127;\n  if (ma < mb) { ma <<= 1u; e -= 1; }\n  uint q = 0u; uint r = ma;\n  for (int i = 0; i < 26; i++) { q <<= 1u; if (r >= mb) { r -= mb; q |= 1u; } r <<= 1u; }\n  return f32_round(s, e, q, r != 0u);\n}\nuint f32_sqrt(uint a) {\n  uint ea = (a >> 23u) & 255u; uint ma = a & 0x7FFFFFu;\n  if (FTZ && ea == 0u) ma = 0u;\n  if (ea == 255u && ma != 0u) return 0x7FC00000u;\n  if (ea == 0u && ma == 0u) return a & 0x80000000u;\n  if ((a & 0x80000000u) != 0u) return 0x7FC00000u;\n  if (ea == 255u) return a;\n  int e = int(ea) - 127;\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); e = -126 - k; } else { ma |= 0x800000u; }\n  if ((e & 1) != 0) { ma <<= 1u; e -= 1; }\n  uint hi = ma >> 5u; uint lo = ma << 27u; uint r = 0u; uint root = 0u;\n  for (int i = 0; i < 26; i++) {\n    int p = 50 - 2 * i; uint two = p >= 32 ? (hi >> uint(p - 32)) & 3u : (lo >> uint(p)) & 3u;\n    r = (r << 2u) | two; uint trial = (root << 2u) | 1u; root <<= 1u;\n    if (r >= trial) { r -= trial; root |= 1u; }\n  }\n  return f32_round(0u, e / 2 + 127, root, r != 0u);\n}\nuvec2 w_shl(uvec2 v, int n) {\n  if (n == 0) return v;\n  if (n >= 32) return uvec2(v.y << uint(n - 32), 0u);\n  return uvec2((v.x << uint(n)) | (v.y >> uint(32 - n)), v.y << uint(n));\n}\nuvec2 w_shr(uvec2 v, int n) {\n  // Shifted right with every bit lost jammed into bit 0.\n  if (n == 0) return v;\n  if (n >= 64) return uvec2(0u, (v.x | v.y) != 0u ? 1u : 0u);\n  uvec2 r; bool lost;\n  if (n >= 32) { int k = n - 32; r = uvec2(0u, k == 0 ? v.x : v.x >> uint(k)); lost = v.y != 0u || (k != 0 && (v.x & ((1u << uint(k)) - 1u)) != 0u); }\n  else { r = uvec2(v.x >> uint(n), (v.y >> uint(n)) | (v.x << uint(32 - n))); lost = (v.y & ((1u << uint(n)) - 1u)) != 0u; }\n  if (lost) r.y |= 1u;\n  return r;\n}\nuint f32_fma(uint a, uint b, uint c) {\n  uint sp = (a ^ b) & 0x80000000u; uint sc = c & 0x80000000u;\n  uint ea = (a >> 23u) & 255u; uint eb = (b >> 23u) & 255u; uint ec = (c >> 23u) & 255u; uint ma = a & 0x7FFFFFu; uint mb = b & 0x7FFFFFu; uint mc = c & 0x7FFFFFu;\n  if (FTZ) { if (ea == 0u) ma = 0u; if (eb == 0u) mb = 0u; if (ec == 0u) mc = 0u; }\n  if ((ea == 255u && ma != 0u) || (eb == 255u && mb != 0u) || (ec == 255u && mc != 0u)) return 0x7FC00000u;\n  bool az = ea == 0u && ma == 0u; bool bz = eb == 0u && mb == 0u; bool cz = ec == 0u && mc == 0u;\n  if ((ea == 255u && bz) || (eb == 255u && az)) return 0x7FC00000u;\n  if (ea == 255u || eb == 255u) { if (ec == 255u && sc != sp) return 0x7FC00000u; return sp | 0x7F800000u; }\n  if (ec == 255u) return c;\n  if (az || bz) { if (cz) return sp & sc; return c; }\n  int xa = int(ea); int xb = int(eb);\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); xa = 1 - k; } else { ma |= 0x800000u; }\n  if (eb == 0u) { int k = 23 - findMSB(mb); mb <<= uint(k); xb = 1 - k; } else { mb |= 0x800000u; }\n  // The product exactly, its top bit moved to bit 61; tb is that bit's unbiased exponent.\n  uvec2 big; umulExtended(ma, mb, big.x, big.y);\n  int top = 32 + findMSB(big.x);\n  int tb = xa + xb - 254 - 46 + top;\n  big = w_shl(big, 61 - top);\n  uint sb = sp;\n  if (!cz) {\n    int xc = int(ec);\n    if (ec == 0u) { int k = 23 - findMSB(mc); mc <<= uint(k); xc = 1 - k; } else { mc |= 0x800000u; }\n    uvec2 small = uvec2(mc << 6u, 0u); int ts = xc - 127; uint ss = sc;\n    if (ts > tb) { uvec2 w = big; big = small; small = w; int x = tb; tb = ts; ts = x; uint s = sb; sb = ss; ss = s; }\n    small = w_shr(small, tb - ts);\n    uint carry; uint borrow;\n    if (sb == ss) { big.y = uaddCarry(big.y, small.y, carry); big.x = big.x + small.x + carry; }\n    else {\n      if (big.x < small.x || (big.x == small.x && big.y < small.y)) { uvec2 w = big; big = small; small = w; sb = ss; }\n      big.y = usubBorrow(big.y, small.y, borrow); big.x = big.x - small.x - borrow;\n      if ((big.x | big.y) == 0u) return 0u;\n    }\n  }\n  int t = big.x != 0u ? 32 + findMSB(big.x) : findMSB(big.y);\n  uint q = t >= 25 ? w_shr(big, t - 25).y : big.y << uint(25 - t);\n  return f32_round(sb, tb - 61 + t + 127, q, false);\n}\n"
+    ret "uint f32_round_x(uint s, int e, uint q, bool sticky, bool flush) {\n  // q: 26 bits, the leading one at bit 25; e: the biased exponent of that one.\n  if (e <= 0) {\n    if (flush) {\n      uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n      if (e == 0 && m == 16777216u) return s | 0x00800000u;\n      return s;\n    }\n    int shift = 1 - e;\n    if (shift > 26) { sticky = sticky || q != 0u; q = 0u; } else { sticky = sticky || (q & ((1u << uint(shift)) - 1u)) != 0u; q >>= uint(shift); }\n    uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n    return s | m;\n  }\n  uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n  if (m == 16777216u) { m = 8388608u; e += 1; }\n  if (e >= 255) return s | 0x7F800000u;\n  return s | (uint(e) << 23u) | (m & 0x7FFFFFu);\n}\nuint f32_round(uint s, int e, uint q, bool sticky) { return f32_round_x(s, e, q, sticky, FTZ); }\nuint f32_div(uint a, uint b) {\n  uint s = (a ^ b) & 0x80000000u; uint ea = (a >> 23u) & 255u; uint eb = (b >> 23u) & 255u; uint ma = a & 0x7FFFFFu; uint mb = b & 0x7FFFFFu;\n  if (FTZ) { if (ea == 0u) ma = 0u; if (eb == 0u) mb = 0u; }\n  if (ea == 255u && ma != 0u) return 0x7FC00000u;\n  if (eb == 255u && mb != 0u) return 0x7FC00000u;\n  bool az = ea == 0u && ma == 0u; bool bz = eb == 0u && mb == 0u;\n  if ((ea == 255u && eb == 255u) || (az && bz)) return 0x7FC00000u;\n  if (ea == 255u || bz) return s | 0x7F800000u;\n  if (eb == 255u || az) return s;\n  int xa = int(ea); int xb = int(eb);\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); xa = 1 - k; } else { ma |= 0x800000u; }\n  if (eb == 0u) { int k = 23 - findMSB(mb); mb <<= uint(k); xb = 1 - k; } else { mb |= 0x800000u; }\n  int e = xa - xb + 127;\n  if (ma < mb) { ma <<= 1u; e -= 1; }\n  uint q = 0u; uint r = ma;\n  for (int i = 0; i < 26; i++) { q <<= 1u; if (r >= mb) { r -= mb; q |= 1u; } r <<= 1u; }\n  return f32_round(s, e, q, r != 0u);\n}\nuint f32_sqrt(uint a) {\n  uint ea = (a >> 23u) & 255u; uint ma = a & 0x7FFFFFu;\n  if (FTZ && ea == 0u) ma = 0u;\n  if (ea == 255u && ma != 0u) return 0x7FC00000u;\n  if (ea == 0u && ma == 0u) return a & 0x80000000u;\n  if ((a & 0x80000000u) != 0u) return 0x7FC00000u;\n  if (ea == 255u) return a;\n  int e = int(ea) - 127;\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); e = -126 - k; } else { ma |= 0x800000u; }\n  if ((e & 1) != 0) { ma <<= 1u; e -= 1; }\n  uint hi = ma >> 5u; uint lo = ma << 27u; uint r = 0u; uint root = 0u;\n  for (int i = 0; i < 26; i++) {\n    int p = 50 - 2 * i; uint two = p >= 32 ? (hi >> uint(p - 32)) & 3u : (lo >> uint(p)) & 3u;\n    r = (r << 2u) | two; uint trial = (root << 2u) | 1u; root <<= 1u;\n    if (r >= trial) { r -= trial; root |= 1u; }\n  }\n  return f32_round(0u, e / 2 + 127, root, r != 0u);\n}\nuvec2 w_shl(uvec2 v, int n) {\n  if (n == 0) return v;\n  if (n >= 32) return uvec2(v.y << uint(n - 32), 0u);\n  return uvec2((v.x << uint(n)) | (v.y >> uint(32 - n)), v.y << uint(n));\n}\nuvec2 w_shr(uvec2 v, int n) {\n  // Shifted right with every bit lost jammed into bit 0.\n  if (n == 0) return v;\n  if (n >= 64) return uvec2(0u, (v.x | v.y) != 0u ? 1u : 0u);\n  uvec2 r; bool lost;\n  if (n >= 32) { int k = n - 32; r = uvec2(0u, k == 0 ? v.x : v.x >> uint(k)); lost = v.y != 0u || (k != 0 && (v.x & ((1u << uint(k)) - 1u)) != 0u); }\n  else { r = uvec2(v.x >> uint(n), (v.y >> uint(n)) | (v.x << uint(32 - n))); lost = (v.y & ((1u << uint(n)) - 1u)) != 0u; }\n  if (lost) r.y |= 1u;\n  return r;\n}\nuint f32_fma(uint a, uint b, uint c) {\n  uint sp = (a ^ b) & 0x80000000u; uint sc = c & 0x80000000u;\n  uint ea = (a >> 23u) & 255u; uint eb = (b >> 23u) & 255u; uint ec = (c >> 23u) & 255u; uint ma = a & 0x7FFFFFu; uint mb = b & 0x7FFFFFu; uint mc = c & 0x7FFFFFu;\n  if ((ea == 255u && ma != 0u) || (eb == 255u && mb != 0u) || (ec == 255u && mc != 0u)) return 0x7FC00000u;\n  bool az = ea == 0u && ma == 0u; bool bz = eb == 0u && mb == 0u; bool cz = ec == 0u && mc == 0u;\n  if ((ea == 255u && bz) || (eb == 255u && az)) return 0x7FC00000u;\n  if (ea == 255u || eb == 255u) { if (ec == 255u && sc != sp) return 0x7FC00000u; return sp | 0x7F800000u; }\n  if (ec == 255u) return c;\n  if (az || bz) { if (cz) return sp & sc; return c; }\n  int xa = int(ea); int xb = int(eb);\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); xa = 1 - k; } else { ma |= 0x800000u; }\n  if (eb == 0u) { int k = 23 - findMSB(mb); mb <<= uint(k); xb = 1 - k; } else { mb |= 0x800000u; }\n  // The product exactly, its top bit moved to bit 61; tb is that bit's unbiased exponent.\n  uvec2 big; umulExtended(ma, mb, big.x, big.y);\n  int top = 32 + findMSB(big.x);\n  int tb = xa + xb - 254 - 46 + top;\n  big = w_shl(big, 61 - top);\n  uint sb = sp;\n  if (!cz) {\n    int xc = int(ec);\n    if (ec == 0u) { int k = 23 - findMSB(mc); mc <<= uint(k); xc = 1 - k; } else { mc |= 0x800000u; }\n    uvec2 small = uvec2(mc << 6u, 0u); int ts = xc - 127; uint ss = sc;\n    if (ts > tb) { uvec2 w = big; big = small; small = w; int x = tb; tb = ts; ts = x; uint s = sb; sb = ss; ss = s; }\n    small = w_shr(small, tb - ts);\n    uint carry; uint borrow;\n    if (sb == ss) { big.y = uaddCarry(big.y, small.y, carry); big.x = big.x + small.x + carry; }\n    else {\n      if (big.x < small.x || (big.x == small.x && big.y < small.y)) { uvec2 w = big; big = small; small = w; sb = ss; }\n      big.y = usubBorrow(big.y, small.y, borrow); big.x = big.x - small.x - borrow;\n      if ((big.x | big.y) == 0u) return 0u;\n    }\n  }\n  int t = big.x != 0u ? 32 + findMSB(big.x) : findMSB(big.y);\n  uint q = t >= 25 ? w_shr(big, t - 25).y : big.y << uint(25 - t);\n  return f32_round_x(sb, tb - 61 + t + 127, q, false, false);\n}\n"
 }
 
 error Unsupported
@@ -215,7 +235,7 @@ fn type_name(code: u8) -> str {
 
 fn type_bytes(code: u8) -> usize {
     if code == 1u8 || code == 2u8 || code == 3u8 { ret 1usize }
-    if code == 4u8 || code == 5u8 { ret 2usize }
+    if code == 4u8 || code == 5u8 || narrow_code(code) { ret 2usize }
     if code == 8u8 || code == 9u8 || (code == T_F64) { ret 8usize }
     ret 4usize
 }
@@ -227,6 +247,19 @@ fn is_signed(code: u8) -> bool {
 fn is_wide(code: u8) -> bool { ret code == 8u8 || code == 9u8 }
 
 fn is_float(code: u8) -> bool { ret code == T_F32 || code == T_F64 }
+
+fn narrow_code(code: u8) -> bool { ret code == T_F16 || code == T_BF16 }
+
+// The helper that widens a narrow value's bits to f32 bits, and the one that rounds f32 bits back.
+fn narrow_widen(code: u8) -> str {
+    if (code == T_F16) { ret "h_bits_to_f32" }
+    ret "bf_bits_to_f32"
+}
+
+fn narrow_round(code: u8) -> str {
+    if (code == T_F16) { ret "f32_bits_to_h" }
+    ret "f32_bits_to_bf"
+}
 
 // The unsigned type a magnitude of `code` is held in.
 fn unsigned_name(code: u8) -> str {
@@ -252,6 +285,8 @@ fn value_type(ty: check.Type) -> u8 {
     if ty.kind == .Float {
         if same(ty.name, "f32") { ret 10u8 }
         if same(ty.name, "f64") { ret 11u8 }
+        if same(ty.name, "f16") { ret 13u8 }
+        if same(ty.name, "bf16") { ret 14u8 }
         ret 0u8
     }
     if ty.kind == .Integer {
@@ -523,11 +558,13 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     if m.wg_round { put(&m.body, "shared uint wg_pc;\n") }
     if m.needs_dfma || m.helper_dfma { put(&m.body, dfma_source()) }
     if m.shared_words == 0usize && m.helper_shared { put(&m.body, "shared uint tg[1];\n") }
-    if m.needs_divide || m.needs_sqrt || m.helper_exact {
+    if m.needs_divide || m.needs_sqrt || m.helper_exact || m.needs_narrow64 || m.helper_narrow64 {
         // An `ftz` kernel (spec section 11, D4203) flushes in the exact sequences as the CPU's FTZ and DAZ do; its helpers too.
         if (check.kernel_fact(c, checked) & 128usize) != 0usize { put(&m.body, "const bool FTZ = true;\n") } else { put(&m.body, "const bool FTZ = false;\n") }
         put(&m.body, exact_source())
     }
+    if m.needs_narrow || m.helper_narrow { put(&m.body, narrow_source()) }
+    if m.needs_narrow64 || m.helper_narrow64 { put(&m.body, narrow64_source()) }
     put_text(&m.body, &m.prototypes)
     put_text(&m.body, &m.helpers)
     put(&m.body, "void main() {\n")
@@ -610,6 +647,8 @@ fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Build
     if m.needs_divide || m.needs_sqrt { m.helper_exact = true }
     if m.needs_subgroup { m.helper_subgroup = true }
     if m.needs_dfma { m.helper_dfma = true }
+    if m.needs_narrow { m.helper_narrow = true }
+    if m.needs_narrow64 { m.helper_narrow64 = true }
     if text_has(&m.code, "tg[") { m.helper_shared = true }
     if uses_wide(function, &values) { m.helper_wide = true }
     put_text(&m.helpers, &header)
@@ -680,6 +719,8 @@ fn lower_function(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Bu
     m.needs_sqrt = false
     m.needs_subgroup = false
     m.needs_dfma = false
+    m.needs_narrow = false
+    m.needs_narrow64 = false
     var at = 0usize
     while at < function.instruction_count {
         let instruction = builder.instructions[function.first_instruction + at]
@@ -1067,6 +1108,20 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     }
     if opcode == .Sqrt {
         let source = operand(builder, instruction, 0usize)
+        if (values.kind[source] == KIND_SCALAR && narrow_code(values.ty[source])) {
+            let kind = values.ty[source]
+            m.needs_sqrt = true
+            m.needs_narrow = true
+            scalar(values, instruction.result, kind)
+            assign(t, instruction.result)
+            put(t, narrow_round(kind))
+            put(t, "(f32_sqrt(")
+            put(t, narrow_widen(kind))
+            put(t, "(v")
+            put_number(t, source)
+            put(t, ")));\n")
+            ret ok
+        }
         if (values.kind[source] == KIND_SCALAR && values.ty[source] == T_F64) {
             scalar(values, instruction.result, T_F64)
             assign(t, instruction.result)
@@ -1125,6 +1180,8 @@ fn emit_subgroup(m: *Module, builder: *nir.Builder, instruction: nir.Instruction
     }
     let ty = value_type(instruction.ty)
     let value = operand(builder, instruction, 0usize)
+    // A narrow float's reductions are not integer ones; moving its bits (broadcast, shuffle) is.
+    if narrow_code(ty) && kind >= 5usize { ret fail(m, "a subgroup reduction of f16 or bf16 is not written as GLSL") }
     if (ty == 0u8 || ty == T_BOOL || is_wide(ty) || ty == T_F64 || values.kind[value] != KIND_SCALAR || values.ty[value] != ty) { ret fail(m, "a subgroup operation on this type is not written as GLSL") }
     if ((ty == T_F32) && kind >= 8usize) { ret fail(m, "a subgroup bitwise reduction is not integer") }
     scalar(values, instruction.result, ty)
@@ -1266,6 +1323,27 @@ fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: 
     if same(callee_function.name, "fma") {
         if instruction.operand_count != 3usize { ret fail(m, "math.fma takes three operands") }
         let first = operand(builder, instruction, 0usize)
+        // f16 and bf16 (D5914): widen, fuse in f32, round once, as the CPU does.
+        if (values.kind[first] == KIND_SCALAR && narrow_code(values.ty[first])) {
+            let kind = values.ty[first]
+            m.needs_divide = true
+            m.needs_narrow = true
+            scalar(values, instruction.result, kind)
+            assign(t, instruction.result)
+            put(t, narrow_round(kind))
+            put(t, "(f32_fma(")
+            var arg = 0usize
+            while arg < 3usize {
+                if arg != 0usize { put(t, ", ") }
+                put(t, narrow_widen(kind))
+                put(t, "(v")
+                put_number(t, operand(builder, instruction, arg))
+                put(t, ")")
+                arg += 1usize
+            }
+            put(t, "));\n")
+            ret ok
+        }
         if (values.kind[first] == KIND_SCALAR && values.ty[first] == T_F64) {
             m.needs_dfma = true
             scalar(values, instruction.result, T_F64)
@@ -1610,12 +1688,114 @@ fn emit_copy(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     ret ok
 }
 
+// (D5914) Conversions to and from f16 and bf16, each one rounding of the value (the CPU's, D5913). Narrow to f32 or f64 is
+// exact; f32, f64 and an integer of 32 bits or fewer to narrow is one round-to-nearest-even in integer code (an integer of 32
+// bits or fewer is exact in f64, so through f64 it is the one rounding of its value); narrow to narrow and to an integer go
+// through f32. A 64-bit integer to narrow is not written: the CPU rounds it to f64 first.
+fn emit_narrow_cast(m: *Module, instruction: nir.Instruction, ty: u8, from: u8, source: usize, values: *Values) -> err {
+    let t = &m.code
+    m.needs_narrow = true
+    scalar(values, instruction.result, ty)
+    assign(t, instruction.result)
+    if narrow_code(from) {
+        if (ty == T_BOOL) {
+            put(t, "(v")
+            put_number(t, source)
+            put(t, " & 32767u) != 0u;\n")
+            ret ok
+        }
+        if narrow_code(ty) {
+            if ty == from {
+                put_value(t, source)
+                put(t, ";\n")
+                ret ok
+            }
+            put(t, narrow_round(ty))
+            put(t, "(")
+            put(t, narrow_widen(from))
+            put(t, "(v")
+            put_number(t, source)
+            put(t, "));\n")
+            ret ok
+        }
+        if (ty == T_F32) {
+            put(t, "uintBitsToFloat(")
+            put(t, narrow_widen(from))
+            put(t, "(v")
+            put_number(t, source)
+            put(t, "));\n")
+            ret ok
+        }
+        if (ty == T_F64) {
+            put(t, "double(uintBitsToFloat(")
+            put(t, narrow_widen(from))
+            put(t, "(v")
+            put_number(t, source)
+            put(t, ")));\n")
+            put_double_nan(t, instruction.result)
+            ret ok
+        }
+        if ty >= 2u8 && ty <= 7u8 {
+            var inner: [96]u8 = zero
+            var expression = Text { data: inner[0usize..96usize], count: 0usize, full: false }
+            put(&expression, type_name(ty))
+            put(&expression, "(uintBitsToFloat(")
+            put(&expression, narrow_widen(from))
+            put(&expression, "(v")
+            put_number(&expression, source)
+            put(&expression, ")))")
+            put_narrowed(t, ty, &expression)
+            put(t, ";\n")
+            ret ok
+        }
+        ret fail(m, "this conversion from f16 or bf16 is not yet written as GLSL")
+    }
+    // To a narrow type.
+    if (from == T_F32) {
+        put(t, narrow_round(ty))
+        put(t, "(floatBitsToUint(v")
+        put_number(t, source)
+        put(t, "));\n")
+        ret ok
+    }
+    if (from == T_F64) {
+        m.needs_narrow64 = true
+        put(t, "f64_bits_to_narrow(unpackDouble2x32(v")
+        put_number(t, source)
+        if (ty == T_F16) { put(t, "), 10, -14, 15);\n") } else { put(t, "), 7, -126, 127);\n") }
+        ret ok
+    }
+    if from >= 2u8 && from <= 7u8 {
+        var helper = "int_to_h"
+        if (ty == T_BF16) { helper = "int_to_bf" }
+        put(t, helper)
+        if is_signed(from) {
+            put(t, "((int(v")
+            put_number(t, source)
+            put(t, ") < 0) ? (0u - uint(v")
+            put_number(t, source)
+            put(t, ")) : uint(v")
+            put_number(t, source)
+            put(t, "), (int(v")
+            put_number(t, source)
+            put(t, ") < 0) ? 0x8000u : 0u);\n")
+        } else {
+            put(t, "(v")
+            put_number(t, source)
+            put(t, ", 0u);\n")
+        }
+        ret ok
+    }
+    ret fail(m, "this conversion to f16 or bf16 is not yet written as GLSL")
+}
+
 fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let source = operand(builder, instruction, 0usize)
     let ty = value_type(instruction.ty)
     if (ty == 0u8 || values.kind[source] != KIND_SCALAR) { ret fail(m, "a conversion of this type is not yet written as GLSL") }
     let from = values.ty[source]
     if (from == T_ADDRESS || ty == T_ADDRESS) && from != ty { ret fail(m, "a conversion between an address and an integer is not written as GLSL") }
+    if narrow_code(ty) || narrow_code(from) { ret emit_narrow_cast(m, instruction, ty, from, source, values) }
     scalar(values, instruction.result, ty)
     let t = &m.code
     assign(t, instruction.result)
@@ -1644,6 +1824,48 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     ret ok
 }
 
+// (D5914) f16 and bf16 arithmetic: widen both, one f32 operation, round once. Division is the exact f32 sequence, so the
+// answer is the correctly rounded f32 quotient rounded again, as the CPU's.
+fn emit_narrow_binary(m: *Module, instruction: nir.Instruction, ty: u8, left: usize, right: usize, values: *Values) -> err {
+    let t = &m.code
+    let opcode = instruction.opcode
+    var symbol = ""
+    if opcode == .Add { symbol = "+" }
+    if opcode == .Subtract { symbol = "-" }
+    if opcode == .Multiply { symbol = "*" }
+    if symbol.len == 0usize && opcode != .Divide { ret fail(m, "this f16 or bf16 operation is not yet written as GLSL") }
+    m.needs_narrow = true
+    scalar(values, instruction.result, ty)
+    assign(t, instruction.result)
+    put(t, narrow_round(ty))
+    if opcode == .Divide {
+        m.needs_divide = true
+        put(t, "(f32_div(")
+        put(t, narrow_widen(ty))
+        put(t, "(v")
+        put_number(t, left)
+        put(t, "), ")
+        put(t, narrow_widen(ty))
+        put(t, "(v")
+        put_number(t, right)
+        put(t, ")));\n")
+        ret ok
+    }
+    // The f32 result goes through floatBitsToUint and integer rounding, which nothing can fuse across.
+    put(t, "(floatBitsToUint(uintBitsToFloat(")
+    put(t, narrow_widen(ty))
+    put(t, "(v")
+    put_number(t, left)
+    put(t, ")) ")
+    put(t, symbol)
+    put(t, " uintBitsToFloat(")
+    put(t, narrow_widen(ty))
+    put(t, "(v")
+    put_number(t, right)
+    put(t, "))));\n")
+    ret ok
+}
+
 fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let left = operand(builder, instruction, 0usize)
     let right = operand(builder, instruction, 1usize)
@@ -1652,6 +1874,7 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     if (ty == T_BOOL) { ret fail(m, "an integer operation is not yet written as GLSL") }
     let opcode = instruction.opcode
     let t = &m.code
+    if narrow_code(ty) { ret emit_narrow_binary(m, instruction, ty, left, right, values) }
     var symbol = ""
     if opcode == .Add || opcode == .AddWrap { symbol = "+" }
     if opcode == .Subtract || opcode == .SubtractWrap { symbol = "-" }
@@ -1805,6 +2028,7 @@ fn emit_compare(m: *Module, builder: *nir.Builder, instruction: nir.Instruction,
     if (values.kind[left] != KIND_SCALAR || values.kind[right] != KIND_SCALAR) { ret fail(m, "a comparison has no operands") }
     if (values.ty[left] == T_BOOL) { ret fail(m, "a bool comparison is not yet written as GLSL") }
     let opcode = instruction.opcode
+    let narrow_kind = values.ty[left]
     var symbol = "=="
     if opcode == .NotEqual { symbol = "!=" }
     if opcode == .Less { symbol = "<" }
@@ -1814,6 +2038,22 @@ fn emit_compare(m: *Module, builder: *nir.Builder, instruction: nir.Instruction,
     let t = &m.code
     scalar(values, instruction.result, T_BOOL)
     assign(t, instruction.result)
+    // (D5914) f16 and bf16 compare widened, in f32, where it is exact.
+    if narrow_code(narrow_kind) {
+        m.needs_narrow = true
+        put(t, "uintBitsToFloat(")
+        put(t, narrow_widen(narrow_kind))
+        put(t, "(v")
+        put_number(t, left)
+        put(t, ")) ")
+        put(t, symbol)
+        put(t, " uintBitsToFloat(")
+        put(t, narrow_widen(narrow_kind))
+        put(t, "(v")
+        put_number(t, right)
+        put(t, "));\n")
+        ret ok
+    }
     put_value(t, left)
     put(t, " ")
     put(t, symbol)
@@ -1837,6 +2077,17 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
         put(t, "!")
         put_value(t, source)
         put(t, ";\n")
+        ret ok
+    }
+    if narrow_code(ty) && instruction.opcode == .Negate {
+        // Bit 15 flips; a NaN becomes the width's canonical one (D5914).
+        put(t, "(((v")
+        put_number(t, source)
+        put(t, " & 0x7FFFu) > ")
+        if (ty == T_F16) { put(t, "0x7C00u) ? 0x7E00u : ") } else { put(t, "0x7F80u) ? 0x7FC0u : ") }
+        put(t, "(v")
+        put_number(t, source)
+        put(t, " ^ 0x8000u));\n")
         ret ok
     }
     var inner: [32]u8 = zero

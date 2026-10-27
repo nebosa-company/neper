@@ -18,9 +18,9 @@ use x.khronos.gl
 
 error Unsupported
 
-// Int8 and Int16: GLSL narrow loads and atomic stores; Int64, Float64 and Subgroup below. Float16 waits for the CPU's f16. Whether f32
+// Int8, Int16 and Float16 (D5914: f16 and bf16 are integer code over f32, no extension): GLSL narrow loads and atomic stores; Int64, Float64 and Subgroup below. Whether f32
 // denormals survive is the driver's (GL allows either), so `open` asks: DenormPreserve when they do, Ftz when they flush.
-const CAPABILITIES: usize = 3usize
+const CAPABILITIES: usize = 11usize
 const CAP_FTZ: usize = 128usize
 const CAP_DENORM_PRESERVE: usize = 256usize
 const MAX_DEVICES: usize = 4usize

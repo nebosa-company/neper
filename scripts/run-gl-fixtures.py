@@ -22,7 +22,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LINK = os.path.join(REPO, 'tests', 'selfhost', 'fixtures', 'link')
-COMPILER = os.path.join(REPO, 'build', 'windows', 'neper-try.exe')
+COMPILER = os.environ.get('NEPER_COMPILER') or os.path.join(REPO, 'build', 'windows', 'neper-try.exe')
 # The flags the suites build a fixture with.
 FLAGS = {'gpu_fault_unchecked': ['--unchecked']}
 MAIN = re.compile(r'^fn main\(a: \*mem\.Arena, args: \[\]str\) -> err \{$', re.M)
