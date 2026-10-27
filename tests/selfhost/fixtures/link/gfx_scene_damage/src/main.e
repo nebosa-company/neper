@@ -1,7 +1,10 @@
 // `e.gfx.scene` incremental redraw: a second frame that differs from the first only in two Text
 // commands (inside a Save + Transform(scale) group, over a backdrop and rounded-rect cards that
 // fully contain the text boxes) must repaint the cards under the damage box, not leave the backdrop
-// colour there. The texts are hand-built layouts (no fonts); they differ in baseline.
+// colour there. The texts are hand-built layouts (no fonts); they differ in baseline. The box
+// `changed_box` reports (D5905, what a GL presenter uploads) holds every pixel that differs
+// between the two frames and is not the whole frame; a scene rendered again unchanged reports
+// an empty one.
 
 use e.gfx.svg
 use e.gfx.geometry
@@ -77,6 +80,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (first, first_error) = frame(a, &renderer, canvas, 0.0)
     if first_error != ok { os.exit(2i32) }
     if scene.render(&renderer, first, canvas, size) != ok { os.exit(2i32) }
+    let (first_image, first_presented_error) = gpu.presented(frames)
+    if first_presented_error != ok { os.exit(2i32) }
+    let (before, before_error) = mem.alloc[u32](a, SIDE * SIDE)
+    if before_error != ok { os.exit(2i32) }
+    if gpu.read_image(q, first_image, before) != ok { os.exit(2i32) }
     if scene.release_scene(&renderer, first) != ok { os.exit(2i32) }
     let (second, second_error) = frame(a, &renderer, canvas, 1.0)
     if second_error != ok { os.exit(3i32) }
@@ -91,5 +99,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if pixels[90usize * SIDE + 70usize] != CARD { os.exit(11i32) }
     // The margin outside every card keeps the backdrop.
     if pixels[2usize * SIDE + 2usize] != BACKDROP { os.exit(12i32) }
+    let (x0, y0, x1, y1) = scene.changed_box(&renderer)
+    if x0 >= x1 || y0 >= y1 || x1 > SIDE || y1 > SIDE { os.exit(13i32) }
+    if x0 == 0usize && y0 == 0usize && x1 == SIDE && y1 == SIDE { os.exit(14i32) }
+    var at = 0usize
+    while at < SIDE * SIDE {
+        if pixels[at] != before[at] {
+            let x = at % SIDE
+            let y = at / SIDE
+            if x < x0 || x >= x1 || y < y0 || y >= y1 { os.exit(15i32) }
+        }
+        at += 1usize
+    }
+    if scene.render(&renderer, second, canvas, size) != ok { os.exit(17i32) }
+    let (ex0, ey0, ex1, ey1) = scene.changed_box(&renderer)
+    if ex0 < ex1 && ey0 < ey1 { os.exit(18i32) }
     ret ok
 }

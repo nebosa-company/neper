@@ -43185,3 +43185,17 @@ The emitted GLSL needs nothing else past 3.1. Doubles and int64 are never offere
 The heap needed nothing new: `buffer_here` already takes `MAX_SHADER_STORAGE_BLOCK_SIZE` up to 256 MiB, and ES 3.1 guarantees 128 MiB.
 
 Mesa answers as a 3.1 driver under `MESA_GLES_VERSION_OVERRIDE=3.1`. There it takes the OES header and `gpu_gl`'s ES pass is word-equal to the CPU. The Linux suite now runs `gpu_gl` a second time that way.
+
+## D5905 — The GL presenter uploads only the box the renderer changed
+
+D5887's presenter uploaded every frame whole. `e.gfx.scene` already knows each frame's damage (D914): up to two boxes, a scroll strip, or the whole frame. Now:
+- **Renderer.** Each render keeps the pixel box that holds all of them. `scene.changed_box` answers it, and it is empty when nothing changed.
+- **App.** `e.ui.app` passes it to its window after every render with `window.report_changed`.
+- **Window.** `request_frame` hands the box to the presenter as `window.Changed`. When nothing reported one, the box is the whole frame, so any other caller of `request_frame` stays correct.
+- **Presenter.** A new size, or the first frame, still uploads whole. Otherwise only the box goes up: its rows are copied into one of two pixel-unpack buffers in turn, so filling one never waits on the upload from the other. `glTexSubImage2D` then takes the box's columns from that buffer under `UNPACK_ROW_LENGTH` and `UNPACK_SKIP_PIXELS`. An empty box uploads nothing.
+
+One box, not two. The union costs a little extra upload when two damage boxes are far apart, and saves a second buffer copy and texture update per frame.
+
+The window's own logical `damage`/`damaged` (D904) are left as they were. They are rectangles in logical units for repaint scheduling, and the presenter needs device pixels from the renderer itself.
+
+`x_khronos_gl_present` checks it at all three scales on both GL 3.3 and GLES 3.0. A box of each frame is changed and reported. The uploaded byte count must grow by exactly that box, the back buffer must equal the whole new frame, and an empty box must upload nothing. `gfx_scene_damage` checks that `changed_box` holds every pixel that differs between two frames, is not the whole frame, and is empty when an unchanged scene is rendered again.

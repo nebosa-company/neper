@@ -5,8 +5,10 @@
 // window -- top-left anchored, no filtering, BGRA swizzled in the shader, alpha forced opaque.
 // A GL error drops the window back to `os.window_present` for the rest of the session.
 //
-// ponytail: the whole frame is uploaded every time; uploading only `window.damaged`'s rectangle
-// through two PBOs is the upgrade once e.ui.app reports damage to the window.
+// (D5905) After the first frame of a size only the box the renderer changed is uploaded: its
+// rows go into one of two pixel-unpack buffers in turn, so filling the next never waits on the
+// upload from the last, and `glTexSubImage2D` takes the box from there. A box that is empty
+// uploads nothing.
 
 use e.mem
 use e.os
@@ -17,7 +19,7 @@ use x.khronos.gl
 error Unsupported
 error Failed
 
-type Present = struct { c: context.Context, program: u32, texture: u32, vertex_array: u32, height_slot: i32, origin_slot: i32, width: u32, height: u32, live: bool }
+type Present = struct { c: context.Context, program: u32, texture: u32, vertex_array: u32, height_slot: i32, origin_slot: i32, width: u32, height: u32, live: bool, unpack: [2]u32, next_unpack: usize, uploaded_bytes: usize }
 
 const MAX_PRESENTS: usize = 16usize
 
@@ -67,7 +69,7 @@ fn open(a: *mem.Arena, host: os.Window, options: context.Options) -> (usize, err
     if slot == MAX_PRESENTS { ret (0usize, Unsupported) }
     let (c, context_error) = context.for_window(a, host, options)
     if context_error != ok { ret (0usize, Unsupported) }
-    var p = Present { c: c, program: 0u32, texture: 0u32, vertex_array: 0u32, height_slot: 0i32, origin_slot: 0i32, width: 0u32, height: 0u32, live: true }
+    var p = Present { c: c, program: 0u32, texture: 0u32, vertex_array: 0u32, height_slot: 0i32, origin_slot: 0i32, width: 0u32, height: 0u32, live: true, unpack: zero, next_unpack: 0usize, uploaded_bytes: 0usize }
     if context.load(a, options) != ok {
         let closed = context.close(&p.c)
         ret (0usize, Unsupported)
@@ -116,6 +118,7 @@ fn open(a: *mem.Arena, host: os.Window, options: context.Options) -> (usize, err
     gl.tex_parameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, i32(gl.NEAREST))
     gl.tex_parameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, i32(gl.NEAREST))
     gl.pixel_storei(gl.UNPACK_ALIGNMENT, 4i32)
+    gl.gen_buffers(2i32, &p.unpack[0usize])
     if gl.get_error() != gl.NO_ERROR {
         let closed = context.close(&p.c)
         ret (0usize, Failed)
@@ -126,19 +129,42 @@ fn open(a: *mem.Arena, host: os.Window, options: context.Options) -> (usize, err
 
 // Draws `pixels` (BGRA8, rows from the top) into the back buffer without swapping.
 fn draw(index: usize, host: os.Window, pixels: []const u32, width: u32, height: u32) -> err {
+    ret draw_changed(index, host, pixels, width, height, window.Changed { x0: 0u32, y0: 0u32, x1: width, y1: height })
+}
+
+// The same, given that only `changed` differs from the last frame drawn.
+fn draw_changed(index: usize, host: os.Window, pixels: []const u32, width: u32, height: u32, changed: window.Changed) -> err {
     if index >= MAX_PRESENTS || !presents[index].live { ret Failed }
     if width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
     let p = &presents[index]
     if context.make_current(&p.c) != ok { ret Failed }
     let (metrics, metrics_error) = os.window_metrics(host)
     if metrics_error != ok { ret Failed }
-    let data = context.as_pointer(mem.address_of(&pixels[0usize]))
     if width != p.width || height != p.height {
-        gl.tex_image_2d(gl.TEXTURE_2D, 0i32, i32(gl.RGBA8), i32(width), i32(height), 0i32, gl.RGBA, gl.UNSIGNED_BYTE, data)
+        gl.tex_image_2d(gl.TEXTURE_2D, 0i32, i32(gl.RGBA8), i32(width), i32(height), 0i32, gl.RGBA, gl.UNSIGNED_BYTE, context.as_pointer(mem.address_of(&pixels[0usize])))
         p.width = width
         p.height = height
+        p.uploaded_bytes += usize(width) * usize(height) * 4usize
     } else {
-        gl.tex_sub_image_2d(gl.TEXTURE_2D, 0i32, 0i32, 0i32, i32(width), i32(height), gl.RGBA, gl.UNSIGNED_BYTE, data)
+        var x1 = changed.x1
+        var y1 = changed.y1
+        if x1 > width { x1 = width }
+        if y1 > height { y1 = height }
+        if changed.x0 < x1 && changed.y0 < y1 {
+            // The box's rows, whole, into the next unpack buffer; the texture takes the box's columns from them.
+            let first = usize(changed.y0) * usize(width)
+            let bytes = (usize(y1) - usize(changed.y0)) * usize(width) * 4usize
+            gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, p.unpack[p.next_unpack])
+            gl.buffer_data(gl.PIXEL_UNPACK_BUFFER, isize(bytes), context.as_pointer(mem.address_of(&pixels[first])), gl.STREAM_DRAW)
+            p.next_unpack = 1usize - p.next_unpack
+            gl.pixel_storei(gl.UNPACK_ROW_LENGTH, i32(width))
+            gl.pixel_storei(gl.UNPACK_SKIP_PIXELS, i32(changed.x0))
+            gl.tex_sub_image_2d(gl.TEXTURE_2D, 0i32, i32(changed.x0), i32(changed.y0), i32(x1 - changed.x0), i32(y1 - changed.y0), gl.RGBA, gl.UNSIGNED_BYTE, nil)
+            gl.pixel_storei(gl.UNPACK_ROW_LENGTH, 0i32)
+            gl.pixel_storei(gl.UNPACK_SKIP_PIXELS, 0i32)
+            gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, 0u32)
+            p.uploaded_bytes += usize(x1 - changed.x0) * usize(y1 - changed.y0) * 4usize
+        }
     }
     // The frame hangs from the window's top edge, as the software blit draws it.
     let origin = i32(metrics.height) - i32(height)
@@ -155,11 +181,17 @@ fn draw(index: usize, host: os.Window, pixels: []const u32, width: u32, height: 
     ret ok
 }
 
-// The `window.Presenter` function: draw, then swap.
-fn present(index: usize, host: os.Window, pixels: []const u32, width: u32, height: u32) -> err {
-    let drawn = draw(index, host, pixels, width, height)
+// The `window.Presenter` function: draw what changed, then swap.
+fn present(index: usize, host: os.Window, pixels: []const u32, width: u32, height: u32, changed: window.Changed) -> err {
+    let drawn = draw_changed(index, host, pixels, width, height, changed)
     if drawn != ok { ret drawn }
     ret context.swap(&presents[index].c)
+}
+
+// The texel bytes uploaded so far, for a test that checks only the changed box went up.
+fn uploaded(index: usize) -> usize {
+    if index >= MAX_PRESENTS || !presents[index].live { ret 0usize }
+    ret presents[index].uploaded_bytes
 }
 
 // Shows `w`'s frames through GL from its next `request_frame` on.

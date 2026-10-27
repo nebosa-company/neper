@@ -194,6 +194,9 @@ fn present_frame(s: *State) -> err {
     if canvas_error != ok { ret Failed }
     let render_error = scene.render_scaled(&s.renderer, compiled, canvas, metrics.logical_size, metrics.scale)
     if render_error != ok { ret render_error }
+    // (D5905) A presenter uploads only what the renderer changed.
+    let (x0, y0, x1, y1) = scene.changed_box(&s.renderer)
+    if window.report_changed(&s.win, window.Changed { x0: u32(x0), y0: u32(y0), x1: u32(x1), y1: u32(y1) }) != ok { ret Failed }
     if window.request_frame(&s.win) != ok { ret Failed }
     s.frames += 1u64
     s.frame_due = widget.animation_frame_requested(&s.runtime)

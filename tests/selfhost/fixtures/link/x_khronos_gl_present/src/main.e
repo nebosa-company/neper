@@ -2,12 +2,15 @@
 // buffer bit for bit. A 160x120 window takes BGRA patterns at 64x48, 96x72 and 128x96 -- one
 // logical 64x48 frame at scales 1.0, 1.5 and 2.0 -- through OpenGL 3.3 core and OpenGL ES 3.0;
 // each is drawn hanging from the top-left corner, read back before the swap, compared pixel
-// by pixel (the margin must be black), then swapped. A host without a display or GL exits 0
-// having printed why.
+// by pixel (the margin must be black), then swapped. Then (D5905) a box of each frame is
+// changed and drawn as the renderer reports it: only that box's bytes may go up, through the
+// presenter's unpack buffers, and the back buffer must again equal the whole new frame, and an
+// empty box must upload nothing. A host without a display or GL exits 0 having printed why.
 
 use e.io
 use e.mem
 use e.os
+use e.ui.window
 use x.khronos.context
 use x.khronos.gl
 use x.khronos.present
@@ -20,6 +23,29 @@ fn pattern(x: u32, y: u32, size: u32) -> u32 {
     let g = (y * 11u32) & 255u32
     let b = (x * y + 3u32) & 255u32
     ret (255u32 << 24u32) | (r << 16u32) | (g << 8u32) | b
+}
+
+// The back buffer against `pixels`, hung from the top-left corner with a black margin.
+fn compare(a: *mem.Arena, pixels: []const u32, width: u32, height: u32, base: i32) -> err {
+    let (back, back_error) = mem.alloc[u8](a, usize(WINDOW_W) * usize(WINDOW_H) * 4usize)
+    if back_error != ok { ret back_error }
+    gl.pixel_storei(gl.PACK_ALIGNMENT, 1i32)
+    gl.read_pixels(0i32, 0i32, i32(WINDOW_W), i32(WINDOW_H), gl.RGBA, gl.UNSIGNED_BYTE, context.as_pointer(mem.address_of(&back[0usize])))
+    if gl.get_error() != gl.NO_ERROR { os.exit(base + 2i32) }
+    // Window row `row` from the top is GL row WINDOW_H - 1 - row.
+    var row = 0u32
+    while row < WINDOW_H {
+        var col = 0u32
+        while col < WINDOW_W {
+            let at = (usize(WINDOW_H - 1u32 - row) * usize(WINDOW_W) + usize(col)) * 4usize
+            var want = 255u32 << 24u32
+            if row < height && col < width { want = pixels[usize(row) * usize(width) + usize(col)] }
+            if u32(back[at]) != (want >> 16u32) & 255u32 || u32(back[at + 1usize]) != (want >> 8u32) & 255u32 || u32(back[at + 2usize]) != want & 255u32 || back[at + 3usize] != 255u8 { os.exit(base + 3i32) }
+            col += 1u32
+        }
+        row += 1u32
+    }
+    ret ok
 }
 
 fn check(a: *mem.Arena, index: usize, host: os.Window, width: u32, height: u32, base: i32) -> err {
@@ -35,25 +61,26 @@ fn check(a: *mem.Arena, index: usize, host: os.Window, width: u32, height: u32, 
         y += 1u32
     }
     if present.draw(index, host, pixels, width, height) != ok { os.exit(base + 1i32) }
-    let (back, back_error) = mem.alloc[u8](a, usize(WINDOW_W) * usize(WINDOW_H) * 4usize)
-    if back_error != ok { ret back_error }
-    gl.pixel_storei(gl.PACK_ALIGNMENT, 1i32)
-    gl.read_pixels(0i32, 0i32, i32(WINDOW_W), i32(WINDOW_H), gl.RGBA, gl.UNSIGNED_BYTE, context.as_pointer(mem.address_of(&back[0usize])))
-    if gl.get_error() != gl.NO_ERROR { os.exit(base + 2i32) }
-    // Window row `row` from the top is GL row WINDOW_H - 1 - row.
-    var row = 0u32
-    while row < WINDOW_H {
-        var col = 0u32
-        while col < WINDOW_W {
-            let at = (usize(WINDOW_H - 1u32 - row) * usize(WINDOW_W) + usize(col)) * 4usize
-            var want = 255u32 << 24u32
-            if row < height && col < width { want = pattern(col, row, width) }
-            if u32(back[at]) != (want >> 16u32) & 255u32 || u32(back[at + 1usize]) != (want >> 8u32) & 255u32 || u32(back[at + 2usize]) != want & 255u32 || back[at + 3usize] != 255u8 { os.exit(base + 3i32) }
-            col += 1u32
+    try compare(a, pixels, width, height, base)
+    let whole = window.Changed { x0: 0u32, y0: 0u32, x1: width, y1: height }
+    if present.present(index, host, pixels, width, height, whole) != ok { os.exit(base + 4i32) }
+    // A box changed, and reported as the only change.
+    let changed = window.Changed { x0: width / 4u32, y0: height / 3u32, x1: width / 2u32 + 1u32, y1: height / 2u32 + 3u32 }
+    y = changed.y0
+    while y < changed.y1 {
+        var x = changed.x0
+        while x < changed.x1 {
+            pixels[usize(y) * usize(width) + usize(x)] = pixels[usize(y) * usize(width) + usize(x)] ^ 16777215u32
+            x += 1u32
         }
-        row += 1u32
+        y += 1u32
     }
-    if present.present(index, host, pixels, width, height) != ok { os.exit(base + 4i32) }
+    let before = present.uploaded(index)
+    if present.draw_changed(index, host, pixels, width, height, changed) != ok { os.exit(base + 5i32) }
+    if present.uploaded(index) - before != usize(changed.x1 - changed.x0) * usize(changed.y1 - changed.y0) * 4usize { os.exit(base + 6i32) }
+    try compare(a, pixels, width, height, base + 3i32)
+    if present.present(index, host, pixels, width, height, window.Changed { x0: 0u32, y0: 0u32, x1: 0u32, y1: 0u32 }) != ok { os.exit(base + 7i32) }
+    if present.uploaded(index) - before != usize(changed.x1 - changed.x0) * usize(changed.y1 - changed.y0) * 4usize { os.exit(base + 8i32) }
     ret ok
 }
 

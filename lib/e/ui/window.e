@@ -57,13 +57,19 @@ type State = struct {
     damaged: bool,
     presenter: Presenter,
     has_presenter: bool,
+    changed: Changed,
+    has_changed: bool,
 }
 
+// The pixels of the next frame that differ from the last one shown: `[x0, x1) x [y0, y1)`, empty when none do (D5905).
+type Changed = struct { x0: u32, y0: u32, x1: u32, y1: u32 }
+
 // Another way to show a finished frame than `os.window_present` (D5887): `x.khronos.present`
-// uploads it to a GL texture and swaps. `present(context, host, pixels, width, height)` takes
-// the frame as `os.window_present` would; any error hands this and every later frame back to
-// the software path.
-type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32) -> err }
+// uploads it to a GL texture and swaps. `present(context, host, pixels, width, height, changed)`
+// takes the frame as `os.window_present` would, with the box that differs from the last frame
+// it was given (the whole frame unless the renderer said otherwise, D5905); any error hands
+// this and every later frame back to the software path.
+type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32, Changed) -> err }
 
 var slots: [16]*State = zero
 var generations: [16]u32 = zero
@@ -114,7 +120,7 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
-    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false, presenter: zero, has_presenter: false }
+    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false, presenter: zero, has_presenter: false, changed: zero, has_changed: false }
     generations[slot] += 1u32
     slots[slot] = &states[0usize]
     live[slot] = true
@@ -243,13 +249,26 @@ fn request_frame(window: *Window) -> err {
         if gpu.read_image(s.queue, shown, s.scratch[0usize..count]) != ok { ret Invalid }
         var presented = false
         if s.has_presenter {
-            presented = s.presenter.present(s.presenter.context, s.handle, s.scratch[0usize..count], shown.width, shown.height) == ok
+            var changed = Changed { x0: 0u32, y0: 0u32, x1: shown.width, y1: shown.height }
+            if s.has_changed { changed = s.changed }
+            presented = s.presenter.present(s.presenter.context, s.handle, s.scratch[0usize..count], shown.width, shown.height, changed) == ok
             if !presented { s.has_presenter = false }
         }
         if !presented && os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
     }
     s.frame_requested = true
     s.damaged = false
+    s.has_changed = false
+    ret ok
+}
+
+// (D5905) The renderer's word on which pixels of the next frame differ from the last one: a presenter given it uploads only
+// those. Without it, the presenter takes the whole frame.
+fn report_changed(window: *Window, changed: Changed) -> err {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret state_error }
+    s.changed = changed
+    s.has_changed = true
     ret ok
 }
 
