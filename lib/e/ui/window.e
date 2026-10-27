@@ -55,7 +55,15 @@ type State = struct {
     closed: bool,
     damage: geometry.Rect,
     damaged: bool,
+    presenter: Presenter,
+    has_presenter: bool,
 }
+
+// Another way to show a finished frame than `os.window_present` (D5887): `x.khronos.present`
+// uploads it to a GL texture and swaps. `present(context, host, pixels, width, height)` takes
+// the frame as `os.window_present` would; any error hands this and every later frame back to
+// the software path.
+type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32) -> err }
 
 var slots: [16]*State = zero
 var generations: [16]u32 = zero
@@ -106,7 +114,7 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
-    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false }
+    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false, presenter: zero, has_presenter: false }
     generations[slot] += 1u32
     slots[slot] = &states[0usize]
     live[slot] = true
@@ -233,11 +241,32 @@ fn request_frame(window: *Window) -> err {
             s.scratch = scratch
         }
         if gpu.read_image(s.queue, shown, s.scratch[0usize..count]) != ok { ret Invalid }
-        if os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
+        var presented = false
+        if s.has_presenter {
+            presented = s.presenter.present(s.presenter.context, s.handle, s.scratch[0usize..count], shown.width, shown.height) == ok
+            if !presented { s.has_presenter = false }
+        }
+        if !presented && os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
     }
     s.frame_requested = true
     s.damaged = false
     ret ok
+}
+
+// Shows this window's frames through `presenter` from the next `request_frame` on.
+fn set_presenter(window: *Window, presenter: Presenter) -> err {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret state_error }
+    s.presenter = presenter
+    s.has_presenter = true
+    ret ok
+}
+
+// Whether frames still go through a presenter: false before `set_presenter`, and after one failed.
+fn presenting(window: *const Window) -> bool {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret false }
+    ret s.has_presenter
 }
 
 fn clipboard_get(a: *mem.Arena, window: *Window) -> (str, err) {

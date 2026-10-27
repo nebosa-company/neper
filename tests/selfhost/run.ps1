@@ -3668,6 +3668,13 @@ $khronosWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $khronosWindowWritten -ne 'executable written') { throw 'x_khronos_gl_window emission failed' }
 & $khronosWindowPath
 if ($LASTEXITCODE -ne 0) { throw "a window's GL context answered wrongly: exit $LASTEXITCODE" }
+# `x.khronos.present` (D5887): BGRA frames at the physical sizes of scales 1.0, 1.5 and 2.0 come
+# back from the window's back buffer bit for bit, through GL 3.3 and GLES 3.0.
+$khronosPresentPath = Join-Path $testBuild 'x-khronos-gl-present-selfhost.exe'
+$khronosPresentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_present\src\main.e') $repo 'x64' 'windows' $khronosPresentPath
+if ($LASTEXITCODE -ne 0 -or $khronosPresentWritten -ne 'executable written') { throw 'x_khronos_gl_present emission failed' }
+& $khronosPresentPath
+if ($LASTEXITCODE -ne 0) { throw "the GL presenter answered wrongly: exit $LASTEXITCODE" }
 $glTrianglePath = Join-Path $testBuild 'gl-triangle-selfhost.exe'
 $glTriangleWritten = & $compiler emit-executable (Join-Path $repo 'examples\gl_triangle.e') $repo 'x64' 'windows' $glTrianglePath
 if ($LASTEXITCODE -ne 0 -or $glTriangleWritten -ne 'executable written') { throw 'examples/gl_triangle.e emission failed' }

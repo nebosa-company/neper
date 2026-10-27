@@ -1,0 +1,101 @@
+// x.khronos.present (L178): frames handed to the GL presenter come back from the window's back
+// buffer bit for bit. A 160x120 window takes BGRA patterns at 64x48, 96x72 and 128x96 -- one
+// logical 64x48 frame at scales 1.0, 1.5 and 2.0 -- through OpenGL 3.3 core and OpenGL ES 3.0;
+// each is drawn hanging from the top-left corner, read back before the swap, compared pixel
+// by pixel (the margin must be black), then swapped. A host without a display or GL exits 0
+// having printed why.
+
+use e.io
+use e.mem
+use e.os
+use x.khronos.context
+use x.khronos.gl
+use x.khronos.present
+
+const WINDOW_W: u32 = 160u32
+const WINDOW_H: u32 = 120u32
+
+fn pattern(x: u32, y: u32, size: u32) -> u32 {
+    let r = (x * 7u32 + size) & 255u32
+    let g = (y * 11u32) & 255u32
+    let b = (x * y + 3u32) & 255u32
+    ret (255u32 << 24u32) | (r << 16u32) | (g << 8u32) | b
+}
+
+fn check(a: *mem.Arena, index: usize, host: os.Window, width: u32, height: u32, base: i32) -> err {
+    let (pixels, pixels_error) = mem.alloc[u32](a, usize(width) * usize(height))
+    if pixels_error != ok { ret pixels_error }
+    var y = 0u32
+    while y < height {
+        var x = 0u32
+        while x < width {
+            pixels[usize(y) * usize(width) + usize(x)] = pattern(x, y, width)
+            x += 1u32
+        }
+        y += 1u32
+    }
+    if present.draw(index, host, pixels, width, height) != ok { os.exit(base + 1i32) }
+    let (back, back_error) = mem.alloc[u8](a, usize(WINDOW_W) * usize(WINDOW_H) * 4usize)
+    if back_error != ok { ret back_error }
+    gl.pixel_storei(gl.PACK_ALIGNMENT, 1i32)
+    gl.read_pixels(0i32, 0i32, i32(WINDOW_W), i32(WINDOW_H), gl.RGBA, gl.UNSIGNED_BYTE, context.as_pointer(mem.address_of(&back[0usize])))
+    if gl.get_error() != gl.NO_ERROR { os.exit(base + 2i32) }
+    // Window row `row` from the top is GL row WINDOW_H - 1 - row.
+    var row = 0u32
+    while row < WINDOW_H {
+        var col = 0u32
+        while col < WINDOW_W {
+            let at = (usize(WINDOW_H - 1u32 - row) * usize(WINDOW_W) + usize(col)) * 4usize
+            var want = 255u32 << 24u32
+            if row < height && col < width { want = pattern(col, row, width) }
+            if u32(back[at]) != (want >> 16u32) & 255u32 || u32(back[at + 1usize]) != (want >> 8u32) & 255u32 || u32(back[at + 2usize]) != want & 255u32 || back[at + 3usize] != 255u8 { os.exit(base + 3i32) }
+            col += 1u32
+        }
+        row += 1u32
+    }
+    if present.present(index, host, pixels, width, height) != ok { os.exit(base + 4i32) }
+    ret ok
+}
+
+fn run(a: *mem.Arena, host: os.Window, options: context.Options, base: i32) -> err {
+    let (index, open_error) = present.open(a, host, options)
+    if open_error != ok { ret open_error }
+    if check(a, index, host, 64u32, 48u32, base) != ok { os.exit(base + 5i32) }
+    if check(a, index, host, 96u32, 72u32, base + 10i32) != ok { os.exit(base + 6i32) }
+    if check(a, index, host, 128u32, 96u32, base + 20i32) != ok { os.exit(base + 7i32) }
+    let printed = io.print(gl.c_text(gl.get_string(gl.RENDERER)))
+    let ended = io.print("\n")
+    if present.close(index) != ok { os.exit(base + 8i32) }
+    ret ok
+}
+
+fn pump() {
+    var spins = 0usize
+    while spins < 64usize {
+        let (event, any, poll_error) = os.window_poll(0i64)
+        if poll_error != ok || !any { ret }
+        spins += 1usize
+    }
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (gl_window, gl_window_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos_gl_present", width: WINDOW_W, height: WINDOW_H, resizable: false, visible: true, mode: .Windowed })
+    if gl_window_error != ok {
+        let printed = io.print("no window on this host; nothing checked\n")
+        ret ok
+    }
+    pump()
+    let gl_label = io.print("OpenGL 3.3 core present: ")
+    let gl_error = run(a, gl_window, context.Options { api: .Gl, major: 3u32, minor: 3u32 }, 10i32)
+    if gl_error != ok { let skipped = io.print("unsupported\n") }
+    if os.window_close(gl_window) != ok { os.exit(2i32) }
+    // A fresh window for ES: on Windows a window's pixel format belongs to WGL once set.
+    let (es_window, es_window_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos_gl_present es", width: WINDOW_W, height: WINDOW_H, resizable: false, visible: true, mode: .Windowed })
+    if es_window_error != ok { os.exit(3i32) }
+    pump()
+    let es_label = io.print("OpenGL ES 3.0 present: ")
+    let es_error = run(a, es_window, context.Options { api: .Gles, major: 3u32, minor: 0u32 }, 50i32)
+    if es_error != ok { let es_skipped = io.print("unsupported\n") }
+    if os.window_close(es_window) != ok { os.exit(4i32) }
+    ret ok
+}

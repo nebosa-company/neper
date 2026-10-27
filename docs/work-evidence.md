@@ -428,9 +428,9 @@ Design docs/opengl-plan.md, D5879, D5880. Needs L173. Acceptance: an NSOpenGLCon
 
 Verify-only turn, no edits. Needs L177. Run the phase 1 fixtures on Windows with the machine's own driver, and on Linux as cross-compiled ELF in WSL on Mesa llvmpipe (LIBGL_ALWAYS_SOFTWARE=1, surfaceless EGL; installing Mesa in WSL needs the user's go-ahead). Report the tails.
 
-### L178 — OpenGL 7: e.ui presents through GL (0%)
+### L178 — OpenGL 7: e.ui presents through GL (75%)
 
-Design docs/opengl-plan.md, D5877. Needs L173 and a context item (L174 or L175). Acceptance: opt-in present: .Gl in e.ui.app; only the renderer's damage boxes are uploaded, through two PBOs; one full-screen triangle with nearest sampling; vsync swap; any GL error falls back to window_present for the rest of the session; the fixture's readback equals the CPU canvas bit for bit at scales 1.0, 1.5 and 2.0.
+Done 2026-10-27 (D5887): e.ui.window.Presenter and set_presenter, with x.khronos.present.attach as the GL presenter (a hook, because e.* cannot import x.*). Frames go through one texture and a texelFetch triangle with vsync, and any error returns the window to window_present for the session. x_khronos_gl_present compares every back-buffer pixel bit for bit at 64x48, 96x72 and 128x96 through GL 3.3 and GLES 3.0, on Intel WGL, ANGLE D3D11 and Mesa llvmpipe, and is in both suites. examples/ui/main.e --gl and --gles run the controls gallery through it (screenshots taken; sampled pixels equal the software path's), and ui_app and ui_window still pass on both hosts. Remaining: uploading only the damage boxes through two PBOs, which needs e.ui.app to report damage to the window. Design docs/opengl-plan.md, D5877. Needs L173 and a context item (L174 or L175). Acceptance: opt-in present: .Gl in e.ui.app; only the renderer's damage boxes are uploaded, through two PBOs; one full-screen triangle with nearest sampling; vsync swap; any GL error falls back to window_present for the rest of the session; the fixture's readback equals the CPU canvas bit for bit at scales 1.0, 1.5 and 2.0.
 
 ### L179 — OpenGL 8: WebGL2 presentation in the browser host (0%)
 

@@ -42980,3 +42980,11 @@ Checked here:
 - Mesa 25.2.8 llvmpipe in WSL: all four contexts, plus a window through WSLg's X server.
 
 `x_khronos_gl_headless` draws a triangle into a framebuffer object. Its interior and exterior pixels are the same on any conforming driver, and on llvmpipe the whole image is checked against a golden FNV-1a hash. It then runs a compute shader that fills an SSBO. `x_khronos_gl_window` clears, scissors, reads back and swaps on an `os` window, and `examples/gl_triangle.e` draws the blended triangle (`--es` for GLES). All three are in both suites.
+
+## D5887 — e.ui presents through a hook; x.khronos.present is the GL one
+
+`e.*` never imports `x.*`, so `e.ui.app` cannot take a `present: .Gl` option as L178 first said. Instead `e.ui.window` gains `Presenter { context, present }`, `set_presenter` and `presenting`. In `request_frame`, the frame `os.window_present` would have blitted goes to the presenter, and the first error from the presenter returns that window to the software blit for good. `x.khronos.present.attach(a, window, options)` is the GL presenter. It makes a context on the host window, uploads the BGRA frame to one RGBA8 texture, and draws one full-screen triangle that `texelFetch`es pixel (x, y) from row `height - 1 - (y - origin)`. The swizzle is `.bgr`, alpha is forced to 1, and the frame hangs from the window's top edge, as the GDI and X11 blits draw it. Vsync is requested.
+
+`x_khronos_gl_present` shows BGRA patterns at 64x48, 96x72 and 128x96 (one logical frame at scales 1.0, 1.5 and 2.0) in a 160x120 window through GL 3.3 and GLES 3.0. It reads every pixel of the back buffer before the swap, including the black margin, and compares them bit for bit. It passes on Intel through WGL, ANGLE D3D11 and Mesa llvmpipe. The controls gallery (`examples/ui/main.e --gl` / `--gles`) runs through the presenter, and its sampled client pixels equal the software path's.
+
+The whole frame is uploaded on every present: `e.ui.app` does not report damage to the window yet, so a damage-only upload through two PBOs waits for that.
