@@ -9538,10 +9538,13 @@ fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64, fi: f64, fb: f64)
     let ext_b = vertical_extras(bb2)
     var inline = 0.0f64
     let (wv, has_w) = resolve_len(s.width, pbase)
+    let (rwo, has_ro) = ratio_width(l, c, to_content_h(l, c, s.height.px))
     if fi >= 0.0f64 {
         inline = fi
     } else if s.width.kind == .Px && has_w {
         inline = to_content_w(l, c, wv)
+    } else if s.width.kind == .Auto && fb < 0.0f64 && s.height.kind == .Px && s.height.pct == 0.0f64 && has_ro {
+        inline = rwo
     } else {
         // Automatic inline size of an orthogonal flow: shrink-to-fit against the container's block space (Writing Modes 3 7.3).
         clear_widths(l, c)
