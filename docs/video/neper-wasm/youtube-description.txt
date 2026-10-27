@@ -1,0 +1,44 @@
+TITLE
+Neper writes WebAssembly itself: no LLVM, the compiler runs as .wasm
+
+DESCRIPTION
+Neper's own compiler now writes WebAssembly modules (wasm32-wasi) the same way it writes Windows, Linux and macOS executables: from one typed intermediate representation, with its own emitter and no LLVM, no Emscripten and no separate linker. This 2-minute video shows what that produced, with every number measured and the limits on screen.
+
+Neper is a native language whose compiler is also its linker. WebAssembly is one more target of the same compiler.
+
+CHAPTERS
+0:00 A WebAssembly target without a toolchain
+0:21 One command: a hello world in 18,250 bytes
+0:37 Inside the emitter: structured code, 8-byte pointers, a small host interface
+0:59 Checked against the native build, fixture by fixture
+1:19 The compiler itself running as WebAssembly
+1:44 In a canvas, on an Android phone and an iPhone simulator
+2:02 Where it stops. One compiler. Every target.
+
+WHAT THE VIDEO SHOWS
+- One command: neper emit-executable hello.e . wasm32 wasi hello.wasm --release. The module is 18,250 bytes (7,060 gzipped) and took 497, 409 and 339 ms to write in three runs on a Windows machine. The same program is 12,600 bytes as a native Windows executable. Node 24 runs it. Nothing else was installed.
+- The emitter is whole-program and writes only structured control flow (loops and blocks, no goto), with a name section so a trap names the Neper function. A pointer stays eight bytes in memory, so layouts and arithmetic match x64. What WASI lacks (sockets, a poller, processes and pipes, threads, system information) comes through a small import module, neper_host, that the runner supplies. The runtime itself is Neper code in lib/e/os.wasi.e.
+- A sweep builds every link fixture for the host and for WebAssembly, runs both, and compares exit status, standard output and standard error. In the threaded sweep, 1,075 of 1,142 fixtures matched at the last full count. Each difference since has been fixed or written down with its cause in tests/wasm/sweep-expected.tsv (no memory mapping, no file locks, no signals, no dynamic libraries, no desktop services under WASI).
+- The compiler as WebAssembly: src/main.e written for wasm32-wasi is a 4,689,531-byte module of 3,330 functions. Run under Node it wrote 2,266 executables: 2,196 byte-identical to the native compiler's, 58 differing only in an embedded compiler identity, 10 refused with the same diagnostics, and 2 different in one constant that the native compiler gets wrong at its default worker count. It also compiles itself to the same bytes. Writing the compiler for x64 Windows took 1.6 s native and 5.6 s as WebAssembly.
+- In a browser the same e.ui widgets draw into a canvas. A 6.5 MB release module is the whole widget gallery. On an Android phone a tapped keyboard suggestion arrived as one delete event for the whole word, so the window now reads the edit from the text field's value. A touch hold selects a word, dragging extends it, and a toolbar offers Cut, Copy, Paste and Select all. On an iPhone simulator (iOS 17.5, Mobile Safari, driven through Appium on a macOS runner), typing, Backspace and the hold toolbar work.
+
+THE HONEST PART
+- We have not run this on a real iPhone, and not with a composing keyboard such as Japanese or Chinese. The phone checks are one Android phone and one iPhone simulator.
+- There are no draggable selection handles yet. They belong in the e.ui text field.
+- A page has no sockets or processes, so those calls answer Unsupported. Processes, pipes, sockets and system information need Node as the runner. A module has at most 4 GiB of memory, and there is no GPU device inside one.
+- 1,075 of 1,142 is the threaded sweep at the last full count. Later changes fixed more fixtures and wrote the rest down, but we have not recounted every one, so treat it as a floor.
+- The 2,266-executable comparison and the compiler timings date from when that work landed (October 25, 2026). The window size (1.7 MB, 464 KB gzipped) and the 18,250-byte hello world were measured on October 27.
+- The size comparison with a native window (2.7 MiB) is not like for like: they include different platform code.
+- The narration is a synthetic voice (Microsoft George).
+
+THE FULL WRITE-UP
+Numbers, commands, the table of what stays different and the sources: https://neper.dev/blog/neper-webassembly.html
+
+RELATED
+Ten languages, one window: what you install, and the earlier video: https://neper.dev/blog/desktop-toolchains.html
+
+LINKS
+Neper: https://neper.dev
+Source (MIT licensed): https://github.com/nebosa-company/neper
+
+#Neper #WebAssembly #WASM #WASI #Compiler #ProgrammingLanguages

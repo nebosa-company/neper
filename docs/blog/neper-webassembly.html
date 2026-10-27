@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neper writes WebAssembly itself — Neper blog</title>
+  <meta name="description" content="Neper's own compiler writes wasm32-wasi modules with no LLVM and no second toolchain: an 18 KB hello world, a 1.7 MB window, the compiler itself running as WebAssembly, and a phone keyboard in a canvas. Measured, with the limits listed.">
+  <link rel="canonical" href="https://neper.dev/blog/neper-webassembly.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Neper writes WebAssembly itself">
+  <meta property="og:description" content="One compiler, no LLVM, no Emscripten: wasm32-wasi from the same emitter that writes PE, ELF and Mach-O. What runs, what was checked against native, and where it stops.">
+  <meta property="og:url" content="https://neper.dev/blog/neper-webassembly.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/neper-webassembly.svg">
+  <meta property="article:published_time" content="2026-10-27">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 9 7, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+    figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    .text-table th, .text-table td { text-align: left; white-space: normal; vertical-align: top; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin: var(--space-8) 0; }
+    .stat { padding: var(--space-5) var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); text-align: center; }
+    .stat b { display: block; color: var(--primary); font: 400 32px/40px var(--font-display); }
+    .stat span { display: block; margin-top: var(--space-1); color: var(--on-surface-variant); font: 400 13px/18px var(--font-sans); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: var(--space-6) 0; }
+    .tiles.three { grid-template-columns: 1fr; }
+    .tile { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); }
+    .tile h3 { margin: 0 0 var(--space-2); font: 600 17px/24px var(--font-sans); }
+    .tile p { margin: 0; color: var(--on-surface-variant); font-size: 15px; line-height: 23px; }
+    .note { color: var(--on-surface-variant); font-size: 14px; line-height: 22px; }
+    .score th, .score td { font-size: 14px; line-height: 20px; }
+    .score tr.neper td { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip { display: inline-block; padding: 0 9px; border-radius: var(--radius-full); font: 600 12px/20px var(--font-sans); }
+    .chip.ok { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip.warn { background: var(--secondary-container); color: var(--on-secondary-container); }
+    .score tr.neper .chip.ok { background: var(--surface); color: var(--on-surface); }
+    .bars { margin: var(--space-6) 0 var(--space-3); }
+    .bar-row { display: grid; grid-template-columns: 200px 1fr; gap: var(--space-3); align-items: center; margin: var(--space-2) 0; font-size: 14px; line-height: 20px; }
+    .bar-track { display: flex; align-items: center; gap: var(--space-3); }
+    .bar-fill { height: 24px; min-width: 6px; border-radius: var(--radius-xs); background: var(--outline-variant); }
+    .bar-fill.n { background: var(--primary); }
+    .bar-track em { font-style: normal; color: var(--on-surface-variant); white-space: nowrap; }
+    details.lang { margin: 0 0 var(--space-2); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-low); }
+    details.lang summary { cursor: pointer; padding: var(--space-3) var(--space-4); font: 600 16px/24px var(--font-sans); }
+    details.lang[open] summary { border-bottom: 1px solid var(--outline-variant); }
+    details.lang ul { margin: 0; padding: var(--space-4) var(--space-5) var(--space-2) 36px; font-size: 15px; line-height: 23px; }
+    @media (max-width: 599px) {
+      .stats, .tiles { grid-template-columns: 1fr 1fr; }
+      .tiles { grid-template-columns: 1fr; }
+      .bar-row { grid-template-columns: 1fr; gap: var(--space-1); }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // target</div>
+      <h1>Neper writes WebAssembly itself</h1>
+      <p class="meta">October 27, 2026 · Measured with Neper's own compiler on Windows, Node 24, Chrome, and an iPhone simulator; every number is from a run, and the limits are listed</p>
+      <img class="banner" src="img/neper-webassembly.svg" width="1200" height="630" alt="Neper writes WebAssembly itself. An 18,250-byte hello world, a 1.7 MB window, and 2,196 of 2,266 executables written by neper.wasm byte-identical to the native compiler. No LLVM, no second toolchain.">
+
+      <p class="lede">The compiler that writes Windows, Linux and macOS executables now writes WebAssembly the same way: its own emitter and its own file writer, with no LLVM, no Emscripten and no separate linker. A hello world is 18,250 bytes. A window with the real renderer and widgets is 1.7 MB. The compiler itself, compiled to WebAssembly, writes the same executables as the native one, byte for byte, and the same widgets run in a canvas on a phone.</p>
+
+      <div class="stats">
+        <div class="stat"><b>18,250 B</b><span>hello world, release (7,060 gzipped)</span></div>
+        <div class="stat"><b>1.7 MB</b><span>a window with the real widgets (464 KB gzipped)</span></div>
+        <div class="stat"><b>1,075</b><span>of 1,142 fixtures match native in the threaded sweep</span></div>
+        <div class="stat"><b>2,196</b><span>of 2,266 executables neper.wasm writes are byte-identical</span></div>
+      </div>
+
+<!-- Add the video here once it is on YouTube, as in desktop-toolchains.html:
+      <figure>
+        <iframe src="https://www.youtube-nocookie.com/embed/VIDEO_ID?rel=0" title="Neper writes WebAssembly itself" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <figcaption>The same story in about two minutes, with the real commands and sizes. Captioned, with a synthetic voice. <a href="https://youtu.be/VIDEO_ID" rel="noopener noreferrer">Watch on YouTube</a>.</figcaption>
+      </figure>
+-->
+
+      <h2>One command</h2>
+      <p>The target is <code>wasm32-wasi</code>: WebAssembly with WASI preview 1, the interface that Node and most runtimes already implement. It is one more argument to the command that writes native files.</p>
+<pre><code><span class="prompt">$</span> neper emit-executable hello.e . wasm32 wasi hello.wasm --release
+executable written
+<span class="prompt">$</span> node lib/wasm/run-wasm.mjs hello.wasm
+hello, neper</code></pre>
+      <p>Three runs on a Windows machine took 497, 409 and 339 ms and wrote 18,250 bytes. The same program is 12,600 bytes as a native Windows executable. Nothing else was installed for it: no <code>clang</code>, no <code>wasm-ld</code>, no SDK. The only thing that has to exist at run time is a WebAssembly engine, which Node 24 and every current browser provide.</p>
+
+      <h2>How it is built</h2>
+      <div class="tiles">
+        <div class="tile"><h3>A whole-program emitter</h3><p>The compiler already turns a program into one typed intermediate representation, NIR, for its other back ends. <code>src/wasm.e</code> writes a module from it directly: types, imports, functions, data, and a name section so that a trap names the Neper function.</p></div>
+        <div class="tile"><h3>Structured control flow</h3><p>WebAssembly has no <code>goto</code>. Every function the emitter writes is structured: loops, blocks and ladders recovered from the program's control-flow graph, with a dispatch-loop fallback that the test suite forces on to keep it honest. The compiler's own 3,330 functions all come out structured.</p></div>
+        <div class="tile"><h3>The data layout does not change</h3><p>A pointer is still eight bytes in memory, so struct layout, compile-time results and checked <code>usize</code> arithmetic are identical to x64. In an expression a pointer is an <code>i64</code> wrapped to <code>i32</code> at each memory access. The price is one wrap per access and 4 GiB of memory; the way out is <code>wasm64</code>.</p></div>
+        <div class="tile"><h3>The runtime is Neper</h3><p>What a program asks of its host lives in <code>lib/e/os.wasi.e</code>, an ordinary Neper file, the way NeperOS's is.</p></div>
+      </div>
+
+      <h2>What a module can do</h2>
+      <p>Files, directories, the clock, random numbers and the environment go through WASI. Everything else WASI does not offer comes through a small import module, <code>neper_host</code>, that the runner supplies. These are the parts that were built and exercised:</p>
+      <div class="tiles">
+        <div class="tile"><h3>Sockets and a poller</h3><p>TCP and UDP, name resolution, and the poller that <code>e.net</code> sits on. The network fixtures (TLS, SMTP and POP3 among them) run in a module and talk over real loopback sockets.</p></div>
+        <div class="tile"><h3>Processes and pipes</h3><p>A module can start a program, read its output through a pipe and wait for it, under Node. A browser page has no processes, so there the same calls answer <code>Unsupported</code>.</p></div>
+        <div class="tile"><h3>Threads</h3><p><code>--threads</code> writes a module with shared memory and real atomics. The thread runtime is Neper code; the runner starts each thread as a worker. In a page it needs the cross-origin isolation headers.</p></div>
+        <div class="tile"><h3>System information</h3><p>CPU times, memory, uptime, disks and the process table come from the runner as the same text <code>/proc</code> gives, so Linux's parsers read them unchanged. A page that has none answers <code>Unsupported</code>.</p></div>
+      </div>
+
+      <h2>Checked against native</h2>
+      <p>A sweep builds every link fixture for the host and for WebAssembly, runs both, and compares the exit status, standard output and standard error. Of 1,142 fixtures in the threaded sweep, 1,075 matched at the last full count; each of the remainder was then either fixed or written down with its cause:</p>
+      <div class="table-scroll">
+        <table class="text-table">
+          <thead><tr><th>What differs</th><th>Why, and whose limit it is</th></tr></thead>
+          <tbody>
+            <tr><td>Memory-mapped files, file locks, signals, dynamic libraries</td><td>WASI has none of them. The program gets <code>Unsupported</code> rather than a pretence: a copy cannot keep a mapping's promise.</td></tr>
+            <tr><td>Desktop services: opening a URI, revealing a file, the trash</td><td>A module has no desktop. Windows and GPU fixtures print the unsupported line.</td></tr>
+            <tr><td>Reading a font by a host path</td><td>A module cannot reach <code>C:\Windows\Fonts</code> or a Linux path outside its preopened folders.</td></tr>
+            <tr><td>Killing a process tree on Windows</td><td>Node on Windows cannot kill a descendant that outlived its root.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The sweep keeps these in a file, <code>tests/wasm/sweep-expected.tsv</code>, and reports a run as <code>expected</code> only when the host and both exit statuses match a row. A new regression in one of them therefore still shows as a failure.</p>
+      <p>The Linux suite and the WebAssembly sweep pass in CI at the last full run on <code>master</code>, and a curated set also runs on macOS 14, plain and threaded. That is where a difference between epoll and kqueue turned up: adding an already-registered file descriptor replaces it silently on macOS, so the poller now keeps its own table.</p>
+
+      <h2>The compiler runs as WebAssembly</h2>
+      <p>The strongest test of an emitter is the largest program you have. <code>src/main.e</code>, the compiler, written for <code>wasm32-wasi</code>, is a 4,689,531-byte module of 3,330 functions. Run under Node, it compiles programs for other targets:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Result of 2,266 executables written by neper.wasm</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr><td>Byte-identical to the native compiler's</td><td class="win">2,196</td></tr>
+            <tr><td>Differing only in the embedded compiler identity (device code carries the compiler's own checksum)</td><td>58</td></tr>
+            <tr><td>Refused, with the same diagnostics as the native compiler</td><td>10</td></tr>
+            <tr><td>Different in one constant that the native compiler gets wrong at its default worker count (<code>gpu_tensor</code>)</td><td>2</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>It also compiles itself: <code>neper.wasm</code> writes <code>src/main.e</code> for <code>wasm32-wasi</code> and the bytes equal the module the native compiler wrote, a fixed point. It costs time and memory. Writing the compiler for x64 Windows takes 1.6 s native and 5.6 s as WebAssembly, with a 986 MB working set. For a WebAssembly target it is 1.8 s against 3.1 s.</p>
+
+      <h2>In a browser, and on a phone</h2>
+      <p>The same <code>e.ui</code> widgets that draw a native window draw into a canvas: the renderer produces CPU frames, the page presents the newest one each animation frame, and input crosses to the module through a shared ring. A module that is a whole gallery of widgets is 6.5 MB in release form; here it is in Chrome:</p>
+      <figure>
+        <img src="img/wasm-gallery-fields.png" width="1000" height="700" alt="The e.ui widget gallery in a Chrome canvas: text fields, a chooser, an error message under a required field." loading="lazy">
+        <figcaption>The widget gallery's Fields tab, one <code>.wasm</code> file in a Chrome canvas. The page is cross-origin isolated, which threads need.</figcaption>
+      </figure>
+      <p>A canvas is not editable, so a phone shows no keyboard for it. The page keeps a hidden text field beside it and forwards what that field receives. We checked that on an Android phone, and it found a bug that no desktop test could. Android's keyboard does not compose text for Bulgarian or English; when you tap a suggestion it sends <em>one</em> delete event that removes the whole half-typed word, then the replacement. The window turned each delete event into one Backspace, so correcting <code>outdige</code> to <code>outside</code> left the old letters in the program. The text field now keeps what was typed and the page reads the edit from the field's value before and after.</p>
+      <p>A finger has no right button, so a hold selects the word, dragging extends the selection, and on lift a small toolbar offers Cut, Copy, Paste and Select all. We confirmed it on the Android phone, then drove the same page in Mobile Safari on an iPhone simulator on a macOS runner (iOS 17.5, through Appium): typing on the on-screen keyboard, Backspace and the hold toolbar all reach the program.</p>
+      <figure>
+        <img src="img/wasm-ios-simulator.png" width="589" height="1278" alt="The counter window in Mobile Safari on an iPhone simulator: the name field holds 'hel', a toolbar with Cut, Copy, Paste and Select all is above it, and the iOS keyboard is open." loading="lazy" style="max-width: 320px; margin: 0 auto;">
+        <figcaption>The counter window in Mobile Safari on an iPhone simulator running iOS 17.5, after a hold on the text. The on-screen keyboard is iOS's own.</figcaption>
+      </figure>
+
+      <div class="callout">
+        <strong>Where it stops</strong>
+        <p>Not yet on a real iPhone, and not with a composing keyboard such as Japanese or Chinese. Selection has no draggable end handles: that belongs in <code>e.ui</code>'s text field, which lists touch handles as not built. A page has no sockets or processes, so those calls answer <code>Unsupported</code>. A module's memory is at most 4 GiB, and there is no GPU device inside one.</p>
+      </div>
+
+      <h2>Try it</h2>
+      <pre><code><span class="prompt">$</span> neper emit-executable app.e . wasm32 wasi app.wasm --release
+<span class="prompt">$</span> neper emit-executable app.e . wasm32 wasi app.wasm --release --threads
+<span class="prompt">$</span> node scripts/serve-wasm.mjs --isolated    <span class="com"># a page with the headers threads need</span></code></pre>
+      <p>Node 24 or a current browser runs the result. The window page is <code>tests/wasm/browser/ui_counter.html</code>, and <code>lib/wasm/neper-host.js</code> is the host a page of your own passes the module to.</p>
+
+      <h2>Honest limits of these numbers</h2>
+      <ul>
+        <li>The sizes are release builds of the programs named, read on one Windows machine. The native window figure, 2.7 MiB, and the WebAssembly window figure, 1.7 MB, are not a like-for-like comparison: they include different platform code.</li>
+        <li>1,075 of 1,142 is the threaded sweep at the last full count. Later changes fixed more fixtures and wrote down the rest, but we have not re-counted every one, so the figure is a floor.</li>
+        <li>The compiler comparison is for x64 Windows and Linux outputs plus WebAssembly's own, on one machine. The memory figures are Node's: V8 keeps the optimized code and the engine commits all memory up to the highest byte touched.</li>
+        <li>The phone checks are one Android phone and one iPhone simulator, with a Bulgarian and an English keyboard. The simulator taps keys one at a time and cannot show a real keyboard's autocorrect.</li>
+        <li>The narration and captions of the video are a synthetic voice.</li>
+      </ul>
+
+      <h2>Sources</h2>
+      <ul>
+        <li>The emitter: <code>src/wasm.e</code>, <code>src/wasm_code.e</code>. The host half of the runtime: <code>lib/e/os.wasi.e</code>, <code>lib/e/proc/sys/host.wasi.e</code>.</li>
+        <li>The runners: <code>lib/wasm/run-wasm.mjs</code>, <code>lib/wasm/run-wasm-host.mjs</code> (Node) and <code>lib/wasm/neper-host.js</code>, <code>lib/wasm/window.js</code> (a page).</li>
+        <li>The checks: <code>scripts/wasm-sweep.sh</code>, <code>scripts/wasm-compiler.sh</code>, <code>tests/wasm/sweep-expected.tsv</code>, <code>tests/wasm/window_edits.mjs</code>, <code>.github/workflows/ios-sim.yml</code>.</li>
+        <li>The decisions behind it are in <code>docs/decisions.md</code>, D5213 (the design), D5640 (the compiler as WebAssembly), D5835 and D5872 (what stays different), D5890 and D5891 (the phone keyboard and touch), and D5900 (the iPhone simulator).</li>
+      </ul>
+      <p>The sizes and the phone checks were measured on October 26 and 27, 2026; the compiler-as-WebAssembly and sweep figures on October 25, when that work landed. All of them drift. If one here is wrong or out of date, we want to know.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS, WebAssembly.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
