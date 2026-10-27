@@ -8,6 +8,7 @@ use e.fs
 use e.mem
 use e.os
 use e.os.shell
+use e.gpu.metal as mtl
 use e.str
 
 var results_path: str = zero
@@ -110,6 +111,65 @@ var resize_calls: u32 = zero
 // The live-resize handler (D5856): AppKit calls it from inside its own tracking loop while an edge is dragged.
 fn on_resize(w: os.Window, width: u32, height: u32) {
     resize_calls += 1u32
+}
+
+// What a real Mac's GPU does that the CI runners' paravirtual one does not (D5231, D5853): a subnormal through an add of zero, and
+// a buffer of a gibibyte reached at its last word. Both are facts the Metal backend's limits (no DenormPreserve, 256 MiB heaps)
+// rest on, so a real answer says whether those limits are the runners' or Metal's.
+fn metal_facts(a: *mem.Arena) {
+    if !mtl.available() {
+        record(a, "metal device", "none on this Mac")
+        ret
+    }
+    let (context, open_error) = mtl.open(a)
+    if open_error != ok { ret }
+    var name: [128]u8 = zero
+    let length = mtl.name(context, name[..])
+    say("Metal device: ")
+    say(name[0usize..length])
+    say("\n")
+    let source = "#include <metal_stdlib>\nusing namespace metal;\nkernel void k(device const float* x [[buffer(0)]], device float* y [[buffer(1)]], uint i [[thread_position_in_grid]]) { y[i] = x[i] + 0.0f; }\n"
+    let (pipeline, compile_error) = mtl.compile(context, source, "k")
+    if compile_error != ok { ret }
+    let (x, x_error) = mtl.buffer(context, 64usize)
+    let (y, y_error) = mtl.buffer(context, 64usize)
+    if x_error != ok || y_error != ok { ret }
+    // A subnormal f32 (below 1.1754944e-38, exponent bits zero): 0x006C03EE.
+    var bits: [1]u32 = zero
+    bits[0usize] = 7078894u32
+    let copied = os.raw_memcpy(mem.address_of(&x.bytes[0usize]), mem.address_of(&bits[0usize]), 4usize)
+    var both: [2]mtl.Buffer = zero
+    both[0usize] = x
+    both[1usize] = y
+    let one = mtl.Size { width: 1usize, height: 1usize, depth: 1usize }
+    let ran = mtl.dispatch(context, pipeline, both[..], one, one, 0usize)
+    var seen: [1]u32 = zero
+    let back = os.raw_memcpy(mem.address_of(&seen[0usize]), mem.address_of(&y.bytes[0usize]), 4usize)
+    if ran != ok {
+        record(a, "metal subnormals", "the dispatch failed")
+    } else if seen[0usize] == 7078894u32 {
+        record(a, "metal subnormals", "PRESERVED on this GPU (the runners' flushed them): .DenormPreserve could be claimed here")
+    } else {
+        record(a, "metal subnormals", "flushed to zero, as on the runners")
+    }
+    // A single buffer of 1 GiB: the runners read one back wrong; its last word is written by the kernel below.
+    let big_source = "#include <metal_stdlib>\nusing namespace metal;\nkernel void b(device float* y [[buffer(0)]], uint i [[thread_position_in_grid]]) { y[268435455u] = 7.0f; }\n"
+    let (big_pipeline, big_compile) = mtl.compile(context, big_source, "b")
+    let (big, big_error) = mtl.buffer(context, 1073741824usize)
+    if big_compile != ok || big_error != ok {
+        record(a, "metal 1 GiB buffer", "could not be made")
+        ret
+    }
+    var only: [1]mtl.Buffer = zero
+    only[0usize] = big
+    let big_ran = mtl.dispatch(context, big_pipeline, only[..], one, one, 0usize)
+    var last: [1]u32 = zero
+    let last_back = os.raw_memcpy(mem.address_of(&last[0usize]), mem.address_of(&big.bytes[1073741820usize]), 4usize)
+    if big_ran == ok && last[0usize] == 1088421888u32 {
+        record(a, "metal 1 GiB buffer", "its last word reads back: one heap of this size works here (the runners' did not)")
+    } else {
+        record(a, "metal 1 GiB buffer", "the last word did not read back, as on the runners")
+    }
 }
 
 fn red_icon() -> shell.Icon {
@@ -339,6 +399,7 @@ fn main(a: *mem.Arena) -> err {
     say(" times\n")
     ask(a, "live resize while dragging", "Did the handler count climb during the drag (more than a handful of calls), not only at the end?")
 
+    metal_facts(a)
     say("\nDone: ")
     number(passed)
     say(" passed, ")
