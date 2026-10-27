@@ -9151,8 +9151,8 @@ fn layout_abs(l: *Layout, b: u32) {
         spec_h = rh
     } else if s.height.kind == .Px && has_hv {
         spec_h = to_content_h(l, b, hv)
-    } else if has_t && has_b && !has_box_ratio(l, b) {
-        // (a box with a preferred ratio takes its height from its width instead of stretching)
+    } else if has_t && has_b && !has_box_ratio(l, b) && s.height.kind != .MinContent && s.height.kind != .MaxContent && s.height.kind != .FitContent && s.height.kind != .FitLimit {
+        // (a box with a preferred ratio takes its height from its width instead of stretching; a content keyword takes the content's)
         spec_h = maxf(0.0f64, cb_h - tv - bv - mt - mb - extras_v)
     }
     var ratio_h_abs = -1.0f64
@@ -9176,11 +9176,18 @@ fn layout_abs(l: *Layout, b: u32) {
     let bbh = bx(l, b)
     bbh.h = h + extras_v
     set_baseline(l, b)
-    if has_t && has_b && s.height.kind != .Px && !(bbh.inner == .Replaced) {
-        let restv = cb_h - tv - bv - bbh.h - mt - mb
-        if s.margin[0usize].kind == .Auto && s.margin[2usize].kind == .Auto {
-            mt = maxf(0.0f64, restv / 2.0f64)
-            mb = maxf(0.0f64, restv / 2.0f64)
+    if has_t && has_b {
+        // Over-constrained vertically: the free space goes to the auto margins (both: halves; one: all of it).
+        let restv = maxf(0.0f64, cb_h - tv - bv - bbh.h - mt - mb)
+        let amt = s.margin[0usize].kind == .Auto
+        let amb = s.margin[2usize].kind == .Auto
+        if amt && amb {
+            mt = restv / 2.0f64
+            mb = restv / 2.0f64
+        } else if amt {
+            mt = restv
+        } else if amb {
+            mb = restv
         }
     }
     bbh.margin[0usize] = mt
