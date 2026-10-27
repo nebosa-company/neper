@@ -4,6 +4,8 @@ name: ios-sim
 # page can be cross-origin isolated) and tests/wasm/ios/drive.mjs types, holds and drags, reading the program's own output.
 on:
   workflow_dispatch:
+  push:
+    branches: [ci/ios-sim]
 jobs:
   build:
     runs-on: ubuntu-latest
