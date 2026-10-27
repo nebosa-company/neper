@@ -66,9 +66,17 @@ fn probe_denormals(handle: mtl.Context) {
 
 type Slot = struct { c: context.Context, live: bool }
 
+@cc(c)
+type BufferStorageExt = extern fn(u32, isize, *void, u32)
+type BufferStoragePun = union { function: BufferStorageExt, bits: usize }
+
 var slots: [4]Slot = zero
 // The denormal answer of the last device opened; every device in a process is the same driver.
 var denormal_caps: usize = 0usize
+// (C218) Devices are OpenGL ES 3.2 contexts rather than GL 4.3 core ones; ES 3.2 is the first with `precise`.
+var use_es: bool = false
+// `glBufferStorageEXT` where the context has only the extension (OpenGL ES), else 0.
+var storage_ext: usize = 0usize
 
 fn available() -> bool { ret true }
 
@@ -82,11 +90,22 @@ fn open(a: *mem.Arena) -> (mtl.Context, err) {
     var at = 0usize
     while at < MAX_DEVICES && slots[at].live { at += 1usize }
     if at == MAX_DEVICES { ret (none, Unsupported) }
-    let options = context.Options { api: .Gl, major: 4u32, minor: 3u32 }
+    var options = context.Options { api: .Gl, major: 4u32, minor: 3u32 }
+    if use_es { options = context.Options { api: .Gles, major: 3u32, minor: 2u32 } }
     let (c, c_error) = context.headless(a, options)
     if c_error != ok { ret (none, Unsupported) }
     slots[at] = Slot { c: c, live: true }
-    if context.load(a, options) != ok || !gl.present(gl.BUFFER_STORAGE_ENTRY) {
+    storage_ext = 0usize
+    var loaded = context.load(a, options)
+    if loaded == ok && !gl.present(gl.BUFFER_STORAGE_ENTRY) {
+        storage_ext = context.resolve(a, 0usize, "glBufferStorageEXT")
+        if storage_ext == 0usize { loaded = Unsupported }
+    }
+    if loaded == ok {
+        let (major, minor, es, version_error) = gl.version()
+        if version_error != ok || es != use_es || major < options.major || (major == options.major && minor < options.minor) { loaded = Unsupported }
+    }
+    if loaded != ok {
         close(mtl.Context { device: at + 1usize, queue: 0usize })
         ret (none, Unsupported)
     }
@@ -122,7 +141,13 @@ fn buffer(handle: mtl.Context, bytes: usize) -> (mtl.Buffer, err) {
     gl.gen_buffers(1i32, &name_value)
     gl.bind_buffer(gl.SHADER_STORAGE_BUFFER, name_value)
     let flags = gl.MAP_READ_BIT | gl.MAP_WRITE_BIT | gl.MAP_PERSISTENT_BIT | gl.MAP_COHERENT_BIT
-    gl.buffer_storage(gl.SHADER_STORAGE_BUFFER, isize(bytes), nil, flags)
+    if storage_ext != 0usize {
+        var pun: BufferStoragePun = zero
+        pun.bits = storage_ext
+        pun.function(gl.SHADER_STORAGE_BUFFER, isize(bytes), nil, flags)
+    } else {
+        gl.buffer_storage(gl.SHADER_STORAGE_BUFFER, isize(bytes), nil, flags)
+    }
     let mapped = gl.map_buffer_range(gl.SHADER_STORAGE_BUFFER, 0isize, isize(bytes), flags)
     let address = mem.address_of(mapped)
     if address == 0usize || gl.get_error() != gl.NO_ERROR {
@@ -168,13 +193,26 @@ fn compile(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, err) 
         if source[end - 1usize] == 10u8 && end + 8usize <= source.len && mem.eq[u8](source[end..end + 8usize], "//entry:") { break }
         end += 1usize
     }
-    let text = source[start..end]
+    var text = source[start..end]
+    // On OpenGL ES the emitter's `#version 430` line gives way to ES 3.2's, with every precision high.
+    var header = ""
+    let desktop = "#version 430\n"
+    if use_es && text.len > desktop.len && mem.eq[u8](text[0usize..desktop.len], desktop) {
+        header = "#version 320 es\nprecision highp float;\nprecision highp int;\n"
+        text = text[desktop.len..text.len]
+    }
     let shader = gl.create_shader(gl.COMPUTE_SHADER)
-    var pointers: [1]usize = zero
-    pointers[0usize] = mem.address_of(&text[0usize])
-    var lengths: [1]i32 = zero
-    lengths[0usize] = i32(text.len)
-    gl.shader_source(shader, 1i32, mem.address_of(&pointers[0usize]), &lengths[0usize])
+    var pointers: [2]usize = zero
+    var lengths: [2]i32 = zero
+    var count = 0usize
+    if header.len != 0usize {
+        pointers[0usize] = mem.address_of(&header[0usize])
+        lengths[0usize] = i32(header.len)
+        count = 1usize
+    }
+    pointers[count] = mem.address_of(&text[0usize])
+    lengths[count] = i32(text.len)
+    gl.shader_source(shader, i32(count + 1usize), mem.address_of(&pointers[0usize]), &lengths[0usize])
     gl.compile_shader(shader)
     var status = 0i32
     gl.get_shaderiv(shader, gl.COMPILE_STATUS, &status)
@@ -225,7 +263,19 @@ fn dispatch_wait(command: usize) -> err {
     ret ok
 }
 
+// Makes `.Gl` an `e.gpu` backend over OpenGL ES 3.2 instead (C218): EGL's on Linux, ANGLE's `libEGL.dll` on Windows.
+// The emitted shaders are the same; ES needs `GL_EXT_buffer_storage` for the mapped heap.
+fn install_es() {
+    use_es = true
+    register()
+}
+
 // Makes `.Gl` an `e.gpu` backend for this program.
 fn install() {
+    use_es = false
+    register()
+}
+
+fn register() {
     gpu.install_gl(gpu.HeapDriver { available: available, name: name, open: open, close: close, buffer: buffer, free: free, compile: compile, destroy: destroy, dispatch_begin: dispatch_begin, dispatch_wait: dispatch_wait, capabilities: capabilities })
 }

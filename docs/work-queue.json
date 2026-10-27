@@ -1159,17 +1159,6 @@
       "evidence": "Design docs/opengl-plan.md, D5879, D5880. Needs L173. Acceptance: an NSOpenGLContext on the content view that window_native returns; follows the Retina backing scale; checked on the macOS CI runners. Metal (C193) keeps the Mac's compute."
     },
     {
-      "id": "T045",
-      "category": "tooling",
-      "group": "OpenGL",
-      "order": 280,
-      "title": "OpenGL verify 1 (verify-only): binding fixtures on Windows and Linux",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "low",
-      "evidence": "Verify-only turn, no edits. Needs L177. Run the phase 1 fixtures on Windows with the machine's own driver, and on Linux as cross-compiled ELF in WSL on Mesa llvmpipe (LIBGL_ALWAYS_SOFTWARE=1, surfaceless EGL; installing Mesa in WSL needs the user's go-ahead). Report the tails."
-    },
-    {
       "id": "L178",
       "category": "library",
       "group": "OpenGL",
@@ -1263,10 +1252,10 @@
       "group": "OpenGL",
       "order": 290,
       "title": "OpenGL 15: the GLES 3.1 profile",
-      "score": 0,
+      "score": 0.75,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Design docs/opengl-plan.md, D5879, D5884. Needs C217 and L181. Acceptance: #version 310 es with highp everywhere; no doubles; the heap sized up from the 128 MiB ES floor; the same fixtures pass on Mesa's GLES through EGL."
+      "evidence": "Done 2026-10-27 (D5890): x.khronos.compute.install_es() opens OpenGL ES 3.2 devices, with the shader header rewritten to #version 320 es and highp at compile time, and glBufferStorageEXT where only the extension exists. gpu_gl's ES pass is word-equal to the CPU on Mesa llvmpipe. The floor is 3.2, not 3.1, because 3.2 is the first ES with precise; ANGLE on D3D11 (3.1) is refused. Remaining: ES 3.1 devices through GL_EXT_gpu_shader5's precise, and sizing the heap from the driver's SSBO limit (fixed at 256 MiB today). Design docs/opengl-plan.md, D5879, D5884. Needs C217 and L181. Acceptance: #version 310 es with highp everywhere; no doubles; the heap sized up from the 128 MiB ES floor; the same fixtures pass on Mesa's GLES through EGL."
     },
     {
       "id": "T047",

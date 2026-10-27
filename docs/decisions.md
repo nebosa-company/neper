@@ -43025,3 +43025,9 @@ Metal's backend already worked over one host-visible heap whose ranges are the b
 `glBufferStorage` without data leaves the bytes undefined, so the probe writes every byte it reads. The context is current on the opening thread, and every call must come from that thread (the D5881 worker thread is the recorded upgrade).
 
 `gpu_gl` (built with `--gpu glsl`) runs saxpy, u8 and i16 stores racing their neighbours, signed `/` and `%` by a negative divisor, and a 2-D grid's ids. Every word equals the CPU backend's on Intel Iris Xe (the `ftz` saxpy) and on Mesa llvmpipe (the plain one), and a checked overrun comes back as a `Bounds` fault. The CPU and Vulkan fixtures (`gpu_cpu`, `gpu_fault_bounds`, `gpu_devices`, `gpu_shared`, `gpu_ftz_ops`, `gpu_present`, `gpu_vulkan_*`) still pass, including Vulkan launches from a `--gpu glsl` build.
+
+## D5890 — The GLES compute profile is ES 3.2, from the same shaders
+
+`x.khronos.compute.install_es()` makes `.Gl` open OpenGL ES 3.2 contexts instead of GL 4.3 core ones (Mesa's EGL on Linux, ANGLE's `libEGL.dll` on Windows). The emitter is unchanged. At compile time the shader's `#version 430` line gives way to `#version 320 es` with `precision highp float; precision highp int;`, passed as a second string to `glShaderSource`, so nothing is copied.
+
+The floor is ES 3.2 rather than the 3.1 the plan named, because 3.2 is the first ES with `precise`: without it a multiply and an add may be fused, and the words would no longer be the CPU's. A device that answers below 3.2 is not opened. ANGLE on D3D11, which stops at 3.1, is therefore refused rather than run inexactly. ES has `glBufferStorage` only as `GL_EXT_buffer_storage`, which the driver calls through `glBufferStorageEXT` when the core entry is absent. `gpu_gl` runs every kernel a second time through ES and is word-equal to the CPU on Mesa llvmpipe's GLES 3.2.

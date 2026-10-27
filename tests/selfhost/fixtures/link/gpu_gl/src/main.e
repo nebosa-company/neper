@@ -148,5 +148,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let named = io.print("every word equal to the CPU backend's on ")
     let device_name = io.print(found[0usize].name)
     let ended = io.print("\n")
+    ret check_es(a, cpu_out, gl_out)
+}
+
+// The same kernels through OpenGL ES 3.2 (C218): Mesa's GLES on Linux, ANGLE on Windows where it reaches 3.2.
+fn check_es(a: *mem.Arena, cpu_out: []u32, es_out: []u32) -> err {
+    compute.install_es()
+    let (found, found_error) = gpu.devices(a, .Gl, 4usize)
+    if found_error != ok || found.len == 0usize {
+        let printed = io.print("no OpenGL ES 3.2 compute device; ES not checked\n")
+        ret ok
+    }
+    var flushing = true
+    for capability in found[0usize].capabilities {
+        if capability == .DenormPreserve { flushing = false }
+    }
+    if run(a, .Cpu, cpu_out, flushing) != ok { os.exit(30i32) }
+    if run(a, .Gl, es_out, flushing) != ok { os.exit(31i32) }
+    var k = 0usize
+    while k < cpu_out.len {
+        if cpu_out[k] != es_out[k] { os.exit(32i32 + i32(k / N)) }
+        k += 1usize
+    }
+    if flushing { let mode = io.print("(ftz) ") }
+    let named = io.print("every word equal to the CPU backend's on OpenGL ES: ")
+    let device_name = io.print(found[0usize].name)
+    let ended = io.print("\n")
     ret ok
 }

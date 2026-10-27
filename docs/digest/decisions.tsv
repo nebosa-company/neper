@@ -2967,4 +2967,5 @@ D5885	2329	The GL binding is generated from the registry's headers, as one table
 D5886	2962	x.khronos.context: one EGL path, WGL without a throwaway window
 D5887	1505	e.ui presents through a hook; x.khronos.present is the GL one
 D5888	2929	`--gpu glsl`: GLSL after the SPIR-V, from src/glsl.e
-D5889	2245	e.gpu's heap backends share one driver table; x.khronos.compute is GL's
+D5889	2246	e.gpu's heap backends share one driver table; x.khronos.compute is GL's
+D5890	1030	The GLES compute profile is ES 3.2, from the same shaders

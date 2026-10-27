@@ -424,10 +424,6 @@ Done 2026-10-27 (D5886): x.khronos.context.windows. The WGL core context comes f
 
 Design docs/opengl-plan.md, D5879, D5880. Needs L173. Acceptance: an NSOpenGLContext on the content view that window_native returns; follows the Retina backing scale; checked on the macOS CI runners. Metal (C193) keeps the Mac's compute.
 
-### T045 — OpenGL verify 1 (verify-only): binding fixtures on Windows and Linux (0%)
-
-Verify-only turn, no edits. Needs L177. Run the phase 1 fixtures on Windows with the machine's own driver, and on Linux as cross-compiled ELF in WSL on Mesa llvmpipe (LIBGL_ALWAYS_SOFTWARE=1, surfaceless EGL; installing Mesa in WSL needs the user's go-ahead). Report the tails.
-
 ### L178 — OpenGL 7: e.ui presents through GL (75%)
 
 Done 2026-10-27 (D5887): e.ui.window.Presenter and set_presenter, with x.khronos.present.attach as the GL presenter (a hook, because e.* cannot import x.*). Frames go through one texture and a texelFetch triangle with vsync, and any error returns the window to window_present for the session. x_khronos_gl_present compares every back-buffer pixel bit for bit at 64x48, 96x72 and 128x96 through GL 3.3 and GLES 3.0, on Intel WGL, ANGLE D3D11 and Mesa llvmpipe, and is in both suites. examples/ui/main.e --gl and --gles run the controls gallery through it (screenshots taken; sampled pixels equal the software path's), and ui_app and ui_window still pass on both hosts. Remaining: uploading only the damage boxes through two PBOs, which needs e.ui.app to report damage to the window. Design docs/opengl-plan.md, D5877. Needs L173 and a context item (L174 or L175). Acceptance: opt-in present: .Gl in e.ui.app; only the renderer's damage boxes are uploaded, through two PBOs; one full-screen triangle with nearest sampling; vsync swap; any GL error falls back to window_present for the rest of the session; the fixture's readback equals the CPU canvas bit for bit at scales 1.0, 1.5 and 2.0.
@@ -460,9 +456,9 @@ Done 2026-10-27 (D5889): Backend.Gl over e.gpu's shared heap-driver table, with 
 
 Done 2026-10-27 (D5889): Int8 and Int16, plus DenormPreserve or Ftz from the probe at open; a kernel needing anything else is gpu.Unsupported at launch through e.gpu's existing requirement check. Remaining: Float64, Int64 and subgroups from their extensions (which also need C215 to emit them), and the shared-memory and workgroup limits. Design docs/opengl-plan.md, D5882. Needs L180. Acceptance: Float64 from ARB_gpu_shader_fp64, Int64 from ARB_gpu_shader_int64, subgroups from KHR_shader_subgroup, 32-bit atomics only, and the shared-memory and workgroup limits; a missing capability is gpu.Unsupported at launch, naming the kernel and the capability.
 
-### C218 — OpenGL 15: the GLES 3.1 profile (0%)
+### C218 — OpenGL 15: the GLES 3.1 profile (75%)
 
-Design docs/opengl-plan.md, D5879, D5884. Needs C217 and L181. Acceptance: #version 310 es with highp everywhere; no doubles; the heap sized up from the 128 MiB ES floor; the same fixtures pass on Mesa's GLES through EGL.
+Done 2026-10-27 (D5890): x.khronos.compute.install_es() opens OpenGL ES 3.2 devices, with the shader header rewritten to #version 320 es and highp at compile time, and glBufferStorageEXT where only the extension exists. gpu_gl's ES pass is word-equal to the CPU on Mesa llvmpipe. The floor is 3.2, not 3.1, because 3.2 is the first ES with precise; ANGLE on D3D11 (3.1) is refused. Remaining: ES 3.1 devices through GL_EXT_gpu_shader5's precise, and sizing the heap from the driver's SSBO limit (fixed at 256 MiB today). Design docs/opengl-plan.md, D5879, D5884. Needs C217 and L181. Acceptance: #version 310 es with highp everywhere; no doubles; the heap sized up from the 128 MiB ES floor; the same fixtures pass on Mesa's GLES through EGL.
 
 ### T047 — OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl (20%)
 
@@ -1833,3 +1829,7 @@ Closed 2026-10-27 (D5886): examples/gl_triangle.e draws a colour-blended triangl
 ### C214 — OpenGL 9: the glsl GPU target in the compiler
 
 Closed 2026-10-27 (D5888): the self-hosted compiler takes --gpu LIST (spv, ptx, glsl, none; any other item is no build), and Graph.gpu_glsl carries it into lowering. With glsl, each kernel's embedded module string gets ';' and its GLSL in hex after the SPIR-V; the launcher cuts there, and a Vulkan launch from such a build still passes (gpu_vulkan_loop, gpu_vulkan_float, gpu_vulkan_sync). The option is bit 55 of the compiler identity (OPTIONS_MASK now 55 bits). There is no target.Arch.Glsl and no K$glsl: GLSL is never a target of its own. Spec §10 gained the GL row and §13 gained --gpu glsl. Without the flag the output is unchanged: the saxpy SPIR-V golden is byte-equal and nothing follows the module. The self-hosted compiler rebuilds itself byte for byte.
+
+### T045 — OpenGL verify 1 (verify-only): binding fixtures on Windows and Linux
+
+Closed 2026-10-27: x_khronos_gl_load, x_khronos_gl_headless, x_khronos_gl_window and examples/gl_triangle pass on Windows (Intel Iris Xe through WGL; GLES through ANGLE D3D11 from PATH) and on Linux as cross-compiled ELF in WSL on Mesa 25.2.8 (llvmpipe through surfaceless EGL, and a window through WSLg's X server). The headless image matches llvmpipe's golden hash. Mesa EGL/GLES were already installed in WSL, and ANGLE was already on PATH (D:/tools/qemu).
