@@ -878,7 +878,8 @@ fn state_of(device: *Device) -> (*DeviceState, err) {
         unlock_state(found)
         ret (found, InvalidHandle)
     }
-    metal_finish(found)
+    // Not reported here: `close` and the queries come through this door, and a device that failed must still close.
+    let failed = metal_finish(found)
     ret (found, ok)
 }
 
@@ -1232,7 +1233,10 @@ fn queue_state(q: *Queue) -> (*QueueState, err) {
         unlock_state(state.device)
         ret (state, InvalidHandle)
     }
-    metal_finish(state.device)
+    if metal_finish(state.device) {
+        unlock_state(state.device)
+        ret (state, Lost)
+    }
     ret (state, ok)
 }
 
@@ -1381,7 +1385,10 @@ fn token_device(token_value: Token) -> (*DeviceState, err) {
         unlock_state(found)
         ret (found, InvalidHandle)
     }
-    metal_finish(found)
+    if metal_finish(found) {
+        unlock_state(found)
+        ret (found, Lost)
+    }
     ret (found, ok)
 }
 
@@ -1562,7 +1569,10 @@ fn queue_state_of(state: *QueueState) -> (*QueueState, err) {
         unlock_state(state.device)
         ret (state, InvalidHandle)
     }
-    metal_finish(state.device)
+    if metal_finish(state.device) {
+        unlock_state(state.device)
+        ret (state, Lost)
+    }
     ret (state, ok)
 }
 
@@ -1899,17 +1909,19 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
 
 // Waits for the launch `launch_metal` left running and reads its fault block, as the Vulkan path reads its buffer; called with the
 // device locked at every entry that could see the launch's effects.
-fn metal_finish(device: *DeviceState) {
-    if device.backend != .Metal || device.pending_command == 0usize { ret }
+fn metal_finish(device: *DeviceState) -> bool {
+    if device.backend != .Metal || device.pending_command == 0usize { ret false }
     let command = device.pending_command
     device.pending_command = 0usize
     let waited = mtl.dispatch_wait(command)
     mtl.free(device.pending_block)
-    if !device.pending_checked { ret }
+    // A command the device failed is `Lost`, once, at the call that waited for it (a launch used to say so itself).
+    if waited != ok { ret true }
+    if !device.pending_checked { ret false }
     let state = device.pending_queue
     let fault_bytes = device.heap.bytes
     let count = *mem.cast[*u32](&fault_bytes[0usize])
-    if count == 0u32 { ret }
+    if count == 0u32 { ret false }
     if state.fault_count == 0u32 {
         var kind: FaultKind = .Bounds
         let kind_value = fault_bytes[8usize]
@@ -1930,6 +1942,7 @@ fn metal_finish(device: *DeviceState) {
         }
     }
     state.fault_count += count
+    ret false
 }
 
 // The Metal pipeline for a kernel's module and entry, compiled the first time. The entry is `module.kernel`; the MSL
