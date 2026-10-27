@@ -2954,4 +2954,6 @@ D5872	737	The sweep knows which differences the platform imposes
 D5873	970	Permission bits through neper_host, and a link mid-path refused
 D5874	1365	window_on_resize on Windows, and the uses goldens become per-host
 D5875	1352	A Metal launch is committed and not waited for
-D5876	866	macos-bundle.sh can sign with entitlements and notarize, unrun
+D5876	867	macos-bundle.sh can sign with entitlements and notarize, unrun
+D5877	1702	System information reaches a WebAssembly module through neper_host, and the Windows rows are confirmed
+D5878	1201	Metal device memory is up to four heaps, an address names its heap in the top byte
