@@ -36,8 +36,8 @@ try {
   const layout = /layout 4 (\d+) (\d+) (\d+) (\d+)/.exec(await stdout())
   const field = await browser.execute((l) => {
     const r = document.getElementById('screen').getBoundingClientRect()
-    const k = r.width / 480
-    return { x: Math.round(r.left + (+l[1] + +l[3] / 2) * k), y: Math.round(r.top + (+l[2] + +l[4] / 2) * k) }
+    // the canvas is a fixed 320 px tall and at most 480 wide, so the two scales differ on a phone
+    return { x: Math.round(r.left + (+l[1] + +l[3] / 2) * r.width / 480), y: Math.round(r.top + (+l[2] + +l[4] / 2) * r.height / 320) }
   }, layout)
   console.log('field at', JSON.stringify(field))
 
