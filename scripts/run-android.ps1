@@ -5,7 +5,7 @@
 #   scripts/run-android.ps1 hello advanced gpu_cpu x_khronos_gl_headless gpu_gl
 #   scripts/run-android.ps1 -Arch aarch64 hello atomic_ops
 # `hello` is examples/hello.e. ADB is $env:ADB, else adb.exe under $env:ANDROID_SDK_ROOT, else on PATH.
-param([string]$Arch = 'x64', [Parameter(Mandatory = $true, ValueFromRemainingArguments = $true)][string[]]$Fixtures)
+param([string]$Arch = 'x64', [Parameter(Mandatory = $true, Position = 0, ValueFromRemainingArguments = $true)][string[]]$Fixtures)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $compiler = Join-Path $repo 'build\windows\neper-try.exe'
