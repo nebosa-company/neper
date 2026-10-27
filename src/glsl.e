@@ -57,6 +57,14 @@ type Module = struct {
     // below are written into its shader.
     needs_divide: bool,
     needs_sqrt: bool,
+    // (C215) The helpers the kernels reach, as GLSL functions every kernel's shader carries, and their prototypes; whether
+    // any of them needs the exact sequences; and, while one is written, its signature.
+    helpers: Text,
+    prototypes: Text,
+    helper_exact: bool,
+    signatures: *nir.Signatures,
+    in_helper: bool,
+    signature: nir.Signature,
 }
 
 // f32 division and square root on the bits, correctly rounded to nearest-even as section 11 requires; every NaN result is
@@ -232,28 +240,80 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
         *message = "the program has no kernel to write as GLSL"
         ret (no_bytes, Unsupported)
     }
-    function_at = first
+    // (C215) The kernels and every helper they reach: a helper is one GLSL function, which each kernel's shader carries.
+    let (helpers, helpers_error) = mem.alloc[u8](a, 2097152usize)
+    if helpers_error != ok { ret (no_bytes, helpers_error) }
+    let (prototypes, prototypes_error) = mem.alloc[u8](a, 262144usize)
+    if prototypes_error != ok { ret (no_bytes, prototypes_error) }
+    m.helpers.data = helpers
+    m.prototypes.data = prototypes
+    m.signatures = signatures
+    let (reachable, reachable_error) = mem.alloc[bool](a, builder.function_count + 1usize)
+    if reachable_error != ok { ret (no_bytes, reachable_error) }
+    var has_calls = false
+    function_at = 0usize
+    while function_at < builder.function_count {
+        reachable[function_at] = is_kernel(c, builder, first, function_at)
+        function_at += 1usize
+    }
+    function_at = 0usize
     while function_at < builder.function_count {
         let function = builder.functions[function_at]
-        let (index, found) = check.find_function(c, function.module_index, function.name)
         var instruction_at = function.first_instruction
-        if !found || !c.functions[index].gpu { instruction_at = function.first_instruction + function.instruction_count }
         while instruction_at < function.first_instruction + function.instruction_count {
-            if builder.instructions[instruction_at].opcode == .Call {
-                *message = "a kernel calls a helper, which the GLSL emitter does not write yet"
-                ret (no_bytes, Unsupported)
-            }
+            if builder.instructions[instruction_at].opcode == .Call { has_calls = true }
             instruction_at += 1usize
         }
         function_at += 1usize
     }
-    m.checked = !builder.nocheck && reachable_checked(builder, first)
+    if has_calls {
+        nir.resolve_reference_targets(builder)
+        var changed = true
+        while changed {
+            changed = false
+            function_at = 0usize
+            while function_at < builder.function_count {
+                if reachable[function_at] {
+                    let function = builder.functions[function_at]
+                    var instruction_at = function.first_instruction
+                    while instruction_at < function.first_instruction + function.instruction_count {
+                        let instruction = builder.instructions[instruction_at]
+                        if instruction.opcode == .Call {
+                            let (callee, found) = callee_of(builder, instruction)
+                            if !found {
+                                *message = "a helper call has no GLSL body"
+                                ret (no_bytes, Unsupported)
+                            }
+                            if !reachable[callee] {
+                                reachable[callee] = true
+                                changed = true
+                            }
+                        }
+                        instruction_at += 1usize
+                    }
+                }
+                function_at += 1usize
+            }
+        }
+    }
+    m.checked = !builder.nocheck && reachable_checked(builder, reachable)
     *has_checks = m.checked
+    function_at = 0usize
+    while function_at < builder.function_count {
+        if reachable[function_at] && !is_kernel(c, builder, first, function_at) {
+            let helper_error = emit_helper(a, &m, c, builder, function_at)
+            if helper_error != ok {
+                *message = m.failure
+                ret (no_bytes, helper_error)
+            }
+        }
+        function_at += 1usize
+    }
     function_at = first
     while function_at < builder.function_count {
-        let function = builder.functions[function_at]
-        let (index, found) = check.find_function(c, function.module_index, function.name)
-        if found && c.functions[index].gpu {
+        if is_kernel(c, builder, first, function_at) {
+            let function = builder.functions[function_at]
+            let (index, found) = check.find_function(c, function.module_index, function.name)
             let kernel_error = emit_kernel(a, &m, c, g, builder, function_at, index)
             if kernel_error != ok {
                 *message = m.failure
@@ -262,19 +322,34 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
         }
         function_at += 1usize
     }
-    if m.body.full || m.code.full {
+    if m.body.full || m.code.full || m.helpers.full || m.prototypes.full {
         *message = "the GLSL source is longer than the emitter's buffer"
         ret (no_bytes, mem.Exhausted)
     }
     ret (m.body.data[0usize..m.body.count], ok)
 }
 
-// Whether any trap, bounds check or slice check can write a fault.
-fn reachable_checked(builder: *nir.Builder, first: usize) -> bool {
-    var function_at = first
+fn is_kernel(c: *check.Checker, builder: *nir.Builder, first: usize, function_at: usize) -> bool {
+    if function_at < first { ret false }
+    let function = builder.functions[function_at]
+    let (index, found) = check.find_function(c, function.module_index, function.name)
+    ret found && c.functions[index].gpu
+}
+
+fn callee_of(builder: *nir.Builder, instruction: nir.Instruction) -> (usize, bool) {
+    if instruction.immediate >= builder.function_ref_count { ret (0usize, false) }
+    let (callee, found) = nir.function_for_reference(builder, builder.function_refs[instruction.immediate])
+    if !found || callee >= builder.function_count { ret (0usize, false) }
+    ret (callee, true)
+}
+
+// Whether any trap, bounds check or slice check in a reachable function can write a fault.
+fn reachable_checked(builder: *nir.Builder, reachable: []const bool) -> bool {
+    var function_at = 0usize
     while function_at < builder.function_count {
         let function = builder.functions[function_at]
         var at = function.first_instruction
+        if !reachable[function_at] { at = function.first_instruction + function.instruction_count }
         while at < function.first_instruction + function.instruction_count {
             let instruction = builder.instructions[at]
             if instruction.opcode == .Trap { ret true }
@@ -337,14 +412,155 @@ fn scalar(values: *Values, value: usize, ty: u8) {
 }
 
 fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, function_at: usize, checked: usize) -> err {
-    let function = builder.functions[function_at]
     let kernel = c.functions[checked]
-    var values: Values = zero
-    try init_values(a, &values, function.value_count + 1usize)
+    m.in_helper = false
+    m.shared_words = 0usize
+    var no_values: Values = zero
+    var values = no_values
+    try lower_function(a, m, c, builder, function_at, kernel, &values)
+    put(&m.body, "//entry:")
+    put_entry_name(&m.body, g, kernel)
+    put(&m.body, "\n#version 430\n")
+    let size = usize(kernel.gpu_size)
+    put(&m.body, "layout(local_size_x = ")
+    put_number(&m.body, size % 1024usize + 1usize)
+    put(&m.body, ", local_size_y = ")
+    put_number(&m.body, size / 1024usize % 1024usize + 1usize)
+    put(&m.body, ", local_size_z = ")
+    put_number(&m.body, size / 1048576usize % 1024usize + 1usize)
+    put(&m.body, ") in;\nlayout(std430, binding = 0) readonly buffer Args { uint args[]; };\nlayout(std430, binding = 1) buffer Heap { uint heap[]; };\n")
+    if m.shared_words != 0usize {
+        put(&m.body, "shared uint tg[")
+        put_number(&m.body, m.shared_words)
+        put(&m.body, "];\n")
+    }
+    if m.needs_divide || m.needs_sqrt || m.helper_exact {
+        // An `ftz` kernel (spec section 11, D4203) flushes in the exact sequences as the CPU's FTZ and DAZ do; its helpers too.
+        if (check.kernel_fact(c, checked) & 128usize) != 0usize { put(&m.body, "const bool FTZ = true;\n") } else { put(&m.body, "const bool FTZ = false;\n") }
+        put(&m.body, exact_source())
+    }
+    put_text(&m.body, &m.prototypes)
+    put_text(&m.body, &m.helpers)
+    put(&m.body, "void main() {\n")
+    put_locals(m, builder.functions[function_at], &values, &m.body)
+    put(&m.body, "  return;\n}\n")
+    ret ok
+}
+
+fn put_text(t: *Text, from: *Text) { put(t, from.data[0usize..from.count]) }
+
+// A helper as a GLSL function `hN`: scalars by value, an aggregate as its words, a shared pointer as its byte offset.
+fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Builder, function_at: usize) -> err {
+    if function_at >= m.signatures.count { ret fail(m, "a helper has no signature") }
+    let signature = m.signatures.entries[function_at]
+    if signature.return_count > 1usize { ret fail(m, "a helper returns more than one value") }
+    var returned = "void"
+    var returned_type: u8 = 0u8
+    if signature.return_count == 1usize {
+        returned_type = value_type(m.signatures.types[signature.first_return_type])
+        if returned_type == 0u8 { ret fail(m, "a helper returns a value of a type not yet written as GLSL") }
+        returned = type_name(returned_type)
+    }
+    var header_bytes: [4096]u8 = zero
+    var header = Text { data: header_bytes[0usize..4096usize], count: 0usize, full: false }
+    put(&header, returned)
+    put(&header, " h")
+    put_number(&header, function_at)
+    put(&header, "(")
+    var parameter_at = 0usize
+    var listed = 0usize
+    while parameter_at < signature.parameter_count {
+        let parameter = m.signatures.types[signature.first_parameter_type + parameter_at]
+        var words = 1usize
+        var name = "uint"
+        if aggregate(parameter) {
+            let (held, held_error) = aggregate_bytes(c, parameter)
+            if held_error != ok { ret held_error }
+            words = held / 4usize
+        } else {
+            if !(parameter.kind == .Pointer && parameter.in_shared) {
+                let held = value_type(parameter)
+                if held == 0u8 { ret fail(m, "a helper parameter of this type is not yet written as GLSL") }
+                name = type_name(held)
+            }
+        }
+        var word = 0usize
+        while word < words {
+            if listed != 0usize { put(&header, ", ") }
+            put(&header, name)
+            put(&header, " p")
+            put_number(&header, parameter_at)
+            put(&header, "_")
+            put_number(&header, word)
+            listed += 1usize
+            word += 1usize
+        }
+        parameter_at += 1usize
+    }
+    put(&header, ")")
+    if header.full { ret fail(m, "a helper has too many parameter words") }
+    put_text(&m.prototypes, &header)
+    put(&m.prototypes, ";\n")
+    m.in_helper = true
+    m.signature = signature
+    var no_values: Values = zero
+    var values = no_values
+    let function = builder.functions[function_at]
+    try lower_function(a, m, c, builder, function_at, c.functions[0usize], &values)
+    if m.needs_divide || m.needs_sqrt { m.helper_exact = true }
+    put_text(&m.helpers, &header)
+    put(&m.helpers, " {\n")
+    put_locals(m, function, &values, &m.helpers)
+    if returned_type == 0u8 { put(&m.helpers, "  return;\n}\n") } else {
+        put(&m.helpers, "  return ")
+        put(&m.helpers, returned)
+        put(&m.helpers, "(0);\n}\n")
+    }
+    m.in_helper = false
+    ret ok
+}
+
+// The function's frame, values and dispatch loop, after its signature line: what `lower_function` left in `m.code`.
+fn put_locals(m: *Module, function: nir.Function, values: *Values, out: *Text) {
+    put(out, "  uint a;\n")
+    if m.frame_bytes != 0usize {
+        put(out, "  uint fr[")
+        put_number(out, m.frame_bytes / 4usize)
+        put(out, "];\n  for (uint z = 0u; z < ")
+        put_number(out, m.frame_bytes / 4usize)
+        put(out, "u; z += 1u) fr[z] = 0u;\n")
+    }
+    var value_at = 0usize
+    while value_at < function.value_count + 1usize {
+        if (values.kind[value_at] == KIND_SCALAR) {
+            put(out, "  ")
+            if (values.ty[value_at] == T_F32) { put(out, "precise ") }
+            put(out, type_name(values.ty[value_at]))
+            put(out, " v")
+            put_number(out, value_at)
+            put(out, ";\n")
+        }
+        value_at += 1usize
+    }
+    var dynamic_at = 1usize
+    while dynamic_at <= m.dynamics {
+        put(out, "  uint d")
+        put_number(out, dynamic_at)
+        put(out, " = 0u;\n")
+        dynamic_at += 1usize
+    }
+    put(out, "  uint pc = 0u;\n  while (true) {\n")
+    put_text(out, &m.code)
+    put(out, "    break;\n  }\n")
+}
+
+// The function's NIR as the dispatch loop's blocks in `m.code`, its values typed in `values`.
+fn lower_function(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Builder, function_at: usize, kernel: check.Function, values: *Values) -> err {
+    let function = builder.functions[function_at]
+    try init_values(a, values, function.value_count + 1usize)
     m.code.count = 0usize
     m.dynamics = 0usize
     m.frame_bytes = 0usize
-    m.shared_words = 0usize
     m.needs_divide = false
     m.needs_sqrt = false
     var at = 0usize
@@ -384,72 +600,12 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
         var instruction_at = 0usize
         while instruction_at < record.instruction_count {
             let instruction = builder.instructions[record.first_instruction + instruction_at]
-            try emit_instruction(m, c, builder, function, kernel, instruction, &values)
+            try emit_instruction(m, c, builder, function, kernel, instruction, values)
             instruction_at += 1usize
         }
         put(&m.code, "    }\n")
         block_index += 1usize
     }
-    put(&m.body, "//entry:")
-    put_entry_name(&m.body, g, kernel)
-    put(&m.body, "\n#version 430\n")
-    let size = usize(kernel.gpu_size)
-    put(&m.body, "layout(local_size_x = ")
-    put_number(&m.body, size % 1024usize + 1usize)
-    put(&m.body, ", local_size_y = ")
-    put_number(&m.body, size / 1024usize % 1024usize + 1usize)
-    put(&m.body, ", local_size_z = ")
-    put_number(&m.body, size / 1048576usize % 1024usize + 1usize)
-    put(&m.body, ") in;\nlayout(std430, binding = 0) readonly buffer Args { uint args[]; };\nlayout(std430, binding = 1) buffer Heap { uint heap[]; };\n")
-    if m.shared_words != 0usize {
-        put(&m.body, "shared uint tg[")
-        put_number(&m.body, m.shared_words)
-        put(&m.body, "];\n")
-    }
-    if m.needs_divide || m.needs_sqrt {
-        // An `ftz` kernel (spec section 11, D4203) flushes in the exact sequences as the CPU's FTZ and DAZ do.
-        if (check.kernel_fact(c, checked) & 128usize) != 0usize { put(&m.body, "const bool FTZ = true;\n") } else { put(&m.body, "const bool FTZ = false;\n") }
-        put(&m.body, exact_source())
-    }
-    put(&m.body, "void main() {\n  uint a;\n")
-    if m.frame_bytes != 0usize {
-        put(&m.body, "  uint fr[")
-        put_number(&m.body, m.frame_bytes / 4usize)
-        put(&m.body, "];\n  for (uint z = 0u; z < ")
-        put_number(&m.body, m.frame_bytes / 4usize)
-        put(&m.body, "u; z += 1u) fr[z] = 0u;\n")
-    }
-    var value_at = 0usize
-    while value_at < function.value_count + 1usize {
-        if (values.kind[value_at] == KIND_SCALAR) {
-            put(&m.body, "  ")
-            if (values.ty[value_at] == T_F32) { put(&m.body, "precise ") }
-            put(&m.body, type_name(values.ty[value_at]))
-            put(&m.body, " v")
-            put_number(&m.body, value_at)
-            put(&m.body, ";\n")
-        }
-        value_at += 1usize
-    }
-    var dynamic_at = 1usize
-    while dynamic_at <= m.dynamics {
-        put(&m.body, "  uint d")
-        put_number(&m.body, dynamic_at)
-        put(&m.body, " = 0u;\n")
-        dynamic_at += 1usize
-    }
-    put(&m.body, "  uint pc = 0u;\n  while (true) {\n")
-    var copied = 0usize
-    while copied < m.code.count {
-        if m.body.count >= m.body.data.len {
-            m.body.full = true
-            break
-        }
-        m.body.data[m.body.count] = m.code.data[copied]
-        m.body.count += 1usize
-        copied += 1usize
-    }
-    put(&m.body, "    return;\n  }\n}\n")
     ret ok
 }
 
@@ -588,7 +744,11 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     let opcode = instruction.opcode
     let t = &m.code
     if opcode == .Stack { ret ok }
-    if opcode == .Parameter { ret emit_parameter(m, c, kernel, instruction, values) }
+    if opcode == .Parameter {
+        if m.in_helper { ret emit_helper_parameter(m, c, instruction, values) }
+        ret emit_parameter(m, c, kernel, instruction, values)
+    }
+    if opcode == .Call { ret emit_call(m, c, builder, instruction, values) }
     if opcode == .Barrier {
         line(t, "memoryBarrierShared(); barrier();")
         ret ok
@@ -643,7 +803,14 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     if opcode == .Negate || opcode == .BitNot { ret emit_unary(m, builder, instruction, values) }
     if opcode == .Copy { ret emit_copy(m, builder, instruction, values) }
     if opcode == .Return {
-        if instruction.operand_count != 0usize { ret fail(m, "a kernel returns a value") }
+        if instruction.operand_count != 0usize {
+            let returned = operand(builder, instruction, 0usize)
+            if !m.in_helper || (values.kind[returned] != KIND_SCALAR) { ret fail(m, "a kernel returns a value, or a helper an aggregate") }
+            put(t, "      return v")
+            put_number(t, returned)
+            put(t, ";\n")
+            ret ok
+        }
         line(t, "return;")
         ret ok
     }
@@ -745,6 +912,129 @@ fn emit_parameter(m: *Module, c: *check.Checker, kernel: check.Function, instruc
     put(t, "u]; fr[")
     put_number(t, slot + 3usize)
     put(t, "u] = 0u;\n")
+    ret ok
+}
+
+// A helper's parameter from its GLSL parameters `pI_W`: a scalar read, an aggregate's words into its frame slot, a shared
+// pointer's offset into a dynamic offset variable.
+fn emit_helper_parameter(m: *Module, c: *check.Checker, instruction: nir.Instruction, values: *Values) -> err {
+    let t = &m.code
+    let index = instruction.immediate
+    if index >= m.signature.parameter_count { ret fail(m, "a helper parameter is out of range") }
+    if instruction.ty.kind == .Pointer && instruction.ty.in_shared {
+        m.dynamics += 1usize
+        put(t, "      d")
+        put_number(t, m.dynamics)
+        put(t, " = p")
+        put_number(t, index)
+        put(t, "_0;\n")
+        values.kind[instruction.result] = KIND_SHARED
+        values.offset[instruction.result] = 0usize
+        values.dynamic[instruction.result] = m.dynamics
+        ret ok
+    }
+    if aggregate(instruction.ty) {
+        if (values.kind[instruction.result] != KIND_PRIVATE) { ret fail(m, "an aggregate helper parameter has no frame slot") }
+        let (held, held_error) = aggregate_bytes(c, instruction.ty)
+        if held_error != ok { ret held_error }
+        var word = 0usize
+        while word < held / 4usize {
+            put(t, "      fr[")
+            put_number(t, values.offset[instruction.result] / 4usize + word)
+            put(t, "u] = p")
+            put_number(t, index)
+            put(t, "_")
+            put_number(t, word)
+            put(t, ";\n")
+            word += 1usize
+        }
+        ret ok
+    }
+    let ty = value_type(instruction.ty)
+    if ty == 0u8 { ret fail(m, "a helper parameter of this type is not yet written as GLSL") }
+    scalar(values, instruction.result, ty)
+    assign(t, instruction.result)
+    put(t, "p")
+    put_number(t, index)
+    put(t, "_0;\n")
+    ret ok
+}
+
+// A helper call: `hN(...)` with each argument as the callee's parameter list flattens it.
+fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let t = &m.code
+    let (callee, found) = callee_of(builder, instruction)
+    if !found || callee >= m.signatures.count { ret fail(m, "a helper call has no GLSL body") }
+    let callee_function = builder.functions[callee]
+    // GLSL's fma need not round once, so a call of `math.fma` has no exact GLSL; the CPU runs that kernel.
+    if same(callee_function.name, "fma") { ret fail(m, "math.fma is not yet written as GLSL") }
+    let signature = m.signatures.entries[callee]
+    if instruction.operand_count != signature.parameter_count { ret fail(m, "a helper call has the wrong argument count") }
+    var call_bytes: [4096]u8 = zero
+    var call = Text { data: call_bytes[0usize..4096usize], count: 0usize, full: false }
+    put(&call, "h")
+    put_number(&call, callee)
+    put(&call, "(")
+    var listed = 0usize
+    var at = 0usize
+    while at < instruction.operand_count {
+        let argument = operand(builder, instruction, at)
+        let parameter = m.signatures.types[signature.first_parameter_type + at]
+        if aggregate(parameter) {
+            if (values.kind[argument] != KIND_PRIVATE) { ret fail(m, "a helper call has no aggregate argument") }
+            let (held, held_error) = aggregate_bytes(c, parameter)
+            if held_error != ok { ret held_error }
+            var word = 0usize
+            while word < held / 4usize {
+                if listed != 0usize { put(&call, ", ") }
+                put(&call, "fr[(")
+                put_number(&call, values.offset[argument] + word * 4usize)
+                put(&call, "u")
+                if values.dynamic[argument] != 0usize {
+                    put(&call, " + d")
+                    put_number(&call, values.dynamic[argument])
+                }
+                put(&call, ") >> 2u]")
+                listed += 1usize
+                word += 1usize
+            }
+        } else {
+            if listed != 0usize { put(&call, ", ") }
+            if parameter.kind == .Pointer && parameter.in_shared {
+                if (values.kind[argument] != KIND_SHARED) { ret fail(m, "a helper call has no shared pointer argument") }
+                put(&call, "(")
+                put_number(&call, values.offset[argument])
+                put(&call, "u")
+                if values.dynamic[argument] != 0usize {
+                    put(&call, " + d")
+                    put_number(&call, values.dynamic[argument])
+                }
+                put(&call, ")")
+            } else {
+                if (values.kind[argument] != KIND_SCALAR) { ret fail(m, "a helper call has no scalar argument") }
+                let held = value_type(parameter)
+                if held == 0u8 { ret fail(m, "a helper call passes a type not yet written as GLSL") }
+                put(&call, type_name(held))
+                put(&call, "(v")
+                put_number(&call, argument)
+                put(&call, ")")
+            }
+            listed += 1usize
+        }
+        at += 1usize
+    }
+    put(&call, ")")
+    if call.full { ret fail(m, "a helper call has too many argument words") }
+    if instruction.has_result {
+        let ty = value_type(instruction.ty)
+        if ty == 0u8 { ret fail(m, "a helper call returns a type not yet written as GLSL") }
+        scalar(values, instruction.result, ty)
+        assign(t, instruction.result)
+    } else {
+        put(t, "      ")
+    }
+    put_text(t, &call)
+    put(t, ";\n")
     ret ok
 }
 

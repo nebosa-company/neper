@@ -2969,4 +2969,5 @@ D5887	1505	e.ui presents through a hook; x.khronos.present is the GL one
 D5888	2929	`--gpu glsl`: GLSL after the SPIR-V, from src/glsl.e
 D5889	2246	e.gpu's heap backends share one driver table; x.khronos.compute is GL's
 D5890	1031	The GLES compute profile is ES 3.2, from the same shaders
-D5891	1684	Exact f32 division and square root in GLSL are integer sequences
+D5891	1685	Exact f32 division and square root in GLSL are integer sequences
+D5892	1497	A helper the kernel calls is a GLSL function, in every kernel's shader

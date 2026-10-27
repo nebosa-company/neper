@@ -48,6 +48,34 @@ fn ids(width: u32, out: []u32) {
     out[at] = (gpu.wgid.y << 24u32) | (gpu.wgid.x << 16u32) | (gpu.lid.y << 8u32) | gpu.lid.x
 }
 
+// Helpers (C215): a scalar one, one that takes a slice, nested calls, and one that returns f32.
+fn mix(x: u32, y: u32) -> u32 { ret (x *% 2654435761u32) ^ (y +% 7u32) }
+
+fn pick(values: []const u32, k: usize) -> u32 {
+    if k >= values.len { ret 0u32 }
+    ret mix(values[k], u32(k))
+}
+
+fn halve(v: f32) -> f32 { ret v * 0.5f32 + 0.25f32 }
+
+@gpu(64)
+fn helped(n: u32, values: []const u32, out: []u32, floats: []f32) {
+    let i = gpu.gid.x
+    if i >= n { ret }
+    let k = usize(i)
+    out[k] = pick(values, k) +% mix(i, 3u32)
+    floats[k] = halve(f32(i))
+}
+
+@gpu(64, ftz)
+fn helped_ftz(n: u32, values: []const u32, out: []u32, floats: []f32) {
+    let i = gpu.gid.x
+    if i >= n { ret }
+    let k = usize(i)
+    out[k] = pick(values, k) +% mix(i, 3u32)
+    floats[k] = halve(f32(i))
+}
+
 @gpu(64)
 fn overrun(out: []u32) {
     let i = gpu.gid.x
@@ -85,6 +113,28 @@ fn run(a: *mem.Arena, backend: gpu.Backend, out: []u32, flushing: bool) -> err {
     if narrow_error != ok { ret narrow_error }
     let ids_error = gpu.launch[ids](q, gpu.grid2(16usize, 16usize), 16u32, tile)
     if ids_error != ok { ret ids_error }
+    var seeds: [200]u32 = zero
+    k = 0usize
+    while k < N {
+        seeds[k] = u32(k) * 7919u32 + 13u32
+        k += 1usize
+    }
+    let (seeded, seeded_error) = gpu.upload[u32](q, seeds[0usize..N])
+    let (mixed, mixed_error) = gpu.alloc[u32](q, N)
+    let (halves_f, halves_f_error) = gpu.alloc[f32](q, N)
+    if seeded_error != ok || mixed_error != ok || halves_f_error != ok { os.exit(20i32) }
+    var helped_error = ok
+    if flushing { helped_error = gpu.launch[helped_ftz](q, gpu.grid1(N), u32(N), seeded, mixed, halves_f) } else { helped_error = gpu.launch[helped](q, gpu.grid1(N), u32(N), seeded, mixed, halves_f) }
+    if helped_error != ok { ret helped_error }
+    var got_mixed: [200]u32 = zero
+    var got_halves_f: [200]f32 = zero
+    if gpu.download(q, mixed, got_mixed[0usize..N]) != ok || gpu.download(q, halves_f, got_halves_f[0usize..N]) != ok { os.exit(21i32) }
+    k = 0usize
+    while k < N {
+        out[5usize * N + 256usize + k] = got_mixed[k]
+        out[6usize * N + 256usize + k] = *mem.cast[*u32](&got_halves_f[k])
+        k += 1usize
+    }
     var got_y: [200]f32 = zero
     var got_bytes: [200]u8 = zero
     var got_halves: [200]i16 = zero
@@ -120,8 +170,8 @@ fn run(a: *mem.Arena, backend: gpu.Backend, out: []u32, flushing: bool) -> err {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     compute.install()
-    let (cpu_out, cpu_error) = mem.alloc[u32](a, 5usize * N + 256usize)
-    let (gl_out, gl_error) = mem.alloc[u32](a, 5usize * N + 256usize)
+    let (cpu_out, cpu_error) = mem.alloc[u32](a, 7usize * N + 256usize)
+    let (gl_out, gl_error) = mem.alloc[u32](a, 7usize * N + 256usize)
     if cpu_error != ok || gl_error != ok { os.exit(8i32) }
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
     if found_error != ok || found.len == 0usize {

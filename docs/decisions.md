@@ -43042,3 +43042,16 @@ GLSL lets division be 2.5 ULP off and `sqrt` looser still. Its `fma` is not prom
 The first run found the CPU returning 0x7FC00000 where the sequence followed x86's default NaN. Section 11 is the rule: every floating operation that produces a NaN returns the one canonical positive quiet NaN. The sequences now return 0x7FC00000 for every NaN case, and the emitter also canonicalises the result of every f32 `+ - *`, so a device's own NaN payload never reaches memory.
 
 `gpu_gl_exact` divides and takes square roots of 65,536 operand pairs from a fixed xorshift. The pairs include every special value in either place and divisors at the dividend's scale, so rounding is decided in the last bits. Every word equals the CPU's on Intel (the `ftz` kernel) and on Mesa llvmpipe (the plain one, with subnormal results).
+
+## D5892 — A helper the kernel calls is a GLSL function, in every kernel's shader
+
+The GLSL emitter used to refuse any kernel that calls a helper (the MSL emitter still does). Helpers now go the way the SPIR-V emitter takes them:
+- **Which helpers.** Every function the kernels reach through `Call` is found from the resolved references, as `spirv.e` finds them.
+- **Shape.** Each becomes `T hN(...)`: a scalar or device address by value, an aggregate as its `uint` words (copied into the callee's own frame slot by its `Parameter`), and a shared pointer as its byte offset into `tg`.
+- **Body.** Its frame is a local `uint fr[]` of its own, and the dispatch loop is the kernel's.
+- **Placement.** Prototypes and definitions go into every kernel's shader ahead of `main`, after the `FTZ` constant and the exact sequences, so a helper divides under its caller's `ftz`.
+- **Refused.** A helper that returns an aggregate or more than one value, a pointer into the caller's frame, and `math.fma` (GLSL's `fma` need not round once) are `Unsupported`, and the CPU runs that kernel.
+
+GLSL forbids recursion, as device code does.
+
+`gpu_gl`'s `helped` kernel uses a scalar helper, a helper that indexes a slice it was handed, a nested call, and an f32 helper. It is word-equal to the CPU on Intel (its `ftz` twin) and on llvmpipe through both GL and GLES 3.2. `gpu_cpu`, `gpu_vulkan_loop` and `gpu_device_helpers` built with `--gpu glsl` still pass, and the compiler still rebuilds itself byte for byte.
