@@ -5325,7 +5325,7 @@ if [ -n "$previous_gpu_cache" ]; then export NEPER_GPU_CACHE=$previous_gpu_cache
 float_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float.e" "$repo" spv none "$test_build/float.spv")
 [ "$float_spirv_written" = 'spir-v written' ]
 cmp "$test_build/float.spv" "$repo/tests/conformance/spirv/float.spv"
-gpu_vulkan_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_float/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-float-selfhost")
+gpu_vulkan_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_float/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-float-selfhost" --gpu glsl)
 [ "$gpu_vulkan_float_written" = 'executable written' ]
 chmod +x "$test_build/gpu-vulkan-float-selfhost"
 gpu_vulkan_float_output=$("$test_build/gpu-vulkan-float-selfhost")
@@ -5369,7 +5369,7 @@ case "$gpu_staging_output" in
     *) printf '%s\n' "the GPU staging runtime failed: $gpu_staging_output" >&2; exit 1 ;;
 esac
 for float_mode in '' '--release'; do
-    gpu_float_modes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_float_modes/src/main.e" "$repo" x64 linux "$test_build/gpu-float-modes-selfhost" $float_mode)
+    gpu_float_modes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_float_modes/src/main.e" "$repo" x64 linux "$test_build/gpu-float-modes-selfhost" $float_mode --gpu glsl)
     [ "$gpu_float_modes_written" = 'executable written' ]
     chmod +x "$test_build/gpu-float-modes-selfhost"
     gpu_float_modes_output=$("$test_build/gpu-float-modes-selfhost")

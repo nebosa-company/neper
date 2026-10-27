@@ -43134,3 +43134,16 @@ D5896's last paragraph guessed wrong. The arm64 image holds no absolute address:
 A third fault was the per-module linker. `em_link.e` chose a64's call patching only for the `aarch64-linux`, `-none`, `-neperos` and `-macos` target strings, so `aarch64-android` artifacts were patched as x64 code (`emit_a64.NotPatchable`).
 
 `scripts/run-android.ps1 -Arch aarch64` builds and runs fixtures as arm64. On the x86_64 Android 15 emulator, both architectures pass `hello`, `advanced`, `gpu_cpu`, `gpu_fault_bounds`, `x_khronos_gl_load`, `x_khronos_gl_headless` (GLES 3.0 draws), `atomic_ops`, `atomic_threads` and `channel_threads`. `atomic_ops` and `atomic_threads` built for `aarch64 linux` pass under `qemu-aarch64 -cpu cortex-a53`.
+
+## D5901 — `math.fma` in GLSL, and the float fixtures on every GL device
+
+GLSL's `fma` need not round once, so the emitter refused kernels that call `math.fma`. It is now the fourth exact sequence beside `f32_div` and `f32_sqrt`, written in the shader as `f32_fma` on the bits:
+- **Product.** `umulExtended` gives the 48-bit product exactly, and it is moved so its top bit is bit 61 of a `uvec2`.
+- **Sum.** The addend is aligned to it at the same bit, with every bit shifted out jammed into bit 0. When the two cancel heavily, their exponents are within one of each other, so nothing was shifted out; when anything was, the result keeps 34 bits below its rounding point. The jam is therefore exact for rounding.
+- **Rounding.** The sum is normalised to 26 bits and rounded by the shared `f32_round`: nearest-even, subnormals, and `ftz` flushing of inputs and results. NaNs, infinities, `inf * 0` and zero products are settled first, and an exact cancellation is `+0`.
+
+It needs only GLSL 4.30 and ES 3.10 built-ins, and no `int64` or `fp64`. The call is written in place, so `math.fma`'s own body, which is 64-bit integer code, is no longer marked reachable as a helper. Before this change, that body was why the kernel failed.
+
+`gpu_gl_exact` adds a fused multiply-add to each of its 65,536 pairs. Half take an unrelated addend; half take the product's negation, whose answer is the product's rounding error, which only a single rounding gets right. It is word-equal to the CPU on Intel Iris Xe (`ftz`) and on llvmpipe.
+
+`gpu_float_modes` and `gpu_vulkan_float` now run every `.Gl` device after the Vulkan ones; the suites build them with `--gpu glsl`. `scripts/check-fixture.sh` always passes `--gpu glsl`, which only adds GLSL to kernel modules, so a GL fixture checked by it runs its kernels instead of reporting `Unsupported`.

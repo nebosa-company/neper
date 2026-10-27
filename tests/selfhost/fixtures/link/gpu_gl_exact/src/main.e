@@ -3,7 +3,9 @@
 // operand pairs from a fixed xorshift: random bit patterns over every exponent, the special values (zeros, infinities, NaNs,
 // the largest and smallest normals, subnormals) in both positions, and quotients that land in the subnormal range and past
 // the largest finite. A device that keeps denormals runs the plain kernels; one that flushes them (Intel) the `ftz` ones,
-// which the CPU flushes too. A host without an OpenGL compute device exits 0 having printed why.
+// which the CPU flushes too. The same pairs check `math.fma` (D5901), whose addend is either another operand or the
+// product's negation, where only a single rounding leaves the right residual. A host without an OpenGL compute device
+// exits 0 having printed why.
 
 use e.gpu
 use e.io
@@ -13,21 +15,27 @@ use e.os
 use x.khronos.compute
 
 @gpu(64)
-fn divide(n: u32, x: []const f32, y: []const f32, q: []f32, r: []f32) {
+fn divide(n: u32, x: []const f32, y: []const f32, q: []f32, r: []f32, f: []f32) {
     let i = gpu.gid.x
     if i >= n { ret }
     let k = usize(i)
     q[k] = x[k] / y[k]
     r[k] = math.sqrt[f32](x[k])
+    var addend = x[usize(n - 1u32 - i)]
+    if i % 2u32 == 1u32 { addend = -(x[k] * y[k]) }
+    f[k] = math.fma[f32](x[k], y[k], addend)
 }
 
 @gpu(64, ftz)
-fn divide_ftz(n: u32, x: []const f32, y: []const f32, q: []f32, r: []f32) {
+fn divide_ftz(n: u32, x: []const f32, y: []const f32, q: []f32, r: []f32, f: []f32) {
     let i = gpu.gid.x
     if i >= n { ret }
     let k = usize(i)
     q[k] = x[k] / y[k]
     r[k] = math.sqrt[f32](x[k])
+    var addend = x[usize(n - 1u32 - i)]
+    if i % 2u32 == 1u32 { addend = -(x[k] * y[k]) }
+    f[k] = math.fma[f32](x[k], y[k], addend)
 }
 
 const N: usize = 65536usize
@@ -66,18 +74,21 @@ fn run(a: *mem.Arena, backend: gpu.Backend, flushing: bool, xs: []const f32, ys:
     let (y, y_error) = gpu.upload[f32](queue, ys)
     let (q, q_error) = gpu.alloc[f32](queue, N)
     let (r, r_error) = gpu.alloc[f32](queue, N)
-    if x_error != ok || y_error != ok || q_error != ok || r_error != ok { os.exit(2i32) }
+    let (f, f_error) = gpu.alloc[f32](queue, N)
+    if x_error != ok || y_error != ok || q_error != ok || r_error != ok || f_error != ok { os.exit(2i32) }
     var launched = ok
-    if flushing { launched = gpu.launch[divide_ftz](queue, gpu.grid1(N), u32(N), x, y, q, r) } else { launched = gpu.launch[divide](queue, gpu.grid1(N), u32(N), x, y, q, r) }
+    if flushing { launched = gpu.launch[divide_ftz](queue, gpu.grid1(N), u32(N), x, y, q, r, f) } else { launched = gpu.launch[divide](queue, gpu.grid1(N), u32(N), x, y, q, r, f) }
     if launched != ok { ret launched }
     let (quotients, quotients_error) = mem.alloc[f32](a, N)
     let (roots, roots_error) = mem.alloc[f32](a, N)
-    if quotients_error != ok || roots_error != ok { os.exit(3i32) }
-    if gpu.download(queue, q, quotients) != ok || gpu.download(queue, r, roots) != ok { os.exit(4i32) }
+    let (fused, fused_error) = mem.alloc[f32](a, N)
+    if quotients_error != ok || roots_error != ok || fused_error != ok { os.exit(3i32) }
+    if gpu.download(queue, q, quotients) != ok || gpu.download(queue, r, roots) != ok || gpu.download(queue, f, fused) != ok { os.exit(4i32) }
     var k = 0usize
     while k < N {
         out[k] = *mem.cast[*u32](&quotients[k])
         out[N + k] = *mem.cast[*u32](&roots[k])
+        out[2usize * N + k] = *mem.cast[*u32](&fused[k])
         k += 1usize
     }
     ret gpu.close(device)
@@ -96,8 +107,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let (xs, xs_error) = mem.alloc[f32](a, N)
     let (ys, ys_error) = mem.alloc[f32](a, N)
-    let (cpu_out, cpu_error) = mem.alloc[u32](a, 2usize * N)
-    let (gl_out, gl_error) = mem.alloc[u32](a, 2usize * N)
+    let (cpu_out, cpu_error) = mem.alloc[u32](a, 3usize * N)
+    let (gl_out, gl_error) = mem.alloc[u32](a, 3usize * N)
     if xs_error != ok || ys_error != ok || cpu_error != ok || gl_error != ok { os.exit(5i32) }
     var state = 2463534242u32
     var k = 0usize
@@ -128,16 +139,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if gl_run != ok { os.exit(7i32) }
     var wrong_quotients = 0usize
     var wrong_roots = 0usize
+    var wrong_fused = 0usize
     k = 0usize
     while k < N {
         if cpu_out[k] != gl_out[k] { wrong_quotients += 1usize }
         if cpu_out[N + k] != gl_out[N + k] { wrong_roots += 1usize }
+        if cpu_out[2usize * N + k] != gl_out[2usize * N + k] { wrong_fused += 1usize }
         k += 1usize
     }
     if wrong_quotients != 0usize { os.exit(8i32) }
     if wrong_roots != 0usize { os.exit(9i32) }
+    if wrong_fused != 0usize {
+        k = 0usize
+        while gl_out[2usize * N + k] == cpu_out[2usize * N + k] { k += 1usize }
+        let shown = io.printf["fma {}: x {} y {} cpu {} gl {}\n"](k, *mem.cast[*u32](&xs[k]), *mem.cast[*u32](&ys[k]), cpu_out[2usize * N + k], gl_out[2usize * N + k])
+        os.exit(10i32)
+    }
     if flushing { let mode = io.print("(ftz) ") }
-    let named = io.print("65536 f32 quotients and square roots equal to the CPU backend's on ")
+    let named = io.print("65536 f32 quotients, square roots and fused multiply-adds equal to the CPU backend's on ")
     let device_name = io.print(found[0usize].name)
     let ended = io.print("\n")
     ret ok

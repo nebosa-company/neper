@@ -1192,17 +1192,6 @@
       "evidence": "Done 2026-10-27 (D5888): u8, i8, u16 and i16 load through bitfieldExtract (sign-extended for the signed ones), store into heap and tg through atomicAnd and atomicOr on the word and into the frame through bitfieldInsert, and are masked or sign-extended back after every operation. gpu_gl's u8 and i16 stores into neighbouring bytes of the same words are word-exact on Intel and llvmpipe. Remaining: f16 and bf16 (packHalf2x16) are Unsupported. Design docs/opengl-plan.md, D5882. Needs C215 (same file, so one at a time). Acceptance: u8, i8, u16, i16, f16 and bf16 loads via bitfieldExtract; stores via atomicAnd/atomicOr on the containing word; packHalf2x16 for f16; a fixture where neighbouring invocations race to store narrow values is word-exact."
     },
     {
-      "id": "C217",
-      "category": "compiler",
-      "group": "OpenGL",
-      "order": 287,
-      "title": "OpenGL 12: exact float in GLSL",
-      "score": 0.9,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Done 2026-10-27 (D5888, D5889, D5891): every f32 variable is precise, so no multiply-add is fused. f32 division and square root are integer sequences rounded to nearest-even (f32_div, f32_sqrt, f32_round written into the shader), honouring the kernel's ftz, and every NaN result, including those of + - *, is section 11's canonical 0x7FC00000. x.khronos.compute probes denormals at open and reports DenormPreserve (llvmpipe) or Ftz (Intel). gpu_gl_exact (65,536 quotients and square roots, special values included) and gpu_gl's saxpy are word-equal to the CPU on Intel and llvmpipe, and both are in both suites. Remaining: the other float fixtures (gpu_float_modes, gpu_ftz_ops, gpu_vulkan_float) launched on .Gl, which is T047's run. Design docs/opengl-plan.md, D5882. Needs C216 (same file). Acceptance: precise on every float operation; f32 divide and sqrt correctly rounded by an integer-residual correction (integer emulation of the divide is the fallback); an ftz probe when the device opens feeds caps(ftz); every float fixture is word-equal to the CPU backend."
-    },
-    {
       "id": "L181",
       "category": "library",
       "group": "OpenGL",

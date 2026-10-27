@@ -3694,7 +3694,7 @@ $gpuGlExactPath = Join-Path $testBuild 'gpu-gl-exact-selfhost.exe'
 $gpuGlExactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_exact\src\main.e') $repo 'x64' 'windows' $gpuGlExactPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlExactWritten -ne 'executable written') { throw 'gpu_gl_exact emission failed' }
 & $gpuGlExactPath
-if ($LASTEXITCODE -ne 0) { throw "exact f32 division or square root on OpenGL answered wrongly: exit $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { throw "exact f32 division, square root or fma on OpenGL answered wrongly: exit $LASTEXITCODE" }
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 $gpuGlThreadsPath = Join-Path $testBuild 'gpu-gl-threads-selfhost.exe'
 $gpuGlThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_threads\src\main.e') $repo 'x64' 'windows' $gpuGlThreadsPath --gpu glsl
@@ -5846,7 +5846,7 @@ $floatSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conform
 if ($LASTEXITCODE -ne 0 -or $floatSpirvWritten -ne 'spir-v written') { throw 'float SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $floatSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\float.spv')).Hash) { throw 'the float SPIR-V module differs from the conformance corpus' }
 $gpuVulkanFloatPath = Join-Path $testBuild 'gpu-vulkan-float-selfhost.exe'
-$gpuVulkanFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_float\src\main.e') $repo 'x64' 'windows' $gpuVulkanFloatPath
+$gpuVulkanFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_float\src\main.e') $repo 'x64' 'windows' $gpuVulkanFloatPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanFloatWritten -ne 'executable written') { throw 'gpu_vulkan_float emission failed' }
 $gpuVulkanFloatOutput = & $gpuVulkanFloatPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanFloatOutput -notmatch '^gpu float (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan float runtime failed: $gpuVulkanFloatOutput" }
@@ -5883,7 +5883,7 @@ if ($LASTEXITCODE -ne 0 -or $gpuStagingOutput -notmatch '^gpu staging (cpu only|
 # leaving the host alone, on the CPU build and on every Vulkan device at the floor.
 $gpuFloatModesPath = Join-Path $testBuild 'gpu-float-modes-selfhost.exe'
 foreach ($floatMode in @('', '--release')) {
-    if ($floatMode -eq '') { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath } else { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath $floatMode }
+    if ($floatMode -eq '') { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath --gpu glsl } else { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath $floatMode --gpu glsl }
     if ($LASTEXITCODE -ne 0 -or $gpuFloatModesWritten -ne 'executable written') { throw "gpu_float_modes emission failed ($floatMode)" }
     $gpuFloatModesOutput = & $gpuFloatModesPath
     if ($LASTEXITCODE -ne 0 -or $gpuFloatModesOutput -notmatch '^gpu float modes ok on cpu( and [0-9]+ devices)?$') { throw "an e.gpu floating-point mode answered wrongly ($floatMode): exit $LASTEXITCODE $gpuFloatModesOutput" }

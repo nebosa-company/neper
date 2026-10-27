@@ -107,7 +107,6 @@ L178	library	0.75	1188	OpenGL 7: e.ui presents through GL	Done 2026-10-27 (D5887
 T046	tooling	0	123	OpenGL verify 2 (verify-only): ui fixtures presented through GL	Verify-only turn, no edits.
 C215	compiler	0.9	1372	OpenGL 10: src/glsl.e, the GLSL 4.30 emitter	Pinned 2026-10-27: tests/conformance/glsl/saxpy.glsl and loops.glsl (gpu_vulkan_loop's kernel) are checked in both suites through scripts/dump_glsl.py, and the Linux and Windows builds emit the same t
 C216	compiler	0.6	749	OpenGL 11: narrow and half types in GLSL	Done 2026-10-27 (D5888): u8, i8, u16 and i16 load through bitfieldExtract (sign-extended for the signed ones), store into heap and tg through atomicAnd and atomicOr on the word and into the frame thro
-C217	compiler	0.9	1068	OpenGL 12: exact float in GLSL	Done 2026-10-27 (D5888, D5889, D5891): every f32 variable is precise, so no multiply-add is fused.
 L181	library	0.5	877	OpenGL 14: GPU capabilities from GL extensions	Done 2026-10-27 (D5889, D5893): Int8 and Int16;
 C218	compiler	0.75	742	OpenGL 15: the GLES 3.1 profile	Done 2026-10-27 (D5890): x.khronos.compute.install_es() opens OpenGL ES 3.2 devices, with the shader header rewritten to #version 320 es and highp at compile time, and glBufferStorageEXT where only th
 T047	tooling	0.2	392	OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl	So far (2026-10-27): gpu_gl is word-equal to the CPU on Intel Iris Xe (Windows) and Mesa llvmpipe (Linux in WSL).
