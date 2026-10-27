@@ -41,8 +41,20 @@ try {
   }, layout)
   console.log('field at', JSON.stringify(field), 'canvas', JSON.stringify(await browser.execute(() => { const r = document.getElementById('screen').getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height, scrollY, innerWidth, innerHeight, dpr: devicePixelRatio, vv: visualViewport.height } })))
 
+  // Where a touch at a given point lands depends on the driver's idea of the viewport: tap empty page below the canvas once,
+  // read where the page saw it, and shift every later touch by the difference.
+  await browser.execute(() => { document.addEventListener('pointerdown', (e) => { window.lastTap = { x: e.clientX, y: e.clientY } }, true) })
+  await touch([{ type: 'pointerMove', duration: 0, x: 100, y: 500 }, { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 80 }, { type: 'pointerUp', button: 0 }])
+  await sleep(500)
+  const seen = await browser.execute(() => window.lastTap)
+  const shift = seen ? { x: 100 - seen.x, y: 500 - seen.y } : { x: 0, y: 0 }
+  console.log('a touch at 100,500 landed at', JSON.stringify(seen), 'shift', JSON.stringify(shift))
+  field.x += shift.x
+  field.y += shift.y
+
   await touch([{ type: 'pointerMove', duration: 0, x: field.x, y: field.y }, { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 80 }, { type: 'pointerUp', button: 0 }])
   await sleep(1500)
+  console.log('after the field tap:', (await stdout()).replace(/\n/g, '|'))
   await shot('field-tapped')
   await browser.switchContext('NATIVE_APP')
   const keyboard = await browser.$('-ios predicate string:type == "XCUIElementTypeKeyboard"')
