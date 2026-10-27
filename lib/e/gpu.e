@@ -639,7 +639,8 @@ fn metal_carve(state: *DeviceState, bytes: usize) -> (usize, err) {
     var candidate = METAL_HEAP_FIRST
     var settled = false
     while !settled {
-        if candidate + need > METAL_HEAP_BYTES { ret (0usize, OutOfMemory) }
+        // The heap's own mapping is its size: Metal maps all METAL_HEAP_BYTES, a GL driver may map less (its SSBO limit).
+        if candidate + need > state.heap.bytes.len { ret (0usize, OutOfMemory) }
         settled = true
         var at = 0usize
         while at < state.buffers.len {

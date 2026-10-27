@@ -137,10 +137,16 @@ fn name(handle: mtl.Context, out: []u8) -> usize {
     ret n
 }
 
-// A shader storage buffer of `bytes`, mapped for reading and writing for as long as it lives.
-fn buffer(handle: mtl.Context, bytes: usize) -> (mtl.Buffer, err) {
+// A shader storage buffer of `bytes`, mapped for reading and writing for as long as it lives. A request past the driver's
+// largest shader storage block (the ES floor is 128 MiB; e.gpu asks 256 MiB for the heap) gets that largest block, and
+// e.gpu carves from the length the mapping has.
+fn buffer(handle: mtl.Context, requested: usize) -> (mtl.Buffer, err) {
     var none: mtl.Buffer = zero
     if slot_of(handle) == MAX_DEVICES { ret (none, Unsupported) }
+    var bytes = requested
+    var largest = 0i32
+    gl.get_integerv(gl.MAX_SHADER_STORAGE_BLOCK_SIZE, &largest)
+    if largest > 0i32 && bytes > usize(largest) { bytes = usize(largest) / 256usize * 256usize }
     var name_value = 0u32
     gl.gen_buffers(1i32, &name_value)
     gl.bind_buffer(gl.SHADER_STORAGE_BUFFER, name_value)
