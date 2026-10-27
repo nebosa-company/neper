@@ -2956,4 +2956,7 @@ D5874	1365	window_on_resize on Windows, and the uses goldens become per-host
 D5875	1352	A Metal launch is committed and not waited for
 D5876	867	macos-bundle.sh can sign with entitlements and notarize, unrun
 D5877	1702	System information reaches a WebAssembly module through neper_host, and the Windows rows are confirmed
-D5878	1201	Metal device memory is up to four heaps, an address names its heap in the top byte
+D5878	1202	Metal device memory is up to four heaps, an address names its heap in the top byte
+D5890	1123	A virtual keyboard's edits are read from the field's value, not counted from its events
+D5891	1264	A touch hold selects a word, drags to extend, and offers a toolbar
+D5892	1473	Metal launches overlap: up to four in flight, one fault block each
