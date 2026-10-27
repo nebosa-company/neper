@@ -43095,4 +43095,4 @@ So `x64 android` is `x64 linux` to everything but the ELF writer:
 
 The same run explained D5886's open question. The emulator's GLES, and the SwiftShader `libEGL.dll` it ships for Windows, draw nothing when a draw has no vertex attributes. That is the `gl_VertexID`-only shaders the fixtures used. `x_khronos_gl_headless` and `x.khronos.present` now take their corners from a vertex buffer, and SwiftShader draws on Windows too. The emulator offers no GLES 3.1, so `e.gpu` compute has no device there and `gpu_gl` reports that it checked nothing.
 
-`aarch64 android` (`link_elf_a64.e`, real phones) is not done: whether the a64 code is position-independent too is untested.
+`aarch64 android` (`link_elf_a64.e`, real phones) is not done, and it is not the same change. The emulator runs arm64 executables through its ndk_translation binfmt, and a static arm64 neper image runs there as it is. Typed `ET_DYN`, the same image exits 255, so the a64 code or its image still holds absolute addresses (`A64_IMAGE_BASE`). An arm64 Android image needs those found and given relative relocations first.

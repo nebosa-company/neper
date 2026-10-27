@@ -114,7 +114,7 @@ L181	library	0.5	877	OpenGL 14: GPU capabilities from GL extensions	Done 2026-10
 C218	compiler	0.75	742	OpenGL 15: the GLES 3.1 profile	Done 2026-10-27 (D5890): x.khronos.compute.install_es() opens OpenGL ES 3.2 devices, with the shader header rewritten to #version 320 es and highp at compile time, and glBufferStorageEXT where only th
 T047	tooling	0.2	392	OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl	So far (2026-10-27): gpu_gl is word-equal to the CPU on Intel Iris Xe (Windows) and Mesa llvmpipe (Linux in WSL).
 T048	tooling	0	122	OpenGL verify 4 (verify-only): full suites for the shared compiler change	Verify-only turn, no edits.
-C219	compiler	0.65	1075	OpenGL 16: the Android target, executable form	Done 2026-10-27 (D5896): emit-executable ...
+C219	compiler	0.65	1224	OpenGL 16: the Android target, executable form	Done 2026-10-27 (D5896): emit-executable ...
 C220	compiler	0	214	OpenGL 17: the Android target, app form (needs @export)	Design docs/opengl-plan.md, D5884.
 L182	library	0	205	OpenGL 18: os.android windows and input	Design docs/opengl-plan.md, D5884.
 T044	tooling	0	176	OpenGL 19: APK packaging and signing	Design docs/opengl-plan.md, D5884.
