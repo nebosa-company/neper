@@ -3695,6 +3695,12 @@ $gpuGlThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $gpuGlThreadsWritten -ne 'executable written') { throw 'gpu_gl_threads emission failed' }
 & $gpuGlThreadsPath
 if ($LASTEXITCODE -ne 0) { throw "the GL device answered wrongly across threads: exit $LASTEXITCODE" }
+# (D5898) A reopened GL device takes its kernel from the program-binary cache.
+$gpuGlCachePath = Join-Path $testBuild 'gpu-gl-cache-selfhost.exe'
+$gpuGlCacheWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_cache\src\main.e') $repo 'x64' 'windows' $gpuGlCachePath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlCacheWritten -ne 'executable written') { throw 'gpu_gl_cache emission failed' }
+& $gpuGlCachePath
+if ($LASTEXITCODE -ne 0) { throw "the GL program cache answered wrongly: exit $LASTEXITCODE" }
 # (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
 $saxpyGlslPath = Join-Path $testBuild 'saxpy-glsl-selfhost.exe'
 $saxpyGlslWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'x64' 'windows' $saxpyGlslPath --gpu glsl

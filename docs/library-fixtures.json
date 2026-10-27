@@ -2464,6 +2464,7 @@
     "gpu_ftz_ops",
     "gpu_gaps",
     "gpu_gl",
+    "gpu_gl_cache",
     "gpu_gl_exact",
     "gpu_gl_threads",
     "gpu_inventory",

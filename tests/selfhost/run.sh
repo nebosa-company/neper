@@ -3228,6 +3228,11 @@ gpu_gl_threads_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$gpu_gl_threads_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-threads-selfhost"
 "$test_build/gpu-gl-threads-selfhost"
+# (D5898) A reopened GL device takes its kernel from the program-binary cache.
+gpu_gl_cache_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_cache/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-cache-selfhost" --gpu glsl)
+[ "$gpu_gl_cache_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-cache-selfhost"
+"$test_build/gpu-gl-cache-selfhost"
 # (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
 saxpy_glsl_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" x64 linux "$test_build/saxpy-glsl-selfhost" --gpu glsl)
 [ "$saxpy_glsl_written" = 'executable written' ]

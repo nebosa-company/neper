@@ -43105,3 +43105,11 @@ D5881 as built. `x.khronos.compute.open` gives the device a slot with a mutex, t
 - **No join.** The safety checker refuses a write to a module array after a thread has been lent one in the same function. Starting the thread is therefore its own function that detaches it, and a device's thread is never joined: it leaves its loop on close.
 
 `gpu_gl_threads` opens the GL device on the main thread, launches and downloads from a spawned thread, then does it again from the main thread. Both results are word-equal on Intel and on llvmpipe, and `gpu_gl` and `gpu_gl_exact` pass unchanged through the device thread.
+
+## D5898 — Linked GL programs are cached as program binaries
+
+`x.khronos.compute` keeps each linked kernel's `glGetProgramBinary` output, with its format in the first four bytes, under the temporary directory's `neper-gl` folder. The file is named by the FNV-1a hash of the renderer, the GL version and the shader text with its header.
+- **Hit.** Before compiling, `compile` tries `glProgramBinary` on that file and uses the program only if it reports linked. A binary the driver refuses, after a driver update say, is skipped and compiled again.
+- **Miss.** A program linked from source is marked retrievable and saved. A driver with no binary formats, or a directory that cannot be written, simply has no cache.
+
+`compute.cache_hits()` counts the programs taken from the cache. `gpu_gl_cache` closes and reopens the GL device in one process, so its second compile must come from the file. The hit count grows and the words are the CPU's, on Intel and on llvmpipe.

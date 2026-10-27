@@ -2975,4 +2975,5 @@ D5893	1215	64-bit integers in GLSL through GL_ARB_gpu_shader_int64
 D5894	978	gl.load asks for an entry's ARB, KHR and EXT spellings before calling it missing
 D5895	1192	The browser host presents through WebGL2 where the page has it
 D5896	2488	`x64 android`: the Linux image, typed ET_DYN for /system/bin/linker64
-D5897	1420	Each GL compute device runs on a thread of its own
+D5897	1421	Each GL compute device runs on a thread of its own
+D5898	968	Linked GL programs are cached as program binaries

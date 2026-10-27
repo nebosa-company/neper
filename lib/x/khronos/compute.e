@@ -8,6 +8,7 @@
 // thread; a worker thread that owns the context and takes the calls (D5881) is the upgrade when e.gpu is used across threads.
 
 use e.gpu
+use e.fs
 use e.gpu.metal as mtl
 use e.mem
 use e.sync
@@ -66,7 +67,7 @@ fn probe_denormals(handle: mtl.Context) {
     free_here(heap)
 }
 
-type Slot = struct { c: context.Context, live: bool }
+type Slot = struct { c: context.Context, live: bool, arena: *mem.Arena }
 
 @cc(c)
 type BufferStorageExt = extern fn(u32, isize, *void, u32)
@@ -81,6 +82,7 @@ var int64_caps: usize = 0usize
 var use_es: bool = false
 // `glBufferStorageEXT` where the context has only the extension (OpenGL ES), else 0.
 var storage_ext: usize = 0usize
+var cache_hit_count: usize = 0usize
 
 fn available() -> bool { ret true }
 
@@ -336,7 +338,7 @@ fn open_here(a: *mem.Arena, at: usize) -> (mtl.Context, err) {
     if use_es { options = context.Options { api: .Gles, major: 3u32, minor: 2u32 } }
     let (c, c_error) = context.headless(a, options)
     if c_error != ok { ret (none, Unsupported) }
-    slots[at] = Slot { c: c, live: true }
+    slots[at] = Slot { c: c, live: true, arena: a }
     storage_ext = 0usize
     var loaded = context.load(a, options)
     if loaded == ok && !gl.present(gl.BUFFER_STORAGE_ENTRY) {
@@ -451,6 +453,14 @@ fn compile_here(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, 
         header = "#version 320 es\nprecision highp float;\nprecision highp int;\n"
         text = text[desktop.len..text.len]
     }
+    var most = 0i32
+    gl.get_integerv(gl.MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &most)
+    let device_slot = slot_of(handle)
+    let (cache_path, cache_path_error) = cache_path_of(slots[device_slot].arena, header, text)
+    if cache_path_error == ok {
+        let cached = cached_program(slots[device_slot].arena, cache_path)
+        if cached != 0u32 { ret (mtl.Pipeline { state: usize(cached) | ((device_slot + 1usize) << 32usize), max_threads: usize(most) }, ok) }
+    }
     let shader = gl.create_shader(gl.COMPUTE_SHADER)
     var pointers: [2]usize = zero
     var lengths: [2]i32 = zero
@@ -471,6 +481,7 @@ fn compile_here(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, 
         ret (none, Unsupported)
     }
     let program = gl.create_program()
+    gl.program_parameteri(program, gl.PROGRAM_BINARY_RETRIEVABLE_HINT, 1i32)
     gl.attach_shader(program, shader)
     gl.link_program(program)
     gl.delete_shader(shader)
@@ -479,9 +490,101 @@ fn compile_here(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, 
         gl.delete_program(program)
         ret (none, Unsupported)
     }
-    var most = 0i32
-    gl.get_integerv(gl.MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &most)
-    ret (mtl.Pipeline { state: usize(program) | ((slot_of(handle) + 1usize) << 32usize), max_threads: usize(most) }, ok)
+    if cache_path_error == ok { save_program(slots[device_slot].arena, cache_path, program) }
+    ret (mtl.Pipeline { state: usize(program) | ((device_slot + 1usize) << 32usize), max_threads: usize(most) }, ok)
+}
+
+// ---- the program cache (D5898) -------------------------------------------------------------------------------------------
+// A linked program's binary is kept under the temporary directory's `neper-gl` folder, named by the FNV-1a hash of the
+// renderer, the GL version and the shader text, so a later run on the same driver skips the GLSL compiler. A cached binary
+// the driver refuses (a driver update) is ignored and compiled again; a cache that cannot be written is no cache.
+
+fn fnv_mix(hash: u64, text: str) -> u64 {
+    var mixed = hash
+    for byte in text { mixed = (mixed ^ u64(byte)) *% 1099511628211u64 }
+    ret mixed
+}
+
+fn cache_path_of(a: *mem.Arena, header: str, text: str) -> (str, err) {
+    var hash = 14695981039346656037u64
+    hash = fnv_mix(hash, gl.c_text(gl.get_string(gl.RENDERER)))
+    hash = fnv_mix(hash, gl.c_text(gl.get_string(gl.VERSION)))
+    hash = fnv_mix(hash, header)
+    hash = fnv_mix(hash, text)
+    let (directory, directory_error) = fs.temp_dir(a)
+    if directory_error != ok { ret ("", directory_error) }
+    let folder = "/neper-gl/"
+    let (path, path_error) = mem.alloc[u8](a, directory.len + folder.len + 20usize)
+    if path_error != ok { ret ("", path_error) }
+    var at = 0usize
+    while at < directory.len {
+        path[at] = directory[at]
+        at += 1usize
+    }
+    var k = 0usize
+    while k < folder.len {
+        path[at] = folder[k]
+        at += 1usize
+        k += 1usize
+    }
+    let digits = "0123456789abcdef"
+    var shift = 60u64
+    while true {
+        path[at] = digits[usize((hash >> shift) & 15u64)]
+        at += 1usize
+        if shift == 0u64 { break }
+        shift = shift - 4u64
+    }
+    let suffix = ".bin"
+    k = 0usize
+    while k < suffix.len {
+        path[at] = suffix[k]
+        at += 1usize
+        k += 1usize
+    }
+    ret (path[0usize..at], ok)
+}
+
+// The program the cache holds for `path`, linked; 0 when there is none or the driver refuses it.
+fn cached_program(a: *mem.Arena, path: str) -> u32 {
+    let (bytes, read_error) = fs.read_file(a, path, 67108864usize)
+    if read_error != ok || bytes.len <= 4usize { ret 0u32 }
+    let format = u32(bytes[0usize]) | (u32(bytes[1usize]) << 8u32) | (u32(bytes[2usize]) << 16u32) | (u32(bytes[3usize]) << 24u32)
+    let program = gl.create_program()
+    gl.program_binary(program, format, context.as_pointer(mem.address_of(&bytes[4usize])), i32(bytes.len - 4usize))
+    var status = 0i32
+    gl.get_programiv(program, gl.LINK_STATUS, &status)
+    if status == 0i32 || gl.get_error() != gl.NO_ERROR {
+        gl.delete_program(program)
+        ret 0u32
+    }
+    cache_hit_count += 1usize
+    ret program
+}
+
+// How many kernels this process took from the program cache rather than compiling.
+fn cache_hits() -> usize { ret cache_hit_count }
+
+fn save_program(a: *mem.Arena, path: str, program: u32) {
+    var formats = 0i32
+    gl.get_integerv(gl.NUM_PROGRAM_BINARY_FORMATS, &formats)
+    var length = 0i32
+    gl.get_programiv(program, gl.PROGRAM_BINARY_LENGTH, &length)
+    if formats <= 0i32 || length <= 0i32 { ret }
+    let (bytes, bytes_error) = mem.alloc[u8](a, usize(length) + 4usize)
+    if bytes_error != ok { ret }
+    var written = 0i32
+    var format = 0u32
+    gl.get_program_binary(program, length, &written, &format, context.as_pointer(mem.address_of(&bytes[4usize])))
+    if written <= 0i32 || gl.get_error() != gl.NO_ERROR { ret }
+    bytes[0usize] = u8(format & 255u32)
+    bytes[1usize] = u8((format >> 8u32) & 255u32)
+    bytes[2usize] = u8((format >> 16u32) & 255u32)
+    bytes[3usize] = u8(format >> 24u32)
+    var cut = path.len
+    while cut > 0usize && path[cut - 1usize] != 47u8 { cut -= 1usize }
+    let made = fs.make_dirs(a, path[0usize..cut])
+    let saved = fs.write_file(a, path, bytes[0usize..usize(written) + 4usize])
 }
 
 fn destroy_here(pipeline: mtl.Pipeline) { gl.delete_program(u32(pipeline.state & 4294967295usize)) }
