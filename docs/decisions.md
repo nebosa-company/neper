@@ -43215,3 +43215,13 @@ The window's own logical `damage`/`damaged` (D904) are left as they were. They a
 - **`math.fma[f64]`.** This follows Boldo and Melquiond: an exact product from Dekker's split, two exact sums, a round-to-odd add, then one rounding. It is exact while no step overflows or underflows; outside that it is the plain expression, which is a marked limit. `gpu_gl_f64` checks 65,536 triples within that range, half of them near-cancelling, and is word-equal on llvmpipe.
 
 `e.gpu.open_id` answers `NoDevice` for a `.Gl` or `.Metal` key when that backend is present, since their records carry no key, and `Unsupported` otherwise. Before, every such key was `Unsupported`. Emitted text for kernels without barriers is unchanged, and the GLSL goldens are byte-identical.
+
+## D5907 — One call presents every window through GL
+
+`e.ui.window.set_default_presenter` takes a `PresenterFactory`, and every window opened afterwards calls its `attach`. If the attach fails, the window stays on the software path. `x.khronos.present.install()` sets one that attaches GL 3.3 core, and `install_es()` one that attaches GLES 3.0. A program, or an `e.ui.app` with its own windows, opts every window into GL with a single call, without reaching for each window as `attach` needs. `e.*` still cannot import `x.*`, so the factory is a hook, like the presenter itself (D5887).
+
+`scripts/run-gl-fixtures.py --ui` runs every `ui_*` fixture that opens a host window with `install()` (or `install_es()`) called first. The other `ui_*` fixtures render offscreen and present nothing. All six pass:
+- **Windows:** Intel's GL 3.3 and ANGLE's GLES 3.0.
+- **Linux (WSLg):** llvmpipe's GL 3.3 and GLES 3.0.
+
+A copy of `ui_app` confirmed `window.presenting` stays true after its frames, so frames went through GL rather than the fallback.

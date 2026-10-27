@@ -7,6 +7,10 @@ check themselves against the CPU backend, so the exit code is the verdict; the l
 
     python scripts/run-gl-fixtures.py windows
     python scripts/run-gl-fixtures.py linux [--es] [NAME...]
+    python scripts/run-gl-fixtures.py windows --ui [--es]
+
+With --ui (T046, D5907) it runs the ui_* fixtures that open host windows instead, each window presenting through GL:
+the program calls x.khronos.present's `install()` (`install_es()`) first, and no backend is rewritten.
 
 Fixtures that already open .Gl devices themselves (gpu_gl*, and those importing x.khronos.compute) are left to the suites.
 """
@@ -24,14 +28,16 @@ FLAGS = {'gpu_fault_unchecked': ['--unchecked']}
 MAIN = re.compile(r'^fn main\(a: \*mem\.Arena, args: \[\]str\) -> err \{$', re.M)
 
 
-def rewrite(source, es):
+def rewrite(source, es, ui):
     if not MAIN.search(source):
         return None
-    source = source.replace('.Vulkan', '.Gl')
+    module = 'present' if ui else 'compute'
+    if not ui:
+        source = source.replace('.Vulkan', '.Gl')
     install = 'install_es' if es else 'install'
-    source = MAIN.sub(lambda m: m.group(0) + '\n    compute.' + install + '()', source, count=1)
+    source = MAIN.sub(lambda m: m.group(0) + '\n    ' + module + '.' + install + '()', source, count=1)
     # At the end, so every kernel keeps the line its fault records name.
-    return source + '\nuse x.khronos.compute\n'
+    return source + '\nuse x.khronos.' + module + '\n'
 
 
 def wsl_path(path):
@@ -42,16 +48,21 @@ def wsl_path(path):
 def main(argv):
     target = argv[1]
     es = '--es' in argv
-    names = [n for n in argv[2:] if n != '--es']
+    ui = '--ui' in argv
+    names = [n for n in argv[2:] if n not in ('--es', '--ui')]
+    if not names and ui:
+        names = sorted(n for n in os.listdir(LINK) if n.startswith('ui_')
+                       and os.path.isfile(os.path.join(LINK, n, 'src', 'main.e'))
+                       and re.search(r'app\.init\[|window\.open\(', open(os.path.join(LINK, n, 'src', 'main.e'), encoding='utf-8').read()))
     if not names:
         names = sorted(n for n in os.listdir(LINK) if n.startswith('gpu_') and not n.startswith('gpu_gl')
                        and os.path.isfile(os.path.join(LINK, n, 'src', 'main.e'))
                        and '.Vulkan' in open(os.path.join(LINK, n, 'src', 'main.e'), encoding='utf-8').read()
                        and 'x.khronos.compute' not in open(os.path.join(LINK, n, 'src', 'main.e'), encoding='utf-8').read())
-    out = os.path.join(REPO, 'build', 'gl-fixtures', target + ('-es' if es else ''))
+    out = os.path.join(REPO, 'build', 'gl-fixtures', target + ('-es' if es else '') + ('-ui' if ui else ''))
     failed = 0
     for name in names:
-        source = rewrite(open(os.path.join(LINK, name, 'src', 'main.e'), encoding='utf-8').read(), es)
+        source = rewrite(open(os.path.join(LINK, name, 'src', 'main.e'), encoding='utf-8').read(), es, ui)
         if source is None:
             print('%-40s skipped: no main(a, args)' % name)
             continue

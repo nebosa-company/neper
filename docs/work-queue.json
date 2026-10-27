@@ -1148,17 +1148,6 @@
       "evidence": "Design docs/opengl-plan.md, D5879, D5880. Needs L173. Acceptance: an NSOpenGLContext on the content view that window_native returns; follows the Retina backing scale; checked on the macOS CI runners. Metal (C193) keeps the Mac's compute."
     },
     {
-      "id": "T046",
-      "category": "tooling",
-      "group": "OpenGL",
-      "order": 283,
-      "title": "OpenGL verify 2 (verify-only): ui fixtures presented through GL",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "low",
-      "evidence": "Verify-only turn, no edits. Needs L178. Run every ui_* fixture with present: .Gl on Windows and Linux and report the tails."
-    },
-    {
       "id": "C216",
       "category": "compiler",
       "group": "OpenGL",

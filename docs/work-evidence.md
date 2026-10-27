@@ -420,10 +420,6 @@ GL 4.6 added 2026-10-27 (D5894): a 4.6 core context draws and computes on Intel 
 
 Design docs/opengl-plan.md, D5879, D5880. Needs L173. Acceptance: an NSOpenGLContext on the content view that window_native returns; follows the Retina backing scale; checked on the macOS CI runners. Metal (C193) keeps the Mac's compute.
 
-### T046 — OpenGL verify 2 (verify-only): ui fixtures presented through GL (0%)
-
-Verify-only turn, no edits. Needs L178. Run every ui_* fixture with present: .Gl on Windows and Linux and report the tails.
-
 ### C216 — OpenGL 11: narrow and half types in GLSL (60%)
 
 Done 2026-10-27 (D5888): u8, i8, u16 and i16 load through bitfieldExtract (sign-extended for the signed ones), store into heap and tg through atomicAnd and atomicOr on the word and into the frame through bitfieldInsert, and are masked or sign-extended back after every operation. gpu_gl's u8 and i16 stores into neighbouring bytes of the same words are word-exact on Intel and llvmpipe. Remaining: f16 and bf16 (packHalf2x16) are Unsupported. Blocked outside this group: no backend computes f16 or bf16 (codegen_x64.float_width answers 0, so the CPU backend that every GL result is compared with refuses an f16 kernel), so GLSL has no reference to be word-exact against until the CPU has f16 arithmetic. Design docs/opengl-plan.md, D5882. Needs C215 (same file, so one at a time). Acceptance: u8, i8, u16, i16, f16 and bf16 loads via bitfieldExtract; stores via atomicAnd/atomicOr on the containing word; packHalf2x16 for f16; a fixture where neighbouring invocations race to store narrow values is word-exact.
@@ -1833,3 +1829,7 @@ Closed 2026-10-27 (D5887, D5905): e.ui.window.Presenter and set_presenter, with 
 ### T047 — OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl
 
 Closed 2026-10-27 (D5906): scripts/run-gl-fixtures.py runs every gpu_* fixture that launches on Vulkan devices (22; the other gpu_* fixtures run the CPU backend only) on .Gl instead, built with --gpu glsl, each checking itself against the CPU backend. All 22 pass on Intel Iris Xe (Windows GL 4.6), on llvmpipe through GL 4.5, and on llvmpipe through GLES 3.2. The run found and fixed five GLSL gaps: a barrier reached in different rounds of the dispatch loop (workgroup rounds), acquire/release atomics and memory barriers (fences), a shared slice or pointer handed to a helper, a fault inside a helper that returns a value, and math.fma[f64] (emulated exactly). A key on a .Gl device now names no device rather than being Unsupported. gpu_subgroup_identity and gpu_subgroup_reduce skip GL on every host here: they need Subgroup with Int64, which no GL device here has together. gpu_gl_subgroup covers subgroups on Intel. The gpu_gl* fixtures and those already opening .Gl run in the suites.
+
+### T046 — OpenGL verify 2 (verify-only): ui fixtures presented through GL
+
+Closed 2026-10-27 (D5907): x.khronos.present.install() (install_es() for GLES) makes every e.ui.window opened afterwards present through GL, an e.ui.app's included. scripts/run-gl-fixtures.py --ui runs every ui_* fixture that opens a host window (ui_algorithms, ui_app, ui_drag_drop, ui_host, ui_taskbar, ui_window; the other ui_* fixtures draw offscreen and present nothing) with it: all six pass on Windows through Intel GL 3.3 and ANGLE GLES 3.0, and on Linux (WSLg) through llvmpipe GL 3.3 and GLES 3.0. A scratch ui_app confirmed window.presenting is true after its frames, so the GL path ran rather than the software fallback.

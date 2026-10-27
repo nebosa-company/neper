@@ -203,6 +203,23 @@ fn attach(a: *mem.Arena, w: *window.Window, options: context.Options) -> err {
     ret window.set_presenter(w, window.Presenter { context: index, present: present })
 }
 
+// (D5907) Every `e.ui.window` opened from now on presents through GL 3.3 core, or GLES 3.0 with `install_es`.
+fn install() {
+    window.set_default_presenter(window.PresenterFactory { attach: attach_gl })
+}
+
+fn install_es() {
+    window.set_default_presenter(window.PresenterFactory { attach: attach_gles })
+}
+
+fn attach_gl(a: *mem.Arena, w: *window.Window) -> err {
+    ret attach(a, w, context.Options { api: .Gl, major: 3u32, minor: 3u32 })
+}
+
+fn attach_gles(a: *mem.Arena, w: *window.Window) -> err {
+    ret attach(a, w, context.Options { api: .Gles, major: 3u32, minor: 0u32 })
+}
+
 fn close(index: usize) -> err {
     if index >= MAX_PRESENTS || !presents[index].live { ret ok }
     presents[index].live = false

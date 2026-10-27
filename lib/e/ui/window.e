@@ -71,6 +71,18 @@ type Changed = struct { x0: u32, y0: u32, x1: u32, y1: u32 }
 // this and every later frame back to the software path.
 type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32, Changed) -> err }
 
+// (D5907) A presenter every window opened from now on gets: `x.khronos.present.install` sets one, so a program opts every
+// window (an `e.ui.app`'s too) into GL with one call. A window it cannot attach to stays on the software path.
+type PresenterFactory = struct { attach: fn(*mem.Arena, *Window) -> err }
+
+var default_presenter: PresenterFactory = zero
+var has_default_presenter: bool = false
+
+fn set_default_presenter(factory: PresenterFactory) {
+    default_presenter = factory
+    has_default_presenter = true
+}
+
 var slots: [16]*State = zero
 var generations: [16]u32 = zero
 var live: [16]bool = zero
@@ -124,7 +136,9 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
     generations[slot] += 1u32
     slots[slot] = &states[0usize]
     live[slot] = true
-    ret (Window { state: mem.cast[*void](&states[0usize]), id: Id { slot: u32(slot), generation: generations[slot] } }, ok)
+    var opened = Window { state: mem.cast[*void](&states[0usize]), id: Id { slot: u32(slot), generation: generations[slot] } }
+    if has_default_presenter { let attached = default_presenter.attach(a, &opened) }
+    ret (opened, ok)
 }
 
 // The window a host handle names, for the input queue; `false` for a stranger.
