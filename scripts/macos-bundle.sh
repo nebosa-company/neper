@@ -3,7 +3,8 @@
 #   macos-bundle.sh --exe PROGRAM --name NAME --id com.example.name --out DIR
 #                   [--version 1.0] [--icon icon.png] [--agent]
 #                   [--usage-camera TEXT] [--usage-microphone TEXT] [--usage-location TEXT] [--zip] [--dmg]
-#                   [--url-scheme SCHEME]... [--doc-type EXTENSION]... [--sign IDENTITY]
+#                   [--url-scheme SCHEME]... [--doc-type EXTENSION]... [--sign IDENTITY] [--entitlements FILE]
+#                   [--notarize KEYCHAIN_PROFILE]
 # DIR/NAME.app holds Contents/Info.plist, Contents/MacOS/NAME (the program), Contents/Resources/NAME.icns (from the png, a square
 # of 1024 pixels or more is best) and an ad-hoc signature. --agent leaves the program out of the Dock (LSUIElement). The usage texts
 # are what the system shows when the program first asks for the camera, the microphone or the location, and without them the system
@@ -11,12 +12,16 @@
 # compressed disk image holding the app, made with hdiutil). --url-scheme and --doc-type (each may repeat) declare the URL schemes
 # and the file extensions the app opens (CFBundleURLTypes, CFBundleDocumentTypes); a program that registers them itself at run
 # time with associate_file does not need them. --sign IDENTITY signs with that identity and the hardened runtime instead of
-# ad hoc (a Developer ID Application identity from the keychain), which is what notarization wants.
+# ad hoc (a Developer ID Application identity from the keychain), which is what notarization wants. --entitlements FILE is passed
+# to codesign with it. --notarize PROFILE (needs --sign) submits a zip of the signed app with `xcrun notarytool submit --keychain-profile
+# PROFILE --wait`, fails unless the answer is Accepted, staples the ticket to the app and checks it with spctl; PROFILE is what
+# `xcrun notarytool store-credentials` saved. Neither of those two options has been run: this repository has no Apple developer
+# identity (D5855), so they are written to the tools' documented command lines and wait for a first real run.
 # Not done here: a Developer ID signature with the hardened runtime and notarization, which need an Apple developer identity;
 # run `codesign --force --options runtime --sign "Developer ID Application: ..." DIR/NAME.app` and `xcrun notarytool submit` on the
 # result.
 set -eu
-exe=""; name=""; id=""; out=""; version="1.0"; icon=""; agent=0; zip=0; dmg=0; sign=""
+exe=""; name=""; id=""; out=""; version="1.0"; icon=""; agent=0; zip=0; dmg=0; sign=""; entitlements=""; notarize=""
 schemes=""; doctypes=""
 camera=""; microphone=""; location=""
 while [ $# -gt 0 ]; do
@@ -34,6 +39,8 @@ while [ $# -gt 0 ]; do
     --zip) zip=1; shift ;;
     --dmg) dmg=1; shift ;;
     --sign) sign=$2; shift 2 ;;
+    --entitlements) entitlements=$2; shift 2 ;;
+    --notarize) notarize=$2; shift 2 ;;
     --url-scheme) schemes="$schemes $2"; shift 2 ;;
     --doc-type) doctypes="$doctypes $2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -43,6 +50,7 @@ for v in exe name id out; do
   if [ -z "${!v}" ]; then echo "missing --$v" >&2; exit 2; fi
 done
 [ -x "$exe" ] || { echo "not an executable: $exe" >&2; exit 2; }
+if [ -n "$notarize" ] && [ -z "$sign" ]; then echo "--notarize needs --sign: only a Developer ID signature is notarized" >&2; exit 2; fi
 case "$name" in */*|*..*) echo "the name is a file name: $name" >&2; exit 2 ;; esac
 
 app="$out/$name.app"
@@ -86,7 +94,11 @@ cat > "$app/Contents/Info.plist" <<PLIST
 PLIST
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 if [ -n "$sign" ]; then
-  codesign --force --options runtime --timestamp --sign "$sign" --deep "$app"
+  if [ -n "$entitlements" ]; then
+    codesign --force --options runtime --timestamp --entitlements "$entitlements" --sign "$sign" --deep "$app"
+  else
+    codesign --force --options runtime --timestamp --sign "$sign" --deep "$app"
+  fi
 else
   codesign --force --sign - --deep "$app" 2>/dev/null
 fi
@@ -94,6 +106,14 @@ codesign --verify --deep --strict "$app"
 if [ "$zip" = 1 ]; then
   rm -f "$out/$name.zip"
   ditto -c -k --keepParent "$app" "$out/$name.zip"
+fi
+if [ -n "$notarize" ]; then
+  upload=$(mktemp -d)/"$name.zip"
+  ditto -c -k --keepParent "$app" "$upload"
+  result=$(xcrun notarytool submit "$upload" --keychain-profile "$notarize" --wait 2>&1) || { echo "$result" >&2; exit 1; }
+  echo "$result" | grep -q "status: Accepted" || { echo "notarization was not accepted:" >&2; echo "$result" >&2; exit 1; }
+  xcrun stapler staple "$app"
+  spctl -a -vv -t exec "$app"
 fi
 if [ "$dmg" = 1 ]; then
   rm -f "$out/$name.dmg"
