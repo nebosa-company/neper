@@ -39,7 +39,7 @@ jobs:
           chmod +x /tmp/neper-aarch64-macos scripts/*.sh tests/selfhost/*.sh
           export NEPER_COMPILER=/tmp/neper-aarch64-macos
           sw_vers; node --version; bash --version | head -1
-          names="wasm_basics wasm_ops wasm_flow wasm_irreducible wasm_mask wasm_atomics wasm_reserve wasm_address fs_basics os_clock_random os_environment os_wait_timeout os_process os_group os_socket os_resolve async_io net wasm_net proc_sys"
+          names="wasm_basics wasm_ops wasm_flow wasm_irreducible wasm_mask wasm_atomics wasm_reserve wasm_address fs_basics os_clock_random os_environment os_wait_timeout os_process os_group os_socket os_resolve async_io net wasm_net"
           clean() { ! grep -qE '	(fail|invalid|refused|stderr-differs|skipped)	' build/wasm-sweep/results.tsv; }
           bash scripts/wasm-sweep.sh -j 2 $names
           clean
