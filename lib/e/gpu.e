@@ -107,7 +107,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_command: usize, pending_block: mtl.Buffer, pending_queue: *QueueState, pending_checked: bool }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
@@ -878,6 +878,7 @@ fn state_of(device: *Device) -> (*DeviceState, err) {
         unlock_state(found)
         ret (found, InvalidHandle)
     }
+    metal_finish(found)
     ret (found, ok)
 }
 
@@ -999,6 +1000,8 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     state.metal = no_metal
     state.heap = no_heap
     state.heap_ends = 0usize
+    state.pending_command = 0usize
+    state.pending_checked = false
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Device { state: mem.cast[*void](state) }
@@ -1229,6 +1232,7 @@ fn queue_state(q: *Queue) -> (*QueueState, err) {
         unlock_state(state.device)
         ret (state, InvalidHandle)
     }
+    metal_finish(state.device)
     ret (state, ok)
 }
 
@@ -1377,6 +1381,7 @@ fn token_device(token_value: Token) -> (*DeviceState, err) {
         unlock_state(found)
         ret (found, InvalidHandle)
     }
+    metal_finish(found)
     ret (found, ok)
 }
 
@@ -1557,6 +1562,7 @@ fn queue_state_of(state: *QueueState) -> (*QueueState, err) {
         unlock_state(state.device)
         ret (state, InvalidHandle)
     }
+    metal_finish(state.device)
     ret (state, ok)
 }
 
@@ -1876,37 +1882,54 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
     var buffers: [2]mtl.Buffer = zero
     buffers[0usize] = block
     buffers[1usize] = device.heap
-    let dispatch_error = mtl.dispatch(device.metal, pipeline, buffers[0usize..2usize], mtl.Size { width: gx, height: gy, depth: gz }, mtl.Size { width: x, height: y, depth: z }, shared_bytes)
-    mtl.free(block)
-    if dispatch_error != ok { ret Lost }
-    if checked {
-        let fault_bytes = device.heap.bytes
-        let count = *mem.cast[*u32](&fault_bytes[0usize])
-        if count != 0u32 {
-            if state.fault_count == 0u32 {
-                var kind: FaultKind = .Bounds
-                let kind_value = fault_bytes[8usize]
-                if kind_value == 1u8 { kind = .Null }
-                if kind_value == 2u8 { kind = .Tag }
-                if kind_value == 3u8 { kind = .Alignment }
-                if kind_value == 4u8 { kind = .Overflow }
-                if kind_value == 5u8 { kind = .DivideByZero }
-                state.fault = FaultRecord {
-                    kernel: *mem.cast[*u32](&fault_bytes[4usize]),
-                    kind: kind,
-                    site: *mem.cast[*u32](&fault_bytes[12usize]),
-                    gid: Id {
-                        x: *mem.cast[*u32](&fault_bytes[16usize]),
-                        y: *mem.cast[*u32](&fault_bytes[20usize]),
-                        z: *mem.cast[*u32](&fault_bytes[24usize]),
-                    },
-                }
-            }
-            state.fault_count += count
-        }
+    // The launch is committed and not waited for (D5875): the host's next call into this device finishes it (`metal_finish`), so
+    // the CPU can work while the GPU runs. The argument block lives until then.
+    let (command, begin_error) = mtl.dispatch_begin(device.metal, pipeline, buffers[0usize..2usize], mtl.Size { width: gx, height: gy, depth: gz }, mtl.Size { width: x, height: y, depth: z }, shared_bytes)
+    if begin_error != ok {
+        mtl.free(block)
+        ret Lost
     }
+    device.pending_command = command
+    device.pending_block = block
+    device.pending_queue = state
+    device.pending_checked = checked
     state.serial += 1u64
     ret ok
+}
+
+// Waits for the launch `launch_metal` left running and reads its fault block, as the Vulkan path reads its buffer; called with the
+// device locked at every entry that could see the launch's effects.
+fn metal_finish(device: *DeviceState) {
+    if device.backend != .Metal || device.pending_command == 0usize { ret }
+    let command = device.pending_command
+    device.pending_command = 0usize
+    let waited = mtl.dispatch_wait(command)
+    mtl.free(device.pending_block)
+    if !device.pending_checked { ret }
+    let state = device.pending_queue
+    let fault_bytes = device.heap.bytes
+    let count = *mem.cast[*u32](&fault_bytes[0usize])
+    if count == 0u32 { ret }
+    if state.fault_count == 0u32 {
+        var kind: FaultKind = .Bounds
+        let kind_value = fault_bytes[8usize]
+        if kind_value == 1u8 { kind = .Null }
+        if kind_value == 2u8 { kind = .Tag }
+        if kind_value == 3u8 { kind = .Alignment }
+        if kind_value == 4u8 { kind = .Overflow }
+        if kind_value == 5u8 { kind = .DivideByZero }
+        state.fault = FaultRecord {
+            kernel: *mem.cast[*u32](&fault_bytes[4usize]),
+            kind: kind,
+            site: *mem.cast[*u32](&fault_bytes[12usize]),
+            gid: Id {
+                x: *mem.cast[*u32](&fault_bytes[16usize]),
+                y: *mem.cast[*u32](&fault_bytes[20usize]),
+                z: *mem.cast[*u32](&fault_bytes[24usize]),
+            },
+        }
+    }
+    state.fault_count += count
 }
 
 // The Metal pipeline for a kernel's module and entry, compiled the first time. The entry is `module.kernel`; the MSL

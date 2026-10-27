@@ -39,6 +39,14 @@ fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
 
 fn destroy(pipeline: Pipeline) {}
 
+fn dispatch_begin(context: Context, pipeline: Pipeline, buffers: []const Buffer, groups: Size, per_group: Size, shared_bytes: usize) -> (usize, err) {
+    ret (0usize, Unsupported)
+}
+
+fn dispatch_wait(command: usize) -> err {
+    ret Unsupported
+}
+
 fn dispatch(context: Context, pipeline: Pipeline, buffers: []const Buffer, groups: Size, per_group: Size, shared_bytes: usize) -> err {
     ret Unsupported
 }

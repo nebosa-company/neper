@@ -140,9 +140,18 @@ fn destroy(pipeline: Pipeline) {
 // Runs the pipeline over `groups` thread groups of `per_group` threads with `buffers[i]` at buffer index i, and waits.
 // `shared_bytes` is the thread group memory of the kernel's `threadgroup` argument at index 0 (zero for none).
 fn dispatch(context: Context, pipeline: Pipeline, buffers: []const Buffer, groups: Size, per_group: Size, shared_bytes: usize) -> err {
-    if buffers.len > 31usize || groups.width == 0usize || groups.height == 0usize || groups.depth == 0usize { ret Failed }
+    let (command, begin_error) = dispatch_begin(context, pipeline, buffers, groups, per_group, shared_bytes)
+    if begin_error != ok { ret begin_error }
+    ret dispatch_wait(command)
+}
+
+// The same dispatch committed and not waited for (D5875): the command buffer, kept alive, which `dispatch_wait` ends. The buffers
+// must stay as they are until then.
+fn dispatch_begin(context: Context, pipeline: Pipeline, buffers: []const Buffer, groups: Size, per_group: Size, shared_bytes: usize) -> (usize, err) {
+    if buffers.len > 31usize || groups.width == 0usize || groups.height == 0usize || groups.depth == 0usize { ret (0usize, Failed) }
     let pool = os.objc_pool_push()
     let command = os.msg0(context.queue, os.cocoa_sel("commandBuffer\x00"))
+    let kept = os.msg0(command, os.cocoa_sel("retain\x00"))
     let encoder = os.msg0(command, os.cocoa_sel("computeCommandEncoder\x00"))
     let pipelined = os.msg1(encoder, os.cocoa_sel("setComputePipelineState:\x00"), pipeline.state)
     var at = 0usize
@@ -158,10 +167,16 @@ fn dispatch(context: Context, pipeline: Pipeline, buffers: []const Buffer, group
     let dispatched = msg_dispatch(encoder, os.cocoa_sel("dispatchThreadgroups:threadsPerThreadgroup:\x00"), groups, per_group)
     let ended = os.msg0(encoder, os.cocoa_sel("endEncoding\x00"))
     let committed = os.msg0(command, os.cocoa_sel("commit\x00"))
+    os.objc_pool_pop(pool)
+    ret (command, ok)
+}
+
+// Waits for a dispatch `dispatch_begin` committed and lets go of it.
+fn dispatch_wait(command: usize) -> err {
     let waited = os.msg0(command, os.cocoa_sel("waitUntilCompleted\x00"))
     // MTLCommandBufferStatusCompleted is 4.
     let status = os.msg0(command, os.cocoa_sel("status\x00"))
-    os.objc_pool_pop(pool)
+    let dropped = os.msg0(command, os.cocoa_sel("release\x00"))
     if status != 4usize { ret Failed }
     ret ok
 }
