@@ -3645,6 +3645,15 @@ $sqliteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $sqliteWritten -ne 'executable written') { throw 'x.sqlite.sqlite emission failed' }
 & $sqlitePath
 if ($LASTEXITCODE -ne 0) { throw "the SQLite driver answered wrongly: exit $LASTEXITCODE" }
+# `x.khronos.gl` and `x.khronos.egl` (D5883, D5885): generated from scripts/khronos, the profile
+# table checked with fake resolvers and no driver, and EGL refused as NoLoader from a missing library.
+& python (Join-Path $repo 'scripts\gen_khronos_gl.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'lib/x/khronos is not what scripts/gen_khronos_gl.py generates' }
+$khronosLoadPath = Join-Path $testBuild 'x-khronos-gl-load-selfhost.exe'
+$khronosLoadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_load\src\main.e') $repo 'x64' 'windows' $khronosLoadPath
+if ($LASTEXITCODE -ne 0 -or $khronosLoadWritten -ne 'executable written') { throw 'x.khronos.gl loader fixture emission failed' }
+& $khronosLoadPath
+if ($LASTEXITCODE -ne 0) { throw "the GL loader answered wrongly: exit $LASTEXITCODE" }
 # The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
 # statement scanner and literal rendering, error mapping -- with no server and no client library.
 $dbUnitsPath = Join-Path $testBuild 'x-db-units-selfhost.exe'

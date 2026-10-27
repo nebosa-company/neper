@@ -3186,6 +3186,13 @@ sqlite_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$sqlite_written" = 'executable written' ]
 chmod +x "$test_build/x-sqlite-selfhost"
 TMPDIR=/tmp "$test_build/x-sqlite-selfhost"
+# `x.khronos.gl` and `x.khronos.egl` (D5883, D5885): generated from scripts/khronos, the profile
+# table checked with fake resolvers and no driver, and EGL refused as NoLoader from a missing library.
+python3 "$repo/scripts/gen_khronos_gl.py" --check
+khronos_load_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_load/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-load-selfhost")
+[ "$khronos_load_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-load-selfhost"
+"$test_build/x-khronos-gl-load-selfhost"
 # The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
 # statement scanner and literal rendering, error mapping -- with no server and no client library.
 db_units_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_db_units/src/main.e" "$repo" x64 linux "$test_build/x-db-units-selfhost")

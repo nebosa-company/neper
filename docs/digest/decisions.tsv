@@ -2962,4 +2962,5 @@ D5880	576	Where a GL context comes from
 D5881	279	One thread owns a GL device
 D5882	645	Exactness on GL is Metal's promise
 D5883	326	GL entry points are generated
-D5884	799	Mobile GL means GLES, and Android comes in two forms
+D5884	800	Mobile GL means GLES, and Android comes in two forms
+D5885	2328	The GL binding is generated from the registry's headers, as one table

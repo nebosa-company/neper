@@ -1126,26 +1126,15 @@
       "evidence": "Needs a device. Prepared: `node scripts/serve-wasm.mjs --isolated --host 0.0.0.0` and open /tests/wasm/browser/phone_probe.html on the phone (a plain field that logs key, composition, paste, visualViewport and scroll events; Report copies the log) to answer checks 1-5 before touching ui_counter. D5821 lists what the mobile preset did and did not show (synthetic composition events, the textarea at 16 px not scrolling or zooming). Serve tests/wasm/browser/ui_counter.html over HTTPS or a LAN address with scripts/serve-wasm.mjs --isolated (a secure context is needed for crossOriginIsolated and the clipboard) and check on iOS Safari and Android Chrome: (1) tapping the Name field opens the keyboard and neither zooms nor scrolls the page; (2) typed letters, Backspace and Enter arrive once each; (3) composition with a CJK keyboard (pinyin or kana) delivers the committed text once, with no duplicate after compositionend and none while composing; (4) the clipboard: paste from the system menu reaches the program, and Ctrl+C in the program writes navigator.clipboard, with the permission prompt answered either way; (5) visualViewport resizes when the keyboard opens and the canvas stays usable (decide whether the window follows it); (6) a physical keyboard on a tablet still works. Fix what fails in lib/wasm/window.js; window_visible is separate."
     },
     {
-      "id": "L172",
-      "category": "library",
-      "group": "OpenGL",
-      "order": 274,
-      "title": "OpenGL 1: registry generator for x.khronos.gl and x.khronos.egl",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Design docs/opengl-plan.md, D5877, D5883. Acceptance: scripts/gen_khronos_gl.py reads vendored Khronos gl.xml and egl.xml (downloading them needs the user's go-ahead) and writes lib/x/khronos/gl.e and egl.e: the constants and one Api function table per profile (gl33core, gl43core, gl46core, gles30, gles31, gles32); regenerating gives identical bytes; no entry point written by hand."
-    },
-    {
       "id": "L173",
       "category": "library",
       "group": "OpenGL",
       "order": 275,
       "title": "OpenGL 2: the loader, gl.load(profile, get_proc)",
-      "score": 0,
+      "score": 0.6,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Design docs/opengl-plan.md, D5877. Needs L172. Acceptance: fills a profile's table through wglGetProcAddress (with opengl32's own exports for the GL 1.1 entries) or eglGetProcAddress; parses GL_VERSION and the extension list; a missing required entry is Unsupported, naming it; no driver at all is NoLoader."
+      "evidence": "Done 2026-10-27 (D5885): gl.load(profile, resolve, context) fills the table and fails Unsupported naming the first required entry through gl.missing(); gl.version() parses desktop and ES GL_VERSION strings; gl.has_extension walks GL_NUM_EXTENSIONS; egl.load opens libEGL (NoLoader when absent) and egl.proc_address is the EGL resolver; checked without a driver by x_khronos_gl_load. Remaining: the WGL resolver (wglGetProcAddress, then opengl32's exports for the GL 1.1 entries, with L175) and a run against a real driver (L174/L175). Design docs/opengl-plan.md, D5877. Needs L172. Acceptance: fills a profile's table through wglGetProcAddress (with opengl32's own exports for the GL 1.1 entries) or eglGetProcAddress; parses GL_VERSION and the extension list; a missing required entry is Unsupported, naming it; no driver at all is NoLoader."
     },
     {
       "id": "L174",
