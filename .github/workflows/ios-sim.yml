@@ -41,7 +41,7 @@ jobs:
         run: |
           mkdir -p /tmp/drv && cd /tmp/drv && npm init -y >/dev/null
           npm i appium webdriverio >/dev/null 2>&1
-          npx appium driver install xcuitest
+          npx appium driver install xcuitest@7.24.2 || npx appium driver install xcuitest@7
       - name: Boot an iPhone simulator
         run: |
           xcrun simctl list devices available | grep -i iphone | head -20
