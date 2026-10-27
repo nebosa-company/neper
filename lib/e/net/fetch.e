@@ -525,7 +525,11 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
             if hit && c.cfg.typed_hosts.len > 0usize {
                 // A rule with request-type options covers only those types.
                 let ti = policy.host_index(c.cfg.typed_hosts, cur.host)
-                if ti >= 0i64 && usize(ti) < c.cfg.typed_types.len { hit = policy.type_allows(c.cfg.typed_types[usize(ti)], req.dest) }
+                if ti >= 0i64 && usize(ti) < c.cfg.typed_types.len {
+                    let (page, pe) = url.parse(c.a, req.referrer, zero, false)
+                    hit = policy.options_allow(c.cfg.typed_types[usize(ti)], req.dest, page.host)
+                    if pe != ok { hit = false }
+                }
             }
             if hit {
                 c.blocked += 1usize

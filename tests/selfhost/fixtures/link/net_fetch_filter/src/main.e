@@ -69,6 +69,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e14 != fetch.BlockedByFilter || t4.blocked != 2usize { os.exit(20i32) }
     let (r15, e15) = fetch.fetch(&t4, request_as("http://plain.test/a.png", "http://site.test/", "image"))
     if e15 != fetch.BlockedByFilter || t4.blocked != 3usize { os.exit(21i32) }
+    // `$domain=` limits a rule to pages on the listed domains; `~` excludes one.
+    var cfg5 = fetch.default_config(zero)
+    let rules5 = policy.parse_filter_list(a, "||ads.test^$domain=news.test|~live.news.test\n")
+    cfg5.block_hosts = rules5.domains
+    cfg5.typed_hosts = rules5.typed
+    cfg5.typed_types = rules5.types
+    let (c5, ce5) = fetch.client(a, cfg5, 8usize)
+    if ce5 != ok { os.exit(22i32) }
+    var t5 = c5
+    let (r16, e16) = fetch.fetch(&t5, request("http://ads.test/a.js", "http://www.news.test/"))
+    if e16 != fetch.BlockedByFilter || t5.blocked != 1usize { os.exit(23i32) }
+    let (r17, e17) = fetch.fetch(&t5, request("http://ads.test/a.js", "http://other.test/"))
+    if e17 == fetch.BlockedByFilter || t5.blocked != 1usize { os.exit(24i32) }
+    let (r18, e18) = fetch.fetch(&t5, request("http://ads.test/a.js", "http://live.news.test/"))
+    if e18 == fetch.BlockedByFilter || t5.blocked != 1usize { os.exit(25i32) }
     // With no list there is no blocking.
     let (c1, ce1) = fetch.client(a, fetch.default_config(zero), 8usize)
     if ce1 != ok { os.exit(9i32) }

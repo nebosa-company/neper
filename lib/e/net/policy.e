@@ -752,6 +752,57 @@ fn type_allows(options: str, dest: str) -> bool {
     ret true
 }
 
+// Whether a rule's `$domain=a.com|~b.com` option lets it apply on a page at `page_host`: a listed domain (or a subdomain) is required when any is positive, a `~` one excludes.
+fn domain_allows(options: str, page_host: str) -> bool {
+    var start = 0usize
+    var i = 0usize
+    while i <= options.len {
+        if i == options.len || options[i] == 44u8 {
+            let tok = trim(options[start..i])
+            start = i + 1usize
+            if str.starts_with(tok, "domain=") { ret domain_list_allows(tok[7usize..], page_host) }
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+fn domain_list_allows(list: str, page_host: str) -> bool {
+    var has_pos = false
+    var matched = false
+    var start = 0usize
+    var i = 0usize
+    while i <= list.len {
+        if i == list.len || list[i] == 124u8 {
+            var d = trim(list[start..i])
+            start = i + 1usize
+            var neg = false
+            if str.starts_with(d, "~") {
+                neg = true
+                d = d[1usize..]
+            }
+            if d.len > 0usize {
+                let one: [1]str = [1]str{ d }
+                let hit = host_index(one[0..], page_host) >= 0i64
+                if neg {
+                    if hit { ret false }
+                } else {
+                    has_pos = true
+                    if hit { matched = true }
+                }
+            }
+        }
+        i += 1usize
+    }
+    if has_pos { ret matched }
+    ret true
+}
+
+// Whether a rule with these `$` options covers a request of type `dest` made from `page_host`.
+fn options_allow(options: str, dest: str, page_host: str) -> bool {
+    ret type_allows(options, dest) && domain_allows(options, page_host)
+}
+
 // The index of the entry of `domains` that `host` is, or a subdomain of; -1 when none.
 fn host_index(domains: []const str, host: str) -> i64 {
     var i = 0usize
@@ -836,7 +887,7 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
                     let (dollar, has_dollar) = str.find(tail, "$")
                     if has_dollar {
                         let options = lower(a, tail[dollar + 1usize..])
-                        if type_options_named(options) {
+                        if type_options_named(options) || str.contains(options, "domain=") {
                             typed[ntp] = host
                             typeopts[ntp] = options
                             ntp += 1usize
