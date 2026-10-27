@@ -45,7 +45,7 @@ jobs:
       - name: Boot an iPhone simulator
         run: |
           xcrun simctl list devices available | grep -i iphone | head -20
-          UDID=$(xcrun simctl list devices available -j | node -e 'const d=JSON.parse(require("fs").readFileSync(0));const all=Object.entries(d.devices).filter(([k])=>k.includes("iOS")).sort((a,b)=>a[0]<b[0]?1:-1).flatMap(([k,v])=>v.map(x=>({...x,runtime:k}))).filter(x=>/iPhone/.test(x.name));console.log(all[0].udid, all[0].runtime.split("iOS-")[1].replace(/-/g,"."))')
+          UDID=$(xcrun simctl list devices available -j | node -e 'const d=JSON.parse(require("fs").readFileSync(0));const all=Object.entries(d.devices).filter(([k])=>k.includes("iOS-17")).sort((a,b)=>a[0]<b[0]?1:-1).flatMap(([k,v])=>v.map(x=>({...x,runtime:k}))).filter(x=>/iPhone/.test(x.name));console.log(all[0].udid, all[0].runtime.split("iOS-")[1].replace(/-/g,"."))')
           set -- $UDID
           echo "UDID=$1" >> $GITHUB_ENV
           echo "IOS_VERSION=$2" >> $GITHUB_ENV
