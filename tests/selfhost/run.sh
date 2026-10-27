@@ -3210,6 +3210,11 @@ khronos_resize_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$khronos_resize_written" = 'executable written' ]
 chmod +x "$test_build/x-khronos-gl-resize-selfhost"
 "$test_build/x-khronos-gl-resize-selfhost"
+# (D5911) WM_DPICHANGED: the window takes the suggested rectangle and GL draws at the new size (Windows; here it says so).
+khronos_dpi_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_dpi/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-dpi-selfhost")
+[ "$khronos_dpi_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-dpi-selfhost"
+"$test_build/x-khronos-gl-dpi-selfhost"
 # `x.khronos.present` (D5887): BGRA frames at the physical sizes of scales 1.0, 1.5 and 2.0 come
 # back from the window's back buffer bit for bit, through GL 3.3 and GLES 3.0.
 khronos_present_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_present/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-present-selfhost")

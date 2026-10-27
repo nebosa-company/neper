@@ -3183,6 +3183,12 @@ extern fn raw_dpi_for_window(window: usize) -> u32
 @import("user32.dll", "GetDpiForSystem")
 extern fn raw_dpi_for_system() -> u32
 
+// (L175, D5911) WM_DPICHANGED's suggested rectangle, which a per-monitor-aware window must take itself.
+@import("user32.dll", "SetWindowPos")
+extern fn raw_set_window_pos(window: usize, after: usize, x: i32, y: i32, width: i32, height: i32, flags: u32) -> i32
+
+type WindowRectPun = union { pointer: *WindowRect, bits: usize }
+
 @import("user32.dll", "SetProcessDpiAwarenessContext")
 extern fn raw_set_dpi_awareness(context: isize) -> i32
 
@@ -3327,6 +3333,17 @@ fn window_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) -
             handler.bits = window_resize_handlers[resized_slot]
             handler.function(event.window, event.width, event.height)
         }
+        ret 0isize
+    }
+    // WM_DPICHANGED (D5911): the window crossed onto a monitor of another scale, or the scale changed. The process is
+    // per-monitor aware (v2), so nothing scales it for us: it takes the size Windows suggests for the new DPI, which comes
+    // back as WM_SIZE and so as a Resize, and `window_metrics` reads the new scale from the window.
+    if message == 736u32 {
+        var suggested: WindowRectPun = zero
+        suggested.bits = mem.bitcast[usize](lparam)
+        let r = *suggested.pointer
+        // SWP_NOZORDER | SWP_NOACTIVATE.
+        let moved = raw_set_window_pos(handle, 0usize, r.left, r.top, r.right - r.left, r.bottom - r.top, 20u32)
         ret 0isize
     }
     if message == 7u32 {

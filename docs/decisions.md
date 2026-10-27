@@ -43280,3 +43280,9 @@ With GL (`x.khronos.present.install_es()`, D5907), `x.khronos.context` makes the
 - Back logs `bye`, and the launcher returns.
 
 The status bar overlaps the top of the window, since the window is drawn edge to edge; insets are not applied.
+
+## D5911 — `WM_DPICHANGED`: a per-monitor-aware window takes the suggested rectangle
+
+`e.os` on Windows makes the process per-monitor DPI aware (v2) and reads each window's scale live (`GetDpiForWindow`). So when a window crosses onto a monitor of another scale, or the scale changes, nothing resizes it for the program. Windows sends `WM_DPICHANGED` with the rectangle the window should now have, and the window must take it. The window procedure now does, through `SetWindowPos` (no z-order change, no activation). That arrives as `WM_SIZE` and so as a Resize, and `window_metrics` answers the new scale. A GL presenter or context follows the Resize like any other: the viewport and the presented frame take the new size (D5899).
+
+`x_khronos_gl_dpi` sends its own window `WM_DPICHANGED` at 144 dpi with the frame half as large again, as Windows does for a 150% monitor. The client area must grow by exactly that share less the frame (200×150 to 311×253 on Intel), `window_metrics` must report it, and a GL frame cleared at the new size must reach its far corner. Before this change the message went unhandled and the window kept its size. The machine has one display, so a real crossing between monitors of different scales is not exercised. The fixture sends the message Windows sends for that crossing.

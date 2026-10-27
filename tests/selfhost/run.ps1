@@ -3674,6 +3674,12 @@ $khronosResizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $khronosResizeWritten -ne 'executable written') { throw 'x_khronos_gl_resize emission failed' }
 & $khronosResizePath
 if ($LASTEXITCODE -ne 0) { throw "a resized window's GL frame was stale: exit $LASTEXITCODE" }
+# (D5911) WM_DPICHANGED: the window takes the suggested rectangle and GL draws at the new size.
+$khronosDpiPath = Join-Path $testBuild 'x-khronos-gl-dpi-selfhost.exe'
+$khronosDpiWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_dpi\src\main.e') $repo 'x64' 'windows' $khronosDpiPath
+if ($LASTEXITCODE -ne 0 -or $khronosDpiWritten -ne 'executable written') { throw 'x_khronos_gl_dpi emission failed' }
+& $khronosDpiPath
+if ($LASTEXITCODE -ne 0) { throw "a window did not follow WM_DPICHANGED: exit $LASTEXITCODE" }
 # `x.khronos.present` (D5887): BGRA frames at the physical sizes of scales 1.0, 1.5 and 2.0 come
 # back from the window's back buffer bit for bit, through GL 3.3 and GLES 3.0.
 $khronosPresentPath = Join-Path $testBuild 'x-khronos-gl-present-selfhost.exe'
