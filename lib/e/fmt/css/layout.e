@@ -4409,7 +4409,18 @@ fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64) {
         let b2 = bx(l, c)
         if b2.inner == .Flow {
             let (rw, has_rw) = ratio_width(l, c, to_content_h(l, c, s2.height.px))
-            if has_rw { b2.w = maxf(0.0f64, clamp_width(l, c, rw, cbw)) + horizontal_extras(b2) }
+            if has_rw {
+                b2.w = maxf(0.0f64, clamp_width(l, c, rw, cbw)) + horizontal_extras(b2)
+                let aml2 = s2.margin[3usize].kind == .Auto
+                let amr2 = s2.margin[1usize].kind == .Auto
+                let rest2 = offer - b2.w - (b2.margin[1usize] + b2.margin[3usize])
+                if aml2 && amr2 && rest2 > 0.0f64 {
+                    b2.margin[3usize] = rest2 / 2.0f64
+                    b2.margin[1usize] = rest2 / 2.0f64
+                } else if aml2 && rest2 > 0.0f64 {
+                    b2.margin[3usize] = rest2
+                }
+            }
         }
     }
 }
