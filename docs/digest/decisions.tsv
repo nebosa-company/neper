@@ -2954,4 +2954,12 @@ D5872	737	The sweep knows which differences the platform imposes
 D5873	970	Permission bits through neper_host, and a link mid-path refused
 D5874	1365	window_on_resize on Windows, and the uses goldens become per-host
 D5875	1352	A Metal launch is committed and not waited for
-D5876	866	macos-bundle.sh can sign with entitlements and notarize, unrun
+D5876	867	macos-bundle.sh can sign with entitlements and notarize, unrun
+D5877	764	OpenGL is a library, not a language feature
+D5878	630	GL compute uses Metal's heap model
+D5879	324	OpenGL floors
+D5880	576	Where a GL context comes from
+D5881	279	One thread owns a GL device
+D5882	645	Exactness on GL is Metal's promise
+D5883	326	GL entry points are generated
+D5884	799	Mobile GL means GLES, and Android comes in two forms

@@ -42913,3 +42913,35 @@ Windows has `window_on_resize` (D5856): the window procedure's `WM_SIZE` branch,
 ## D5876 — macos-bundle.sh can sign with entitlements and notarize, unrun
 
 `scripts/macos-bundle.sh` takes `--entitlements FILE` (handed to `codesign` with the hardened runtime) and `--notarize PROFILE`, which needs `--sign` (refused otherwise, at argument time) and then submits a zip of the signed app with `xcrun notarytool submit --keychain-profile PROFILE --wait`, requires `status: Accepted`, staples the ticket with `xcrun stapler staple` and checks it with `spctl -a -vv -t exec`. Both options are opt-in; the default bundle path is unchanged (`BUNDLE PASS` on aarch64 and x64 in the macOS corpus, 1132/1132). They follow the tools' documented command lines and have never run against Apple's service: this repository has no Developer ID, so C191's finish line, a notarized bundle opened on a clean Mac, is still open and the header of the script says so.
+
+## D5877 — OpenGL is a library, not a language feature
+
+Neper gains OpenGL and OpenGL ES in three layers, each usable without the next: a binding (`x.khronos.gl`, `x.khronos.egl`) loaded at run time the way `e.gpu.vulkan` and `x.sqlite` are, through which a program draws with GLSL strings; an `e.ui` presentation path that hands the CPU renderer's finished frame to GL as a texture; and an `e.gpu` compute backend, `Backend.Gl`. Spec §10's "no graphics pipeline, and none is planned" stands: graphics reach a program through the binding, and `@gpu` gains no vertex or fragment stages. The work is queued as the OpenGL group, C214-C220, L172-L182 and T044-T049, each with its own model and thinking level; `docs/opengl-plan.md` holds the design and the order.
+
+## D5878 — GL compute uses Metal's heap model
+
+GLSL has no pointers, and §10 requires a device slice to be a `{ptr, len}` pair. The GL backend meets that requirement the way Metal does (D5838, D5839): one SSBO heap, `uint heap[]`, in which a device address is a byte offset and a kernel is a switch state machine over heap offsets. The emitter is `src/glsl.e`, a sibling of `src/msl.e`, and the GL code goes into its own `K$glsl` section, selected with `--gpu glsl` (C214), because Vulkan and GL share Windows and Linux targets where Metal had macOS to itself. §10's Platforms table gains a GL row and §13 gains the target.
+
+## D5879 — OpenGL floors
+
+Compute needs desktop GL 4.3 core or GLES 3.1. The binding and presentation need only GL 3.3 core, GLES 3.0 or WebGL2. macOS stops at GL 4.1, which has no compute, so the Mac gets presentation only (L176), and Metal (C193) keeps the compute. GL before 3.3 and GLES before 3.0 are not supported.
+
+## D5880 — Where a GL context comes from
+
+Windows uses WGL, bootstrapped through a dummy window's pixel format and then `wglCreateContextAttribsARB`, and reaches GLES through ANGLE's `libEGL.dll`. Linux uses EGL. Neper's X11 client is a raw protocol socket with no Xlib `Display*`, so the GL side opens a second `libX11` connection and renders into the same window XID (XIDs are server-global). Headless tests and compute devices use surfaceless EGL (`EGL_MESA_platform_surfaceless`) or a hidden WGL window. macOS uses CGL on the content view that `window_native` returns.
+
+## D5881 — One thread owns a GL device
+
+A GL context is current on one thread at a time. `e.gpu.gl` gives each device a worker thread that owns the context and receives every queue call; making the context current on each call would race as soon as two threads share a queue.
+
+## D5882 — Exactness on GL is Metal's promise
+
+Every word a kernel writes on GL equals what the CPU backend writes. GLSL allows 2.5 ULP division and a loose `sqrt`, so the emitter corrects both to correct rounding (with integer emulation of the divide as the fallback), and every float operation is `precise`. GLSL core has no 8- or 16-bit SSBO access, so narrow stores are `atomicAnd`/`atomicOr` on their word; a plain read-modify-write would race with neighbouring invocations. A kernel that needs `f64`, `i64`, 64-bit atomics or subgroups on a device without them fails at `gpu.launch` with `gpu.Unsupported`, the existing §10 mechanism.
+
+## D5883 — GL entry points are generated
+
+The constants and function tables are generated from Khronos `gl.xml` and `egl.xml`, one table per profile (gl33core, gl43core, gl46core, gles30, gles31, gles32), by `scripts/gen_khronos_gl.py` (L172). No entry point is written by hand, and regenerating must give identical bytes.
+
+## D5884 — Mobile GL means GLES, and Android comes in two forms
+
+Mobile OpenGL is the GLES 3.1 profile. It is verified first on Mesa's EGL on desktop Linux, which needs no phone, and then on Android. Neper has no Android target, so the target comes in two forms, cheaper first. The first (C219) is an executable for `adb shell`: a PIE ELF against Bionic that runs headless EGL and every `gpu_*` fixture on the x86_64 emulator using the existing x64 back end. The second (C220) is a NativeActivity app; it needs a C-facing shared library that exports `ANativeActivity_onCreate`, which the spec defers to an `@export` proposal, so it waits for that proposal. Out of scope: GLES on iOS (Apple deprecated it; Metal covers the platform), GL on NeperOS (its kernel has no GPU driver) and OpenCL (§10).
