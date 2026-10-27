@@ -1,7 +1,7 @@
 id	category	score	evidence_bytes	title	status
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU
-C186	library	0.6	1073	macOS permissions: camera, microphone and location status and request	Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationStatusForMediaType (camera, microphone) and CLLocationManager authorizationStatus (location);
+C186	library	0.8	1116	macOS permissions: camera, microphone and location status and request	Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationStatusForMediaType (camera, microphone) and CLLocationManager authorizationStatus (location);
 C187	library	0.5	1084	macOS biometrics (LocalAuthentication) and the photo picker (PHPicker)	Built 2026-10-25 (D5220): biometrics through LocalAuthentication, capabilities().biometrics is LAContext canEvaluatePolicy for Touch ID asked at every call (true only where enrolled), permission_statu
 C188	library	0.7	964	macOS print dialogs: NSPrintPanel and the page setup panel over the PDF printer	Built 2026-10-25 (D5219): print_dialog runs NSPrintPanel modally over a copy of the shared NSPrintInfo with the page range preset to the caller's minimum and maximum, copies and range shown, and retur
 C189	library	0.4	1303	macOS notices through UNUserNotificationCenter: removal, replacement and actions	Built 2026-10-25 (D5221), the center path unverified: for a program with a bundle identifier (shell.bundled()), notice_publish and notice_update ask UNUserNotificationCenter for alert and sound author
@@ -100,4 +100,4 @@ L168	library	0	603	Browser M3: the real web without JavaScript	all of it.
 L169	library	0	640	Browser M4: JavaScript engine and DOM bindings	all of it.
 L170	library	0	541	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it.
 L171	library	0	623	Browser M6: beyond Vaper (gap items)	all of it.
-C213	library	0	1353	e.ui in a browser: a real phone's virtual keyboard and IME	Needs a device.
+C213	library	0	1648	e.ui in a browser: a real phone's virtual keyboard and IME	Android Chrome checked by hand (D5890, D5891: suggestion replacement, touch hold, drag selection, toolbar);

@@ -31,10 +31,10 @@
       "group": "macOS",
       "order": 186,
       "title": "macOS permissions: camera, microphone and location status and request",
-      "score": 0.6,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationStatusForMediaType (camera, microphone) and CLLocationManager authorizationStatus (location); a status that is not decided or is restricted is Unavailable because shell.Permission has no not-determined state. permission_request asks for the camera and microphone through AVCaptureDevice requestAccessForMediaType with a global Objective-C block (isa from dlsym _NSConcreteGlobalBlock, BLOCK_IS_GLOBAL, an @cc invoke), only when a capture device exists, and waits for the answer (up to five minutes). tests/macos/probe/permissions.e on the runners: camera unavailable, microphone granted, location unavailable, requests return at once, no crash; ui_permissions passes and the corpus is 1105. Open: a location request (CLLocationManager requestWhenInUseAuthorization with a delegate callback on the shell target), a not-determined state in shell.Permission (shared by every host), and a real prompt on a Mac with a camera, which only a person can answer (C192). Done when those three are checked."
+      "evidence": "Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationStatusForMediaType (camera, microphone) and CLLocationManager authorizationStatus (location); a status that is not decided or is restricted is Unavailable because shell.Permission has no not-determined state. permission_request asks for the camera and microphone through AVCaptureDevice requestAccessForMediaType with a global Objective-C block (isa from dlsym _NSConcreteGlobalBlock, BLOCK_IS_GLOBAL, an @cc invoke), only when a capture device exists, and waits for the answer (up to five minutes). tests/macos/probe/permissions.e on the runners: camera unavailable, microphone granted, location unavailable, requests return at once, no crash; ui_permissions passes and the corpus is 1105. D5901: shell.Permission has NotDetermined on every host (macOS answers it) and the location request is built (requestWhenInUseAuthorization, then the status polled for a minute); the runners' answers did not change. Open: a real prompt on a Mac, for the camera and the location, which only a person can answer (C192). Done when those are checked."
     },
     {
       "id": "C187",

@@ -2959,4 +2959,6 @@ D5877	1702	System information reaches a WebAssembly module through neper_host, a
 D5878	1202	Metal device memory is up to four heaps, an address names its heap in the top byte
 D5890	1123	A virtual keyboard's edits are read from the field's value, not counted from its events
 D5891	1264	A touch hold selects a word, drags to extend, and offers a toolbar
-D5892	1473	Metal launches overlap: up to four in flight, one fault block each
+D5892	1474	Metal launches overlap: up to four in flight, one fault block each
+D5900	1021	The counter window is driven in Mobile Safari on an iPhone simulator
+D5901	1355	shell.Permission has NotDetermined; the macOS location permission can be asked for
