@@ -43071,3 +43071,12 @@ Device addresses stay 32-bit offsets, and 64-bit atomics stay `Unsupported`. `x.
 Intel's GL 4.6 core context refused `gl.load(.Gl46Core)`: its driver resolves `glGetnTexImageARB` but not the core name `glGetnTexImage`. A driver may export a core entry only under the extension it came from, so `fetch` now asks for `<name>ARB`, `<name>KHR` and `<name>EXT`, in that order, before an entry counts as absent. These are the same function under another name, and the generated table is unchanged. `x_khronos_gl_load` checks both directions: a resolver that knows only `glDispatchComputeARB` satisfies GL 4.3, and one that withholds every spelling still fails it by name.
 
 With this, GL 4.6 core draws and computes on Intel (`x_khronos_gl_headless`), and llvmpipe, which stops at 4.5, reports 4.6 as unsupported. `x_khronos_gl_window` now opens GL 3.3, GL 4.3 and GLES 3.0 contexts on windows of their own, and all three pass on Intel/ANGLE and on llvmpipe under WSLg.
+
+## D5895 — The browser host presents through WebGL2 where the page has it
+
+`lib/wasm/window.js` draws each frame through `webgl2(canvas)` when the page has WebGL2:
+- **How it draws.** One RGBA8 texture, refilled with `texSubImage2D` while the size holds. One full-screen triangle `texelFetch`es pixel (x, y) from row `height - 1 - y`: no filtering, no blending, and a context with `premultipliedAlpha: false`, so the canvas holds exactly the bytes `putImageData` would have written.
+- **Fallback.** Without WebGL2 (an old browser, or Node's canvas shim, which answers every `getContext`) it returns null, and the 2D context draws as before. A real context is told apart by `WebGL2RenderingContext` existing and the object having `createShader`.
+- **Choice.** A canvas keeps whichever context it got first.
+
+`tests/wasm/browser/webgl2_present.html` draws random frames at 64x48, 97x61 and 480x320 and reads them back with `readPixels`. It printed "webgl2 present ok" in the app's Chromium pane. `ui_counter.html` ran and repainted through it (the count went to 2), and `tests/wasm/window.mjs` still passes under Node's shim. The suites have no headless browser, so the page is run by hand.

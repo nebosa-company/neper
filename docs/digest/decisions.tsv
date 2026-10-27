@@ -2972,4 +2972,5 @@ D5890	1031	The GLES compute profile is ES 3.2, from the same shaders
 D5891	1685	Exact f32 division and square root in GLSL are integer sequences
 D5892	1498	A helper the kernel calls is a GLSL function, in every kernel's shader
 D5893	1215	64-bit integers in GLSL through GL_ARB_gpu_shader_int64
-D5894	977	gl.load asks for an entry's ARB, KHR and EXT spellings before calling it missing
+D5894	978	gl.load asks for an entry's ARB, KHR and EXT spellings before calling it missing
+D5895	1191	The browser host presents through WebGL2 where the page has it

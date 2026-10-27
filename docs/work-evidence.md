@@ -428,10 +428,6 @@ Design docs/opengl-plan.md, D5879, D5880. Needs L173. Acceptance: an NSOpenGLCon
 
 Done 2026-10-27 (D5887): e.ui.window.Presenter and set_presenter, with x.khronos.present.attach as the GL presenter (a hook, because e.* cannot import x.*). Frames go through one texture and a texelFetch triangle with vsync, and any error returns the window to window_present for the session. x_khronos_gl_present compares every back-buffer pixel bit for bit at 64x48, 96x72 and 128x96 through GL 3.3 and GLES 3.0, on Intel WGL, ANGLE D3D11 and Mesa llvmpipe, and is in both suites. examples/ui/main.e --gl and --gles run the controls gallery through it (screenshots taken; sampled pixels equal the software path's), and ui_app and ui_window still pass on both hosts. Remaining: uploading only the damage boxes through two PBOs, which needs e.ui.app to report damage to the window. Design docs/opengl-plan.md, D5877. Needs L173 and a context item (L174 or L175). Acceptance: opt-in present: .Gl in e.ui.app; only the renderer's damage boxes are uploaded, through two PBOs; one full-screen triangle with nearest sampling; vsync swap; any GL error falls back to window_present for the rest of the session; the fixture's readback equals the CPU canvas bit for bit at scales 1.0, 1.5 and 2.0.
 
-### L179 — OpenGL 8: WebGL2 presentation in the browser host (0%)
-
-Design docs/opengl-plan.md, D5879. Acceptance: when WebGL2 is available, lib/wasm/window.js presents with texSubImage2D and one draw instead of putImageData; the pixels are the same; without WebGL2 it falls back to the 2D canvas.
-
 ### T046 — OpenGL verify 2 (verify-only): ui fixtures presented through GL (0%)
 
 Verify-only turn, no edits. Needs L178. Run every ui_* fixture with present: .Gl on Windows and Linux and report the tails.
@@ -1833,3 +1829,7 @@ Closed 2026-10-27 (D5888): the self-hosted compiler takes --gpu LIST (spv, ptx, 
 ### T045 — OpenGL verify 1 (verify-only): binding fixtures on Windows and Linux
 
 Closed 2026-10-27: x_khronos_gl_load, x_khronos_gl_headless, x_khronos_gl_window and examples/gl_triangle pass on Windows (Intel Iris Xe through WGL; GLES through ANGLE D3D11 from PATH) and on Linux as cross-compiled ELF in WSL on Mesa 25.2.8 (llvmpipe through surfaceless EGL, and a window through WSLg's X server). The headless image matches llvmpipe's golden hash. Mesa EGL/GLES were already installed in WSL, and ANGLE was already on PATH (D:/tools/qemu).
+
+### L179 — OpenGL 8: WebGL2 presentation in the browser host
+
+Closed 2026-10-27 (D5895): lib/wasm/window.js presents each frame through webgl2(canvas), with one RGBA8 texture refilled by texSubImage2D and one texelFetch triangle, unfiltered, unblended and not premultiplied. It falls back to the 2D canvas without WebGL2 (and under Node's shim, which answers every getContext). tests/wasm/browser/webgl2_present.html reads back random frames at 64x48, 97x61 and 480x320 byte for byte ('webgl2 present ok' in Chromium). ui_counter.html runs and repaints through it, and tests/wasm/window.mjs passes. The page is run by hand: the suites have no headless browser.
