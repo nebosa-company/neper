@@ -65,7 +65,7 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
     if !has_entry || !has_main_call || !has_arena_literal { ret InvalidImage }
     try link_elf.patch_little_u64(output, 24usize, A64_IMAGE_BASE + runtime_start + entry)
     try emit_a64.patch_relative(output, runtime_start + main_call, machine_start + function_offsets[main_index])
-    if builder.arena_bytes != 0usize { try link_elf.patch_little_u64(output, runtime_start + arena_literal, builder.arena_bytes) }
+    try link_elf.patch_little_u64(output, runtime_start + arena_literal, nir.root_arena_bytes(builder))
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         let relocation = relocations[relocation_at]

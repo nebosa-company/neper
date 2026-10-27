@@ -181,7 +181,7 @@ fn place_code(intel: bool, builder: *nir.Builder, machine: *emit_x64.Buffer, fun
     if !has_entry || !has_main_call || !has_arena_literal { ret InvalidImage }
     *entry_address = MACHO_BASE + runtime_start + entry
     try patch_branch(intel, output, runtime_start + main_call + call_field(intel), machine_start + function_offsets[main_index])
-    if builder.arena_bytes != 0usize { try link_elf.patch_little_u64(output, runtime_start + arena_literal, builder.arena_bytes) }
+    try link_elf.patch_little_u64(output, runtime_start + arena_literal, nir.root_arena_bytes(builder))
     // The argument slot's distance from its own literal, both as file offsets.
     let (args_literal, has_args_literal) = runtime_symbol(intel, "neper_start_args")
     if !has_args_literal { ret InvalidImage }

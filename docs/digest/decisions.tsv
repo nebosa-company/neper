@@ -2961,4 +2961,5 @@ D5890	1123	A virtual keyboard's edits are read from the field's value, not count
 D5891	1264	A touch hold selects a word, drags to extend, and offers a toolbar
 D5892	1474	Metal launches overlap: up to four in flight, one fault block each
 D5900	1021	The counter window is driven in Mobile Safari on an iPhone simulator
-D5901	1355	shell.Permission has NotDetermined; the macOS location permission can be asked for
+D5901	1356	shell.Permission has NotDetermined; the macOS location permission can be asked for
+D5912	3079	The root arena's default ceiling is 32 GiB
