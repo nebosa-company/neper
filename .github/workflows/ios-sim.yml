@@ -51,16 +51,12 @@ jobs:
           echo "IOS_VERSION=$2" >> $GITHUB_ENV
           xcrun simctl boot $1
           xcrun simctl bootstatus $1 -b
-      - name: Serve the page
+      - name: Serve, start Appium and drive Safari
         run: |
           node scripts/serve-wasm.mjs --isolated > /tmp/serve.log 2>&1 &
-          sleep 2; cat /tmp/serve.log
-      - name: Start Appium
-        run: |
-          cd /tmp/drv && npx appium > /tmp/appium.log 2>&1 &
-          sleep 10; tail -5 /tmp/appium.log
-      - name: Drive Safari
-        run: |
+          (cd /tmp/drv && npx appium > /tmp/appium.log 2>&1 &)
+          for i in $(seq 1 30); do curl -s http://127.0.0.1:4723/status >/dev/null && break; sleep 2; done
+          tail -5 /tmp/appium.log
           cp tests/wasm/ios/drive.mjs /tmp/drv/drive.mjs
           mkdir -p /tmp/shots
           cd /tmp/drv && node drive.mjs
