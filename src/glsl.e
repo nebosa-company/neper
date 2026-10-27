@@ -37,6 +37,8 @@ const KIND_INPUT: u8 = 5u8
 // 12 a heap address.
 const T_BOOL: u8 = 1u8
 const T_F32: u8 = 10u8
+// (L181, D5903) f64: a GLSL `double`, core since 4.00; its words cross memory through packDouble2x32, so no int64 is needed.
+const T_F64: u8 = 11u8
 const T_ADDRESS: u8 = 12u8
 
 type Values = struct {
@@ -172,6 +174,7 @@ fn type_name(code: u8) -> str {
     if (code == T_BOOL) { ret "bool" }
     if code == 3u8 || code == 5u8 || code == 7u8 { ret "int" }
     if (code == T_F32) { ret "float" }
+    if (code == T_F64) { ret "double" }
     if code == 8u8 { ret "uint64_t" }
     if code == 9u8 { ret "int64_t" }
     ret "uint"
@@ -180,7 +183,7 @@ fn type_name(code: u8) -> str {
 fn type_bytes(code: u8) -> usize {
     if code == 1u8 || code == 2u8 || code == 3u8 { ret 1usize }
     if code == 4u8 || code == 5u8 { ret 2usize }
-    if code == 8u8 || code == 9u8 { ret 8usize }
+    if code == 8u8 || code == 9u8 || (code == T_F64) { ret 8usize }
     ret 4usize
 }
 
@@ -189,6 +192,8 @@ fn is_signed(code: u8) -> bool {
 }
 
 fn is_wide(code: u8) -> bool { ret code == 8u8 || code == 9u8 }
+
+fn is_float(code: u8) -> bool { ret code == T_F32 || code == T_F64 }
 
 // The unsigned type a magnitude of `code` is held in.
 fn unsigned_name(code: u8) -> str {
@@ -213,6 +218,7 @@ fn value_type(ty: check.Type) -> u8 {
     }
     if ty.kind == .Float {
         if same(ty.name, "f32") { ret 10u8 }
+        if same(ty.name, "f64") { ret 11u8 }
         ret 0u8
     }
     if ty.kind == .Integer {
@@ -592,7 +598,7 @@ fn put_locals(m: *Module, function: nir.Function, values: *Values, out: *Text) {
     while value_at < function.value_count + 1usize {
         if (values.kind[value_at] == KIND_SCALAR) {
             put(out, "  ")
-            if (values.ty[value_at] == T_F32) { put(out, "precise ") }
+            if is_float(values.ty[value_at]) { put(out, "precise ") }
             put(out, type_name(values.ty[value_at]))
             put(out, " v")
             put_number(out, value_at)
@@ -704,6 +710,14 @@ fn set_address(t: *Text, values: *Values, address: usize, extra: usize) {
 // The value of type `ty` at byte `a` of `array`, as an expression.
 fn put_read(t: *Text, array: str, ty: u8) {
     let bytes = type_bytes(ty)
+    if (ty == T_F64) {
+        put(t, "packDouble2x32(uvec2(")
+        put(t, array)
+        put(t, "[a >> 2u], ")
+        put(t, array)
+        put(t, "[(a >> 2u) + 1u]))")
+        ret
+    }
     if bytes == 8usize {
         put(t, type_name(ty))
         put(t, "(packUint2x32(uvec2(")
@@ -733,6 +747,16 @@ fn put_read(t: *Text, array: str, ty: u8) {
 // `value` of type `ty` stored at byte `a` of `array`; narrow stores into memory others share are two atomics.
 fn put_write(t: *Text, array: str, ty: u8, value: usize) {
     let bytes = type_bytes(ty)
+    if (ty == T_F64) {
+        put(t, "      { uvec2 w = unpackDouble2x32(v")
+        put_number(t, value)
+        put(t, "); ")
+        put(t, array)
+        put(t, "[a >> 2u] = w.x; ")
+        put(t, array)
+        put(t, "[(a >> 2u) + 1u] = w.y; }\n")
+        ret
+    }
     if bytes == 8usize {
         put(t, "      { uvec2 w = unpackUint2x32(uint64_t(v")
         put_number(t, value)
@@ -852,6 +876,14 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
             put(t, "u);\n")
             ret ok
         }
+        if (ty == T_F64) {
+            put(t, "packDouble2x32(uvec2(")
+            put_hex(t, bits & 4294967295usize)
+            put(t, "u, ")
+            put_hex(t, bits >> 32usize)
+            put(t, "u));\n")
+            ret ok
+        }
         if is_wide(ty) {
             put(t, type_name(ty))
             put(t, "(")
@@ -936,6 +968,15 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     }
     if opcode == .Sqrt {
         let source = operand(builder, instruction, 0usize)
+        if (values.kind[source] == KIND_SCALAR && values.ty[source] == T_F64) {
+            scalar(values, instruction.result, T_F64)
+            assign(t, instruction.result)
+            put(t, "sqrt(v")
+            put_number(t, source)
+            put(t, ");\n")
+            put_double_nan(t, instruction.result)
+            ret ok
+        }
         if (values.kind[source] != KIND_SCALAR || values.ty[source] != T_F32) { ret fail(m, "a square root has no f32 operand") }
         m.needs_sqrt = true
         scalar(values, instruction.result, T_F32)
@@ -980,7 +1021,7 @@ fn emit_subgroup(m: *Module, builder: *nir.Builder, instruction: nir.Instruction
     }
     let ty = value_type(instruction.ty)
     let value = operand(builder, instruction, 0usize)
-    if (ty == 0u8 || ty == T_BOOL || is_wide(ty) || values.kind[value] != KIND_SCALAR || values.ty[value] != ty) { ret fail(m, "a subgroup operation on this type is not written as GLSL") }
+    if (ty == 0u8 || ty == T_BOOL || is_wide(ty) || ty == T_F64 || values.kind[value] != KIND_SCALAR || values.ty[value] != ty) { ret fail(m, "a subgroup operation on this type is not written as GLSL") }
     if ((ty == T_F32) && kind >= 8usize) { ret fail(m, "a subgroup bitwise reduction is not integer") }
     scalar(values, instruction.result, ty)
     var call_bytes: [256]u8 = zero
@@ -1461,7 +1502,7 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     assign(t, instruction.result)
     if (ty == T_BOOL) {
         put_value(t, source)
-        if (from == T_F32) { put(t, " != 0.0;\n") } else { put(t, " != 0;\n") }
+        if is_float(from) { put(t, " != 0.0;\n") } else { put(t, " != 0;\n") }
         ret ok
     }
     var inner: [64]u8 = zero
@@ -1472,6 +1513,15 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     put(&expression, ")")
     put_narrowed(t, ty, &expression)
     put(t, ";\n")
+    // Section 11: a NaN converted is the canonical NaN of its new width, not the old payload.
+    if (ty == T_F64) { put_double_nan(t, instruction.result) }
+    if (ty == T_F32) && (from == T_F64) {
+        put(t, "      if (isnan(v")
+        put_number(t, instruction.result)
+        put(t, ")) v")
+        put_number(t, instruction.result)
+        put(t, " = uintBitsToFloat(0x7FC00000u);\n")
+    }
     ret ok
 }
 
@@ -1500,6 +1550,10 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
             ret ok
         }
         if symbol.len == 0usize { ret fail(m, "this float operation is not yet written as GLSL") }
+    } else {
+    if (ty == T_F64) {
+        if opcode == .Divide { symbol = "/" }
+        if symbol.len == 0usize { ret fail(m, "this f64 operation is not yet written as GLSL") }
     } else {
         if is_signed(ty) && (opcode == .Divide || opcode == .Remainder) {
             // GLSL leaves a negative operand's quotient and remainder undefined: both are taken from the magnitudes, as
@@ -1577,6 +1631,7 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
         if opcode == .ShiftLeft { symbol = "<<" }
         if opcode == .ShiftRight { symbol = ">>" }
     }
+    }
     if symbol.len == 0usize { ret fail(m, "an integer operation is not yet written as GLSL") }
     scalar(values, instruction.result, ty)
     var inner: [256]u8 = zero
@@ -1585,7 +1640,7 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     put(&expression, "(v")
     put_number(&expression, left)
     // The same unprovable zero as the signed case: an unsigned multiply's overflow check divides the product too.
-    if (ty != T_F32) && (opcode == .Divide || opcode == .Remainder) {
+    if !is_float(ty) && (opcode == .Divide || opcode == .Remainder) {
         put(&expression, " + ")
         put(&expression, unknown_zero(ty))
     }
@@ -1596,7 +1651,7 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     put(&expression, type_name(ty))
     put(&expression, "(v")
     put_number(&expression, right)
-    if (ty != T_F32) && (opcode == .Divide || opcode == .Remainder) {
+    if !is_float(ty) && (opcode == .Divide || opcode == .Remainder) {
         put(&expression, " + ")
         put(&expression, unknown_zero(ty))
     }
@@ -1612,7 +1667,17 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
         put_number(t, instruction.result)
         put(t, " = uintBitsToFloat(0x7FC00000u);\n")
     }
+    if (ty == T_F64) { put_double_nan(t, instruction.result) }
     ret ok
+}
+
+// Section 11's canonical NaN for an f64 result, 0x7FF8000000000000.
+fn put_double_nan(t: *Text, value: usize) {
+    put(t, "      if (isnan(v")
+    put_number(t, value)
+    put(t, ")) v")
+    put_number(t, value)
+    put(t, " = packDouble2x32(uvec2(0u, 0x7FF80000u));\n")
 }
 
 fn emit_compare(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
@@ -1659,7 +1724,7 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     var expression = Text { data: inner[0usize..32usize], count: 0usize, full: false }
     if instruction.opcode == .Negate {
         // Subtracted from zero rather than negated: Intel's compiler got a negated constant wrong in a later comparison.
-        if (ty == T_F32) { put(&expression, "-") } else {
+        if is_float(ty) { put(&expression, "-") } else {
             put(&expression, type_name(ty))
             put(&expression, "(0) - ")
         }

@@ -18,7 +18,7 @@ use x.khronos.gl
 
 error Unsupported
 
-// Int8 and Int16: GLSL narrow loads and atomic stores; Int64 and Subgroup below. Float16 and Float64 wait for L181. Whether f32
+// Int8 and Int16: GLSL narrow loads and atomic stores; Int64, Float64 and Subgroup below. Float16 waits for the CPU's f16. Whether f32
 // denormals survive is the driver's (GL allows either), so `open` asks: DenormPreserve when they do, Ftz when they flush.
 const CAPABILITIES: usize = 3usize
 const CAP_FTZ: usize = 128usize
@@ -28,7 +28,7 @@ const MAX_DEVICES: usize = 4usize
 // The smallest positive f32 denormal, doubled: 2 where denormals are kept, 0 where they are flushed.
 fn denormal_probe() -> str { ret "//entry:probe\n#version 430\nlayout(local_size_x = 1) in;\nlayout(std430, binding = 1) buffer Heap { uint heap[]; };\nvoid main() { precise float d = uintBitsToFloat(heap[0]); precise float twice = d * 2.0; heap[1] = floatBitsToUint(twice); }\n" }
 
-fn capabilities() -> usize { ret CAPABILITIES | denormal_caps | int64_caps | subgroup_caps }
+fn capabilities() -> usize { ret CAPABILITIES | denormal_caps | int64_caps | float64_caps | subgroup_caps }
 
 // Runs the probe on the device just opened and records its answer.
 fn probe_denormals(handle: mtl.Context) {
@@ -78,6 +78,8 @@ var slots: [4]Slot = zero
 var denormal_caps: usize = 0usize
 // Int64 (`Cap` bit 4) where the desktop driver has GL_ARB_gpu_shader_int64, which the emitter's 64-bit values need.
 var int64_caps: usize = 0usize
+// (D5903) Float64 (`Cap` bit 16) on desktop GL, where `double` is core; OpenGL ES has none.
+var float64_caps: usize = 0usize
 // (D5902) Subgroup (`Cap` bit 64) where GL_KHR_shader_subgroup offers compute shaders the basic, vote, ballot, shuffle and
 // arithmetic operations the emitter writes.
 var subgroup_caps: usize = 0usize
@@ -360,6 +362,8 @@ fn open_here(a: *mem.Arena, at: usize) -> (mtl.Context, err) {
     probe_denormals(opened)
     int64_caps = 0usize
     if !use_es && gl.has_extension("GL_ARB_gpu_shader_int64") { int64_caps = 4usize }
+    float64_caps = 0usize
+    if !use_es { float64_caps = 16usize }
     subgroup_caps = 0usize
     if gl.has_extension("GL_KHR_shader_subgroup") {
         var stages = 0i32
@@ -438,6 +442,24 @@ fn starts_entry(source: str, at: usize, entry: str) -> bool {
 }
 
 // The program for `entry`: the shader that follows its `//entry:` line, up to the next one.
+// The decimal number after the first `key` in a shader the emitter wrote; 0 where there is none.
+fn declared(text: str, key: str) -> usize {
+    var at = 0usize
+    while at + key.len <= text.len {
+        if mem.eq[u8](text[at..at + key.len], key) {
+            var value = 0usize
+            var digit = at + key.len
+            while digit < text.len && text[digit] >= 48u8 && text[digit] <= 57u8 {
+                value = value * 10usize + usize(text[digit] - 48u8)
+                digit += 1usize
+            }
+            ret value
+        }
+        at += 1usize
+    }
+    ret 0usize
+}
+
 fn compile_here(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, err) {
     var none: mtl.Pipeline = zero
     if slot_of(handle) == MAX_DEVICES { ret (none, Unsupported) }
@@ -467,6 +489,21 @@ fn compile_here(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, 
     var most = 0i32
     gl.get_integerv(gl.MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &most)
     let device_slot = slot_of(handle)
+    // (L181, D5903) A workgroup longer than the device allows along an axis, or shared memory past its size, would fail in
+    // the driver's compiler as `Unsupported`; it is `TooLarge`, which a pipeline of no threads makes the launch answer.
+    var axis = 0u32
+    while axis < 3u32 {
+        var longest = 0i32
+        gl.get_integeri_v(gl.MAX_COMPUTE_WORK_GROUP_SIZE, axis, &longest)
+        var key = "local_size_x = "
+        if axis == 1u32 { key = "local_size_y = " }
+        if axis == 2u32 { key = "local_size_z = " }
+        if declared(text, key) > usize(longest) { ret (mtl.Pipeline { state: 0usize, max_threads: 0usize }, ok) }
+        axis += 1u32
+    }
+    var shared_most = 0i32
+    gl.get_integerv(gl.MAX_COMPUTE_SHARED_MEMORY_SIZE, &shared_most)
+    if declared(text, "shared uint tg[") * 4usize > usize(shared_most) { ret (mtl.Pipeline { state: 0usize, max_threads: 0usize }, ok) }
     let (cache_path, cache_path_error) = cache_path_of(slots[device_slot].arena, header, text)
     if cache_path_error == ok {
         let cached = cached_program(slots[device_slot].arena, cache_path)

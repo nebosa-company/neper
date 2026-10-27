@@ -3701,6 +3701,18 @@ $gpuGlSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gpuGlSubgroupWritten -ne 'executable written') { throw 'gpu_gl_subgroup emission failed' }
 & $gpuGlSubgroupPath
 if ($LASTEXITCODE -ne 0) { throw "a subgroup collective on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5903) Shared memory or a workgroup axis past the GL device's limit is TooLarge at launch, not a driver compile failure.
+$gpuGlLimitsPath = Join-Path $testBuild 'gpu-gl-limits-selfhost.exe'
+$gpuGlLimitsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_limits\src\main.e') $repo 'x64' 'windows' $gpuGlLimitsPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlLimitsWritten -ne 'executable written') { throw 'gpu_gl_limits emission failed' }
+& $gpuGlLimitsPath
+if ($LASTEXITCODE -ne 0) { throw "an OpenGL device limit answered wrongly: exit $LASTEXITCODE" }
+# (D5903) f64 as GLSL's double, word-equal to the CPU where the device keeps denormals.
+$gpuGlF64Path = Join-Path $testBuild 'gpu-gl-f64-selfhost.exe'
+$gpuGlF64Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_f64\src\main.e') $repo 'x64' 'windows' $gpuGlF64Path --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlF64Written -ne 'executable written') { throw 'gpu_gl_f64 emission failed' }
+& $gpuGlF64Path
+if ($LASTEXITCODE -ne 0) { throw "f64 on OpenGL answered wrongly: exit $LASTEXITCODE" }
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 $gpuGlThreadsPath = Join-Path $testBuild 'gpu-gl-threads-selfhost.exe'
 $gpuGlThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_threads\src\main.e') $repo 'x64' 'windows' $gpuGlThreadsPath --gpu glsl

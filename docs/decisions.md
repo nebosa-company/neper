@@ -43161,3 +43161,14 @@ It needs only GLSL 4.30 and ES 3.10 built-ins, and no `int64` or `fp64`. The cal
 `x.khronos.compute` reports `.Subgroup` where the extension lists compute among `SUBGROUP_SUPPORTED_STAGES_KHR` and all five features among `SUBGROUP_SUPPORTED_FEATURES_KHR`. Intel's Windows GL does. Mesa's llvmpipe advertises no GL subgroups, and forced on it answers zero stages.
 
 `gpu_gl_subgroup` checks each collective lane by lane against what section 8 defines for the width the kernel reports, rather than against the CPU backend. The CPU's width comes only from `NEPER_SUBGROUP_WIDTH` at open, and a process cannot set that for itself. On Intel every collective is correct at width 16, the partial last subgroup included. The ballot kernel runs only where the device also has Int64, and no device here has both, so it is written but unrun.
+
+## D5903 — f64 as GLSL's `double`, and the GL device's limits as `TooLarge`
+
+`glsl.e` holds an f64 as a `precise double`, which is core since GLSL 4.00, so desktop GL needs no extension.
+- **Memory.** Its two words cross the heap through `packDouble2x32` and `unpackDouble2x32`, not through int64, which Intel's GL lacks.
+- **Arithmetic.** `+ - * /` and `sqrt` are GLSL's own.
+- **NaNs.** Every NaN result, including a converted one, is section 11's canonical NaN of its width (`0x7FF8000000000000`, or `0x7FC00000` after narrowing). Before this, narrowing a NaN kept its payload.
+
+`x.khronos.compute` reports `.Float64` on desktop contexts; ES has no doubles. Unlike f32 (D5891), the double operations are not written as integer sequences. GLSL promises them only single precision, so the driver's arithmetic is trusted where `gpu_gl_f64` passes. That fixture covers 65,536 pairs of random patterns and special values through every operation and narrowing, and is word-equal to the CPU on llvmpipe. Intel cannot run an f64 kernel at all: it flushes denormals, so only `ftz` kernels launch there, and an `ftz` kernel cannot hold f64. If a device ever fails that fixture, the integer sequences are the fix: 53-bit mantissas over `uvec2` words, as `f32_fma` does for 48 bits.
+
+A workgroup longer along an axis than `MAX_COMPUTE_WORK_GROUP_SIZE`, or shared memory past `MAX_COMPUTE_SHARED_MEMORY_SIZE`, used to fail in the driver's compiler and answer `Unsupported`. GL's `compile` now reads the shader's declared `local_size_*` and `tg[]` size against those limits first. Over a limit, it returns a pipeline of no threads, which `e.gpu`'s existing invocation check turns into `TooLarge`, the CPU's and Vulkan's answer. `gpu_gl_limits` checks both: a mebibyte of shared memory is `TooLarge` everywhere, and a 1×1×1024 workgroup is `TooLarge` on Intel (64 along z) and runs correctly on llvmpipe.

@@ -3233,6 +3233,16 @@ gpu_gl_subgroup_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$gpu_gl_subgroup_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-subgroup-selfhost"
 "$test_build/gpu-gl-subgroup-selfhost"
+# (D5903) Shared memory or a workgroup axis past the GL device's limit is TooLarge at launch, not a driver compile failure.
+gpu_gl_limits_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_limits/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-limits-selfhost" --gpu glsl)
+[ "$gpu_gl_limits_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-limits-selfhost"
+"$test_build/gpu-gl-limits-selfhost"
+# (D5903) f64 as GLSL's double, word-equal to the CPU where the device keeps denormals.
+gpu_gl_f64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_f64/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-f64-selfhost" --gpu glsl)
+[ "$gpu_gl_f64_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-f64-selfhost"
+"$test_build/gpu-gl-f64-selfhost"
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 gpu_gl_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_threads/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-threads-selfhost" --gpu glsl)
 [ "$gpu_gl_threads_written" = 'executable written' ]
