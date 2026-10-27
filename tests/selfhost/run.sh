@@ -3218,6 +3218,11 @@ gpu_gl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$gpu_gl_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-selfhost"
 "$test_build/gpu-gl-selfhost"
+# (D5891) 65,536 f32 quotients and square roots through the GLSL emitter's exact integer sequences, word-equal to the CPU.
+gpu_gl_exact_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_exact/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-exact-selfhost" --gpu glsl)
+[ "$gpu_gl_exact_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-exact-selfhost"
+"$test_build/gpu-gl-exact-selfhost"
 gl_triangle_written=$($test_build/neper-self emit-executable "$repo/examples/gl_triangle.e" "$repo" x64 linux "$test_build/gl-triangle-selfhost")
 [ "$gl_triangle_written" = 'executable written' ]
 chmod +x "$test_build/gl-triangle-selfhost"

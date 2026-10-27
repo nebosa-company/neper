@@ -3683,6 +3683,12 @@ $gpuGlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $gpuGlWritten -ne 'executable written') { throw 'gpu_gl emission failed' }
 & $gpuGlPath
 if ($LASTEXITCODE -ne 0) { throw "e.gpu on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5891) 65,536 f32 quotients and square roots through the GLSL emitter's exact integer sequences, word-equal to the CPU.
+$gpuGlExactPath = Join-Path $testBuild 'gpu-gl-exact-selfhost.exe'
+$gpuGlExactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_exact\src\main.e') $repo 'x64' 'windows' $gpuGlExactPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlExactWritten -ne 'executable written') { throw 'gpu_gl_exact emission failed' }
+& $gpuGlExactPath
+if ($LASTEXITCODE -ne 0) { throw "exact f32 division or square root on OpenGL answered wrongly: exit $LASTEXITCODE" }
 $glTrianglePath = Join-Path $testBuild 'gl-triangle-selfhost.exe'
 $glTriangleWritten = & $compiler emit-executable (Join-Path $repo 'examples\gl_triangle.e') $repo 'x64' 'windows' $glTrianglePath
 if ($LASTEXITCODE -ne 0 -or $glTriangleWritten -ne 'executable written') { throw 'examples/gl_triangle.e emission failed' }

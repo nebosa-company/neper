@@ -53,6 +53,17 @@ type Module = struct {
     frame_bytes: usize,
     shared_words: usize,
     failure: str,
+    // (C217) The kernel divides or takes square roots of f32, which GLSL does not round correctly: the integer sequences
+    // below are written into its shader.
+    needs_divide: bool,
+    needs_sqrt: bool,
+}
+
+// f32 division and square root on the bits, correctly rounded to nearest-even as section 11 requires; every NaN result is
+// the canonical positive quiet NaN, 0x7FC00000. With FTZ set (an `ftz` kernel), subnormal operands count as zero and a
+// result tiny after rounding is a zero.
+fn exact_source() -> str {
+    ret "uint f32_round(uint s, int e, uint q, bool sticky) {\n  // q: 26 bits, the leading one at bit 25; e: the biased exponent of that one.\n  if (e <= 0) {\n    if (FTZ) {\n      uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n      if (e == 0 && m == 16777216u) return s | 0x00800000u;\n      return s;\n    }\n    int shift = 1 - e;\n    if (shift > 26) { sticky = sticky || q != 0u; q = 0u; } else { sticky = sticky || (q & ((1u << uint(shift)) - 1u)) != 0u; q >>= uint(shift); }\n    uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n    return s | m;\n  }\n  uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n  if (m == 16777216u) { m = 8388608u; e += 1; }\n  if (e >= 255) return s | 0x7F800000u;\n  return s | (uint(e) << 23u) | (m & 0x7FFFFFu);\n}\nuint f32_div(uint a, uint b) {\n  uint s = (a ^ b) & 0x80000000u; uint ea = (a >> 23u) & 255u; uint eb = (b >> 23u) & 255u; uint ma = a & 0x7FFFFFu; uint mb = b & 0x7FFFFFu;\n  if (FTZ) { if (ea == 0u) ma = 0u; if (eb == 0u) mb = 0u; }\n  if (ea == 255u && ma != 0u) return 0x7FC00000u;\n  if (eb == 255u && mb != 0u) return 0x7FC00000u;\n  bool az = ea == 0u && ma == 0u; bool bz = eb == 0u && mb == 0u;\n  if ((ea == 255u && eb == 255u) || (az && bz)) return 0x7FC00000u;\n  if (ea == 255u || bz) return s | 0x7F800000u;\n  if (eb == 255u || az) return s;\n  int xa = int(ea); int xb = int(eb);\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); xa = 1 - k; } else { ma |= 0x800000u; }\n  if (eb == 0u) { int k = 23 - findMSB(mb); mb <<= uint(k); xb = 1 - k; } else { mb |= 0x800000u; }\n  int e = xa - xb + 127;\n  if (ma < mb) { ma <<= 1u; e -= 1; }\n  uint q = 0u; uint r = ma;\n  for (int i = 0; i < 26; i++) { q <<= 1u; if (r >= mb) { r -= mb; q |= 1u; } r <<= 1u; }\n  return f32_round(s, e, q, r != 0u);\n}\nuint f32_sqrt(uint a) {\n  uint ea = (a >> 23u) & 255u; uint ma = a & 0x7FFFFFu;\n  if (FTZ && ea == 0u) ma = 0u;\n  if (ea == 255u && ma != 0u) return 0x7FC00000u;\n  if (ea == 0u && ma == 0u) return a & 0x80000000u;\n  if ((a & 0x80000000u) != 0u) return 0x7FC00000u;\n  if (ea == 255u) return a;\n  int e = int(ea) - 127;\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); e = -126 - k; } else { ma |= 0x800000u; }\n  if ((e & 1) != 0) { ma <<= 1u; e -= 1; }\n  uint hi = ma >> 5u; uint lo = ma << 27u; uint r = 0u; uint root = 0u;\n  for (int i = 0; i < 26; i++) {\n    int p = 50 - 2 * i; uint two = p >= 32 ? (hi >> uint(p - 32)) & 3u : (lo >> uint(p)) & 3u;\n    r = (r << 2u) | two; uint trial = (root << 2u) | 1u; root <<= 1u;\n    if (r >= trial) { r -= trial; root |= 1u; }\n  }\n  return f32_round(0u, e / 2 + 127, root, r != 0u);\n}\n"
 }
 
 error Unsupported
@@ -334,6 +345,8 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     m.dynamics = 0usize
     m.frame_bytes = 0usize
     m.shared_words = 0usize
+    m.needs_divide = false
+    m.needs_sqrt = false
     var at = 0usize
     while at < function.instruction_count {
         let instruction = builder.instructions[function.first_instruction + at]
@@ -392,6 +405,11 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
         put(&m.body, "shared uint tg[")
         put_number(&m.body, m.shared_words)
         put(&m.body, "];\n")
+    }
+    if m.needs_divide || m.needs_sqrt {
+        // An `ftz` kernel (spec section 11, D4203) flushes in the exact sequences as the CPU's FTZ and DAZ do.
+        if (check.kernel_fact(c, checked) & 128usize) != 0usize { put(&m.body, "const bool FTZ = true;\n") } else { put(&m.body, "const bool FTZ = false;\n") }
+        put(&m.body, exact_source())
     }
     put(&m.body, "void main() {\n  uint a;\n")
     if m.frame_bytes != 0usize {
@@ -660,7 +678,17 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         line(t, "return;")
         ret ok
     }
-    if opcode == .Sqrt { ret fail(m, "an exact square root is not yet written as GLSL") }
+    if opcode == .Sqrt {
+        let source = operand(builder, instruction, 0usize)
+        if (values.kind[source] != KIND_SCALAR || values.ty[source] != T_F32) { ret fail(m, "a square root has no f32 operand") }
+        m.needs_sqrt = true
+        scalar(values, instruction.result, T_F32)
+        assign(t, instruction.result)
+        put(t, "uintBitsToFloat(f32_sqrt(floatBitsToUint(v")
+        put_number(t, source)
+        put(t, ")));\n")
+        ret ok
+    }
     if opcode == .AtomicLoad || opcode == .AtomicStore || opcode == .AtomicRmw || opcode == .AtomicCas { ret emit_atomic(m, builder, instruction, values) }
     ret fail(m, "an operation in this kernel is not yet written as GLSL")
 }
@@ -983,7 +1011,18 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     if opcode == .Subtract || opcode == .SubtractWrap { symbol = "-" }
     if opcode == .Multiply || opcode == .MultiplyWrap { symbol = "*" }
     if (ty == T_F32) {
-        if symbol.len == 0usize { ret fail(m, "an exact float division is not yet written as GLSL") }
+        if opcode == .Divide {
+            m.needs_divide = true
+            scalar(values, instruction.result, ty)
+            assign(t, instruction.result)
+            put(t, "uintBitsToFloat(f32_div(floatBitsToUint(v")
+            put_number(t, left)
+            put(t, "), floatBitsToUint(v")
+            put_number(t, right)
+            put(t, ")));\n")
+            ret ok
+        }
+        if symbol.len == 0usize { ret fail(m, "this float operation is not yet written as GLSL") }
     } else {
         if is_signed(ty) && (opcode == .Divide || opcode == .Remainder) {
             // GLSL leaves a negative operand's quotient and remainder undefined: both are taken from the magnitudes, as
@@ -1055,6 +1094,14 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     assign(t, instruction.result)
     put_narrowed(t, ty, &expression)
     put(t, ";\n")
+    // Section 11: a NaN result is the one canonical quiet NaN, whatever the device's arithmetic left in the payload.
+    if (ty == T_F32) {
+        put(t, "      if (isnan(v")
+        put_number(t, instruction.result)
+        put(t, ")) v")
+        put_number(t, instruction.result)
+        put(t, " = uintBitsToFloat(0x7FC00000u);\n")
+    }
     ret ok
 }
 

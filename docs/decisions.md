@@ -43031,3 +43031,14 @@ Metal's backend already worked over one host-visible heap whose ranges are the b
 `x.khronos.compute.install_es()` makes `.Gl` open OpenGL ES 3.2 contexts instead of GL 4.3 core ones (Mesa's EGL on Linux, ANGLE's `libEGL.dll` on Windows). The emitter is unchanged. At compile time the shader's `#version 430` line gives way to `#version 320 es` with `precision highp float; precision highp int;`, passed as a second string to `glShaderSource`, so nothing is copied.
 
 The floor is ES 3.2 rather than the 3.1 the plan named, because 3.2 is the first ES with `precise`: without it a multiply and an add may be fused, and the words would no longer be the CPU's. A device that answers below 3.2 is not opened. ANGLE on D3D11, which stops at 3.1, is therefore refused rather than run inexactly. ES has `glBufferStorage` only as `GL_EXT_buffer_storage`, which the driver calls through `glBufferStorageEXT` when the core entry is absent. `gpu_gl` runs every kernel a second time through ES and is word-equal to the CPU on Mesa llvmpipe's GLES 3.2.
+
+## D5891 — Exact f32 division and square root in GLSL are integer sequences
+
+GLSL lets division be 2.5 ULP off and `sqrt` looser still. Its `fma` is not promised to round once, so a Newton correction cannot be trusted. The GLSL emitter therefore writes `f32_div` and `f32_sqrt` into each shader that needs them, and they work on the bits:
+- **Division.** Unpack and normalise subnormals, long-divide the two 24-bit mantissas to 26 quotient bits plus a sticky bit, and round to nearest-even in one `f32_round`. That covers subnormal results (shifted, with the shifted-out bits sticky) and overflow to infinity.
+- **Square root.** A digit-by-digit integer square root of the mantissa scaled to 52 bits, to 26 bits plus a sticky bit, rounded the same way.
+- **`ftz` kernels.** `const bool FTZ` is set from the kernel's `ftz` fact. Subnormal operands then count as zero and a result tiny after rounding becomes a zero, as the CPU's FTZ and DAZ make it.
+
+The first run found the CPU returning 0x7FC00000 where the sequence followed x86's default NaN. Section 11 is the rule: every floating operation that produces a NaN returns the one canonical positive quiet NaN. The sequences now return 0x7FC00000 for every NaN case, and the emitter also canonicalises the result of every f32 `+ - *`, so a device's own NaN payload never reaches memory.
+
+`gpu_gl_exact` divides and takes square roots of 65,536 operand pairs from a fixed xorshift. The pairs include every special value in either place and divisors at the dividend's scale, so rounding is decided in the last bits. Every word equals the CPU's on Intel (the `ftz` kernel) and on Mesa llvmpipe (the plain one, with subnormal results).
