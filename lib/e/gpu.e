@@ -103,16 +103,19 @@ const CPU_CAPABILITIES: usize = 503usize
 // generation a handle has to carry.
 // A Vulkan device's buffer is mapped host memory (D1611): `bytes` is the mapping, so a
 // write, an upload and a download are the CPU's copies, and `device` is what frees it.
-type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool, device: vulkan.Buffer, heap_offset: usize }
+type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool, device: vulkan.Buffer, heap_offset: usize, heap_index: usize }
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_command: usize, pending_block: mtl.Buffer, pending_queue: *QueueState, pending_checked: bool }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_command: usize, pending_block: mtl.Buffer, pending_queue: *QueueState, pending_checked: bool, more_heaps: [3]mtl.Buffer, heap_count: usize }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
 const METAL_HEAP_BYTES: usize = 268435456usize
 const METAL_HEAP_FIRST: usize = 256usize
+// Up to this many heaps of METAL_HEAP_BYTES, made as the buffers need them (D5877): an address is the heap's number in its top byte
+// and the offset in the rest, and a buffer lives whole in one heap.
+const METAL_HEAPS: usize = 4usize
 const METAL_CAPABILITIES: usize = 199usize
 
 type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
@@ -584,30 +587,52 @@ fn open_metal(a: *mem.Arena, index: u32) -> (*Device, err) {
     ret (device, ok)
 }
 
-// `bytes` of the heap: the offset of the first gap that holds them, 256-byte aligned (the fault block sits below), or
-// `OutOfMemory`. Every live buffer is a candidate's neighbour, so the search is the buffers squared.
-fn metal_carve(state: *DeviceState, bytes: usize) -> (usize, err) {
+// The mapping of heap `index` (0 is `heap`, the rest `more_heaps`).
+fn metal_heap(state: *DeviceState, index: usize) -> mtl.Buffer {
+    if index == 0usize { ret state.heap }
+    ret state.more_heaps[index - 1usize]
+}
+
+// Room for `bytes`: the heap number and the offset of the first gap in an existing heap that holds them, 256-byte aligned (heap 0's
+// first bytes are the launch's fault block), else in a heap made for them, or `OutOfMemory`. Every live buffer is a candidate's
+// neighbour, so the search is the buffers squared.
+fn metal_carve(state: *DeviceState, bytes: usize) -> (usize, usize, err) {
     let need = (bytes + 255usize) / 256usize * 256usize
-    var candidate = METAL_HEAP_FIRST
-    var settled = false
-    while !settled {
-        if candidate + need > METAL_HEAP_BYTES { ret (0usize, OutOfMemory) }
-        settled = true
-        var at = 0usize
-        while at < state.buffers.len {
-            let held = state.buffers[at]
-            if held.live && held.count != 0usize {
-                let start = state.buffers[at].heap_offset
-                let end = start + (held.count * held.elem + 255usize) / 256usize * 256usize
-                if candidate < end && start < candidate + need {
-                    candidate = end
-                    settled = false
-                }
-            }
-            at += 1usize
+    var heap_at = 0usize
+    while heap_at < METAL_HEAPS {
+        if heap_at == state.heap_count {
+            let (made, made_error) = mtl.buffer(state.metal, METAL_HEAP_BYTES)
+            if made_error != ok { ret (0usize, 0usize, OutOfMemory) }
+            state.more_heaps[heap_at - 1usize] = made
+            state.heap_count += 1usize
         }
+        var candidate = METAL_HEAP_FIRST
+        var settled = false
+        var fits = true
+        while !settled {
+            if candidate + need > METAL_HEAP_BYTES {
+                fits = false
+                break
+            }
+            settled = true
+            var at = 0usize
+            while at < state.buffers.len {
+                let held = state.buffers[at]
+                if held.live && held.count != 0usize && held.heap_index == heap_at {
+                    let start = state.buffers[at].heap_offset
+                    let end = start + (held.count * held.elem + 255usize) / 256usize * 256usize
+                    if candidate < end && start < candidate + need {
+                        candidate = end
+                        settled = false
+                    }
+                }
+                at += 1usize
+            }
+        }
+        if fits { ret (heap_at, candidate, ok) }
+        heap_at += 1usize
     }
-    ret (candidate, ok)
+    ret (0usize, 0usize, OutOfMemory)
 }
 
 // The mock inventory (C093, the contract's `--gpu-inventory FILE`, which `neper run` hands the
@@ -970,7 +995,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     var empty: []u8 = zero
     var i = 0usize
     while i < MAX_BUFFERS {
-        buffers[i] = Buffer { bytes: empty, count: 0usize, elem: 0usize, generation: 1u32, live: false, device: zero, heap_offset: 0usize }
+        buffers[i] = Buffer { bytes: empty, count: 0usize, elem: 0usize, generation: 1u32, live: false, device: zero, heap_offset: 0usize, heap_index: 0usize }
         i += 1usize
     }
     let state = &states[0usize]
@@ -1003,6 +1028,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     state.heap_ends = 0usize
     state.pending_command = 0usize
     state.pending_checked = false
+    state.heap_count = 1usize
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Device { state: mem.cast[*void](state) }
@@ -1159,6 +1185,11 @@ fn close(device: *Device) -> err {
             mtl.destroy(state.metal_pipelines[made_metal])
             made_metal += 1usize
         }
+        var freed_heap = 1usize
+        while freed_heap < state.heap_count {
+            mtl.free(state.more_heaps[freed_heap - 1usize])
+            freed_heap += 1usize
+        }
         mtl.free(state.heap)
         mtl.close(state.metal)
     }
@@ -1264,23 +1295,23 @@ fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
     if state.device.backend == .Vulkan {
         let (made, made_error) = vulkan.buffer(a, state.device.context, n * elem)
         if made_error != ok { ret (zero, OutOfMemory) }
-        state.device.buffers[slot] = Buffer { bytes: made.bytes, count: n, elem: elem, generation: generation, live: true, device: made, heap_offset: 0usize }
+        state.device.buffers[slot] = Buffer { bytes: made.bytes, count: n, elem: elem, generation: generation, live: true, device: made, heap_offset: 0usize, heap_index: 0usize }
         ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
     }
     // A Metal buffer is a piece of the device's heap: its bytes are the heap's mapping there (D5838).
     if state.device.backend == .Metal {
-        let (offset, carve_error) = metal_carve(state.device, n * elem)
+        let (heap_at, offset, carve_error) = metal_carve(state.device, n * elem)
         if carve_error != ok { ret (zero, OutOfMemory) }
         var held: []u8 = zero
         if n > 0usize {
-            held = state.device.heap.bytes[offset..offset + n * elem]
+            held = metal_heap(state.device, heap_at).bytes[offset..offset + n * elem]
             var clear_at = 0usize
             while clear_at < held.len {
                 held[clear_at] = 0u8
                 clear_at += 1usize
             }
         }
-        state.device.buffers[slot] = Buffer { bytes: held, count: n, elem: elem, generation: generation, live: true, device: zero, heap_offset: offset }
+        state.device.buffers[slot] = Buffer { bytes: held, count: n, elem: elem, generation: generation, live: true, device: zero, heap_offset: offset, heap_index: heap_at }
         ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
     }
     let (storage, storage_error) = mem.alloc[T](a, n)
@@ -1288,7 +1319,7 @@ fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
     // The storage is the arena's top: its bytes are the last `n * elem` allocated.
     var bytes: []u8 = zero
     if n > 0usize { bytes = mem.view(a, a.off - n * elem, n * elem) }
-    state.device.buffers[slot] = Buffer { bytes: bytes, count: n, elem: elem, generation: generation, live: true, device: zero, heap_offset: 0usize }
+    state.device.buffers[slot] = Buffer { bytes: bytes, count: n, elem: elem, generation: generation, live: true, device: zero, heap_offset: 0usize, heap_index: 0usize }
     ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
 }
 
@@ -1709,7 +1740,7 @@ fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usi
     // A Vulkan buffer crosses as its device address (D1611).
     if state.device.backend == .Vulkan { ret (usize(buffer.device.address), buffer.count, ok) }
     // A Metal buffer crosses as its offset in the heap (D5838).
-    if state.device.backend == .Metal { ret (buffer.heap_offset, buffer.count, ok) }
+    if state.device.backend == .Metal { ret (buffer.heap_index * 72057594037927936usize + buffer.heap_offset, buffer.count, ok) }
     if buffer.count == 0usize { ret (0usize, 0usize, ok) }
     ret (mem.address_of(&buffer.bytes[0usize]), buffer.count, ok)
 }
@@ -1889,12 +1920,18 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
         mtl.free(block)
         ret TooLarge
     }
-    var buffers: [2]mtl.Buffer = zero
+    // Buffer 0 is the argument block, 1 to 4 the heaps; a heap not made yet is heap 0 again, which no address names.
+    var buffers: [5]mtl.Buffer = zero
     buffers[0usize] = block
-    buffers[1usize] = device.heap
+    var bound = 0usize
+    while bound < METAL_HEAPS {
+        buffers[1usize + bound] = device.heap
+        if bound < device.heap_count { buffers[1usize + bound] = metal_heap(device, bound) }
+        bound += 1usize
+    }
     // The launch is committed and not waited for (D5875): the host's next call into this device finishes it (`metal_finish`), so
     // the CPU can work while the GPU runs. The argument block lives until then.
-    let (command, begin_error) = mtl.dispatch_begin(device.metal, pipeline, buffers[0usize..2usize], mtl.Size { width: gx, height: gy, depth: gz }, mtl.Size { width: x, height: y, depth: z }, shared_bytes)
+    let (command, begin_error) = mtl.dispatch_begin(device.metal, pipeline, buffers[0usize..5usize], mtl.Size { width: gx, height: gy, depth: gz }, mtl.Size { width: x, height: y, depth: z }, shared_bytes)
     if begin_error != ok {
         mtl.free(block)
         ret Lost

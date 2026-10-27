@@ -25,6 +25,18 @@ fn keep(x: []const f32, y: []f32) {
     y[i] = x[i] + 0.0
 }
 
+@gpu(1, ftz)
+fn poke3(a: []u32, b: []u32, c: []u32, small: []u32) {
+    if gpu.gid.x == 0u32 {
+        a[a.len - 1usize] = 11u32
+        b[b.len - 1usize] = 22u32
+        c[c.len - 1usize] = 33u32
+        small[0usize] = a[a.len - 1usize]
+        small[1usize] = b[b.len - 1usize]
+        small[2usize] = c[c.len - 1usize]
+    }
+}
+
 fn run(q: *gpu.Queue, x: []const f32, y: []f32) -> err {
     let (dx, dx_error) = gpu.upload[f32](q, x)
     if dx_error != ok { os.exit(51i32) }
@@ -88,6 +100,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (dout, dout_error) = gpu.upload[f32](q, out[0..])
     if dt_error != ok || dout_error != ok { os.exit(12i32) }
     if gpu.launch[keep](q, gpu.grid1(64usize), dt, dout) != gpu.Unsupported { os.exit(13i32) }
+    // More than one heap's worth (256 MiB) of buffers: three of 200 MiB live in their own heaps and all are reachable (D5877).
+    let (ba, ba_error) = gpu.alloc[u32](q, 50000000usize)
+    let (bb, bb_error) = gpu.alloc[u32](q, 50000000usize)
+    let (bc, bc_error) = gpu.alloc[u32](q, 50000000usize)
+    if ba_error != ok || bb_error != ok || bc_error != ok { os.exit(20i32) }
+    var three: [3]u32 = zero
+    let (dthree, dthree_error) = gpu.upload[u32](q, three[0..])
+    if dthree_error != ok { os.exit(21i32) }
+    if gpu.launch[poke3](q, gpu.grid1(1usize), ba, bb, bc, dthree) != ok { os.exit(22i32) }
+    if gpu.download(q, dthree, three[0..]) != ok { os.exit(23i32) }
+    if three[0] != 11u32 || three[1] != 22u32 || three[2] != 33u32 { os.exit(24i32) }
+    // Released, their room is taken again.
+    let freed_a = gpu.release(q, ba)
+    let freed_b = gpu.release(q, bb)
+    let freed_c = gpu.release(q, bc)
+    let (again_big, again_error) = gpu.alloc[u32](q, 50000000usize)
+    if again_error != ok { os.exit(25i32) }
     let closed = gpu.close(dev)
     ret ok
 }
