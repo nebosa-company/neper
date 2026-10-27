@@ -3223,6 +3223,11 @@ gpu_gl_exact_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$gpu_gl_exact_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-exact-selfhost"
 "$test_build/gpu-gl-exact-selfhost"
+# (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
+gpu_gl_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_threads/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-threads-selfhost" --gpu glsl)
+[ "$gpu_gl_threads_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-threads-selfhost"
+"$test_build/gpu-gl-threads-selfhost"
 # (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
 saxpy_glsl_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" x64 linux "$test_build/saxpy-glsl-selfhost" --gpu glsl)
 [ "$saxpy_glsl_written" = 'executable written' ]

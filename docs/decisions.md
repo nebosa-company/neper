@@ -43096,3 +43096,12 @@ So `x64 android` is `x64 linux` to everything but the ELF writer:
 The same run explained D5886's open question. The emulator's GLES, and the SwiftShader `libEGL.dll` it ships for Windows, draw nothing when a draw has no vertex attributes. That is the `gl_VertexID`-only shaders the fixtures used. `x_khronos_gl_headless` and `x.khronos.present` now take their corners from a vertex buffer, and SwiftShader draws on Windows too. The emulator offers no GLES 3.1, so `e.gpu` compute has no device there and `gpu_gl` reports that it checked nothing.
 
 `aarch64 android` (`link_elf_a64.e`, real phones) is not done, and it is not the same change. The emulator runs arm64 executables through its ndk_translation binfmt, and a static arm64 neper image runs there as it is. Typed `ET_DYN`, the same image exits 255, so the a64 code or its image still holds absolute addresses (`A64_IMAGE_BASE`). An arm64 Android image needs those found and given relative relocations first.
+
+## D5897 — Each GL compute device runs on a thread of its own
+
+D5881 as built. `x.khronos.compute.open` gives the device a slot with a mutex, two conditions and one request record. It starts a thread (8 MiB stack, detached) that makes the device's headless context and then serves requests until the device closes or its open fails.
+- **Calls.** Every driver function (`name`, `buffer`, `free`, `compile`, `destroy`, `dispatch_begin`, `dispatch_wait`, `close`) posts its request into the slot and waits for the answer. The GL work it did before now happens on the device's thread. e.gpu already serialises calls per device, so one record per slot is enough.
+- **Routing.** The calls that get no device handle find their slot from the handles themselves: a buffer's GL name and a program carry the slot in their high 32 bits. A fence is found through the slot whose last launch made it.
+- **No join.** The safety checker refuses a write to a module array after a thread has been lent one in the same function. Starting the thread is therefore its own function that detaches it, and a device's thread is never joined: it leaves its loop on close.
+
+`gpu_gl_threads` opens the GL device on the main thread, launches and downloads from a spawned thread, then does it again from the main thread. Both results are word-equal on Intel and on llvmpipe, and `gpu_gl` and `gpu_gl_exact` pass unchanged through the device thread.

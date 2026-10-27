@@ -3689,6 +3689,12 @@ $gpuGlExactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuGlExactWritten -ne 'executable written') { throw 'gpu_gl_exact emission failed' }
 & $gpuGlExactPath
 if ($LASTEXITCODE -ne 0) { throw "exact f32 division or square root on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
+$gpuGlThreadsPath = Join-Path $testBuild 'gpu-gl-threads-selfhost.exe'
+$gpuGlThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_threads\src\main.e') $repo 'x64' 'windows' $gpuGlThreadsPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlThreadsWritten -ne 'executable written') { throw 'gpu_gl_threads emission failed' }
+& $gpuGlThreadsPath
+if ($LASTEXITCODE -ne 0) { throw "the GL device answered wrongly across threads: exit $LASTEXITCODE" }
 # (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
 $saxpyGlslPath = Join-Path $testBuild 'saxpy-glsl-selfhost.exe'
 $saxpyGlslWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'x64' 'windows' $saxpyGlslPath --gpu glsl
