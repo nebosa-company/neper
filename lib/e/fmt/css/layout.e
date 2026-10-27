@@ -6061,7 +6061,15 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
                 flex_place_item(l, id, items[i].target, hspec)
                 items[i].cross = bx(l, id).h + items[i].cs + items[i].ce
             } else {
-                let w = flex_cross_width(l, id, cw, items[i].align == .Stretch)
+                var w = flex_cross_width(l, id, cw, items[i].align == .Stretch)
+                // An auto width follows the flexed main size through a preferred ratio.
+                if ks.width.kind == .Auto {
+                    let (rwc, okc) = ratio_width(l, id, items[i].target)
+                    if okc {
+                        let rw5 = maxf(0.0f64, clamp_width(l, id, rwc, cw))
+                        if items[i].align == .Stretch && cs.width.kind != .Auto { w = minf(w, rw5) } else { w = rw5 }
+                    }
+                }
                 if items[i].align == .Stretch { l.orth_fb = w }
                 flex_place_item(l, id, w, items[i].target)
                 items[i].cross = bx(l, id).w + items[i].cs + items[i].ce
