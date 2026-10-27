@@ -2947,4 +2947,10 @@ D5852	1134	MSL subgroups, and a state machine that reconverges by lowest block
 D5853	803	The Metal heap stays 256 MiB: a larger one read back wrong on the runners
 D5854	1336	An AAPCS64 call that returns three or four doubles stores v0-v3 into its slot (C178)
 D5855	948	macos-bundle.sh makes a dmg, declares URL and document types, and takes a signing identity
-D5856	1168	window_on_resize: a handler called from the platform's own resize loop
+D5856	1169	window_on_resize: a handler called from the platform's own resize loop
+D5870	577	A duplicate poller registration is not part of the portable contract
+D5871	476	A kqueue poller tracks its registrations so a duplicate answers Exists
+D5872	737	The sweep knows which differences the platform imposes
+D5873	970	Permission bits through neper_host, and a link mid-path refused
+D5874	1365	window_on_resize on Windows, and the uses goldens become per-host
+D5875	1179	A Metal launch is committed and not waited for
