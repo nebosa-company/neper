@@ -51,6 +51,7 @@ jobs:
           echo "IOS_VERSION=$2" >> $GITHUB_ENV
           xcrun simctl boot $1
           xcrun simctl bootstatus $1 -b
+          xcrun simctl launch $1 com.apple.mobilesafari; sleep 5
       - name: Serve, start Appium and drive Safari
         run: |
           node scripts/serve-wasm.mjs --isolated > /tmp/serve.log 2>&1 &

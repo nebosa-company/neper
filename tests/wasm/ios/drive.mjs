@@ -15,7 +15,7 @@ const browser = await remote({
     platformName: 'iOS', browserName: 'Safari',
     'appium:automationName': 'XCUITest', 'appium:udid': process.env.UDID, 'appium:platformVersion': process.env.IOS_VERSION,
     'appium:deviceName': 'iPhone', 'appium:connectHardwareKeyboard': false, 'appium:newCommandTimeout': 300,
-    'appium:safariAllowPopups': true, 'appium:showXcodeLog': true, 'appium:wdaLaunchTimeout': 240000,
+    'appium:safariAllowPopups': true, 'appium:showXcodeLog': true, 'appium:webviewConnectTimeout': 120000, 'appium:safariInitialUrl': 'about:blank', 'appium:wdaLaunchTimeout': 240000,
   },
 })
 let step = 0
