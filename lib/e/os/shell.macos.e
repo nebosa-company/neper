@@ -46,7 +46,7 @@ type Activation = struct { kind: ActivationKind, payload: str, args: []const str
 // A global shortcut: the modifiers and the host's key code; a permission the
 // host answers for background work; the lifecycle events a session sends.
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
-type Permission = enum u8 { Granted, Denied, Unavailable }
+type Permission = enum u8 { Granted, Denied, Unavailable, NotDetermined }
 type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
 // A printer opened for a job, the page a printer draws in device pixels, a
 // page setup in hundredths of a millimetre, and a job in progress.
@@ -2598,10 +2598,26 @@ fn permission_location_status() -> usize {
     ret os.msg0(os.cocoa_class("CLLocationManager\x00"), os.cocoa_sel("authorizationStatus\x00"))
 }
 
+// 0 not decided: a person has yet to be asked (`NotDetermined`, D5893); 1 restricted and 2 denied are a refusal.
+fn permission_location_enabled() -> bool {
+    permission_load()
+    ret os.msg_bool_ret(os.cocoa_class("CLLocationManager\x00"), os.cocoa_sel("locationServicesEnabled\x00")) != 0u8
+}
+
 fn permission_of(code: usize, authorized_from: usize) -> Permission {
     if code >= authorized_from && code <= 4usize { ret .Granted }
     if code == 2usize || code == 1usize { ret .Denied }
+    if code == 0usize { ret .NotDetermined }
     ret .Unavailable
+}
+
+// Whether there is a capture device of the media type at all: without one a status of "not decided" is not a thing to ask about.
+fn permission_media_present(kind: str) -> bool {
+    permission_load()
+    let name = os.cocoa_text(kind)
+    let device = os.msg1(os.cocoa_class("AVCaptureDevice\x00"), os.cocoa_sel("defaultDeviceWithMediaType:\x00"), name)
+    os.cf_release(name)
+    ret device != 0usize
 }
 
 // The screen is always capturable; without the Screen Recording permission the picture leaves out other applications' windows,
@@ -2612,9 +2628,18 @@ fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
     if os.cocoa_start() != ok { ret .Unavailable }
     let pool = os.objc_pool_push()
     var answer = Permission.Unavailable
-    if c == .Camera { answer = permission_of(permission_media_status("vide"), 3usize) }
-    if c == .Microphone { answer = permission_of(permission_media_status("soun"), 3usize) }
-    if c == .Location { answer = permission_of(permission_location_status(), 3usize) }
+    if c == .Camera {
+        answer = permission_of(permission_media_status("vide"), 3usize)
+        if answer == .NotDetermined && !permission_media_present("vide") { answer = .Unavailable }
+    }
+    if c == .Microphone {
+        answer = permission_of(permission_media_status("soun"), 3usize)
+        if answer == .NotDetermined && !permission_media_present("soun") { answer = .Unavailable }
+    }
+    if c == .Location {
+        answer = permission_of(permission_location_status(), 3usize)
+        if answer == .NotDetermined && !permission_location_enabled() { answer = .Unavailable }
+    }
     os.objc_pool_pop(pool)
     ret answer
 }
@@ -2655,8 +2680,8 @@ fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
     let started = os.cocoa_start()
     if started != ok { ret (.Unavailable, ok) }
     let decided = permission_status(a, c)
-    if decided != .Unavailable { ret (decided, ok) }
-    // Unavailable is also "restricted": only a not-decided status is worth asking about.
+    if decided != .NotDetermined { ret (decided, ok) }
+    // Only a status not yet decided, with something to ask about, is worth a prompt.
     let pool = os.objc_pool_push()
     var result = Permission.Unavailable
     var failure = ok
@@ -2670,8 +2695,33 @@ fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
         result = answer
         failure = answer_error
     }
+    if c == .Location {
+        let (answer, answer_error) = permission_location_request()
+        result = answer
+        failure = answer_error
+    }
     os.objc_pool_pop(pool)
     ret (result, failure)
+}
+
+var permission_location_manager: usize = zero
+
+// CLLocationManager's requestWhenInUseAuthorization shows the system prompt; the answer is not a callback this library takes (it
+// would be a delegate object) but the status changing, which is polled for up to a minute while the run loop turns.
+fn permission_location_request() -> (Permission, err) {
+    permission_load()
+    if permission_location_manager == 0usize {
+        permission_location_manager = os.msg0(os.msg0(os.cocoa_class("CLLocationManager\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("init\x00"))
+    }
+    let asked = os.msg0(permission_location_manager, os.cocoa_sel("requestWhenInUseAuthorization\x00"))
+    var waited = 0usize
+    while permission_location_status() == 0usize && waited < 600usize {
+        os.cocoa_pump(100000000i64)
+        waited += 1usize
+    }
+    let status = permission_of(permission_location_status(), 3usize)
+    if status == .NotDetermined { ret (.NotDetermined, ok) }
+    ret (status, ok)
 }
 // The login keychain through `security`: a generic password whose service is the name and whose account is the user.
 // ponytail: the secret travels in the tool's arguments, which a process listing shows for the moment it runs; the Keychain
