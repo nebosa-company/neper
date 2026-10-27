@@ -18,7 +18,7 @@ use x.khronos.gl
 
 error Unsupported
 
-// Int8 and Int16: GLSL narrow loads and atomic stores; Int64 below. Float16, Float64 and subgroups wait for L181. Whether f32
+// Int8 and Int16: GLSL narrow loads and atomic stores; Int64 and Subgroup below. Float16 and Float64 wait for L181. Whether f32
 // denormals survive is the driver's (GL allows either), so `open` asks: DenormPreserve when they do, Ftz when they flush.
 const CAPABILITIES: usize = 3usize
 const CAP_FTZ: usize = 128usize
@@ -28,7 +28,7 @@ const MAX_DEVICES: usize = 4usize
 // The smallest positive f32 denormal, doubled: 2 where denormals are kept, 0 where they are flushed.
 fn denormal_probe() -> str { ret "//entry:probe\n#version 430\nlayout(local_size_x = 1) in;\nlayout(std430, binding = 1) buffer Heap { uint heap[]; };\nvoid main() { precise float d = uintBitsToFloat(heap[0]); precise float twice = d * 2.0; heap[1] = floatBitsToUint(twice); }\n" }
 
-fn capabilities() -> usize { ret CAPABILITIES | denormal_caps | int64_caps }
+fn capabilities() -> usize { ret CAPABILITIES | denormal_caps | int64_caps | subgroup_caps }
 
 // Runs the probe on the device just opened and records its answer.
 fn probe_denormals(handle: mtl.Context) {
@@ -78,6 +78,9 @@ var slots: [4]Slot = zero
 var denormal_caps: usize = 0usize
 // Int64 (`Cap` bit 4) where the desktop driver has GL_ARB_gpu_shader_int64, which the emitter's 64-bit values need.
 var int64_caps: usize = 0usize
+// (D5902) Subgroup (`Cap` bit 64) where GL_KHR_shader_subgroup offers compute shaders the basic, vote, ballot, shuffle and
+// arithmetic operations the emitter writes.
+var subgroup_caps: usize = 0usize
 // (C218) Devices are OpenGL ES 3.2 contexts rather than GL 4.3 core ones; ES 3.2 is the first with `precise`.
 var use_es: bool = false
 // `glBufferStorageEXT` where the context has only the extension (OpenGL ES), else 0.
@@ -357,6 +360,14 @@ fn open_here(a: *mem.Arena, at: usize) -> (mtl.Context, err) {
     probe_denormals(opened)
     int64_caps = 0usize
     if !use_es && gl.has_extension("GL_ARB_gpu_shader_int64") { int64_caps = 4usize }
+    subgroup_caps = 0usize
+    if gl.has_extension("GL_KHR_shader_subgroup") {
+        var stages = 0i32
+        var features = 0i32
+        gl.get_integerv(gl.SUBGROUP_SUPPORTED_STAGES_KHR, &stages)
+        gl.get_integerv(gl.SUBGROUP_SUPPORTED_FEATURES_KHR, &features)
+        if (stages & 32i32) != 0i32 && (features & 31i32) == 31i32 { subgroup_caps = 64usize }
+    }
     ret (opened, ok)
 }
 

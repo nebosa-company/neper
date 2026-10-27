@@ -2979,4 +2979,5 @@ D5897	1421	Each GL compute device runs on a thread of its own
 D5898	969	Linked GL programs are cached as program binaries
 D5899	1303	A resized X11 window's GL surface is swapped once before its next frame
 D5900	2043	`aarch64 android`, and arm64 atomics as exclusive loops
-D5901	1835	`math.fma` in GLSL, and the float fixtures on every GL device
+D5901	1836	`math.fma` in GLSL, and the float fixtures on every GL device
+D5902	2138	Subgroups in GLSL, at the width the workgroup was cut into

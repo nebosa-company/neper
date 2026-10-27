@@ -43147,3 +43147,17 @@ It needs only GLSL 4.30 and ES 3.10 built-ins, and no `int64` or `fp64`. The cal
 `gpu_gl_exact` adds a fused multiply-add to each of its 65,536 pairs. Half take an unrelated addend; half take the product's negation, whose answer is the product's rounding error, which only a single rounding gets right. It is word-equal to the CPU on Intel Iris Xe (`ftz`) and on llvmpipe.
 
 `gpu_float_modes` and `gpu_vulkan_float` now run every `.Gl` device after the Vulkan ones; the suites build them with `--gpu glsl`. `scripts/check-fixture.sh` always passes `--gpu glsl`, which only adds GLSL to kernel modules, so a GL fixture checked by it runs its kernels instead of reporting `Unsupported`.
+
+## D5902 — Subgroups in GLSL, at the width the workgroup was cut into
+
+`glsl.e` writes NIR's subgroup operations with `GL_KHR_shader_subgroup`, ported from MSL's (D5852):
+- **Inputs.** `gpu.sid` is `gl_SubgroupInvocationID`.
+- **Collectives.** Vote is `subgroupAll` and `subgroupAny`. Ballot is `packUint2x32(subgroupBallot(p).xy)`, so it needs Int64. Broadcast and shuffle are both `subgroupShuffle`, since a broadcast's lane is a value and `subgroupBroadcast` takes only a constant. The add, min, max, and, or and xor reductions keep narrow types at their width.
+- **Lockstep.** A function that uses any of these gets MSL's round: `if (pc != subgroupMin(pc)) continue;`. Lanes that took different branches meet again at the join before a collective.
+- **Header.** Its shader requires the basic, vote, ballot, shuffle and arithmetic extensions.
+
+`gl_SubgroupSize` is not the width. Intel's driver reports 32 and runs this workgroup of 40 in subgroups of 16, so lanes 16 to 31 read `sid` 0 to 15. `gpu.subgroup_width` is therefore the width the workgroup was actually cut into: its size over `gl_NumSubgroups`, rounded up to a power of two, at most `gl_SubgroupSize`. Subgroups are packed in invocation order, so that is exact whenever the workgroup holds at least one full subgroup. A smaller workgroup reads its own size rounded up rather than the hardware's, which is a known limit.
+
+`x.khronos.compute` reports `.Subgroup` where the extension lists compute among `SUBGROUP_SUPPORTED_STAGES_KHR` and all five features among `SUBGROUP_SUPPORTED_FEATURES_KHR`. Intel's Windows GL does. Mesa's llvmpipe advertises no GL subgroups, and forced on it answers zero stages.
+
+`gpu_gl_subgroup` checks each collective lane by lane against what section 8 defines for the width the kernel reports, rather than against the CPU backend. The CPU's width comes only from `NEPER_SUBGROUP_WIDTH` at open, and a process cannot set that for itself. On Intel every collective is correct at width 16, the partial last subgroup included. The ballot kernel runs only where the device also has Int64, and no device here has both, so it is written but unrun.

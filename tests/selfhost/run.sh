@@ -3228,6 +3228,11 @@ gpu_gl_exact_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$gpu_gl_exact_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-exact-selfhost"
 "$test_build/gpu-gl-exact-selfhost"
+# (D5902) Subgroup collectives through GL_KHR_shader_subgroup, checked lane by lane at the width the driver cut the workgroup into.
+gpu_gl_subgroup_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_subgroup/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-subgroup-selfhost" --gpu glsl)
+[ "$gpu_gl_subgroup_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-subgroup-selfhost"
+"$test_build/gpu-gl-subgroup-selfhost"
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 gpu_gl_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_threads/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-threads-selfhost" --gpu glsl)
 [ "$gpu_gl_threads_written" = 'executable written' ]

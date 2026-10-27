@@ -1170,17 +1170,6 @@
       "evidence": "Verify-only turn, no edits. Needs L178. Run every ui_* fixture with present: .Gl on Windows and Linux and report the tails."
     },
     {
-      "id": "C215",
-      "category": "compiler",
-      "group": "OpenGL",
-      "order": 285,
-      "title": "OpenGL 10: src/glsl.e, the GLSL 4.30 emitter",
-      "score": 0.9,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Pinned 2026-10-27: tests/conformance/glsl/saxpy.glsl and loops.glsl (gpu_vulkan_loop's kernel) are checked in both suites through scripts/dump_glsl.py, and the Linux and Windows builds emit the same text. Helper calls added 2026-10-27 (D5892): every helper the kernels reach is a GLSL function hN in each kernel's shader, with scalars by value, aggregates as their words and shared pointers as offsets; gpu_gl's helped kernel is word-equal on Intel and llvmpipe (GL and ES). Done 2026-10-27 (D5888): src/glsl.e, ported from msl.e. Kernels become one GLSL 4.30 shader each over uint word arrays (heap, frame, shared) with byte addressing and bit-casts, using an if-chain dispatch, Metal's launch ABI and its fault block, and emulated signed division. Integer divisions get an unprovable zero added to both operands, the workaround for two Intel miscompiles. The output compiles on Intel and Mesa, and gpu_gl's kernels (saxpy, narrow stores, signed div/rem, 2-D ids, a bounds fault) are word-equal to the CPU. Remaining: subgroups (64-bit integers landed in D5893; 64-bit atomics stay Unsupported). Design docs/opengl-plan.md, D5878. Needs C214. Acceptance: ported from msl.e's heap-offset state machine; every access goes through uint heap[] with bit-casts; helpers are inlined; the launch ABI is Metal's; saxpy, loops and control flow are pinned in tests/conformance/glsl."
-    },
-    {
       "id": "C216",
       "category": "compiler",
       "group": "OpenGL",
@@ -1189,7 +1178,7 @@
       "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Done 2026-10-27 (D5888): u8, i8, u16 and i16 load through bitfieldExtract (sign-extended for the signed ones), store into heap and tg through atomicAnd and atomicOr on the word and into the frame through bitfieldInsert, and are masked or sign-extended back after every operation. gpu_gl's u8 and i16 stores into neighbouring bytes of the same words are word-exact on Intel and llvmpipe. Remaining: f16 and bf16 (packHalf2x16) are Unsupported. Design docs/opengl-plan.md, D5882. Needs C215 (same file, so one at a time). Acceptance: u8, i8, u16, i16, f16 and bf16 loads via bitfieldExtract; stores via atomicAnd/atomicOr on the containing word; packHalf2x16 for f16; a fixture where neighbouring invocations race to store narrow values is word-exact."
+      "evidence": "Done 2026-10-27 (D5888): u8, i8, u16 and i16 load through bitfieldExtract (sign-extended for the signed ones), store into heap and tg through atomicAnd and atomicOr on the word and into the frame through bitfieldInsert, and are masked or sign-extended back after every operation. gpu_gl's u8 and i16 stores into neighbouring bytes of the same words are word-exact on Intel and llvmpipe. Remaining: f16 and bf16 (packHalf2x16) are Unsupported. Blocked outside this group: no backend computes f16 or bf16 (codegen_x64.float_width answers 0, so the CPU backend that every GL result is compared with refuses an f16 kernel), so GLSL has no reference to be word-exact against until the CPU has f16 arithmetic. Design docs/opengl-plan.md, D5882. Needs C215 (same file, so one at a time). Acceptance: u8, i8, u16, i16, f16 and bf16 loads via bitfieldExtract; stores via atomicAnd/atomicOr on the containing word; packHalf2x16 for f16; a fixture where neighbouring invocations race to store narrow values is word-exact."
     },
     {
       "id": "L181",
@@ -1197,10 +1186,10 @@
       "group": "OpenGL",
       "order": 289,
       "title": "OpenGL 14: GPU capabilities from GL extensions",
-      "score": 0.5,
+      "score": 0.65,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Done 2026-10-27 (D5889, D5893): Int8 and Int16; DenormPreserve or Ftz from the probe at open; Int64 where the desktop driver lists GL_ARB_gpu_shader_int64 (Mesa yes, Intel's GL no), with the emitter writing u64/i64 for it. A kernel needing anything else is gpu.Unsupported at launch through e.gpu's existing requirement check, and gpu_gl's wide kernel is word-equal on llvmpipe. Remaining: Float64 (GLSL does not promise IEEE double results, so it needs exact sequences like D5891's), subgroups (KHR_shader_subgroup), and the shared-memory and workgroup limits. Design docs/opengl-plan.md, D5882. Needs L180. Acceptance: Float64 from ARB_gpu_shader_fp64, Int64 from ARB_gpu_shader_int64, subgroups from KHR_shader_subgroup, 32-bit atomics only, and the shared-memory and workgroup limits; a missing capability is gpu.Unsupported at launch, naming the kernel and the capability."
+      "evidence": "Done 2026-10-27 (D5889, D5893): Int8 and Int16; DenormPreserve or Ftz from the probe at open; Int64 where the desktop driver lists GL_ARB_gpu_shader_int64 (Mesa yes, Intel's GL no), with the emitter writing u64/i64 for it. A kernel needing anything else is gpu.Unsupported at launch through e.gpu's existing requirement check, and gpu_gl's wide kernel is word-equal on llvmpipe. Subgroup (D5902) where GL_KHR_shader_subgroup offers compute shaders basic, vote, ballot, shuffle and arithmetic (Intel yes; llvmpipe advertises none). Remaining: Float64 (GLSL does not promise IEEE double results, so it needs exact sequences like D5891's), and the shared-memory and workgroup limits. Design docs/opengl-plan.md, D5882. Needs L180. Acceptance: Float64 from ARB_gpu_shader_fp64, Int64 from ARB_gpu_shader_int64, subgroups from KHR_shader_subgroup, 32-bit atomics only, and the shared-memory and workgroup limits; a missing capability is gpu.Unsupported at launch, naming the kernel and the capability."
     },
     {
       "id": "C218",

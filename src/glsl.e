@@ -30,6 +30,8 @@ const KIND_SCALAR: u8 = 1u8
 const KIND_PRIVATE: u8 = 2u8
 const KIND_BUILTIN: u8 = 3u8
 const KIND_SHARED: u8 = 4u8
+// (D5902) `gpu.sid` (offset 1) or `gpu.subgroup_width` (offset 2), read from GLSL's subgroup built-ins.
+const KIND_INPUT: u8 = 5u8
 
 // How a scalar is held: 1 bool, 2 u8, 3 i8, 4 u16, 5 i16, 6 u32, 7 i32, 8 u64, 9 i64 (GL_ARB_gpu_shader_int64), 10 f32,
 // 12 a heap address.
@@ -64,6 +66,9 @@ type Module = struct {
     prototypes: Text,
     helper_exact: bool,
     helper_wide: bool,
+    // (D5902) The function being written reads a subgroup input or runs a collective; any helper that did.
+    needs_subgroup: bool,
+    helper_subgroup: bool,
     signatures: *nir.Signatures,
     in_helper: bool,
     signature: nir.Signature,
@@ -459,6 +464,9 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     put_entry_name(&m.body, g, kernel)
     put(&m.body, "\n#version 430\n")
     if m.helper_wide || uses_wide(builder.functions[function_at], &values) { put(&m.body, "#extension GL_ARB_gpu_shader_int64 : require\n") }
+    if m.helper_subgroup || m.needs_subgroup {
+        put(&m.body, "#extension GL_KHR_shader_subgroup_basic : require\n#extension GL_KHR_shader_subgroup_vote : require\n#extension GL_KHR_shader_subgroup_ballot : require\n#extension GL_KHR_shader_subgroup_shuffle : require\n#extension GL_KHR_shader_subgroup_arithmetic : require\n")
+    }
     let size = usize(kernel.gpu_size)
     put(&m.body, "layout(local_size_x = ")
     put_number(&m.body, size % 1024usize + 1usize)
@@ -556,6 +564,7 @@ fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Build
     let function = builder.functions[function_at]
     try lower_function(a, m, c, builder, function_at, c.functions[0usize], &values)
     if m.needs_divide || m.needs_sqrt { m.helper_exact = true }
+    if m.needs_subgroup { m.helper_subgroup = true }
     if uses_wide(function, &values) { m.helper_wide = true }
     put_text(&m.helpers, &header)
     put(&m.helpers, " {\n")
@@ -599,6 +608,10 @@ fn put_locals(m: *Module, function: nir.Function, values: *Values, out: *Text) {
         dynamic_at += 1usize
     }
     put(out, "  uint pc = 0u;\n  while (true) {\n")
+    // (D5902) As in MSL: only the lanes of a subgroup at the lowest block run a round, so lanes that took different branches
+    // meet again at the join (blocks are in program order, a join after its branches) and a collective sees the lanes the
+    // source says.
+    if m.needs_subgroup { put(out, "    if (pc != subgroupMin(pc)) { continue; }\n") }
     put_text(out, &m.code)
     put(out, "    break;\n  }\n")
 }
@@ -612,6 +625,7 @@ fn lower_function(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Bu
     m.frame_bytes = 0usize
     m.needs_divide = false
     m.needs_sqrt = false
+    m.needs_subgroup = false
     var at = 0usize
     while at < function.instruction_count {
         let instruction = builder.instructions[function.first_instruction + at]
@@ -932,7 +946,69 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         ret ok
     }
     if opcode == .AtomicLoad || opcode == .AtomicStore || opcode == .AtomicRmw || opcode == .AtomicCas { ret emit_atomic(m, builder, instruction, values) }
+    if opcode == .Subgroup { ret emit_subgroup(m, builder, instruction, values) }
     ret fail(m, "an operation in this kernel is not yet written as GLSL")
+}
+
+// ---- subgroups (D5902) ---------------------------------------------------------------
+// GL_KHR_shader_subgroup over the active invocations of a subgroup: NIR's kinds 0 all, 1 any, 2 ballot, 3 broadcast,
+// 4 shuffle, then the reductions add, min, max, and, or, xor. A broadcast's lane is a value, not a constant, so it is a
+// shuffle too. Operations on 64-bit values are `Unsupported`, as in MSL; a ballot's answer is the low 64 lanes.
+fn emit_subgroup(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let t = &m.code
+    let kind = instruction.immediate
+    if kind > 10usize { ret fail(m, "a subgroup operation is unknown") }
+    m.needs_subgroup = true
+    if kind <= 2usize {
+        if instruction.operand_count != 1usize { ret fail(m, "a subgroup operation has the wrong argument count") }
+        let predicate = operand(builder, instruction, 0usize)
+        if (values.kind[predicate] != KIND_SCALAR || values.ty[predicate] != T_BOOL) { ret fail(m, "a subgroup predicate is not bool") }
+        if kind == 2usize {
+            scalar(values, instruction.result, 8u8)
+            assign(t, instruction.result)
+            put(t, "packUint2x32(subgroupBallot(v")
+            put_number(t, predicate)
+            put(t, ").xy);\n")
+            ret ok
+        }
+        scalar(values, instruction.result, T_BOOL)
+        assign(t, instruction.result)
+        if kind == 0usize { put(t, "subgroupAll(v") } else { put(t, "subgroupAny(v") }
+        put_number(t, predicate)
+        put(t, ");\n")
+        ret ok
+    }
+    let ty = value_type(instruction.ty)
+    let value = operand(builder, instruction, 0usize)
+    if (ty == 0u8 || ty == T_BOOL || is_wide(ty) || values.kind[value] != KIND_SCALAR || values.ty[value] != ty) { ret fail(m, "a subgroup operation on this type is not written as GLSL") }
+    if ((ty == T_F32) && kind >= 8usize) { ret fail(m, "a subgroup bitwise reduction is not integer") }
+    scalar(values, instruction.result, ty)
+    var call_bytes: [256]u8 = zero
+    var call = Text { data: call_bytes[0usize..256usize], count: 0usize, full: false }
+    if kind == 3usize || kind == 4usize {
+        let lane = operand(builder, instruction, 1usize)
+        if (values.kind[lane] != KIND_SCALAR || values.ty[lane] != 6u8) { ret fail(m, "a subgroup exchange lane is not u32") }
+        put(&call, "subgroupShuffle(v")
+        put_number(&call, value)
+        put(&call, ", v")
+        put_number(&call, lane)
+        put(&call, ")")
+    } else {
+        var name = "subgroupAdd(v"
+        if kind == 6usize { name = "subgroupMin(v" }
+        if kind == 7usize { name = "subgroupMax(v" }
+        if kind == 8usize { name = "subgroupAnd(v" }
+        if kind == 9usize { name = "subgroupOr(v" }
+        if kind == 10usize { name = "subgroupXor(v" }
+        put(&call, name)
+        put_number(&call, value)
+        put(&call, ")")
+    }
+    assign(t, instruction.result)
+    // A narrow sum wraps at its own width.
+    put_narrowed(t, ty, &call)
+    put(t, ";\n")
+    ret ok
 }
 
 // A parameter from the argument block: a scalar read, a slice's header copied into its frame slot.
@@ -1140,6 +1216,13 @@ fn emit_global_address(m: *Module, builder: *nir.Builder, instruction: nir.Instr
     if same(global.name, "gid") { which = 1usize }
     if same(global.name, "lid") { which = 2usize }
     if same(global.name, "wgid") { which = 3usize }
+    if same(global.name, "sid") || same(global.name, "subgroup_width") {
+        m.needs_subgroup = true
+        values.kind[instruction.result] = KIND_INPUT
+        values.offset[instruction.result] = 1usize
+        if same(global.name, "subgroup_width") { values.offset[instruction.result] = 2usize }
+        ret ok
+    }
     if which == 0usize { ret fail(m, "a kernel reads a module-scope variable other than the invocation ids") }
     values.kind[instruction.result] = KIND_BUILTIN
     values.offset[instruction.result] = which
@@ -1280,6 +1363,16 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     }
     let ty = value_type(instruction.ty)
     if ty == 0u8 { ret fail(m, "a load of this type is not yet written as GLSL") }
+    if (values.kind[address] == KIND_INPUT) {
+        if ty != 6u8 { ret fail(m, "a subgroup input is read in an unexpected shape") }
+        scalar(values, result, ty)
+        assign(&m.code, result)
+        // gl_SubgroupSize is the largest width the driver may pick (Intel says 32 and runs 16), so the width is the one the
+        // workgroup was cut into: its size over its subgroups, up to a power of two. A workgroup smaller than one subgroup
+        // reads as its own size rounded up, not the hardware's (a known ceiling).
+        if values.offset[address] == 1usize { put(&m.code, "gl_SubgroupInvocationID;\n") } else { put(&m.code, "min(gl_SubgroupSize, 1u << uint(findMSB((gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z + gl_NumSubgroups - 1u) / gl_NumSubgroups - 1u) + 1));\n") }
+        ret ok
+    }
     if (values.kind[address] == KIND_BUILTIN) {
         let which = values.offset[address]
         if ty != 6u8 { ret fail(m, "an invocation id is read in an unexpected shape") }

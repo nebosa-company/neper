@@ -3695,6 +3695,12 @@ $gpuGlExactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuGlExactWritten -ne 'executable written') { throw 'gpu_gl_exact emission failed' }
 & $gpuGlExactPath
 if ($LASTEXITCODE -ne 0) { throw "exact f32 division, square root or fma on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5902) Subgroup collectives through GL_KHR_shader_subgroup, checked lane by lane at the width the driver cut the workgroup into.
+$gpuGlSubgroupPath = Join-Path $testBuild 'gpu-gl-subgroup-selfhost.exe'
+$gpuGlSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_subgroup\src\main.e') $repo 'x64' 'windows' $gpuGlSubgroupPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlSubgroupWritten -ne 'executable written') { throw 'gpu_gl_subgroup emission failed' }
+& $gpuGlSubgroupPath
+if ($LASTEXITCODE -ne 0) { throw "a subgroup collective on OpenGL answered wrongly: exit $LASTEXITCODE" }
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 $gpuGlThreadsPath = Join-Path $testBuild 'gpu-gl-threads-selfhost.exe'
 $gpuGlThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_threads\src\main.e') $repo 'x64' 'windows' $gpuGlThreadsPath --gpu glsl
