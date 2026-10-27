@@ -244,12 +244,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     ret check_es(a, cpu_out, gl_out)
 }
 
-// The same kernels through OpenGL ES 3.2 (C218): Mesa's GLES on Linux, ANGLE on Windows where it reaches 3.2.
+// The same kernels through OpenGL ES 3.2, or 3.1 with GL_EXT_gpu_shader5 (C218, D5904): Mesa's GLES on Linux, ANGLE on
+// Windows where it reaches either.
 fn check_es(a: *mem.Arena, cpu_out: []u32, es_out: []u32) -> err {
     compute.install_es()
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
     if found_error != ok || found.len == 0usize {
-        let printed = io.print("no OpenGL ES 3.2 compute device; ES not checked\n")
+        let printed = io.print("no OpenGL ES 3.1 compute device with precise; ES not checked\n")
         ret ok
     }
     var flushing = true

@@ -85,6 +85,15 @@ var float64_caps: usize = 0usize
 var subgroup_caps: usize = 0usize
 // (C218) Devices are OpenGL ES 3.2 contexts rather than GL 4.3 core ones; ES 3.2 is the first with `precise`.
 var use_es: bool = false
+// (D5904) Which header an ES device's shaders take: 0 3.2's own, 1 or 2 3.1's with the EXT or OES extension that gives it
+// `precise`.
+var es_profile: u8 = 0u8
+
+fn es_header() -> str {
+    if es_profile == 1u8 { ret "#version 310 es\n#extension GL_EXT_gpu_shader5 : require\nprecision highp float;\nprecision highp int;\n" }
+    if es_profile == 2u8 { ret "#version 310 es\n#extension GL_OES_gpu_shader5 : require\nprecision highp float;\nprecision highp int;\n" }
+    ret "#version 320 es\nprecision highp float;\nprecision highp int;\n"
+}
 // `glBufferStorageEXT` where the context has only the extension (OpenGL ES), else 0.
 var storage_ext: usize = 0usize
 var cache_hit_count: usize = 0usize
@@ -340,7 +349,7 @@ fn slot_of(handle: mtl.Context) -> usize {
 fn open_here(a: *mem.Arena, at: usize) -> (mtl.Context, err) {
     var none: mtl.Context = zero
     var options = context.Options { api: .Gl, major: 4u32, minor: 3u32 }
-    if use_es { options = context.Options { api: .Gles, major: 3u32, minor: 2u32 } }
+    if use_es { options = context.Options { api: .Gles, major: 3u32, minor: 1u32 } }
     let (c, c_error) = context.headless(a, options)
     if c_error != ok { ret (none, Unsupported) }
     slots[at] = Slot { c: c, live: true, arena: a }
@@ -353,6 +362,14 @@ fn open_here(a: *mem.Arena, at: usize) -> (mtl.Context, err) {
     if loaded == ok {
         let (major, minor, es, version_error) = gl.version()
         if version_error != ok || es != use_es || major < options.major || (major == options.major && minor < options.minor) { loaded = Unsupported }
+        // ES 3.1 has no `precise` of its own; GL_EXT_gpu_shader5 (or the OES one) gives it, and without either no multiply-add
+        // is safe from fusing, so the device is refused.
+        es_profile = 0u8
+        if loaded == ok && use_es && major == 3u32 && minor == 1u32 {
+            if gl.has_extension("GL_EXT_gpu_shader5") { es_profile = 1u8 }
+            if gl.has_extension("GL_OES_gpu_shader5") { es_profile = 2u8 }
+            if es_profile == 0u8 { loaded = Unsupported }
+        }
     }
     if loaded != ok {
         close_here(mtl.Context { device: at + 1usize, queue: 0usize })
@@ -483,7 +500,7 @@ fn compile_here(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, 
     var header = ""
     let desktop = "#version 430\n"
     if use_es && text.len > desktop.len && mem.eq[u8](text[0usize..desktop.len], desktop) {
-        header = "#version 320 es\nprecision highp float;\nprecision highp int;\n"
+        header = es_header()
         text = text[desktop.len..text.len]
     }
     var most = 0i32
@@ -664,7 +681,8 @@ fn dispatch_wait_here(command: usize) -> err {
     ret ok
 }
 
-// Makes `.Gl` an `e.gpu` backend over OpenGL ES 3.2 instead (C218): EGL's on Linux, ANGLE's `libEGL.dll` on Windows.
+// Makes `.Gl` an `e.gpu` backend over OpenGL ES 3.2, or 3.1 with GL_EXT_gpu_shader5 (C218, D5904), instead: EGL's on Linux,
+// ANGLE's `libEGL.dll` on Windows.
 // The emitted shaders are the same; ES needs `GL_EXT_buffer_storage` for the mapped heap.
 fn install_es() {
     use_es = true

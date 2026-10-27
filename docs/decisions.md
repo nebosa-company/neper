@@ -43172,3 +43172,16 @@ It needs only GLSL 4.30 and ES 3.10 built-ins, and no `int64` or `fp64`. The cal
 `x.khronos.compute` reports `.Float64` on desktop contexts; ES has no doubles. Unlike f32 (D5891), the double operations are not written as integer sequences. GLSL promises them only single precision, so the driver's arithmetic is trusted where `gpu_gl_f64` passes. That fixture covers 65,536 pairs of random patterns and special values through every operation and narrowing, and is word-equal to the CPU on llvmpipe. Intel cannot run an f64 kernel at all: it flushes denormals, so only `ftz` kernels launch there, and an `ftz` kernel cannot hold f64. If a device ever fails that fixture, the integer sequences are the fix: 53-bit mantissas over `uvec2` words, as `f32_fma` does for 48 bits.
 
 A workgroup longer along an axis than `MAX_COMPUTE_WORK_GROUP_SIZE`, or shared memory past `MAX_COMPUTE_SHARED_MEMORY_SIZE`, used to fail in the driver's compiler and answer `Unsupported`. GL's `compile` now reads the shader's declared `local_size_*` and `tg[]` size against those limits first. Over a limit, it returns a pipeline of no threads, which `e.gpu`'s existing invocation check turns into `TooLarge`, the CPU's and Vulkan's answer. `gpu_gl_limits` checks both: a mebibyte of shared memory is `TooLarge` everywhere, and a 1×1×1024 workgroup is `TooLarge` on Intel (64 along z) and runs correctly on llvmpipe.
+
+## D5904 — OpenGL ES 3.1 devices where `gpu_shader5` gives them `precise`
+
+D5890 put the ES floor at 3.2 because 3.2 is the first ES with `precise`, and without it a driver may fuse an f32 multiply and add, breaking word equality. ES 3.1 drivers often have `GL_EXT_gpu_shader5` or `GL_OES_gpu_shader5`, which brings the same keyword. `x.khronos.compute` now asks for ES 3.1 or later:
+- **3.1 with either extension.** The device is taken, and its shaders start `#version 310 es` with that extension required and every precision high.
+- **3.1 without either.** The device is refused, as ANGLE on D3D11 still is.
+- **3.2 and later.** These keep 3.2's header.
+
+The emitted GLSL needs nothing else past 3.1. Doubles and int64 are never offered on ES.
+
+The heap needed nothing new: `buffer_here` already takes `MAX_SHADER_STORAGE_BLOCK_SIZE` up to 256 MiB, and ES 3.1 guarantees 128 MiB.
+
+Mesa answers as a 3.1 driver under `MESA_GLES_VERSION_OVERRIDE=3.1`. There it takes the OES header and `gpu_gl`'s ES pass is word-equal to the CPU. The Linux suite now runs `gpu_gl` a second time that way.
