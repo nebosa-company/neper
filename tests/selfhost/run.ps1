@@ -3689,6 +3689,17 @@ $gpuGlExactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuGlExactWritten -ne 'executable written') { throw 'gpu_gl_exact emission failed' }
 & $gpuGlExactPath
 if ($LASTEXITCODE -ne 0) { throw "exact f32 division or square root on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
+$saxpyGlslPath = Join-Path $testBuild 'saxpy-glsl-selfhost.exe'
+$saxpyGlslWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'x64' 'windows' $saxpyGlslPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $saxpyGlslWritten -ne 'executable written') { throw 'examples/saxpy.e --gpu glsl emission failed' }
+& python (Join-Path $repo 'scripts\dump_glsl.py') $saxpyGlslPath --check (Join-Path $repo 'tests\conformance\glsl\saxpy.glsl')
+if ($LASTEXITCODE -ne 0) { throw 'the saxpy GLSL is not tests/conformance/glsl/saxpy.glsl' }
+$loopGlslPath = Join-Path $testBuild 'loop-glsl-selfhost.exe'
+$loopGlslWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $loopGlslPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $loopGlslWritten -ne 'executable written') { throw 'gpu_vulkan_loop --gpu glsl emission failed' }
+& python (Join-Path $repo 'scripts\dump_glsl.py') $loopGlslPath --check (Join-Path $repo 'tests\conformance\glsl\loops.glsl')
+if ($LASTEXITCODE -ne 0) { throw 'the loop GLSL is not tests/conformance/glsl/loops.glsl' }
 $glTrianglePath = Join-Path $testBuild 'gl-triangle-selfhost.exe'
 $glTriangleWritten = & $compiler emit-executable (Join-Path $repo 'examples\gl_triangle.e') $repo 'x64' 'windows' $glTrianglePath
 if ($LASTEXITCODE -ne 0 -or $glTriangleWritten -ne 'executable written') { throw 'examples/gl_triangle.e emission failed' }

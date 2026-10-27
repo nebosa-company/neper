@@ -3223,6 +3223,13 @@ gpu_gl_exact_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$gpu_gl_exact_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-exact-selfhost"
 "$test_build/gpu-gl-exact-selfhost"
+# (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
+saxpy_glsl_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" x64 linux "$test_build/saxpy-glsl-selfhost" --gpu glsl)
+[ "$saxpy_glsl_written" = 'executable written' ]
+python3 "$repo/scripts/dump_glsl.py" "$test_build/saxpy-glsl-selfhost" --check "$repo/tests/conformance/glsl/saxpy.glsl"
+loop_glsl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/loop-glsl-selfhost" --gpu glsl)
+[ "$loop_glsl_written" = 'executable written' ]
+python3 "$repo/scripts/dump_glsl.py" "$test_build/loop-glsl-selfhost" --check "$repo/tests/conformance/glsl/loops.glsl"
 gl_triangle_written=$($test_build/neper-self emit-executable "$repo/examples/gl_triangle.e" "$repo" x64 linux "$test_build/gl-triangle-selfhost")
 [ "$gl_triangle_written" = 'executable written' ]
 chmod +x "$test_build/gl-triangle-selfhost"
