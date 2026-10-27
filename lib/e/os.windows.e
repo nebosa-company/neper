@@ -3615,6 +3615,9 @@ fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err {
     ret ok
 }
 
+// (D5910) Only the Linux variant takes another host's windows.
+fn window_hosted() -> bool { ret false }
+
 fn window_native(w: Window) -> (usize, usize, err) {
     if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret (0usize, 0usize, NotFound) }
     ret (w.raw, raw_module_handle(0usize), ok)

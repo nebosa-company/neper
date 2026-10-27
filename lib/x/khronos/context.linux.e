@@ -91,6 +91,19 @@ fn for_window(a: *mem.Arena, w: os.Window, options: Options) -> (Context, err) {
     var c: Context = zero
     let (window_id, socket, native_error) = os.window_native(w)
     if native_error != ok { ret (c, native_error) }
+    if os.window_hosted() {
+        // (D5910) Another host's window (Android's ANativeWindow): EGL's default display and that window, no X11.
+        if window_id == 0usize || egl.load(a, "") != ok { ret (c, Unsupported) }
+        let hosted_display = egl.get_display(0usize)
+        if eglcontext.initialize(hosted_display) != ok { ret (c, Unsupported) }
+        let (hosted_state, hosted_error) = eglcontext.on_window(hosted_display, window_id, options)
+        c.egl_state = hosted_state
+        c.window = window_id
+        c.host = w
+        c.has_host = true
+        if hosted_error == ok { remember_hosted(hosted_state.surface, window_id) }
+        ret (c, mapped(hosted_error))
+    }
     if egl.load(a, "") != ok || open_xlib(a) != ok { ret (c, Unsupported) }
     let x_display = xlib.open_display(nil)
     if x_display == 0usize { ret (c, Unsupported) }
@@ -128,7 +141,45 @@ var sized_surfaces: [16]usize = zero
 var sized_widths: [16]u32 = zero
 var sized_heights: [16]u32 = zero
 
+// (D5910) A hosted context's window can go and come back (Android destroys it on pause and makes a new one on resume), and
+// a surface is made on one window: each context, named by the surface it was made with, keeps the window and surface it
+// has now, and gets a new surface when the host's window is another.
+var hosted_keys: [16]usize = zero
+var hosted_natives: [16]usize = zero
+var hosted_surfaces: [16]usize = zero
+
+fn remember_hosted(surface: usize, native: usize) {
+    var slot = 0usize
+    while slot < 16usize && hosted_keys[slot] != 0usize { slot += 1usize }
+    if slot == 16usize { ret }
+    hosted_keys[slot] = surface
+    hosted_natives[slot] = native
+    hosted_surfaces[slot] = surface
+}
+
+// The surface to draw a hosted context into now; NO_SURFACE while the host has no window.
+fn hosted_surface(c: *const Context) -> usize {
+    var slot = 0usize
+    while slot < 16usize && hosted_keys[slot] != c.egl_state.surface { slot += 1usize }
+    if slot == 16usize { ret c.egl_state.surface }
+    let (native, extra, native_error) = os.window_native(c.host)
+    if native_error != ok || native == 0usize { ret egl.NO_SURFACE }
+    if native != hosted_natives[slot] {
+        let released = egl.make_current(c.egl_state.display, egl.NO_SURFACE, egl.NO_SURFACE, egl.NO_CONTEXT)
+        if hosted_surfaces[slot] != egl.NO_SURFACE { let destroyed = egl.destroy_surface(c.egl_state.display, hosted_surfaces[slot]) }
+        hosted_surfaces[slot] = egl.create_window_surface(c.egl_state.display, c.egl_state.config, native, nil)
+        hosted_natives[slot] = native
+    }
+    ret hosted_surfaces[slot]
+}
+
 fn make_current(c: *const Context) -> err {
+    if c.has_host && os.window_hosted() {
+        let surface = hosted_surface(c)
+        if surface == egl.NO_SURFACE || !c.egl_state.live { ret Failed }
+        if egl.make_current(c.egl_state.display, surface, surface, c.egl_state.context) != egl.TRUE { ret Failed }
+        ret ok
+    }
     let made = mapped(eglcontext.make_current(&c.egl_state))
     if made != ok || !c.has_host || c.egl_state.surface == egl.NO_SURFACE { ret made }
     let (metrics, metrics_error) = os.window_metrics(c.host)
@@ -145,7 +196,14 @@ fn make_current(c: *const Context) -> err {
     ret made
 }
 
-fn swap(c: *const Context) -> err { ret mapped(eglcontext.swap(&c.egl_state)) }
+fn swap(c: *const Context) -> err {
+    if c.has_host && os.window_hosted() {
+        let surface = hosted_surface(c)
+        if surface == egl.NO_SURFACE || egl.swap_buffers(c.egl_state.display, surface) != egl.TRUE { ret Failed }
+        ret ok
+    }
+    ret mapped(eglcontext.swap(&c.egl_state))
+}
 
 // 1 waits for the vertical blank, 0 does not.
 fn swap_interval(c: *const Context, interval: i32) -> err { ret mapped(eglcontext.swap_interval(&c.egl_state, interval)) }

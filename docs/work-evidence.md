@@ -432,10 +432,6 @@ Verify-only turn, no edits. Needs T047. Run the full suites on both hosts for th
 
 Done 2026-10-27 (D5896, D5900): emit-executable ... x64 android and aarch64 android write the Linux image typed ET_DYN for /system/bin/linker64, with Bionic library names (libc.so) plus libdl.so and liblog.so; arm64 Android images always carry a dynamic segment, and arm64 atomics are LDAXR/STLXR loops (ARMv8.0). Android is linux to every module and variant, so no os.android.e was needed (neither Bionic nor SELinux refused anything run so far). scripts/run-android.ps1 [-Arch aarch64] runs hello, advanced, gpu_cpu, gpu_fault_bounds, x_khronos_gl_load, x_khronos_gl_headless, atomic_ops, atomic_threads and channel_threads on the SDK's Android 15 x86_64 emulator for both architectures, all passing, with GLES 3.0 drawing and reading back. Remaining: e.gpu compute on a device with GLES 3.1+. The emulator stops at 3.0 on this host: SwiftShader, -gpu host on the Iris Xe (draws there too) and -feature GLESDynamicVersion all report ro.opengles.version 196608, and -feature GuestAngle does not boot, so this needs a real phone. Design docs/opengl-plan.md, D5884. Needs T047. Acceptance: --target android-x64 and android-a64 emit a PIE ELF for /system/bin/linker64 with DT_NEEDED libc.so, libdl.so and liblog.so; os.android.e is os.linux.e without what Bionic and SELinux refuse; the executable runs under adb shell on the x86_64 emulator, and T047's fixtures pass there on GLES.
 
-### L182 — OpenGL 18: os.android windows and input (0%)
-
-Design docs/opengl-plan.md, D5884. Needs C220. Acceptance: an ANativeWindow window; events from AInputQueue/ALooper; the EGL surface is recreated across pause and resume; ui_counter runs with present: .Gl.
-
 ### T049 — OpenGL verify 5 (verify-only): Android emulator (0%)
 
 Verify-only turn, no edits. Needs L182 and T044. On the emulator, run gpu_* on GLES and run ui_counter; the real-phone check folds into C213. Report the results.
@@ -1833,3 +1829,7 @@ Closed 2026-10-27 (D5908, D5909): `@export("Name")` on a `@cc(c)` function and `
 ### T044 — OpenGL 19: APK packaging and signing
 
 Closed 2026-10-27 (D5909): scripts/build-apk.ps1 builds the program as x86_64 and arm64-v8a libapp.so, writes a NativeActivity manifest, links it with aapt2 against android-35, stores the libraries uncompressed, page-aligns with zipalign -P 16 and signs with apksigner (WSL OpenJDK 17) and the debug keystore. The example APK installs (adb install) and launches on the emulator.
+
+### L182 — OpenGL 18: os.android windows and input
+
+Closed 2026-10-27 (D5910): os.linux.e takes a WindowHost; x.android.activity is the NativeActivity host (ANativeWindow window, AInputQueue on the app thread's ALooper, a pthread app thread, density scale, Back as Close, software frames through ANativeWindow_lock). x.khronos.context makes the EGL surface on the native window and makes it again on the window that returns after a pause. examples/android/counter (ui_counter's count and buttons; the wasm ui_counter sources are another session's work in flight) runs on the emulator through GLES: taps count, Home and back keep state and draw on the new surface, Back quits.

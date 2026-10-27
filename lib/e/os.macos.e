@@ -3420,6 +3420,9 @@ fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err {
     ret ok
 }
 
+// (D5910) Only the Linux variant takes another host's windows.
+fn window_hosted() -> bool { ret false }
+
 fn window_native(w: Window) -> (usize, usize, err) {
     let slot = cocoa_slot(w)
     if slot >= COCOA_TABLE { ret (0usize, 0usize, NotFound) }

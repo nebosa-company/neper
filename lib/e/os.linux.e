@@ -2803,6 +2803,29 @@ type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focus
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+
+// (L182, D5910) Another host's windows in place of X11's: Android's NativeActivity, whose window and input arrive through
+// callbacks `x.android.activity` turns into these. Installed, every `window_*` call goes to it; title, visibility, cursor
+// and capture mean nothing there and answer ok.
+type WindowHost = struct {
+    open: fn(*mem.Arena, WindowOptions) -> (Window, err),
+    close: fn(Window) -> err,
+    poll: fn(i64) -> (WindowEvent, bool, err),
+    metrics: fn(Window) -> (WindowMetrics, err),
+    present: fn(Window, []const u32, u32, u32) -> err,
+    native: fn(Window) -> (usize, usize, err),
+}
+
+var window_host: WindowHost = zero
+var has_window_host: bool = false
+
+fn set_window_host(host: WindowHost) {
+    window_host = host
+    has_window_host = true
+}
+
+// Whether the windows are another host's (D5910): its `window_native` answers that host's window, not an X11 id.
+fn window_hosted() -> bool { ret has_window_host }
 type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
 
 const WINDOW_RING: usize = 256usize
@@ -3479,6 +3502,10 @@ fn x_work_area() -> (i32, i32, u32, u32, bool) {
 }
 
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
+    if has_window_host {
+        let (hosted, hosted_error) = window_host.open(a, options)
+        ret (hosted, hosted_error)
+    }
     var none: Window = zero
     if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
     let connect_error = x_connect(a)
@@ -3550,6 +3577,7 @@ fn x_simple(opcode: u8, window: u32) -> err {
 }
 
 fn window_close(w: Window) -> err {
+    if has_window_host { ret window_host.close(w) }
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
     atspi_release(slot)
@@ -3572,6 +3600,10 @@ fn window_close(w: Window) -> err {
 }
 
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
+    if has_window_host {
+        let (hosted, any, hosted_error) = window_host.poll(timeout_ns)
+        ret (hosted, any, hosted_error)
+    }
     var none: WindowEvent = zero
     if !x_connected { ret (none, false, Unsupported) }
     if window_event_count == 0usize {
@@ -3591,6 +3623,10 @@ fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
 }
 
 fn window_metrics(w: Window) -> (WindowMetrics, err) {
+    if has_window_host {
+        let (hosted, hosted_error) = window_host.metrics(w)
+        ret (hosted, hosted_error)
+    }
     var metrics: WindowMetrics = zero
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret (metrics, NotFound) }
@@ -3605,6 +3641,7 @@ fn window_metrics(w: Window) -> (WindowMetrics, err) {
 }
 
 fn window_title(w: Window, value: str) -> err {
+    if has_window_host { ret ok }
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
     if x_change_property(u32(w.raw), 39u32, 31u32, 8u32, value, value.len) != ok { ret Failed }
     atspi_set_title(window_slot(u32(w.raw)), value)
@@ -3612,6 +3649,7 @@ fn window_title(w: Window, value: str) -> err {
 }
 
 fn window_visible(w: Window, value: bool) -> err {
+    if has_window_host { ret ok }
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
     var opcode = 10u8
@@ -3622,11 +3660,13 @@ fn window_visible(w: Window, value: bool) -> err {
 }
 
 fn window_cursor(w: Window, shape: CursorShape) -> err {
+    if has_window_host { ret ok }
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
     ret ok
 }
 
 fn window_capture(w: Window, on: bool) -> err {
+    if has_window_host { ret ok }
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
     if !on {
         var ungrab: [8]u8 = zero
@@ -3652,6 +3692,7 @@ fn window_capture(w: Window, on: bool) -> err {
 
 // PutImage of BGRX rows in bands under the request-size ceiling.
 fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    if has_window_host { ret window_host.present(w, pixels, width, height) }
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
     if width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
@@ -3697,6 +3738,10 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
 fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
 
 fn window_native(w: Window) -> (usize, usize, err) {
+    if has_window_host {
+        let (hosted, extra, hosted_error) = window_host.native(w)
+        ret (hosted, extra, hosted_error)
+    }
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret (0usize, 0usize, NotFound) }
     ret (w.raw, x_socket, ok)
 }

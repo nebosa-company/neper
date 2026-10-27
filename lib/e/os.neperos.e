@@ -479,6 +479,9 @@ fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) { ret (detail
 // Live resize is the macOS host's: a poll-model host sees every size as a Resize event (D5856).
 fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
 
+// (D5910) Only the Linux variant takes another host's windows.
+fn window_hosted() -> bool { ret false }
+
 fn window_native(w: Window) -> (usize, usize, err) { ret (0usize, 0usize, Unsupported) }
 
 fn pipe() -> (File, File, err) { ret (File { raw: 0usize }, File { raw: 0usize }, Unsupported) }

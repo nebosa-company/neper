@@ -43255,3 +43255,28 @@ An Android app with no Java is `android.app.NativeActivity` naming a native libr
 6. `apksigner` signs with the debug keystore. It runs under WSL's OpenJDK 17, which the user allowed installing; Windows has no Java.
 
 On the x86_64 Android 15 emulator the APK installs and launches cold. The process is alive as the top resumed activity, and `logcat` shows the neper code's line. The app draws nothing yet: its window and input are L182.
+
+## D5910 — e.ui apps on Android: `x.android.activity` as `e.os`'s window host
+
+Android compiles as Linux (D5896), so its `e.os` windows were X11's. `os.linux.e` now takes a `WindowHost`, a table of open, close, poll, metrics, present and native. When one is installed, every `window_*` call goes to it, and title, visibility, cursor and capture answer ok. The other variants answer `window_hosted()` false.
+
+`x.android.activity` is that host for a NativeActivity:
+- **Start.** The program's exported `ANativeActivity_onCreate` (D5908) calls `start` with its entry. `start` sets the activity's window, input-queue and destroy callbacks, installs the host, reads the density (`AConfiguration`, scale = dpi × 100 / 160), and runs the entry on a `pthread`.
+- **Why a Bionic thread.** Bionic's own calls (`ALooper_prepare`) need a thread Bionic made. Neper code keeps no state in a thread register, so it runs there unchanged.
+- **Memory.** The entry's arena is 512 MiB from `mmap` with `MAP_NORESERVE`: address space, not committed memory.
+- **Hand-over.** The callbacks, on Android's UI thread, only hand over. A window or queue that appears is offered, and the app thread takes it at its next poll, attaching the queue to its own `ALooper`. One that goes away is withdrawn, and the callback waits until the app thread has let go of it, as Android requires.
+- **Events.** A touch is the pointer with button 1, Back (released) is Close, and a new window is a Resize then a Paint.
+- **Software frames.** A frame with no GL presenter is copied into the window through `ANativeWindow_lock`, BGRA words to RGBX bytes.
+
+With GL (`x.khronos.present.install_es()`, D5907), `x.khronos.context` makes the EGL surface on the host's native window through EGL's default display, not X11.
+- **Pause and resume.** Android destroys the window on pause and makes another on resume. Each hosted context therefore remembers the window its surface was made on and makes a new surface when the host's window is another.
+- **No window.** While there is none, the presenter shows nothing, and the first frame afterwards uploads whole.
+
+`e.gpu.open(.Cpu)` now reads an environment it may not read as unset: an app cannot read `/proc/self/environ`, and that refusal used to fail the open.
+
+`examples/android/counter`, `ui_counter`'s count and buttons, runs on the x86_64 emulator as an APK (D5909) and presents through GLES:
+- two taps on Increment make the count 2, in the log and on screen;
+- Home and back to it keep the process and its state, the new window draws, and a third tap makes it 3;
+- Back logs `bye`, and the launcher returns.
+
+The status bar overlaps the top of the window, since the window is drawn edge to edge; insets are not applied.

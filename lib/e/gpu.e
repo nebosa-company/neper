@@ -973,8 +973,8 @@ fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
         if width == 0u32 { ret (zero, Unsupported) }
         subgroup_width = width
     } else {
+        // (D5910) An environment the process may not read (an Android app's /proc/self/environ) configures nothing either.
         mem.reset(a, checkpoint)
-        if env_error != os.NotFound { ret (zero, Unsupported) }
     }
     let (device, device_error) = open_state(a, .Cpu)
     ret (device, device_error)

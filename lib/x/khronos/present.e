@@ -137,6 +137,15 @@ fn draw_changed(index: usize, host: os.Window, pixels: []const u32, width: u32, 
     if index >= MAX_PRESENTS || !presents[index].live { ret Failed }
     if width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
     let p = &presents[index]
+    // (D5910) A hosted window can be away (Android between pause and resume): nothing is shown then, and the frame after
+    // it comes back goes up whole, since what changed meanwhile was never uploaded.
+    if os.window_hosted() {
+        let (native, extra, native_error) = os.window_native(host)
+        if native_error != ok || native == 0usize {
+            p.width = 0u32
+            ret ok
+        }
+    }
     if context.make_current(&p.c) != ok { ret Failed }
     let (metrics, metrics_error) = os.window_metrics(host)
     if metrics_error != ok { ret Failed }
@@ -185,6 +194,10 @@ fn draw_changed(index: usize, host: os.Window, pixels: []const u32, width: u32, 
 fn present(index: usize, host: os.Window, pixels: []const u32, width: u32, height: u32, changed: window.Changed) -> err {
     let drawn = draw_changed(index, host, pixels, width, height, changed)
     if drawn != ok { ret drawn }
+    if os.window_hosted() {
+        let (native, extra, native_error) = os.window_native(host)
+        if native_error != ok || native == 0usize { ret ok }
+    }
     ret context.swap(&presents[index].c)
 }
 
