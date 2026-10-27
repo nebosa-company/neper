@@ -1036,38 +1036,52 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
             try read_into(allocations, builder.operands[instruction.first_operand + 1usize], A64_S1, output)
             let (desired, desired_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], A64_S2, output)
             if desired_error != ok { ret desired_error }
-            try emit_a64.compare_swap(output, A64_S1, desired, address, bytes)
+            // (D5900) An exclusive loop, not CASAL: x2 the store's status, x4 the expected
+            // value as the exclusive load answers it, zero-extended. x0-x7 hold nothing
+            // inside an instruction.
+            try emit_a64.extend_integer(output, 4usize, A64_S1, width, false)
+            let retry = output.count
+            try emit_a64.load_exclusive(output, A64_S1, address, bytes)
+            try emit_a64.compare_register(output, A64_S1, 4usize)
+            let (differ, differ_error) = emit_a64.branch_condition(output, emit_a64.A64_NE)
+            if differ_error != ok { ret differ_error }
+            try emit_a64.store_exclusive(output, 2usize, desired, address, bytes)
+            let (again, again_error) = emit_a64.branch_zero(output, 2usize, true)
+            if again_error != ok { ret again_error }
+            try emit_a64.patch_relative(output, again, retry)
+            try emit_a64.patch_relative(output, differ, output.count)
         } else {
             if instruction.opcode != .AtomicRmw || instruction.operand_count != 2usize { ret codegen_x64.Unsupported }
             let (operand, operand_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], A64_S2, output)
             if operand_error != ok { ret operand_error }
-            // nir's kinds: xchg, add, sub, and, or, xor, min, max.
+            // nir's kinds: xchg, add, sub, and, or, xor, min, max. (D5900) The new value in
+            // x3, the store's status in x2; min and max compare at the width, so both sides
+            // are extended, the operand once into x4.
             let kind = instruction.immediate / 8usize
-            var operation = 0usize
-            var operand_register = operand
-            if kind == 1usize { operation = 1usize }
-            if kind == 2usize {
-                try emit_a64.negate_register(output, A64_S2, operand)
-                operand_register = A64_S2
-                operation = 1usize
+            if kind > 7usize { ret codegen_x64.Unsupported }
+            if kind >= 6usize { try emit_a64.extend_integer(output, 4usize, operand, width, signed) }
+            let retry = output.count
+            try emit_a64.load_exclusive(output, A64_S1, address, bytes)
+            var stored = 3usize
+            if kind == 0usize { stored = operand }
+            if kind == 1usize { try emit_a64.add_register(output, 3usize, A64_S1, operand) }
+            if kind == 2usize { try emit_a64.sub_register(output, 3usize, A64_S1, operand) }
+            if kind == 3usize { try emit_a64.and_register(output, 3usize, A64_S1, operand) }
+            if kind == 4usize { try emit_a64.orr_register(output, 3usize, A64_S1, operand) }
+            if kind == 5usize { try emit_a64.eor_register(output, 3usize, A64_S1, operand) }
+            if kind >= 6usize {
+                try emit_a64.extend_integer(output, 3usize, A64_S1, width, signed)
+                try emit_a64.compare_register(output, 3usize, 4usize)
+                var keep = emit_a64.A64_LO
+                if kind == 6usize && signed { keep = emit_a64.A64_LT }
+                if kind == 7usize { keep = emit_a64.A64_HI }
+                if kind == 7usize && signed { keep = emit_a64.A64_GT }
+                try emit_a64.select_condition(output, 3usize, 3usize, 4usize, keep)
             }
-            if kind == 3usize {
-                // AND is LDCLR of the complement: clear what the operand does not keep.
-                try emit_a64.not_register(output, A64_S2, operand)
-                operand_register = A64_S2
-                operation = 3usize
-            }
-            if kind == 4usize { operation = 4usize }
-            if kind == 5usize { operation = 5usize }
-            if kind == 6usize {
-                operation = 8usize
-                if signed { operation = 6usize }
-            }
-            if kind == 7usize {
-                operation = 9usize
-                if signed { operation = 7usize }
-            }
-            try emit_a64.atomic_operation(output, operation, operand_register, A64_S1, address, bytes)
+            try emit_a64.store_exclusive(output, 2usize, stored, address, bytes)
+            let (again, again_error) = emit_a64.branch_zero(output, 2usize, true)
+            if again_error != ok { ret again_error }
+            try emit_a64.patch_relative(output, again, retry)
         }
     }
     let (destination, destination_error) = result_register(allocations, instruction.result, A64_S1)

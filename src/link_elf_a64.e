@@ -118,7 +118,9 @@ fn place_globals(builder: *nir.Builder, relocations: []codegen_x64.Relocation, r
 fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, table_at: usize, output: *emit_x64.Buffer) -> err {
     let base = A64_IMAGE_BASE
     let symbols = nir.import_symbol_total(builder)
-    let interpreter = "/lib/ld-linux-aarch64.so.1"
+    var interpreter = "/lib/ld-linux-aarch64.so.1"
+    // (D5896) Android: its loader, as on x64.
+    if builder.android { interpreter = "/system/bin/linker64" }
     let phdr_offset = 64usize
     let phdr_count = 5usize
     let interp_offset = phdr_offset + phdr_count * 56usize
@@ -134,7 +136,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     let page = A64_IMAGE_PAGE
     var code_offset = link_elf.align_up_to(rela_offset + rela_size, page)
     if code_offset < page { code_offset = page }
-    try elf_header(output, phdr_count)
+    try elf_header(output, phdr_count, link_elf.executable_type(builder))
     // PT_PHDR, PT_INTERP, the read-execute load, the writable load and PT_DYNAMIC; the
     // sizes are patched once known.
     try program_header(output, 6usize, 4usize, phdr_offset, base + phdr_offset, phdr_count * 56usize, 8usize)
@@ -229,7 +231,7 @@ fn patch_dynamic_relocations(builder: *nir.Builder, output: *emit_x64.Buffer, re
     ret ok
 }
 
-fn elf_header(output: *emit_x64.Buffer, phdr_count: usize) -> err {
+fn elf_header(output: *emit_x64.Buffer, phdr_count: usize, kind: usize) -> err {
     try emit_x64.byte(output, 127usize)
     try emit_x64.byte(output, 69usize)
     try emit_x64.byte(output, 76usize)
@@ -238,7 +240,7 @@ fn elf_header(output: *emit_x64.Buffer, phdr_count: usize) -> err {
     try emit_x64.byte(output, 1usize)
     try emit_x64.byte(output, 1usize)
     try link_elf.pad_to(output, 16usize)
-    try link_elf.little_u16(output, 2usize)
+    try link_elf.little_u16(output, kind)
     try link_elf.little_u16(output, 183usize)
     try emit_x64.little_u32(output, 1usize)
     try emit_x64.little_u64(output, 0usize)
@@ -267,10 +269,11 @@ fn program_header(output: *emit_x64.Buffer, kind: usize, flags: usize, offset: u
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, table_at: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len || table_at > machine.count { ret InvalidImage }
     codegen_x64.mark_live_globals(builder, relocations, relocation_count)
-    if nir.import_library_count(builder) != 0usize { ret write_dynamic(builder, machine, function_offsets, relocations, relocation_count, lines, table_at, output) }
+    // (D5896) Android's arm64 translator loads nothing without a dynamic segment.
+    if nir.import_library_count(builder) != 0usize || builder.android { ret write_dynamic(builder, machine, function_offsets, relocations, relocation_count, lines, table_at, output) }
     var segments = 1usize
     if nir.live_global_count(builder) != 0usize { segments = 2usize }
-    try elf_header(output, segments)
+    try elf_header(output, segments, link_elf.executable_type(builder))
     // The read-execute segment from the file's start and, with globals, the writable one;
     // their sizes are patched at the end.
     try program_header(output, 1usize, 5usize, 0usize, A64_IMAGE_BASE, 0usize, A64_IMAGE_PAGE)

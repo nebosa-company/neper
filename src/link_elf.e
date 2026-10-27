@@ -109,15 +109,17 @@ fn interpreter_path(builder: *nir.Builder) -> str {
 // (C219, D5896) `x64 android`: the Linux image for Android's loader. Android runs only position-independent executables
 // through `/system/bin/linker64`; neper's code needs no relocation to move, so the image is the Linux one typed ET_DYN.
 // Bionic's libraries carry no version suffix (`libc.so`, not `libc.so.6`) and keep dlopen in `libdl.so`, which an image that
-// imports anything also needs; with no symbol versions the loader looks each symbol up in every library named.
+// imports anything also needs, as it needs `liblog.so`, Android's logger; with no symbol versions the loader looks each
+// symbol up in every library named.
 fn library_count(builder: *nir.Builder) -> usize {
     let count = nir.import_library_count(builder)
-    if builder.android && count != 0usize { ret count + 1usize }
+    if builder.android && count != 0usize { ret count + 2usize }
     ret count
 }
 
 fn library_name(builder: *nir.Builder, library: usize) -> str {
-    if library >= nir.import_library_count(builder) { ret "libdl.so" }
+    if library > nir.import_library_count(builder) { ret "liblog.so" }
+    if library == nir.import_library_count(builder) { ret "libdl.so" }
     let name = nir.import_library_name(builder, library)
     if !builder.android { ret name }
     // `libc.so.6` is `libc.so`: the name up to its `.so`.

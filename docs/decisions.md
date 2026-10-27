@@ -43122,3 +43122,15 @@ D5881 as built. `x.khronos.compute.open` gives the device a slot with a mutex, t
 - **The fix.** `x.khronos.context`'s Linux `make_current` compares the window's size with the size it last saw for that surface (recorded when the surface is made, kept in a small table since the context is `*const` there). When the size changed, it swaps once first, which shows the last frame again rather than a torn one, and the frame that follows has buffers of the new size.
 
 Both hosts now pass all twelve steps. Windows' minimum window width (about 176 px with a caption) is why the fixture asks for 200 px or more.
+
+## D5900 — `aarch64 android`, and arm64 atomics as exclusive loops
+
+`aarch64 android` is `aarch64 linux` typed `ET_DYN` for `/system/bin/linker64`, with D5896's Bionic library names; `link_elf.e`'s `executable_type` and `builder.android` serve both writers. Android images also name `liblog.so`, Android's logger, beside `libdl.so`.
+
+D5896's last paragraph guessed wrong. The arm64 image holds no absolute address: under qemu-aarch64 the same image typed `ET_DYN` runs at a moved base. The emulator's arm64 translator (berberis, run by ndk_translation's binfmt) refused it for two other reasons:
+- **No dynamic segment.** The translator loads nothing without `PT_DYNAMIC`, so an arm64 Android image always takes the dynamic layout, with no libraries when it imports none.
+- **LSE atomics.** The translator implements ARMv8.0, and `SWPAL` (`0xb8eb8151`) stopped it with SIGILL. The LSE read-modify-writes and `CASAL` are ARMv8.1; arm64-v8a promises ARMv8.0, and so does a Cortex-A53 or A72 Linux board. Every arm64 target now emits `LDAXR`/`STLXR` loops: the operation into x3, the store's status in x2, retried while it fails. Min, max and compare-and-swap compare at the width, from values extended into x3 and x4. x0–x7 hold nothing inside an instruction, since parameters live in slots. The LSE encoders stay in `emit_a64.e`, under the encoder sweep, for a target that guarantees them.
+
+A third fault was the per-module linker. `em_link.e` chose a64's call patching only for the `aarch64-linux`, `-none`, `-neperos` and `-macos` target strings, so `aarch64-android` artifacts were patched as x64 code (`emit_a64.NotPatchable`).
+
+`scripts/run-android.ps1 -Arch aarch64` builds and runs fixtures as arm64. On the x86_64 Android 15 emulator, both architectures pass `hello`, `advanced`, `gpu_cpu`, `gpu_fault_bounds`, `x_khronos_gl_load`, `x_khronos_gl_headless` (GLES 3.0 draws), `atomic_ops`, `atomic_threads` and `channel_threads`. `atomic_ops` and `atomic_threads` built for `aarch64 linux` pass under `qemu-aarch64 -cpu cortex-a53`.

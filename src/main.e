@@ -14991,6 +14991,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                             if same(args[5usize], "macos") {
                                 try link_macho.write(same(args[4usize], "x64"), &builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                             } else {
+                                builder.android = same(args[5usize], "android")
                                 try link_elf_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                             }
                         }

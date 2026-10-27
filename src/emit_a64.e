@@ -450,6 +450,11 @@ fn size_field(width: usize) -> usize {
 fn load_acquire(output: *emit_x64.Buffer, rt: usize, rn: usize, width: usize) -> err { ret instruction_word(output, size_field(width) | 0x08DFFC00usize | (rn << 5usize) | rt) }
 fn store_release(output: *emit_x64.Buffer, rt: usize, rn: usize, width: usize) -> err { ret instruction_word(output, size_field(width) | 0x089FFC00usize | (rn << 5usize) | rt) }
 
+// LDAXR/STLXR: the exclusive pair every read-modify-write loops on (D5900: LSE is
+// ARMv8.1, and arm64-v8a promises ARMv8.0). `rs` gets 0 when the store took.
+fn load_exclusive(output: *emit_x64.Buffer, rt: usize, rn: usize, width: usize) -> err { ret instruction_word(output, size_field(width) | 0x085FFC00usize | (rn << 5usize) | rt) }
+fn store_exclusive(output: *emit_x64.Buffer, rs: usize, rt: usize, rn: usize, width: usize) -> err { ret instruction_word(output, size_field(width) | 0x0800FC00usize | (rs << 16usize) | (rn << 5usize) | rt) }
+
 // The ARMv8.1 LSE read-modify-writes with acquire and release, by `kind`: 0 SWP,
 // 1 LDADD, 3 LDCLR (and-not), 4 LDSET (or), 5 LDEOR, then the signed and unsigned
 // min/max. `rs` is the operand and `rt` gets the value that was there.

@@ -1123,7 +1123,9 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     if neperos_error != ok { ret neperos_error }
     let (macos, macos_error) = em.string_matches(artifacts[0usize].bytes, root_target, "aarch64-macos")
     if macos_error != ok { ret macos_error }
-    if aarch64 || kernel || neperos || macos {
+    let (android, android_error) = em.string_matches(artifacts[0usize].bytes, root_target, "aarch64-android")
+    if android_error != ok { ret android_error }
+    if aarch64 || kernel || neperos || macos || android {
         try codegen_a64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
     } else {
         try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
