@@ -76,6 +76,20 @@ fn helped_ftz(n: u32, values: []const u32, out: []u32, floats: []f32) {
     floats[k] = halve(f32(i))
 }
 
+// 64-bit integers (GL_ARB_gpu_shader_int64): a wrapping multiply, shifts, division by a constant, signed division by a negative.
+@gpu(64)
+fn wide(n: u32, us: []u64, ss: []i64) {
+    let i = gpu.gid.x
+    if i >= n { ret }
+    let k = usize(i)
+    let h = u64(i) *% 11400714819323198485u64
+    us[2usize * k] = (h >> 7u64) ^ (u64(i) << 40u64)
+    us[2usize * k + 1usize] = h / 1000003u64
+    let v = i64(i) * -123456789012i64
+    ss[2usize * k] = v / -97i64
+    ss[2usize * k + 1usize] = v % -97i64
+}
+
 @gpu(64)
 fn overrun(out: []u32) {
     let i = gpu.gid.x
@@ -85,7 +99,7 @@ fn overrun(out: []u32) {
 const N: usize = 200usize
 
 // Every kernel on `backend`; the results land in `out`. `flushing` picks the `ftz` saxpy.
-fn run(a: *mem.Arena, backend: gpu.Backend, out: []u32, flushing: bool) -> err {
+fn run(a: *mem.Arena, backend: gpu.Backend, out: []u32, flushing: bool, wide_check: bool) -> err {
     let (device, open_error) = gpu.open(a, backend, 0u32)
     if open_error != ok { ret open_error }
     let (q, queue_error) = gpu.queue(device)
@@ -135,6 +149,26 @@ fn run(a: *mem.Arena, backend: gpu.Backend, out: []u32, flushing: bool) -> err {
         out[6usize * N + 256usize + k] = *mem.cast[*u32](&got_halves_f[k])
         k += 1usize
     }
+    // 64-bit words land after the helpers' results, as four u32 per pair; a device without Int64 leaves them zero on both sides.
+    if gpu.has(device, .Int64) && wide_check {
+        let (us, us_error) = gpu.alloc[u64](q, 2usize * N)
+        let (ss, ss_error) = gpu.alloc[i64](q, 2usize * N)
+        if us_error != ok || ss_error != ok { os.exit(22i32) }
+        let wide_error = gpu.launch[wide](q, gpu.grid1(N), u32(N), us, ss)
+        if wide_error != ok { ret wide_error }
+        var got_us: [400]u64 = zero
+        var got_ss: [400]i64 = zero
+        if gpu.download(q, us, got_us[0usize..2usize * N]) != ok || gpu.download(q, ss, got_ss[0usize..2usize * N]) != ok { os.exit(23i32) }
+        k = 0usize
+        while k < 2usize * N {
+            out[7usize * N + 256usize + 2usize * k] = u32(got_us[k] & 4294967295u64)
+            out[7usize * N + 256usize + 2usize * k + 1usize] = u32(got_us[k] >> 32u64)
+            let bits = *mem.cast[*u64](&got_ss[k])
+            out[11usize * N + 256usize + 2usize * k] = u32(bits & 4294967295u64)
+            out[11usize * N + 256usize + 2usize * k + 1usize] = u32(bits >> 32u64)
+            k += 1usize
+        }
+    }
     var got_y: [200]f32 = zero
     var got_bytes: [200]u8 = zero
     var got_halves: [200]i16 = zero
@@ -170,8 +204,8 @@ fn run(a: *mem.Arena, backend: gpu.Backend, out: []u32, flushing: bool) -> err {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     compute.install()
-    let (cpu_out, cpu_error) = mem.alloc[u32](a, 7usize * N + 256usize)
-    let (gl_out, gl_error) = mem.alloc[u32](a, 7usize * N + 256usize)
+    let (cpu_out, cpu_error) = mem.alloc[u32](a, 15usize * N + 256usize)
+    let (gl_out, gl_error) = mem.alloc[u32](a, 15usize * N + 256usize)
     if cpu_error != ok || gl_error != ok { os.exit(8i32) }
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
     if found_error != ok || found.len == 0usize {
@@ -179,11 +213,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var flushing = true
+    var wide_check = false
     for capability in found[0usize].capabilities {
         if capability == .DenormPreserve { flushing = false }
+        if capability == .Int64 { wide_check = true }
     }
-    if run(a, .Cpu, cpu_out, flushing) != ok { os.exit(9i32) }
-    let gl_run = run(a, .Gl, gl_out, flushing)
+    if run(a, .Cpu, cpu_out, flushing, wide_check) != ok { os.exit(9i32) }
+    let gl_run = run(a, .Gl, gl_out, flushing, wide_check)
     if gl_run == gpu.NoDevice || gl_run == gpu.Unsupported {
         let printed = io.print("the OpenGL device refused these kernels; nothing checked\n")
         os.exit(10i32)
@@ -195,9 +231,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         k += 1usize
     }
     if flushing { let mode = io.print("(ftz) ") }
+    if wide_check { let wide_mode = io.print("(int64) ") }
     let named = io.print("every word equal to the CPU backend's on ")
     let device_name = io.print(found[0usize].name)
     let ended = io.print("\n")
+    var cleared = 0usize
+    while cleared < cpu_out.len {
+        cpu_out[cleared] = 0u32
+        gl_out[cleared] = 0u32
+        cleared += 1usize
+    }
     ret check_es(a, cpu_out, gl_out)
 }
 
@@ -213,8 +256,8 @@ fn check_es(a: *mem.Arena, cpu_out: []u32, es_out: []u32) -> err {
     for capability in found[0usize].capabilities {
         if capability == .DenormPreserve { flushing = false }
     }
-    if run(a, .Cpu, cpu_out, flushing) != ok { os.exit(30i32) }
-    if run(a, .Gl, es_out, flushing) != ok { os.exit(31i32) }
+    if run(a, .Cpu, cpu_out, flushing, false) != ok { os.exit(30i32) }
+    if run(a, .Gl, es_out, flushing, false) != ok { os.exit(31i32) }
     var k = 0usize
     while k < cpu_out.len {
         if cpu_out[k] != es_out[k] { os.exit(32i32 + i32(k / N)) }

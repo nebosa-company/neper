@@ -15,7 +15,7 @@ use x.khronos.gl
 
 error Unsupported
 
-// Int8 and Int16: GLSL narrow loads and atomic stores. Int64, Float16, Float64 and subgroups wait for L181. Whether f32
+// Int8 and Int16: GLSL narrow loads and atomic stores; Int64 below. Float16, Float64 and subgroups wait for L181. Whether f32
 // denormals survive is the driver's (GL allows either), so `open` asks: DenormPreserve when they do, Ftz when they flush.
 const CAPABILITIES: usize = 3usize
 const CAP_FTZ: usize = 128usize
@@ -25,7 +25,7 @@ const MAX_DEVICES: usize = 4usize
 // The smallest positive f32 denormal, doubled: 2 where denormals are kept, 0 where they are flushed.
 fn denormal_probe() -> str { ret "//entry:probe\n#version 430\nlayout(local_size_x = 1) in;\nlayout(std430, binding = 1) buffer Heap { uint heap[]; };\nvoid main() { precise float d = uintBitsToFloat(heap[0]); precise float twice = d * 2.0; heap[1] = floatBitsToUint(twice); }\n" }
 
-fn capabilities() -> usize { ret CAPABILITIES | denormal_caps }
+fn capabilities() -> usize { ret CAPABILITIES | denormal_caps | int64_caps }
 
 // Runs the probe on the device just opened and records its answer.
 fn probe_denormals(handle: mtl.Context) {
@@ -73,6 +73,8 @@ type BufferStoragePun = union { function: BufferStorageExt, bits: usize }
 var slots: [4]Slot = zero
 // The denormal answer of the last device opened; every device in a process is the same driver.
 var denormal_caps: usize = 0usize
+// Int64 (`Cap` bit 4) where the desktop driver has GL_ARB_gpu_shader_int64, which the emitter's 64-bit values need.
+var int64_caps: usize = 0usize
 // (C218) Devices are OpenGL ES 3.2 contexts rather than GL 4.3 core ones; ES 3.2 is the first with `precise`.
 var use_es: bool = false
 // `glBufferStorageEXT` where the context has only the extension (OpenGL ES), else 0.
@@ -111,6 +113,8 @@ fn open(a: *mem.Arena) -> (mtl.Context, err) {
     }
     let opened = mtl.Context { device: at + 1usize, queue: 0usize }
     probe_denormals(opened)
+    int64_caps = 0usize
+    if !use_es && gl.has_extension("GL_ARB_gpu_shader_int64") { int64_caps = 4usize }
     ret (opened, ok)
 }
 

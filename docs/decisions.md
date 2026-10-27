@@ -43055,3 +43055,13 @@ The GLSL emitter used to refuse any kernel that calls a helper (the MSL emitter 
 GLSL forbids recursion, as device code does.
 
 `gpu_gl`'s `helped` kernel uses a scalar helper, a helper that indexes a slice it was handed, a nested call, and an f32 helper. It is word-equal to the CPU on Intel (its `ftz` twin) and on llvmpipe through both GL and GLES 3.2. `gpu_cpu`, `gpu_vulkan_loop` and `gpu_device_helpers` built with `--gpu glsl` still pass, and the compiler still rebuilds itself byte for byte.
+
+## D5893 — 64-bit integers in GLSL through GL_ARB_gpu_shader_int64
+
+How the GLSL emitter handles `u64` and `i64`:
+- **Values** are held as `uint64_t` and `int64_t`. A shader holding one starts with `#extension GL_ARB_gpu_shader_int64 : require`, whether the value is in the kernel or in one of its helpers.
+- **Memory.** In heap, frame or shared memory a 64-bit value is two words, read with `packUint2x32` and written with `unpackUint2x32`. Its alignment is natural, so a neighbour's store never shares its words.
+- **Constants** are written as 16 hex digits with the `ul` suffix.
+- **Division.** Signed division and remainder take 64-bit magnitudes, and the unprovable zero is a 64-bit one.
+
+Device addresses stay 32-bit offsets, and 64-bit atomics stay `Unsupported`. `x.khronos.compute` reports `Int64` only where the desktop driver lists the extension: Mesa does, Intel's GL driver (31.0.101.3962) does not, so there a 64-bit kernel is `gpu.Unsupported` at launch and the CPU runs it. `gpu_gl`'s `wide` kernel (wrapping multiply, shifts, division by a constant, `i64` `/` and `%` by a negative) runs where `Int64` is reported and is word-equal to the CPU on llvmpipe. The pinned GLSL goldens are unchanged.

@@ -31,7 +31,8 @@ const KIND_PRIVATE: u8 = 2u8
 const KIND_BUILTIN: u8 = 3u8
 const KIND_SHARED: u8 = 4u8
 
-// How a scalar is held: 1 bool, 2 u8, 3 i8, 4 u16, 5 i16, 6 u32, 7 i32, 10 f32, 12 a heap address.
+// How a scalar is held: 1 bool, 2 u8, 3 i8, 4 u16, 5 i16, 6 u32, 7 i32, 8 u64, 9 i64 (GL_ARB_gpu_shader_int64), 10 f32,
+// 12 a heap address.
 const T_BOOL: u8 = 1u8
 const T_F32: u8 = 10u8
 const T_ADDRESS: u8 = 12u8
@@ -62,6 +63,7 @@ type Module = struct {
     helpers: Text,
     prototypes: Text,
     helper_exact: bool,
+    helper_wide: bool,
     signatures: *nir.Signatures,
     in_helper: bool,
     signature: nir.Signature,
@@ -127,6 +129,21 @@ fn put_hex(t: *Text, value: usize) {
     }
 }
 
+// `0x`, sixteen hex digits and `ul`, for a 64-bit constant.
+fn put_hex64(t: *Text, value: usize) {
+    put_hex(t, value >> 32usize)
+    let digits = "0123456789abcdef"
+    var shift = 28usize
+    while true {
+        var one: [1]u8 = zero
+        one[0usize] = digits[(value >> shift) & 15usize]
+        put(t, one[0usize..1usize])
+        if shift == 0usize { break }
+        shift = shift - 4usize
+    }
+    put(t, "ul")
+}
+
 fn line(t: *Text, value: str) {
     put(t, "      ")
     put(t, value)
@@ -150,17 +167,34 @@ fn type_name(code: u8) -> str {
     if (code == T_BOOL) { ret "bool" }
     if code == 3u8 || code == 5u8 || code == 7u8 { ret "int" }
     if (code == T_F32) { ret "float" }
+    if code == 8u8 { ret "uint64_t" }
+    if code == 9u8 { ret "int64_t" }
     ret "uint"
 }
 
 fn type_bytes(code: u8) -> usize {
     if code == 1u8 || code == 2u8 || code == 3u8 { ret 1usize }
     if code == 4u8 || code == 5u8 { ret 2usize }
+    if code == 8u8 || code == 9u8 { ret 8usize }
     ret 4usize
 }
 
 fn is_signed(code: u8) -> bool {
-    ret code == 3u8 || code == 5u8 || code == 7u8
+    ret code == 3u8 || code == 5u8 || code == 7u8 || code == 9u8
+}
+
+fn is_wide(code: u8) -> bool { ret code == 8u8 || code == 9u8 }
+
+// The unsigned type a magnitude of `code` is held in.
+fn unsigned_name(code: u8) -> str {
+    if is_wide(code) { ret "uint64_t" }
+    ret "uint"
+}
+
+// The zero no compiler can prove (D5888), in the width of `code`.
+fn unknown_zero(code: u8) -> str {
+    if is_wide(code) { ret "(gl_NumWorkGroups.z == 0u ? 1ul : 0ul)" }
+    ret "uint(gl_NumWorkGroups.z == 0u)"
 }
 
 // The scalar code a NIR type is held in; 0 when this emitter cannot hold it.
@@ -183,6 +217,8 @@ fn value_type(ty: check.Type) -> u8 {
         if same(ty.name, "i16") { ret 5u8 }
         if same(ty.name, "u32") || same(ty.name, "usize") { ret 6u8 }
         if same(ty.name, "i32") || same(ty.name, "isize") { ret 7u8 }
+        if same(ty.name, "u64") { ret 8u8 }
+        if same(ty.name, "i64") { ret 9u8 }
     }
     ret 0u8
 }
@@ -421,6 +457,7 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     put(&m.body, "//entry:")
     put_entry_name(&m.body, g, kernel)
     put(&m.body, "\n#version 430\n")
+    if m.helper_wide || uses_wide(builder.functions[function_at], &values) { put(&m.body, "#extension GL_ARB_gpu_shader_int64 : require\n") }
     let size = usize(kernel.gpu_size)
     put(&m.body, "layout(local_size_x = ")
     put_number(&m.body, size % 1024usize + 1usize)
@@ -448,6 +485,16 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
 }
 
 fn put_text(t: *Text, from: *Text) { put(t, from.data[0usize..from.count]) }
+
+// Whether the function holds a 64-bit integer, which needs GL_ARB_gpu_shader_int64.
+fn uses_wide(function: nir.Function, values: *Values) -> bool {
+    var at = 0usize
+    while at < function.value_count + 1usize {
+        if (values.kind[at] == KIND_SCALAR) && is_wide(values.ty[at]) { ret true }
+        at += 1usize
+    }
+    ret false
+}
 
 // A helper as a GLSL function `hN`: scalars by value, an aggregate as its words, a shared pointer as its byte offset.
 fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Builder, function_at: usize) -> err {
@@ -508,6 +555,7 @@ fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Build
     let function = builder.functions[function_at]
     try lower_function(a, m, c, builder, function_at, c.functions[0usize], &values)
     if m.needs_divide || m.needs_sqrt { m.helper_exact = true }
+    if uses_wide(function, &values) { m.helper_wide = true }
     put_text(&m.helpers, &header)
     put(&m.helpers, " {\n")
     put_locals(m, function, &values, &m.helpers)
@@ -641,6 +689,15 @@ fn set_address(t: *Text, values: *Values, address: usize, extra: usize) {
 // The value of type `ty` at byte `a` of `array`, as an expression.
 fn put_read(t: *Text, array: str, ty: u8) {
     let bytes = type_bytes(ty)
+    if bytes == 8usize {
+        put(t, type_name(ty))
+        put(t, "(packUint2x32(uvec2(")
+        put(t, array)
+        put(t, "[a >> 2u], ")
+        put(t, array)
+        put(t, "[(a >> 2u) + 1u])))")
+        ret
+    }
     if bytes == 4usize {
         if (ty == T_F32) { put(t, "uintBitsToFloat(") }
         if is_signed(ty) { put(t, "int(") }
@@ -661,6 +718,16 @@ fn put_read(t: *Text, array: str, ty: u8) {
 // `value` of type `ty` stored at byte `a` of `array`; narrow stores into memory others share are two atomics.
 fn put_write(t: *Text, array: str, ty: u8, value: usize) {
     let bytes = type_bytes(ty)
+    if bytes == 8usize {
+        put(t, "      { uvec2 w = unpackUint2x32(uint64_t(v")
+        put_number(t, value)
+        put(t, ")); ")
+        put(t, array)
+        put(t, "[a >> 2u] = w.x; ")
+        put(t, array)
+        put(t, "[(a >> 2u) + 1u] = w.y; }\n")
+        ret
+    }
     if bytes == 4usize {
         put(t, "      ")
         put(t, array)
@@ -768,6 +835,13 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
             put(t, "uintBitsToFloat(")
             put_hex(t, bits & 4294967295usize)
             put(t, "u);\n")
+            ret ok
+        }
+        if is_wide(ty) {
+            put(t, type_name(ty))
+            put(t, "(")
+            put_hex64(t, bits)
+            put(t, ");\n")
             ret ok
         }
         if is_signed(ty) {
@@ -1318,36 +1392,63 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
             // GLSL leaves a negative operand's quotient and remainder undefined: both are taken from the magnitudes, as
             // unsigned steps with an unsigned negation.
             scalar(values, instruction.result, ty)
-            put(t, "      { uint n = (v")
+            let magnitude = unsigned_name(ty)
+            var zero_literal = "0u"
+            if is_wide(ty) { zero_literal = "0ul" }
+            put(t, "      { ")
+            put(t, magnitude)
+            put(t, " n = (v")
             put_number(t, left)
-            put(t, " < 0) ? 0u - uint(v")
+            put(t, " < 0) ? ")
+            put(t, zero_literal)
+            put(t, " - ")
+            put(t, magnitude)
+            put(t, "(v")
             put_number(t, left)
-            put(t, ") : uint(v")
+            put(t, ") : ")
+            put(t, magnitude)
+            put(t, "(v")
             put_number(t, left)
-            put(t, "); uint d = (v")
+            put(t, "); ")
+            put(t, magnitude)
+            put(t, " d = (v")
             put_number(t, right)
-            put(t, " < 0) ? 0u - uint(v")
+            put(t, " < 0) ? ")
+            put(t, zero_literal)
+            put(t, " - ")
+            put(t, magnitude)
+            put(t, "(v")
             put_number(t, right)
-            put(t, ") : uint(v")
+            put(t, ") : ")
+            put(t, magnitude)
+            put(t, "(v")
             put_number(t, right)
             // Both get a zero the compiler cannot prove (a dispatch has at least one group along z). Intel's compiler took
             // `|a * b| / |a|` for an exact division and folded it wrongly, so every checked signed multiply faulted, and its
             // sequence for an unsigned division by a constant 7 answered 0.
-            put(t, "); n += uint(gl_NumWorkGroups.z == 0u); d += uint(gl_NumWorkGroups.z == 0u);")
+            put(t, "); n += ")
+            put(t, unknown_zero(ty))
+            put(t, "; d += ")
+            put(t, unknown_zero(ty))
+            put(t, "; ")
+            put(t, magnitude)
             if opcode == .Divide {
-                put(t, " uint q = n / d; bool negative = (v")
+                put(t, " q = n / d; bool negative = (v")
                 put_number(t, left)
                 put(t, " < 0) != (v")
                 put_number(t, right)
                 put(t, " < 0);")
             } else {
-                put(t, " uint q = n % d; bool negative = v")
+                put(t, " q = n % d; bool negative = v")
                 put_number(t, left)
                 put(t, " < 0;")
             }
             var inner: [64]u8 = zero
             var expression = Text { data: inner[0usize..64usize], count: 0usize, full: false }
-            put(&expression, "int(negative ? 0u - q : q)")
+            put(&expression, type_name(ty))
+            put(&expression, "(negative ? ")
+            put(&expression, zero_literal)
+            put(&expression, " - q : q)")
             put(t, " v")
             put_number(t, instruction.result)
             put(t, " = ")
@@ -1365,13 +1466,16 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     }
     if symbol.len == 0usize { ret fail(m, "an integer operation is not yet written as GLSL") }
     scalar(values, instruction.result, ty)
-    var inner: [96]u8 = zero
-    var expression = Text { data: inner[0usize..96usize], count: 0usize, full: false }
+    var inner: [256]u8 = zero
+    var expression = Text { data: inner[0usize..256usize], count: 0usize, full: false }
     put(&expression, type_name(ty))
     put(&expression, "(v")
     put_number(&expression, left)
     // The same unprovable zero as the signed case: an unsigned multiply's overflow check divides the product too.
-    if (ty != T_F32) && (opcode == .Divide || opcode == .Remainder) { put(&expression, " + uint(gl_NumWorkGroups.z == 0u)") }
+    if (ty != T_F32) && (opcode == .Divide || opcode == .Remainder) {
+        put(&expression, " + ")
+        put(&expression, unknown_zero(ty))
+    }
     put(&expression, ") ")
     put(&expression, symbol)
     put(&expression, " ")
@@ -1379,7 +1483,10 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     put(&expression, type_name(ty))
     put(&expression, "(v")
     put_number(&expression, right)
-    if (ty != T_F32) && (opcode == .Divide || opcode == .Remainder) { put(&expression, " + uint(gl_NumWorkGroups.z == 0u)") }
+    if (ty != T_F32) && (opcode == .Divide || opcode == .Remainder) {
+        put(&expression, " + ")
+        put(&expression, unknown_zero(ty))
+    }
     put(&expression, ")")
     assign(t, instruction.result)
     put_narrowed(t, ty, &expression)
