@@ -8112,7 +8112,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         rspan[i] = span
         var t3 = start
         while t3 < start + span && t3 < g.nr {
-            ends[t3] = right
+            ends[t3] = maxf(right, left)
             t3 += 1usize
         }
         i += 1usize
@@ -8414,7 +8414,7 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, c
         sspan[i] = span
         var t3 = start
         while t3 < start + span && t3 < g.nc {
-            ends[t3] = bottom
+            ends[t3] = maxf(bottom, top)
             lastin[t3] = i
             t3 += 1usize
         }
