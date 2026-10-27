@@ -32,7 +32,7 @@ fn serve(job: *Job) {
 }
 
 fn request(u: str) -> fetch.Request {
-    ret fetch.Request { url: u, method: http.Method.Get, headers: zero, body: zero, redirect: fetch.Redirect.Follow, credentials: fetch.Credentials.Omit, referrer: "" }
+    ret fetch.Request { url: u, method: http.Method.Get, headers: zero, body: zero, redirect: fetch.Redirect.Follow, credentials: fetch.Credentials.Omit, referrer: "", dest: "" }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

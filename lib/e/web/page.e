@@ -125,10 +125,12 @@ fn resolve_against(a: *mem.Arena, base: *const url.Url, ref_text: str) -> (str, 
     ret (url.href(a, &u, false), true)
 }
 
-fn get_request(u: str, referrer: str, creds: fetch.Credentials) -> fetch.Request {
+fn get_request(u: str, referrer: str, creds: fetch.Credentials) -> fetch.Request { ret get_request_as(u, referrer, creds, "") }
+
+fn get_request_as(u: str, referrer: str, creds: fetch.Credentials, dest: str) -> fetch.Request {
     let none_headers: []const http.Header = zero
     let none_body: []const u8 = zero
-    ret fetch.Request { url: u, method: http.Method.Get, headers: none_headers, body: none_body, redirect: fetch.Redirect.Follow, credentials: creds, referrer: referrer }
+    ret fetch.Request { url: u, method: http.Method.Get, headers: none_headers, body: none_body, redirect: fetch.Redirect.Follow, credentials: creds, referrer: referrer, dest: dest }
 }
 
 // --- CSS text: decoding, imports, url() rewriting.
@@ -293,7 +295,7 @@ fn push_sheet(p: *Page, out: *list.List[str], text_in: str, base: *const url.Url
         i += 1usize
         if !good { continue }
         if !csp_url_ok(p, "style-src-elem", abs) { continue }
-        let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
+        let (resp, fe) = fetch.fetch(p.client, get_request_as(abs, p.url, fetch.Credentials.SameOrigin, "stylesheet"))
         if fe != ok || resp.status >= 400u16 { continue }
         let (sub_base, be) = url.parse(p.pa, abs, zero, false)
         if be != ok { continue }
@@ -327,7 +329,7 @@ fn collect_sheets(p: *Page) -> []const str {
             if has_rel && has_href && has_token(rel, "stylesheet") && !has_token(rel, "alternate") && href.len > 0usize && (!has_media2 || sheet.media_matches(&env, p.pa, media2)) {
                 let (abs, good) = resolve_against(p.pa, &p.base, href)
                 if good && csp_url_ok(p, "style-src-elem", abs) {
-                    let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
+                    let (resp, fe) = fetch.fetch(p.client, get_request_as(abs, p.url, fetch.Credentials.SameOrigin, "stylesheet"))
                     if fe == ok && resp.status < 400u16 {
                         let (sheet_base, be) = url.parse(p.pa, abs, zero, false)
                         if be == ok { push_sheet(p, &out, absolutize_css(p.pa, css_text(p.pa, &resp), &sheet_base), &sheet_base, 0usize) }
@@ -369,7 +371,7 @@ fn load_web_fonts(p: *Page) {
             fi += 1usize
             if f.url.len == 0usize || f.family.len == 0usize { continue }
             if !csp_url_ok(p, "font-src", f.url) { continue }
-            let (resp, fe) = fetch.fetch(p.client, get_request(f.url, p.url, fetch.Credentials.SameOrigin))
+            let (resp, fe) = fetch.fetch(p.client, get_request_as(f.url, p.url, fetch.Credentials.SameOrigin, "font"))
             if fe != ok || resp.status >= 400u16 || resp.body.len < 12usize { continue }
             var data: []const u8 = resp.body
             let b = resp.body
@@ -403,7 +405,7 @@ fn image_entry(p: *Page, abs: str) -> *ImageEntry {
         let blocked = list.push[ImageEntry](&p.images, e)
         ret &p.images.items[p.images.len - 1usize]
     }
-    let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
+    let (resp, fe) = fetch.fetch(p.client, get_request_as(abs, p.url, fetch.Credentials.SameOrigin, "image"))
     if fe == ok && resp.status < 400u16 && resp.body.len > 0usize {
         var st = io.SliceReader { data: resp.body, off: 0usize }
         let src = io.slice_reader(&st)
@@ -853,7 +855,7 @@ fn net_hook(ctx: *void, method: str, u: str, header_lines: str, body: []const u8
         }
     }
     let none_body: []const u8 = zero
-    var req = fetch.Request { url: u, method: m, headers: list.slice_const[http.Header](&heads), body: body, redirect: fetch.Redirect.Follow, credentials: fetch.Credentials.SameOrigin, referrer: p.url }
+    var req = fetch.Request { url: u, method: m, headers: list.slice_const[http.Header](&heads), body: body, redirect: fetch.Redirect.Follow, credentials: fetch.Credentials.SameOrigin, referrer: p.url, dest: "xmlhttprequest" }
     if body.len == 0usize { req.body = none_body }
     let (resp, fe) = fetch.fetch(p.client, req)
     if fe != ok { ret false }
@@ -878,7 +880,7 @@ fn net_hook(ctx: *void, method: str, u: str, header_lines: str, body: []const u8
 fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
     let p = mem.cast[*Page](ctx)
     if !csp_url_ok(p, "script-src-elem", u) { ret ("", 0u16, false) }
-    let (resp, fe) = fetch.fetch(p.client, get_request(u, p.url, fetch.Credentials.Include))
+    let (resp, fe) = fetch.fetch(p.client, get_request_as(u, p.url, fetch.Credentials.Include, "script"))
     if fe != ok { ret ("", 0u16, false) }
     let (text, de) = cjk.decode_sniffing_bom(p.pa, "UTF-8", resp.body)
     if de != ok { ret ("", resp.status, true) }

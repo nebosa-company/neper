@@ -695,7 +695,74 @@ fn is_private_network_host(a: *mem.Arena, host: str) -> bool {
 
 // --- filter lists ----------------------------------------------------------------------------------------------
 
-type FilterRules = struct { domains: []const str, selectors: []const str, allow: []const str, third: []const str }
+type FilterRules = struct { domains: []const str, selectors: []const str, allow: []const str, third: []const str, typed: []const str, types: []const str }
+
+// The ABP request-type names; `xhr` is an alias of `xmlhttprequest`.
+fn is_type_option(t: str) -> bool {
+    ret str.eq(t, "script") || str.eq(t, "image") || str.eq(t, "stylesheet") || str.eq(t, "xmlhttprequest") || str.eq(t, "xhr") || str.eq(t, "font") || str.eq(t, "document") || str.eq(t, "subdocument") || str.eq(t, "media") || str.eq(t, "other")
+}
+
+// Whether a rule's `$` options name at least one request type.
+fn type_options_named(options: str) -> bool {
+    var start = 0usize
+    var i = 0usize
+    while i <= options.len {
+        if i == options.len || options[i] == 44u8 {
+            var tok = trim(options[start..i])
+            start = i + 1usize
+            if str.starts_with(tok, "~") { tok = tok[1usize..] }
+            if is_type_option(tok) { ret true }
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+// Whether a request of type `dest` ("" when unknown) is covered by a rule's `$` options: the positive types name it, a `~type` does not.
+fn type_allows(options: str, dest: str) -> bool {
+    var has_pos = false
+    var matched = false
+    var denied = false
+    var start = 0usize
+    var i = 0usize
+    while i <= options.len {
+        if i == options.len || options[i] == 44u8 {
+            var tok = trim(options[start..i])
+            start = i + 1usize
+            var neg = false
+            if str.starts_with(tok, "~") {
+                neg = true
+                tok = tok[1usize..]
+            }
+            if is_type_option(tok) {
+                var same = str.eq(tok, dest)
+                if str.eq(tok, "xhr") && str.eq(dest, "xmlhttprequest") { same = true }
+                if neg {
+                    if same { denied = true }
+                } else {
+                    has_pos = true
+                    if same { matched = true }
+                }
+            }
+        }
+        i += 1usize
+    }
+    if denied { ret false }
+    if has_pos { ret matched }
+    ret true
+}
+
+// The index of the entry of `domains` that `host` is, or a subdomain of; -1 when none.
+fn host_index(domains: []const str, host: str) -> i64 {
+    var i = 0usize
+    while i < domains.len {
+        let d = domains[i]
+        if str.eq(host, d) { ret i64(i) }
+        if host.len > d.len + 1usize && host[host.len - d.len - 1usize] == 46u8 && str.eq(host[host.len - d.len..], d) { ret i64(i) }
+        i += 1usize
+    }
+    ret -1i64
+}
 
 fn add_unique(out: []str, n: *usize, v: str) {
     var i = 0usize
@@ -713,6 +780,9 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
     let (selectors, e2) = mem.alloc[str](a, text.len + 1usize)
     let (exempt, e3) = mem.alloc[str](a, text.len + 1usize)
     let (third, e4) = mem.alloc[str](a, text.len + 1usize)
+    let (typed, e5) = mem.alloc[str](a, text.len + 1usize)
+    let (typeopts, e6) = mem.alloc[str](a, text.len + 1usize)
+    var ntp = 0usize
     var nt = 0usize
     var na = 0usize
     var nd = 0usize
@@ -761,6 +831,17 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
                 if host.len > 0usize && !str.contains(host, "/") && !str.contains(host, "*") && !str.contains(host, "[") {
                     // `$third-party` limits the rule to requests from another site.
                     if str.contains(line[end..], "$") && str.contains(line[end..], "third-party") && !str.contains(line[end..], "~third-party") { add_unique(third, &nt, host) }
+                    // `$script,~image,...` limits the rule to the named request types.
+                    let tail = line[end..]
+                    let (dollar, has_dollar) = str.find(tail, "$")
+                    if has_dollar {
+                        let options = lower(a, tail[dollar + 1usize..])
+                        if type_options_named(options) {
+                            typed[ntp] = host
+                            typeopts[ntp] = options
+                            ntp += 1usize
+                        }
+                    }
                     add_unique(domains, &nd, host)
                 }
             }
@@ -768,7 +849,7 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
         }
         i += 1usize
     }
-    ret FilterRules { domains: domains[0usize..nd], selectors: selectors[0usize..ns], allow: exempt[0usize..na], third: third[0usize..nt] }
+    ret FilterRules { domains: domains[0usize..nd], selectors: selectors[0usize..ns], allow: exempt[0usize..na], third: third[0usize..nt], typed: typed[0usize..ntp], types: typeopts[0usize..ntp] }
 }
 
 // --- Content-Security-Policy -----------------------------------------------------------------------------------
