@@ -1344,13 +1344,36 @@ fn ratio_width(l: *const Layout, b: u32, ch: f64) -> (f64, bool) {
 }
 
 // min-width / max-width applied to a content width.
-fn clamp_width(l: *const Layout, b: u32, w: f64, cbw: f64) -> f64 {
+// The width a `min-width`/`max-width` of `len` stands for (content box): a length, or a sizing keyword of the box's contents.
+fn width_limit(l: *Layout, b: u32, len: style.Len, cbw: f64) -> (f64, bool) {
+    if len.kind == .Px {
+        let (v, good) = resolve_len(len, cbw)
+        if good { ret (to_content_w(l, b, v), true) }
+        ret (0.0f64, false)
+    }
+    if bx(l, b).inner == .Replaced { ret (0.0f64, false) }
+    if len.kind == .MinContent || len.kind == .MaxContent || len.kind == .FitContent || len.kind == .FitLimit {
+        let (mn, mx) = content_widths(l, b)
+        if len.kind == .MinContent { ret (mn, true) }
+        if len.kind == .MaxContent { ret (mx, true) }
+        if len.kind == .FitLimit {
+            let (lv, lgood) = resolve_len(style.Len { kind: .Px, px: len.px, pct: len.pct }, cbw)
+            if lgood { ret (minf(mx, maxf(mn, to_content_w(l, b, lv))), true) }
+            ret (mx, true)
+        }
+        if cbw >= 0.0f64 { ret (minf(maxf(mn, cbw - horizontal_extras(bx(l, b))), mx), true) }
+        ret (mx, true)
+    }
+    ret (0.0f64, false)
+}
+
+fn clamp_width(l: *Layout, b: u32, w: f64, cbw: f64) -> f64 {
     let s = bstyle(l, b)
     var out = w
-    let (mx, has_max) = resolve_len(s.max_width, cbw)
-    if s.max_width.kind == .Px && has_max { out = minf(out, to_content_w(l, b, mx)) }
-    let (mn, has_min) = resolve_len(s.min_width, cbw)
-    if s.min_width.kind == .Px && has_min { out = maxf(out, to_content_w(l, b, mn)) }
+    let (mx, has_max) = width_limit(l, b, s.max_width, cbw)
+    if has_max { out = minf(out, mx) }
+    let (mn, has_min) = width_limit(l, b, s.min_width, cbw)
+    if has_min { out = maxf(out, mn) }
     ret out
 }
 
@@ -3554,7 +3577,12 @@ fn used_width_block(l: *Layout, c: u32, cbw: f64, avail: f64) {
     if cb.parent != NONE { cb_rtl = st(l, l.boxes.items[usize(cb.parent)].style).direction == .Rtl }
     var cw = 0.0f64
     var w_auto = s.width.kind != .Px
-    if s.width.kind == .MinContent || s.width.kind == .MaxContent || s.width.kind == .FitContent {
+    if s.width.kind == .FitLimit {
+        let (mn, mx) = content_widths(l, c)
+        let (lv, lgood) = resolve_len(style.Len { kind: .Px, px: s.width.px, pct: s.width.pct }, base)
+        w_auto = false
+        if lgood { cw = minf(mx, maxf(mn, to_content_w(l, c, lv))) } else { cw = mx }
+    } else if s.width.kind == .MinContent || s.width.kind == .MaxContent || s.width.kind == .FitContent {
         let (mn, mx) = content_widths(l, c)
         w_auto = false
         if s.width.kind == .MinContent { cw = mn } else if s.width.kind == .MaxContent { cw = mx } else { cw = minf(maxf(mn, avail - ml - mr - extras), mx) }

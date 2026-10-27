@@ -42,7 +42,7 @@ const RIGHT: usize = 1usize
 const BOTTOM: usize = 2usize
 const LEFT: usize = 3usize
 
-type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Number, Normal }
+type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Number, Normal, FitLimit }
 
 // A length: `px` plus `pct` times the percentage basis (a fraction: 50% is 0.5). `Number` is a unitless
 // `line-height` factor (in `px`); `Normal` is `line-height: normal`.
@@ -198,6 +198,11 @@ fn parse_len(c: *const Context, v: str, em: f64, allow: u32) -> (Len, bool) {
         if str.eq(t, "min-content") { ret (Len { kind: .MinContent, px: 0.0f64, pct: 0.0f64 }, true) }
         if str.eq(t, "max-content") { ret (Len { kind: .MaxContent, px: 0.0f64, pct: 0.0f64 }, true) }
         if str.eq(t, "fit-content") || str.eq(t, "-moz-fit-content") || str.eq(t, "-webkit-fit-content") { ret (Len { kind: .FitContent, px: 0.0f64, pct: 0.0f64 }, true) }
+    }
+    if (allow & A_CONTENT) != 0u32 && str.starts_with(t, "fit-content(") && str.ends_with(t, ")") {
+        let (lim, lim_ok) = parse_len(c, t["fit-content(".len..t.len - 1usize], em, A_PERCENT)
+        if lim_ok { ret (Len { kind: .FitLimit, px: lim.px, pct: lim.pct }, true) }
+        ret (len_auto(), false)
     }
     if (allow & A_NUMBER) != 0u32 {
         let (n, is_number) = plain_number(c, t)

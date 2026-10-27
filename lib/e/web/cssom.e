@@ -66,6 +66,8 @@ fn len_text(a: *mem.Arena, l: style.Len) -> str {
         ret "max-content"
     case .FitContent:
         ret "fit-content"
+    case .FitLimit:
+        ret "fit-content"
     case .Normal:
         ret "normal"
     case .Number:
