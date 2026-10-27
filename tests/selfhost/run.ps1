@@ -11149,6 +11149,8 @@ if ($wasmNode) {
     if ((& $compiler emit-executable (Join-Path $repo 'examples\ui\main.e') $repo 'wasm32' 'wasi' $wasmGalleryPath) -ne 'executable written') { throw 'examples/ui did not emit as WebAssembly' }
     $wasmWindow = Invoke-Wasm $wasmCounterPath @($wasmCounterThreads, $wasmGalleryPath) (Join-Path $repo 'tests\wasm\window.mjs')
     if ($wasmWindow.Status -ne 0) { throw "the lib/wasm/window.js check failed: $($wasmWindow.Output)" }
+    $wasmEdits = Invoke-Wasm (Join-Path $repo 'tests\wasm\window_edits.mjs') @() (Join-Path $repo 'tests\wasm\window_edits.mjs')
+    if ($wasmEdits.Status -ne 0) { throw "the lib/wasm/window.js edit check failed: $($wasmEdits.Output)" }
     # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
     $wasmNullSource = Join-Path $repo 'tests\wasm\null_call\src\main.e'
