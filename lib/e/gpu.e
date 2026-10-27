@@ -97,7 +97,7 @@ const MAX_DEVICES: usize = 16usize
 const MAX_QUEUES: usize = 64usize
 const MAX_AXIS: usize = 4294967295usize
 const SUBGROUP_PC: usize = 1073741824usize
-const CPU_CAPABILITIES: usize = 503usize
+const CPU_CAPABILITIES: usize = 511usize
 
 // One buffer slot: the storage's bytes, the element count and size, and the
 // generation a handle has to carry.

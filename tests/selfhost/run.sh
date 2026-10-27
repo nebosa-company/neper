@@ -6391,6 +6391,20 @@ float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$float_written" = 'executable written' ]
 chmod +x "$test_build/float-scalar-selfhost"
 "$test_build/float-scalar-selfhost"
+# f16 and bf16 (D5913): widen to f32, operate, round once to nearest-even, in integer
+# instructions on x64 and with FCVT (f16) or the same integer rounding (bf16) on aarch64;
+# every operation and conversion folds thousands of operands into a hash that
+# scripts/narrow_float_vectors.py computes with numpy and exact rational rounding.
+narrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/narrow_float/src/main.e" "$repo" x64 linux "$test_build/narrow-float-selfhost")
+[ "$narrow_written" = 'executable written' ]
+chmod +x "$test_build/narrow-float-selfhost"
+"$test_build/narrow-float-selfhost"
+narrow_a64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/narrow_float/src/main.e" "$repo" aarch64 linux "$test_build/narrow-float-a64")
+[ "$narrow_a64_written" = 'executable written' ]
+if command -v qemu-aarch64 >/dev/null 2>&1; then
+    chmod +x "$test_build/narrow-float-a64"
+    qemu-aarch64 "$test_build/narrow-float-a64"
+fi
 # The read-only half of `e.str`: comparison, search, trim, split, the integer parsers
 # and the forms that allocate. The fixture pins what an empty needle matches, where a
 # non-overlapping count stops, that `lines` takes CRLF without inventing a final empty

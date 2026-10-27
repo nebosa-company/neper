@@ -320,8 +320,8 @@ fn integer_width(ty: check.Type) -> usize {
     ret check.integer_width(ty)
 }
 
-// f16 and bf16 are in the type system but not in this emitter, so they answer zero
-// here and reach the caller as `Unsupported` rather than as the wrong width.
+// f16 and bf16 are not held in an xmm register, so they answer zero here: they have
+// their own paths (`narrow_float`) and never reach an f32/f64 sequence.
 fn float_width(ty: check.Type) -> usize {
     if ty.kind != .Float || ty.name.len != 3usize { ret 0usize }
     if ty.name[1usize] == 51u8 { ret 32usize }
@@ -343,6 +343,7 @@ fn bitcast_scalar(ty: check.Type) -> bool {
 
 fn bitcast_width(ty: check.Type) -> usize {
     if ty.kind == .Integer { ret integer_width(ty) }
+    if narrow_float(ty) != 0usize { ret 16usize }
     if ty.kind == .Float { ret float_width(ty) }
     if ty.kind == .Bool { ret 8usize }
     if ty.kind == .Err { ret 32usize }
@@ -523,6 +524,7 @@ fn storage_width(instruction: nir.Instruction) -> usize {
     if instruction.ty.kind == .Bool { ret 8usize }
     if instruction.ty.kind == .Err { ret 32usize }
     if instruction.ty.kind == .Pointer || instruction.ty.kind == .String || instruction.ty.kind == .Slice { ret 64usize }
+    if narrow_float(instruction.ty) != 0usize { ret 16usize }
     if instruction.ty.kind == .Float { ret float_width(instruction.ty) }
     ret integer_width(instruction.ty)
 }
@@ -614,12 +616,242 @@ fn canonicalize_nan(width: usize, output: *emit_x64.Buffer) -> err {
     ret emit_x64.patch_relative32(output, finite_at, output.count)
 }
 
+// f16 and bf16 (D5913): a value lives in a general register as its sixteen bits,
+// zero-extended, and every operation widens to f32, operates and rounds once to
+// nearest-even back, in integer instructions -- no F16C, so x64-v1 needs nothing new.
+// 1 is f16, 2 is bf16, 0 is anything else.
+fn narrow_float(ty: check.Type) -> usize {
+    if ty.kind != .Float { ret 0usize }
+    if check.same(ty.name, "f16") { ret 1usize }
+    if check.same(ty.name, "bf16") { ret 2usize }
+    ret 0usize
+}
+
+fn narrow_nan(kind: usize) -> usize {
+    if kind == 1usize { ret 32256usize }
+    ret 32704usize
+}
+
+// The sixteen bits in xmm `source` become an f32 in xmm `destination`. r10, r11, xmm6
+// and xmm7 are borrowed. A bf16 is the top half of an f32; an f16 is rebiased by
+// adding to the shifted fields, and its denormals are renormalized by one exact
+// subtraction. A NaN keeps its payload here: the narrowing that follows, or the cast
+// that asked, makes it the canonical one.
+fn widen_narrow(kind: usize, source: usize, destination: usize, output: *emit_x64.Buffer) -> err {
+    try emit_x64.move_from_float(output, 10usize, source, false)
+    if kind == 2usize {
+        try emit_x64.shift_immediate(output, 10usize, true, 16usize)
+        ret emit_x64.move_to_float(output, destination, 10usize, false)
+    }
+    try emit_x64.mov_register(output, 11usize, 10usize)
+    try emit_x64.shift_immediate(output, 11usize, false, 15usize)
+    try emit_x64.shift_immediate(output, 11usize, true, 31usize)
+    try emit_x64.move_to_float(output, 6usize, 11usize, false)
+    try emit_x64.shift_immediate(output, 10usize, true, 49usize)
+    try emit_x64.shift_immediate(output, 10usize, false, 49usize)
+    try emit_x64.mov_register(output, 11usize, 10usize)
+    try emit_x64.shift_immediate(output, 11usize, false, 10usize)
+    try emit_x64.test_register(output, 11usize)
+    let (denormal_at, denormal_error) = emit_x64.jump_condition(output, 4usize)
+    if denormal_error != ok { ret denormal_error }
+    try emit_x64.add_immediate(output, 11usize, 4294967265usize)
+    let (special_at, special_error) = emit_x64.jump_condition(output, 4usize)
+    if special_error != ok { ret special_error }
+    try emit_x64.shift_immediate(output, 10usize, true, 13usize)
+    try emit_x64.add_immediate(output, 10usize, 939524096usize)
+    let (normal_done, normal_error) = emit_x64.jump(output)
+    if normal_error != ok { ret normal_error }
+    try emit_x64.patch_relative32(output, denormal_at, output.count)
+    try emit_x64.shift_immediate(output, 10usize, true, 13usize)
+    try emit_x64.add_immediate(output, 10usize, 947912704usize)
+    try emit_x64.move_to_float(output, destination, 10usize, false)
+    try emit_x64.mov_immediate(output, 11usize, 947912704usize)
+    try emit_x64.move_to_float(output, 7usize, 11usize, false)
+    try emit_x64.float_binary(output, destination, 7usize, 92usize, false)
+    try emit_x64.move_from_float(output, 10usize, destination, false)
+    let (denormal_done, denormal_done_error) = emit_x64.jump(output)
+    if denormal_done_error != ok { ret denormal_done_error }
+    try emit_x64.patch_relative32(output, special_at, output.count)
+    try emit_x64.shift_immediate(output, 10usize, true, 13usize)
+    try emit_x64.add_immediate(output, 10usize, 1879048192usize)
+    try emit_x64.patch_relative32(output, normal_done, output.count)
+    try emit_x64.patch_relative32(output, denormal_done, output.count)
+    try emit_x64.move_from_float(output, 11usize, 6usize, false)
+    try emit_x64.bit_or_register(output, 10usize, 11usize)
+    ret emit_x64.move_to_float(output, destination, 10usize, false)
+}
+
+// The f32 in xmm0 rounded to nearest-even into r10's low sixteen bits. A NaN is the
+// canonical one of the width. bf16 adds half an ulp plus the odd bit under the cut
+// and drops sixteen bits; f16 rounds a denormal result by adding 0.5f (the hardware's
+// own rounding does it) and a normal one by the same add-and-shift, whose carry out of
+// the mantissa is the exponent step, an overflow to the infinity included. r11, xmm1
+// and xmm2 are borrowed.
+fn narrow_to_bits(kind: usize, output: *emit_x64.Buffer) -> err {
+    try emit_x64.float_compare(output, 0usize, 0usize, false)
+    let (nan_at, nan_error) = emit_x64.jump_condition(output, 10usize)
+    if nan_error != ok { ret nan_error }
+    try emit_x64.move_from_float(output, 10usize, 0usize, false)
+    if kind == 2usize {
+        try emit_x64.mov_register(output, 11usize, 10usize)
+        try emit_x64.shift_immediate(output, 11usize, false, 16usize)
+        try emit_x64.and_immediate8(output, 11usize, 1usize)
+        try emit_x64.add_immediate(output, 11usize, 32767usize)
+        try emit_x64.add_register(output, 10usize, 11usize)
+        try emit_x64.shift_immediate(output, 10usize, false, 16usize)
+        let (done_at, done_error) = emit_x64.jump(output)
+        if done_error != ok { ret done_error }
+        try emit_x64.patch_relative32(output, nan_at, output.count)
+        try emit_x64.mov_immediate(output, 10usize, narrow_nan(kind))
+        ret emit_x64.patch_relative32(output, done_at, output.count)
+    }
+    try emit_x64.mov_register(output, 11usize, 10usize)
+    try emit_x64.shift_immediate(output, 11usize, false, 31usize)
+    try emit_x64.shift_immediate(output, 11usize, true, 15usize)
+    try emit_x64.move_to_float(output, 2usize, 11usize, false)
+    try emit_x64.shift_immediate(output, 10usize, true, 33usize)
+    try emit_x64.shift_immediate(output, 10usize, false, 33usize)
+    try emit_x64.mov_immediate(output, 11usize, 1199570944usize)
+    try emit_x64.compare_register(output, 10usize, 11usize)
+    let (infinity_at, infinity_error) = emit_x64.jump_condition(output, 3usize)
+    if infinity_error != ok { ret infinity_error }
+    try emit_x64.mov_immediate(output, 11usize, 947912704usize)
+    try emit_x64.compare_register(output, 10usize, 11usize)
+    let (denormal_at, denormal_error) = emit_x64.jump_condition(output, 2usize)
+    if denormal_error != ok { ret denormal_error }
+    try emit_x64.mov_register(output, 11usize, 10usize)
+    try emit_x64.shift_immediate(output, 11usize, false, 13usize)
+    try emit_x64.and_immediate8(output, 11usize, 1usize)
+    try emit_x64.add_immediate(output, 10usize, 3355447295usize)
+    try emit_x64.add_register(output, 10usize, 11usize)
+    try emit_x64.shift_immediate(output, 10usize, false, 13usize)
+    let (normal_done, normal_error) = emit_x64.jump(output)
+    if normal_error != ok { ret normal_error }
+    try emit_x64.patch_relative32(output, denormal_at, output.count)
+    try emit_x64.move_to_float(output, 0usize, 10usize, false)
+    try emit_x64.mov_immediate(output, 11usize, 1056964608usize)
+    try emit_x64.move_to_float(output, 1usize, 11usize, false)
+    try emit_x64.float_binary(output, 0usize, 1usize, 88usize, false)
+    try emit_x64.move_from_float(output, 10usize, 0usize, false)
+    try emit_x64.subtract_register(output, 10usize, 11usize)
+    let (denormal_done, denormal_done_error) = emit_x64.jump(output)
+    if denormal_done_error != ok { ret denormal_done_error }
+    try emit_x64.patch_relative32(output, infinity_at, output.count)
+    try emit_x64.mov_immediate(output, 10usize, 31744usize)
+    try emit_x64.patch_relative32(output, normal_done, output.count)
+    try emit_x64.patch_relative32(output, denormal_done, output.count)
+    try emit_x64.move_from_float(output, 11usize, 2usize, false)
+    try emit_x64.bit_or_register(output, 10usize, 11usize)
+    let (done_at, done_error) = emit_x64.jump(output)
+    if done_error != ok { ret done_error }
+    try emit_x64.patch_relative32(output, nan_at, output.count)
+    try emit_x64.mov_immediate(output, 10usize, narrow_nan(kind))
+    ret emit_x64.patch_relative32(output, done_at, output.count)
+}
+
+// The f64 in xmm0 as an f32 rounded to odd: the nearest-even conversion, stepped one
+// ulp back toward zero when it landed farther from zero than the operand, then its
+// last bit set when inexact. A narrow format has at most 11 significant bits, so
+// rounding that f32 to nearest-even afterwards is the one rounding of the f64 itself,
+// where converting through a plain f32 would round twice. A NaN or an exact value
+// leaves the conversion alone. r10, r11, xmm1 and xmm2 are borrowed.
+fn narrow_double_to_odd(output: *emit_x64.Buffer) -> err {
+    try emit_x64.move_from_float(output, 10usize, 0usize, true)
+    try emit_x64.move_to_float(output, 2usize, 10usize, true)
+    try emit_x64.float_convert(output, 0usize, 0usize, false)
+    try emit_x64.float_convert(output, 1usize, 0usize, true)
+    try emit_x64.float_compare(output, 1usize, 2usize, true)
+    let (exact_at, exact_error) = emit_x64.jump_condition(output, 4usize)
+    if exact_error != ok { ret exact_error }
+    try emit_x64.move_from_float(output, 10usize, 2usize, true)
+    try emit_x64.move_from_float(output, 11usize, 1usize, true)
+    try emit_x64.shift_immediate(output, 10usize, true, 1usize)
+    try emit_x64.shift_immediate(output, 11usize, true, 1usize)
+    try emit_x64.compare_register(output, 11usize, 10usize)
+    let (kept_at, kept_error) = emit_x64.jump_condition(output, 6usize)
+    if kept_error != ok { ret kept_error }
+    try emit_x64.move_from_float(output, 10usize, 0usize, false)
+    try emit_x64.add_immediate(output, 10usize, 4294967295usize)
+    try emit_x64.move_to_float(output, 0usize, 10usize, false)
+    try emit_x64.patch_relative32(output, kept_at, output.count)
+    try emit_x64.move_from_float(output, 10usize, 0usize, false)
+    try emit_x64.mov_immediate(output, 11usize, 1usize)
+    try emit_x64.bit_or_register(output, 10usize, 11usize)
+    try emit_x64.move_to_float(output, 0usize, 10usize, false)
+    ret emit_x64.patch_relative32(output, exact_at, output.count)
+}
+
+// r10's sixteen bits are a NaN of `kind` exactly when the zero flag is clear
+// afterwards: the magnitude plus the distance to 2^16 from one past the infinity
+// carries into bit sixteen only above the infinity. r11 is borrowed.
+fn narrow_nan_test(kind: usize, output: *emit_x64.Buffer) -> err {
+    var bias = 33791usize
+    if kind == 2usize { bias = 32895usize }
+    try emit_x64.mov_register(output, 11usize, 10usize)
+    try emit_x64.shift_immediate(output, 11usize, true, 49usize)
+    try emit_x64.shift_immediate(output, 11usize, false, 49usize)
+    try emit_x64.add_immediate(output, 11usize, bias)
+    try emit_x64.shift_immediate(output, 11usize, false, 16usize)
+    ret emit_x64.test_register(output, 11usize)
+}
+
+fn finish_narrow(allocations: []regalloc.Allocation, result: usize, output: *emit_x64.Buffer) -> err {
+    let (destination, destination_error) = result_register(allocations, result, 10usize)
+    if destination_error != ok { ret destination_error }
+    if destination != 10usize { try emit_x64.mov_register(output, destination, 10usize) }
+    ret store_result(allocations, result, destination, output)
+}
+
+fn select_narrow_binary(kind: usize, builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+    if left_error != ok { ret left_error }
+    let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 11usize, output)
+    if right_error != ok { ret right_error }
+    try emit_x64.move_to_float(output, 4usize, left, false)
+    try emit_x64.move_to_float(output, 5usize, right, false)
+    try widen_narrow(kind, 4usize, 0usize, output)
+    try widen_narrow(kind, 5usize, 1usize, output)
+    var opcode = 88usize
+    if instruction.opcode == .Subtract { opcode = 92usize }
+    if instruction.opcode == .Multiply { opcode = 89usize }
+    if instruction.opcode == .Divide { opcode = 94usize }
+    try emit_x64.float_binary(output, 0usize, 1usize, opcode, false)
+    try narrow_to_bits(kind, output)
+    ret finish_narrow(allocations, instruction.result, output)
+}
+
+fn select_narrow_negate(kind: usize, builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+    if source_error != ok { ret source_error }
+    if source != 10usize { try emit_x64.mov_register(output, 10usize, source) }
+    try emit_x64.mov_immediate(output, 11usize, 32768usize)
+    try emit_x64.bit_xor_register(output, 10usize, 11usize)
+    try narrow_nan_test(kind, output)
+    let (kept_at, kept_error) = emit_x64.jump_condition(output, 4usize)
+    if kept_error != ok { ret kept_error }
+    try emit_x64.mov_immediate(output, 10usize, narrow_nan(kind))
+    try emit_x64.patch_relative32(output, kept_at, output.count)
+    ret finish_narrow(allocations, instruction.result, output)
+}
+
+fn select_narrow_sqrt(kind: usize, builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+    if source_error != ok { ret source_error }
+    try emit_x64.move_to_float(output, 4usize, source, false)
+    try widen_narrow(kind, 4usize, 0usize, output)
+    try emit_x64.float_sqrt(output, 0usize, 0usize, false)
+    try narrow_to_bits(kind, output)
+    ret finish_narrow(allocations, instruction.result, output)
+}
+
 // Float values live in general registers as raw bits and move into xmm0 and xmm1 for
 // the operation itself. The cost is two moves per operation and no float value ever
 // staying in a vector register; the upgrade is a second register class in
 // `regalloc`, which the allocator's `register_count` parameter is already shaped for.
 fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
     if instruction.operand_count != 2usize || !instruction.has_result { ret Unsupported }
+    let narrow = narrow_float(instruction.ty)
+    if narrow != 0usize { ret select_narrow_binary(narrow, builder, instruction, allocations, output) }
     let width = float_width(instruction.ty)
     if width == 0usize { ret Unsupported }
     let wide = width == 64usize
@@ -918,7 +1150,9 @@ fn select_float_comparison(builder: *nir.Builder, current: nir.Function, instruc
     let right_value = builder.operands[instruction.first_operand + 1usize]
     let (operand_type, operand_type_error) = value_type(builder, current, left_value)
     if operand_type_error != ok { ret operand_type_error }
-    let width = float_width(operand_type)
+    let narrow = narrow_float(operand_type)
+    var width = float_width(operand_type)
+    if narrow != 0usize { width = 32usize }
     if width == 0usize { ret Unsupported }
     let wide = width == 64usize
     let (left, left_error) = read_value(allocations, left_value, 10usize, output)
@@ -926,12 +1160,24 @@ fn select_float_comparison(builder: *nir.Builder, current: nir.Function, instruc
     let (right, right_error) = read_value(allocations, right_value, 11usize, output)
     if right_error != ok { ret right_error }
     let swapped = instruction.opcode == .Less || instruction.opcode == .LessEqual
-    if swapped {
-        try emit_x64.move_to_float(output, 0usize, right, wide)
-        try emit_x64.move_to_float(output, 1usize, left, wide)
+    if narrow != 0usize {
+        try emit_x64.move_to_float(output, 4usize, left, false)
+        try emit_x64.move_to_float(output, 5usize, right, false)
+        if swapped {
+            try widen_narrow(narrow, 5usize, 0usize, output)
+            try widen_narrow(narrow, 4usize, 1usize, output)
+        } else {
+            try widen_narrow(narrow, 4usize, 0usize, output)
+            try widen_narrow(narrow, 5usize, 1usize, output)
+        }
     } else {
-        try emit_x64.move_to_float(output, 0usize, left, wide)
-        try emit_x64.move_to_float(output, 1usize, right, wide)
+        if swapped {
+            try emit_x64.move_to_float(output, 0usize, right, wide)
+            try emit_x64.move_to_float(output, 1usize, left, wide)
+        } else {
+            try emit_x64.move_to_float(output, 0usize, left, wide)
+            try emit_x64.move_to_float(output, 1usize, right, wide)
+        }
     }
     try emit_x64.float_compare(output, 0usize, 1usize, wide)
     let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
@@ -959,6 +1205,8 @@ fn select_float_comparison(builder: *nir.Builder, current: nir.Function, instruc
 
 fn select_float_negate(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
     if instruction.operand_count != 1usize || !instruction.has_result { ret Unsupported }
+    let narrow = narrow_float(instruction.ty)
+    if narrow != 0usize { ret select_narrow_negate(narrow, builder, instruction, allocations, output) }
     let width = float_width(instruction.ty)
     if width == 0usize { ret Unsupported }
     let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
@@ -981,6 +1229,8 @@ fn select_float_negate(builder: *nir.Builder, instruction: nir.Instruction, allo
 // operand gives the default NaN, which the canonicalization leaves as it is.
 fn select_float_sqrt(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
     if instruction.operand_count != 1usize || !instruction.has_result { ret Unsupported }
+    let narrow = narrow_float(instruction.ty)
+    if narrow != 0usize { ret select_narrow_sqrt(narrow, builder, instruction, allocations, output) }
     let width = float_width(instruction.ty)
     if width == 0usize { ret Unsupported }
     let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
@@ -1190,8 +1440,47 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
     if source_error != ok { ret source_error }
     let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
     if destination_error != ok { ret destination_error }
-    let source_width = float_width(source_type)
+    var source_width = float_width(source_type)
     let target_width = float_width(instruction.ty)
+    let source_narrow = narrow_float(source_type)
+    let target_narrow = narrow_float(instruction.ty)
+    if source_narrow != 0usize || target_narrow != 0usize {
+        if source_narrow == target_narrow {
+            if destination != source { try emit_x64.mov_register(output, destination, source) }
+            ret store_result(allocations, instruction.result, destination, output)
+        }
+        if target_narrow != 0usize {
+            if source_type.kind == .Float {
+                if source_narrow != 0usize {
+                    try emit_x64.move_to_float(output, 4usize, source, false)
+                    try widen_narrow(source_narrow, 4usize, 0usize, output)
+                } else {
+                    if source_width == 0usize { ret Unsupported }
+                    try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
+                    if source_width == 64usize { try narrow_double_to_odd(output) }
+                }
+            } else {
+                if source_type.kind != .Integer { ret Unsupported }
+                try float_from_integer(source, unsigned_wide(source_type), true, output)
+                try narrow_double_to_odd(output)
+            }
+            try narrow_to_bits(target_narrow, output)
+            ret finish_narrow(allocations, instruction.result, output)
+        }
+        if source_narrow != 0usize && instruction.ty.kind == .Float {
+            if target_width == 0usize { ret Unsupported }
+            try emit_x64.move_to_float(output, 4usize, source, false)
+            try widen_narrow(source_narrow, 4usize, 0usize, output)
+            if target_width == 64usize { try emit_x64.float_convert(output, 0usize, 0usize, true) }
+            try canonicalize_nan(target_width, output)
+            try emit_x64.move_from_float(output, destination, 0usize, target_width == 64usize)
+            ret store_result(allocations, instruction.result, destination, output)
+        }
+        if instruction.ty.kind != .Integer { ret Unsupported }
+        try emit_x64.move_to_float(output, 4usize, source, false)
+        try widen_narrow(source_narrow, 4usize, 0usize, output)
+        source_width = 32usize
+    }
     if source_type.kind == .Float && instruction.ty.kind == .Float {
         if source_width == 0usize || target_width == 0usize { ret Unsupported }
         if source_width == target_width {
@@ -1211,7 +1500,7 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
         ret store_result(allocations, instruction.result, destination, output)
     }
     if source_width == 0usize || instruction.ty.kind != .Integer { ret Unsupported }
-    try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
+    if source_narrow == 0usize { try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize) }
     var saturated = 0usize
     if instruction.immediate == 0usize && !instruction.nocheck && !builder.release {
         try emit_float_range_check(builder, current, instruction.site, instruction.path, instruction.ty, source_width == 64usize, context)
@@ -1495,7 +1784,7 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
         let (argument_type, argument_type_error) = value_type(builder, current, value)
         if argument_type_error != ok { ret argument_type_error }
         let width = float_width(argument_type)
-        if argument_type.kind == .Float && width == 0usize { ret Unsupported }
+        if argument_type.kind == .Float && width == 0usize && narrow_float(argument_type) == 0usize { ret Unsupported }
         if stacked_argument(argument_type) {
             in_register = false
             stack_index = stack_used
@@ -3518,7 +3807,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                         if result_float != 0usize || result_pair_sse(instruction.ty) % 2usize == 1usize {
                             try emit_x64.move_from_float(output, 10usize, 0usize, result_float != 32usize)
                         } else {
-                            if instruction.ty.kind == .Float { ret Unsupported }
+                            if instruction.ty.kind == .Float && narrow_float(instruction.ty) == 0usize { ret Unsupported }
                             try emit_x64.mov_register(output, 10usize, 0usize)
                             // A callee returning a type narrower than a register leaves
                             // only that many bits defined -- both System V and Win64 say
@@ -3631,7 +3920,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                         if source_error != ok { ret source_error }
                         let (returned_type, returned_error) = value_type(builder, current, value)
                         if returned_error != ok { ret returned_error }
-                        if returned_type.kind == .Float {
+                        if returned_type.kind == .Float && narrow_float(returned_type) == 0usize {
                             let returned_width = float_width(returned_type)
                             if returned_width == 0usize { ret Unsupported }
                             try emit_x64.move_to_float(output, 0usize, source, returned_width == 64usize)

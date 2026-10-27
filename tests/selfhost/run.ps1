@@ -6884,6 +6884,14 @@ $floatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $floatWritten -ne 'executable written') { throw 'float executable emission failed' }
 & $floatPath
 if ($LASTEXITCODE -ne 0) { throw 'a float literal, operator, comparison or conversion is wrong' }
+# f16 and bf16 (D5913): widen to f32, operate, round once to nearest-even, in integer
+# instructions; every operation and conversion folds thousands of operands into a hash that
+# scripts/narrow_float_vectors.py computes with numpy and exact rational rounding.
+$narrowPath = Join-Path $testBuild 'narrow-float-selfhost.exe'
+$narrowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\narrow_float\src\main.e') $repo 'x64' 'windows' $narrowPath
+if ($LASTEXITCODE -ne 0 -or $narrowWritten -ne 'executable written') { throw 'narrow_float executable emission failed' }
+& $narrowPath
+if ($LASTEXITCODE -ne 0) { throw "an f16 or bf16 operation or conversion is wrong: exit $LASTEXITCODE" }
 # The read-only half of `e.str`: comparison, search, trim, split, the integer parsers
 # and the forms that allocate. The fixture pins what an empty needle matches, where a
 # non-overlapping count stops, that `lines` takes CRLF without inventing a final empty

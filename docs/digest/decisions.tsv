@@ -2990,4 +2990,5 @@ D5908	2299	`@export("Name")` and `emit-shared-library`
 D5909	1342	A neper NativeActivity app, packed into an APK
 D5910	2730	e.ui apps on Android: `x.android.activity` as `e.os`'s window host
 D5911	1312	`WM_DPICHANGED`: a per-monitor-aware window takes the suggested rectangle
-D5912	2510	The root arena's default ceiling is 64 GiB, 4 GiB on Android
+D5912	2511	The root arena's default ceiling is 64 GiB, 4 GiB on Android
+D5913	3724	f16 and bf16 on the CPU code generators: widen to f32, operate, round once, in integer instructions

@@ -478,6 +478,9 @@ fn fma_bits(a: u64, b: u64, c: u64, mantissa: u32, exponent_bits: u32) -> u64 {
 }
 
 fn fma[F: type](a: F, b: F, c: F) -> F {
+    // f16 and bf16 (D5913) widen to f32, fuse there and round once back, as every other
+    // operation on them does (section 4).
+    if mem.size_of[F]() == 2usize { ret F(fma[f32](f32(a), f32(b), f32(c))) }
     if mem.size_of[F]() == 4usize {
         let result = fma_bits(u64(mem.bitcast[u32](a)), u64(mem.bitcast[u32](b)), u64(mem.bitcast[u32](c)), 24u32, 8u32)
         ret mem.bitcast[F](u32(result))

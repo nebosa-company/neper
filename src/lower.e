@@ -267,6 +267,8 @@ fn float_literal_bits(c: *check.Checker, text: str, node: syntax.Node, expected:
     var width = 0usize
     if check.same(ty.name, "f32") { width = 32usize }
     if check.same(ty.name, "f64") { width = 64usize }
+    if check.same(ty.name, "f16") { width = 16usize }
+    if check.same(ty.name, "bf16") { width = 17usize }
     if width == 0usize { ret (0usize, ty, check.Unsupported) }
     let (pattern, pattern_error) = decimal.literal_bits(lex.token_text(text, token), width)
     if pattern_error != ok { ret (0usize, ty, pattern_error) }
