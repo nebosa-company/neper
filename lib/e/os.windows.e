@@ -3111,6 +3111,8 @@ type BitmapInfo = struct { size: u32, width: i32, height: i32, planes: u16, bit_
 
 const WINDOW_RING: usize = 256usize
 const WINDOW_TABLE: usize = 16usize
+type WindowResizeHandler = union { function: fn(Window, u32, u32), bits: usize }
+var window_resize_handlers: [16]usize = zero
 
 var window_events: [256]WindowEvent = zero
 var window_event_head: usize = 0usize
@@ -3317,6 +3319,14 @@ fn window_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) -
         event.width = u32(size_bits & 65535usize)
         event.height = u32((size_bits >> 16usize) & 65535usize)
         window_push(event)
+        // While an edge is dragged the sizing loop runs inside the caller's DispatchMessage, so the handler is where a program
+        // repaints live (D5856); a minimised window (size 0) is not a size.
+        let resized_slot = window_slot(handle)
+        if resized_slot < WINDOW_TABLE && window_resize_handlers[resized_slot] != 0usize && event.width != 0u32 && event.height != 0u32 {
+            var handler: WindowResizeHandler = zero
+            handler.bits = window_resize_handlers[resized_slot]
+            handler.function(event.window, event.width, event.height)
+        }
         ret 0isize
     }
     if message == 7u32 {
@@ -3479,6 +3489,7 @@ fn window_close(w: Window) -> err {
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
     uia_release(slot, w.raw)
     window_handles[slot] = 0usize
+    window_resize_handlers[slot] = 0usize
     // Its events are dropped with it: a Close for a window that is gone is noise.
     var kept = 0usize
     var at = 0usize
@@ -3593,8 +3604,16 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
 }
 
 // The handle and its module, for a `gpu.Surface` of kind `.Win32`.
-// Live resize is the macOS host's: a poll-model host sees every size as a Resize event (D5856).
-fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
+// Calls `handler` with the new client size in physical pixels each time the window is resized, from the window procedure, so
+// from inside the system's sizing loop while an edge is dragged (D5856).
+fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err {
+    let slot = window_slot(w.raw)
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    var holder: WindowResizeHandler = zero
+    holder.function = handler
+    window_resize_handlers[slot] = holder.bits
+    ret ok
+}
 
 fn window_native(w: Window) -> (usize, usize, err) {
     if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret (0usize, 0usize, NotFound) }

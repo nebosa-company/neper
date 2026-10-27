@@ -6065,6 +6065,12 @@ $osUiaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $osUiaWritten -ne 'executable written') { throw 'os_uia emission failed' }
 $osUiaOutput = & $osUiaPath
 if ($LASTEXITCODE -ne 0 -or $osUiaOutput -ne 'os uia ok') { throw "the UI Automation provider answered wrongly: exit $LASTEXITCODE" }
+# `window_on_resize` (D5856): the handler runs from the window procedure with the new client size, here by resizing from code.
+$osWindowResizePath = Join-Path $testBuild 'os-window-resize-selfhost.exe'
+$osWindowResizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_window_resize\src\main.e') $repo 'x64' 'windows' $osWindowResizePath
+if ($LASTEXITCODE -ne 0 -or $osWindowResizeWritten -ne 'executable written') { throw 'os_window_resize emission failed' }
+& $osWindowResizePath
+if ($LASTEXITCODE -ne 0) { throw "window_on_resize answered wrongly: exit $LASTEXITCODE" }
 # `e.gfx.scene` (D796): the CPU reference renderer over an offscreen target -- fills,
 # an anti-aliased edge, clips, a gradient, a stroke, an image, a glyph, a layer, a
 # rotation -- checked pixel by pixel, and the refusals.
@@ -8813,7 +8819,7 @@ $aliasFixture = Join-Path $conformanceRoot 'tools\uses_alias'
 $aliasUsesActual = Join-Path $testBuild 'conformance-tools-uses-alias.jsonl'
 cmd /c "cd /d `"$aliasFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol deep.pick > `"$aliasUsesActual`""
 if ($LASTEXITCODE -ne 0) { throw 'uses-file --json through an alias failed' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $aliasUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_alias.expected.jsonl')).Hash) { throw 'uses-file --json through an alias differs from the conformance corpus' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $aliasUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_alias.x64-windows.expected.jsonl')).Hash) { throw 'uses-file --json through an alias differs from the conformance corpus' }
 $aliasOther = cmd /c "cd /d `"$aliasFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol other.pick"
 if ($LASTEXITCODE -ne 0 -or ($aliasOther | Where-Object { $_ -match '"record":"use"' }).Count -ne 2) { throw 'the same-spelled function of the other module does not have its own two uses' }
 $aliasPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-alias.jsonl'
@@ -8883,7 +8889,7 @@ $comptimeFixture = Join-Path $conformanceRoot 'tools\uses_comptime'
 $comptimeUsesActual = Join-Path $testBuild 'conformance-tools-uses-comptime.jsonl'
 cmd /c "cd /d `"$comptimeFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol main.twice > `"$comptimeUsesActual`""
 if ($LASTEXITCODE -ne 0) { throw 'uses-file --json of a function only a constant reaches failed' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $comptimeUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_comptime.expected.jsonl')).Hash) { throw 'uses-file --json of a function only a constant reaches differs from the conformance corpus' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $comptimeUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_comptime.x64-windows.expected.jsonl')).Hash) { throw 'uses-file --json of a function only a constant reaches differs from the conformance corpus' }
 $comptimePlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-comptime.jsonl'
 cmd /c "cd /d `"$comptimeFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol main.twice --to double > `"$comptimePlanActual`""
 if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json of a function only a constant reaches failed' }
@@ -8905,7 +8911,7 @@ $callbackFixture = Join-Path $conformanceRoot 'tools\uses_callback'
 $callbackUsesActual = Join-Path $testBuild 'conformance-tools-uses-callback.jsonl'
 cmd /c "cd /d `"$callbackFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol main.twice > `"$callbackUsesActual`""
 if ($LASTEXITCODE -ne 0) { throw 'uses-file --json of a callback failed' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $callbackUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_callback.expected.jsonl')).Hash) { throw 'uses-file --json of a callback differs from the conformance corpus' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $callbackUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_callback.x64-windows.expected.jsonl')).Hash) { throw 'uses-file --json of a callback differs from the conformance corpus' }
 $callbackPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-callback.jsonl'
 cmd /c "cd /d `"$callbackFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol main.twice --to double > `"$callbackPlanActual`""
 if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json of a callback failed' }
@@ -9393,7 +9399,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexSyntaxActual).Hash -ne (G
 $usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""
 if ($LASTEXITCODE -ne 0) { throw "uses-file --json failed" }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $usesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses.expected.jsonl')).Hash) { throw "uses-file --json differs from the conformance corpus" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $usesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses.x64-windows.expected.jsonl')).Hash) { throw "uses-file --json differs from the conformance corpus" }
 # `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
 $disActual = Join-Path $testBuild 'conformance-tools-dis.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json > `"$disActual`""

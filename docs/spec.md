@@ -1448,7 +1448,7 @@ type AccessibleNode = struct { id: u32, parent: u32, has_parent: bool, role: u8,
 | `fn window_cursor(w: Window, shape: CursorShape) -> err` | the cursor over the client area |
 | `fn window_capture(w: Window, on: bool) -> err` | pointer capture: every pointer event goes to this window until released |
 | `fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err` | draws `width * height` BGRA8 pixels, row-major from the top, at the client's origin through the host's software path; a short `pixels` is `Unsupported` |
-| `fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err` | calls `handler` with the window and its new client size in physical pixels each time it is resized, from inside the platform's own resize loop, so a program can repaint while an edge is dragged; `Unsupported` where the host's poll already sees each size (every host but macOS today) |
+| `fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err` | calls `handler` with the window and its new client size in physical pixels each time it is resized, from inside the platform's own resize loop, so a program can repaint while an edge is dragged; `Unsupported` where the host's poll already sees each size (Linux, NeperOS and WASI; macOS and Windows have it) |
 | `fn window_native(w: Window) -> (usize, usize, err)` | the native handle and its context, for a `gpu.Surface` (section 10, Presentation) |
 | `fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)` | the displays, the primary first, into `a`; zero `limit` is `Unsupported` |
 | `fn clipboard_text(a: *mem.Arena) -> (str, err)` | the clipboard's text as UTF-8 into `a`, empty when it holds none |

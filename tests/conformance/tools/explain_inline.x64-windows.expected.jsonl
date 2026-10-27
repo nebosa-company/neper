@@ -210,7 +210,7 @@
 {"record":"inline","symbol":"e.os.window_visible","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.window_cursor","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.window_capture","decision":"rejected","reason":"its body is over the cap","pass":2}
-{"record":"inline","symbol":"e.os.window_on_resize","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_on_resize","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.clipboard_open","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.uia_same_guid","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.uia_this","decision":"inlinable","reason":"at or under the cap","pass":2}
