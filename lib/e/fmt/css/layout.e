@@ -9069,7 +9069,7 @@ fn layout_abs(l: *Layout, b: u32) {
         w_auto = false
     }
     var ratio_w = false
-    if w_auto && !(has_l && has_r) && s.height.kind == .Px {
+    if w_auto && s.height.kind == .Px {
         let (hv0, has_hv0) = resolve_len(s.height, cb_h)
         if has_hv0 {
             let (rw0, has_rw0) = ratio_width(l, b, to_content_h(l, b, hv0))
@@ -9089,7 +9089,11 @@ fn layout_abs(l: *Layout, b: u32) {
         }
     }
     if ratio_w {
-        // the width came from the ratio
+        // the width came from the ratio; the automatic minimum (min-content) still applies
+        if s.min_width.kind == .Auto && s.overflow_x == .Visible && s.overflow_y == .Visible {
+            let (mnr, _mxr) = content_widths(l, b)
+            cw = maxf(cw, mnr)
+        }
     } else if w_auto {
         if has_l && has_r {
             cw = cb_w - lv - rv - ml - mr - extras_h
@@ -9171,7 +9175,7 @@ fn layout_abs(l: *Layout, b: u32) {
     let (sc9, scw9, sch9) = size_contained(l, b)
     if sc9 && spec_h < 0.0f64 { h = sch9 }
     if spec_h >= 0.0f64 { h = spec_h }
-    if ratio_h_abs >= 0.0f64 && s.overflow_x == .Visible && s.overflow_y == .Visible { h = maxf(ratio_h_abs, content_h) }
+    if ratio_h_abs >= 0.0f64 && s.min_height.kind == .Auto && s.overflow_x == .Visible && s.overflow_y == .Visible { h = maxf(ratio_h_abs, content_h) }
     h = maxf(0.0f64, clamp_height_auto(l, b, h, cb_h, content_h))
     let bbh = bx(l, b)
     bbh.h = h + extras_v
