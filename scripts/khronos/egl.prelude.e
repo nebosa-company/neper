@@ -23,6 +23,9 @@ type Lookup = struct { get_proc: GetProc }
 var library: os.Lib = zero
 var lookup_state: Lookup = zero
 var loaded: bool = false
+// What the library's `load` answered: 0 ok, 2 Unsupported (a module-scope `err` cannot be
+// stored). A library that did not open is not remembered, so `load` may try another.
+var load_code: u8 = 0u8
 var missing_name: str = zero
 
 fn default_library() -> str {
@@ -58,11 +61,15 @@ fn proc_address(a: *mem.Arena, context: usize, name: str) -> usize {
     ret pun.bits
 }
 
-// Opens `name` (empty for the platform's default) and fills the table. `NoLoader` when the
-// library or its `eglGetProcAddress` is missing; `Unsupported` names, through `missing`, an
-// EGL 1.5 entry point the library lacks.
+// Opens `name` (empty for the platform's default) and fills the table, once per process: a
+// second call answers what the first did. `NoLoader` when the library or its
+// `eglGetProcAddress` is missing; `Unsupported` names, through `missing`, an EGL 1.4 entry
+// point the library lacks. EGL 1.5's entries are filled when present; ask `present`.
 fn load(a: *mem.Arena, name: str) -> err {
-    if loaded { ret ok }
+    if loaded {
+        if load_code != 0u8 { ret Unsupported }
+        ret ok
+    }
     var path = name
     if path.len == 0usize { path = default_library() }
     let (opened, open_error) = os.dlopen(a, path)
@@ -76,7 +83,14 @@ fn load(a: *mem.Arena, name: str) -> err {
     lookup_state.get_proc = lookup
     loaded = true
     missing_name = ""
-    ret load_entries(a, proc_address, 0usize, 1u8)
+    if load_entries(a, proc_address, 0usize, 1u8) != ok {
+        load_code = 2u8
+        ret Unsupported
+    }
+    ret ok
 }
 
 fn missing() -> str { ret missing_name }
+
+// Whether the library supplied the entry in slot `entry` (a `*_ENTRY` constant).
+fn present(entry: usize) -> bool { ret entry < ENTRY_COUNT && procs[entry] != 0usize }

@@ -26,6 +26,9 @@ type Lookup = struct { get_proc: GetProc }
 var library: os.Lib = zero
 var lookup_state: Lookup = zero
 var loaded: bool = false
+// What the library's `load` answered: 0 ok, 2 Unsupported (a module-scope `err` cannot be
+// stored). A library that did not open is not remembered, so `load` may try another.
+var load_code: u8 = 0u8
 var missing_name: str = zero
 
 fn default_library() -> str {
@@ -61,11 +64,15 @@ fn proc_address(a: *mem.Arena, context: usize, name: str) -> usize {
     ret pun.bits
 }
 
-// Opens `name` (empty for the platform's default) and fills the table. `NoLoader` when the
-// library or its `eglGetProcAddress` is missing; `Unsupported` names, through `missing`, an
-// EGL 1.5 entry point the library lacks.
+// Opens `name` (empty for the platform's default) and fills the table, once per process: a
+// second call answers what the first did. `NoLoader` when the library or its
+// `eglGetProcAddress` is missing; `Unsupported` names, through `missing`, an EGL 1.4 entry
+// point the library lacks. EGL 1.5's entries are filled when present; ask `present`.
 fn load(a: *mem.Arena, name: str) -> err {
-    if loaded { ret ok }
+    if loaded {
+        if load_code != 0u8 { ret Unsupported }
+        ret ok
+    }
     var path = name
     if path.len == 0usize { path = default_library() }
     let (opened, open_error) = os.dlopen(a, path)
@@ -79,10 +86,17 @@ fn load(a: *mem.Arena, name: str) -> err {
     lookup_state.get_proc = lookup
     loaded = true
     missing_name = ""
-    ret load_entries(a, proc_address, 0usize, 1u8)
+    if load_entries(a, proc_address, 0usize, 1u8) != ok {
+        load_code = 2u8
+        ret Unsupported
+    }
+    ret ok
 }
 
 fn missing() -> str { ret missing_name }
+
+// Whether the library supplied the entry in slot `entry` (a `*_ENTRY` constant).
+fn present(entry: usize) -> bool { ret entry < ENTRY_COUNT && procs[entry] != 0usize }
 
 // ---- generated below ----
 
@@ -365,25 +379,70 @@ type U28 = union { function: F28, bits: usize }
 const ENTRY_COUNT: usize = 44usize
 var procs: [44]usize = zero
 
+const BIND_API_ENTRY: usize = 0usize
+const BIND_TEX_IMAGE_ENTRY: usize = 1usize
+const CHOOSE_CONFIG_ENTRY: usize = 2usize
+const CLIENT_WAIT_SYNC_ENTRY: usize = 3usize
+const COPY_BUFFERS_ENTRY: usize = 4usize
+const CREATE_CONTEXT_ENTRY: usize = 5usize
+const CREATE_IMAGE_ENTRY: usize = 6usize
+const CREATE_PBUFFER_FROM_CLIENT_BUFFER_ENTRY: usize = 7usize
+const CREATE_PBUFFER_SURFACE_ENTRY: usize = 8usize
+const CREATE_PIXMAP_SURFACE_ENTRY: usize = 9usize
+const CREATE_PLATFORM_PIXMAP_SURFACE_ENTRY: usize = 10usize
+const CREATE_PLATFORM_WINDOW_SURFACE_ENTRY: usize = 11usize
+const CREATE_SYNC_ENTRY: usize = 12usize
+const CREATE_WINDOW_SURFACE_ENTRY: usize = 13usize
+const DESTROY_CONTEXT_ENTRY: usize = 14usize
+const DESTROY_IMAGE_ENTRY: usize = 15usize
+const DESTROY_SURFACE_ENTRY: usize = 16usize
+const DESTROY_SYNC_ENTRY: usize = 17usize
+const GET_CONFIG_ATTRIB_ENTRY: usize = 18usize
+const GET_CONFIGS_ENTRY: usize = 19usize
+const GET_CURRENT_CONTEXT_ENTRY: usize = 20usize
+const GET_CURRENT_DISPLAY_ENTRY: usize = 21usize
+const GET_CURRENT_SURFACE_ENTRY: usize = 22usize
+const GET_DISPLAY_ENTRY: usize = 23usize
+const GET_ERROR_ENTRY: usize = 24usize
+const GET_PLATFORM_DISPLAY_ENTRY: usize = 25usize
+const GET_PROC_ADDRESS_ENTRY: usize = 26usize
+const GET_SYNC_ATTRIB_ENTRY: usize = 27usize
+const INITIALIZE_ENTRY: usize = 28usize
+const MAKE_CURRENT_ENTRY: usize = 29usize
+const QUERY_API_ENTRY: usize = 30usize
+const QUERY_CONTEXT_ENTRY: usize = 31usize
+const QUERY_STRING_ENTRY: usize = 32usize
+const QUERY_SURFACE_ENTRY: usize = 33usize
+const RELEASE_TEX_IMAGE_ENTRY: usize = 34usize
+const RELEASE_THREAD_ENTRY: usize = 35usize
+const SURFACE_ATTRIB_ENTRY: usize = 36usize
+const SWAP_BUFFERS_ENTRY: usize = 37usize
+const SWAP_INTERVAL_ENTRY: usize = 38usize
+const TERMINATE_ENTRY: usize = 39usize
+const WAIT_CLIENT_ENTRY: usize = 40usize
+const WAIT_GL_ENTRY: usize = 41usize
+const WAIT_NATIVE_ENTRY: usize = 42usize
+const WAIT_SYNC_ENTRY: usize = 43usize
+
 fn load_entries_0(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
     if fetch(a, resolve, context, 0usize, "eglBindAPI", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 1usize, "eglBindTexImage", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 2usize, "eglChooseConfig", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 3usize, "eglClientWaitSync", bit & 1u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 3usize, "eglClientWaitSync", bit & 2u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 4usize, "eglCopyBuffers", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 5usize, "eglCreateContext", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 6usize, "eglCreateImage", bit & 1u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 6usize, "eglCreateImage", bit & 2u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 7usize, "eglCreatePbufferFromClientBuffer", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 8usize, "eglCreatePbufferSurface", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 9usize, "eglCreatePixmapSurface", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 10usize, "eglCreatePlatformPixmapSurface", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 11usize, "eglCreatePlatformWindowSurface", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 12usize, "eglCreateSync", bit & 1u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 10usize, "eglCreatePlatformPixmapSurface", bit & 2u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 11usize, "eglCreatePlatformWindowSurface", bit & 2u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 12usize, "eglCreateSync", bit & 2u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 13usize, "eglCreateWindowSurface", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 14usize, "eglDestroyContext", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 15usize, "eglDestroyImage", bit & 1u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 15usize, "eglDestroyImage", bit & 2u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 16usize, "eglDestroySurface", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 17usize, "eglDestroySync", bit & 1u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 17usize, "eglDestroySync", bit & 2u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 18usize, "eglGetConfigAttrib", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 19usize, "eglGetConfigs", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 20usize, "eglGetCurrentContext", bit & 1u8) != ok { ret Unsupported }
@@ -391,9 +450,9 @@ fn load_entries_0(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> e
     if fetch(a, resolve, context, 22usize, "eglGetCurrentSurface", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 23usize, "eglGetDisplay", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 24usize, "eglGetError", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 25usize, "eglGetPlatformDisplay", bit & 1u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 25usize, "eglGetPlatformDisplay", bit & 2u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 26usize, "eglGetProcAddress", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 27usize, "eglGetSyncAttrib", bit & 1u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 27usize, "eglGetSyncAttrib", bit & 2u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 28usize, "eglInitialize", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 29usize, "eglMakeCurrent", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 30usize, "eglQueryAPI", bit & 1u8) != ok { ret Unsupported }
@@ -409,7 +468,7 @@ fn load_entries_0(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> e
     if fetch(a, resolve, context, 40usize, "eglWaitClient", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 41usize, "eglWaitGL", bit & 1u8) != ok { ret Unsupported }
     if fetch(a, resolve, context, 42usize, "eglWaitNative", bit & 1u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 43usize, "eglWaitSync", bit & 1u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, 43usize, "eglWaitSync", bit & 2u8) != ok { ret Unsupported }
     ret ok
 }
 

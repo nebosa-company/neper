@@ -222,6 +222,13 @@ class Module:
         out.append('const ENTRY_COUNT: usize = %dusize' % len(names))
         out.append('var procs: [%d]usize = zero' % len(names))
         out.append('')
+        # Each entry's slot, for `present` on one a profile does not require.
+        for i, cname in enumerate(names):
+            entry = snake(cname[len(self.fprefix):]).upper() + '_ENTRY'
+            if entry in self.constants:
+                raise SystemExit('%s collides with a constant' % entry)
+            out.append('const %s: usize = %dusize' % (entry, i))
+        out.append('')
         for c in range(0, len(names), chunk):
             out.append('fn load_entries_%d(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {' % (c // chunk))
             for i in range(c, min(c + chunk, len(names))):
@@ -289,8 +296,9 @@ def egl_module():
             if cname in ('EGL_TRUE', 'EGL_FALSE'):
                 value = (value[0], 'u32')
             m.constant(cname, value)
+        # EGL 1.4 is required; 1.5's entries are filled when present (SwiftShader stops at 1.4).
         for entry in functions:
-            m.function(entry, 1)
+            m.function(entry, 2 if block == 'EGL_VERSION_1_5' else 1)
     for path in ('eglext.h', 'eglext_angle.h'):
         for block, (constants, functions) in parse(SRC / path, proto, 'i32', lambda b: b in EGL_EXTENSIONS).items():
             for cname, value in constants:

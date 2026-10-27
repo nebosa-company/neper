@@ -1126,26 +1126,15 @@
       "evidence": "Needs a device. Prepared: `node scripts/serve-wasm.mjs --isolated --host 0.0.0.0` and open /tests/wasm/browser/phone_probe.html on the phone (a plain field that logs key, composition, paste, visualViewport and scroll events; Report copies the log) to answer checks 1-5 before touching ui_counter. D5821 lists what the mobile preset did and did not show (synthetic composition events, the textarea at 16 px not scrolling or zooming). Serve tests/wasm/browser/ui_counter.html over HTTPS or a LAN address with scripts/serve-wasm.mjs --isolated (a secure context is needed for crossOriginIsolated and the clipboard) and check on iOS Safari and Android Chrome: (1) tapping the Name field opens the keyboard and neither zooms nor scrolls the page; (2) typed letters, Backspace and Enter arrive once each; (3) composition with a CJK keyboard (pinyin or kana) delivers the committed text once, with no duplicate after compositionend and none while composing; (4) the clipboard: paste from the system menu reaches the program, and Ctrl+C in the program writes navigator.clipboard, with the permission prompt answered either way; (5) visualViewport resizes when the keyboard opens and the canvas stays usable (decide whether the window follows it); (6) a physical keyboard on a tablet still works. Fix what fails in lib/wasm/window.js; window_visible is separate."
     },
     {
-      "id": "L173",
-      "category": "library",
-      "group": "OpenGL",
-      "order": 275,
-      "title": "OpenGL 2: the loader, gl.load(profile, get_proc)",
-      "score": 0.6,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Done 2026-10-27 (D5885): gl.load(profile, resolve, context) fills the table and fails Unsupported naming the first required entry through gl.missing(); gl.version() parses desktop and ES GL_VERSION strings; gl.has_extension walks GL_NUM_EXTENSIONS; egl.load opens libEGL (NoLoader when absent) and egl.proc_address is the EGL resolver; checked without a driver by x_khronos_gl_load. Remaining: the WGL resolver (wglGetProcAddress, then opengl32's exports for the GL 1.1 entries, with L175) and a run against a real driver (L174/L175). Design docs/opengl-plan.md, D5877. Needs L172. Acceptance: fills a profile's table through wglGetProcAddress (with opengl32's own exports for the GL 1.1 entries) or eglGetProcAddress; parses GL_VERSION and the extension list; a missing required entry is Unsupported, naming it; no driver at all is NoLoader."
-    },
-    {
       "id": "L174",
       "category": "library",
       "group": "OpenGL",
       "order": 276,
       "title": "OpenGL 3: EGL contexts on Linux, windowed and headless",
-      "score": 0,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Design docs/opengl-plan.md, D5880. Needs L173. Acceptance: GL 4.3 core and GLES 3.1 contexts on a Neper os window, through a second libX11 connection to the window's XID (Neper's X11 client is a raw socket with no Display*); surfaceless and pbuffer contexts for headless use; swap interval; resizing follows window_on_resize; a resize storm shows no torn or stale frame."
+      "evidence": "Done 2026-10-27 (D5886): x.khronos.context.linux over the shared x.khronos.eglcontext. Headless GL 3.3, GL 4.3, GLES 3.0 and GLES 3.1 run on Mesa's surfaceless EGL (pbuffer fallback written but not exercised), drawn, read back against llvmpipe's golden hash and computed on (x_khronos_gl_headless). A GL 3.3 context on an os window through a second libX11 connection to its window id clears, scissors, reads back and swaps under WSLg (x_khronos_gl_window, examples/gl_triangle with and without --es). swap_interval is called. Remaining: GL 4.3 and GLES 3.1 on a window (only headless so far), following window_on_resize, and the resize storm. Design docs/opengl-plan.md, D5880. Needs L173. Acceptance: GL 4.3 core and GLES 3.1 contexts on a Neper os window, through a second libX11 connection to the window's XID (Neper's X11 client is a raw socket with no Display*); surfaceless and pbuffer contexts for headless use; swap interval; resizing follows window_on_resize; a resize storm shows no torn or stale frame."
     },
     {
       "id": "L175",
@@ -1153,10 +1142,10 @@
       "group": "OpenGL",
       "order": 277,
       "title": "OpenGL 4: WGL contexts on Windows, and GLES through ANGLE",
-      "score": 0,
+      "score": 0.8,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Design docs/opengl-plan.md, D5880. Needs L173; can run at the same time as L174. Acceptance: pixel format bootstrapped through a dummy window, then wglCreateContextAttribsARB for core 3.3, 4.3 and 4.6; WGL_EXT_swap_control; per-monitor DPI; the same GLES 3.0 sample runs through ANGLE's libEGL.dll (installing the ANGLE DLLs needs the user's go-ahead)."
+      "evidence": "Done 2026-10-27 (D5886): x.khronos.context.windows. The WGL core context comes from a legacy context on the same device context, so no dummy window is needed. Checked on Intel Iris Xe: GL 3.3 and GL 4.3 core (compute included) headless on a hidden os window, and a GL 3.3 context on a visible window cleared, scissored, read back and swapped. wglSwapIntervalEXT is called. GLES 3.0 and 3.1 (compute included) run through ANGLE's D3D11 libEGL.dll from PATH, and examples/gl_triangle --es draws through it (screenshots taken). Remaining: a 4.6 core request, and per-monitor DPI (the viewport follows the window's Resize event, not its scale). Design docs/opengl-plan.md, D5880. Needs L173; can run at the same time as L174. Acceptance: pixel format bootstrapped through a dummy window, then wglCreateContextAttribsARB for core 3.3, 4.3 and 4.6; WGL_EXT_swap_control; per-monitor DPI; the same GLES 3.0 sample runs through ANGLE's libEGL.dll (installing the ANGLE DLLs needs the user's go-ahead)."
     },
     {
       "id": "L176",
@@ -1168,17 +1157,6 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Design docs/opengl-plan.md, D5879, D5880. Needs L173. Acceptance: an NSOpenGLContext on the content view that window_native returns; follows the Retina backing scale; checked on the macOS CI runners. Metal (C193) keeps the Mac's compute."
-    },
-    {
-      "id": "L177",
-      "category": "library",
-      "group": "OpenGL",
-      "order": 279,
-      "title": "OpenGL 6: samples and headless fixtures",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Design docs/opengl-plan.md. Needs L174 or L175. Acceptance: examples/gl_triangle with GL 3.3 and GLES 3.0 shaders; a headless fixture reads back with glReadPixels and matches a golden exactly on Mesa llvmpipe; the fixture is part of both suites."
     },
     {
       "id": "T045",

@@ -52,6 +52,10 @@ fn load(a: *mem.Arena, profile: Profile, resolve: Resolve, context: usize) -> er
 
 fn missing() -> str { ret missing_name }
 
+// Whether the driver supplied the entry in slot `entry` (a `*_ENTRY` constant): the check
+// before calling one the loaded profile does not require.
+fn present(entry: usize) -> bool { ret entry < ENTRY_COUNT && procs[entry] != 0usize }
+
 // A buffer offset where the API takes `const void *`, as `vertex_attrib_pointer`'s last argument.
 fn offset(n: usize) -> *void {
     var pun: OffsetPun = zero

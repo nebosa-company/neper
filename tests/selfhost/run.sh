@@ -3193,6 +3193,22 @@ khronos_load_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$khronos_load_written" = 'executable written' ]
 chmod +x "$test_build/x-khronos-gl-load-selfhost"
 "$test_build/x-khronos-gl-load-selfhost"
+# `x.khronos.context` (D5880, D5886): headless GL 3.3/4.3 and GLES 3.0/3.1 on Mesa's surfaceless
+# EGL, drawn, read back (llvmpipe's whole image against its golden hash) and computed on; then a
+# context on an os window through a second Xlib connection; then examples/gl_triangle for 3
+# frames when a display is there. A host without EGL prints what it skipped.
+khronos_headless_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_headless/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-headless-selfhost")
+[ "$khronos_headless_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-headless-selfhost"
+"$test_build/x-khronos-gl-headless-selfhost"
+khronos_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_window/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-window-selfhost")
+[ "$khronos_window_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-window-selfhost"
+"$test_build/x-khronos-gl-window-selfhost"
+gl_triangle_written=$($test_build/neper-self emit-executable "$repo/examples/gl_triangle.e" "$repo" x64 linux "$test_build/gl-triangle-selfhost")
+[ "$gl_triangle_written" = 'executable written' ]
+chmod +x "$test_build/gl-triangle-selfhost"
+if [ -n "${DISPLAY:-}" ]; then "$test_build/gl-triangle-selfhost" --frames 3; fi
 # The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
 # statement scanner and literal rendering, error mapping -- with no server and no client library.
 db_units_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_db_units/src/main.e" "$repo" x64 linux "$test_build/x-db-units-selfhost")
@@ -10819,6 +10835,8 @@ if command -v node >/dev/null 2>&1; then
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.threads.wasm" --threads)" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/examples/ui/main.e" "$repo" wasm32 wasi "$wasm_build/ui_gallery.wasm")" = 'executable written' ]
     (cd "$repo" && node --no-warnings tests/wasm/window.mjs "$wasm_build/ui_counter.wasm" "$wasm_build/ui_counter.threads.wasm" "$wasm_build/ui_gallery.wasm") || { printf '%s\n' 'the lib/wasm/window.js check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/window_edits.mjs) || { printf '%s
+' 'the lib/wasm/window.js edit check failed' >&2; exit 1; }
     # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
     wasm_null_source="$repo/tests/wasm/null_call/src/main.e"

@@ -3654,6 +3654,25 @@ $khronosLoadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $khronosLoadWritten -ne 'executable written') { throw 'x.khronos.gl loader fixture emission failed' }
 & $khronosLoadPath
 if ($LASTEXITCODE -ne 0) { throw "the GL loader answered wrongly: exit $LASTEXITCODE" }
+# `x.khronos.context` (D5880, D5886): headless GL 3.3/4.3 through WGL and GLES 3.0/3.1 through
+# ANGLE's libEGL.dll when one is on PATH, drawn, read back and computed on; then a context on an
+# os window, cleared, scissored, read back and swapped; then examples/gl_triangle for 3 frames.
+# A host without the interface prints what it skipped.
+$khronosHeadlessPath = Join-Path $testBuild 'x-khronos-gl-headless-selfhost.exe'
+$khronosHeadlessWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_headless\src\main.e') $repo 'x64' 'windows' $khronosHeadlessPath
+if ($LASTEXITCODE -ne 0 -or $khronosHeadlessWritten -ne 'executable written') { throw 'x_khronos_gl_headless emission failed' }
+& $khronosHeadlessPath
+if ($LASTEXITCODE -ne 0) { throw "a headless GL context answered wrongly: exit $LASTEXITCODE" }
+$khronosWindowPath = Join-Path $testBuild 'x-khronos-gl-window-selfhost.exe'
+$khronosWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_window\src\main.e') $repo 'x64' 'windows' $khronosWindowPath
+if ($LASTEXITCODE -ne 0 -or $khronosWindowWritten -ne 'executable written') { throw 'x_khronos_gl_window emission failed' }
+& $khronosWindowPath
+if ($LASTEXITCODE -ne 0) { throw "a window's GL context answered wrongly: exit $LASTEXITCODE" }
+$glTrianglePath = Join-Path $testBuild 'gl-triangle-selfhost.exe'
+$glTriangleWritten = & $compiler emit-executable (Join-Path $repo 'examples\gl_triangle.e') $repo 'x64' 'windows' $glTrianglePath
+if ($LASTEXITCODE -ne 0 -or $glTriangleWritten -ne 'executable written') { throw 'examples/gl_triangle.e emission failed' }
+& $glTrianglePath --frames 3
+if ($LASTEXITCODE -ne 0) { throw "examples/gl_triangle.e failed: exit $LASTEXITCODE" }
 # The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
 # statement scanner and literal rendering, error mapping -- with no server and no client library.
 $dbUnitsPath = Join-Path $testBuild 'x-db-units-selfhost.exe'
@@ -11158,6 +11177,8 @@ if ($wasmNode) {
     if ((& $compiler emit-executable (Join-Path $repo 'examples\ui\main.e') $repo 'wasm32' 'wasi' $wasmGalleryPath) -ne 'executable written') { throw 'examples/ui did not emit as WebAssembly' }
     $wasmWindow = Invoke-Wasm $wasmCounterPath @($wasmCounterThreads, $wasmGalleryPath) (Join-Path $repo 'tests\wasm\window.mjs')
     if ($wasmWindow.Status -ne 0) { throw "the lib/wasm/window.js check failed: $($wasmWindow.Output)" }
+    $wasmEdits = Invoke-Wasm (Join-Path $repo 'tests\wasm\window_edits.mjs') @() (Join-Path $repo 'tests\wasm\window_edits.mjs')
+    if ($wasmEdits.Status -ne 0) { throw "the lib/wasm/window.js edit check failed: $($wasmEdits.Output)" }
     # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
     # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
     $wasmNullSource = Join-Path $repo 'tests\wasm\null_call\src\main.e'
