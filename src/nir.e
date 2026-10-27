@@ -374,6 +374,11 @@ type DebugInfo = struct {
     inherited: usize,
 }
 
+// (D5908) The functions a shared library exports, by their index in the linked builder, and the C name of each.
+// Where the writer put the regions a shared library's section headers describe (Android's loader reads them): file offset,
+// address and size of `.dynstr`, `.dynsym` and `.dynamic`, in that order.
+type Exports = struct { shared_library: bool, count: usize, functions: [64]usize, symbols: [64]str, regions: [9]usize }
+
 type Builder = struct {
     // (D1582) Named locals for a debugger: bound by lowering, placed by selection.
     debug: DebugInfo,
@@ -475,6 +480,7 @@ type Builder = struct {
     cpu_level: usize,
     // (C219, D5896) `x64 android`: the ELF image is typed ET_DYN for /system/bin/linker64, with Bionic's library names.
     android: bool,
+    exports: Exports,
     explain: bool,
     // Where the explanations go (D408, H20): appended here by the oracle's worker,
     // written out by the driver after the phase in worker order -- as records of the

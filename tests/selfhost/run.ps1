@@ -3689,6 +3689,12 @@ $gpuGlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $gpuGlWritten -ne 'executable written') { throw 'gpu_gl emission failed' }
 & $gpuGlPath
 if ($LASTEXITCODE -ne 0) { throw "e.gpu on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5908) A shared library is written for Linux and Android (run.sh loads it into a C host; Windows cannot load it).
+foreach ($sharedTarget in @(@('x64', 'linux'), @('aarch64', 'android'))) {
+    $sharedPath = Join-Path $testBuild "libshared-library-$($sharedTarget[0])-$($sharedTarget[1]).so"
+    $sharedWritten = & $compiler emit-shared-library (Join-Path $PSScriptRoot 'fixtures\link\shared_library\src\main.e') $repo $sharedTarget[0] $sharedTarget[1] $sharedPath
+    if ($LASTEXITCODE -ne 0 -or $sharedWritten -ne 'executable written') { throw "shared_library emission failed ($($sharedTarget -join ' '))" }
+}
 # (D5891) 65,536 f32 quotients and square roots through the GLSL emitter's exact integer sequences, word-equal to the CPU.
 $gpuGlExactPath = Join-Path $testBuild 'gpu-gl-exact-selfhost.exe'
 $gpuGlExactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_exact\src\main.e') $repo 'x64' 'windows' $gpuGlExactPath --gpu glsl

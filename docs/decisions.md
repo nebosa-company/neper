@@ -43225,3 +43225,19 @@ The window's own logical `damage`/`damaged` (D904) are left as they were. They a
 - **Linux (WSLg):** llvmpipe's GL 3.3 and GLES 3.0.
 
 A copy of `ui_app` confirmed `window.presenting` stays true after its frames, so frames went through GL rather than the fallback.
+
+## D5908 — `@export("Name")` and `emit-shared-library`
+
+The user's decision (2026-10-27), resolving spec section 13's open `@export` question (spec line 1238): a neper function becomes a C symbol by `@export("Name")` written above a `@cc(c)` function, and only that way.
+- **Where it may stand.** The attribute is legal only on a `@cc` function, since the symbol must be callable by C's rules, and only on a non-generic one, since one symbol names one function. Each name may be exported once. A library exports at most 64.
+- **The output.** `emit-shared-library SOURCE ROOT ARCH OS OUTPUT` writes an ELF shared object for Linux and Android, x64 and aarch64. It is the dynamic executable's layout (D5896) with these changes:
+  - It is `ET_DYN`, and its `PT_INTERP` header becomes `PT_NULL`, which loaders skip.
+  - Every export is a defined global `STT_FUNC` in `.dynsym` after the imports. Its address is patched once the code is placed, and it is found through `DT_HASH`'s chain.
+  - It carries section headers for `.dynstr`, `.dynsym` and `.dynamic`. Android's loader refuses a library without a `SHT_DYNAMIC` section header; glibc does not need one.
+- **Roots.** The program needs no `main`: the startup's call to it is left unpatched, and dead-function elimination, with no `main` to root it, keeps everything.
+- **No startup.** Nothing runs when the library loads. Neper code receives its arena as a parameter, never from startup state, so an exported function that needs memory makes its own arena, as a thread entry does.
+- **Executables.** An executable ignores `@export`; nothing reads it there.
+
+The command is `emit-executable` with `--shared-library` appended. The rewrite happens in `run_arguments`, not in `dispatch`: calling `dispatch` from itself doubles its very large frame and overflowed the stack (D1605).
+
+`shared_library` holds two exports, one looping and one reading a module-scope `var` the other writes. The Linux suite builds it, builds `host.c` beside it with `cc`, and checks what `dlopen` and `dlsym` find. The same library also loads into C hosts as arm64 Linux under qemu, and as x64 and arm64 Android on the emulator, with hosts built by the NDK's clang. This is what Android's NativeActivity form needs (C220): `libapp.so` exporting `ANativeActivity_onCreate`.

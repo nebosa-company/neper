@@ -937,7 +937,7 @@ fn flags_known(args: []str) -> bool {
                     if !same(args[at], "-j") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") && !same(args[at], "--shared-library") { ret false }
                 }
             }
         }
@@ -5976,6 +5976,75 @@ fn finish_report(report: *Sink) -> err {
 fn stderr_text(text: str) -> err {
     var sink = stderr_sink()
     ret write_all(&sink, text)
+}
+
+// (D5908) `emit-shared-library`: every `@export("Name")` written at the start of a line in a module, and the `fn` it
+// marks, checked to be a non-generic `@cc` function and found among the linked functions. Anything else is the
+// program's error, reported and fatal.
+fn collect_exports(loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, args: []str) -> err {
+    if !same(args[5usize], "linux") && !same(args[5usize], "android") {
+        try stderr_text("error: a shared library is written for linux and android only\n")
+        os.exit(1i32)
+    }
+    builder.exports.shared_library = true
+    builder.exports.count = 0usize
+    let marker = "@export(\""
+    var module_at = 0usize
+    while module_at < loaded.count {
+        let text = loaded.modules[module_at].text
+        var at = 0usize
+        while at + marker.len <= text.len {
+            var line_start = at
+            while line_start > 0usize && (text[line_start - 1usize] == 32u8 || text[line_start - 1usize] == 9u8) { line_start = line_start - 1usize }
+            if (line_start == 0usize || text[line_start - 1usize] == 10u8) && same(text[at..at + marker.len], marker) {
+                var close = at + marker.len
+                while close < text.len && text[close] != 34u8 && text[close] != 10u8 { close += 1usize }
+                let symbol = text[at + marker.len..close]
+                var fn_at = close
+                while fn_at + 3usize <= text.len && !(same(text[fn_at..fn_at + 3usize], "fn ") && (text[fn_at - 1usize] == 32u8 || text[fn_at - 1usize] == 10u8)) { fn_at += 1usize }
+                var name_end = fn_at + 3usize
+                while name_end < text.len && (text[name_end] == 95u8 || (text[name_end] >= 48u8 && text[name_end] <= 57u8) || (text[name_end] >= 65u8 && text[name_end] <= 90u8) || (text[name_end] >= 97u8 && text[name_end] <= 122u8)) { name_end += 1usize }
+                let name = text[fn_at + 3usize..name_end]
+                let (index, found) = check.find_function(checker, module_at, name)
+                if symbol.len == 0usize || !found || !checker.functions[index].callback || checker.functions[index].generic {
+                    try stderr_text("error: `@export(\"")
+                    try stderr_text(symbol)
+                    try stderr_text("\")` must mark a `@cc fn` that is not generic\n")
+                    os.exit(1i32)
+                }
+                var placed = 0usize
+                while placed < builder.function_count {
+                    let function = builder.functions[placed]
+                    let same_module = (function.module_name.len != 0usize && same(function.module_name, loaded.modules[module_at].name)) || (function.module_name.len == 0usize && function.module_index == module_at)
+                    if same_module && same(function.name, name) { break }
+                    placed += 1usize
+                }
+                var duplicate = false
+                var earlier = 0usize
+                while earlier < builder.exports.count {
+                    if same(builder.exports.symbols[earlier], symbol) { duplicate = true }
+                    earlier += 1usize
+                }
+                if placed == builder.function_count || duplicate || builder.exports.count == 64usize {
+                    try stderr_text("error: `@export(\"")
+                    try stderr_text(symbol)
+                    try stderr_text("\")` names a symbol already exported, or a function not in the image, or one past the 64 a library exports\n")
+                    os.exit(1i32)
+                }
+                builder.exports.functions[builder.exports.count] = placed
+                builder.exports.symbols[builder.exports.count] = symbol
+                builder.exports.count += 1usize
+                at = close
+            }
+            at += 1usize
+        }
+        module_at += 1usize
+    }
+    if builder.exports.count == 0usize {
+        try stderr_text("error: a shared library exports nothing: mark a `@cc fn` `@export(\"Name\")`\n")
+        os.exit(1i32)
+    }
+    ret ok
 }
 
 fn stderr_sink() -> Sink {
@@ -13796,6 +13865,19 @@ fn hex16_is(text: str, value: usize) -> bool {
 fn run_arguments(a: *mem.Arena, args: []str) -> err {
     let short_result = dispatch_short_form(a, args)
     if short_result != NotShortForm { ret short_result }
+    // (D5908) `emit-shared-library` is `emit-executable` with `--shared-library` after it: the same build, another image.
+    if args.len >= 7usize && same(args[1usize], "emit-shared-library") {
+        let (rewritten, rewritten_error) = mem.alloc[str](a, args.len + 1usize)
+        if rewritten_error != ok { ret rewritten_error }
+        var copied = 0usize
+        while copied < args.len {
+            rewritten[copied] = args[copied]
+            copied += 1usize
+        }
+        rewritten[1usize] = "emit-executable"
+        rewritten[args.len] = "--shared-library"
+        ret dispatch(a, rewritten)
+    }
     ret dispatch(a, args)
 }
 
@@ -14979,6 +15061,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 report.build.pools[stats.POOL_IMAGE] = executable_storage.len
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
+                if has_flag(args, "--shared-library") { try collect_exports(&loaded, &checker, &builder, args) }
                 if machine_abi_of(args) == .Windows {
                     try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                 } else {

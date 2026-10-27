@@ -3225,6 +3225,11 @@ chmod +x "$test_build/gpu-gl-selfhost"
 "$test_build/gpu-gl-selfhost"
 # (D5904) Again with Mesa answering as an ES 3.1 driver: the ES pass takes 3.1's header with GL_OES_gpu_shader5's `precise`.
 MESA_GLES_VERSION_OVERRIDE=3.1 "$test_build/gpu-gl-selfhost"
+# (D5908) A shared library: `@export`ed `@cc` functions found and called through dlopen by a C host.
+shared_library_written=$($test_build/neper-self emit-shared-library "$repo/tests/selfhost/fixtures/link/shared_library/src/main.e" "$repo" x64 linux "$test_build/libshared-library-selfhost.so")
+[ "$shared_library_written" = 'executable written' ]
+cc -o "$test_build/shared-library-host" "$repo/tests/selfhost/fixtures/link/shared_library/host.c" -ldl
+"$test_build/shared-library-host" "$test_build/libshared-library-selfhost.so"
 # (D5891) 65,536 f32 quotients and square roots through the GLSL emitter's exact integer sequences, word-equal to the CPU.
 gpu_gl_exact_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_exact/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-exact-selfhost" --gpu glsl)
 [ "$gpu_gl_exact_written" = 'executable written' ]

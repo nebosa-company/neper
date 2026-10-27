@@ -1186,10 +1186,10 @@
       "group": "OpenGL",
       "order": 294,
       "title": "OpenGL 17: the Android target, app form (needs @export)",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Design docs/opengl-plan.md, D5884. Blocked on an @export (C-facing shared library) proposal (spec line 1238). Acceptance: ET_DYN output that exports ANativeActivity_onCreate; the process starts as a NativeActivity."
+      "evidence": "Done 2026-10-27 (D5908): the user chose `@export(\"Name\")` on a `@cc(c)` function; `emit-shared-library` writes an ET_DYN ELF shared object for linux and android, x64 and aarch64, with the exports in .dynsym and the .dynstr/.dynsym/.dynamic section headers Bionic requires. shared_library loads into C hosts through dlopen on Linux x64 (suite), Linux arm64 (qemu), and Android x64 and arm64 (emulator, NDK hosts). Remaining: ANativeActivity_onCreate exported from an app library and the process started as a NativeActivity, which needs T044's APK. Design docs/opengl-plan.md, D5884. Blocked on an @export (C-facing shared library) proposal (spec line 1238). Acceptance: ET_DYN output that exports ANativeActivity_onCreate; the process starts as a NativeActivity."
     },
     {
       "id": "L182",

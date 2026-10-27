@@ -43,7 +43,9 @@ fn runtime_limit(builder: *nir.Builder, relocations: []codegen_x64.Relocation, r
 // where the table went.
 fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, table_at: usize, code_offset: usize, got_address: usize, output: *emit_x64.Buffer, table_file: *usize) -> err {
     let (main_index, main_error) = link_elf.find_main(builder)
-    if main_error != ok { ret main_error }
+    // (D5908) A shared library needs no `main`: nothing starts it.
+    let has_main = main_error == ok
+    if !has_main && !builder.exports.shared_library { ret main_error }
     try link_elf.pad_to(output, code_offset)
     let machine_start = output.count
     try emit_x64.append_bytes(output, machine.bytes[0usize..table_at])
@@ -64,7 +66,7 @@ fn place_code(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets
     let (arena_literal, has_arena_literal) = runtime_elf_a64.symbol_offset("neper_start_arena")
     if !has_entry || !has_main_call || !has_arena_literal { ret InvalidImage }
     try link_elf.patch_little_u64(output, 24usize, A64_IMAGE_BASE + runtime_start + entry)
-    try emit_a64.patch_relative(output, runtime_start + main_call, machine_start + function_offsets[main_index])
+    if has_main { try emit_a64.patch_relative(output, runtime_start + main_call, machine_start + function_offsets[main_index]) }
     if builder.arena_bytes != 0usize { try link_elf.patch_little_u64(output, runtime_start + arena_literal, builder.arena_bytes) }
     var relocation_at = 0usize
     while relocation_at < relocation_count {
@@ -128,7 +130,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     let dynstr_offset = interp_offset + interp_size
     let dynstr_size = link_elf.dynamic_string_size(builder)
     let dynsym_offset = link_elf.align_up_to(dynstr_offset + dynstr_size, 8usize)
-    let dynsym_size = (symbols + 1usize) * 24usize
+    let dynsym_size = (link_elf.dynamic_symbol_total(builder) + 1usize) * 24usize
     let hash_offset = link_elf.align_up_to(dynsym_offset + dynsym_size, 8usize)
     let hash_size = link_elf.dynamic_hash_size(builder)
     let rela_offset = link_elf.align_up_to(hash_offset + hash_size, 8usize)
@@ -140,7 +142,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     // PT_PHDR, PT_INTERP, the read-execute load, the writable load and PT_DYNAMIC; the
     // sizes are patched once known.
     try program_header(output, 6usize, 4usize, phdr_offset, base + phdr_offset, phdr_count * 56usize, 8usize)
-    try program_header(output, 3usize, 4usize, interp_offset, base + interp_offset, interp_size, 1usize)
+    try program_header(output, link_elf.interpreter_header_type(builder), 4usize, interp_offset, base + interp_offset, interp_size, 1usize)
     try program_header(output, 1usize, 5usize, 0usize, base, 0usize, A64_IMAGE_PAGE)
     try program_header(output, 1usize, 6usize, 0usize, 0usize, 0usize, A64_IMAGE_PAGE)
     try program_header(output, 2usize, 6usize, 0usize, 0usize, 0usize, 8usize)
@@ -185,6 +187,8 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     let data_end = output.count
     try place_globals(builder, relocations, relocation_count, machine_start, base + globals_offset, output)
     try patch_dynamic_relocations(builder, output, rela_offset, got_address)
+    try link_elf.patch_export_values(builder, output, dynsym_offset, base + machine_start, function_offsets)
+    link_elf.record_regions(builder, base, dynstr_offset, dynstr_size, dynsym_offset, dynsym_size, data_offset, dynamic_size)
     try link_elf.patch_little_u64(output, 96usize + 56usize * 2usize, text_end)
     try link_elf.patch_little_u64(output, 104usize + 56usize * 2usize, text_end)
     try link_elf.patch_little_u64(output, 72usize + 56usize * 3usize, data_offset)
@@ -270,7 +274,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     if builder.function_count > function_offsets.len || relocation_count > relocations.len || table_at > machine.count { ret InvalidImage }
     codegen_x64.mark_live_globals(builder, relocations, relocation_count)
     // (D5896) Android's arm64 translator loads nothing without a dynamic segment.
-    if nir.import_library_count(builder) != 0usize || builder.android { ret write_dynamic(builder, machine, function_offsets, relocations, relocation_count, lines, table_at, output) }
+    if nir.import_library_count(builder) != 0usize || builder.android || builder.exports.shared_library { ret write_dynamic(builder, machine, function_offsets, relocations, relocation_count, lines, table_at, output) }
     var segments = 1usize
     if nir.live_global_count(builder) != 0usize { segments = 2usize }
     try elf_header(output, segments, link_elf.executable_type(builder))
