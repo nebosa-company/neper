@@ -32,7 +32,13 @@ fn serve(job: *Job) {
                 // The valid chain: the first connection offers h2 and is dropped; the HTTP/1.1 retry is answered.
                 var inbound: [2048]u8 = zero
                 var secure_source = tls.reader(&secure)
-                let (got, got_error) = io.read(&secure_source, inbound[0..])
+                var filled = 0usize
+                var got_error = ok
+                while got_error == ok && filled < 2048usize && !str.contains(inbound[0..filled], "\r\n\r\n") {
+                    let (got, read_error) = io.read(&secure_source, inbound[filled..])
+                    got_error = read_error
+                    filled += got
+                }
                 var secure_sink = tls.writer(&secure)
                 let wrote = io.write_all(&secure_sink, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
                 let flushed = io.flush(&secure_sink)
@@ -103,6 +109,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e5 != fetch.CertificateUntrusted { os.exit(13i32) }
     let (r6, e6) = fetch.fetch(&local_client, request(local))
     if e6 == fetch.CertificateError || e6 == fetch.CertificateName || e6 == fetch.CertificateExpired || e6 == fetch.CertificateSelfSigned || e6 == fetch.CertificateUntrusted { os.exit(14i32) }
+    if e6 != ok || r6.status != 200u16 || r6.body.len != 2usize { os.exit(15i32) }
     if thread.join(worker) != ok { os.exit(9i32) }
     ret ok
 }
