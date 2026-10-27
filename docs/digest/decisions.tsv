@@ -2953,4 +2953,5 @@ D5871	476	A kqueue poller tracks its registrations so a duplicate answers Exists
 D5872	737	The sweep knows which differences the platform imposes
 D5873	970	Permission bits through neper_host, and a link mid-path refused
 D5874	1365	window_on_resize on Windows, and the uses goldens become per-host
-D5875	1179	A Metal launch is committed and not waited for
+D5875	1352	A Metal launch is committed and not waited for
+D5876	866	macos-bundle.sh can sign with entitlements and notarize, unrun
