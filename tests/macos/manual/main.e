@@ -152,6 +152,18 @@ fn metal_facts(a: *mem.Arena) {
     } else {
         record(a, "metal subnormals", "flushed to zero, as on the runners")
     }
+    // Atomic fences: the runners' Metal 3.1 has no memory_order_seq_cst, so an atomic stronger than relaxed stays on the CPU (D5840).
+    let fence_source = "#include <metal_stdlib>\nusing namespace metal;\nkernel void f(device atomic_uint* c [[buffer(0)]]) { atomic_fetch_add_explicit(c, 1u, memory_order_relaxed); atomic_thread_fence(mem_flags::mem_device, memory_order::memory_order_seq_cst, thread_scope::thread_scope_device); }\n"
+    let (fence_pipeline, fence_error) = mtl.compile(context, fence_source, "f")
+    if fence_error == ok {
+        record(a, "metal fences", "memory_order_seq_cst compiles here: acquire-release atomics could be written for this Metal")
+    } else {
+        var why: [200]u8 = zero
+        let said = mtl.last_problem(why[..])
+        record(a, "metal fences", "not available, as on the runners")
+        say(why[0usize..said])
+        say("\n")
+    }
     // A single buffer of 1 GiB: the runners read one back wrong; its last word is written by the kernel below.
     let big_source = "#include <metal_stdlib>\nusing namespace metal;\nkernel void b(device float* y [[buffer(0)]], uint i [[thread_position_in_grid]]) { y[268435455u] = 7.0f; }\n"
     let (big_pipeline, big_compile) = mtl.compile(context, big_source, "b")
