@@ -39,7 +39,7 @@ try {
     // the canvas is a fixed 320 px tall and at most 480 wide, so the two scales differ on a phone
     return { x: Math.round(r.left + (+l[1] + +l[3] / 2) * r.width / 480), y: Math.round(r.top + (+l[2] + +l[4] / 2) * r.height / 320) }
   }, layout)
-  console.log('field at', JSON.stringify(field))
+  console.log('field at', JSON.stringify(field), 'canvas', JSON.stringify(await browser.execute(() => { const r = document.getElementById('screen').getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height, scrollY, innerWidth, innerHeight, dpr: devicePixelRatio, vv: visualViewport.height } })))
 
   await touch([{ type: 'pointerMove', duration: 0, x: field.x, y: field.y }, { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 80 }, { type: 'pointerUp', button: 0 }])
   await sleep(1500)
