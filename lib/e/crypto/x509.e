@@ -27,6 +27,7 @@ type KeyUsage = enum u8 { ServerAuth, ClientAuth, CodeSigning, EmailProtection, 
 type Chain = struct { certificates: []const Certificate }
 error InvalidCertificate
 error UnknownAuthority
+error SelfSigned
 error Expired
 error NameMismatch
 error InvalidUsage
@@ -842,7 +843,11 @@ fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, e
             break
         }
         let (intermediate, has_intermediate) = find_issuer(options.intermediates, current.issuer)
-        if !has_intermediate || same_der(intermediate.der, current.der) { ret (zero, UnknownAuthority) }
+        if !has_intermediate || same_der(intermediate.der, current.der) {
+            // A certificate that names itself as issuer and is no trusted root is self-signed.
+            if str.eq(current.subject, current.issuer) { ret (zero, SelfSigned) }
+            ret (zero, UnknownAuthority)
+        }
         if intermediate.unhandled_critical { ret (zero, InvalidCertificate) }
         if !intermediate.is_ca { ret (zero, UnknownAuthority) }
         if intermediate.has_key_usage && !intermediate.key_cert_sign { ret (zero, UnknownAuthority) }

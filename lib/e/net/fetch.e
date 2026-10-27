@@ -40,6 +40,7 @@ error CertificateError
 error CertificateExpired
 error CertificateName
 error CertificateUntrusted
+error CertificateSelfSigned
 error UnsupportedScheme
 error TooManyRedirects
 error RedirectRefused
@@ -465,6 +466,7 @@ fn exchange(c: *Client, u: *const url.Url, method: http.Method, headers: []const
                 if re2 == tls.CertificateExpired { ret (zero, CertificateExpired) }
                 if re2 == tls.CertificateName { ret (zero, CertificateName) }
                 if re2 == tls.CertificateUntrusted { ret (zero, CertificateUntrusted) }
+                if re2 == tls.CertificateSelfSigned { ret (zero, CertificateSelfSigned) }
                 if re2 == h2client.NotH2 { remember_h1(c, bare) }
                 try_h2 = false
             }
@@ -475,6 +477,7 @@ fn exchange(c: *Client, u: *const url.Url, method: http.Method, headers: []const
             if re == tls.CertificateExpired { ret (zero, CertificateExpired) }
             if re == tls.CertificateName { ret (zero, CertificateName) }
             if re == tls.CertificateUntrusted { ret (zero, CertificateUntrusted) }
+            if re == tls.CertificateSelfSigned { ret (zero, CertificateSelfSigned) }
         } else {
             let (resp2, re2) = http.request(c.a, eps[i], &req, limits)
             if re2 == ok { ret (resp2, ok) }

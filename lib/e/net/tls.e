@@ -33,6 +33,7 @@ error InvalidCertificate
 error CertificateExpired
 error CertificateName
 error CertificateUntrusted
+error CertificateSelfSigned
 error Handshake
 error Protocol
 error Closed
@@ -693,6 +694,7 @@ fn verify_certificate_set(a: *mem.Arena, set: CertificateSet, config: ClientConf
     let (_, verify_error) = x509.verify(a, set.leaf, options)
     if verify_error == x509.Expired { ret CertificateExpired }
     if verify_error == x509.NameMismatch { ret CertificateName }
+    if verify_error == x509.SelfSigned { ret CertificateSelfSigned }
     if verify_error == x509.UnknownAuthority { ret CertificateUntrusted }
     if verify_error != ok { ret InvalidCertificate }
     ret ok
