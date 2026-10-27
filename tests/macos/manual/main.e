@@ -105,6 +105,13 @@ fn pump_for(seconds: usize) {
     }
 }
 
+var resize_calls: u32 = zero
+
+// The live-resize handler (D5856): AppKit calls it from inside its own tracking loop while an edge is dragged.
+fn on_resize(w: os.Window, width: u32, height: u32) {
+    resize_calls += 1u32
+}
+
 fn red_icon() -> shell.Icon {
     var pixels: [484]u32 = zero
     var i = 0usize
@@ -322,6 +329,15 @@ fn main(a: *mem.Arena) -> err {
         number(usize(pressed_request.id))
         say(" arrived\n")
     }
+
+    // Live resize: the handler runs during the drag itself, not only after it.
+    let hooked = os.window_on_resize(window, on_resize)
+    say("\nDrag the window's bottom-right corner back and forth, slowly, for about eight seconds.\n")
+    pump_for(8usize)
+    say("  the resize handler ran ")
+    number(usize(resize_calls))
+    say(" times\n")
+    ask(a, "live resize while dragging", "Did the handler count climb during the drag (more than a handful of calls), not only at the end?")
 
     say("\nDone: ")
     number(passed)
