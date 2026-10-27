@@ -117,6 +117,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let freed_c = gpu.release(q, bc)
     let (again_big, again_error) = gpu.alloc[u32](q, 50000000usize)
     if again_error != ok { os.exit(25i32) }
+    // Launches in a row without a download between them stay in flight (D5879), more than the four the device keeps: each sees the
+    // last one's writes, and the sum is exact.
+    var run_x: [1000]f32 = zero
+    var run_y: [1000]f32 = zero
+    var j = 0usize
+    while j < 1000usize {
+        run_x[j] = f32(j)
+        run_y[j] = 1.0
+        j += 1usize
+    }
+    let (px, px_error) = gpu.upload[f32](q, run_x[0..])
+    let (py, py_error) = gpu.upload[f32](q, run_y[0..])
+    if px_error != ok || py_error != ok { os.exit(30i32) }
+    var rounds = 0usize
+    while rounds < 7usize {
+        if gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, px, py) != ok { os.exit(31i32) }
+        rounds += 1usize
+    }
+    if gpu.download(q, py, run_y[0..]) != ok { os.exit(32i32) }
+    j = 0usize
+    while j < 1000usize {
+        if run_y[j] != 1.0 + 14.0*f32(j) { os.exit(33i32) }
+        j += 1usize
+    }
+    // A fault in the middle of a run is reported once, from the next call that waits, and the launches around it still ran.
+    var flags: [64]u32 = zero
+    let (pf, pf_error) = gpu.upload[u32](q, flags[0..])
+    if pf_error != ok { os.exit(34i32) }
+    run_y[0] = 1.0
+    let (py2, py2_error) = gpu.upload[f32](q, run_y[0..])
+    if py2_error != ok { os.exit(35i32) }
+    if gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, px, py2) != ok { os.exit(36i32) }
+    if gpu.launch[outside](q, gpu.grid1(64usize), pf) != ok { os.exit(37i32) }
+    if gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, px, py2) != ok { os.exit(38i32) }
+    if gpu.download(q, py2, run_y[0..]) != gpu.Fault { os.exit(39i32) }
+    let (record_again, had_again) = gpu.last_fault(q)
+    if !had_again || record_again.kind != .Bounds { os.exit(40i32) }
+    if gpu.download(q, py2, run_y[0..]) != ok { os.exit(41i32) }
+    if run_y[3] != 43.0 + 12.0 { os.exit(42i32) }
     let closed = gpu.close(dev)
     ret ok
 }

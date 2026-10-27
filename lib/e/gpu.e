@@ -107,7 +107,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_command: usize, pending_block: mtl.Buffer, pending_queue: *QueueState, pending_checked: bool, more_heaps: [3]mtl.Buffer, heap_count: usize }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
@@ -116,6 +116,8 @@ const METAL_HEAP_FIRST: usize = 256usize
 // Up to this many heaps of METAL_HEAP_BYTES, made as the buffers need them (D5877): an address is the heap's number in its top byte
 // and the offset in the rest, and a buffer lives whole in one heap.
 const METAL_HEAPS: usize = 4usize
+// Launches kept in flight on a Metal device (D5879): each has a fault block of 32 bytes in heap 0's first 128.
+const METAL_PENDING: usize = 4usize
 const METAL_CAPABILITIES: usize = 199usize
 
 type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
@@ -1026,8 +1028,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     state.metal = no_metal
     state.heap = no_heap
     state.heap_ends = 0usize
-    state.pending_command = 0usize
-    state.pending_checked = false
+    state.pending_count = 0usize
     state.heap_count = 1usize
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
@@ -1594,6 +1595,17 @@ fn target_state(t: *Target) -> (*TargetState, err) {
     ret (state, ok)
 }
 
+fn queue_state_launch(q: *Queue) -> (*QueueState, err) {
+    let state = mem.cast[*QueueState](q.state)
+    if mem.address_of(state) == 0usize { ret (zero, InvalidHandle) }
+    lock_state(state.device)
+    if state.device.closed {
+        unlock_state(state.device)
+        ret (state, InvalidHandle)
+    }
+    ret (state, ok)
+}
+
 fn queue_state_of(state: *QueueState) -> (*QueueState, err) {
     lock_state(state.device)
     if state.device.closed {
@@ -1873,6 +1885,12 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, s
 fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y: usize, z: usize, shared_bytes: usize, ctx: *void, module_code: str, entry: str, layout: str, checked: bool) -> err {
     let device = state.device
     let a = device.arena
+    // At most METAL_PENDING launches are in flight; a full set is finished before the next goes in.
+    if device.pending_count == METAL_PENDING {
+        if metal_finish(device) { ret Lost }
+    }
+    let slot = device.pending_count
+    let fault_at = slot * 32usize
     let parameter_count = layout.len
     var over: mem.Arena = zero
     over.base = mem.cast[*u8](ctx)
@@ -1885,11 +1903,11 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
     if checked {
         var clear_at = 0usize
         while clear_at < 32usize {
-            device.heap.bytes[clear_at] = 0u8
+            device.heap.bytes[fault_at + clear_at] = 0u8
             clear_at += 1usize
         }
-        *mem.cast[*u64](&block.bytes[0usize]) = 0u64
-        *mem.cast[*u32](&device.heap.bytes[4usize]) = u32(state.serial)
+        *mem.cast[*u64](&block.bytes[0usize]) = u64(fault_at)
+        *mem.cast[*u32](&device.heap.bytes[fault_at + 4usize]) = u32(state.serial)
         offset = 8usize
     }
     var at = 0usize
@@ -1936,29 +1954,39 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
         mtl.free(block)
         ret Lost
     }
-    device.pending_command = command
-    device.pending_block = block
-    device.pending_queue = state
-    device.pending_checked = checked
+    device.pending_commands[slot] = command
+    device.pending_blocks[slot] = block
+    device.pending_queues[slot] = state
+    device.pending_checks[slot] = checked
+    device.pending_count = slot + 1usize
     state.serial += 1u64
     ret ok
 }
 
-// Waits for the launch `launch_metal` left running and reads its fault block, as the Vulkan path reads its buffer; called with the
-// device locked at every entry that could see the launch's effects.
+// Waits for the launches `launch_metal` left running, in order, and reads each one's fault block as the Vulkan path reads its
+// buffer; called with the device locked at every entry that could see their effects. True when the device failed one.
 fn metal_finish(device: *DeviceState) -> bool {
-    if device.backend != .Metal || device.pending_command == 0usize { ret false }
-    let command = device.pending_command
-    device.pending_command = 0usize
-    let waited = mtl.dispatch_wait(command)
-    mtl.free(device.pending_block)
-    // A command the device failed is `Lost`, once, at the call that waited for it (a launch used to say so itself).
-    if waited != ok { ret true }
-    if !device.pending_checked { ret false }
-    let state = device.pending_queue
-    let fault_bytes = device.heap.bytes
+    if device.backend != .Metal || device.pending_count == 0usize { ret false }
+    var failed = false
+    var slot = 0usize
+    while slot < device.pending_count {
+        let waited = mtl.dispatch_wait(device.pending_commands[slot])
+        mtl.free(device.pending_blocks[slot])
+        // A command the device failed is `Lost`, once, at the call that waited for it (a launch used to say so itself).
+        if waited != ok { failed = true }
+        if waited == ok && device.pending_checks[slot] { metal_fault(device, slot) }
+        slot += 1usize
+    }
+    device.pending_count = 0usize
+    ret failed
+}
+
+// One launch's fault block (32 bytes at slot * 32 in heap 0) into its queue's record; the first fault a queue sees is kept.
+fn metal_fault(device: *DeviceState, slot: usize) {
+    let state = device.pending_queues[slot]
+    let fault_bytes = device.heap.bytes[slot * 32usize..slot * 32usize + 32usize]
     let count = *mem.cast[*u32](&fault_bytes[0usize])
-    if count == 0u32 { ret false }
+    if count == 0u32 { ret }
     if state.fault_count == 0u32 {
         var kind: FaultKind = .Bounds
         let kind_value = fault_bytes[8usize]
@@ -1979,7 +2007,6 @@ fn metal_finish(device: *DeviceState) -> bool {
         }
     }
     state.fault_count += count
-    ret false
 }
 
 // The Metal pipeline for a kernel's module and entry, compiled the first time. The entry is `module.kernel`; the MSL
@@ -2350,7 +2377,8 @@ fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local
 // `1` to `8` a scalar's size in bytes, `?` what the argument block cannot carry yet. The
 // CPU ignores them.
 fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(opaque: *void, frame: *u8, workgroup: *u8), ctx: *void, requirements: usize, module: str, entry: str, layout: str) -> err {
-    let (state, state_error) = queue_state(q)
+    // A launch does not finish the ones before it (D5879): on Metal they stay in flight, in order, on one command queue.
+    let (state, state_error) = queue_state_launch(q)
     if state_error != ok { ret state_error }
     defer unlock_state(state.device)
     var available = CPU_CAPABILITIES
