@@ -37,13 +37,34 @@ fn profile_bit(profile: Profile) -> u8 {
 }
 
 fn fetch(a: *mem.Arena, resolve: Resolve, context: usize, index: usize, name: str, required: u8) -> err {
-    let address = resolve(a, context, name)
+    var address = resolve(a, context, name)
+    // A core entry some drivers still export only under the extension it came from (Intel's GL 4.6 has
+    // glGetnTexImageARB, not glGetnTexImage): the suffixed names are asked before the entry counts as missing.
+    if address == 0usize { address = suffixed(a, resolve, context, name, "ARB") }
+    if address == 0usize { address = suffixed(a, resolve, context, name, "KHR") }
+    if address == 0usize { address = suffixed(a, resolve, context, name, "EXT") }
     procs[index] = address
     if address == 0usize && required != 0u8 {
         missing_name = name
         ret Unsupported
     }
     ret ok
+}
+
+fn suffixed(a: *mem.Arena, resolve: Resolve, context: usize, name: str, suffix: str) -> usize {
+    var buffer: [96]u8 = zero
+    if name.len + suffix.len > buffer.len { ret 0usize }
+    var k = 0usize
+    while k < name.len {
+        buffer[k] = name[k]
+        k += 1usize
+    }
+    var s = 0usize
+    while s < suffix.len {
+        buffer[k + s] = suffix[s]
+        s += 1usize
+    }
+    ret resolve(a, context, buffer[0usize..name.len + suffix.len])
 }
 
 // Fills the table from the current context. `Unsupported` names the first entry point the

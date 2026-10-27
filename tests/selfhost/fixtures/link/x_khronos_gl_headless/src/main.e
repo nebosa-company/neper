@@ -201,6 +201,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let gl43_label = io.print("OpenGL 4.3 core: draw")
     let gl43_error = draw(a, context.Options { api: .Gl, major: 4u32, minor: 3u32 }, 20i32)
     if gl43_error != ok { let gl43_skipped = io.print(" unsupported\n") }
+    let gl46_label = io.print("OpenGL 4.6 core: draw")
+    let gl46_error = draw(a, context.Options { api: .Gl, major: 4u32, minor: 6u32 }, 30i32)
+    if gl46_error != ok { let gl46_skipped = io.print(" unsupported\n") }
+    if gl46_error != ok && gl46_error != context.Unsupported { os.exit(74i32) }
     let es_label = io.print("OpenGL ES 3.0: draw")
     let es_error = draw(a, context.Options { api: .Gles, major: 3u32, minor: 0u32 }, 40i32)
     if es_error != ok { let es_skipped = io.print(" unsupported\n") }

@@ -24,13 +24,26 @@ fn every(a: *mem.Arena, context: usize, name: str) -> usize {
     ret 4096usize
 }
 
+// Whether `name` is `entry` or `entry` with a vendor suffix: `load` asks for those too (glGetnTexImageARB on Intel).
+fn spelled(name: str, entry: str) -> bool {
+    if name.len < entry.len || !mem.eq[u8](name[0usize..entry.len], entry) { ret false }
+    let rest = name[entry.len..name.len]
+    ret rest.len == 0usize || mem.eq[u8](rest, "ARB") || mem.eq[u8](rest, "KHR") || mem.eq[u8](rest, "EXT")
+}
+
 fn without_dispatch(a: *mem.Arena, context: usize, name: str) -> usize {
-    if mem.eq[u8](name, "glDispatchCompute") { ret 0usize }
+    if spelled(name, "glDispatchCompute") { ret 0usize }
     ret 4096usize
 }
 
 fn without_clear(a: *mem.Arena, context: usize, name: str) -> usize {
-    if mem.eq[u8](name, "glClear") { ret 0usize }
+    if spelled(name, "glClear") { ret 0usize }
+    ret 4096usize
+}
+
+// Answers only the ARB spelling of glDispatchCompute: `load` takes it.
+fn suffix_only(a: *mem.Arena, context: usize, name: str) -> usize {
+    if mem.eq[u8](name, "glDispatchCompute") { ret 0usize }
     ret 4096usize
 }
 
@@ -59,6 +72,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if gl.load(a, .Gl33Core, without_clear, 0usize) != gl.Unsupported { os.exit(12i32) }
     if !mem.eq[u8](gl.missing(), "glClear") { os.exit(13i32) }
     if gl.load(a, .Gles30, without_clear, 0usize) != gl.Unsupported { os.exit(14i32) }
+    if gl.load(a, .Gl43Core, suffix_only, 0usize) != ok || !gl.present(gl.DISPATCH_COMPUTE_ENTRY) { os.exit(22i32) }
 
     if gl.load(a, .Gl46Core, every, 0usize) != ok { os.exit(15i32) }
     set_version("4.6.0 - Build 31.0.101.3962")

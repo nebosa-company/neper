@@ -43065,3 +43065,9 @@ How the GLSL emitter handles `u64` and `i64`:
 - **Division.** Signed division and remainder take 64-bit magnitudes, and the unprovable zero is a 64-bit one.
 
 Device addresses stay 32-bit offsets, and 64-bit atomics stay `Unsupported`. `x.khronos.compute` reports `Int64` only where the desktop driver lists the extension: Mesa does, Intel's GL driver (31.0.101.3962) does not, so there a 64-bit kernel is `gpu.Unsupported` at launch and the CPU runs it. `gpu_gl`'s `wide` kernel (wrapping multiply, shifts, division by a constant, `i64` `/` and `%` by a negative) runs where `Int64` is reported and is word-equal to the CPU on llvmpipe. The pinned GLSL goldens are unchanged.
+
+## D5894 — gl.load asks for an entry's ARB, KHR and EXT spellings before calling it missing
+
+Intel's GL 4.6 core context refused `gl.load(.Gl46Core)`: its driver resolves `glGetnTexImageARB` but not the core name `glGetnTexImage`. A driver may export a core entry only under the extension it came from, so `fetch` now asks for `<name>ARB`, `<name>KHR` and `<name>EXT`, in that order, before an entry counts as absent. These are the same function under another name, and the generated table is unchanged. `x_khronos_gl_load` checks both directions: a resolver that knows only `glDispatchComputeARB` satisfies GL 4.3, and one that withholds every spelling still fails it by name.
+
+With this, GL 4.6 core draws and computes on Intel (`x_khronos_gl_headless`), and llvmpipe, which stops at 4.5, reports 4.6 as unsupported. `x_khronos_gl_window` now opens GL 3.3, GL 4.3 and GLES 3.0 contexts on windows of their own, and all three pass on Intel/ANGLE and on llvmpipe under WSLg.
