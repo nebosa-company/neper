@@ -34,7 +34,6 @@ fn append_blob(output: *emit_x64.Buffer, bytes: str) -> err {
 // immediates (D330; they were 32-bit, and so was the largest arena) -- the mapping's
 // length, two bounds and the arena's capacity -- at these offsets from its start.
 fn patch_arena(output: *emit_x64.Buffer, startup: usize, arena_bytes: usize) -> err {
-    if arena_bytes == 0usize { ret ok }
     try patch_little_u64(output, startup + 7usize, arena_bytes)
     try patch_little_u64(output, startup + 68usize, arena_bytes)
     try patch_little_u64(output, startup + 126usize, arena_bytes)
@@ -539,7 +538,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
 
     try pad_to(output, code_offset)
     try append_startup(output)
-    try patch_arena(output, code_offset, builder.arena_bytes)
+    try patch_arena(output, code_offset, nir.root_arena_bytes(builder))
     let machine_start = output.count
     try emit_x64.append_bytes(output, machine.bytes[0usize..table_at])
     let runtime_start = output.count
@@ -731,7 +730,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     }
     try pad_to(output, code_offset)
     try append_startup(output)
-    try patch_arena(output, code_offset, builder.arena_bytes)
+    try patch_arena(output, code_offset, nir.root_arena_bytes(builder))
     let machine_start = output.count
     try emit_x64.append_bytes(output, machine.bytes[0usize..table_at])
     let runtime_start = output.count
