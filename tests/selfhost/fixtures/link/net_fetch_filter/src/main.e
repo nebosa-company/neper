@@ -84,6 +84,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e17 == fetch.BlockedByFilter || t5.blocked != 1usize { os.exit(24i32) }
     let (r18, e18) = fetch.fetch(&t5, request("http://ads.test/a.js", "http://live.news.test/"))
     if e18 == fetch.BlockedByFilter || t5.blocked != 1usize { os.exit(25i32) }
+    // `||host/path^` blocks only URLs under that path.
+    var cfg6 = fetch.default_config(zero)
+    let rules6 = policy.parse_filter_list(a, "||pathy.test/ads/^\n")
+    cfg6.block_hosts = rules6.domains
+    cfg6.typed_hosts = rules6.typed
+    cfg6.typed_types = rules6.types
+    if rules6.domains.len != 1usize || rules6.typed.len != 1usize { os.exit(26i32) }
+    let (c6, ce6) = fetch.client(a, cfg6, 8usize)
+    if ce6 != ok { os.exit(27i32) }
+    var t6 = c6
+    let (r19, e19) = fetch.fetch(&t6, request("http://pathy.test/ads/a.js", "http://site.test/"))
+    if e19 != fetch.BlockedByFilter || t6.blocked != 1usize { os.exit(28i32) }
+    let (r20, e20) = fetch.fetch(&t6, request("http://pathy.test/app.js", "http://site.test/"))
+    if e20 == fetch.BlockedByFilter || t6.blocked != 1usize { os.exit(29i32) }
     // With no list there is no blocking.
     let (c1, ce1) = fetch.client(a, fetch.default_config(zero), 8usize)
     if ce1 != ok { os.exit(9i32) }

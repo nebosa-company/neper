@@ -527,7 +527,7 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
                 let ti = policy.host_index(c.cfg.typed_hosts, cur.host)
                 if ti >= 0i64 && usize(ti) < c.cfg.typed_types.len {
                     let (page, pe) = url.parse(c.a, req.referrer, zero, false)
-                    hit = policy.options_allow(c.cfg.typed_types[usize(ti)], req.dest, page.host)
+                    hit = policy.options_allow(c.cfg.typed_types[usize(ti)], req.dest, page.host, cur.path)
                     if pe != ok { hit = false }
                 }
             }

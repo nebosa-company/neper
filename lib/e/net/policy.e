@@ -799,8 +799,18 @@ fn domain_list_allows(list: str, page_host: str) -> bool {
 }
 
 // Whether a rule with these `$` options covers a request of type `dest` made from `page_host`.
-fn options_allow(options: str, dest: str, page_host: str) -> bool {
-    ret type_allows(options, dest) && domain_allows(options, page_host)
+fn options_allow(options: str, dest: str, page_host: str, request_path: str) -> bool {
+    ret type_allows(options, dest) && domain_allows(options, page_host) && path_allows(options, request_path)
+}
+
+// A `path=/prefix` option (from a `||host/prefix^` rule) covers only request paths that start with the prefix.
+fn path_allows(options: str, request_path: str) -> bool {
+    let (at, found) = str.find(options, "path=")
+    if !found { ret true }
+    var rest = options[at + 5usize..]
+    let (comma, has_comma) = str.find(rest, ",")
+    if has_comma { rest = rest[0usize..comma] }
+    ret str.starts_with(request_path, rest)
 }
 
 // The index of the entry of `domains` that `host` is, or a subdomain of; -1 when none.
@@ -878,20 +888,32 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
                     }
                     k += 1usize
                 }
-                let host = trim(lower(a, line[2usize..end]))
-                if host.len > 0usize && !str.contains(host, "/") && !str.contains(host, "*") && !str.contains(host, "[") {
+                let full = trim(lower(a, line[2usize..end]))
+                // `||host/path^` limits the rule to URLs whose path starts with `/path`.
+                var host = full
+                var path_prefix = ""
+                let (slash, has_slash) = str.find(full, "/")
+                if has_slash {
+                    host = full[0usize..slash]
+                    path_prefix = full[slash..]
+                }
+                if host.len > 0usize && !str.contains(path_prefix, "*") && !str.contains(host, "*") && !str.contains(host, "[") {
                     // `$third-party` limits the rule to requests from another site.
                     if str.contains(line[end..], "$") && str.contains(line[end..], "third-party") && !str.contains(line[end..], "~third-party") { add_unique(third, &nt, host) }
                     // `$script,~image,...` limits the rule to the named request types.
                     let tail = line[end..]
                     let (dollar, has_dollar) = str.find(tail, "$")
-                    if has_dollar {
-                        let options = lower(a, tail[dollar + 1usize..])
-                        if type_options_named(options) || str.contains(options, "domain=") {
-                            typed[ntp] = host
-                            typeopts[ntp] = options
-                            ntp += 1usize
-                        }
+                    var options = ""
+                    if has_dollar { options = lower(a, tail[dollar + 1usize..]) }
+                    if path_prefix.len > 0usize {
+                        let (joined, je) = str.concat(a, options, ",path=")
+                        let (with_path, pe) = str.concat(a, joined, path_prefix)
+                        if je == ok && pe == ok { options = with_path }
+                    }
+                    if type_options_named(options) || str.contains(options, "domain=") || str.contains(options, "path=") {
+                        typed[ntp] = host
+                        typeopts[ntp] = options
+                        ntp += 1usize
                     }
                     add_unique(domains, &nd, host)
                 }
