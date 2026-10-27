@@ -2706,6 +2706,13 @@ fragment stages — and none is planned.
 |---|---|---|
 | SPIR-V | Vulkan compute | AMD, NVIDIA, Intel, Qualcomm, ARM Mali — on Windows and Linux; on macOS through the supported second-tier MoltenVK path below |
 | PTX | CUDA driver | NVIDIA only, with access to CUDA-side interop |
+| GLSL 4.30 | OpenGL 4.3 compute with `glBufferStorage`, through `x.khronos.compute` | Any OpenGL 4.4-class driver on Windows and Linux, where Vulkan is absent or unwanted (D5888, D5889) |
+
+GLSL has no pointers, so the GL backend uses Metal's model (D5838): one heap buffer that every device buffer is
+carved from, with a device address being a byte offset into it. A `--gpu glsl` build embeds each kernel's GLSL beside its
+SPIR-V. `e.gpu` reaches it as `Backend.Gl` once `x.khronos.compute.install()` has run, because `e.*` does not import
+`x.*`. Whether f32 denormals survive is the driver's choice under OpenGL, so the device reports `DenormPreserve` or `Ftz`
+from a probe.
 
 The floors: **Vulkan 1.2** with the `bufferDeviceAddress` and `scalarBlockLayout`
 features, which is what gives a device slice a real address (Device types and
@@ -4205,7 +4212,7 @@ One binary, named `neper`, does everything — compile, format, index, disassemb
 There is no separate build system and no package manager.
 
 ```
-neper build [<file.e>|DIR] [--target ARCH-OS|spv|ptx] [--gpu spv,ptx|none] [--cpu LEVEL]...
+neper build [<file.e>|DIR] [--target ARCH-OS|spv|ptx] [--gpu spv,ptx,glsl|none] [--cpu LEVEL]...
                      [--release] [--unchecked] [--g] [--linker=own|system] [--arena SIZE]
                      [--libpath DIR] [--link LIB] [-j N] [-o PATH]
 neper run [<file.e>|DIR] [the build options] [-- ARGS...]

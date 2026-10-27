@@ -3211,6 +3211,13 @@ khronos_present_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$khronos_present_written" = 'executable written' ]
 chmod +x "$test_build/x-khronos-gl-present-selfhost"
 "$test_build/x-khronos-gl-present-selfhost"
+# e.gpu's `.Gl` backend (D5888, D5889): built with `--gpu glsl`, x.khronos.compute installed, and every word of saxpy (ftz
+# where the driver flushes denormals), racing u8/i16 stores, signed division by negatives and a 2-D grid equal to the CPU
+# backend's; a checked overrun comes back as a Bounds fault.
+gpu_gl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-selfhost" --gpu glsl)
+[ "$gpu_gl_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-selfhost"
+"$test_build/gpu-gl-selfhost"
 gl_triangle_written=$($test_build/neper-self emit-executable "$repo/examples/gl_triangle.e" "$repo" x64 linux "$test_build/gl-triangle-selfhost")
 [ "$gl_triangle_written" = 'executable written' ]
 chmod +x "$test_build/gl-triangle-selfhost"

@@ -3675,6 +3675,14 @@ $khronosPresentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $khronosPresentWritten -ne 'executable written') { throw 'x_khronos_gl_present emission failed' }
 & $khronosPresentPath
 if ($LASTEXITCODE -ne 0) { throw "the GL presenter answered wrongly: exit $LASTEXITCODE" }
+# e.gpu's `.Gl` backend (D5888, D5889): built with `--gpu glsl`, x.khronos.compute installed, and every word of saxpy (ftz
+# where the driver flushes denormals), racing u8/i16 stores, signed division by negatives and a 2-D grid equal to the CPU
+# backend's; a checked overrun comes back as a Bounds fault.
+$gpuGlPath = Join-Path $testBuild 'gpu-gl-selfhost.exe'
+$gpuGlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl\src\main.e') $repo 'x64' 'windows' $gpuGlPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlWritten -ne 'executable written') { throw 'gpu_gl emission failed' }
+& $gpuGlPath
+if ($LASTEXITCODE -ne 0) { throw "e.gpu on OpenGL answered wrongly: exit $LASTEXITCODE" }
 $glTrianglePath = Join-Path $testBuild 'gl-triangle-selfhost.exe'
 $glTriangleWritten = & $compiler emit-executable (Join-Path $repo 'examples\gl_triangle.e') $repo 'x64' 'windows' $glTrianglePath
 if ($LASTEXITCODE -ne 0 -or $glTriangleWritten -ne 'executable written') { throw 'examples/gl_triangle.e emission failed' }

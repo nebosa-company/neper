@@ -108,14 +108,13 @@ T045	tooling	0	277	OpenGL verify 1 (verify-only): binding fixtures on Windows an
 L178	library	0.75	1188	OpenGL 7: e.ui presents through GL	Done 2026-10-27 (D5887): e.ui.window.Presenter and set_presenter, with x.khronos.present.attach as the GL presenter (a hook, because e.* cannot import x.*).
 L179	library	0	229	OpenGL 8: WebGL2 presentation in the browser host	Design docs/opengl-plan.md, D5879.
 T046	tooling	0	123	OpenGL verify 2 (verify-only): ui fixtures presented through GL	Verify-only turn, no edits.
-C214	compiler	0	225	OpenGL 9: the glsl GPU target in the compiler	Design docs/opengl-plan.md, D5878.
-C215	compiler	0	275	OpenGL 10: src/glsl.e, the GLSL 4.30 emitter	Design docs/opengl-plan.md, D5878.
-C216	compiler	0	306	OpenGL 11: narrow and half types in GLSL	Design docs/opengl-plan.md, D5882.
-C217	compiler	0	333	OpenGL 12: exact float in GLSL	Design docs/opengl-plan.md, D5882.
-L180	library	0	403	OpenGL 13: the e.gpu.gl runtime, Backend.Gl	Design docs/opengl-plan.md, D5878, D5881.
-L181	library	0	315	OpenGL 14: GPU capabilities from GL extensions	Design docs/opengl-plan.md, D5882.
+C215	compiler	0.75	950	OpenGL 10: src/glsl.e, the GLSL 4.30 emitter	Done 2026-10-27 (D5888): src/glsl.e, ported from msl.e.
+C216	compiler	0.6	749	OpenGL 11: narrow and half types in GLSL	Done 2026-10-27 (D5888): u8, i8, u16 and i16 load through bitfieldExtract (sign-extended for the signed ones), store into heap and tg through atomicAnd and atomicOr on the word and into the frame thro
+C217	compiler	0.35	797	OpenGL 12: exact float in GLSL	Done 2026-10-27 (D5888, D5889): every f32 variable is precise, so no multiply-add is fused, and gpu_gl's saxpy is word-equal to the CPU.
+L180	library	0.75	1231	OpenGL 13: the e.gpu.gl runtime, Backend.Gl	Done 2026-10-27 (D5889): Backend.Gl over e.gpu's shared heap-driver table, with x.khronos.compute.install() as the GL driver (e.* cannot import x.*).
+L181	library	0.3	654	OpenGL 14: GPU capabilities from GL extensions	Done 2026-10-27 (D5889): Int8 and Int16, plus DenormPreserve or Ftz from the probe at open;
 C218	compiler	0	221	OpenGL 15: the GLES 3.1 profile	Design docs/opengl-plan.md, D5879, D5884.
-T047	tooling	0	214	OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl	Verify-only turn, no edits.
+T047	tooling	0.2	392	OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl	So far (2026-10-27): gpu_gl is word-equal to the CPU on Intel Iris Xe (Windows) and Mesa llvmpipe (Linux in WSL).
 T048	tooling	0	122	OpenGL verify 4 (verify-only): full suites for the shared compiler change	Verify-only turn, no edits.
 C219	compiler	0	417	OpenGL 16: the Android target, executable form	Design docs/opengl-plan.md, D5884.
 C220	compiler	0	214	OpenGL 17: the Android target, app form (needs @export)	Design docs/opengl-plan.md, D5884.

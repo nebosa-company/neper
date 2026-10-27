@@ -285,6 +285,8 @@ type Graph = struct {
     workers_admitted: usize,
     // The instruction level the build was given (D765), for the manifest's `options`.
     cpu_level: usize,
+    // (D5888) `--gpu` named `glsl`: each kernel's embedded module also carries GLSL for an OpenGL device.
+    gpu_glsl: bool,
     // What every worker arena of every phase committed, summed (D339).
     worker_bytes: usize,
     // (D1666) Whether each module's tokens and tree get a reservation of their own:

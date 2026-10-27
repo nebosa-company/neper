@@ -440,37 +440,33 @@ Design docs/opengl-plan.md, D5879. Acceptance: when WebGL2 is available, lib/was
 
 Verify-only turn, no edits. Needs L178. Run every ui_* fixture with present: .Gl on Windows and Linux and report the tails.
 
-### C214 — OpenGL 9: the glsl GPU target in the compiler (0%)
+### C215 — OpenGL 10: src/glsl.e, the GLSL 4.30 emitter (75%)
 
-Design docs/opengl-plan.md, D5878. Acceptance: --gpu spv,glsl; a K$glsl section next to K$spirv; target.Arch.Glsl; spec §10's Platforms table and §13 amended; a build that does not ask for glsl is byte-identical to today's.
+Done 2026-10-27 (D5888): src/glsl.e, ported from msl.e. Kernels become one GLSL 4.30 shader each over uint word arrays (heap, frame, shared) with byte addressing and bit-casts, using an if-chain dispatch, Metal's launch ABI and its fault block, and emulated signed division. Integer divisions get an unprovable zero added to both operands, the workaround for two Intel miscompiles. The output compiles on Intel and Mesa, and gpu_gl's kernels (saxpy, narrow stores, signed div/rem, 2-D ids, a bounds fault) are word-equal to the CPU. Remaining: helper calls (Call is Unsupported), 64-bit values, subgroups, and pinning saxpy, loops and control flow in tests/conformance/glsl. Design docs/opengl-plan.md, D5878. Needs C214. Acceptance: ported from msl.e's heap-offset state machine; every access goes through uint heap[] with bit-casts; helpers are inlined; the launch ABI is Metal's; saxpy, loops and control flow are pinned in tests/conformance/glsl.
 
-### C215 — OpenGL 10: src/glsl.e, the GLSL 4.30 emitter (0%)
+### C216 — OpenGL 11: narrow and half types in GLSL (60%)
 
-Design docs/opengl-plan.md, D5878. Needs C214. Acceptance: ported from msl.e's heap-offset state machine; every access goes through uint heap[] with bit-casts; helpers are inlined; the launch ABI is Metal's; saxpy, loops and control flow are pinned in tests/conformance/glsl.
+Done 2026-10-27 (D5888): u8, i8, u16 and i16 load through bitfieldExtract (sign-extended for the signed ones), store into heap and tg through atomicAnd and atomicOr on the word and into the frame through bitfieldInsert, and are masked or sign-extended back after every operation. gpu_gl's u8 and i16 stores into neighbouring bytes of the same words are word-exact on Intel and llvmpipe. Remaining: f16 and bf16 (packHalf2x16) are Unsupported. Design docs/opengl-plan.md, D5882. Needs C215 (same file, so one at a time). Acceptance: u8, i8, u16, i16, f16 and bf16 loads via bitfieldExtract; stores via atomicAnd/atomicOr on the containing word; packHalf2x16 for f16; a fixture where neighbouring invocations race to store narrow values is word-exact.
 
-### C216 — OpenGL 11: narrow and half types in GLSL (0%)
+### C217 — OpenGL 12: exact float in GLSL (35%)
 
-Design docs/opengl-plan.md, D5882. Needs C215 (same file, so one at a time). Acceptance: u8, i8, u16, i16, f16 and bf16 loads via bitfieldExtract; stores via atomicAnd/atomicOr on the containing word; packHalf2x16 for f16; a fixture where neighbouring invocations race to store narrow values is word-exact.
+Done 2026-10-27 (D5888, D5889): every f32 variable is precise, so no multiply-add is fused, and gpu_gl's saxpy is word-equal to the CPU. x.khronos.compute probes denormals at open (the smallest f32 denormal doubled), and the device reports DenormPreserve (llvmpipe) or Ftz (Intel), so a non-ftz float kernel is Unsupported where the driver flushes. Remaining: correctly rounded f32 division and square root (both Unsupported today, so the CPU runs those kernels). Design docs/opengl-plan.md, D5882. Needs C216 (same file). Acceptance: precise on every float operation; f32 divide and sqrt correctly rounded by an integer-residual correction (integer emulation of the divide is the fallback); an ftz probe when the device opens feeds caps(ftz); every float fixture is word-equal to the CPU backend.
 
-### C217 — OpenGL 12: exact float in GLSL (0%)
+### L180 — OpenGL 13: the e.gpu.gl runtime, Backend.Gl (75%)
 
-Design docs/opengl-plan.md, D5882. Needs C216 (same file). Acceptance: precise on every float operation; f32 divide and sqrt correctly rounded by an integer-residual correction (integer emulation of the divide is the fallback); an ftz probe when the device opens feeds caps(ftz); every float fixture is word-equal to the CPU backend.
+Done 2026-10-27 (D5889): Backend.Gl over e.gpu's shared heap-driver table, with x.khronos.compute.install() as the GL driver (e.* cannot import x.*). The device is a headless GL 4.3 core context with glBufferStorage. The heap (256 MiB, as Metal's) and the argument block are persistently and coherently mapped SSBOs; a launch dispatches, then glMemoryBarrier(ALL) and a fence, waited on with glClientWaitSync on the next call into the device (D5875's semantics). Metal's fault block is reused, and pipelines are cached per module and entry in-process. gpu_gl passes on Intel Iris Xe and Mesa llvmpipe and is in both suites. Remaining: a worker thread that owns the context (D5881; today the opening thread must make every call), sizing the heap from GL_MAX_SHADER_STORAGE_BLOCK_SIZE, and a glGetProgramBinary cache across runs. Design docs/opengl-plan.md, D5878, D5881. Needs L173, L174 and C215. Acceptance: a headless context on a worker thread the device owns; a heap SSBO sized from GL_MAX_SHADER_STORAGE_BLOCK_SIZE, capped at 256 MiB; the argument block; glDispatchCompute followed by glMemoryBarrier; the fault block; asynchronous launch through glFenceSync with D5875's semantics; a program cache through glGetProgramBinary.
 
-### L180 — OpenGL 13: the e.gpu.gl runtime, Backend.Gl (0%)
+### L181 — OpenGL 14: GPU capabilities from GL extensions (30%)
 
-Design docs/opengl-plan.md, D5878, D5881. Needs L173, L174 and C215. Acceptance: a headless context on a worker thread the device owns; a heap SSBO sized from GL_MAX_SHADER_STORAGE_BLOCK_SIZE, capped at 256 MiB; the argument block; glDispatchCompute followed by glMemoryBarrier; the fault block; asynchronous launch through glFenceSync with D5875's semantics; a program cache through glGetProgramBinary.
-
-### L181 — OpenGL 14: GPU capabilities from GL extensions (0%)
-
-Design docs/opengl-plan.md, D5882. Needs L180. Acceptance: Float64 from ARB_gpu_shader_fp64, Int64 from ARB_gpu_shader_int64, subgroups from KHR_shader_subgroup, 32-bit atomics only, and the shared-memory and workgroup limits; a missing capability is gpu.Unsupported at launch, naming the kernel and the capability.
+Done 2026-10-27 (D5889): Int8 and Int16, plus DenormPreserve or Ftz from the probe at open; a kernel needing anything else is gpu.Unsupported at launch through e.gpu's existing requirement check. Remaining: Float64, Int64 and subgroups from their extensions (which also need C215 to emit them), and the shared-memory and workgroup limits. Design docs/opengl-plan.md, D5882. Needs L180. Acceptance: Float64 from ARB_gpu_shader_fp64, Int64 from ARB_gpu_shader_int64, subgroups from KHR_shader_subgroup, 32-bit atomics only, and the shared-memory and workgroup limits; a missing capability is gpu.Unsupported at launch, naming the kernel and the capability.
 
 ### C218 — OpenGL 15: the GLES 3.1 profile (0%)
 
 Design docs/opengl-plan.md, D5879, D5884. Needs C217 and L181. Acceptance: #version 310 es with highp everywhere; no doubles; the heap sized up from the 128 MiB ES floor; the same fixtures pass on Mesa's GLES through EGL.
 
-### T047 — OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl (0%)
+### T047 — OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl (20%)
 
-Verify-only turn, no edits. Needs C218. Run every gpu_* fixture on Backend.Gl with the Windows driver, and on Linux llvmpipe through both GL and GLES; each must be word-equal to the CPU backend. Report the results.
+So far (2026-10-27): gpu_gl is word-equal to the CPU on Intel Iris Xe (Windows) and Mesa llvmpipe (Linux in WSL). The other gpu_* fixtures still launch only on .Cpu and .Vulkan. Verify-only turn, no edits. Needs C218. Run every gpu_* fixture on Backend.Gl with the Windows driver, and on Linux llvmpipe through both GL and GLES; each must be word-equal to the CPU backend. Report the results.
 
 ### T048 — OpenGL verify 4 (verify-only): full suites for the shared compiler change (0%)
 
@@ -1833,3 +1829,7 @@ Closed 2026-10-27 (D5885, D5886): gl.load(profile, resolve, context) fills the t
 ### L177 — OpenGL 6: samples and headless fixtures
 
 Closed 2026-10-27 (D5886): examples/gl_triangle.e draws a colour-blended triangle with GL 3.3 core or, with --es, GLES 3.0 shaders, and screenshots were taken on Windows through WGL and ANGLE. x_khronos_gl_headless reads back a triangle with glReadPixels: interior and exterior pixels that every conforming driver agrees on, plus the whole 32x32 image against an FNV-1a golden on llvmpipe. It also checks a compute shader's SSBO. It passes on Mesa 25.2.8 llvmpipe in WSL, on Intel Iris Xe and on ANGLE D3D11. The fixtures and the example (3 frames) are registered in run.ps1 and run.sh and pass check_suite_parity. The full suites were not run here; each was run on its own on both hosts.
+
+### C214 — OpenGL 9: the glsl GPU target in the compiler
+
+Closed 2026-10-27 (D5888): the self-hosted compiler takes --gpu LIST (spv, ptx, glsl, none; any other item is no build), and Graph.gpu_glsl carries it into lowering. With glsl, each kernel's embedded module string gets ';' and its GLSL in hex after the SPIR-V; the launcher cuts there, and a Vulkan launch from such a build still passes (gpu_vulkan_loop, gpu_vulkan_float, gpu_vulkan_sync). The option is bit 55 of the compiler identity (OPTIONS_MASK now 55 bits). There is no target.Arch.Glsl and no K$glsl: GLSL is never a target of its own. Spec §10 gained the GL row and §13 gained --gpu glsl. Without the flag the output is unchanged: the saxpy SPIR-V golden is byte-equal and nothing follows the module. The self-hosted compiler rebuilds itself byte for byte.

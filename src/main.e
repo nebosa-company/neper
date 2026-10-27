@@ -783,7 +783,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu") || same(flag, "--subgroup-width") || same(flag, "--gpu-inventory")
+    ret same(flag, "--gpu") || same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu") || same(flag, "--subgroup-width") || same(flag, "--gpu-inventory")
 }
 
 // `--cpu LEVEL` (D765): section 13's x64 levels, `x64-v1` the SSE2 baseline the build
@@ -794,6 +794,36 @@ fn cpu_level_of(spelling: str) -> usize {
     if same(spelling, "x64-v2") { ret 2usize }
     if same(spelling, "x64-v3") { ret 3usize }
     ret 0usize
+}
+
+// `--gpu LIST` (D5888): comma-separated GPU targets from `spv`, `ptx`, `glsl` and `none`.
+// Only `glsl` changes what is written today: each kernel's module carries GLSL too.
+fn gpu_list_ok(list: str) -> bool {
+    var start = 0usize
+    var at = 0usize
+    while at <= list.len {
+        if at == list.len || list[at] == 44u8 {
+            let item = list[start..at]
+            if !same(item, "spv") && !same(item, "ptx") && !same(item, "glsl") && !same(item, "none") { ret false }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret true
+}
+
+fn gpu_glsl_flag(args: []str) -> bool {
+    let list = string_flag(args, "--gpu")
+    var start = 0usize
+    var at = 0usize
+    while at <= list.len {
+        if at == list.len || list[at] == 44u8 {
+            if same(list[start..at], "glsl") { ret true }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret false
 }
 
 fn cpu_level_flag(args: []str) -> usize {
@@ -893,10 +923,11 @@ fn flags_known(args: []str) -> bool {
             if !size_ok { ret false }
             at += 1usize
         } else {
-            if same(args[at], "--project") || same(args[at], "--overlay") || same(args[at], "--cpu") || same(args[at], "--gpu-inventory") {
+            if same(args[at], "--project") || same(args[at], "--overlay") || same(args[at], "--cpu") || same(args[at], "--gpu-inventory") || same(args[at], "--gpu") {
                 if at + 1usize >= args.len { ret false }
                 // A level the build does not have is no build (D765).
                 if same(args[at], "--cpu") && cpu_level_of(args[at + 1usize]) == 0usize { ret false }
+                if same(args[at], "--gpu") && !gpu_list_ok(args[at + 1usize]) { ret false }
                 at += 1usize
             } else {
                 // `-j N` (D331): a worker count from one up; `--inline-cap N` (D348): a
@@ -8701,8 +8732,9 @@ fn artifact_identity(a: *mem.Arena, old: []const u8, old_error: err, text_now: s
     ret (3u8, true)
 }
 
-// The identity below its options byte (D431): CRC-32C in the low word, size above.
-const OPTIONS_MASK: usize = 72057594037927935usize
+// The identity below its options (D431): CRC-32C in the low word, size above, up to bit 54; bit 55 is
+// `--gpu glsl` (D5888) and the top byte the other options.
+const OPTIONS_MASK: usize = 36028797018963967usize
 
 fn artifact_worker_entry(w: *ArtifactWorker) {
     var at = 0usize
@@ -9028,6 +9060,7 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
 // cannot find or read itself that way leaves zero, which compares as nothing -- the
 // behaviour before the field.
 fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str, args: []str) {
+    loaded.gpu_glsl = gpu_glsl_flag(args)
     if self_path.len == 0usize { ret }
     let (self_bytes, self_error) = source.load(a, self_path)
     if self_error != ok { ret }
@@ -9046,7 +9079,10 @@ fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str, 
     if options > 63usize { options = 63usize }
     options += (cpu_level_flag(args) - 1usize) * 64usize
     loaded.cpu_level = cpu_level_flag(args)
-    loaded.compiler_identity = ((self_crc | (self_bytes.len << 32usize)) & OPTIONS_MASK) | (options << 56usize)
+    // (D5888) Bit 55, below the options byte, is `--gpu glsl`: those kernels' modules carry GLSL as well.
+    var glsl_bit = 0usize
+    if loaded.gpu_glsl { glsl_bit = 36028797018963968usize }
+    loaded.compiler_identity = ((self_crc | (self_bytes.len << 32usize)) & OPTIONS_MASK) | glsl_bit | (options << 56usize)
 }
 
 fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: *graph.Graph, args: []str, on: bool, release: bool, unchecked: bool) -> err {

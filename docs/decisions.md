@@ -42988,3 +42988,40 @@ Checked here:
 `x_khronos_gl_present` shows BGRA patterns at 64x48, 96x72 and 128x96 (one logical frame at scales 1.0, 1.5 and 2.0) in a 160x120 window through GL 3.3 and GLES 3.0. It reads every pixel of the back buffer before the swap, including the black margin, and compares them bit for bit. It passes on Intel through WGL, ANGLE D3D11 and Mesa llvmpipe. The controls gallery (`examples/ui/main.e --gl` / `--gles`) runs through the presenter, and its sampled client pixels equal the software path's.
 
 The whole frame is uploaded on every present: `e.ui.app` does not report damage to the window yet, so a damage-only upload through two PBOs waits for that.
+
+## D5888 — `--gpu glsl`: GLSL after the SPIR-V, from src/glsl.e
+
+The self-hosted compiler now takes `--gpu LIST`: comma-separated items from `spv`, `ptx`, `glsl` and `none`; any other item is not a build. Only `glsl` changes the output. With it, each kernel's embedded module string (`[!]<identity>:<hex SPIR-V>`) gets `;` and the hex of the same kernels as GLSL 4.30 appended. A kernel the SPIR-V emitter could not write keeps an empty module before the `;`. The launcher cuts at the `;`: Vulkan and Metal take what is before it, a GL device what is after. `Graph.gpu_glsl` carries the flag. There is no `target.Arch.Glsl` and no `K$glsl`, as C214 first proposed: GLSL is never a target of its own, only text that rides beside a kernel's SPIR-V. The option is bit 55 of the compiler identity, so a cache never mixes the two kinds of artifact. To make room, `OPTIONS_MASK` now keeps 55 bits and gives up the size's bit 23.
+
+`src/glsl.e` ports `msl.e` to GLSL. GLSL has no pointers and no byte access, so every place a value lives is a `uint` word array addressed in bytes: `heap`, an SSBO for device memory; `fr`, the invocation's frame; and `tg`, the shared block.
+- **Loads.** Four-byte values are words. One- and two-byte values are `bitfieldExtract`s.
+- **Narrow stores.** In `heap` and `tg` they are `atomicAnd` and `atomicOr` on the word, so neighbouring invocations' bytes survive. In `fr` they are a `bitfieldInsert`.
+- **Floats** are `precise`, so a multiply and an add are never fused.
+- **Narrowing.** A narrow integer is masked or sign-extended back after every operation.
+- **Signed division and remainder** are taken from unsigned magnitudes, because GLSL leaves negative operands undefined.
+- **Shaders.** One shader per kernel follows a `//entry:module_kernel` line, with `local_size` from `@gpu(X, Y, Z)`.
+- **Dispatch.** The dispatch is a chain of `if (pc == N)` blocks.
+- **Unsupported.** 64-bit values, `f64`, subgroups, helper calls, atomic orders stronger than relaxed, and exact float division and square root (C217) are `Unsupported`, so the CPU runs those kernels.
+
+A builtin's field address carries the component's byte offset (4 for `.y`), not its index. `msl.e` multiplies it by four again, which looks like the same latent bug for `.y` and `.z`. It is left alone here, because no Mac is at hand to check.
+
+Intel's GL compiler (Iris Xe, 31.0.101.3962) miscompiled two integer divisions:
+- a checked signed multiply's `|a * b| / |a|`, taken as exact and folded wrongly;
+- an unsigned division by a constant 7, which answered 0.
+
+Both dividend and divisor of every integer division and remainder therefore get `uint(gl_NumWorkGroups.z == 0u)` added: a zero the compiler cannot prove. llvmpipe was right either way. The emitted GLSL compiles and links on Intel and Mesa. The self-hosted compiler rebuilds itself byte for byte, and the SPIR-V golden (`tests/conformance/spirv/saxpy.spv`) is unchanged.
+
+## D5889 — e.gpu's heap backends share one driver table; x.khronos.compute is GL's
+
+Metal's backend already worked over one host-visible heap whose ranges are the buffers (D5838). The GL backend is the same model, so `e.gpu` gains `Backend.Gl` and a `HeapDriver` table: `available`, `name`, `open`, `close`, `buffer`, `free`, `compile`, `destroy`, `dispatch_begin`, `dispatch_wait` and `capabilities`. Metal's table is `e.gpu.metal`'s own functions. GL's is set by `install_gl`, which `x.khronos.compute.install()` calls, because `e.*` cannot import `x.*`. Every place that said `.Metal` now asks `heap_backend`, and the GL backend reuses the Metal launcher, fault block, carving and pipeline cache unchanged. Metal's own behaviour is unchanged; a GL device closing waits for its pending launch.
+
+`x.khronos.compute` works as follows:
+- **Device.** A headless GL 4.3 core context, which needs `glBufferStorage`.
+- **Buffers.** The heap and each argument block are SSBOs mapped persistently and coherently.
+- **Kernels.** Each is compiled from the shader after its `//entry:` line.
+- **Launch.** Binds the block at binding 0 and the heap at binding 1, dispatches, then `glMemoryBarrier(ALL)`, a fence and a flush. The wait is `glClientWaitSync`.
+- **Capabilities.** Int8 and Int16, plus what a probe at `open` finds: the smallest f32 denormal doubled comes back as 2 (`DenormPreserve`) or 0 (`Ftz`). Intel flushes and llvmpipe keeps them, so on Intel a float kernel needs `ftz` to run.
+
+`glBufferStorage` without data leaves the bytes undefined, so the probe writes every byte it reads. The context is current on the opening thread, and every call must come from that thread (the D5881 worker thread is the recorded upgrade).
+
+`gpu_gl` (built with `--gpu glsl`) runs saxpy, u8 and i16 stores racing their neighbours, signed `/` and `%` by a negative divisor, and a 2-D grid's ids. Every word equals the CPU backend's on Intel Iris Xe (the `ftz` saxpy) and on Mesa llvmpipe (the plain one), and a checked overrun comes back as a `Bounds` fault. The CPU and Vulkan fixtures (`gpu_cpu`, `gpu_fault_bounds`, `gpu_devices`, `gpu_shared`, `gpu_ftz_ops`, `gpu_present`, `gpu_vulkan_*`) still pass, including Vulkan launches from a `--gpu glsl` build.

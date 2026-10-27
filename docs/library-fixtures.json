@@ -2463,6 +2463,7 @@
     "gpu_frame_many",
     "gpu_ftz_ops",
     "gpu_gaps",
+    "gpu_gl",
     "gpu_inventory",
     "gpu_launch_facts",
     "gpu_present",
