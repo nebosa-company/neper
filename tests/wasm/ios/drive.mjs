@@ -55,6 +55,7 @@ try {
   }
   await shot('typed-hello')
   await web()
+  console.log('page events after typing:', (await browser.execute(() => document.querySelector('pre:last-of-type')?.textContent ?? '')).replace(/\n/g, ' | '))
   check(await until(async () => /name hello\n/.test(await stdout()), 8000), 'typing hello reaches the program', (await stdout()).slice(-60).replace(/\n/g, '|'))
 
   await browser.switchContext('NATIVE_APP')
