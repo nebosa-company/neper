@@ -10,7 +10,7 @@ const check = (ok, what, detail = '') => { if (!ok) failures++; console.log(`${o
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const browser = await remote({
-  hostname: '127.0.0.1', port: 4723, logLevel: 'error',
+  hostname: '127.0.0.1', port: 4723, logLevel: 'error', connectionRetryTimeout: 240000, connectionRetryCount: 1,
   capabilities: {
     platformName: 'iOS', browserName: 'Safari',
     'appium:automationName': 'XCUITest', 'appium:udid': process.env.UDID, 'appium:platformVersion': process.env.IOS_VERSION,
