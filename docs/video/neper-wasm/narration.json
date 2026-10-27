@@ -1,0 +1,54 @@
+{
+  "voice": "Microsoft George",
+  "note": "Local Windows voice. Neper is spelled Nee-per for the synthesizer only; captions use the real spelling. cueSeconds is each scene's spoken length, so the on-screen timings in scenes.html (seconds into the speech) follow the voice.",
+  "scenes": [
+    {
+      "id": "hook",
+      "caption": "Compiling to WebAssembly usually adds a toolchain. Neper's own compiler writes the module itself, from the same intermediate representation as its native back ends: no LLVM, no Emscripten, no separate linker.",
+      "say": "Compiling to WebAssembly usually adds a toolchain: a back end such as L L V M, a linker, a loader. Nee-per's own compiler writes the module itself, from the same intermediate representation as its native back ends. No L L V M. No Emscripten. No separate linker.",
+      "cueSeconds": 18.86
+    },
+    {
+      "id": "hello",
+      "caption": "One command: emit-executable, target wasm32 wasi. A hello world is 18,250 bytes, written in about 400 milliseconds. Node runs it. Nothing else was installed.",
+      "say": "One command. Emit executable, target wasm thirty-two wasi. A hello world is eighteen thousand two hundred fifty bytes, written in about four hundred milliseconds. Node runs it. Nothing else was installed.",
+      "cueSeconds": 14.54
+    },
+    {
+      "id": "inside",
+      "caption": "Inside, it is a whole-program emitter. Every function comes out structured, with loops and blocks and no goto. A pointer stays eight bytes in memory, so layouts and arithmetic match x64. What WASI lacks comes through a small host interface: sockets, a poller, processes, threads, system information.",
+      "say": "Inside, it is a whole-program emitter. Every function comes out structured, with loops and blocks and no go-to. A pointer stays eight bytes in memory, so layouts and arithmetic match x sixty-four. What wasi lacks comes through a small host interface: sockets, a poller, processes, threads, and system information.",
+      "cueSeconds": 20.99
+    },
+    {
+      "id": "checked",
+      "caption": "It is checked against the native build. A sweep compiles every fixture twice, runs both, and compares exit status, output and errors. 1,075 of 1,142 matched at the last full count in the threaded sweep; each difference is written down with its cause.",
+      "say": "It is checked against the native build. A sweep compiles every fixture twice, runs both, and compares exit status, output, and errors. In the threaded sweep, one thousand seventy-five of one thousand one hundred forty-two matched at the last full count. Each difference is written down with its cause.",
+      "cueSeconds": 18.24
+    },
+    {
+      "id": "compiler",
+      "caption": "The hardest test is the compiler itself. As WebAssembly it is 4.7 MB and 3,330 functions. Under Node it wrote 2,266 executables, and 2,196 are byte for byte the native compiler's. It also compiles itself to the same bytes, in 5.6 seconds against 1.6 native.",
+      "say": "The hardest test is the compiler itself. As WebAssembly it is four point seven megabytes and three thousand three hundred thirty functions. Under Node it wrote two thousand two hundred sixty-six executables, and two thousand one hundred ninety-six are byte for byte the native compiler's. It also compiles itself to the same bytes, in five point six seconds against one point six native.",
+      "cueSeconds": 22.44
+    },
+    {
+      "id": "browser",
+      "caption": "In a browser the same widgets draw into a canvas. On an Android phone, a tapped suggestion turned out to be one delete for the whole word, so the window now reads the edit from the text field. On an iPhone simulator, typing, Backspace and the touch-and-hold toolbar work.",
+      "say": "In a browser, the same widgets draw into a canvas. On an Android phone, a tapped suggestion turned out to be one delete for the whole word, so the window now reads the edit from the text field. On an iPhone simulator, typing, backspace, and the touch and hold toolbar work.",
+      "cueSeconds": 16.97
+    },
+    {
+      "id": "limits",
+      "caption": "The limits: not yet on a real iPhone, no composing keyboards, no selection handles. A page has no sockets or processes, and a module gets at most four gigabytes.",
+      "say": "The limits. Not yet on a real iPhone. No composing keyboards. No selection handles. A page has no sockets or processes, and a module gets at most four gigabytes.",
+      "cueSeconds": 12.56
+    },
+    {
+      "id": "close",
+      "caption": "Neper. One compiler. Every target. Now WebAssembly too.",
+      "say": "Nee-per. One compiler. Every target. Now WebAssembly too.",
+      "cueSeconds": 5.97
+    }
+  ]
+}
