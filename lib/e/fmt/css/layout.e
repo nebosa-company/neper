@@ -5827,7 +5827,8 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if !row { main_len = ks.height }
         let (mv, has_m) = resolve_len(main_len, main_def)
         var spec_main = -1.0f64
-        if main_len.kind == .Px && has_m {
+        let fb_content = fb.kind == .MaxContent
+        if main_len.kind == .Px && has_m && !fb_content {
             if row { spec_main = to_content_w(l, id, mv) } else { spec_main = to_content_h(l, id, mv) }
         }
         if fb.kind == .Px && has_fb {

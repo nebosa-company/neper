@@ -817,7 +817,7 @@ fn apply_flex(ap: *Ap, prop: str, v: str) -> bool {
     }
     if str.eq(prop, "flex-basis") {
         if str.eq(low, "content") {
-            s.flex_basis = len_auto()
+            s.flex_basis = Len { kind: .MaxContent, px: 0.0f64, pct: 0.0f64 }
             ret true
         }
         let (l, good) = parse_len(ap.c, low, s.font_size, A_AUTO | A_CONTENT | A_PERCENT)
