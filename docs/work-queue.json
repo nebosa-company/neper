@@ -1126,17 +1126,6 @@
       "evidence": "Needs a device. Prepared: `node scripts/serve-wasm.mjs --isolated --host 0.0.0.0` and open /tests/wasm/browser/phone_probe.html on the phone (a plain field that logs key, composition, paste, visualViewport and scroll events; Report copies the log) to answer checks 1-5 before touching ui_counter. D5821 lists what the mobile preset did and did not show (synthetic composition events, the textarea at 16 px not scrolling or zooming). Serve tests/wasm/browser/ui_counter.html over HTTPS or a LAN address with scripts/serve-wasm.mjs --isolated (a secure context is needed for crossOriginIsolated and the clipboard) and check on iOS Safari and Android Chrome: (1) tapping the Name field opens the keyboard and neither zooms nor scrolls the page; (2) typed letters, Backspace and Enter arrive once each; (3) composition with a CJK keyboard (pinyin or kana) delivers the committed text once, with no duplicate after compositionend and none while composing; (4) the clipboard: paste from the system menu reaches the program, and Ctrl+C in the program writes navigator.clipboard, with the permission prompt answered either way; (5) visualViewport resizes when the keyboard opens and the canvas stays usable (decide whether the window follows it); (6) a physical keyboard on a tablet still works. Fix what fails in lib/wasm/window.js; window_visible is separate."
     },
     {
-      "id": "L174",
-      "category": "library",
-      "group": "OpenGL",
-      "order": 276,
-      "title": "OpenGL 3: EGL contexts on Linux, windowed and headless",
-      "score": 0.85,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "GL 4.3 and GLES 3.0 on windows added 2026-10-27 (D5894): x_khronos_gl_window opens GL 3.3, GL 4.3 and GLES 3.0 contexts each on its own os window under WSLg, and all pass. Remaining: the resize storm, since e.os has no call that resizes a window, so it needs a driver outside the program. An EGL window surface takes the window's size at each swap, so there is nothing to hook into window_on_resize. Done 2026-10-27 (D5886): x.khronos.context.linux over the shared x.khronos.eglcontext. Headless GL 3.3, GL 4.3, GLES 3.0 and GLES 3.1 run on Mesa's surfaceless EGL (pbuffer fallback written but not exercised), drawn, read back against llvmpipe's golden hash and computed on (x_khronos_gl_headless). A GL 3.3 context on an os window through a second libX11 connection to its window id clears, scissors, reads back and swaps under WSLg (x_khronos_gl_window, examples/gl_triangle with and without --es). swap_interval is called. Remaining: GL 4.3 and GLES 3.1 on a window (only headless so far), following window_on_resize, and the resize storm. Design docs/opengl-plan.md, D5880. Needs L173. Acceptance: GL 4.3 core and GLES 3.1 contexts on a Neper os window, through a second libX11 connection to the window's XID (Neper's X11 client is a raw socket with no Display*); surfaceless and pbuffer contexts for headless use; swap interval; resizing follows window_on_resize; a resize storm shows no torn or stale frame."
-    },
-    {
       "id": "L175",
       "category": "library",
       "group": "OpenGL",

@@ -43113,3 +43113,12 @@ D5881 as built. `x.khronos.compute.open` gives the device a slot with a mutex, t
 - **Miss.** A program linked from source is marked retrievable and saved. A driver with no binary formats, or a directory that cannot be written, simply has no cache.
 
 `compute.cache_hits()` counts the programs taken from the cache. `gpu_gl_cache` closes and reopens the GL device in one process, so its second compile must come from the file. The hit count grows and the words are the CPU's, on Intel and on llvmpipe.
+
+## D5899 — A resized X11 window's GL surface is swapped once before its next frame
+
+`x_khronos_gl_resize` resizes its window from outside twelve times: `SetWindowPos` on Windows, `XResizeWindow` through a second Xlib connection on Linux. Each time it waits for `os.window_metrics` to report the new size, clears at that size, scissors a marker into the top-right corner, and reads the back buffer before swapping.
+- **Windows.** WGL passed as it was.
+- **Mesa under WSLg** failed at the first resize. `eglQuerySurface` already gave the new size, but the far corner read `0xCDCDCD`: Mesa's software X11 surface keeps its buffers at the old size until a swap, so the first frame after a resize goes into a stale buffer. Unbinding and rebinding the surface does not change that.
+- **The fix.** `x.khronos.context`'s Linux `make_current` compares the window's size with the size it last saw for that surface (recorded when the surface is made, kept in a small table since the context is `*const` there). When the size changed, it swaps once first, which shows the last frame again rather than a torn one, and the frame that follows has buffers of the new size.
+
+Both hosts now pass all twelve steps. Windows' minimum window width (about 176 px with a caption) is why the fixture asks for 200 px or more.

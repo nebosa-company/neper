@@ -17,7 +17,7 @@ error Failed
 
 type Api = eglcontext.Api
 type Options = eglcontext.Options
-type Context = struct { egl_state: eglcontext.State, x_display: usize, window: usize }
+type Context = struct { egl_state: eglcontext.State, x_display: usize, window: usize, host: os.Window, has_host: bool }
 
 type OpenDisplay = fn(*const u8) -> usize
 type CloseDisplay = fn(usize) -> i32
@@ -96,16 +96,54 @@ fn for_window(a: *mem.Arena, w: os.Window, options: Options) -> (Context, err) {
     if x_display == 0usize { ret (c, Unsupported) }
     c.x_display = x_display
     c.window = window_id
+    c.host = w
+    c.has_host = true
     // EGL 1.4 takes the Xlib display as its native display; 1.5 names the platform.
     var display = egl.get_display(x_display)
     if egl.present(egl.GET_PLATFORM_DISPLAY_ENTRY) { display = egl.get_platform_display(u32(egl.PLATFORM_X11_KHR), as_pointer(x_display), nil) }
     if eglcontext.initialize(display) != ok { ret (c, Unsupported) }
     let (s, state_error) = eglcontext.on_window(display, window_id, options)
     c.egl_state = s
+    if state_error == ok { remember_size(s.surface, w) }
     ret (c, mapped(state_error))
 }
 
-fn make_current(c: *const Context) -> err { ret mapped(eglcontext.make_current(&c.egl_state)) }
+// The window's size as the surface was made, for make_current to compare with.
+fn remember_size(surface: usize, w: os.Window) {
+    let (metrics, metrics_error) = os.window_metrics(w)
+    if metrics_error != ok { ret }
+    var slot = 0usize
+    while slot < 16usize && sized_surfaces[slot] != surface && sized_surfaces[slot] != 0usize { slot += 1usize }
+    if slot == 16usize { ret }
+    sized_surfaces[slot] = surface
+    sized_widths[slot] = metrics.width
+    sized_heights[slot] = metrics.height
+}
+
+// (D5899) Mesa's X11 window surface reports a resized window's new size at once, but its buffers keep the old one until a
+// swap: the first frame after a resize would be drawn into a stale buffer (its new part uninitialised). So when the window's
+// size differs from the size this surface was last made current at, the surface is swapped once first -- the last frame
+// shown again -- and the frame that follows has buffers of the new size.
+var sized_surfaces: [16]usize = zero
+var sized_widths: [16]u32 = zero
+var sized_heights: [16]u32 = zero
+
+fn make_current(c: *const Context) -> err {
+    let made = mapped(eglcontext.make_current(&c.egl_state))
+    if made != ok || !c.has_host || c.egl_state.surface == egl.NO_SURFACE { ret made }
+    let (metrics, metrics_error) = os.window_metrics(c.host)
+    if metrics_error != ok { ret made }
+    var slot = 0usize
+    while slot < 16usize && sized_surfaces[slot] != c.egl_state.surface && sized_surfaces[slot] != 0usize { slot += 1usize }
+    if slot == 16usize { ret made }
+    if sized_surfaces[slot] == c.egl_state.surface && (sized_widths[slot] != metrics.width || sized_heights[slot] != metrics.height) {
+        let swapped = egl.swap_buffers(c.egl_state.display, c.egl_state.surface)
+    }
+    sized_surfaces[slot] = c.egl_state.surface
+    sized_widths[slot] = metrics.width
+    sized_heights[slot] = metrics.height
+    ret made
+}
 
 fn swap(c: *const Context) -> err { ret mapped(eglcontext.swap(&c.egl_state)) }
 

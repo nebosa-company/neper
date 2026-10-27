@@ -3668,6 +3668,12 @@ $khronosWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $khronosWindowWritten -ne 'executable written') { throw 'x_khronos_gl_window emission failed' }
 & $khronosWindowPath
 if ($LASTEXITCODE -ne 0) { throw "a window's GL context answered wrongly: exit $LASTEXITCODE" }
+# (D5899) Twelve resizes from outside, each frame drawn and read back at its new size.
+$khronosResizePath = Join-Path $testBuild 'x-khronos-gl-resize-selfhost.exe'
+$khronosResizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_resize\src\main.e') $repo 'x64' 'windows' $khronosResizePath
+if ($LASTEXITCODE -ne 0 -or $khronosResizeWritten -ne 'executable written') { throw 'x_khronos_gl_resize emission failed' }
+& $khronosResizePath
+if ($LASTEXITCODE -ne 0) { throw "a resized window's GL frame was stale: exit $LASTEXITCODE" }
 # `x.khronos.present` (D5887): BGRA frames at the physical sizes of scales 1.0, 1.5 and 2.0 come
 # back from the window's back buffer bit for bit, through GL 3.3 and GLES 3.0.
 $khronosPresentPath = Join-Path $testBuild 'x-khronos-gl-present-selfhost.exe'

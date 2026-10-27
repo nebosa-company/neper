@@ -27,12 +27,12 @@ fn pump() {
     }
 }
 
-// GL 3.3 and 4.3 core, and GLES 3.0, each on a window of its own: on Windows a window's pixel format is WGL's once set.
+// GL 3.3 and 4.3 core, and GLES 3.1, each on a window of its own: on Windows a window's pixel format is WGL's once set.
 fn main(a: *mem.Arena, args: []str) -> err {
     let first = on_window(a, context.Options { api: .Gl, major: 3u32, minor: 3u32 }, "OpenGL 3.3 core", 0i32)
     if first == os.Unsupported { ret ok }
     let second = on_window(a, context.Options { api: .Gl, major: 4u32, minor: 3u32 }, "OpenGL 4.3 core", 20i32)
-    let third = on_window(a, context.Options { api: .Gles, major: 3u32, minor: 0u32 }, "OpenGL ES 3.0", 40i32)
+    let third = on_window(a, context.Options { api: .Gles, major: 3u32, minor: 1u32 }, "OpenGL ES 3.1", 40i32)
     ret ok
 }
 
