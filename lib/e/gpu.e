@@ -1140,6 +1140,11 @@ fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err) {
         if cuda_chosen_error != ok { ret (zero, cuda_chosen_error) }
         ret (zero, Unsupported)
     }
+    // (D5906) A heap device's record carries no key, so a key names none of them where the backend is there at all.
+    if heap_backend(key.backend) {
+        if heap_available(key.backend) { ret (zero, NoDevice) }
+        ret (zero, Unsupported)
+    }
     if key.backend != .Vulkan { ret (zero, Unsupported) }
     // Enumerate the full set so a duplicate is seen, match, then open that very handle:
     // removal or a changed identity fails instead of opening a replacement at the ordinal.

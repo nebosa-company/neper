@@ -3,6 +3,8 @@
 // special values in both places) through + - * / and the square root, and each first operand narrowed to f32; every result
 // word must equal the CPU backend's. The kernel keeps denormals, so it runs only on a device that does (llvmpipe; Intel
 // flushes, and an `ftz` kernel cannot hold f64). Otherwise, or without an OpenGL compute device, it says so and passes.
+// `math.fma[f64]` (D5906) runs over 65,536 triples whose exponents stay within 300 of one's, where its emulation is
+// exact; half the addends are the product's negation, whose answer is the product's rounding error.
 use e.gpu
 use e.io
 use e.math
@@ -24,7 +26,43 @@ fn arithmetic(n: u32, x: []const f64, y: []const f64, out: []f64, narrow: []f32)
     narrow[k] = f32(x[k])
 }
 
+@gpu(64)
+fn fused(n: u32, a: []const f64, b: []const f64, c: []const f64, out: []f64) {
+    let i = gpu.gid.x
+    if i >= n { ret }
+    let k = usize(i)
+    out[k] = math.fma[f64](a[k], b[k], c[k])
+}
+
 const N: usize = 65536usize
+
+// A random double with its exponent within 300 of one's.
+fn moderate(bits: u64) -> u64 {
+    let exponent = 723u64 + (bits >> 52u32) % 600u64
+    ret (bits & 9227875636482146303u64) | (exponent << 52u32)
+}
+
+fn fused_run(a: *mem.Arena, backend: gpu.Backend, xs: []const f64, ys: []const f64, zs: []const f64, out: []u64) -> err {
+    let (device, open_error) = gpu.open(a, backend, 0u32)
+    if open_error != ok { ret open_error }
+    let (queue, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret queue_error }
+    let (x, x_error) = gpu.upload[f64](queue, xs)
+    let (y, y_error) = gpu.upload[f64](queue, ys)
+    let (z, z_error) = gpu.upload[f64](queue, zs)
+    let (o, o_error) = gpu.alloc[f64](queue, N)
+    if x_error != ok || y_error != ok || z_error != ok || o_error != ok { os.exit(30i32) }
+    try gpu.launch[fused](queue, gpu.grid1(N), u32(N), x, y, z, o)
+    let (results, results_error) = mem.alloc[f64](a, N)
+    if results_error != ok { os.exit(31i32) }
+    if gpu.download(queue, o, results) != ok { os.exit(32i32) }
+    var k = 0usize
+    while k < N {
+        out[k] = mem.bitcast[u64](results[k])
+        k += 1usize
+    }
+    ret gpu.close(device)
+}
 
 fn special(k: u64) -> u64 {
     let table = k % 12u64
@@ -135,6 +173,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         k += 1usize
     }
-    try io.printf["65536 f64 sums, differences, products, quotients, roots and narrowings equal to the CPU backend's on {}\n"](found[0usize].name)
+    let (fa, fa_error) = mem.alloc[f64](a, N)
+    let (fb, fb_error) = mem.alloc[f64](a, N)
+    let (fc, fc_error) = mem.alloc[f64](a, N)
+    let (cpu_fused, cpu_fused_error) = mem.alloc[u64](a, N)
+    let (gl_fused, gl_fused_error) = mem.alloc[u64](a, N)
+    if fa_error != ok || fb_error != ok || fc_error != ok || cpu_fused_error != ok || gl_fused_error != ok { os.exit(33i32) }
+    k = 0usize
+    while k < N {
+        state = state ^ (state << 13u32)
+        state = state ^ (state >> 7u32)
+        state = state ^ (state << 17u32)
+        fa[k] = mem.bitcast[f64](moderate(state))
+        state = state ^ (state << 13u32)
+        state = state ^ (state >> 7u32)
+        state = state ^ (state << 17u32)
+        fb[k] = mem.bitcast[f64](moderate(state))
+        state = state ^ (state << 13u32)
+        state = state ^ (state >> 7u32)
+        state = state ^ (state << 17u32)
+        fc[k] = mem.bitcast[f64](moderate(state))
+        if k % 2usize == 1usize { fc[k] = -(fa[k] * fb[k]) }
+        k += 1usize
+    }
+    if fused_run(a, .Cpu, fa, fb, fc, cpu_fused) != ok { os.exit(34i32) }
+    if fused_run(a, .Gl, fa, fb, fc, gl_fused) != ok { os.exit(35i32) }
+    k = 0usize
+    while k < N {
+        if cpu_fused[k] != gl_fused[k] {
+            try io.printf["fma {}: a {} b {} c {} cpu {} gl {}\n"](k, mem.bitcast[u64](fa[k]), mem.bitcast[u64](fb[k]), mem.bitcast[u64](fc[k]), cpu_fused[k], gl_fused[k])
+            os.exit(36i32)
+        }
+        k += 1usize
+    }
+    try io.printf["65536 f64 sums, differences, products, quotients, roots, narrowings and fused multiply-adds equal to the CPU backend's on {}\n"](found[0usize].name)
     ret ok
 }

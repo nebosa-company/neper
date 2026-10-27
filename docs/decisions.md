@@ -43199,3 +43199,19 @@ One box, not two. The union costs a little extra upload when two damage boxes ar
 The window's own logical `damage`/`damaged` (D904) are left as they were. They are rectangles in logical units for repaint scheduling, and the presenter needs device pixels from the renderer itself.
 
 `x_khronos_gl_present` checks it at all three scales on both GL 3.3 and GLES 3.0. A box of each frame is changed and reported. The uploaded byte count must grow by exactly that box, the back buffer must equal the whole new frame, and an empty box must upload nothing. `gfx_scene_damage` checks that `changed_box` holds every pixel that differs between two frames, is not the whole frame, and is empty when an unchanged scene is rendered again.
+
+## D5906 — The gpu fixtures on `.Gl`, and what running them fixed in GLSL
+
+`scripts/run-gl-fixtures.py` runs every `gpu_*` link fixture that launches on Vulkan devices on `.Gl` instead. It rewrites `.Vulkan` to `.Gl`, has `main` call `x.khronos.compute.install()` (or `install_es()` with `--es`), and builds with `--gpu glsl` and the flags the suite uses for that fixture. The `use` goes at the end of the file, so fault records keep their line numbers. The fixtures check themselves against the CPU backend. All 22 pass on Intel's Windows GL, on llvmpipe's GL and on llvmpipe's GLES. The run found these GLSL gaps:
+- **Barriers in rounds.** A barrier that lanes reach in different rounds of the dispatch loop is undefined in GLSL, so Intel let lanes pass before a peer's write. A kernel with barriers now runs in workgroup rounds:
+  - Each round, every invocation meets three barriers that agree, through a shared `atomicMin`, on the workgroup's lowest `pc`, and only lanes at that `pc` run.
+  - A barrier ends its round: its block's `pc` is scaled by 64, and the code after the barrier is a continuation block.
+  - A lane that returns or faults waits at `0xFFFFFFFF`, still meeting the barriers, until every lane does.
+
+  It is MSL's subgroup round (D5852) taken to the workgroup.
+- **Ordered atomics and fences.** An atomic stronger than relaxed is the relaxed GLSL atomic between two full fences (`memoryBarrier`, `memoryBarrierShared`), and a memory barrier or atomic fence of either scope is the same pair.
+- **Shared memory in helpers.** A helper may take a shared slice or pointer even though helpers are written before any kernel. A kernel without shared memory declares a one-word `tg` when some helper uses it. A shared pointer's null check always takes its non-null branch, since it is an offset into `tg`.
+- **Faults in helpers.** A fault in a helper that returns a value returns a zero of its type. A bare `return;` there failed the driver's compile.
+- **`math.fma[f64]`.** This follows Boldo and Melquiond: an exact product from Dekker's split, two exact sums, a round-to-odd add, then one rounding. It is exact while no step overflows or underflows; outside that it is the plain expression, which is a marked limit. `gpu_gl_f64` checks 65,536 triples within that range, half of them near-cancelling, and is word-equal on llvmpipe.
+
+`e.gpu.open_id` answers `NoDevice` for a `.Gl` or `.Metal` key when that backend is present, since their records carry no key, and `Unsupported` otherwise. Before, every such key was `Unsupported`. Emitted text for kernels without barriers is unchanged, and the GLSL goldens are byte-identical.

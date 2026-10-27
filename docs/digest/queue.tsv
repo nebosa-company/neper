@@ -105,7 +105,6 @@ L175	library	0.9	1283	OpenGL 4: WGL contexts on Windows, and GLES through ANGLE	
 L176	library	0	237	OpenGL 5: CGL context on macOS (GL 4.1 core, presentation only)	Design docs/opengl-plan.md, D5879, D5880.
 T046	tooling	0	123	OpenGL verify 2 (verify-only): ui fixtures presented through GL	Verify-only turn, no edits.
 C216	compiler	0.6	1010	OpenGL 11: narrow and half types in GLSL	Done 2026-10-27 (D5888): u8, i8, u16 and i16 load through bitfieldExtract (sign-extended for the signed ones), store into heap and tg through atomicAnd and atomicOr on the word and into the frame thro
-T047	tooling	0.2	392	OpenGL verify 3 (verify-only): gpu fixtures on Backend.Gl	So far (2026-10-27): gpu_gl is word-equal to the CPU on Intel Iris Xe (Windows) and Mesa llvmpipe (Linux in WSL).
 T048	tooling	0	122	OpenGL verify 4 (verify-only): full suites for the shared compiler change	Verify-only turn, no edits.
 C219	compiler	0.9	1380	OpenGL 16: the Android target, executable form	Done 2026-10-27 (D5896, D5900): emit-executable ...
 C220	compiler	0	214	OpenGL 17: the Android target, app form (needs @export)	Design docs/opengl-plan.md, D5884.

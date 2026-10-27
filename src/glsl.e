@@ -71,6 +71,19 @@ type Module = struct {
     // (D5902) The function being written reads a subgroup input or runs a collective; any helper that did.
     needs_subgroup: bool,
     helper_subgroup: bool,
+    // (D5906) A kernel with barriers runs in workgroup rounds: only the invocations at the workgroup's lowest `pc` run a
+    // round, so every barrier is reached by the whole workgroup in one round. Its `pc` is a block's number times 64 plus
+    // the barriers passed in that block; an invocation that is done waits at DONE until all are.
+    wg_round: bool,
+    block_at: usize,
+    split_at: usize,
+    // A helper reads or writes workgroup memory, so every kernel's shader, which carries every helper, declares `tg`.
+    helper_shared: bool,
+    // The type the helper being written returns, `void` for none: what a fault in it returns.
+    helper_returns: str,
+    // (D5906) The function being written, or any helper, calls `math.fma[f64]`: `f64_fma` goes into the shader.
+    needs_dfma: bool,
+    helper_dfma: bool,
     signatures: *nir.Signatures,
     in_helper: bool,
     signature: nir.Signature,
@@ -79,6 +92,15 @@ type Module = struct {
 // f32 division and square root on the bits, correctly rounded to nearest-even as section 11 requires; every NaN result is
 // the canonical positive quiet NaN, 0x7FC00000. With FTZ set (an `ftz` kernel), subnormal operands count as zero and a
 // result tiny after rounding is a zero.
+// (D5906) `math.fma[f64]` rounded once, after Boldo and Melquiond: the product exact as two doubles (Dekker's split), the
+// addend's sum with its low part exact, the low parts added rounding to odd, and one round to nearest at the end. Every
+// step is a `precise` double operation GLSL leaves to the driver, as D5903 does for + - * /.
+// ponytail: exact while no step overflows and the product's low part is not subnormal (|a| or |b| past 2^995, or a product
+// near 2^-969); there it is the plain a * b + c. Integer sequences over 106-bit products are the upgrade.
+fn dfma_source() -> str {
+    ret "dvec2 f64_two_sum(double a, double b) {\n  precise double s = a + b; precise double bb = s - a; precise double e = (a - (s - bb)) + (b - bb);\n  return dvec2(s, e);\n}\ndvec2 f64_split(double a) {\n  precise double c = 134217729.0 * a; precise double h = c - (c - a); precise double l = a - h;\n  return dvec2(h, l);\n}\ndouble f64_add_odd(double x, double y) {\n  dvec2 s = f64_two_sum(x, y);\n  uvec2 w = unpackDouble2x32(s.x);\n  if (s.y == 0.0 || (w.x & 1u) != 0u) return s.x;\n  if ((s.y > 0.0) == (s.x > 0.0)) { w.x += 1u; if (w.x == 0u) w.y += 1u; } else { if (w.x == 0u) w.y -= 1u; w.x -= 1u; }\n  return packDouble2x32(w);\n}\ndouble f64_fma(double a, double b, double c) {\n  precise double p = a * b;\n  precise double plain = p + c;\n  if (isnan(plain) || isinf(plain) || isinf(p) || p == 0.0 || abs(a) > 1.0e297 || abs(b) > 1.0e297 || abs(p) < 1.0e-290) return plain;\n  dvec2 sa = f64_split(a); dvec2 sb = f64_split(b);\n  precise double pe = ((sa.x * sb.x - p) + sa.x * sb.y + sa.y * sb.x) + sa.y * sb.y;\n  dvec2 t = f64_two_sum(c, pe);\n  dvec2 v = f64_two_sum(p, t.x);\n  precise double r = v.x + f64_add_odd(v.y, t.y);\n  return r;\n}\n"
+}
+
 fn exact_source() -> str {
     ret "uint f32_round(uint s, int e, uint q, bool sticky) {\n  // q: 26 bits, the leading one at bit 25; e: the biased exponent of that one.\n  if (e <= 0) {\n    if (FTZ) {\n      uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n      if (e == 0 && m == 16777216u) return s | 0x00800000u;\n      return s;\n    }\n    int shift = 1 - e;\n    if (shift > 26) { sticky = sticky || q != 0u; q = 0u; } else { sticky = sticky || (q & ((1u << uint(shift)) - 1u)) != 0u; q >>= uint(shift); }\n    uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n    return s | m;\n  }\n  uint m = q >> 2u; bool up = ((q & 2u) != 0u) && (((q & 1u) != 0u) || sticky || ((m & 1u) != 0u)); m += up ? 1u : 0u;\n  if (m == 16777216u) { m = 8388608u; e += 1; }\n  if (e >= 255) return s | 0x7F800000u;\n  return s | (uint(e) << 23u) | (m & 0x7FFFFFu);\n}\nuint f32_div(uint a, uint b) {\n  uint s = (a ^ b) & 0x80000000u; uint ea = (a >> 23u) & 255u; uint eb = (b >> 23u) & 255u; uint ma = a & 0x7FFFFFu; uint mb = b & 0x7FFFFFu;\n  if (FTZ) { if (ea == 0u) ma = 0u; if (eb == 0u) mb = 0u; }\n  if (ea == 255u && ma != 0u) return 0x7FC00000u;\n  if (eb == 255u && mb != 0u) return 0x7FC00000u;\n  bool az = ea == 0u && ma == 0u; bool bz = eb == 0u && mb == 0u;\n  if ((ea == 255u && eb == 255u) || (az && bz)) return 0x7FC00000u;\n  if (ea == 255u || bz) return s | 0x7F800000u;\n  if (eb == 255u || az) return s;\n  int xa = int(ea); int xb = int(eb);\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); xa = 1 - k; } else { ma |= 0x800000u; }\n  if (eb == 0u) { int k = 23 - findMSB(mb); mb <<= uint(k); xb = 1 - k; } else { mb |= 0x800000u; }\n  int e = xa - xb + 127;\n  if (ma < mb) { ma <<= 1u; e -= 1; }\n  uint q = 0u; uint r = ma;\n  for (int i = 0; i < 26; i++) { q <<= 1u; if (r >= mb) { r -= mb; q |= 1u; } r <<= 1u; }\n  return f32_round(s, e, q, r != 0u);\n}\nuint f32_sqrt(uint a) {\n  uint ea = (a >> 23u) & 255u; uint ma = a & 0x7FFFFFu;\n  if (FTZ && ea == 0u) ma = 0u;\n  if (ea == 255u && ma != 0u) return 0x7FC00000u;\n  if (ea == 0u && ma == 0u) return a & 0x80000000u;\n  if ((a & 0x80000000u) != 0u) return 0x7FC00000u;\n  if (ea == 255u) return a;\n  int e = int(ea) - 127;\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); e = -126 - k; } else { ma |= 0x800000u; }\n  if ((e & 1) != 0) { ma <<= 1u; e -= 1; }\n  uint hi = ma >> 5u; uint lo = ma << 27u; uint r = 0u; uint root = 0u;\n  for (int i = 0; i < 26; i++) {\n    int p = 50 - 2 * i; uint two = p >= 32 ? (hi >> uint(p - 32)) & 3u : (lo >> uint(p)) & 3u;\n    r = (r << 2u) | two; uint trial = (root << 2u) | 1u; root <<= 1u;\n    if (r >= trial) { r -= trial; root |= 1u; }\n  }\n  return f32_round(0u, e / 2 + 127, root, r != 0u);\n}\nuvec2 w_shl(uvec2 v, int n) {\n  if (n == 0) return v;\n  if (n >= 32) return uvec2(v.y << uint(n - 32), 0u);\n  return uvec2((v.x << uint(n)) | (v.y >> uint(32 - n)), v.y << uint(n));\n}\nuvec2 w_shr(uvec2 v, int n) {\n  // Shifted right with every bit lost jammed into bit 0.\n  if (n == 0) return v;\n  if (n >= 64) return uvec2(0u, (v.x | v.y) != 0u ? 1u : 0u);\n  uvec2 r; bool lost;\n  if (n >= 32) { int k = n - 32; r = uvec2(0u, k == 0 ? v.x : v.x >> uint(k)); lost = v.y != 0u || (k != 0 && (v.x & ((1u << uint(k)) - 1u)) != 0u); }\n  else { r = uvec2(v.x >> uint(n), (v.y >> uint(n)) | (v.x << uint(32 - n))); lost = (v.y & ((1u << uint(n)) - 1u)) != 0u; }\n  if (lost) r.y |= 1u;\n  return r;\n}\nuint f32_fma(uint a, uint b, uint c) {\n  uint sp = (a ^ b) & 0x80000000u; uint sc = c & 0x80000000u;\n  uint ea = (a >> 23u) & 255u; uint eb = (b >> 23u) & 255u; uint ec = (c >> 23u) & 255u; uint ma = a & 0x7FFFFFu; uint mb = b & 0x7FFFFFu; uint mc = c & 0x7FFFFFu;\n  if (FTZ) { if (ea == 0u) ma = 0u; if (eb == 0u) mb = 0u; if (ec == 0u) mc = 0u; }\n  if ((ea == 255u && ma != 0u) || (eb == 255u && mb != 0u) || (ec == 255u && mc != 0u)) return 0x7FC00000u;\n  bool az = ea == 0u && ma == 0u; bool bz = eb == 0u && mb == 0u; bool cz = ec == 0u && mc == 0u;\n  if ((ea == 255u && bz) || (eb == 255u && az)) return 0x7FC00000u;\n  if (ea == 255u || eb == 255u) { if (ec == 255u && sc != sp) return 0x7FC00000u; return sp | 0x7F800000u; }\n  if (ec == 255u) return c;\n  if (az || bz) { if (cz) return sp & sc; return c; }\n  int xa = int(ea); int xb = int(eb);\n  if (ea == 0u) { int k = 23 - findMSB(ma); ma <<= uint(k); xa = 1 - k; } else { ma |= 0x800000u; }\n  if (eb == 0u) { int k = 23 - findMSB(mb); mb <<= uint(k); xb = 1 - k; } else { mb |= 0x800000u; }\n  // The product exactly, its top bit moved to bit 61; tb is that bit's unbiased exponent.\n  uvec2 big; umulExtended(ma, mb, big.x, big.y);\n  int top = 32 + findMSB(big.x);\n  int tb = xa + xb - 254 - 46 + top;\n  big = w_shl(big, 61 - top);\n  uint sb = sp;\n  if (!cz) {\n    int xc = int(ec);\n    if (ec == 0u) { int k = 23 - findMSB(mc); mc <<= uint(k); xc = 1 - k; } else { mc |= 0x800000u; }\n    uvec2 small = uvec2(mc << 6u, 0u); int ts = xc - 127; uint ss = sc;\n    if (ts > tb) { uvec2 w = big; big = small; small = w; int x = tb; tb = ts; ts = x; uint s = sb; sb = ss; ss = s; }\n    small = w_shr(small, tb - ts);\n    uint carry; uint borrow;\n    if (sb == ss) { big.y = uaddCarry(big.y, small.y, carry); big.x = big.x + small.x + carry; }\n    else {\n      if (big.x < small.x || (big.x == small.x && big.y < small.y)) { uvec2 w = big; big = small; small = w; sb = ss; }\n      big.y = usubBorrow(big.y, small.y, borrow); big.x = big.x - small.x - borrow;\n      if ((big.x | big.y) == 0u) return 0u;\n    }\n  }\n  int t = big.x != 0u ? 32 + findMSB(big.x) : findMSB(big.y);\n  uint q = t >= 25 ? w_shr(big, t - 25).y : big.y << uint(25 - t);\n  return f32_round(sb, tb - 61 + t + 127, q, false);\n}\n"
 }
@@ -155,6 +177,17 @@ fn line(t: *Text, value: str) {
     put(t, "      ")
     put(t, value)
     put(t, "\n")
+}
+
+fn text_has(t: *Text, part: str) -> bool {
+    var at = 0usize
+    while at + part.len <= t.count {
+        var k = 0usize
+        while k < part.len && t.data[at + k] == part[k] { k += 1usize }
+        if k == part.len { ret true }
+        at += 1usize
+    }
+    ret false
 }
 
 fn put_value(t: *Text, value: usize) {
@@ -463,6 +496,7 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     let kernel = c.functions[checked]
     m.in_helper = false
     m.shared_words = 0usize
+    m.wg_round = has_barrier(builder, function_at)
     var no_values: Values = zero
     var values = no_values
     try lower_function(a, m, c, builder, function_at, kernel, &values)
@@ -486,6 +520,9 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
         put_number(&m.body, m.shared_words)
         put(&m.body, "];\n")
     }
+    if m.wg_round { put(&m.body, "shared uint wg_pc;\n") }
+    if m.needs_dfma || m.helper_dfma { put(&m.body, dfma_source()) }
+    if m.shared_words == 0usize && m.helper_shared { put(&m.body, "shared uint tg[1];\n") }
     if m.needs_divide || m.needs_sqrt || m.helper_exact {
         // An `ftz` kernel (spec section 11, D4203) flushes in the exact sequences as the CPU's FTZ and DAZ do; its helpers too.
         if (check.kernel_fact(c, checked) & 128usize) != 0usize { put(&m.body, "const bool FTZ = true;\n") } else { put(&m.body, "const bool FTZ = false;\n") }
@@ -523,6 +560,7 @@ fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Build
         if returned_type == 0u8 { ret fail(m, "a helper returns a value of a type not yet written as GLSL") }
         returned = type_name(returned_type)
     }
+    m.helper_returns = returned
     var header_bytes: [4096]u8 = zero
     var header = Text { data: header_bytes[0usize..4096usize], count: 0usize, full: false }
     put(&header, returned)
@@ -571,6 +609,8 @@ fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Build
     try lower_function(a, m, c, builder, function_at, c.functions[0usize], &values)
     if m.needs_divide || m.needs_sqrt { m.helper_exact = true }
     if m.needs_subgroup { m.helper_subgroup = true }
+    if m.needs_dfma { m.helper_dfma = true }
+    if text_has(&m.code, "tg[") { m.helper_shared = true }
     if uses_wide(function, &values) { m.helper_wide = true }
     put_text(&m.helpers, &header)
     put(&m.helpers, " {\n")
@@ -614,6 +654,13 @@ fn put_locals(m: *Module, function: nir.Function, values: *Values, out: *Text) {
         dynamic_at += 1usize
     }
     put(out, "  uint pc = 0u;\n  while (true) {\n")
+    if m.wg_round && !m.in_helper {
+        // (D5906) Every invocation, done or not, meets these three barriers each round; the lowest `pc` runs.
+        put(out, "    if (gl_LocalInvocationIndex == 0u) { wg_pc = 4294967295u; }\n    memoryBarrierShared(); barrier();\n    atomicMin(wg_pc, pc);\n    memoryBarrierShared(); barrier();\n    uint low = wg_pc;\n    barrier();\n    if (low == 4294967295u) { return; }\n    if (pc != low) { continue; }\n")
+        put_text(out, &m.code)
+        put(out, "    pc = 4294967295u;\n  }\n")
+        ret
+    }
     // (D5902) As in MSL: only the lanes of a subgroup at the lowest block run a round, so lanes that took different branches
     // meet again at the join (blocks are in program order, a join after its branches) and a collective sees the lanes the
     // source says.
@@ -632,6 +679,7 @@ fn lower_function(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Bu
     m.needs_divide = false
     m.needs_sqrt = false
     m.needs_subgroup = false
+    m.needs_dfma = false
     var at = 0usize
     while at < function.instruction_count {
         let instruction = builder.instructions[function.first_instruction + at]
@@ -662,8 +710,10 @@ fn lower_function(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Bu
     }
     var block_index = 0usize
     while block_index < function.block_count {
+        m.block_at = block_index
+        m.split_at = 0usize
         put(&m.code, "    if (pc == ")
-        put_number(&m.code, block_index)
+        put_pc(m, &m.code, block_index)
         put(&m.code, "u) {\n")
         let record = builder.blocks[function.first_block + block_index]
         var instruction_at = 0usize
@@ -842,8 +892,37 @@ fn guard(m: *Module, holds: str, value_a: usize, value_b: usize, kind: usize, si
     put_number(t, value_b)
     put(t, ")) {\n")
     write_fault(m, kind, site)
-    line(t, "  return;")
+    put_exit(m, "  ")
     line(t, "}")
+}
+
+// An invocation leaving the kernel: `return`, or in workgroup rounds a wait at DONE, so it still meets every round's barriers.
+fn put_exit(m: *Module, indent: str) {
+    put(&m.code, "      ")
+    put(&m.code, indent)
+    if m.in_helper && !same(m.helper_returns, "void") {
+        put(&m.code, "return ")
+        put(&m.code, m.helper_returns)
+        put(&m.code, "(0);\n")
+        ret
+    }
+    if m.wg_round && !m.in_helper { put(&m.code, "pc = 4294967295u; continue;\n") } else { put(&m.code, "return;\n") }
+}
+
+// A block's `pc` as the dispatch loop numbers it.
+fn put_pc(m: *Module, t: *Text, block: usize) {
+    if m.wg_round && !m.in_helper { put_number(t, block * 64usize) } else { put_number(t, block) }
+}
+
+// Whether a function waits at a workgroup barrier.
+fn has_barrier(builder: *nir.Builder, function_at: usize) -> bool {
+    let function = builder.functions[function_at]
+    var at = 0usize
+    while at < function.instruction_count {
+        if builder.instructions[function.first_instruction + at].opcode == .Barrier { ret true }
+        at += 1usize
+    }
+    ret false
 }
 
 fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, function: nir.Function, kernel: check.Function, instruction: nir.Instruction, values: *Values) -> err {
@@ -856,7 +935,20 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
     }
     if opcode == .Call { ret emit_call(m, c, builder, instruction, values) }
     if opcode == .Barrier {
-        line(t, "memoryBarrierShared(); barrier();")
+        if m.in_helper { ret fail(m, "a barrier in a helper is not written as GLSL") }
+        if !m.wg_round {
+            line(t, "memoryBarrierShared(); barrier();")
+            ret ok
+        }
+        // The rest of the block is a round of its own: the next round's barriers are the wait.
+        m.split_at += 1usize
+        if m.split_at >= 64usize { ret fail(m, "a block holds more barriers than the GLSL rounds number") }
+        line(t, "memoryBarrierShared();")
+        put(t, "      pc = ")
+        put_number(t, m.block_at * 64usize + m.split_at)
+        put(t, "u; continue;\n    }\n    if (pc == ")
+        put_number(t, m.block_at * 64usize + m.split_at)
+        put(t, "u) {\n")
         ret ok
     }
     if opcode == .ConstInteger || opcode == .ConstFloat || opcode == .ConstBool || (opcode == .Zero && instruction.has_result) {
@@ -932,25 +1024,32 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
             put(t, ";\n")
             ret ok
         }
-        line(t, "return;")
+        put_exit(m, "")
         ret ok
     }
     if opcode == .Branch {
         put(t, "      pc = ")
-        put_number(t, instruction.target - function.first_block)
+        put_pc(m, t, instruction.target - function.first_block)
         put(t, "u; continue;\n")
         ret ok
     }
     if opcode == .BranchIf {
         let condition = operand(builder, instruction, 0usize)
+        // (D5906) A workgroup pointer's null check: it is an offset into `tg`, never null.
+        if (values.kind[condition] == KIND_SHARED) {
+            put(t, "      pc = ")
+            put_pc(m, t, instruction.target - function.first_block)
+            put(t, "u; continue;\n")
+            ret ok
+        }
         if (values.kind[condition] != KIND_SCALAR) { ret fail(m, "a branch has no condition value") }
         put(t, "      if (v")
         put_number(t, condition)
         if (values.ty[condition] != T_BOOL) { put(t, " != 0u") }
         put(t, ") { pc = ")
-        put_number(t, instruction.target - function.first_block)
+        put_pc(m, t, instruction.target - function.first_block)
         put(t, "u; } else { pc = ")
-        put_number(t, instruction.target2 - function.first_block)
+        put_pc(m, t, instruction.target2 - function.first_block)
         put(t, "u; }\n      continue;\n")
         ret ok
     }
@@ -963,7 +1062,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         if same(instruction.ty.name, "divide") { kind = 5usize }
         if kind == 99usize { ret fail(m, "this trap kind is not yet written as a device fault") }
         write_fault(m, kind, instruction.site.line)
-        line(t, "return;")
+        put_exit(m, "")
         ret ok
     }
     if opcode == .Sqrt {
@@ -987,6 +1086,11 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
         ret ok
     }
     if opcode == .AtomicLoad || opcode == .AtomicStore || opcode == .AtomicRmw || opcode == .AtomicCas { ret emit_atomic(m, builder, instruction, values) }
+    // (D5906) A memory barrier or fence of either scope orders this invocation's accesses to the heap and shared memory.
+    if opcode == .MemoryBarrier || opcode == .AtomicFence {
+        line(t, "memoryBarrier(); memoryBarrierShared();")
+        ret ok
+    }
     if opcode == .Subgroup { ret emit_subgroup(m, builder, instruction, values) }
     ret fail(m, "an operation in this kernel is not yet written as GLSL")
 }
@@ -1161,10 +1265,25 @@ fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: 
     // GLSL's fma need not round once, so `math.fma` is f32_fma on the bits (D5901), one of the exact sequences.
     if same(callee_function.name, "fma") {
         if instruction.operand_count != 3usize { ret fail(m, "math.fma takes three operands") }
+        let first = operand(builder, instruction, 0usize)
+        if (values.kind[first] == KIND_SCALAR && values.ty[first] == T_F64) {
+            m.needs_dfma = true
+            scalar(values, instruction.result, T_F64)
+            assign(t, instruction.result)
+            put(t, "f64_fma(v")
+            put_number(t, first)
+            put(t, ", v")
+            put_number(t, operand(builder, instruction, 1usize))
+            put(t, ", v")
+            put_number(t, operand(builder, instruction, 2usize))
+            put(t, ");\n")
+            put_double_nan(t, instruction.result)
+            ret ok
+        }
         var at = 0usize
         while at < 3usize {
             let source = operand(builder, instruction, at)
-            if (values.kind[source] != KIND_SCALAR || values.ty[source] != T_F32) { ret fail(m, "math.fma is written as GLSL for f32 only") }
+            if (values.kind[source] != KIND_SCALAR || values.ty[source] != T_F32) { ret fail(m, "math.fma is written as GLSL for f32 and f64 only") }
             at += 1usize
         }
         m.needs_divide = true
@@ -1391,7 +1510,7 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     let result = instruction.result
     if instruction.ty.kind == .Pointer && instruction.ty.in_shared {
         // A workgroup pointer read from a slice header: the header's first word is its offset.
-        if (values.kind[address] != KIND_PRIVATE) || m.shared_words == 0usize { ret fail(m, "a shared pointer is not loaded from a slice header") }
+        if (values.kind[address] != KIND_PRIVATE) || (m.shared_words == 0usize && !m.in_helper) { ret fail(m, "a shared pointer is not loaded from a slice header") }
         set_address(t, values, address, 0usize)
         m.dynamics += 1usize
         put(t, "      d")
@@ -1736,8 +1855,8 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
 }
 
 // ---- atomics -----------------------------------------------------------------------
-// GLSL's atomics are 32 bits and act on a `uint` word of `heap` or `tg`; an order stronger than relaxed, and a signed minimum
-// or maximum (the heap is `uint`), are `Unsupported` here.
+// GLSL's atomics are 32 bits and act on a `uint` word of `heap` or `tg`; a signed minimum or maximum (the heap is `uint`) is
+// `Unsupported` here.
 
 fn put_atomic_word(m: *Module, values: *Values, address: usize) -> err {
     if (values.kind[address] != KIND_SCALAR && values.kind[address] != KIND_SHARED) { ret fail(m, "an atomic operation has no device or shared address") }
@@ -1745,11 +1864,19 @@ fn put_atomic_word(m: *Module, values: *Values, address: usize) -> err {
     ret ok
 }
 
+// (D5906) GLSL's atomics are relaxed; an order stronger than that is the relaxed operation between two full fences, which
+// orders this invocation's other accesses on both sides (release before, acquire after, both for AcqRel and SeqCst).
 fn emit_atomic(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
-    let t = &m.code
     var ordering = instruction.immediate % 8usize
     if instruction.opcode == .AtomicCas { ordering = (instruction.immediate / 8usize % 8usize) + (instruction.immediate % 8usize) }
-    if ordering != 0usize { ret fail(m, "an atomic operation with an order stronger than relaxed is not yet written as GLSL") }
+    if ordering != 0usize { line(&m.code, "memoryBarrier(); memoryBarrierShared();") }
+    try emit_atomic_relaxed(m, builder, instruction, values)
+    if ordering != 0usize { line(&m.code, "memoryBarrier(); memoryBarrierShared();") }
+    ret ok
+}
+
+fn emit_atomic_relaxed(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let t = &m.code
     let address = operand(builder, instruction, 0usize)
     let ty = value_type(instruction.ty)
     if ty != 6u8 && ty != 7u8 { ret fail(m, "an atomic operation of this width is not written as GLSL: its atomics are 32 bits") }
