@@ -56,13 +56,13 @@ try {
   await shot('typed-hello')
   await web()
   console.log('page events after typing:', (await browser.execute(() => document.querySelector('pre:last-of-type')?.textContent ?? '')).replace(/\n/g, ' | '))
-  check(await until(async () => /name hello\n/.test(await stdout()), 8000), 'typing hello reaches the program', (await stdout()).slice(-60).replace(/\n/g, '|'))
+  check(await until(async () => /name hello\n/.test(await stdout()), 8000), 'typing hello reaches the program', (await stdout()).replace(/\n/g, '|'))
 
   await browser.switchContext('NATIVE_APP')
   const back = await browser.$('-ios predicate string:type == "XCUIElementTypeKey" AND name == "delete"')
   if (await back.isExisting()) { await back.click(); await back.click() }
   await web()
-  check(await until(async () => /name hel\n/.test(await stdout()), 8000), 'two Backspaces leave hel', (await stdout()).slice(-60).replace(/\n/g, '|'))
+  check(await until(async () => /name hel\n/.test(await stdout()), 8000), 'two Backspaces leave hel', (await stdout()).replace(/\n/g, '|'))
 
   await touch([{ type: 'pointerMove', duration: 0, x: field.x - 20, y: field.y }, { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 900 }, { type: 'pointerUp', button: 0 }])
   await sleep(1000)
