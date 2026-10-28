@@ -132,15 +132,24 @@ fn heartbeat_alive(h: *const Heartbeat, id: u64, now: u64, timeout: u64) -> bool
 }
 
 // Drop every node unseen for longer than `timeout` and answer them in
-// `out_dead` (table order); answers the dead count.
+// `out_dead` (table order); answers the dead count. A short `out_dead` answers
+// the required count and `TooSmall` without changing the table or output.
 // ponytail: linear table, a map when the cluster outgrows a few thousand nodes.
 fn heartbeat_sweep(h: *Heartbeat, now: u64, timeout: u64, out_dead: []u64) -> (usize, err) {
-    var dead = 0usize
-    var keep = 0usize
+    var needed = 0usize
     var i = 0usize
     while i < h.count {
         if now -% h.last_seen[i] > timeout {
-            if dead >= out_dead.len { ret (dead, TooSmall) }
+            needed += 1usize
+        }
+        i += 1usize
+    }
+    if needed > out_dead.len { ret (needed, TooSmall) }
+    var dead = 0usize
+    var keep = 0usize
+    i = 0usize
+    while i < h.count {
+        if now -% h.last_seen[i] > timeout {
             out_dead[dead] = h.ids[i]
             dead += 1usize
         } else {

@@ -105,6 +105,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, sweep_room) = res.heartbeat_sweep(&h, 100u64, 10u64, dead[..1usize])
     if sweep_room != res.TooSmall { os.exit(4i32) }
 
+    // A short dead-output buffer leaves the table and the caller's output unchanged.
+    var short_ids: [3]u64 = zero
+    var short_seen: [3]u64 = zero
+    var short_dead: [1]u64 = zero
+    short_dead[0usize] = 99u64
+    var short_heartbeat = res.heartbeat(short_ids[..], short_seen[..])
+    if res.heartbeat_observe(&short_heartbeat, 10u64, 0u64) != ok { os.exit(4i32) }
+    if res.heartbeat_observe(&short_heartbeat, 20u64, 100u64) != ok { os.exit(4i32) }
+    if res.heartbeat_observe(&short_heartbeat, 30u64, 0u64) != ok { os.exit(4i32) }
+    let (short_count, short_sweep_error) = res.heartbeat_sweep(&short_heartbeat, 100u64, 10u64, short_dead[..])
+    if short_sweep_error != res.TooSmall || short_count != 2usize || short_heartbeat.count != 3usize { os.exit(4i32) }
+    if short_ids[0usize] != 10u64 || short_ids[1usize] != 20u64 || short_ids[2usize] != 30u64 { os.exit(4i32) }
+    if short_seen[0usize] != 0u64 || short_seen[1usize] != 100u64 || short_seen[2usize] != 0u64 || short_dead[0usize] != 99u64 { os.exit(4i32) }
+
     // 5: load shedding by band.
     let thresholds: [3]f64 = [3]f64{ 0.9f64, 0.7f64, 0.4f64 }
     var s = res.load_shed(0.5f64, thresholds[..])
