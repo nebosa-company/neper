@@ -102,6 +102,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e18 != cmap.Invalid { os.exit(27) }
     let (no_shards, e19) = cmap.init[u64, u64](a, 8usize, 0u16)
     if e19 != cmap.Invalid { os.exit(28) }
+    // Capacity is an aggregate bound even when it cannot divide among shards.
+    let (limited0, e38) = cmap.init[u64, u64](a, 1usize, 2u16)
+    if e38 != ok { os.exit(53) }
+    var limited = limited0
+    let (first_limited, e39) = cmap.put[u64, u64](&limited, 1u64, 10u64)
+    if e39 != ok || !first_limited { os.exit(54) }
+    let (second_limited, e40) = cmap.put[u64, u64](&limited, 2u64, 20u64)
+    if e40 != cmap.Full || second_limited { os.exit(55) }
+    let (limited_count, e41) = cmap.len[u64, u64](&limited)
+    if e41 != ok || limited_count != 1usize { os.exit(56) }
     let (m0, e20) = cmap.init[u64, u64](a, 8usize, 1u16)
     if e20 != ok { os.exit(29) }
     var m = m0

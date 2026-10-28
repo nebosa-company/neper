@@ -2,9 +2,11 @@
 // table of its own under its own mutex, so operations on different shards never
 // wait on each other and one on the same shard is linearizable by the lock. A key's
 // shard is the top bits of `K.hash`; its slot is the low bits, probed linearly.
-// Capacity is split evenly across the shards and a new key into a full shard is
-// `Full` -- the map is fixed, and "full" is the shard's fullness, which is what a
-// caller sizing `capacity` should expect. `len` sums the shards one after another.
+// Capacity is apportioned exactly across the active shards. When more shards than
+// capacity are requested, the active shard count is reduced so every shard has room
+// for a key. A new key into a full shard is `Full` -- the map is fixed, and "full"
+// is the shard's fullness, which is what a caller sizing `capacity` should expect.
+// `len` sums the shards one after another.
 // After `close` every operation is `Closed`. Zero capacity or shards is `Invalid`.
 use e.mem
 use e.sync
@@ -18,21 +20,27 @@ const EMPTY: u8 = 0u8
 const FULL_MARK: u8 = 1u8
 const DEAD: u8 = 2u8
 
-type Shard[K: type, V: type] = struct { lock: sync.Mutex, keys: []K, values: []V, marks: []u8, count: usize, used: usize }
-type State[K: type, V: type] = struct { shards: []Shard[K, V], closed: bool, slots_per_shard: usize }
+type Shard[K: type, V: type] = struct { lock: sync.Mutex, keys: []K, values: []V, marks: []u8, count: usize, used: usize, limit: usize }
+type State[K: type, V: type] = struct { shards: []Shard[K, V], closed: bool }
 
 fn init[K: type, V: type](a: *mem.Arena, capacity: usize, shards: u16) -> (Map[K, V], err) {
     if capacity == 0usize || shards == 0u16 { ret (zero, Invalid) }
     let (storage, storage_error) = mem.alloc[State[K, V]](a, 1usize)
     if storage_error != ok { ret (zero, storage_error) }
-    let (table, table_error) = mem.alloc[Shard[K, V]](a, usize(shards))
+    var active = usize(shards)
+    if active > capacity { active = capacity }
+    let (table, table_error) = mem.alloc[Shard[K, V]](a, active)
     if table_error != ok { ret (zero, table_error) }
-    // Each shard holds its share of the capacity at a load under three quarters.
-    var per_shard = (capacity + usize(shards) - 1usize) / usize(shards)
-    var slots = 4usize
-    while slots * 3usize < per_shard * 4usize { slots = slots * 2usize }
+    // Give the first remainder shards one extra key, so the limits sum exactly
+    // to capacity while each table remains below a three-quarter load.
+    let base = capacity / active
+    let extra = capacity % active
     var i = 0usize
-    while i < usize(shards) {
+    while i < active {
+        var limit = base
+        if i < extra { limit += 1usize }
+        var slots = 4usize
+        while slots * 3usize < limit * 4usize { slots = slots * 2usize }
         let (keys, keys_error) = mem.alloc[K](a, slots)
         if keys_error != ok { ret (zero, keys_error) }
         let (values, values_error) = mem.alloc[V](a, slots)
@@ -50,11 +58,11 @@ fn init[K: type, V: type](a: *mem.Arena, capacity: usize, shards: u16) -> (Map[K
         table[i].marks = marks
         table[i].count = 0usize
         table[i].used = 0usize
+        table[i].limit = limit
         i += 1usize
     }
     storage[0].shards = table
     storage[0].closed = false
-    storage[0].slots_per_shard = per_shard
     var m: Map[K, V] = zero
     m.state = mem.cast[*void](&storage[0])
     ret (m, ok)
@@ -121,7 +129,7 @@ fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
         sync.mutex_unlock(&shard.lock)
         ret (false, ok)
     }
-    if shard.count >= s.slots_per_shard || shard.used + 1usize > shard.marks.len * 3usize / 4usize {
+    if shard.count >= shard.limit || shard.used + 1usize > shard.marks.len * 3usize / 4usize {
         sync.mutex_unlock(&shard.lock)
         ret (false, Full)
     }
