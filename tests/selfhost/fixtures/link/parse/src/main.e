@@ -44,6 +44,17 @@ fn close(x: f64, y: f64) -> bool {
     ret d < 0.000000001f64
 }
 
+// Every grammar parser must reject the shared table representation before it
+// reads a rule offset.
+fn malformed_grammar_rejected(g: *const parse.Grammar, chart: []u64, items: []parse.Item, sets: []usize, answers: []u32) -> bool {
+    let (_, cyk_problem) = parse.cyk(g, 0u32, answers[..0usize], chart)
+    if cyk_problem != parse.Invalid { ret false }
+    let (_, _, earley_problem) = parse.earley(g, 0u32, answers[..0usize], items, sets)
+    if earley_problem != parse.Invalid { ret false }
+    let (_, next_problem) = parse.next_terminals(g, 0u32, answers[..0usize], answers, items, sets)
+    ret next_problem == parse.Invalid
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var tokens: [64]parse.Token = zero
 
@@ -207,7 +218,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
 
-    // 9: packrat PEG over a JSON-ish subset.
+    // 9: every parsing entry point rejects malformed rule-offset tables.
+    let malformed_lhs_one = [1]u32 { 1u32 }
+    let malformed_rhs_one = [1]u32 { 0u32 }
+    let malformed_start_empty = [1]usize { 0usize }
+    let malformed_start_short = [1]usize { 0usize }
+    let malformed_start_nonzero = [2]usize { 1usize, 1usize }
+    let malformed_start_trailing = [2]usize { 0usize, 0usize }
+    let malformed_lhs_two = [2]u32 { 1u32, 1u32 }
+    let malformed_start_outside = [3]usize { 0usize, 2usize, 1usize }
+    let malformed_lhs_three = [3]u32 { 1u32, 1u32, 1u32 }
+    let malformed_rhs_two = [2]u32 { 0u32, 0u32 }
+    let malformed_start_backwards = [4]usize { 0usize, 2usize, 1usize, 2usize }
+    let malformed_empty = parse.grammar(malformed_lhs_one[..], malformed_rhs_one[..], malformed_start_empty[..0usize], 1u32)
+    let malformed_short = parse.grammar(malformed_lhs_one[..], malformed_rhs_one[..], malformed_start_short[..], 1u32)
+    let malformed_nonzero = parse.grammar(malformed_lhs_one[..], malformed_rhs_one[..], malformed_start_nonzero[..], 1u32)
+    let malformed_trailing = parse.grammar(malformed_lhs_one[..], malformed_rhs_one[..], malformed_start_trailing[..], 1u32)
+    let malformed_outside = parse.grammar(malformed_lhs_two[..], malformed_rhs_one[..], malformed_start_outside[..], 1u32)
+    let malformed_backwards = parse.grammar(malformed_lhs_three[..], malformed_rhs_two[..], malformed_start_backwards[..], 1u32)
+    if !malformed_grammar_rejected(&malformed_empty, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_short, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_nonzero, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_trailing, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_outside, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_backwards, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+
+    // 10: packrat PEG over a JSON-ish subset.
     let peg_op = [96]u8 { 1u8, 1u8, 5u8, 6u8, 2u8, 1u8, 8u8, 7u8, 1u8, 7u8, 4u8, 8u8, 4u8, 4u8, 1u8, 3u8, 4u8, 1u8, 9u8, 3u8, 4u8, 5u8, 1u8, 6u8, 1u8, 4u8, 4u8, 11u8, 11u8, 11u8, 4u8, 4u8, 1u8, 11u8, 1u8, 4u8, 6u8, 4u8, 8u8, 1u8, 4u8, 4u8, 4u8, 11u8, 11u8, 11u8, 1u8, 4u8, 4u8, 4u8, 4u8, 1u8, 4u8, 6u8, 4u8, 1u8, 11u8, 11u8, 8u8, 1u8, 4u8, 4u8, 4u8, 11u8, 11u8, 11u8, 11u8, 1u8, 1u8, 1u8, 1u8, 4u8, 4u8, 4u8, 1u8, 1u8, 1u8, 1u8, 1u8, 4u8, 4u8, 4u8, 4u8, 1u8, 1u8, 1u8, 1u8, 4u8, 4u8, 4u8, 5u8, 5u8, 5u8, 5u8, 5u8, 5u8 }
     let peg_a = [96]u32 { 32u32, 10u32, 0u32, 2u32, 48u32, 45u32, 5u32, 4u32, 46u32, 4u32, 8u32, 10u32, 7u32, 6u32, 92u32, 0u32, 14u32, 34u32, 17u32, 0u32, 18u32, 16u32, 34u32, 21u32, 34u32, 23u32, 22u32, 0u32, 1u32, 1u32, 27u32, 28u32, 91u32, 1u32, 44u32, 34u32, 35u32, 31u32, 37u32, 93u32, 38u32, 33u32, 32u32, 1u32, 3u32, 1u32, 58u32, 46u32, 45u32, 44u32, 43u32, 44u32, 51u32, 52u32, 50u32, 123u32, 1u32, 6u32, 57u32, 125u32, 58u32, 56u32, 55u32, 5u32, 4u32, 3u32, 2u32, 116u32, 114u32, 117u32, 101u32, 69u32, 68u32, 67u32, 102u32, 97u32, 108u32, 115u32, 101u32, 77u32, 76u32, 75u32, 74u32, 110u32, 117u32, 108u32, 108u32, 85u32, 84u32, 83u32, 82u32, 73u32, 66u32, 65u32, 64u32, 63u32 }
     let peg_b = [96]u32 { 0u32, 0u32, 1u32, 0u32, 57u32, 0u32, 0u32, 0u32, 0u32, 0u32, 9u32, 0u32, 11u32, 12u32, 0u32, 0u32, 15u32, 0u32, 0u32, 0u32, 19u32, 20u32, 0u32, 0u32, 0u32, 24u32, 25u32, 0u32, 0u32, 0u32, 29u32, 30u32, 0u32, 0u32, 0u32, 31u32, 0u32, 36u32, 0u32, 0u32, 39u32, 40u32, 41u32, 0u32, 0u32, 0u32, 0u32, 31u32, 47u32, 48u32, 49u32, 0u32, 50u32, 0u32, 53u32, 0u32, 0u32, 0u32, 0u32, 0u32, 59u32, 60u32, 61u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 70u32, 71u32, 72u32, 0u32, 0u32, 0u32, 0u32, 0u32, 78u32, 79u32, 80u32, 81u32, 0u32, 0u32, 0u32, 0u32, 86u32, 87u32, 88u32, 89u32, 90u32, 91u32, 92u32, 93u32, 94u32 }

@@ -478,6 +478,22 @@ fn grammar(lhs: []const u32, rhs: []const u32, rule_start: []const usize, termin
     ret Grammar { lhs: lhs, rhs: rhs, rule_start: rule_start, terminals: terminals }
 }
 
+// The rule offsets form one complete, nondecreasing partition of `rhs`: there
+// is one more offset than lhs entries, the first is zero and the last is
+// `rhs.len`. Keep this at each parser entry point so caller-provided tables
+// cannot reach unchecked rule arithmetic.
+fn grammar_valid(g: *const Grammar) -> bool {
+    if g.rule_start.len == 0usize { ret false }
+    let last = g.rule_start.len - 1usize
+    if last != g.lhs.len || g.rule_start[0usize] != 0usize || g.rule_start[last] != g.rhs.len { ret false }
+    var i = 1usize
+    while i < g.rule_start.len {
+        if g.rule_start[i] < g.rule_start[i - 1usize] || g.rule_start[i] > g.rhs.len { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn rule_count(g: *const Grammar) -> usize { ret g.rule_start.len - 1usize }
 fn rule_len(g: *const Grammar, rule: usize) -> usize { ret g.rule_start[rule + 1usize] - g.rule_start[rule] }
 fn rule_symbol(g: *const Grammar, rule: usize, at_pos: usize) -> u32 { ret g.rhs[g.rule_start[rule] + at_pos] }
@@ -487,6 +503,7 @@ fn rule_symbol(g: *const Grammar, rule: usize, at_pos: usize) -> u32 { ret g.rhs
 // receives, at `(len - 1) * n + i`, the bitset of symbols deriving
 // `sentence[i..i + len]`. Answers whether `start` derives the sentence.
 fn cyk(g: *const Grammar, start: u32, sentence: []const u32, chart: []u64) -> (bool, err) {
+    if !grammar_valid(g) || start >= 64u32 { ret (false, Invalid) }
     let n = sentence.len
     if chart.len < n * n { ret (false, TooSmall) }
     let rules = rule_count(g)
@@ -582,6 +599,7 @@ fn earley_add(items: []Item, from: usize, used: usize, it: Item) -> (usize, err)
 // Fill the Earley chart for `sentence`: set `k` is `items[sets[k]..sets[k + 1]]`
 // for `k` in `0..=n`, `sets.len >= n + 2`. Answers the item count.
 fn earley_run(g: *const Grammar, start: u32, sentence: []const u32, items: []Item, sets: []usize) -> (usize, err) {
+    if !grammar_valid(g) { ret (0usize, Invalid) }
     let n = sentence.len
     if sets.len < n + 2usize { ret (0usize, TooSmall) }
     let nullable = nullable_set(g)
