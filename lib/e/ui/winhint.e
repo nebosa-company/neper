@@ -22,10 +22,14 @@ fn advance(font: shape.Font, ppem: u32, scalar: u32) -> (u32, bool) {
     if gid == 0u32 { ret (0u32, false) }
     let records = usize(shape.u16_at(d, hdmx.at + 2usize))
     let size = usize(shape.u32_at(d, hdmx.at + 4usize))
+    // Each record is ppem, max width, then one byte per glyph. Keep every
+    // calculation within the hdmx table rather than merely within the font:
+    // adjacent tables are not device metrics just because the file is contiguous.
+    if size < 3usize || usize(gid) >= size - 2usize { ret (0u32, false) }
+    if records > (hdmx.len - 8usize) / size { ret (0u32, false) }
     var r = 0usize
     while r < records {
         let at = hdmx.at + 8usize + size * r
-        if at + 2usize + usize(gid) >= d.len { ret (0u32, false) }
         if u32(d[at]) == ppem { ret (u32(d[at + 2usize + usize(gid)]), true) }
         r += 1usize
     }
