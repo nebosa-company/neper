@@ -11,6 +11,18 @@ use e.mem
 use e.os
 use e.time
 
+type PartialWriter = struct { token: *cancel.Token, calls: usize }
+
+fn partial_write(ctx: *void, src: []const u8) -> (usize, err) {
+    let writer_state = mem.cast[*PartialWriter](ctx)
+    writer_state.calls = writer_state.calls + 1usize
+    if writer_state.calls == 1usize {
+        cancel.request(writer_state.token)
+        ret (2usize, ok)
+    }
+    ret (src.len, ok)
+}
+
 fn loopback() -> os.SocketAddress {
     var address: os.SocketAddress = zero
     address.family = .Ip4
@@ -78,6 +90,30 @@ fn exchange(a: *mem.Arena, loop: *async.Loop, client: os.Socket, server: os.Sock
     ret 0i32
 }
 
+fn partial_write_cancellation(a: *mem.Arena, loop: *async.Loop) -> i32 {
+    var token = cancel.token()
+    let control = cancel.Control { token: &token, deadline: time.Instant { nanos: 0i64 }, has_deadline: false }
+    var callback_state = PartialWriter { token: &token, calls: 0usize }
+    let sink = io.Writer { ctx: mem.cast[*void](&callback_state), write: partial_write, flush: socket_flush }
+    let (writing, write_error) = aio.write(a, loop, sink, "partial write", control)
+    if write_error != ok { ret 37i32 }
+    var writing_op = writing
+    let (_, wait_error) = aio.wait[usize](loop, &writing_op)
+    if wait_error != aio.Cancelled { ret 38i32 }
+    if aio.state[usize](&writing_op) != .Cancelled || aio.progress[usize](&writing_op).bytes != 2u64 || callback_state.calls != 1usize { ret 39i32 }
+    ret 0i32
+}
+
+fn wait_any_pending_connect(a: *mem.Arena, loop: *async.Loop, control: cancel.Control) -> i32 {
+    let (connect_record, record_error) = aio.new_record(a, loop, control, .Connect)
+    if record_error != ok { ret 40i32 }
+    var candidates: [1]aio.AnyOp = [1]aio.AnyOp{ aio.AnyOp { state: mem.cast[*void](connect_record) } }
+    let (selected, is_ready, wait_error) = aio.wait_any(loop, candidates[..], time.Duration { nanos: 0i64 })
+    if wait_error != ok { ret 41i32 }
+    if is_ready || selected != 0usize || connect_record.state != .Pending { ret 42i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena) -> err {
     let (loop0, loop_error) = async.init(a)
     if loop_error == async.Unsupported { ret ok }
@@ -85,6 +121,11 @@ fn main(a: *mem.Arena) -> err {
     var loop = loop0
     var token = cancel.token()
     let free = cancel.Control { token: &token, deadline: time.Instant { nanos: 0i64 }, has_deadline: false }
+
+    let partial_write_code = partial_write_cancellation(a, &loop)
+    if partial_write_code != 0i32 { os.exit(partial_write_code) }
+    let pending_connect_code = wait_any_pending_connect(a, &loop, free)
+    if pending_connect_code != 0i32 { os.exit(pending_connect_code) }
 
     // A listener on an ephemeral port; an accept operation registered on the loop.
     let (listener, listener_error) = os.socket_open(.Ip4, .Stream)

@@ -143,24 +143,29 @@ fn settle(r: *Record, outcome: State, failure: err) {
     }
 }
 
+fn settle_control(r: *Record) -> bool {
+    let (check_now, check_now_error) = time.monotonic()
+    if check_now_error == ok {
+        let check_verdict = cancel_api.check(r.control, check_now)
+        if check_verdict == cancel_api.Cancelled {
+            settle(r, .Cancelled, Cancelled)
+            ret true
+        }
+        if check_verdict == cancel_api.Timeout {
+            settle(r, .TimedOut, Timeout)
+            ret true
+        }
+    }
+    ret false
+}
+
 // One attempt at the operation, after the control's checks. `ready` means the poller
 // named this socket; `failed` is its failure verdict, which is how a refused connect
 // arrives. A timer or wake event may produce no matching event, so it may only check a
 // pending socket's control and must not perform socket I/O or complete a connect.
 fn attempt(r: *Record, ready: bool, failed: bool) {
     if terminal(r) { ret }
-    let (now, now_error) = time.monotonic()
-    if now_error == ok {
-        let verdict = cancel_api.check(r.control, now)
-        if verdict == cancel_api.Cancelled {
-            settle(r, .Cancelled, Cancelled)
-            ret
-        }
-        if verdict == cancel_api.Timeout {
-            settle(r, .TimedOut, Timeout)
-            ret
-        }
-    }
+    if settle_control(r) { ret }
     if !ready && (r.kind == .Accept || r.kind == .Connect) { ret }
     if r.kind == .Read {
         let (got, read_error) = r.reader.read(r.reader.ctx, r.dst)
@@ -170,6 +175,7 @@ fn attempt(r: *Record, ready: bool, failed: bool) {
     }
     if r.kind == .Write {
         while r.bytes < r.src.len {
+            if r.bytes > 0usize && settle_control(r) { ret }
             let (put, write_error) = r.writer.write(r.writer.ctx, r.src[r.bytes..])
             r.bytes += put
             if write_error != ok {
@@ -181,6 +187,7 @@ fn attempt(r: *Record, ready: bool, failed: bool) {
                 ret
             }
         }
+        if settle_control(r) { ret }
         let flush_error = r.writer.flush(r.writer.ctx)
         if flush_error != ok { settle(r, .Failed, flush_error) } else { settle(r, .Succeeded, ok) }
         ret
