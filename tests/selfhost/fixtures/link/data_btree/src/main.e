@@ -115,13 +115,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tiny0, tiny_error) = btree.btree(keys[..12usize], values[..12usize], count[..3usize], leaf[..3usize], next[..3usize], 4usize)
     if tiny_error != ok { os.exit(3i32) }
     var tiny = tiny0
-    var k = 0u64
-    var full = ok
-    while k < 20u64 && full == ok {
-        full = btree.insert(&tiny, k, 0u32)
-        k += 1u64
-    }
-    if full != btree.TooSmall { os.exit(3i32) }
+    if btree.insert(&tiny, 0u64, 10u32) != ok || btree.insert(&tiny, 1u64, 11u32) != ok || btree.insert(&tiny, 2u64, 12u32) != ok { os.exit(3i32) }
+    let old_root = tiny.root
+    if btree.insert(&tiny, 3u64, 13u32) != btree.TooSmall { os.exit(3i32) }
+    let (zero_value, has_zero) = btree.get(&tiny, 0u64)
+    let (_, has_failed) = btree.get(&tiny, 3u64)
+    let (after_failed, after_failed_error) = btree.scan(&tiny, 0u64, 4u64, scan_keys[..], scan_values[..])
+    if !has_zero || zero_value != 10u32 || has_failed || after_failed_error != ok || after_failed != 3usize || scan_keys[0usize] != 0u64 || scan_keys[1usize] != 1u64 || scan_keys[2usize] != 2u64 || tiny.root != old_root || tiny.used != 2usize || tiny.height != 1usize || tiny.count[usize(tiny.root)] != 3u32 { os.exit(3i32) }
+    if !btree.remove(&tiny, 2u64) || btree.insert(&tiny, 3u64, 13u32) != ok { os.exit(3i32) }
+    let (retry_value, has_retry) = btree.get(&tiny, 3u64)
+    if !has_retry || retry_value != 13u32 { os.exit(3i32) }
 
     try io.print("data btree ok\n")
     ret ok
