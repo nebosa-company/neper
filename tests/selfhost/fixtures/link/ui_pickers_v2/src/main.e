@@ -274,9 +274,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 206u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || stores[0usize].last_date.year != 2026i32 || stores[0usize].last_date.month != 2u8 || stores[0usize].last_date.day != 1u8 || stores[0usize].dates != 6usize || !widget.focus_within(&runtime, 233u64) { os.exit(42i32) }
     // (D1229) The theme's language picks the week's first day: in "en-US" the 1st of
     // March 2026 (a Sunday) opens the first column under "Su", the 8th right below
-    // it; in "ar-EG" (Saturday first) the same Sunday stands one column further in.
+    // it; in mixed-case "ar-eG" (Saturday first) the same Sunday stands one column
+    // further in.
     let us_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "en-US", runtime: &runtime }
-    let eg_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "ar-EG", runtime: &runtime }
+    let eg_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "ar-eG", runtime: &runtime }
     let first_of_march = time.Date { year: 2026i32, month: 3u8, day: 1u8 }
     let no_dates: widget.Change[time.Date] = zero
     var us_first_x: f32 = 0.0
@@ -456,9 +457,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // (D1388) In German the calendar says "März 2026" over "Mo Di Mi ..."; in
     // French "mars 2026".
     var german_theme = us_theme
-    german_theme.language = "de-DE"
+    german_theme.language = "DE-de"
     var french_theme = us_theme
-    french_theme.language = "fr-FR"
+    french_theme.language = "Fr-fR"
     var no_german_marks: overlay.CalendarMarks = zero
     f = mem.arena_from(frame_storage)
     let (german_month, german_month_error) = overlay.calendar_with(&f, 3100u64, &german_theme, "Termin", first_of_march, first_of_march, false, false, first_of_march, first_of_march, first_of_march, false, picked_dates, picked_dates, no_german_marks)
@@ -763,7 +764,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let after_midnight = time.Time { hour: 0u8, minute: 5u8, second: 0u8, nanos: 0u32 }
     var clock_len = overlay.write_clock_in(clock_bytes, half_past_two, "en-US")
     if !mem.eq[u8](clock_bytes[0usize..clock_len], "2:30 PM") { os.exit(51i32) }
-    clock_len = overlay.write_clock_in(clock_bytes, after_midnight, "en-US")
+    clock_len = overlay.write_clock_in(clock_bytes, after_midnight, "en-us")
     if !mem.eq[u8](clock_bytes[0usize..clock_len], "12:05 AM") { os.exit(52i32) }
     clock_len = overlay.write_clock_in(clock_bytes, half_past_two, "de-DE")
     if !mem.eq[u8](clock_bytes[0usize..clock_len], "14:30") { os.exit(53i32) }
@@ -797,8 +798,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (date_bytes, date_bytes_error) = mem.alloc[u8](a, 24usize)
     if date_bytes_error != ok { os.exit(72i32) }
     let release = time.Date { year: 2026i32, month: 9u8, day: 5u8 }
-    var date_len = overlay.write_date_in(date_bytes, release, "en-US")
-    if !mem.eq[u8](date_bytes[0usize..date_len], "9/5/2026") || !mem.eq[u8](overlay.date_format_hint("en-US"), "mm/dd/yyyy") { os.exit(73i32) }
+    var date_len = overlay.write_date_in(date_bytes, release, "eN-uS")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "9/5/2026") || !mem.eq[u8](overlay.date_format_hint("eN-uS"), "mm/dd/yyyy") || overlay.date_order_of("EN-us") != 0u8 { os.exit(73i32) }
     date_len = overlay.write_date_in(date_bytes, release, "de-DE")
     if !mem.eq[u8](date_bytes[0usize..date_len], "05.09.2026") || !mem.eq[u8](overlay.date_format_hint("de-DE"), "dd.mm.yyyy") { os.exit(74i32) }
     date_len = overlay.write_date_in(date_bytes, release, "en-GB")

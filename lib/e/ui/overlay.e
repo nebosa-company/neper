@@ -3724,9 +3724,7 @@ fn week_start_of(language: str) -> usize {
     var at = 0usize
     while at < language.len {
         if (language[at] == 45u8 || language[at] == 95u8) && at + 3usize <= language.len {
-            let a = language[at + 1usize]
-            let b = language[at + 2usize]
-            if a >= 65u8 && a <= 90u8 && b >= 65u8 && b <= 90u8 && (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) {
+            if at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8 {
                 region = language[at + 1usize..at + 3usize]
             }
         }
@@ -3741,15 +3739,36 @@ fn week_start_of(language: str) -> usize {
     }
     var lang_end = 0usize
     while lang_end < language.len && language[lang_end] != 45u8 && language[lang_end] != 95u8 { lang_end += 1usize }
-    let lang = language[0usize..lang_end]
-    if lang.len == 2usize && ((lang[0usize] == 106u8 && lang[1usize] == 97u8) || (lang[0usize] == 107u8 && lang[1usize] == 111u8) || (lang[0usize] == 104u8 && lang[1usize] == 101u8)) { ret 6usize }
+    if lang_end == 2usize && (language_code_is(language, "ja") || language_code_is(language, "ko") || language_code_is(language, "he")) { ret 6usize }
     ret 0usize
 }
 
+fn ascii_lower(byte: u8) -> u8 {
+    if byte >= 65u8 && byte <= 90u8 { ret byte + 32u8 }
+    ret byte
+}
+
+fn ascii_same(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if ascii_lower(left[at]) != ascii_lower(right[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Whether `language` begins with the two-letter BCP 47 `code`, ignoring ASCII case.
+fn language_code_is(language: str, code: str) -> bool {
+    if language.len < 2usize || code.len != 2usize { ret false }
+    ret ascii_same(language[0usize..2usize], code)
+}
+
 fn week_region_in(list: str, region: str) -> bool {
+    if region.len != 2usize { ret false }
     var at = 0usize
     while at + 2usize <= list.len {
-        if list[at] == region[0usize] && list[at + 1usize] == region[1usize] { ret true }
+        if ascii_same(list[at..at + 2usize], region) { ret true }
         at += 3usize
     }
     ret false
@@ -4553,30 +4572,22 @@ fn month_turn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, kind: con
 // English in the US or with no region, and en-PH), 1 day-month-year (most), 2
 // year-month-day (ja, zh, ko, hu, lt).
 fn date_order_of(language: str) -> u8 {
-    let code = language_code(language)
-    if code.len == 0usize { ret 0u8 }
-    if mem.eq[u8](code, "ja") || mem.eq[u8](code, "zh") || mem.eq[u8](code, "ko") || mem.eq[u8](code, "hu") || mem.eq[u8](code, "lt") { ret 2u8 }
-    if mem.eq[u8](code, "en") {
+    if language.len == 0usize { ret 0u8 }
+    if language_code_is(language, "ja") || language_code_is(language, "zh") || language_code_is(language, "ko") || language_code_is(language, "hu") || language_code_is(language, "lt") { ret 2u8 }
+    if language_code_is(language, "en") {
         if language.len == 2usize { ret 0u8 }
         if language.len >= 5usize {
             let region = language[3usize..5usize]
-            if mem.eq[u8](region, "US") || mem.eq[u8](region, "PH") { ret 0u8 }
+            if week_region_in("US PH", region) { ret 0u8 }
         }
     }
     ret 1u8
 }
 
-// (D1388) The theme language's two-letter code, lower case ("de" of "de-AT").
-fn language_code(language: str) -> str {
-    if language.len < 2usize { ret "" }
-    ret language[0usize..2usize]
-}
-
 // (D1388, docs/ux/components/DatePicker, locale) A month's name in German,
 // French or Spanish when the theme language is one, else English.
 fn month_name_in(month: i64, language: str) -> str {
-    let code = language_code(language)
-    if control.same_text(code, "de") {
+    if language_code_is(language, "de") {
         if month == 1i64 { ret "Januar" }
         if month == 2i64 { ret "Februar" }
         if month == 3i64 { ret "März" }
@@ -4590,7 +4601,7 @@ fn month_name_in(month: i64, language: str) -> str {
         if month == 11i64 { ret "November" }
         ret "Dezember"
     }
-    if control.same_text(code, "fr") {
+    if language_code_is(language, "fr") {
         if month == 1i64 { ret "janvier" }
         if month == 2i64 { ret "février" }
         if month == 3i64 { ret "mars" }
@@ -4604,7 +4615,7 @@ fn month_name_in(month: i64, language: str) -> str {
         if month == 11i64 { ret "novembre" }
         ret "décembre"
     }
-    if control.same_text(code, "es") {
+    if language_code_is(language, "es") {
         if month == 1i64 { ret "enero" }
         if month == 2i64 { ret "febrero" }
         if month == 3i64 { ret "marzo" }
@@ -4624,8 +4635,7 @@ fn month_name_in(month: i64, language: str) -> str {
 // (D1388) A weekday's column head (Monday 0) in German, French or Spanish when
 // the theme language is one, else English.
 fn weekday_name_in(day: usize, narrow: bool, language: str) -> str {
-    let code = language_code(language)
-    if control.same_text(code, "de") {
+    if language_code_is(language, "de") {
         if narrow {
             if day == 0usize { ret "M" }
             if day == 1usize || day == 3usize { ret "D" }
@@ -4641,7 +4651,7 @@ fn weekday_name_in(day: usize, narrow: bool, language: str) -> str {
         if day == 5usize { ret "Sa" }
         ret "So"
     }
-    if control.same_text(code, "fr") {
+    if language_code_is(language, "fr") {
         if narrow {
             if day == 0usize { ret "L" }
             if day == 1usize || day == 2usize { ret "M" }
@@ -4658,7 +4668,7 @@ fn weekday_name_in(day: usize, narrow: bool, language: str) -> str {
         if day == 5usize { ret "sa" }
         ret "di"
     }
-    if control.same_text(code, "es") {
+    if language_code_is(language, "es") {
         if narrow {
             if day == 0usize { ret "L" }
             if day == 1usize || day == 2usize { ret "M" }
@@ -6971,9 +6981,7 @@ fn uses_12_hour(language: str) -> bool {
     var at = 0usize
     while at + 3usize <= language.len {
         if language[at] == 45u8 || language[at] == 95u8 {
-            let a = language[at + 1usize]
-            let b = language[at + 2usize]
-            if (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) && week_region_in(twelve, language[at + 1usize..at + 3usize]) && a >= 65u8 && b >= 65u8 { ret true }
+            if (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) && week_region_in(twelve, language[at + 1usize..at + 3usize]) { ret true }
         }
         at += 1usize
     }
