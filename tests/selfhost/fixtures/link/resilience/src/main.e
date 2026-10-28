@@ -76,6 +76,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !saw_cap { os.exit(3i32) }
     if res.backoff_decorrelated(top, 100u64, top, &r) < 100u64 { os.exit(3i32) }
+    if res.backoff_decorrelated(6000u64, 100u64, 5000u64, &r) != 5000u64 { os.exit(3i32) }
     if res.backoff_decorrelated(0u64, 10u64, 10u64, &r) != 10u64 { os.exit(3i32) }
 
     // 4: heartbeat observe and sweep.

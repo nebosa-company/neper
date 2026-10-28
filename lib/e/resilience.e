@@ -96,6 +96,7 @@ fn backoff_decorrelated(previous: u64, base: u64, cap: u64, rng: *rand.Pcg64) ->
     if base >= cap { ret cap }
     var low = previous
     if low < base { low = base }
+    if low > cap { low = cap }
     var high = low *% 3u64
     if high / 3u64 != low || high > cap { high = cap }
     ret low + rand.pcg64_bounded(rng, high - low + 1u64)
