@@ -298,7 +298,7 @@ fn counter_instantiate(l: *Layout, name: str, value: i64) {
     let pushed = list.push[CounterInst](&l.counters, CounterInst { name: name, value: value, depth: l.gen_depth, nested: nested, pend: 0i64, has_pend: false })
 }
 
-type RevAcc = struct { sum: i64, last: i64 }
+type RevAcc = struct { sum: i64, last: i64, has_set: bool, set_val: i64, set_sum: i64 }
 
 // The `counter-increment` of `name` in `text` (default 1), when it names the counter.
 fn incr_of(l: *Layout, text: str, name: str) -> (i64, bool) {
@@ -341,11 +341,22 @@ fn implicit_list_reset(l: *Layout, e: u32) -> bool {
 
 fn rev_style(l: *Layout, s: *const style.Style, name: str, acc: *RevAcc) {
     let (incr, has) = extra_text(s, "counter-increment")
-    if !has { ret }
-    let (v, found) = incr_of(l, incr, name)
-    if found && v != 0i64 {
-        acc.sum += v
-        acc.last = v
+    if has {
+        let (v, found) = incr_of(l, incr, name)
+        if found && v != 0i64 {
+            acc.sum += v
+            acc.last = v
+        }
+    }
+    // A `counter-set` pins the value after its element, which fixes the start by running the steps back.
+    let (setv, has_setv) = extra_text(s, "counter-set")
+    if has_setv {
+        let (sv, set_found) = incr_of(l, setv, name)
+        if set_found {
+            acc.has_set = true
+            acc.set_val = sv
+            acc.set_sum = acc.sum
+        }
     }
 }
 
@@ -385,17 +396,18 @@ fn rev_walk(l: *Layout, e: u32, name: str, acc: *RevAcc, origin: bool) {
 
 // The initial value of `reversed(name)` on `node`: the counter reaches the size of its last step on the last item that steps it.
 fn rev_initial(l: *Layout, node: u32, name: str) -> i64 {
-    var acc = RevAcc { sum: 0i64, last: 0i64 }
+    var acc = RevAcc { sum: 0i64, last: 0i64, has_set: false, set_val: 0i64, set_sum: 0i64 }
     rev_walk(l, node, name, &acc, true)
     var sib = l.d.nodes[usize(node)].next_sibling
     while sib != html.NONE {
         if l.d.nodes[usize(sib)].kind == .Element {
             let (rs, has_rs) = extra_text(&l.styles[usize(sib)], "counter-reset")
             if (has_rs && resets_name(l, rs, name)) || (!has_rs && str.eq(name, "list-item") && implicit_list_reset(l, sib)) { break }
-            rev_walk(l, sib, name, &acc, false)
+            if !(str.eq(name, "list-item") && l.styles[usize(sib)].display == .ListItem) { rev_walk(l, sib, name, &acc, false) }
         }
         sib = l.d.nodes[usize(sib)].next_sibling
     }
+    if acc.has_set { ret acc.set_val - acc.set_sum }
     ret 0i64 - acc.sum - acc.last
 }
 
@@ -812,6 +824,23 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     if n.kind != .Element { ret }
     let s = &l.styles[usize(node)]
     if s.display == .None { ret }
+    if s.display == .ListItem && l.d.nodes[usize(node)].parent != html.NONE && css_resets_list_item(l, l.d.nodes[usize(node)].parent) {
+        // A list the counter rules count: an item without its own step adds one, ahead of its `counter-set`.
+        let (sincr, has_sincr) = extra_text(s, "counter-increment")
+        var own_step = false
+        if has_sincr {
+            let (siv, sfound) = incr_of(l, sincr, "list-item")
+            own_step = sfound
+        }
+        let sat = find_counter(l, "list-item")
+        if !own_step && sat >= 0i64 {
+            if l.counters.items[usize(sat)].has_pend {
+                l.counters.items[usize(sat)].value = l.counters.items[usize(sat)].pend
+                l.counters.items[usize(sat)].has_pend = false
+            }
+            l.counters.items[usize(sat)].value += li_default_step(l, node)
+        }
+    }
     apply_counter_props(l, s, node)
     // The implicit `list-item` counter: a list starts one and each item steps it (see `list_ordinal`).
     if n.namespace == .Html && (str.eq(n.name, "ol") || str.eq(n.name, "ul") || str.eq(n.name, "menu")) && !css_resets_list_item(l, node) { counter_instantiate(l, "list-item", 0i64) }
@@ -834,20 +863,7 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
         }
         let par = l.d.nodes[usize(node)].parent
         if par != html.NONE && css_resets_list_item(l, par) {
-            // A list whose counter the stylesheet resets counts by the CSS rules: an item without its own step adds one.
-            let (incr, has_incr) = extra_text(s, "counter-increment")
-            var own = false
-            if has_incr {
-                let (iv, found) = incr_of(l, incr, "list-item")
-                own = found
-            }
-            if !own {
-                if l.counters.items[usize(li_at)].has_pend {
-                    l.counters.items[usize(li_at)].value = l.counters.items[usize(li_at)].pend
-                    l.counters.items[usize(li_at)].has_pend = false
-                }
-                l.counters.items[usize(li_at)].value += li_default_step(l, node)
-            }
+            // Counted by the CSS rules: the item's step was taken before its `counter-set` (see above).
         } else {
             l.counters.items[usize(li_at)].value = list_ordinal(l, node)
         }

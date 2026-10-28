@@ -28,7 +28,7 @@ const H: usize = 600usize
 
 type Env = struct {
     fonts: *fontset.Set, client: *fetch.Client, q: *gpu.Queue,
-    frames: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer
+    frames: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, want_text: bool
 }
 
 fn abs_url(a: *mem.Arena, dir: str, name: str) -> str {
@@ -45,6 +45,9 @@ fn abs_url(a: *mem.Arena, dir: str, name: str) -> str {
 fn render(a: *mem.Arena, env: *Env, address: str, out: []u32) -> bool {
     let (pg, le) = page.load(a, env.client, env.fonts, address, f32(W), f32(H), 134217728usize)
     if le != ok { ret false }
+    if env.want_text {
+        let dump_row = io.printf["TEXT {} :: {}\n"](address, view.fragment_text(pg.view))
+    }
     page.attach_renderer(pg, env.renderer)
     let (bv, be) = scene.builder(a, 200000usize)
     if be != ok { ret false }
@@ -118,6 +121,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var floor = 0usize
     var show = false
     var poison = false
+    var want_text = false
     var only = ""
     var out_dir = ""
     var i = 1usize
@@ -128,6 +132,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if ne == ok { floor = usize(n) }
         } else if str.eq(args[i], "--show") {
             show = true
+        } else if str.eq(args[i], "--text") {
+            want_text = true
         } else if str.eq(args[i], "--poison") {
             poison = true
         } else if str.eq(args[i], "--only") {
@@ -179,7 +185,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (cl, client_error) = fetch.client(a, cfg, 8usize)
     if client_error != ok { os.exit(7i32) }
     var client = cl
-    var env = Env { fonts: &fonts, client: &client, q: q, frames: frames, canvas: canvas, renderer: &renderer }
+    var env = Env { fonts: &fonts, client: &client, q: q, frames: frames, canvas: canvas, renderer: &renderer, want_text: want_text }
     let (pa_cell, pe1) = mem.alloc[u32](a, W * H)
     let (pb_cell, pe2) = mem.alloc[u32](a, W * H)
     if pe1 != ok || pe2 != ok { os.exit(8i32) }

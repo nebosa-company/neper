@@ -211,6 +211,24 @@ fn custom(v: *View) -> widget.Custom {
     ret widget.Custom { ctx: mem.cast[*void](v), measure: measure_view, paint: paint_view, state: widget.bytes_of[u64](&v.revision) }
 }
 
+// The text of every laid-out fragment, one per line, for the conformance runner's `--text`.
+fn fragment_text(v: *View) -> str {
+    var out: str = ""
+    var i = 0usize
+    while i < v.lay.frags.len {
+        let t = v.lay.frags.items[i].text
+        if t.len > 0usize {
+            let (joined, je) = str.concat(v.arena, out, t)
+            if je != ok { ret out }
+            let (line, le) = str.concat(v.arena, joined, " | ")
+            if le != ok { ret out }
+            out = line
+        }
+        i += 1usize
+    }
+    ret out
+}
+
 // Notches of the mouse wheel scroll this many pixels.
 fn wheel_step() -> f32 { ret 48.0 }
 
