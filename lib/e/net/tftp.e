@@ -46,8 +46,9 @@ fn put_cstr(dst: []u8, at: usize, s: str) -> (usize, bool) {
     ret (at + s.len + 1usize, true)
 }
 
-// `option\0value\0` pairs for a request or OACK: `names[i]` with `values[i]`.
+// `option\0value\0` pairs for a request or OACK; the parallel slices must match.
 fn put_options(dst: []u8, at: usize, names: []const str, values: []const str) -> (usize, bool) {
+    if names.len != values.len { ret (at, false) }
     var n = at
     var i = 0usize
     while i < names.len {
@@ -61,8 +62,9 @@ fn put_options(dst: []u8, at: usize, names: []const str, values: []const str) ->
     ret (n, true)
 }
 
-// RRQ (`writing == false`) or WRQ.
+// RRQ (`writing == false`) or WRQ; unequal option slices are Malformed and leave `dst` untouched.
 fn encode_request(writing: bool, filename: str, mode: str, names: []const str, values: []const str, dst: []u8) -> (usize, err) {
+    if names.len != values.len { ret (0usize, Malformed) }
     if dst.len < 2usize { ret (0usize, TooSmall) }
     var op = op_rrq()
     if writing { op = op_wrq() }
@@ -104,7 +106,9 @@ fn encode_error(code: u16, message: str, dst: []u8) -> (usize, err) {
     ret (n, ok)
 }
 
+// Unequal option slices are Malformed and leave `dst` untouched.
 fn encode_oack(names: []const str, values: []const str, dst: []u8) -> (usize, err) {
+    if names.len != values.len { ret (0usize, Malformed) }
     if dst.len < 2usize { ret (0usize, TooSmall) }
     put_u16(dst, 0usize, op_oack())
     let (n, fits) = put_options(dst, 2usize, names, values)
@@ -289,7 +293,6 @@ fn read_step(t: *Transfer, incoming: []const u8, reply: []u8) -> (Step, err) {
         ret (s, ok)
     }
     if p.opcode != op_data() { ret (s, Protocol) }
-    let expected = t.block + 1u16
     if p.block == t.block && t.block != 0u16 {
         // the server did not see our ACK: answer it again, store nothing
         let (n, e) = encode_ack(p.block, reply)
@@ -297,6 +300,11 @@ fn read_step(t: *Transfer, incoming: []const u8, reply: []u8) -> (Step, err) {
         s.reply_len = n
         ret (s, ok)
     }
+    if t.block == 65535u16 {
+        if p.block == 0u16 { ret (s, TooLong) }
+        ret (s, ok)
+    }
+    let expected = t.block + 1u16
     if p.block != expected { ret (s, ok) }
     if p.data.len > usize(t.blksize) { ret (s, Protocol) }
     if t.written + p.data.len > t.out.len { ret (s, TooLong) }
