@@ -64,6 +64,16 @@ fn flatten(a: *mem.Arena, root: *const cli.Command) -> ([]Node, err) {
         while k < c.subcommands.len {
             let sub = &c.subcommands[k]
             if !valid_name(sub.name) { ret (zero, Invalid) }
+            // Fish conditions retain at most sixteen words after the root.
+            // Reject a deeper tree here so no completion script can silently
+            // omit the oldest path component and leak another branch's items.
+            var depth = 1usize
+            var ancestor = i
+            while ancestor != 0usize {
+                depth += 1usize
+                ancestor = nodes[ancestor].parent
+            }
+            if depth > 16usize { ret (zero, Invalid) }
             let (p, pe) = joined(a, nodes[i].path, sub.name)
             if pe != ok { ret (zero, pe) }
             nodes[used] = Node{ path: p, command: sub, parent: i }
