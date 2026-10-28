@@ -313,7 +313,11 @@ fn card_expiry(month: u32, year: u32, now_month: u32, now_year: u32) -> bool {
     if month < 1u32 || month > 12u32 { ret false }
     var full = year
     if year < 100u32 { full = 2000u32 + year }
-    if full < now_year || full > now_year + 20u32 { ret false }
+    // The current year is a four-digit calendar year. Reject an out-of-range
+    // value before the subtraction-based future bound, so malformed u32 input
+    // cannot make an upper-bound addition overflow.
+    if now_year > 9999u32 || full < now_year { ret false }
+    if full - now_year > 20u32 { ret false }
     if full == now_year && month < now_month { ret false }
     ret true
 }
