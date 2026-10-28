@@ -26,6 +26,8 @@ const STD3_MAPPED: u8 = 6u8
 
 type Rec = struct { status: u8, off: usize, len: usize }
 
+error Invalid
+
 fn rec_start(records: str, i: usize) -> u32 {
     let at = i * 7usize
     ret (u32(records[at]) << 16u32) | (u32(records[at + 1usize]) << 8u32) | u32(records[at + 2usize])
@@ -55,19 +57,20 @@ fn is_mark(cp: u32) -> bool {
     ret c == .Mn || c == .Mc || c == .Me
 }
 
-fn nfc_points(a: *mem.Arena, points: []const u32) -> bool {
+fn nfc_points(a: *mem.Arena, points: []const u32) -> (bool, err) {
     let (text, te) = mem.alloc[u8](a, points.len * 4usize + 4usize)
-    if te != ok { ret false }
+    if te != ok { ret (false, te) }
     var used = 0usize
     var i = 0usize
     while i < points.len {
         let (w, ee) = utf8.encode(points[i], text[used..])
-        if ee != ok { ret false }
+        if ee != ok { ret (false, Invalid) }
         used += usize(w)
         i += 1usize
     }
     let (yes, ce) = normalize.is_normalized(text[0usize..used], .Nfc)
-    ret ce == ok && yes
+    if ce != ok { ret (false, ce) }
+    ret (yes, ok)
 }
 
 fn status_ok(status: u8, strict: bool) -> bool {
@@ -75,11 +78,11 @@ fn status_ok(status: u8, strict: bool) -> bool {
     ret status == STD3_VALID && !strict
 }
 
-// The A-label form of `domain`; false when the processing found an error.
-fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool) {
+// The A-label form of `domain`; `Invalid` when processing found an error.
+fn to_ascii_checked(a: *mem.Arena, domain: str, strict: bool) -> (str, err) {
     // 1. Map.
     let (mapped, me) = mem.alloc[u32](a, domain.len * 18usize + 8usize)
-    if me != ok { ret ("", false) }
+    if me != ok { ret ("", me) }
     var n = 0usize
     var bad = false
     var it = utf8.iterator(domain)
@@ -108,28 +111,28 @@ fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool) {
             n += 1usize
         }
     }
-    if bad { ret ("", false) }
+    if bad { ret ("", Invalid) }
     // 2. Normalise.
     let (text, te) = mem.alloc[u8](a, n * 4usize + 8usize)
-    if te != ok { ret ("", false) }
+    if te != ok { ret ("", te) }
     var used = 0usize
     var i = 0usize
     while i < n {
         let (w, ee) = utf8.encode(mapped[i], text[used..])
-        if ee != ok { ret ("", false) }
+        if ee != ok { ret ("", Invalid) }
         used += usize(w)
         i += 1usize
     }
     let (points, pe) = mem.alloc[u32](a, used * 4usize + 8usize)
-    if pe != ok { ret ("", false) }
+    if pe != ok { ret ("", pe) }
     let (count, ne) = normalize.normalize_into(text[0usize..used], points, .Nfc)
-    if ne != ok { ret ("", false) }
+    if ne != ok { ret ("", ne) }
     // 3 and 4. Labels: validate, decode `xn--` labels, remember each label's code points for the bidi rule.
     let (out, oe) = mem.alloc[u8](a, count * 8usize + 64usize)
-    if oe != ok { ret ("", false) }
+    if oe != ok { ret ("", oe) }
     var out_len = 0usize
     let (label_pts, lpe) = list.init[usize](a, 8usize)
-    if lpe != ok { ret ("", false) }
+    if lpe != ok { ret ("", lpe) }
     var spans = label_pts
     var start = 0usize
     var any_rtl = false
@@ -141,7 +144,7 @@ fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool) {
             var check = label
             var is_xn = false
             let (dec, de) = mem.alloc[u32](a, label.len * 4usize + 8usize)
-            if de != ok { ret ("", false) }
+            if de != ok { ret ("", de) }
             if label.len >= 4usize && label[0usize] == 120u32 && label[1usize] == 110u32 && label[2usize] == 45u32 && label[3usize] == 45u32 {
                 is_xn = true
                 // IgnoreInvalidPunycode: a label that does not decode or validate is kept as it is.
@@ -164,7 +167,11 @@ fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool) {
                         if !status_ok(lookup(dec[q]).status, strict) { xn_valid = false }
                         q += 1usize
                     }
-                    if xn_valid && dn > 0usize && !nfc_points(a, check) { xn_valid = false }
+                    if xn_valid && dn > 0usize {
+                        let (nfc, nfc_error) = nfc_points(a, check)
+                        if nfc_error == mem.Exhausted { ret ("", nfc_error) }
+                        if nfc_error != ok || !nfc { xn_valid = false }
+                    }
                     if xn_valid && dn > 0usize && is_mark(check[0usize]) { xn_valid = false }
                     var jj = 0usize
                     while xn_valid && jj < dn {
@@ -175,10 +182,10 @@ fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool) {
                 if !xn_valid { check = label[0usize..0usize] }
             }
             if !is_xn {
-                if check.len > 0usize && is_mark(check[0usize]) { ret ("", false) }
+                if check.len > 0usize && is_mark(check[0usize]) { ret ("", Invalid) }
                 var j = 0usize
                 while j < check.len {
-                    if (check[j] == 8204u32 || check[j] == 8205u32) && !idna.contextj_ok(check, j) { ret ("", false) }
+                    if (check[j] == 8204u32 || check[j] == 8205u32) && !idna.contextj_ok(check, j) { ret ("", Invalid) }
                     j += 1usize
                 }
             }
@@ -204,20 +211,26 @@ fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool) {
                     z += 1usize
                 }
             } else {
-                if out_len + 4usize > out.len { ret ("", false) }
+                if out_len + 4usize > out.len { ret ("", Invalid) }
                 out[out_len] = 120u8
                 out[out_len + 1usize] = 110u8
                 out[out_len + 2usize] = 45u8
                 out[out_len + 3usize] = 45u8
                 out_len += 4usize
                 let (pn, ee2) = idna.punycode_encode(label, out[out_len..])
-                if ee2 != ok { ret ("", false) }
+                if ee2 != ok { ret ("", Invalid) }
                 out_len += pn
             }
             start = idx + 1usize
         }
         idx += 1usize
     }
-    if any_rtl && !all_bidi { ret ("", false) }
-    ret (out[0usize..out_len], true)
+    if any_rtl && !all_bidi { ret ("", Invalid) }
+    ret (out[0usize..out_len], ok)
+}
+
+// Compatibility form for users that only need to distinguish a converted domain.
+fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool) {
+    let (text, conversion_error) = to_ascii_checked(a, domain, strict)
+    ret (text, conversion_error == ok)
 }

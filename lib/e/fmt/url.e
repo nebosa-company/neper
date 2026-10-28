@@ -1,7 +1,8 @@
 // URLs by the WHATWG URL Standard (tracker 1.5): the basic URL parser with its state override (the setters of the URL
 // API use it), host parsing (domains through IDNA, IPv4 in every legacy notation, IPv6, opaque hosts), the percent-encode
 // sets, serialisation, `origin` and the setter operations. A `Url` holds its components as text; `parse` takes an optional
-// base for relative references. Failure is the error `Failure`.
+// base for relative references. Invalid input answers `Failure`; arena exhaustion
+// answers `mem.Exhausted` rather than constructing an incomplete URL.
 //
 // Differences from the Standard, on purpose: the encoding is always UTF-8; domain-to-ASCII is `e.net.idna` (IDNA 2008
 // with NFC and simple lower-casing), not the UTS #46 mapping table, so a handful of compatibility mappings are refused
@@ -34,18 +35,20 @@ const EOF: u32 = 4294967295u32
 
 // --- Byte buffers.
 
-type Buf = struct { data: []u8, len: usize }
+type Buf = struct { data: []u8, len: usize, full: bool }
 
 fn buf_new(a: *mem.Arena, cap: usize) -> (Buf, err) {
     let (d, e) = mem.alloc[u8](a, cap + 16usize)
     if e != ok { ret (zero, e) }
-    ret (Buf { data: d, len: 0usize }, ok)
+    ret (Buf { data: d, len: 0usize, full: false }, ok)
 }
 
 fn buf_byte(b: *Buf, c: u8) {
     if b.len < b.data.len {
         b.data[b.len] = c
         b.len += 1usize
+    } else {
+        b.full = true
     }
 }
 
@@ -60,26 +63,27 @@ fn buf_str(b: *Buf, s: str) {
 fn buf_text(b: *const Buf) -> str { ret b.data[0usize..b.len] }
 
 // A copy of the buffer's bytes that outlives its reuse.
-fn buf_take(a: *mem.Arena, b: *const Buf) -> str {
+fn buf_take(a: *mem.Arena, b: *const Buf) -> (str, err) {
+    if b.full { ret ("", mem.Exhausted) }
     let (d, e) = mem.alloc[u8](a, b.len + 1usize)
-    if e != ok { ret "" }
+    if e != ok { ret ("", e) }
     var i = 0usize
     while i < b.len {
         d[i] = b.data[i]
         i += 1usize
     }
-    ret d[0usize..b.len]
+    ret (d[0usize..b.len], ok)
 }
 
-fn copy_str(a: *mem.Arena, s: str) -> str {
+fn copy_str(a: *mem.Arena, s: str) -> (str, err) {
     let (d, e) = mem.alloc[u8](a, s.len + 1usize)
-    if e != ok { ret "" }
+    if e != ok { ret ("", e) }
     var i = 0usize
     while i < s.len {
         d[i] = s[i]
         i += 1usize
     }
-    ret d[0usize..s.len]
+    ret (d[0usize..s.len], ok)
 }
 
 // --- Character classes.
@@ -187,9 +191,9 @@ fn forbidden_domain(c: u32) -> bool {
 }
 
 // Percent-decoded bytes of `s`, as valid UTF-8 (a malformed sequence becomes U+FFFD).
-fn pct_decode_utf8(a: *mem.Arena, s: str) -> str {
+fn pct_decode_utf8(a: *mem.Arena, s: str) -> (str, err) {
     let (raw, e1) = mem.alloc[u8](a, s.len + 1usize)
-    if e1 != ok { ret "" }
+    if e1 != ok { ret ("", e1) }
     var n = 0usize
     var i = 0usize
     while i < s.len {
@@ -204,9 +208,9 @@ fn pct_decode_utf8(a: *mem.Arena, s: str) -> str {
         }
     }
     let bytes = raw[0usize..n]
-    if utf8.validate(bytes) { ret bytes }
+    if utf8.validate(bytes) { ret (bytes, ok) }
     let (out, e2) = mem.alloc[u8](a, n * 3usize + 3usize)
-    if e2 != ok { ret "" }
+    if e2 != ok { ret ("", e2) }
     var m = 0usize
     var it = utf8.iterator(bytes)
     while true {
@@ -222,18 +226,18 @@ fn pct_decode_utf8(a: *mem.Arena, s: str) -> str {
             k += 1usize
         }
     }
-    ret out[0usize..m]
+    ret (out[0usize..m], ok)
 }
 
-fn lower_ascii_copy(a: *mem.Arena, s: str) -> str {
+fn lower_ascii_copy(a: *mem.Arena, s: str) -> (str, err) {
     let (d, e) = mem.alloc[u8](a, s.len + 1usize)
-    if e != ok { ret "" }
+    if e != ok { ret ("", e) }
     var i = 0usize
     while i < s.len {
         d[i] = u8(lower_ascii(u32(s[i])))
         i += 1usize
     }
-    ret d[0usize..s.len]
+    ret (d[0usize..s.len], ok)
 }
 
 fn all_ascii(s: str) -> bool {
@@ -260,14 +264,19 @@ fn has_xn_label(s: str) -> bool {
 }
 
 // Domain to ASCII (UTS #46, not strict): plain ASCII is lower-cased, anything else goes through the mapping table.
-fn domain_to_ascii(a: *mem.Arena, domain: str) -> (str, bool) {
+fn domain_to_ascii(a: *mem.Arena, domain: str) -> (str, err) {
     if all_ascii(domain) && !has_xn_label(domain) {
-        if domain.len == 0usize { ret ("", false) }
-        ret (lower_ascii_copy(a, domain), true)
+        if domain.len == 0usize { ret ("", Failure) }
+        let (lowered, lower_error) = lower_ascii_copy(a, domain)
+        ret (lowered, lower_error)
     }
-    let (r, good) = uts46.to_ascii(a, domain, false)
-    if !good || r.len == 0usize { ret ("", false) }
-    ret (r, true)
+    let (r, conversion_error) = uts46.to_ascii_checked(a, domain, false)
+    if conversion_error != ok {
+        if conversion_error == mem.Exhausted { ret ("", conversion_error) }
+        ret ("", Failure)
+    }
+    if r.len == 0usize { ret ("", Failure) }
+    ret (r, ok)
 }
 
 // One IPv4 number in the legacy notations: decimal, 0x hexadecimal, leading-0 octal. `ok` false for anything else.
@@ -301,33 +310,37 @@ fn ipv4_number(s: str) -> (u64, bool) {
     ret (v, true)
 }
 
-fn split_dots(a: *mem.Arena, s: str) -> []const str {
-    var out = list_of_str(a)
+fn split_dots(a: *mem.Arena, s: str) -> ([]const str, err) {
+    let (out0, out_error) = list_of_str(a)
+    if out_error != ok { ret (zero, out_error) }
+    var out = out0
     var start = 0usize
     var i = 0usize
     while i <= s.len {
         if i == s.len || s[i] == 46u8 {
             let pushed = list.push[str](&out, s[start..i])
+            if pushed != ok { ret (zero, pushed) }
             start = i + 1usize
         }
         i += 1usize
     }
-    ret list.slice_const[str](&out)
+    ret (list.slice_const[str](&out), ok)
 }
 
-fn list_of_str(a: *mem.Arena) -> list.List[str] {
+fn list_of_str(a: *mem.Arena) -> (list.List[str], err) {
     let (l, e) = list.init[str](a, 8usize)
-    if e != ok { ret zero }
-    ret l
+    if e != ok { ret (zero, e) }
+    ret (l, ok)
 }
 
 // Whether the last label of an ASCII domain is a number (decimal digits or a legacy IPv4 number).
-fn ends_in_number(a: *mem.Arena, domain: str) -> bool {
-    var parts = split_dots(a, domain)
+fn ends_in_number(a: *mem.Arena, domain: str) -> (bool, err) {
+    let (parts, parts_error) = split_dots(a, domain)
+    if parts_error != ok { ret (false, parts_error) }
     var n = parts.len
-    if n == 0usize { ret false }
+    if n == 0usize { ret (false, ok) }
     if parts[n - 1usize].len == 0usize {
-        if n == 1usize { ret false }
+        if n == 1usize { ret (false, ok) }
         n -= 1usize
     }
     let last = parts[n - 1usize]
@@ -338,28 +351,29 @@ fn ends_in_number(a: *mem.Arena, domain: str) -> bool {
             if !is_digit(u32(last[i])) { digits = false }
             i += 1usize
         }
-        if digits { ret true }
+        if digits { ret (true, ok) }
     }
     let (_v, good) = ipv4_number(last)
-    ret good
+    ret (good, ok)
 }
 
-fn parse_ipv4(a: *mem.Arena, input: str) -> (str, bool) {
-    var parts = split_dots(a, input)
+fn parse_ipv4(a: *mem.Arena, input: str) -> (str, err) {
+    let (parts, parts_error) = split_dots(a, input)
+    if parts_error != ok { ret ("", parts_error) }
     var n = parts.len
     if parts[n - 1usize].len == 0usize && n > 1usize { n -= 1usize }
-    if n > 4usize { ret ("", false) }
+    if n > 4usize { ret ("", Failure) }
     var nums: [4]u64 = zero
     var i = 0usize
     while i < n {
         let (v, good) = ipv4_number(parts[i])
-        if !good { ret ("", false) }
+        if !good { ret ("", Failure) }
         nums[i] = v
         i += 1usize
     }
     i = 0usize
     while i + 1usize < n {
-        if nums[i] > 255u64 { ret ("", false) }
+        if nums[i] > 255u64 { ret ("", Failure) }
         i += 1usize
     }
     var limit = 1u64
@@ -368,7 +382,7 @@ fn parse_ipv4(a: *mem.Arena, input: str) -> (str, bool) {
         limit = limit * 256u64
         k += 1usize
     }
-    if nums[n - 1usize] >= limit { ret ("", false) }
+    if nums[n - 1usize] >= limit { ret ("", Failure) }
     var ipv4 = nums[n - 1usize]
     i = 0usize
     var mult = 16777216u64
@@ -378,7 +392,7 @@ fn parse_ipv4(a: *mem.Arena, input: str) -> (str, bool) {
         i += 1usize
     }
     let (b, be) = buf_new(a, 16usize)
-    if be != ok { ret ("", false) }
+    if be != ok { ret ("", be) }
     var buf = b
     var shift = 24u64
     var j = 0usize
@@ -389,7 +403,9 @@ fn parse_ipv4(a: *mem.Arena, input: str) -> (str, bool) {
         if shift >= 8u64 { shift -= 8u64 }
         j += 1usize
     }
-    ret (buf_take(a, &buf), true)
+    let (text, text_error) = buf_take(a, &buf)
+    if text_error != ok { ret ("", text_error) }
+    ret (text, ok)
 }
 
 fn put_decimal(b: *Buf, v: u64) {
@@ -414,7 +430,7 @@ fn put_hex16(b: *Buf, v: u32) {
     }
 }
 
-fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool) {
+fn parse_ipv6(a: *mem.Arena, input: str) -> (str, err) {
     var pieces: [8]u32 = zero
     var piece_index = 0usize
     var compress = 8usize
@@ -422,16 +438,16 @@ fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool) {
     var p = 0usize
     let n = input.len
     if p < n && input[p] == 58u8 {
-        if p + 1usize >= n || input[p + 1usize] != 58u8 { ret ("", false) }
+        if p + 1usize >= n || input[p + 1usize] != 58u8 { ret ("", Failure) }
         p += 2usize
         piece_index += 1usize
         compress = piece_index
         has_compress = true
     }
     while p < n {
-        if piece_index == 8usize { ret ("", false) }
+        if piece_index == 8usize { ret ("", Failure) }
         if input[p] == 58u8 {
-            if has_compress { ret ("", false) }
+            if has_compress { ret ("", Failure) }
             p += 1usize
             piece_index += 1usize
             compress = piece_index
@@ -446,9 +462,9 @@ fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool) {
             length += 1usize
         }
         if p < n && input[p] == 46u8 {
-            if length == 0usize { ret ("", false) }
+            if length == 0usize { ret ("", Failure) }
             p -= length
-            if piece_index > 6usize { ret ("", false) }
+            if piece_index > 6usize { ret ("", Failure) }
             var numbers_seen = 0usize
             while p < n {
                 var ipv4_piece = -1i32
@@ -456,33 +472,33 @@ fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool) {
                     if input[p] == 46u8 && numbers_seen < 4usize {
                         p += 1usize
                     } else {
-                        ret ("", false)
+                        ret ("", Failure)
                     }
                 }
-                if p >= n || !is_digit(u32(input[p])) { ret ("", false) }
+                if p >= n || !is_digit(u32(input[p])) { ret ("", Failure) }
                 while p < n && is_digit(u32(input[p])) {
                     let number = i32(input[p]) - 48i32
                     if ipv4_piece == -1i32 {
                         ipv4_piece = number
                     } else if ipv4_piece == 0i32 {
-                        ret ("", false)
+                        ret ("", Failure)
                     } else {
                         ipv4_piece = ipv4_piece * 10i32 + number
                     }
-                    if ipv4_piece > 255i32 { ret ("", false) }
+                    if ipv4_piece > 255i32 { ret ("", Failure) }
                     p += 1usize
                 }
                 pieces[piece_index] = pieces[piece_index] * 256u32 + u32(ipv4_piece)
                 numbers_seen += 1usize
                 if numbers_seen == 2usize || numbers_seen == 4usize { piece_index += 1usize }
             }
-            if numbers_seen != 4usize { ret ("", false) }
+            if numbers_seen != 4usize { ret ("", Failure) }
             break
         } else if p < n && input[p] == 58u8 {
             p += 1usize
-            if p >= n { ret ("", false) }
+            if p >= n { ret ("", Failure) }
         } else if p < n {
-            ret ("", false)
+            ret ("", Failure)
         }
         pieces[piece_index] = value
         piece_index += 1usize
@@ -499,7 +515,7 @@ fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool) {
             swaps -= 1usize
         }
     } else if piece_index != 8usize {
-        ret ("", false)
+        ret ("", Failure)
     }
     // Serialise, compressing the first longest run of two or more zero pieces.
     var best = 8usize
@@ -520,7 +536,7 @@ fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool) {
     }
     if best_len < 2usize { best = 8usize }
     let (b, be) = buf_new(a, 48usize)
-    if be != ok { ret ("", false) }
+    if be != ok { ret ("", be) }
     var buf = b
     buf_byte(&buf, 91u8)
     var ignore0 = false
@@ -543,24 +559,26 @@ fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool) {
         i += 1usize
     }
     buf_byte(&buf, 93u8)
-    ret (buf_take(a, &buf), true)
+    let (text, text_error) = buf_take(a, &buf)
+    if text_error != ok { ret ("", text_error) }
+    ret (text, ok)
 }
 
 // The host parser: `opaque` for non-special URLs.
-fn parse_host(a: *mem.Arena, input: str, opaque: bool) -> (str, bool) {
+fn parse_host(a: *mem.Arena, input: str, opaque: bool) -> (str, err) {
     if input.len > 0usize && input[0usize] == 91u8 {
-        if input[input.len - 1usize] != 93u8 { ret ("", false) }
-        let (v6, v6_ok) = parse_ipv6(a, input[1usize..input.len - 1usize])
-        ret (v6, v6_ok)
+        if input[input.len - 1usize] != 93u8 { ret ("", Failure) }
+        let (v6, v6_error) = parse_ipv6(a, input[1usize..input.len - 1usize])
+        ret (v6, v6_error)
     }
     if opaque {
         var i = 0usize
         while i < input.len {
-            if forbidden_host(u32(input[i])) { ret ("", false) }
+            if forbidden_host(u32(input[i])) { ret ("", Failure) }
             i += 1usize
         }
         let (b, be) = buf_new(a, input.len * 3usize)
-        if be != ok { ret ("", false) }
+        if be != ok { ret ("", be) }
         var buf = b
         var it = utf8.iterator(input)
         while true {
@@ -568,21 +586,26 @@ fn parse_host(a: *mem.Arena, input: str, opaque: bool) -> (str, bool) {
             if !more { break }
             put_encoded(&buf, sc, .C0)
         }
-        ret (buf_take(a, &buf), true)
+        let (text, text_error) = buf_take(a, &buf)
+        if text_error != ok { ret ("", text_error) }
+        ret (text, ok)
     }
-    let domain = pct_decode_utf8(a, input)
-    let (ascii, good) = domain_to_ascii(a, domain)
-    if !good { ret ("", false) }
+    let (domain, domain_error) = pct_decode_utf8(a, input)
+    if domain_error != ok { ret ("", domain_error) }
+    let (ascii, ascii_error) = domain_to_ascii(a, domain)
+    if ascii_error != ok { ret ("", ascii_error) }
     var i2 = 0usize
     while i2 < ascii.len {
-        if forbidden_domain(u32(ascii[i2])) { ret ("", false) }
+        if forbidden_domain(u32(ascii[i2])) { ret ("", Failure) }
         i2 += 1usize
     }
-    if ends_in_number(a, ascii) {
-        let (v4, v4_ok) = parse_ipv4(a, ascii)
-        ret (v4, v4_ok)
+    let (is_number, number_error) = ends_in_number(a, ascii)
+    if number_error != ok { ret ("", number_error) }
+    if is_number {
+        let (v4, v4_error) = parse_ipv4(a, ascii)
+        ret (v4, v4_error)
     }
-    ret (ascii, true)
+    ret (ascii, ok)
 }
 
 // --- Windows drive letters.
@@ -624,7 +647,7 @@ type Parser = struct {
     query: str, has_query: bool, fragment: str, has_fragment: bool
 }
 
-fn from_parser(p: *const Parser) -> Url {
+fn from_parser(p: *const Parser) -> (Url, err) {
     var u: Url = zero
     u.scheme = p.scheme
     u.username = p.username
@@ -637,12 +660,17 @@ fn from_parser(p: *const Parser) -> Url {
     u.has_query = p.has_query
     u.fragment = p.fragment
     u.has_fragment = p.has_fragment
-    u.path = join_path(p)
-    ret u
+    let (path, path_error) = join_path(p)
+    if path_error != ok { ret (zero, path_error) }
+    u.path = path
+    ret (u, ok)
 }
 
-fn join_path(p: *const Parser) -> str {
-    if p.opaque_path { ret buf_take(p.a, &p.opaque_text) }
+fn join_path(p: *const Parser) -> (str, err) {
+    if p.opaque_path {
+        let (opaque, opaque_error) = buf_take(p.a, &p.opaque_text)
+        ret (opaque, opaque_error)
+    }
     var total = 0usize
     var i = 0usize
     while i < p.segs.len {
@@ -650,7 +678,7 @@ fn join_path(p: *const Parser) -> str {
         i += 1usize
     }
     let (b, be) = buf_new(p.a, total)
-    if be != ok { ret "" }
+    if be != ok { ret ("", be) }
     var buf = b
     i = 0usize
     while i < p.segs.len {
@@ -658,26 +686,32 @@ fn join_path(p: *const Parser) -> str {
         buf_str(&buf, p.segs.items[i])
         i += 1usize
     }
-    ret buf_take(p.a, &buf)
+    let (path, path_error) = buf_take(p.a, &buf)
+    ret (path, path_error)
 }
 
 // Splits a serialised path back into its segments.
-fn path_segments(a: *mem.Arena, path: str) -> list.List[str] {
-    var segs = list_of_str(a)
-    if path.len == 0usize { ret segs }
+fn path_segments(a: *mem.Arena, path: str) -> (list.List[str], err) {
+    let (segs0, segs_error) = list_of_str(a)
+    if segs_error != ok { ret (zero, segs_error) }
+    var segs = segs0
+    if path.len == 0usize { ret (segs, ok) }
     var start = 1usize
     var i = 1usize
     while i <= path.len {
         if i == path.len || path[i] == 47u8 {
-            let pushed = list.push[str](&segs, copy_str(a, path[start..i]))
+            let (part, part_error) = copy_str(a, path[start..i])
+            if part_error != ok { ret (zero, part_error) }
+            let pushed = list.push[str](&segs, part)
+            if pushed != ok { ret (zero, pushed) }
             start = i + 1usize
         }
         i += 1usize
     }
-    ret segs
+    ret (segs, ok)
 }
 
-fn to_parser(a: *mem.Arena, u: *const Url) -> Parser {
+fn to_parser(a: *mem.Arena, u: *const Url) -> (Parser, err) {
     var p: Parser = zero
     p.a = a
     p.scheme = u.scheme
@@ -692,16 +726,20 @@ fn to_parser(a: *mem.Arena, u: *const Url) -> Parser {
     p.fragment = u.fragment
     p.has_fragment = u.has_fragment
     let (ob, oe) = buf_new(a, u.path.len)
-    if oe == ok {
-        p.opaque_text = ob
-        if u.opaque_path { buf_str(&p.opaque_text, u.path) }
-    }
+    if oe != ok { ret (zero, oe) }
+    p.opaque_text = ob
+    if u.opaque_path { buf_str(&p.opaque_text, u.path) }
     if u.opaque_path {
-        p.segs = list_of_str(a)
+        let (segs, segs_error) = list_of_str(a)
+        if segs_error != ok { ret (zero, segs_error) }
+        p.segs = segs
     } else {
-        p.segs = path_segments(a, u.path)
+        let (segs, segs_error) = path_segments(a, u.path)
+        if segs_error != ok { ret (zero, segs_error) }
+        p.segs = segs
     }
-    ret p
+    if p.opaque_text.full { ret (zero, mem.Exhausted) }
+    ret (p, ok)
 }
 
 fn shorten_path(p: *Parser) {
@@ -710,8 +748,11 @@ fn shorten_path(p: *Parser) {
     p.segs.len -= 1usize
 }
 
-fn push_seg(p: *Parser, s: str) {
-    let pushed = list.push[str](&p.segs, copy_str(p.a, s))
+fn push_seg(p: *Parser, s: str) -> err {
+    let (copied, copy_error) = copy_str(p.a, s)
+    if copy_error != ok { ret copy_error }
+    let pushed = list.push[str](&p.segs, copied)
+    ret pushed
 }
 
 fn decode_input(a: *mem.Arena, input: str) -> ([]u32, err) {
@@ -734,16 +775,20 @@ fn is_tab_newline(c: u32) -> bool { ret c == 9u32 || c == 10u32 || c == 13u32 }
 
 // Runs the basic URL parser over `input`. `base_ptr` is a pointer to the base (a null address: none). When `target` is
 // given the parser works on it with `override` as the starting state and answers whether the setter succeeded.
-fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Parser, has_override: bool, override: State) -> bool {
+fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Parser, has_override: bool, override: State) -> err {
     // The opaque path buffer must hold what this input can add to what it already holds.
+    if p.opaque_text.full { ret mem.Exhausted }
     if p.opaque_text.data.len < p.opaque_text.len + input_text.len * 3usize + 32usize {
-        var grown = zero_buf(a, p.opaque_text.len + input_text.len * 3usize + 32usize)
+        let (grown0, grow_error) = buf_new(a, p.opaque_text.len + input_text.len * 3usize + 32usize)
+        if grow_error != ok { ret grow_error }
+        var grown = grown0
         buf_str(&grown, buf_text(&p.opaque_text))
+        if grown.full { ret mem.Exhausted }
         p.opaque_text = grown
     }
     let trim = !has_override
     let (all, de) = decode_input(a, input_text)
-    if de != ok { ret false }
+    if de != ok { ret de }
     var lo = 0usize
     var hi = all.len
     if trim {
@@ -751,7 +796,7 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
         while hi > lo && is_c0_or_space(all[hi - 1usize]) { hi -= 1usize }
     }
     let (cps_mem, ce) = mem.alloc[u32](a, hi - lo + 1usize)
-    if ce != ok { ret false }
+    if ce != ok { ret ce }
     var n = 0usize
     var i = lo
     while i < hi {
@@ -765,7 +810,7 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
     var state = State.SchemeStart
     if has_override { state = override }
     let (bb, be) = buf_new(a, input_text.len * 3usize + 16usize)
-    if be != ok { ret false }
+    if be != ok { ret be }
     var buffer = bb
     var at_sign_seen = false
     var inside_brackets = false
@@ -784,22 +829,23 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                 state = .NoScheme
                 pointer -= 1i64
             } else {
-                ret false
+                ret Failure
             }
         } else if state == .Scheme {
             if c != EOF && (is_alpha(c) || is_digit(c) || c == 43u32 || c == 45u32 || c == 46u32) {
                 buf_byte(&buffer, u8(lower_ascii(c)))
             } else if c == 58u32 {
-                let candidate = buf_take(a, &buffer)
+                let (candidate, candidate_error) = buf_take(a, &buffer)
+                if candidate_error != ok { ret candidate_error }
                 if has_override {
-                    if is_special_scheme(p.scheme) != is_special_scheme(candidate) { ret true }
-                    if (p.username.len > 0usize || p.password.len > 0usize || p.port >= 0i32) && str.eq(candidate, "file") { ret true }
-                    if str.eq(p.scheme, "file") && p.has_host && p.host.len == 0usize { ret true }
+                    if is_special_scheme(p.scheme) != is_special_scheme(candidate) { ret ok }
+                    if (p.username.len > 0usize || p.password.len > 0usize || p.port >= 0i32) && str.eq(candidate, "file") { ret ok }
+                    if str.eq(p.scheme, "file") && p.has_host && p.host.len == 0usize { ret ok }
                 }
                 p.scheme = candidate
                 if has_override {
                     if p.port == default_port(p.scheme) { p.port = -1i32 }
-                    ret true
+                    ret ok
                 }
                 buffer.len = 0usize
                 if str.eq(p.scheme, "file") {
@@ -821,10 +867,10 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                 state = .NoScheme
                 pointer = -1i64
             } else {
-                ret false
+                ret Failure
             }
         } else if state == .NoScheme {
-            if !has_base || (base.opaque_path && c != 35u32) { ret false }
+            if !has_base || (base.opaque_path && c != 35u32) { ret Failure }
             if base.opaque_path && c == 35u32 {
                 p.scheme = base.scheme
                 p.opaque_path = true
@@ -869,7 +915,9 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                 p.host = base.host
                 p.has_host = base.has_host
                 p.port = base.port
-                p.segs = path_segments(a, base.path)
+                let (base_segs, base_segs_error) = path_segments(a, base.path)
+                if base_segs_error != ok { ret base_segs_error }
+                p.segs = base_segs
                 p.opaque_path = false
                 p.query = base.query
                 p.has_query = base.has_query
@@ -920,14 +968,20 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
             if c == 64u32 {
                 if at_sign_seen {
                     // A second @: the first one's text belongs to the password.
-                    let held = buf_take(a, &buffer)
+                    let (held, held_error) = buf_take(a, &buffer)
+                    if held_error != ok { ret held_error }
                     buffer.len = 0usize
                     buf_str(&buffer, "%40")
                     buf_str(&buffer, held)
                 }
                 at_sign_seen = true
-                var ub = zero_buf(a, buffer.len * 3usize + p.username.len + p.password.len + 8usize)
-                var pb = zero_buf(a, buffer.len * 3usize + p.username.len + p.password.len + 8usize)
+                if buffer.full { ret mem.Exhausted }
+                let (ub0, username_buffer_error) = buf_new(a, buffer.len * 3usize + p.username.len + p.password.len + 8usize)
+                if username_buffer_error != ok { ret username_buffer_error }
+                var ub = ub0
+                let (pb0, password_buffer_error) = buf_new(a, buffer.len * 3usize + p.username.len + p.password.len + 8usize)
+                if password_buffer_error != ok { ret password_buffer_error }
+                var pb = pb0
                 buf_str(&ub, p.username)
                 buf_str(&pb, p.password)
                 var it = utf8.iterator(buf_text(&buffer))
@@ -940,12 +994,17 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                     }
                     if password_token_seen { put_encoded(&pb, sc, .Userinfo) } else { put_encoded(&ub, sc, .Userinfo) }
                 }
-                p.username = buf_take(a, &ub)
-                p.password = buf_take(a, &pb)
+                let (username, username_error) = buf_take(a, &ub)
+                if username_error != ok { ret username_error }
+                let (password, password_error) = buf_take(a, &pb)
+                if password_error != ok { ret password_error }
+                p.username = username
+                p.password = password
                 buffer.len = 0usize
             } else if c == EOF || c == 47u32 || c == 63u32 || c == 35u32 || (special && c == 92u32) {
-                if at_sign_seen && buffer.len == 0usize { ret false }
-                let held = buf_take(a, &buffer)
+                if at_sign_seen && buffer.len == 0usize { ret Failure }
+                let (held, held_error) = buf_take(a, &buffer)
+                if held_error != ok { ret held_error }
                 var chars = 0i64
                 var it2 = utf8.iterator(held)
                 while true {
@@ -964,10 +1023,12 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                 pointer -= 1i64
                 state = .FileHost
             } else if c == 58u32 && !inside_brackets {
-                if buffer.len == 0usize { ret false }
-                if has_override && override == .Hostname { ret false }
-                let (h, good) = parse_host(a, buf_take(a, &buffer), !special)
-                if !good { ret false }
+                if buffer.len == 0usize { ret Failure }
+                if has_override && override == .Hostname { ret Failure }
+                let (host_text, host_text_error) = buf_take(a, &buffer)
+                if host_text_error != ok { ret host_text_error }
+                let (h, host_error) = parse_host(a, host_text, !special)
+                if host_error != ok { ret host_error }
                 p.host = h
                 p.has_host = true
                 buffer.len = 0usize
@@ -975,17 +1036,19 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
             } else if c == EOF || c == 47u32 || c == 63u32 || c == 35u32 || (special && c == 92u32) {
                 pointer -= 1i64
                 if special && buffer.len == 0usize {
-                    ret false
+                    ret Failure
                 } else if has_override && buffer.len == 0usize && (p.username.len > 0usize || p.password.len > 0usize || p.port >= 0i32) {
-                    ret false
+                    ret Failure
                 }
-                let (h2, good2) = parse_host(a, buf_take(a, &buffer), !special)
-                if !good2 { ret false }
+                let (host_text2, host_text_error2) = buf_take(a, &buffer)
+                if host_text_error2 != ok { ret host_text_error2 }
+                let (h2, host_error2) = parse_host(a, host_text2, !special)
+                if host_error2 != ok { ret host_error2 }
                 p.host = h2
                 p.has_host = true
                 buffer.len = 0usize
                 state = .PathStart
-                if has_override { ret true }
+                if has_override { ret ok }
             } else {
                 if c == 91u32 { inside_brackets = true }
                 if c == 93u32 { inside_brackets = false }
@@ -996,22 +1059,23 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                 buf_byte(&buffer, u8(c))
             } else if c == EOF || c == 47u32 || c == 63u32 || c == 35u32 || (special && c == 92u32) || has_override {
                 if buffer.len != 0usize {
+                    if buffer.full { ret mem.Exhausted }
                     var port = 0i64
                     var k = 0usize
                     while k < buffer.len {
                         port = port * 10i64 + i64(buffer.data[k]) - 48i64
-                        if port > 65535i64 { ret false }
+                        if port > 65535i64 { ret Failure }
                         k += 1usize
                     }
                     if i32(port) == default_port(p.scheme) { p.port = -1i32 } else { p.port = i32(port) }
                     buffer.len = 0usize
-                    if has_override { ret true }
+                    if has_override { ret ok }
                 }
-                if has_override { ret true }
+                if has_override { ret ok }
                 state = .PathStart
                 pointer -= 1i64
             } else {
-                ret false
+                ret Failure
             }
         } else if state == .File {
             p.scheme = "file"
@@ -1022,7 +1086,9 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
             } else if has_base && str.eq(base.scheme, "file") {
                 p.host = base.host
                 p.has_host = base.has_host
-                p.segs = path_segments(a, base.path)
+                let (file_base_segs, file_base_segs_error) = path_segments(a, base.path)
+                if file_base_segs_error != ok { ret file_base_segs_error }
+                p.segs = file_base_segs
                 p.opaque_path = false
                 p.query = base.query
                 p.has_query = base.has_query
@@ -1052,8 +1118,12 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                 if has_base && str.eq(base.scheme, "file") {
                     p.host = base.host
                     p.has_host = base.has_host
-                    let bsegs = path_segments(a, base.path)
-                    if !starts_with_drive_letter(cps, usize(pointer)) && bsegs.len > 0usize && is_normalized_drive_letter(bsegs.items[0usize]) { push_seg(p, bsegs.items[0usize]) }
+                    let (bsegs, bsegs_error) = path_segments(a, base.path)
+                    if bsegs_error != ok { ret bsegs_error }
+                    if !starts_with_drive_letter(cps, usize(pointer)) && bsegs.len > 0usize && is_normalized_drive_letter(bsegs.items[0usize]) {
+                        let pushed = push_seg(p, bsegs.items[0usize])
+                        if pushed != ok { ret pushed }
+                    }
                 }
                 state = .Path
                 pointer -= 1i64
@@ -1061,21 +1131,24 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
         } else if state == .FileHost {
             if c == EOF || c == 47u32 || c == 92u32 || c == 63u32 || c == 35u32 {
                 pointer -= 1i64
+                if buffer.full { ret mem.Exhausted }
                 if !has_override && is_windows_drive_letter(buf_text(&buffer)) {
                     state = .Path
                 } else if buffer.len == 0usize {
                     p.host = ""
                     p.has_host = true
-                    if has_override { ret true }
+                    if has_override { ret ok }
                     state = .PathStart
                 } else {
-                    let (h3, good3) = parse_host(a, buf_take(a, &buffer), !special)
-                    if !good3 { ret false }
+                    let (host_text3, host_text_error3) = buf_take(a, &buffer)
+                    if host_text_error3 != ok { ret host_text_error3 }
+                    let (h3, host_error3) = parse_host(a, host_text3, !special)
+                    if host_error3 != ok { ret host_error3 }
                     var hh = h3
                     if str.eq(hh, "localhost") { hh = "" }
                     p.host = hh
                     p.has_host = true
-                    if has_override { ret true }
+                    if has_override { ret ok }
                     buffer.len = 0usize
                     state = .PathStart
                 }
@@ -1098,28 +1171,34 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                 state = .Path
                 if c != 47u32 { pointer -= 1i64 }
             } else if has_override && !p.has_host {
-                push_seg(p, "")
+                let pushed = push_seg(p, "")
+                if pushed != ok { ret pushed }
             }
         } else if state == .Path {
             if c == EOF || c == 47u32 || (special && c == 92u32) || (!has_override && (c == 63u32 || c == 35u32)) {
-                let seg = buf_take(a, &buffer)
+                let (seg, seg_error) = buf_take(a, &buffer)
+                if seg_error != ok { ret seg_error }
                 let slash = c == 47u32 || (special && c == 92u32)
                 if is_double_dot(seg) {
                     shorten_path(p)
-                    if !slash { push_seg(p, "") }
+                    if !slash {
+                        let pushed = push_seg(p, "")
+                        if pushed != ok { ret pushed }
+                    }
                 } else if is_single_dot(seg) && !slash {
-                    push_seg(p, "")
+                    let pushed = push_seg(p, "")
+                    if pushed != ok { ret pushed }
                 } else if !is_single_dot(seg) {
                     var s2 = seg
                     if str.eq(p.scheme, "file") && p.segs.len == 0usize && is_windows_drive_letter(seg) {
                         let (fixed, fe) = mem.alloc[u8](a, 3usize)
-                        if fe == ok {
-                            fixed[0usize] = seg[0usize]
-                            fixed[1usize] = 58u8
-                            s2 = fixed[0usize..2usize]
-                        }
+                        if fe != ok { ret fe }
+                        fixed[0usize] = seg[0usize]
+                        fixed[1usize] = 58u8
+                        s2 = fixed[0usize..2usize]
                     }
-                    push_seg(p, s2)
+                    let pushed = push_seg(p, s2)
+                    if pushed != ok { ret pushed }
                 }
                 buffer.len = 0usize
                 if c == 63u32 {
@@ -1154,8 +1233,11 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
             if (!has_override && c == 35u32) || c == EOF {
                 var set = EncodeSet.Query
                 if special { set = .SpecialQuery }
-                let raw = buf_take(a, &buffer)
-                var qb = zero_buf(a, raw.len * 3usize + p.query.len + 8usize)
+                let (raw, raw_error) = buf_take(a, &buffer)
+                if raw_error != ok { ret raw_error }
+                let (qb0, query_buffer_error) = buf_new(a, raw.len * 3usize + p.query.len + 8usize)
+                if query_buffer_error != ok { ret query_buffer_error }
+                var qb = qb0
                 buf_str(&qb, p.query)
                 var it3 = utf8.iterator(raw)
                 while true {
@@ -1163,7 +1245,9 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                     if !more3 { break }
                     put_encoded(&qb, sc3, set)
                 }
-                p.query = buf_take(a, &qb)
+                let (query, query_error) = buf_take(a, &qb)
+                if query_error != ok { ret query_error }
+                p.query = query
                 buffer.len = 0usize
                 if c == 35u32 {
                     p.fragment = ""
@@ -1175,25 +1259,23 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
             }
         } else if state == .Fragment {
             if c != EOF {
-                var fb = zero_buf(a, p.fragment.len + 16usize)
+                let (fb0, fragment_buffer_error) = buf_new(a, p.fragment.len + 16usize)
+                if fragment_buffer_error != ok { ret fragment_buffer_error }
+                var fb = fb0
                 buf_str(&fb, p.fragment)
                 put_encoded(&fb, c, .Fragment)
-                p.fragment = buf_take(a, &fb)
+                let (fragment, fragment_error) = buf_take(a, &fb)
+                if fragment_error != ok { ret fragment_error }
+                p.fragment = fragment
             }
         }
         if pointer >= count { break }
         pointer += 1i64
     }
-    ret true
+    ret ok
 }
 
-fn zero_buf(a: *mem.Arena, cap: usize) -> Buf {
-    let (b, e) = buf_new(a, cap)
-    if e != ok { ret zero }
-    ret b
-}
-
-fn new_parser(a: *mem.Arena) -> Parser {
+fn new_parser(a: *mem.Arena) -> (Parser, err) {
     var p: Parser = zero
     p.a = a
     p.scheme = ""
@@ -1202,19 +1284,28 @@ fn new_parser(a: *mem.Arena) -> Parser {
     p.host = ""
     p.has_host = false
     p.port = -1i32
-    p.segs = list_of_str(a)
+    let (segs, segs_error) = list_of_str(a)
+    if segs_error != ok { ret (zero, segs_error) }
+    p.segs = segs
     p.opaque_path = false
-    p.opaque_text = zero_buf(a, 64usize)
+    let (opaque, opaque_error) = buf_new(a, 64usize)
+    if opaque_error != ok { ret (zero, opaque_error) }
+    p.opaque_text = opaque
     p.query = ""
     p.fragment = ""
-    ret p
+    ret (p, ok)
 }
 
 // Parses `input` (against `base` when it is relative).
 fn parse(a: *mem.Arena, input: str, base: *const Url, has_base: bool) -> (Url, err) {
-    var p = new_parser(a)
-    if !run(a, input, base, has_base, &p, false, State.SchemeStart) { ret (zero, Failure) }
-    ret (from_parser(&p), ok)
+    let (p0, parser_error) = new_parser(a)
+    if parser_error != ok { ret (zero, parser_error) }
+    var p = p0
+    let run_error = run(a, input, base, has_base, &p, false, State.SchemeStart)
+    if run_error != ok { ret (zero, run_error) }
+    let (u, url_error) = from_parser(&p)
+    if url_error != ok { ret (zero, url_error) }
+    ret (u, ok)
 }
 
 // Parses `input` against a base given as text.
@@ -1244,7 +1335,9 @@ fn serialize_authority(buf: *Buf, u: *const Url) {
 }
 
 fn href(a: *mem.Arena, u: *const Url, exclude_fragment: bool) -> str {
-    var buf = zero_buf(a, u.scheme.len + u.username.len + u.password.len + u.host.len + u.path.len + u.query.len + u.fragment.len + 32usize)
+    let (buf0, buffer_error) = buf_new(a, u.scheme.len + u.username.len + u.password.len + u.host.len + u.path.len + u.query.len + u.fragment.len + 32usize)
+    if buffer_error != ok { ret "" }
+    var buf = buf0
     buf_str(&buf, u.scheme)
     buf_byte(&buf, 58u8)
     if u.has_host {
@@ -1262,7 +1355,9 @@ fn href(a: *mem.Arena, u: *const Url, exclude_fragment: bool) -> str {
         buf_byte(&buf, 35u8)
         buf_str(&buf, u.fragment)
     }
-    ret buf_take(a, &buf)
+    let (text, text_error) = buf_take(a, &buf)
+    if text_error != ok { ret "" }
+    ret text
 }
 
 // The serialisation of the origin, "null" for an opaque origin.
@@ -1273,7 +1368,9 @@ fn origin(a: *mem.Arena, u: *const Url) -> str {
         ret "null"
     }
     if str.eq(u.scheme, "http") || str.eq(u.scheme, "https") || str.eq(u.scheme, "ws") || str.eq(u.scheme, "wss") || str.eq(u.scheme, "ftp") {
-        var buf = zero_buf(a, u.scheme.len + u.host.len + 16usize)
+        let (buf0, buffer_error) = buf_new(a, u.scheme.len + u.host.len + 16usize)
+        if buffer_error != ok { ret "" }
+        var buf = buf0
         buf_str(&buf, u.scheme)
         buf_str(&buf, "://")
         buf_str(&buf, u.host)
@@ -1281,15 +1378,22 @@ fn origin(a: *mem.Arena, u: *const Url) -> str {
             buf_byte(&buf, 58u8)
             put_decimal(&buf, u64(u.port))
         }
-        ret buf_take(a, &buf)
+        let (text, text_error) = buf_take(a, &buf)
+        if text_error != ok { ret "" }
+        ret text
     }
     ret "null"
 }
 
 fn protocol(a: *mem.Arena, u: *const Url) -> str { ret join2(a, u.scheme, ":") }
 
-fn join2(a: *mem.Arena, x: str, y: str) -> str {
+fn join2_checked(a: *mem.Arena, x: str, y: str) -> (str, err) {
     let (r, e) = str.concat(a, x, y)
+    ret (r, e)
+}
+
+fn join2(a: *mem.Arena, x: str, y: str) -> str {
+    let (r, e) = join2_checked(a, x, y)
     if e != ok { ret "" }
     ret r
 }
@@ -1298,18 +1402,26 @@ fn join2(a: *mem.Arena, x: str, y: str) -> str {
 fn host_port(a: *mem.Arena, u: *const Url) -> str {
     if !u.has_host { ret "" }
     if u.port < 0i32 { ret u.host }
-    var buf = zero_buf(a, u.host.len + 8usize)
+    let (buf0, buffer_error) = buf_new(a, u.host.len + 8usize)
+    if buffer_error != ok { ret "" }
+    var buf = buf0
     buf_str(&buf, u.host)
     buf_byte(&buf, 58u8)
     put_decimal(&buf, u64(u.port))
-    ret buf_take(a, &buf)
+    let (text, text_error) = buf_take(a, &buf)
+    if text_error != ok { ret "" }
+    ret text
 }
 
 fn port_text(a: *mem.Arena, u: *const Url) -> str {
     if u.port < 0i32 { ret "" }
-    var buf = zero_buf(a, 8usize)
+    let (buf0, buffer_error) = buf_new(a, 8usize)
+    if buffer_error != ok { ret "" }
+    var buf = buf0
     put_decimal(&buf, u64(u.port))
-    ret buf_take(a, &buf)
+    let (text, text_error) = buf_take(a, &buf)
+    if text_error != ok { ret "" }
+    ret text
 }
 
 fn search(a: *mem.Arena, u: *const Url) -> str {
@@ -1329,53 +1441,78 @@ fn cannot_have_credentials_or_port(u: *const Url) -> bool {
     ret !u.has_host || u.host.len == 0usize || str.eq(u.scheme, "file")
 }
 
+fn parser_url_or_original(u: *const Url, p: *const Parser, run_error: err) -> Url {
+    // A state override can deliberately leave the parser with the Standard's
+    // partially-applied value on `Failure`; only an allocation failure must
+    // discard the temporary parser and retain the original URL.
+    if run_error != ok && run_error != Failure { ret *u }
+    let (out, output_error) = from_parser(p)
+    if output_error != ok { ret *u }
+    ret out
+}
+
 fn set_protocol(a: *mem.Arena, u: *const Url, value: str) -> Url {
-    var p = to_parser(a, u)
-    let text = join2(a, value, ":")
-    let done = run(a, text, zero, false, &p, true, State.SchemeStart)
-    ret from_parser(&p)
+    let (p0, parser_error) = to_parser(a, u)
+    if parser_error != ok { ret *u }
+    var p = p0
+    let (text, text_error) = join2_checked(a, value, ":")
+    if text_error != ok { ret *u }
+    let run_error = run(a, text, zero, false, &p, true, State.SchemeStart)
+    ret parser_url_or_original(u, &p, run_error)
 }
 
 fn set_username(a: *mem.Arena, u: *const Url, value: str) -> Url {
     if cannot_have_credentials_or_port(u) { ret *u }
     var out = *u
-    var buf = zero_buf(a, value.len * 3usize + 8usize)
+    let (buf0, buffer_error) = buf_new(a, value.len * 3usize + 8usize)
+    if buffer_error != ok { ret *u }
+    var buf = buf0
     var it = utf8.iterator(value)
     while true {
         let (sc, more) = utf8.iterator_next(&it)
         if !more { break }
         put_encoded(&buf, sc, .Userinfo)
     }
-    out.username = buf_take(a, &buf)
+    let (username, username_error) = buf_take(a, &buf)
+    if username_error != ok { ret *u }
+    out.username = username
     ret out
 }
 
 fn set_password(a: *mem.Arena, u: *const Url, value: str) -> Url {
     if cannot_have_credentials_or_port(u) { ret *u }
     var out = *u
-    var buf = zero_buf(a, value.len * 3usize + 8usize)
+    let (buf0, buffer_error) = buf_new(a, value.len * 3usize + 8usize)
+    if buffer_error != ok { ret *u }
+    var buf = buf0
     var it = utf8.iterator(value)
     while true {
         let (sc, more) = utf8.iterator_next(&it)
         if !more { break }
         put_encoded(&buf, sc, .Userinfo)
     }
-    out.password = buf_take(a, &buf)
+    let (password, password_error) = buf_take(a, &buf)
+    if password_error != ok { ret *u }
+    out.password = password
     ret out
 }
 
 fn set_host(a: *mem.Arena, u: *const Url, value: str) -> Url {
     if u.opaque_path { ret *u }
-    var p = to_parser(a, u)
-    let done = run(a, value, zero, false, &p, true, State.Host)
-    ret from_parser(&p)
+    let (p0, parser_error) = to_parser(a, u)
+    if parser_error != ok { ret *u }
+    var p = p0
+    let run_error = run(a, value, zero, false, &p, true, State.Host)
+    ret parser_url_or_original(u, &p, run_error)
 }
 
 fn set_hostname(a: *mem.Arena, u: *const Url, value: str) -> Url {
     if u.opaque_path { ret *u }
-    var p = to_parser(a, u)
-    let done = run(a, value, zero, false, &p, true, State.Hostname)
-    ret from_parser(&p)
+    let (p0, parser_error) = to_parser(a, u)
+    if parser_error != ok { ret *u }
+    var p = p0
+    let run_error = run(a, value, zero, false, &p, true, State.Hostname)
+    ret parser_url_or_original(u, &p, run_error)
 }
 
 fn set_port(a: *mem.Arena, u: *const Url, value: str) -> Url {
@@ -1385,17 +1522,21 @@ fn set_port(a: *mem.Arena, u: *const Url, value: str) -> Url {
         out.port = -1i32
         ret out
     }
-    var p = to_parser(a, u)
-    let done = run(a, value, zero, false, &p, true, State.Port)
-    ret from_parser(&p)
+    let (p0, parser_error) = to_parser(a, u)
+    if parser_error != ok { ret *u }
+    var p = p0
+    let run_error = run(a, value, zero, false, &p, true, State.Port)
+    ret parser_url_or_original(u, &p, run_error)
 }
 
 fn set_pathname(a: *mem.Arena, u: *const Url, value: str) -> Url {
     if u.opaque_path { ret *u }
-    var p = to_parser(a, u)
+    let (p0, parser_error) = to_parser(a, u)
+    if parser_error != ok { ret *u }
+    var p = p0
     p.segs.len = 0usize
-    let done = run(a, value, zero, false, &p, true, State.PathStart)
-    ret from_parser(&p)
+    let run_error = run(a, value, zero, false, &p, true, State.PathStart)
+    ret parser_url_or_original(u, &p, run_error)
 }
 
 fn strip_trailing_spaces(u: *Url) {
@@ -1413,11 +1554,13 @@ fn set_search(a: *mem.Arena, u: *const Url, value: str) -> Url {
     }
     var text = value
     if value[0usize] == 63u8 { text = value[1usize..] }
-    var p = to_parser(a, u)
+    let (p0, parser_error) = to_parser(a, u)
+    if parser_error != ok { ret *u }
+    var p = p0
     p.query = ""
     p.has_query = true
-    let done = run(a, text, zero, false, &p, true, State.Query)
-    ret from_parser(&p)
+    let run_error = run(a, text, zero, false, &p, true, State.Query)
+    ret parser_url_or_original(u, &p, run_error)
 }
 
 fn set_hash(a: *mem.Arena, u: *const Url, value: str) -> Url {
@@ -1430,9 +1573,11 @@ fn set_hash(a: *mem.Arena, u: *const Url, value: str) -> Url {
     }
     var text = value
     if value[0usize] == 35u8 { text = value[1usize..] }
-    var p = to_parser(a, u)
+    let (p0, parser_error) = to_parser(a, u)
+    if parser_error != ok { ret *u }
+    var p = p0
     p.fragment = ""
     p.has_fragment = true
-    let done = run(a, text, zero, false, &p, true, State.Fragment)
-    ret from_parser(&p)
+    let run_error = run(a, text, zero, false, &p, true, State.Fragment)
+    ret parser_url_or_original(u, &p, run_error)
 }

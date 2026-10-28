@@ -43,5 +43,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.eq(w.path, "/new%20path") { os.exit(16i32) }
     let h = url.set_hostname(a, &u, "other.test")
     if !str.eq(h.host, "other.test") || h.port != 8443i32 { os.exit(17i32) }
+
+    // The final path copy used to turn exhaustion into a successful URL with an
+    // empty path. Measure a successful parse, then leave exactly one byte short.
+    var full_storage: [4096]u8 = zero
+    var full_arena = mem.arena_from(full_storage[..])
+    let (_, full_error) = url.parse(&full_arena, "https://example.test/kept", zero, false)
+    if full_error != ok { os.exit(18i32) }
+    let parse_used = mem.mark(&full_arena)
+    if parse_used == 0usize || parse_used >= full_storage.len { os.exit(19i32) }
+    var tight_storage: [4096]u8 = zero
+    var tight_arena = mem.arena_from(tight_storage[0usize..parse_used - 1usize])
+    let (_, tight_error) = url.parse(&tight_arena, "https://example.test/kept", zero, false)
+    if tight_error != mem.Exhausted { os.exit(20i32) }
+
+    // Setters cannot report an error, so they must keep the prior URL when their
+    // parser or reconstructed path runs out of arena space.
+    var setter_full_storage: [4096]u8 = zero
+    var setter_full_arena = mem.arena_from(setter_full_storage[..])
+    let changed = url.set_pathname(&setter_full_arena, &u, "/replacement")
+    if !str.eq(changed.path, "/replacement") { os.exit(21i32) }
+    let setter_used = mem.mark(&setter_full_arena)
+    if setter_used == 0usize || setter_used >= setter_full_storage.len { os.exit(22i32) }
+    var setter_tight_storage: [4096]u8 = zero
+    var setter_tight_arena = mem.arena_from(setter_tight_storage[0usize..setter_used - 1usize])
+    let retained = url.set_pathname(&setter_tight_arena, &u, "/replacement")
+    if !str.eq(retained.path, u.path) { os.exit(23i32) }
     ret ok
 }
