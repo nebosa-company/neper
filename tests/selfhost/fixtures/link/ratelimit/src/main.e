@@ -172,6 +172,62 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ratelimit.leaky_bucket_level(&emptying, 100u64) != 6u64 { os.exit(7i32) }
     if ratelimit.leaky_bucket_level(&emptying, 100000u64) != 0u64 { os.exit(7i32) }
 
+    // 8: unrepresentable configurations and wrapping costs stay denied without traps.
+    let (_, invalid_token) = ratelimit.token_bucket(18446744073709551615u64, 1u64, 2u64, 0u64)
+    if invalid_token != ratelimit.Invalid { os.exit(8i32) }
+    let (scaled_token, scaled_token_error) = ratelimit.token_bucket(10u64, 1u64, 2u64, 0u64)
+    if scaled_token_error != ok { os.exit(8i32) }
+    var bounded_token = scaled_token
+    if ratelimit.token_bucket_allow(&bounded_token, 0u64, 9223372036854775808u64) { os.exit(8i32) }
+    if ratelimit.token_bucket_tokens(&bounded_token, 0u64) != 10u64 { os.exit(8i32) }
+    let (fast_token, fast_token_error) = ratelimit.token_bucket(10u64, 9223372036854775808u64, 1u64, 0u64)
+    if fast_token_error != ok { os.exit(8i32) }
+    var refilled_token = fast_token
+    if !ratelimit.token_bucket_allow(&refilled_token, 0u64, 10u64) { os.exit(8i32) }
+    if ratelimit.token_bucket_tokens(&refilled_token, 2u64) != 10u64 { os.exit(8i32) }
+
+    let (_, invalid_leaky) = ratelimit.leaky_bucket(18446744073709551615u64, 1u64, 2u64, 0u64)
+    if invalid_leaky != ratelimit.Invalid { os.exit(8i32) }
+    let (scaled_leaky, scaled_leaky_error) = ratelimit.leaky_bucket(10u64, 1u64, 2u64, 0u64)
+    if scaled_leaky_error != ok { os.exit(8i32) }
+    var bounded_leaky = scaled_leaky
+    if ratelimit.leaky_bucket_allow(&bounded_leaky, 0u64, 9223372036854775808u64) { os.exit(8i32) }
+    if ratelimit.leaky_bucket_level(&bounded_leaky, 0u64) != 0u64 { os.exit(8i32) }
+    let (fast_leaky, fast_leaky_error) = ratelimit.leaky_bucket(10u64, 9223372036854775808u64, 1u64, 0u64)
+    if fast_leaky_error != ok { os.exit(8i32) }
+    var drained_leaky = fast_leaky
+    if !ratelimit.leaky_bucket_allow(&drained_leaky, 0u64, 10u64) { os.exit(8i32) }
+    if ratelimit.leaky_bucket_level(&drained_leaky, 2u64) != 0u64 { os.exit(8i32) }
+
+    let (scaled_fixed, scaled_fixed_error) = ratelimit.fixed_window(10u64, 1u64)
+    if scaled_fixed_error != ok { os.exit(8i32) }
+    var bounded_fixed = scaled_fixed
+    if !ratelimit.fixed_window_allow(&bounded_fixed, 0u64, 10u64) { os.exit(8i32) }
+    if ratelimit.fixed_window_allow(&bounded_fixed, 0u64, 18446744073709551615u64) { os.exit(8i32) }
+    if bounded_fixed.count != 10u64 { os.exit(8i32) }
+
+    var overflow_stamps: [2]u64 = zero
+    let (overflow_log, overflow_log_error) = ratelimit.sliding_log(1u64, 10u64, overflow_stamps[..])
+    if overflow_log_error != ok { os.exit(8i32) }
+    var bounded_log = overflow_log
+    if !ratelimit.sliding_log_allow(&bounded_log, 18446744073709551610u64) { os.exit(8i32) }
+    if ratelimit.sliding_log_allow(&bounded_log, 18446744073709551615u64) { os.exit(8i32) }
+    if ratelimit.sliding_log_count(&bounded_log, 18446744073709551615u64) != 1u64 { os.exit(8i32) }
+
+    let (_, invalid_window) = ratelimit.sliding_window(18446744073709551615u64, 2u64)
+    if invalid_window != ratelimit.Invalid { os.exit(8i32) }
+    let (scaled_window, scaled_window_error) = ratelimit.sliding_window(10u64, 10u64)
+    if scaled_window_error != ok { os.exit(8i32) }
+    var bounded_window = scaled_window
+    if !ratelimit.sliding_window_allow(&bounded_window, 0u64, 10u64) { os.exit(8i32) }
+    if ratelimit.sliding_window_allow(&bounded_window, 0u64, 18446744073709551615u64) { os.exit(8i32) }
+    if ratelimit.sliding_window_count(&bounded_window, 0u64) != 10u64 { os.exit(8i32) }
+    let (clock_window, clock_window_error) = ratelimit.sliding_window(10u64, 1u64)
+    if clock_window_error != ok { os.exit(8i32) }
+    var wrapped_window = clock_window
+    if !ratelimit.sliding_window_allow(&wrapped_window, 18446744073709551615u64, 1u64) { os.exit(8i32) }
+    if ratelimit.sliding_window_count(&wrapped_window, 0u64) != 0u64 { os.exit(8i32) }
+
     try io.print("ratelimit ok\n")
     ret ok
 }
