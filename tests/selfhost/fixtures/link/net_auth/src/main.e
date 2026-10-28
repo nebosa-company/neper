@@ -159,7 +159,20 @@ fn tampered(a: *mem.Arena, spn: str) -> i32 {
     ret 0i32
 }
 
+// SSPI treats a target as NUL-terminated, so a client must not retain a suffix
+// that peer_name could report without having authenticated it.
+fn nul_principal(a: *mem.Arena) -> i32 {
+    let (c, client_error) = auth.client(a, .Negotiate, "HTTP/trusted.example\0@attacker")
+    if client_error == auth.Invalid { ret 0i32 }
+    if client_error == ok {
+        let closed = auth.close(c)
+    }
+    ret 9i32
+}
+
 fn windows(a: *mem.Arena) -> i32 {
+    var code = nul_principal(a)
+    if code != 0i32 { ret code }
     let (domain, domain_error) = os.env(a, "USERDOMAIN")
     let (user, user_error) = os.env(a, "USERNAME")
     if domain_error != ok || user_error != ok { ret 10i32 }
@@ -168,7 +181,7 @@ fn windows(a: *mem.Arena) -> i32 {
     mem.copy[u8](joined[0usize..domain.len], domain)
     joined[domain.len] = 92u8
     mem.copy[u8](joined[domain.len + 1usize..], user)
-    var code = loopback(a, .Negotiate, "HTTP/localhost", joined, 20i32)
+    code = loopback(a, .Negotiate, "HTTP/localhost", joined, 20i32)
     if code == 0i32 { code = loopback(a, .Ntlm, "HTTP/localhost", joined, 30i32) }
     if code == 0i32 { code = tampered(a, "HTTP/localhost") }
     if code == 0i32 { code = garbled(a, .Negotiate, 50i32) }
