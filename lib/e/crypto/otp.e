@@ -13,6 +13,11 @@ error Invalid
 
 type Algorithm = enum u8 { Sha1, Sha256, Sha512 }
 
+// Verification is deliberately bounded: normal authenticator windows are only a few
+// steps, while an attacker-controlled u32 window would otherwise request billions of HMACs.
+const MAX_VERIFY_WINDOW: u32 = 4096u32
+const COUNTER_MAX: u64 = 18446744073709551615u64
+
 fn pow10(digits: u32) -> u32 {
     var value = 1u32
     var i = 0u32
@@ -85,17 +90,18 @@ fn totp(algorithm: Algorithm, key: []const u8, seconds: u64, start: u64, period:
 // Whether `candidate` is the code for any of the `window + 1` counters starting at `counter`
 // (RFC 4226 look-ahead). Answers the counter that matched, or the first counter when none did.
 fn verify_hotp(algorithm: Algorithm, key: []const u8, counter: u64, window: u32, digits: u32, candidate: u32) -> (u64, bool, err) {
-    if key.len == 0usize || digits < 6u32 || digits > 9u32 { ret (0u64, false, Invalid) }
+    if key.len == 0usize || digits < 6u32 || digits > 9u32 || window > MAX_VERIFY_WINDOW || u64(window) > COUNTER_MAX - counter { ret (0u64, false, Invalid) }
     var found = false
     var matched = counter
     var i = 0u32
-    while i <= window {
+    while true {
         let (code, code_error) = hotp(algorithm, key, counter + u64(i), digits)
         if code_error != ok { ret (0u64, false, code_error) }
         if code == candidate && !found {
             found = true
             matched = counter + u64(i)
         }
+        if i == window { break }
         i += 1u32
     }
     ret (matched, found, ok)
@@ -106,18 +112,21 @@ fn verify_hotp(algorithm: Algorithm, key: []const u8, counter: u64, window: u32,
 fn verify_totp(algorithm: Algorithm, key: []const u8, seconds: u64, start: u64, period: u32, digits: u32, skew: u32, candidate: u32) -> (u64, bool, err) {
     let (step, step_error) = time_step(seconds, start, period)
     if step_error != ok { ret (0u64, false, step_error) }
+    if skew > MAX_VERIFY_WINDOW || u64(skew) > COUNTER_MAX - step { ret (0u64, false, Invalid) }
     var first = step
     if u64(skew) > step { first = 0u64 } else { first = step - u64(skew) }
+    let last = step + u64(skew)
     var found = false
     var matched = step
     var at = first
-    while at <= step + u64(skew) {
+    while true {
         let (code, code_error) = hotp(algorithm, key, at, digits)
         if code_error != ok { ret (0u64, false, code_error) }
         if code == candidate && !found {
             found = true
             matched = at
         }
+        if at == last { break }
         at += 1u64
     }
     ret (matched, found, ok)

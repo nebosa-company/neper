@@ -193,6 +193,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if te7 != ok || !tf7 || tm7 != 0u64 { try report("verify-totp", 7usize) }
     let (tm8, tf8, te8) = otp.verify_totp(.Sha1, verify_key, 1215u64, 1000u64, 30u32, 6u32, 0u32, 292502u32)
     if te8 != ok || !tf8 || tm8 != 7u64 { try report("verify-totp", 8usize) }
+    let (max_code, max_code_error) = otp.hotp(.Sha1, verify_key, 18446744073709551615u64, 6u32)
+    let (max_hotp, max_hotp_found, max_hotp_error) = otp.verify_hotp(.Sha1, verify_key, 18446744073709551615u64, 0u32, 6u32, max_code)
+    if max_code_error != ok || max_hotp_error != ok || !max_hotp_found || max_hotp != 18446744073709551615u64 { try report("verify-bound", 0usize) }
+    let (_, _, hotp_overflow_error) = otp.verify_hotp(.Sha1, verify_key, 18446744073709551615u64, 1u32, 6u32, 0u32)
+    if hotp_overflow_error != otp.Invalid { try report("verify-bound", 1usize) }
+    let (_, _, hotp_large_error) = otp.verify_hotp(.Sha1, verify_key, 0u64, 4097u32, 6u32, 0u32)
+    if hotp_large_error != otp.Invalid { try report("verify-bound", 2usize) }
+    let (max_totp, max_totp_found, max_totp_error) = otp.verify_totp(.Sha1, verify_key, 18446744073709551615u64, 0u64, 1u32, 6u32, 0u32, max_code)
+    if max_totp_error != ok || !max_totp_found || max_totp != 18446744073709551615u64 { try report("verify-bound", 3usize) }
+    let (_, _, totp_overflow_error) = otp.verify_totp(.Sha1, verify_key, 18446744073709551615u64, 0u64, 1u32, 6u32, 1u32, 0u32)
+    if totp_overflow_error != otp.Invalid { try report("verify-bound", 4usize) }
     let (ts0, ts0_error) = otp.time_step(59u64, 0u64, 30u32)
     let (ts1, ts1_error) = otp.time_step(60u64, 0u64, 30u32)
     let (ts2, ts2_error) = otp.time_step(1059u64, 1000u64, 30u32)
