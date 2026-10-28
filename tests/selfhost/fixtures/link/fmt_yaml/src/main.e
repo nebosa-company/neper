@@ -209,5 +209,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e11 != yaml.Invalid { os.exit(87) }
     let (t8, e12) = yaml.parse(a, "", options(4u16, false))
     if e12 != ok || !is_null(t8) { os.exit(88) }
+    let (t9, e13) = yaml.parse(a, "a: \"quote \\\" # inside\"\n", options(4u16, false))
+    if e13 != ok { os.exit(89) }
+    let (escaped, has_escaped) = lookup(mapping_of(t9, 90), "a")
+    if !has_escaped || !str.eq(text_of(escaped, 91), "quote \" # inside") { os.exit(92) }
     ret ok
 }

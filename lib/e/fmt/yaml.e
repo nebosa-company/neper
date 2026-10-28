@@ -45,7 +45,13 @@ fn strip_comment(text: str) -> str {
     while i < text.len {
         let c = text[i]
         if quote != 0u8 {
-            if c == quote { quote = 0u8 }
+            // A backslash escapes the next byte only in a double-quoted scalar.
+            // Do not let an escaped quote expose a following # as a comment.
+            if quote == 34u8 && c == 92u8 && i + 1usize < text.len {
+                i += 1usize
+            } else {
+                if c == quote { quote = 0u8 }
+            }
         } else {
             if c == 34u8 || c == 39u8 {
                 quote = c
