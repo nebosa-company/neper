@@ -791,10 +791,17 @@ fn buffered_detail_writer(a: *mem.Arena, sink: DetailWriter, capacity: usize, de
 fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedReader, err) {
     var handle: BufferedReader = zero
     if capacity == 0usize { ret (handle, TooSmall) }
+    let start = mem.mark(a)
     let (state, state_error) = mem.alloc[BufferState](a, 1usize)
-    if state_error != ok { ret (handle, state_error) }
+    if state_error != ok {
+        mem.reset(a, start)
+        ret (handle, state_error)
+    }
     let (buffer, buffer_error) = mem.alloc[u8](a, capacity)
-    if buffer_error != ok { ret (handle, buffer_error) }
+    if buffer_error != ok {
+        mem.reset(a, start)
+        ret (handle, buffer_error)
+    }
     state[0usize].source = source
     state[0usize].buffer = buffer
     state[0usize].off = 0usize
@@ -806,10 +813,17 @@ fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedR
 fn buffered_writer(a: *mem.Arena, sink: Writer, capacity: usize) -> (BufferedWriter, err) {
     var handle: BufferedWriter = zero
     if capacity == 0usize { ret (handle, TooSmall) }
+    let start = mem.mark(a)
     let (state, state_error) = mem.alloc[BufferState](a, 1usize)
-    if state_error != ok { ret (handle, state_error) }
+    if state_error != ok {
+        mem.reset(a, start)
+        ret (handle, state_error)
+    }
     let (buffer, buffer_error) = mem.alloc[u8](a, capacity)
-    if buffer_error != ok { ret (handle, buffer_error) }
+    if buffer_error != ok {
+        mem.reset(a, start)
+        ret (handle, buffer_error)
+    }
     state[0usize].sink = sink
     state[0usize].buffer = buffer
     state[0usize].off = 0usize

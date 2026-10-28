@@ -12899,6 +12899,8 @@ They never close the underlying stream. writer constructs an unbuffered sink who
 flush callback is nil (flush succeeds without work); writer_with_flush supplies an
 explicit callback. buffered_sink flushes buffered bytes before forwarding flush.
 Partial writes retain only the unwritten suffix; a failed flush is not a rollback.
+If either buffered constructor cannot allocate its state or byte buffer, it restores
+the arena to its entry mark before returning the allocation error.
 Compression finish, protocol shutdown, and durable filesystem sync are distinct
 operations, never implied by generic flush. See stdlib-hardening.md SL02.
 
