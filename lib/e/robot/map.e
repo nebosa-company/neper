@@ -96,7 +96,7 @@ fn occupancy_update(o: *Occupancy, px: f64, py: f64, pth: f64, ranges: []const f
                 y0 += sy
             }
         }
-        if hit { bump(o, x1, y1, l_occ) }
+        if hit { bump(o, x1, y1, l_occ) } else { bump(o, x1, y1, l_free) }
         k += 1usize
     }
     ret ok
