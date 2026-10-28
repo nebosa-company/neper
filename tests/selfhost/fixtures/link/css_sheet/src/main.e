@@ -94,6 +94,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if count_with(scoped_guard_sheet.rules, "--scope-card") != 1usize || count_with(scoped_guard_sheet.rules, "--scope-implicit") != 1usize { os.exit(53) }
     if scoped_guard_sheet.rules[0usize].scopes[0usize].starts.len != 1usize || scoped_guard_sheet.rules[1usize].scopes[0usize].starts.len != 0usize || scoped_guard_sheet.rules[1usize].scopes[0usize].limits.len != 1usize { os.exit(54) }
 
+    // #1189: failure to extend the context cannot turn a nested group into an
+    // unconditional rule. The extension reports its allocation failure instead.
+    var tiny_storage: [1]u8 = zero
+    var tiny_arena = mem.arena_from(tiny_storage[..])
+    var tiny_loader: sheet.Loader = zero
+    tiny_loader.a = &tiny_arena
+    var tiny_ctx: sheet.Ctx = zero
+    let (container_ctx, container_error) = sheet.with_container(&tiny_loader, tiny_ctx, zero)
+    if container_error == ok || container_ctx.containers.len != 0usize { os.exit(55) }
+    let (scope_ctx, scope_error) = sheet.with_scope(&tiny_loader, tiny_ctx, zero)
+    if scope_error == ok || scope_ctx.scopes.len != 0usize { os.exit(56) }
+
     // Every grouping kind can nest, and the rule keeps the accumulated context.
     let nested = "@media (min-width: 1px){@supports (display: grid){@container (width > 10px){@scope (.card){@layer nested{a{--nested:1}}}}}}"
     let (nested_sheet, nested_error) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), nested)

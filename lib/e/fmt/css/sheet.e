@@ -908,24 +908,24 @@ fn style_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
     }
 }
 
-fn with_container(l: *Loader, ctx: Ctx, q: cascade.ContainerQuery) -> Ctx {
+fn with_container(l: *Loader, ctx: Ctx, q: cascade.ContainerQuery) -> (Ctx, err) {
     let (copy, e) = mem.alloc[cascade.ContainerQuery](l.a, ctx.containers.len + 1usize)
-    if e != ok { ret ctx }
+    if e != ok { ret (zero, e) }
     mem.copy[cascade.ContainerQuery](copy[..ctx.containers.len], ctx.containers)
     copy[ctx.containers.len] = q
     var next = ctx
     next.containers = copy
-    ret next
+    ret (next, ok)
 }
 
-fn with_scope(l: *Loader, ctx: Ctx, sc: cascade.Scope) -> Ctx {
+fn with_scope(l: *Loader, ctx: Ctx, sc: cascade.Scope) -> (Ctx, err) {
     let (copy, e) = mem.alloc[cascade.Scope](l.a, ctx.scopes.len + 1usize)
-    if e != ok { ret ctx }
+    if e != ok { ret (zero, e) }
     mem.copy[cascade.Scope](copy[..ctx.scopes.len], ctx.scopes)
     copy[ctx.scopes.len] = sc
     var next = ctx
     next.scopes = copy
-    ret next
+    ret (next, ok)
 }
 
 fn add_font_face(l: *Loader, src: str, tokens: []const syntax.Token) {
@@ -1108,12 +1108,20 @@ fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err {
     }
     if str.eq(name, "container") {
         let (q, good) = container_query(l.a, prelude)
-        if good { ret walk_block(l, src, one, with_container(l, ctx, q)) }
+        if good {
+            let (next, e) = with_container(l, ctx, q)
+            if e != ok { ret e }
+            ret walk_block(l, src, one, next)
+        }
         ret ok
     }
     if str.eq(name, "scope") {
         let (sc, good) = scope_rule(l.a, prelude)
-        if good { ret walk_block(l, src, one, with_scope(l, ctx, sc)) }
+        if good {
+            let (next, e) = with_scope(l, ctx, sc)
+            if e != ok { ret e }
+            ret walk_block(l, src, one, next)
+        }
         ret ok
     }
     if str.eq(name, "font-face") {
