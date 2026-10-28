@@ -110,9 +110,25 @@ fn window_buffer(size: u64, slide: u64, windows: []Window) -> (WindowBuffer, err
 // passed `mark` (the current watermark); windows already past count as late.
 fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err {
     var start = event_time - event_time % b.slide
+    // Count every new open window before updating one: a full caller pool must
+    // leave the buffer retryable instead of keeping an arbitrary prefix.
+    var needed = 0usize
+    while start +% b.size > event_time {
+        if start +% b.size > mark {
+            var i = 0usize
+            while i < b.used && b.windows[i].start != start { i += 1usize }
+            if i == b.used { needed += 1usize }
+        }
+        if start < b.slide { break }
+        start -= b.slide
+    }
+    if needed > b.windows.len - b.used { ret TooSmall }
+
+    start = event_time - event_time % b.slide
+    var late = false
     while start +% b.size > event_time {
         if start +% b.size <= mark {
-            b.late += 1u64
+            late = true
         } else {
             // ponytail: linear scan over open windows; a map by start if thousands stay open.
             var i = 0usize
@@ -128,6 +144,9 @@ fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err {
         if start < b.slide { break }
         start -= b.slide
     }
+    // A sliding event can belong to several already-fired windows, but is one
+    // late event rather than one late event per overlapping window.
+    if late { b.late += 1u64 }
     ret ok
 }
 
