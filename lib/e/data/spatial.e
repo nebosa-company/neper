@@ -96,7 +96,8 @@ fn nearest_range(t: *const KdTree, lo: usize, hi: usize, depth: usize, query: []
 fn kd_nearest(t: *const KdTree, query: []const f64) -> (usize, f64, err) {
     if query.len < t.d { ret (0usize, 0.0f64, TooSmall) }
     if t.order.len == 0usize { ret (0usize, 0.0f64, Invalid) }
-    var best = Best { node: t.order[0usize], distance: 1.0e300f64 }
+    let first = t.order[0usize]
+    var best = Best { node: first, distance: distance_squared(t, first, query) }
     nearest_range(t, 0usize, t.order.len, 0usize, query, &best)
     ret (best.node, best.distance, ok)
 }
@@ -1033,8 +1034,8 @@ fn bvh_build(boxes: []const f64, n: usize, leaf_size: usize, order: []usize, box
 
 // Does the ray from `origin` along `direction` meet the box (slab test)?
 fn ray_hits_box(box: []const f64, origin: []const f64, direction: []const f64) -> bool {
-    var t_near = 0.0f64 - 1.0e300f64
-    var t_far = 1.0e300f64
+    var t_near = 0.0f64 - math.inf64()
+    var t_far = math.inf64()
     var k = 0usize
     while k < 3usize {
         if direction[k] == 0.0f64 {
@@ -1262,7 +1263,8 @@ fn ball_nearest_range(b: *const BallTree, lo: usize, hi: usize, query: []const f
 fn ball_tree_nearest(b: *const BallTree, query: []const f64) -> (usize, f64, err) {
     if query.len < b.tree.d { ret (0usize, 0.0f64, TooSmall) }
     if b.tree.order.len == 0usize { ret (0usize, 0.0f64, Invalid) }
-    var best = Best { node: b.tree.order[0usize], distance: 1.0e300f64 }
+    let first = b.tree.order[0usize]
+    var best = Best { node: first, distance: distance_squared(&b.tree, first, query) }
     ball_nearest_range(b, 0usize, b.tree.order.len, query, &best)
     ret (best.node, best.distance, ok)
 }
