@@ -315,6 +315,50 @@ type BulkResult = struct {
     progress: []const Progress,
 }
 
+// Return an empty reason when `rows` contains exactly one outcome for every
+// requested id. The callback may order its rows freely, but cannot omit,
+// duplicate or invent an id without making the chunk's result untrustworthy.
+fn outcome_problem(chunk: []const f.Value, rows: []const IdOutcome, claimed: []bool) -> str {
+    if rows.len < chunk.len { ret "missing-outcomes" }
+    if rows.len > chunk.len { ret "unexpected-outcomes" }
+    var i = 0usize
+    while i < chunk.len {
+        claimed[i] = false
+        i += 1usize
+    }
+    i = 0usize
+    while i < rows.len {
+        var match = chunk.len
+        var k = 0usize
+        while k < chunk.len {
+            if !claimed[k] && view.same_value(rows[i].id, chunk[k]) {
+                match = k
+                k = chunk.len
+            } else {
+                k += 1usize
+            }
+        }
+        if match == chunk.len {
+            var known = false
+            k = 0usize
+            while k < chunk.len {
+                if view.same_value(rows[i].id, chunk[k]) { known = true }
+                k += 1usize
+            }
+            if known { ret "duplicate-outcomes" }
+            ret "unknown-outcomes"
+        }
+        claimed[match] = true
+        i += 1usize
+    }
+    i = 0usize
+    while i < chunk.len {
+        if !claimed[i] { ret "missing-outcomes" }
+        i += 1usize
+    }
+    ret ""
+}
+
 // Execute a plan chunk by chunk with a per-record outcome and a progress event after each chunk. `valid` means the
 // operation ran to the end (or was cancelled cleanly), not that every record succeeded.
 fn run_bulk_mutation(a: *mem.Arena, plan: BulkPlan, apply: BulkApply, state: *void, is_cancelled: Cancelled, has_cancel: bool) -> BulkResult {
@@ -333,7 +377,8 @@ fn run_bulk_mutation(a: *mem.Arena, plan: BulkPlan, apply: BulkApply, state: *vo
     }
     let (outcomes, oe) = mem.alloc[IdOutcome](a, capacity + 1usize)
     let (events, ee) = mem.alloc[Progress](a, plan.chunks.len + 1usize)
-    if oe != ok || ee != ok {
+    let (claimed, ce) = mem.alloc[bool](a, capacity + 1usize)
+    if oe != ok || ee != ok || ce != ok {
         ret BulkResult { valid: false, reason: "out-of-memory", cancelled: false, correlation_id: plan.correlation_id, total: plan.total, applied: 0usize, failed: 0usize, outcomes: none_outcomes, progress: none_progress }
     }
     var on = 0usize
@@ -368,19 +413,29 @@ fn run_bulk_mutation(a: *mem.Arena, plan: BulkPlan, apply: BulkApply, state: *vo
                     k += 1usize
                 }
             } else {
+                let problem = outcome_problem(chunk, result.results, claimed[..chunk.len])
                 var k = 0usize
-                while k < result.results.len && on < outcomes.len {
-                    var row = result.results[k]
-                    if row.good {
-                        row.reason = ""
-                        applied += 1usize
-                    } else {
-                        if row.reason.len == 0usize { row.reason = "failed" }
+                if problem.len > 0usize {
+                    while k < chunk.len {
+                        outcomes[on] = IdOutcome { id: chunk[k], good: false, reason: problem }
+                        on += 1usize
                         failed += 1usize
+                        k += 1usize
                     }
-                    outcomes[on] = row
-                    on += 1usize
-                    k += 1usize
+                } else {
+                    while k < result.results.len {
+                        var row = result.results[k]
+                        if row.good {
+                            row.reason = ""
+                            applied += 1usize
+                        } else {
+                            if row.reason.len == 0usize { row.reason = "failed" }
+                            failed += 1usize
+                        }
+                        outcomes[on] = row
+                        on += 1usize
+                        k += 1usize
+                    }
                 }
             }
             done += chunk.len

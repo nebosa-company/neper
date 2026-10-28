@@ -253,12 +253,14 @@ fn render_fields(a: *mem.Arena, fields: []const f.Field) -> str {
 
 // --- batch and bulk callbacks ------------------------------------------------------------------------------------
 
-// What the host's apply does, as the vector describes it: ids that fail with a reason, ids that throw.
+// What the host's apply does, as the vector describes it: ids that fail with a reason, ids that throw, and
+// deliberately malformed outcome lists for the runner's accounting regression.
 type Behavior = struct {
     fail_ids: []const f.Field,
     throw_ids: []const str,
     chunk_throw: []const f64,
     void_chunks: bool,
+    malformed: str,
     cancel_after: f64,
     has_cancel: bool,
     chunk_no: f64,
@@ -328,12 +330,44 @@ fn bulk_apply(state: *void, ids: []const f.Value, patch: []const f.Field, correl
         }
         k += 1usize
     }
+    if str.eq(behavior.malformed, "short") { ret b.Applied { threw: false, reason: "", all_ok: false, results: out[..ids.len - 1usize] } }
+    if str.eq(behavior.malformed, "duplicate") && ids.len > 1usize { out[1usize].id = out[0usize].id }
+    if str.eq(behavior.malformed, "foreign") { out[0usize].id = f.text("foreign") }
     ret b.Applied { threw: false, reason: "", all_ok: false, results: out[0usize..ids.len] }
 }
 
 fn zero_outcomes() -> []const b.IdOutcome {
     var none: []const b.IdOutcome = zero
     ret none
+}
+
+fn malformed_outcomes_fail(a: *mem.Arena, kind: str, expected: str) -> bool {
+    g_arena = a
+    var behavior: Behavior = zero
+    behavior.malformed = kind
+    var targets: [2]f.Value = zero
+    targets[0usize] = f.text("one")
+    targets[1usize] = f.text("two")
+    var catalog: []const b.Message = zero
+    var fields: [1]f.Field = zero
+    fields[0usize] = f.Field { name: "Status", value: f.text("Done") }
+    let plan = b.plan_bulk_mutation(a, catalog, targets[..], fields[..], authorize_fn, false, mem.cast[*void](&behavior), false, 2usize, 2usize, true, "malformed")
+    let result = b.run_bulk_mutation(a, plan, bulk_apply, mem.cast[*void](&behavior), cancel_fn, false)
+    if !result.valid || result.cancelled || result.total != 2usize || result.applied != 0usize || result.failed != 2usize { ret false }
+    if result.outcomes.len != 2usize || result.progress.len != 1usize || result.progress[0usize].done != 2usize { ret false }
+    var i = 0usize
+    while i < 2usize {
+        if !view.same_value(result.outcomes[i].id, targets[i]) || result.outcomes[i].good || !str.eq(result.outcomes[i].reason, expected) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn malformed_bulk_outcomes_fail(a: *mem.Arena) -> bool {
+    if !malformed_outcomes_fail(a, "short", "missing-outcomes") { os.exit(121i32) }
+    if !malformed_outcomes_fail(a, "duplicate", "duplicate-outcomes") { os.exit(122i32) }
+    if !malformed_outcomes_fail(a, "foreign", "unknown-outcomes") { os.exit(123i32) }
+    ret true
 }
 
 fn cancel_fn(state: *void) -> bool {
@@ -978,6 +1012,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_25()) != 0u8 { os.exit(26i32) }
     if run(a, vectors_26()) != 0u8 { os.exit(27i32) }
     if run(a, vectors_27()) != 0u8 { os.exit(28i32) }
+    if !malformed_bulk_outcomes_fail(a) { os.exit(120i32) }
     try io.print("algo page batch ok")
     ret ok
 }
