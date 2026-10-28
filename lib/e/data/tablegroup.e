@@ -357,9 +357,16 @@ fn refresh(g: *Grouping, scratch: *mem.Arena) -> err {
 }
 
 fn regroup(g: *Grouping, scratch: *mem.Arena) -> err {
+    // A regroup changes the group indexes that address `sums`. Do not leave old
+    // summaries observable if grouping fails, and reuse their storage only when it fits.
+    let prior_specs = g.specs
+    let prior_sums = g.sums
+    g.specs = g.specs[0usize..0usize]
+    g.sums = g.sums[0usize..0usize]
     g.group_total = 0usize
     if g.level_count == 0usize {
         build_visible(g)
+        restore_summaries(g, prior_specs, prior_sums)
         ret ok
     }
     var keys: [4]LevelKey = zero
@@ -429,7 +436,18 @@ fn regroup(g: *Grouping, scratch: *mem.Arena) -> err {
         }
     }
     build_visible(g)
+    restore_summaries(g, prior_specs, prior_sums)
     ret ok
+}
+
+// A retained summary allocation may be larger than the current grouping after a
+// filter. Recompute it in that case; a larger grouping must apply summaries again.
+fn restore_summaries(g: *Grouping, specs: []SummarySpec, sums: []Summary) {
+    if specs.len == 0usize { ret }
+    if (g.group_total + 1usize) * specs.len > sums.len { ret }
+    g.specs = specs
+    g.sums = sums
+    fill_summaries(g)
 }
 
 // ---- group accessors -------------------------------------------------------------

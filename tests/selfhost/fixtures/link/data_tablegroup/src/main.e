@@ -532,6 +532,31 @@ fn check_summaries(t: *table.Table, v: *view.View, g: *grp.Grouping, a: *mem.Are
     let text_footer = grp.footer_summary(g, 2usize)
     if text_footer.rows != ROWS || text_footer.values != ROWS - (ROWS + 12usize) / 13usize { os.exit(224) }
     if !close_to(grp.summary_value(footer_cmc, grp.SummaryKind.Avg), footer_cmc.sum / f64(footer_cmc.values)) { os.exit(225) }
+    // Refreshing after a filter must not leave the prior full-table summaries attached
+    // to the smaller group layout.
+    var filtered_nodes: [1]view.Node = zero
+    filtered_nodes[0usize] = view.leaf_node(C_EDITION, view.Op.Begins, view.text_operand("E1"))
+    if view.apply_filter(v, filtered_nodes[0usize..1usize], false, a) != ok { os.exit(310) }
+    if grp.refresh(g, a) != ok { os.exit(311) }
+    let filtered_total = verify_groups(t, g, lv[0usize..2usize], view.len(v), refs, 312)
+    if filtered_total == 0usize || grp.row_count(g) >= ROWS { os.exit(320) }
+    gi = 0usize
+    while gi < filtered_total {
+        var s = 0usize
+        while s < 3usize {
+            let want = reference_sum(t, g, specs[s].column, refs[gi].first, refs[gi].count)
+            let got = grp.group_summary(g, gi, s)
+            if got.rows != want.rows || got.values != want.values { os.exit(321) }
+            if !close_to(got.sum, want.sum) || !close_to(got.min, want.min) || !close_to(got.max, want.max) { os.exit(322) }
+            s += 1usize
+        }
+        gi += 1usize
+    }
+    let filtered_footer = grp.footer_summary(g, 0usize)
+    let wanted_filtered_footer = reference_sum(t, g, C_CMC, 0usize, grp.row_count(g))
+    if filtered_footer.rows != grp.row_count(g) || filtered_footer.values != wanted_filtered_footer.values || !close_to(filtered_footer.sum, wanted_filtered_footer.sum) { os.exit(323) }
+    view.clear_filter(v)
+    if grp.refresh(g, a) != ok || grp.row_count(g) != ROWS || grp.group_len(g) != total { os.exit(324) }
     // groups ordered by a summary: level 0 by price sum, descending
     var before: [16]usize = zero
     let tops = top_level_groups(g, before[0..])
