@@ -80,6 +80,130 @@ fn damaged(a: *mem.Arena, m: bar.Matrix, spec: str) -> (bar.Matrix, err) {
     ret (bar.Matrix { size: m.size, modules: store }, ok)
 }
 
+fn qr_gf_mul(x_in: usize, y_in: usize) -> usize {
+    if x_in == 0usize || y_in == 0usize { ret 0usize }
+    var x = x_in
+    var y = y_in
+    var product = 0usize
+    while y != 0usize {
+        if y & 1usize == 1usize { product = product ^ x }
+        x = x << 1usize
+        if x >= 256usize { x = x ^ 285usize }
+        y = y >> 1usize
+    }
+    ret product
+}
+
+// Version-1/L has seven error-correction words.  These helpers make malformed, but
+// checksum-valid, segment payloads so the decoder must reject their invalid values.
+fn add_v1_ecc(data: []const u8, out: []u8) {
+    var divisor: [7]u8 = zero
+    divisor[6usize] = 1u8
+    var root = 1usize
+    var i = 0usize
+    while i < 7usize {
+        var j = 0usize
+        while j < 7usize {
+            divisor[j] = u8(qr_gf_mul(usize(divisor[j]), root))
+            if j + 1usize < 7usize { divisor[j] = divisor[j] ^ divisor[j + 1usize] }
+            j += 1usize
+        }
+        root = qr_gf_mul(root, 2usize)
+        i += 1usize
+    }
+    i = 0usize
+    while i < 7usize {
+        out[i] = 0u8
+        i += 1usize
+    }
+    var at = 0usize
+    while at < data.len {
+        let factor = usize(data[at]) ^ usize(out[0usize])
+        i = 0usize
+        while i + 1usize < 7usize {
+            out[i] = out[i + 1usize]
+            i += 1usize
+        }
+        out[6usize] = 0u8
+        i = 0usize
+        while i < 7usize {
+            out[i] = out[i] ^ u8(qr_gf_mul(usize(divisor[i]), factor))
+            i += 1usize
+        }
+        at += 1usize
+    }
+}
+
+fn v1_fixed(x: usize, y: usize) -> bool {
+    if x == 6usize || y == 6usize { ret true }
+    if x <= 8usize && y <= 8usize { ret true }
+    if x >= 13usize && y <= 8usize { ret true }
+    if x <= 8usize && y >= 13usize { ret true }
+    ret false
+}
+
+fn replace_v1_codewords(m: bar.Matrix, words: []const u8) {
+    var at = 0usize
+    var right = 20usize
+    while right >= 1usize {
+        if right == 6usize { right = 5usize }
+        var vert = 0usize
+        while vert < 21usize {
+            var j = 0usize
+            while j < 2usize {
+                let x = right - j
+                var y = vert
+                if ((right + 1usize) & 2usize) == 0usize { y = 20usize - vert }
+                if !v1_fixed(x, y) && at < 208usize {
+                    var bit = (usize(words[at >> 3usize]) >> (7usize - (at & 7usize))) & 1usize
+                    if (x + y) % 2usize == 0usize { bit = bit ^ 1usize }
+                    m.modules[y * 21usize + x] = u8(bit)
+                    at += 1usize
+                }
+                j += 1usize
+            }
+            vert += 1usize
+        }
+        if right < 2usize { ret }
+        right -= 2usize
+    }
+}
+
+fn write_bits(words: []u8, pos: usize, count: usize, value: usize) {
+    var i = 0usize
+    while i < count {
+        let bit = (value >> (count - 1usize - i)) & 1usize
+        if bit != 0usize {
+            let at = pos + i
+            words[at >> 3usize] = words[at >> 3usize] | u8(1usize << (7usize - (at & 7usize)))
+        }
+        i += 1usize
+    }
+}
+
+fn invalid_segment_case(a: *mem.Arena, mode: usize, count: usize, value: usize, width: usize) -> bool {
+    let (m, matrix_error) = bar.qr_encode_with(a, "x", 0usize, 0usize)
+    if matrix_error != ok { ret false }
+    var words: [26]u8 = zero
+    write_bits(words[..], 0usize, 4usize, mode)
+    var count_width = 9usize
+    if mode == 1usize { count_width = 10usize }
+    write_bits(words[..], 4usize, count_width, count)
+    let value_pos = 4usize + count_width
+    write_bits(words[..], value_pos, width, value)
+    var pad_at = (value_pos + width + 7usize) / 8usize
+    var pad = 236u8
+    while pad_at < 19usize {
+        words[pad_at] = pad
+        if pad == 236u8 { pad = 17u8 } else { pad = 236u8 }
+        pad_at += 1usize
+    }
+    add_v1_ecc(words[0usize..19usize], words[19usize..26usize])
+    replace_v1_codewords(m, words[..])
+    let (_, decode_error) = bar.qr_decode(a, m)
+    ret decode_error == bar.Invalid
+}
+
 // Fixed mask: encode, compare with the reference, read back clean and with `flips` damaged modules.
 fn qr_case(a: *mem.Arena, data: str, bits: str, size: usize, level: usize, mask: usize, flips: str) -> usize {
     let (m, m_error) = bar.qr_encode_with(a, data, level, mask)
@@ -212,6 +336,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if r != 0usize { os.exit(144 + i32(r)) }
     r = wreck_case(a, "111111100011101111111100000101110101000001101110100011101011101101110101100101011101101110100100101011101100000101001001000001111111101010101111111000000000100000000000111110111001010101010111000011001111001101111000100100101101110000011011001111001101000010101100100101011000000001110100100101111111101001010010110100000100010000111110101110101101010010010101110101111111101100101110101010101101100100000101111111111100111111101110100101010", 21, "9,9;10,9;11,9;9,10;10,10;11,10;9,11;10,11;11,11;9,12;10,12;11,12;12,12;13,12;14,12;15,12;16,12;17,12;9,13;10,13;11,13;12,13;13,13;14,13;15,13;16,13;17,13;9,14;10,14;11,14;12,14;13,14;14,14;15,14;16,14;17,14;9,15;10,15;11,15;12,15;13,15;14,15;15,15;16,15;17,15")
     if r != 0usize { os.exit(150 + i32(r)) }
+    if !invalid_segment_case(a, 2usize, 2usize, 2025usize, 11usize) { os.exit(151) }
+    if !invalid_segment_case(a, 2usize, 1usize, 45usize, 6usize) { os.exit(152) }
+    if !invalid_segment_case(a, 1usize, 3usize, 1000usize, 10usize) { os.exit(153) }
+    if !invalid_segment_case(a, 1usize, 2usize, 100usize, 7usize) { os.exit(154) }
+    if !invalid_segment_case(a, 1usize, 1usize, 10usize, 4usize) { os.exit(155) }
     r = code_case(a, "Neper", "110100100001011100011010110010000101001111001011001000010010011110100101111001100011101011")
     if r != 0usize { os.exit(156 + i32(r)) }
     r = code_case(a, "123456", "11010011100101100111001000101100011100010110100011011101100011101011")
