@@ -14,6 +14,7 @@ use e.data.graph as graph
 type Network = struct { head: []u32, next: []u32, to: []u32, capacity: []i64, arcs: usize, nodes: usize, source: u32, sink: u32 }
 error InvalidNode
 error InvalidCapacity
+error InvalidFlow
 
 const NONE: u32 = 4294967295u32
 
@@ -356,6 +357,23 @@ fn max_min_fair(a: *mem.Arena, capacity: []const f64, flow_offsets: []const usiz
     let flows = flow_offsets.len - 1usize
     let links = capacity.len
     if rate.len < flows { ret (0usize, TooSmall) }
+    // Validate the CSR representation before allocating or changing a rate.
+    // The terminal offset is exact: otherwise a caller can hide trailing links
+    // that no flow owns, which is not a valid CSR row partition.
+    if flow_offsets[0usize] != 0usize { ret (0usize, InvalidFlow) }
+    var f = 0usize
+    while f < flows {
+        let first = flow_offsets[f]
+        let after = flow_offsets[f + 1usize]
+        if after < first || after > flow_links.len { ret (0usize, InvalidFlow) }
+        f += 1usize
+    }
+    if flow_offsets[flows] != flow_links.len { ret (0usize, InvalidFlow) }
+    var link_at = 0usize
+    while link_at < flow_links.len {
+        if usize(flow_links[link_at]) >= links { ret (0usize, InvalidNode) }
+        link_at += 1usize
+    }
     let (used, used_error) = mem.alloc[f64](a, links)
     if used_error != ok { ret (0usize, used_error) }
     let (count, count_error) = mem.alloc[usize](a, links)
@@ -368,18 +386,13 @@ fn max_min_fair(a: *mem.Arena, capacity: []const f64, flow_offsets: []const usiz
         l += 1usize
     }
     var remaining = 0usize
-    var f = 0usize
+    f = 0usize
     while f < flows {
         rate[f] = 0.0f64
         active[f] = 0u8
         if flow_offsets[f + 1usize] > flow_offsets[f] {
             active[f] = 1u8
             remaining += 1usize
-        }
-        var i = flow_offsets[f]
-        while i < flow_offsets[f + 1usize] {
-            if usize(flow_links[i]) >= links { ret (0usize, InvalidNode) }
-            i += 1usize
         }
         f += 1usize
     }
