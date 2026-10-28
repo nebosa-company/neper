@@ -115,7 +115,7 @@ fn hex_value(c: i32) -> i32 {
 
 // `a` holds the token list; `keep` holds what a token's text outlives it for (names with escapes, strings, urls), so a caller can
 // give `a` a short life.
-type Scan = struct { a: *mem.Arena, keep: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token] }
+type Scan = struct { a: *mem.Arena, keep: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token], failure: err }
 
 fn cp(s: *const Scan, at: usize) -> i32 {
     if at < s.n { ret i32(s.src[at]) }
@@ -128,8 +128,14 @@ fn plain(kind: Kind, start: usize, end: usize) -> Token {
     ret Token { kind: kind, start: start, end: end, value: "", number: 0.0f64, unit: "", integer: false, hash_id: false }
 }
 
+fn fail(s: *Scan, e: err) {
+    if s.failure == ok && e != ok { s.failure = e }
+}
+
 fn add(s: *Scan, t: Token) {
+    if s.failure != ok { ret }
     let e = list.push[Token](&s.out, t)
+    fail(s, e)
 }
 
 fn add_plain(s: *Scan, kind: Kind, start: usize) {
@@ -259,7 +265,12 @@ fn consume_name(s: *Scan) -> str {
         ret plain_name
     }
     let (b, e) = str.builder(s.keep, 16usize)
-    if e != ok { ret "" }
+    if e != ok {
+        // In particular, consume_ident_like must never retry this leading escape.
+        fail(s, e)
+        s.i = s.n
+        ret ""
+    }
     var out = b
     var more = true
     while more && s.i < s.n {
@@ -666,9 +677,11 @@ fn tokenize(a: *mem.Arena, input: str) -> ([]const Token, err) {
 fn tokenize_with(a: *mem.Arena, keep: *mem.Arena, input: str) -> ([]const Token, err) {
     let (out, e) = list.init[Token](a, 64usize)
     if e != ok { ret (zero, e) }
-    var s = Scan { a: a, keep: keep, src: input, n: input.len, i: 0usize, out: out }
-    while s.i < s.n { consume_token(&s) }
+    var s = Scan { a: a, keep: keep, src: input, n: input.len, i: 0usize, out: out, failure: ok }
+    while s.i < s.n && s.failure == ok { consume_token(&s) }
+    if s.failure != ok { ret (zero, s.failure) }
     add(&s, plain(.Eof, s.n, s.n))
+    if s.failure != ok { ret (zero, s.failure) }
     ret (list.slice_const[Token](&s.out), ok)
 }
 
