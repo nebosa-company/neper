@@ -133,8 +133,9 @@ fn sliding_log(limit: u64, width: u64, stamps: []u64) -> (SlidingLog, err) {
 fn sliding_log_evict(l: *SlidingLog, now: u64) {
     while l.len > 0usize {
         let stamp = l.stamps[l.head]
-        if now < stamp { break }
-        if now - stamp < l.width { break }
+        // The caller's forward clock can cross u64::MAX. Its elapsed time is
+        // therefore the wrapping difference, not an ordered timestamp compare.
+        if now -% stamp < l.width { break }
         l.head = (l.head + 1usize) % l.stamps.len
         l.len -= 1usize
     }

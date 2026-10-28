@@ -213,6 +213,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !ratelimit.sliding_log_allow(&bounded_log, 18446744073709551610u64) { os.exit(8i32) }
     if ratelimit.sliding_log_allow(&bounded_log, 18446744073709551615u64) { os.exit(8i32) }
     if ratelimit.sliding_log_count(&bounded_log, 18446744073709551615u64) != 1u64 { os.exit(8i32) }
+    // The same entry stays live before width across u64 rollover, then expires exactly
+    // at width instead of being held forever after the wrapped timestamp compares lower.
+    if ratelimit.sliding_log_count(&bounded_log, 3u64) != 1u64 { os.exit(8i32) }
+    if ratelimit.sliding_log_count(&bounded_log, 4u64) != 0u64 { os.exit(8i32) }
+    if !ratelimit.sliding_log_allow(&bounded_log, 4u64) { os.exit(8i32) }
 
     let (_, invalid_window) = ratelimit.sliding_window(18446744073709551615u64, 2u64)
     if invalid_window != ratelimit.Invalid { os.exit(8i32) }
