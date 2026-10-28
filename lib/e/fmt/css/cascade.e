@@ -64,7 +64,12 @@ const END: usize = 18446744073709551615usize
 
 fn beats(x: Declared, y: Declared) -> bool {
     if x.declaration.important != y.declaration.important { ret x.declaration.important }
-    if x.author != y.author { ret x.author }
+    // Normal declarations prefer author origin; important declarations reverse
+    // that origin order (the non-author/UA bucket wins over author here).
+    if x.author != y.author {
+        if x.declaration.important { ret !x.author }
+        ret x.author
+    }
     if x.hint != y.hint { ret x.hint }
     if x.has_layer != y.has_layer { ret !x.has_layer }
     if x.has_layer && x.layer != y.layer { ret x.layer > y.layer }

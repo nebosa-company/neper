@@ -519,6 +519,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_23()) != 0u8 { os.exit(24i32) }
     if run_chunk(a, vectors_24()) != 0u8 { os.exit(25i32) }
     if run_chunk(a, vectors_25()) != 0u8 { os.exit(26i32) }
+    // #1183: important declarations reverse normal author/non-author origin
+    // precedence. The non-author (UA/user) declaration must win this tie.
+    let ua_important = cascade.Declared { declaration: cascade.Declaration { property: "color", value: "ua", important: true }, author: false, hint: false, specificity: 0i64, source: 0i64, has_layer: false, layer: 0i64, proximity: 0i64 }
+    let author_important = cascade.Declared { declaration: cascade.Declaration { property: "color", value: "author", important: true }, author: true, hint: false, specificity: 0i64, source: 0i64, has_layer: false, layer: 0i64, proximity: 0i64 }
+    if !cascade.beats(ua_important, author_important) { os.exit(27i32) }
+    if cascade.beats(author_important, ua_important) { os.exit(28i32) }
     try io.print("css cascade ok")
     ret ok
 }
