@@ -28,7 +28,9 @@ const VALUE_SINT: u8 = 6u8
 const VALUE_BOOL: u8 = 7u8
 const MAX_POINTS: usize = 65536usize
 
-type Value = struct { kind: u8, text: str, number: f64, integer: i64 }
+// `integer` holds values represented by the signed MVT fields (and small uints for
+// compatibility); `unsigned` preserves the full protobuf uint_value range.
+type Value = struct { kind: u8, text: str, number: f64, integer: i64, unsigned: u64 }
 type Point = struct { x: i32, y: i32 }
 type Feature = struct { id: u64, has_id: bool, kind: u8, tags: []u32, points: []Point, parts: []usize }
 type Layer = struct { name: str, version: u32, extent: u32, keys: []str, values: []Value, features: []Feature }
@@ -202,7 +204,10 @@ fn parse_value(payload: []const u8) -> (Value, err) {
             let (w, e) = pb.read_u64(&r)
             if e != ok { ret (v, Invalid) }
             v.kind = VALUE_UINT
-            if w > 9223372036854775807u64 { v.integer = 9223372036854775807i64 } else { v.integer = i64(w) }
+            v.unsigned = w
+            // Existing callers read small unsigned values through `integer`; a value
+            // outside i64 is available exactly through `unsigned`, never saturated.
+            if w <= 9223372036854775807u64 { v.integer = i64(w) }
         } else if key.number == 6u32 && key.wire == .Varint {
             let (w, e) = pb.read_sint64(&r)
             if e != ok { ret (v, Invalid) }
