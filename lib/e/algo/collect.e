@@ -434,8 +434,11 @@ fn pow(base: f64, exponent: f64) -> f64 {
     ret math.pow[f64](base, exponent)
 }
 
-// The logarithm of `number` in `base`; a result that is not finite (log of 0 or a negative, base 1) is `NotFinite`.
+// The logarithm of `number` in `base`; both inputs must be finite, `number` and
+// `base` must be positive, and the base cannot be one. A non-finite result is
+// also `NotFinite`.
 fn log(number: f64, base: f64) -> (f64, err) {
+if !(number - number == 0.0f64) || !(base - base == 0.0f64) || !(number > 0.0f64) || !(base > 0.0f64) || base == 1.0f64 { ret (0.0f64, NotFinite) }
     let result = math.log[f64](number) / math.log[f64](base)
     if !(result - result == 0.0f64) { ret (0.0f64, NotFinite) }
     ret (result, ok)
