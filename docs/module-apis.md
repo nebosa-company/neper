@@ -28173,8 +28173,10 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
 fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
 ```
 
-The module supports lossy and lossless WebP. Animation is inspectable; decoding more
-than the first frame remains `Unsupported` until a frame-sequence image type exists.
+The module supports lossy and lossless WebP. A full decode rejects a source shorter
+than its declared RIFF container, while `inspect` can use a bounded header prefix of
+a larger source. Animation is inspectable; decoding more than the first frame remains
+`Unsupported` until a frame-sequence image type exists.
 
 ### `e.fmt.bson`
 

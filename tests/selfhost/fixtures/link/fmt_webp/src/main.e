@@ -37,6 +37,13 @@ fn options() -> webp.DecodeOptions {
     ret webp.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, first_frame_only: false }
 }
 
+fn put32(dst: []u8, offset: usize, value: usize) {
+    dst[offset] = u8(value & 255usize)
+    dst[offset + 1usize] = u8((value >> 8u32) & 255usize)
+    dst[offset + 2usize] = u8((value >> 16u32) & 255usize)
+    dst[offset + 3usize] = u8((value >> 24u32) & 255usize)
+}
+
 // The largest per-sample distance between the decoded image and `pixels`.
 fn worst(decoded: image.Image, pixels: str) -> i32 {
     var worst_seen = 0i32
@@ -165,6 +172,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
     raised.max_width = 16385u32
     if webp.within(16385u32, 1u32, raised) != ok { os.exit(149i32) }
     if webp.within(1u32, 16385u32, raised) != webp.TooLarge { os.exit(150i32) }
+
+    // A complete source cannot end before the RIFF size it declares.
+    let small_source = lossless_small_webp()
+    let (truncated, truncated_alloc) = mem.alloc[u8](a, small_source.len)
+    if truncated_alloc != ok { os.exit(151i32) }
+    var copy_at = 0usize
+    while copy_at < small_source.len {
+        truncated[copy_at] = small_source[copy_at]
+        copy_at += 1usize
+    }
+    put32(truncated, 4usize, 255usize)
+    let (_, truncated_inspect_error) = webp.inspect(reader_of(&state, truncated))
+    if truncated_inspect_error != webp.Invalid { os.exit(152i32) }
+    let (_, truncated_decode_error) = webp.decode(a, reader_of(&state, truncated), options())
+    if truncated_decode_error != webp.Invalid { os.exit(153i32) }
+
+    // Inspect can use the first frame header of a container extending past its
+    // bounded read, without treating a complete short source as that case.
+    let (large_container, large_alloc) = mem.alloc[u8](a, 65538usize)
+    if large_alloc != ok { os.exit(154i32) }
+    var fill_at = 0usize
+    while fill_at < large_container.len {
+        large_container[fill_at] = 0u8
+        fill_at += 1usize
+    }
+    copy_at = 0usize
+    while copy_at < small_source.len {
+        large_container[copy_at] = small_source[copy_at]
+        copy_at += 1usize
+    }
+    put32(large_container, 4usize, large_container.len - 8usize)
+    let chunk_at = small_source.len
+    large_container[chunk_at] = 74u8
+    large_container[chunk_at + 1usize] = 85u8
+    large_container[chunk_at + 2usize] = 78u8
+    large_container[chunk_at + 3usize] = 75u8
+    put32(large_container, chunk_at + 4usize, large_container.len - chunk_at - 8usize)
+    let (large_info, large_info_error) = webp.inspect(reader_of(&state, large_container))
+    if large_info_error != ok || large_info.width != 23u32 || large_info.height != 17u32 { os.exit(155i32) }
 
     try io.print("fmt webp ok\n")
     ret ok
