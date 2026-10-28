@@ -21,6 +21,11 @@ type Rule = struct { lhs: Pattern, rhs: Pattern }
 
 // An absent child, and an unbound variable in a match record.
 fn none() -> u32 { ret 4294967295u32 }
+// Adds extraction costs without wrapping; `none()` is the greatest valid cost.
+fn add_cost(a: u32, b: u32) -> u32 {
+    if a > none() - b { ret none() }
+    ret a + b
+}
 // The op of a retired duplicate; `node_count` excludes them.
 fn dead() -> u32 { ret 4294967294u32 }
 // The pattern op that binds variable `k` (k < 4); ops at or above `variable(0)` are reserved.
@@ -297,8 +302,9 @@ fn saturate(g: *EGraph, rules: []const Rule, max_iterations: usize, matches: []u
 
 // The cheapest term cost of `root`'s class: a node costs `cost_of_op[op]` (1
 // when `op` is past the slice, so an empty slice is egg's AstSize) plus its
-// children's best. `best_cost`/`best_node` (`node_count` long, indexed by class)
-// hold the fixpoint for `extract_write`.
+// children's best. `best_node` marks reachability, so `best_cost` may hold the
+// greatest valid cost; both arrays (`node_count` long, indexed by class) hold
+// the fixpoint for `extract_write`.
 fn extract(g: *EGraph, root: u32, cost_of_op: []const u32, best_cost: []u32, best_node: []u32) -> (u32, err) {
     if best_cost.len < g.nodes || best_node.len < g.nodes { ret (0u32, TooSmall) }
     if usize(root) >= g.nodes { ret (0u32, Invalid) }
@@ -319,15 +325,15 @@ fn extract(g: *EGraph, root: u32, cost_of_op: []const u32, best_cost: []u32, bes
                 if usize(op) < cost_of_op.len { cost = cost_of_op[usize(op)] }
                 var reachable = true
                 if g.node_a[i] != none() {
-                    let ca = best_cost[usize(find(g, g.node_a[i]))]
-                    if ca == none() { reachable = false } else { cost += ca }
+                    let a_class = usize(find(g, g.node_a[i]))
+                    if best_node[a_class] == none() { reachable = false } else { cost = add_cost(cost, best_cost[a_class]) }
                 }
                 if reachable && g.node_b[i] != none() {
-                    let cb = best_cost[usize(find(g, g.node_b[i]))]
-                    if cb == none() { reachable = false } else { cost += cb }
+                    let b_class = usize(find(g, g.node_b[i]))
+                    if best_node[b_class] == none() { reachable = false } else { cost = add_cost(cost, best_cost[b_class]) }
                 }
                 let c = usize(find(g, u32(i)))
-                if reachable && cost < best_cost[c] {
+                if reachable && (best_node[c] == none() || cost < best_cost[c]) {
                     best_cost[c] = cost
                     best_node[c] = u32(i)
                     changed = true
@@ -336,9 +342,9 @@ fn extract(g: *EGraph, root: u32, cost_of_op: []const u32, best_cost: []u32, bes
             i += 1usize
         }
     }
-    let best = best_cost[usize(find(g, root))]
-    if best == none() { ret (0u32, Invalid) }
-    ret (best, ok)
+    let root_class = usize(find(g, root))
+    if best_node[root_class] == none() { ret (0u32, Invalid) }
+    ret (best_cost[root_class], ok)
 }
 
 // Writes the extracted term of `class` in preorder: `out_a`/`out_b` index the
