@@ -86,6 +86,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !container.matches(guarded_sheet.rules[0usize].containers[0usize].condition, guarded_size) { os.exit(49) }
     if container.matches(guarded_sheet.rules[1usize].containers[0usize].condition, guarded_size) { os.exit(50) }
 
+    // #1188: an explicit invalid scope selector is not the implicit root scope.
+    let scoped_guard = "@scope (::before){a{--scope-outside:1}} @scope (.card){b{--scope-card:1}} @scope to (.limit){c{--scope-implicit:1}} @scope (.card) to (::after){d{--scope-limit:1}}"
+    let (scoped_guard_sheet, scoped_guard_error) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), scoped_guard)
+    if scoped_guard_error != ok || scoped_guard_sheet.rules.len != 2usize { os.exit(51) }
+    if count_with(scoped_guard_sheet.rules, "--scope-outside") != 0usize || count_with(scoped_guard_sheet.rules, "--scope-limit") != 0usize { os.exit(52) }
+    if count_with(scoped_guard_sheet.rules, "--scope-card") != 1usize || count_with(scoped_guard_sheet.rules, "--scope-implicit") != 1usize { os.exit(53) }
+    if scoped_guard_sheet.rules[0usize].scopes[0usize].starts.len != 1usize || scoped_guard_sheet.rules[1usize].scopes[0usize].starts.len != 0usize || scoped_guard_sheet.rules[1usize].scopes[0usize].limits.len != 1usize { os.exit(54) }
+
     // Every grouping kind can nest, and the rule keeps the accumulated context.
     let nested = "@media (min-width: 1px){@supports (display: grid){@container (width > 10px){@scope (.card){@layer nested{a{--nested:1}}}}}}"
     let (nested_sheet, nested_error) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), nested)

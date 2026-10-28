@@ -707,45 +707,54 @@ fn first_word_end(t: str) -> usize {
 
 // --- @scope
 
-fn scope_selectors(a: *mem.Arena, text: str) -> []const selector.Selector {
+fn scope_selectors(a: *mem.Arena, text: str) -> ([]const selector.Selector, bool) {
+    if cv.trim_ws(text).len == 0usize { ret (zero, false) }
     let (tokens, e) = syntax.tokenize(a, text)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, false) }
     let (chosen, ce) = selector.parse_selector_list_for_rule(a, text, tokens)
-    if ce != ok { ret zero }
+    if ce != ok || chosen.len == 0usize { ret (zero, false) }
     let (made, me) = list.init[selector.Selector](a, chosen.len + 1usize)
-    if me != ok { ret zero }
+    if me != ok { ret (zero, false) }
     var out = made
     var i = 0usize
     while i < chosen.len {
-        if !chosen[i].has_pseudo {
-            let pushed = list.push[selector.Selector](&out, chosen[i].selector)
-        }
+        if chosen[i].has_pseudo { ret (zero, false) }
+        let pushed = list.push[selector.Selector](&out, chosen[i].selector)
+        if pushed != ok { ret (zero, false) }
         i += 1usize
     }
-    ret list.slice_const[selector.Selector](&out)
+    ret (list.slice_const[selector.Selector](&out), true)
 }
 
-fn scope_rule(a: *mem.Arena, prelude: str) -> cascade.Scope {
+fn scope_rule(a: *mem.Arena, prelude: str) -> (cascade.Scope, bool) {
     let t = cv.trim_ws(prelude)
     var starts: []const selector.Selector = zero
     var limits: []const selector.Selector = zero
     var i = 0usize
-    while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
     if i < t.len && t[i] == 40u8 {
         let close = skip_group(t, i)
-        starts = scope_selectors(a, inner_of(t[i..close]))
+        if close <= i + 1usize || t[close - 1usize] != 41u8 { ret (zero, false) }
+        let (selected, good) = scope_selectors(a, inner_of(t[i..close]))
+        if !good { ret (zero, false) }
+        starts = selected
         i = close
     }
     while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
-    if i + 2usize <= t.len && str.eq(cv.lower(a, t[i..i + 2usize]), "to") {
-        i += 2usize
-        while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
-        if i < t.len && t[i] == 40u8 {
-            let close = skip_group(t, i)
-            limits = scope_selectors(a, inner_of(t[i..close]))
-        }
-    }
-    ret cascade.Scope { starts: starts, limits: limits }
+    if i == t.len { ret (cascade.Scope { starts: starts, limits: limits }, true) }
+    if i + 2usize > t.len || !str.eq(cv.lower(a, t[i..i + 2usize]), "to") { ret (zero, false) }
+    i += 2usize
+    if i < t.len && t[i] != 40u8 && t[i] != 32u8 && t[i] != 9u8 && t[i] != 10u8 { ret (zero, false) }
+    while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
+    if i >= t.len || t[i] != 40u8 { ret (zero, false) }
+    let close = skip_group(t, i)
+    if close <= i + 1usize || t[close - 1usize] != 41u8 { ret (zero, false) }
+    let (selected, good) = scope_selectors(a, inner_of(t[i..close]))
+    if !good { ret (zero, false) }
+    limits = selected
+    i = close
+    while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
+    if i != t.len { ret (zero, false) }
+    ret (cascade.Scope { starts: starts, limits: limits }, true)
 }
 
 // --- Fonts
@@ -1103,7 +1112,9 @@ fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err {
         ret ok
     }
     if str.eq(name, "scope") {
-        ret walk_block(l, src, one, with_scope(l, ctx, scope_rule(l.a, prelude)))
+        let (sc, good) = scope_rule(l.a, prelude)
+        if good { ret walk_block(l, src, one, with_scope(l, ctx, sc)) }
+        ret ok
     }
     if str.eq(name, "font-face") {
         add_font_face(l, src, one.block.inner)
