@@ -1033,8 +1033,9 @@ fn native_combo(a: *mem.Arena, kind: u32, state: u32, width: f32, height: f32) -
     if made_error != ok { ret (zero, made_error) }
     made[0usize] = NCombo { kind: kind, state: state, width: width, height: height }
     var s = style.defaults()
-    s.width = style.Length { Px: width }
-    s.height = style.Length { Px: height }
+    // The painter includes the trailing border row and column in its DFM extent.
+    s.width = style.Length { Px: width + 1.0 }
+    s.height = style.Length { Px: height + 1.0 }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: wedit_measure, paint: ncombo_paint, state: widget.bytes_of[NCombo](&made[0usize]) } }, style: s, children: none }, ok)
 }
