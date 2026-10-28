@@ -1329,7 +1329,7 @@ fn ratio_height(l: *const Layout, b: u32, cw: f64) -> (f64, bool) {
     if !has { ret (0.0f64, false) }
     let s = bstyle(l, b)
     let bb = &l.boxes.items[usize(b)]
-    if s.box_sizing == .BorderBox { ret (maxf(0.0f64, bb.w / r - vertical_extras(bb)), true) }
+    if s.box_sizing == .BorderBox && !ratio_has_auto(l, b) { ret (maxf(0.0f64, bb.w / r - vertical_extras(bb)), true) }
     ret (cw / r, true)
 }
 
@@ -1339,7 +1339,7 @@ fn ratio_width(l: *const Layout, b: u32, ch: f64) -> (f64, bool) {
     if !has { ret (0.0f64, false) }
     let s = bstyle(l, b)
     let bb = &l.boxes.items[usize(b)]
-    if s.box_sizing == .BorderBox { ret (maxf(0.0f64, (ch + vertical_extras(bb)) * r - horizontal_extras(bb)), true) }
+    if s.box_sizing == .BorderBox && !ratio_has_auto(l, b) { ret (maxf(0.0f64, (ch + vertical_extras(bb)) * r - horizontal_extras(bb)), true) }
     ret (ch * r, true)
 }
 
