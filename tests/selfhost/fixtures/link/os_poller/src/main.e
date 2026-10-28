@@ -51,6 +51,8 @@ fn main(a: *mem.Arena) -> err {
 
     var readable: os.PollInterest = zero
     readable.readable = true
+    // Modifying does not create a registration: all native hosts report the missing entry.
+    if os.poller_modify(poller, os.socket_handle(first), READ_TOKEN, readable) != os.NotFound { os.exit(65i32) }
     if os.poller_register(poller, os.socket_handle(first), READ_TOKEN, readable) != ok { os.exit(15i32) }
     if os.poller_register(poller, os.socket_handle(second), WRITE_TOKEN, readable) != ok { os.exit(16i32) }
 

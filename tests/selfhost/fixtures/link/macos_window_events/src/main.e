@@ -88,6 +88,15 @@ fn quiet(code: i32) {
 }
 
 fn main(a: *mem.Arena) -> err {
+    // Rejection happens before AppKit starts, so an oversized request cannot allocate a window.
+    var oversized: os.WindowOptions = zero
+    oversized.width = 16385u32
+    oversized.height = 1u32
+    let (_, oversized_error) = os.window_open(a, oversized)
+    if oversized_error != os.Unsupported { os.exit(1i32) }
+    let (_, pending, pending_error) = os.window_poll(0i64)
+    if pending || pending_error != os.Unsupported { os.exit(2i32) }
+
     var options: os.WindowOptions = zero
     options.title = "Neper: events"
     options.width = 480u32

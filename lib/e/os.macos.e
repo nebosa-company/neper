@@ -2168,7 +2168,8 @@ fn poller_unregister(p: Poller, handle: Handle) -> err {
 }
 
 fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
-    let ignored = poller_unregister(p, handle)
+    let removed = poller_unregister(p, handle)
+    if removed != ok { ret removed }
     ret poller_register(p, handle, token, interest)
 }
 
@@ -3223,10 +3224,10 @@ fn cocoa_make_delegate() -> usize {
 
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
+    // Match the portable window contract before starting AppKit or allocating an NSWindow.
+    if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
     let started = cocoa_start()
     if started != ok { ret (none, started) }
-    // A window with no area is not one the other hosts make either: Unsupported.
-    if options.width == 0u32 || options.height == 0u32 { ret (none, Unsupported) }
     var slot = 0usize
     while slot < COCOA_TABLE && cocoa_windows[slot] != 0usize { slot += 1usize }
     if slot == COCOA_TABLE { ret (none, OutOfMemory) }
