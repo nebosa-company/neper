@@ -108,9 +108,13 @@ fn main(a: *mem.Arena) -> err {
     var connect_op = connecting
     let (connected, connected_error) = aio.wait[bool](&loop, &connect_op)
     if connected_error != ok || !connected || aio.state[bool](&connect_op) != .Succeeded { os.exit(17i32) }
-    let (server, server_error) = aio.wait[os.Socket](&loop, &accept_op)
+    // A zero `wait_any` timeout performs one nonblocking poll, so it observes the
+    // already-ready accept rather than returning false before checking the loop.
+    var accepts: [1]aio.AnyOp = [1]aio.AnyOp{ aio.erase[os.Socket](&accept_op) }
+    let (accepted_index, accepted_ready, accepted_error) = aio.wait_any(&loop, accepts[..], time.Duration { nanos: 0i64 })
+    if accepted_error != ok || !accepted_ready || accepted_index != 0usize || aio.state[os.Socket](&accept_op) != .Succeeded { os.exit(18i32) }
+    let (server, server_error) = aio.take[os.Socket](&accept_op)
     if server_error != ok { os.exit(18i32) }
-    if aio.state[os.Socket](&accept_op) != .Succeeded { os.exit(18i32) }
     if os.socket_set_nonblocking(server, false) != ok || os.socket_set_nonblocking(client, false) != ok { os.exit(19i32) }
     let (_, taken_twice) = aio.take[os.Socket](&accept_op)
     if taken_twice != aio.Closed { os.exit(20i32) }
@@ -124,8 +128,12 @@ fn main(a: *mem.Arena) -> err {
     let (late_accept, late_error) = aio.accept(a, &loop, listener, expired)
     if late_error != ok { os.exit(32i32) }
     var late_op = late_accept
-    let (_, timed_out) = aio.wait[os.Socket](&loop, &late_op)
-    if timed_out != aio.Timeout || aio.state[os.Socket](&late_op) != .TimedOut { os.exit(33i32) }
+    // An unbounded wait still stops at an operation's own deadline.
+    var late_items: [1]aio.AnyOp = [1]aio.AnyOp{ aio.erase[os.Socket](&late_op) }
+    let (late_index, late_ready, late_wait_error) = aio.wait_any(&loop, late_items[..], time.Duration { nanos: -1i64 })
+    if late_wait_error != ok || !late_ready || late_index != 0usize || aio.state[os.Socket](&late_op) != .TimedOut { os.exit(33i32) }
+    let (_, timed_out) = aio.take[os.Socket](&late_op)
+    if timed_out != aio.Timeout { os.exit(33i32) }
     let (_, second_take) = aio.take[os.Socket](&late_op)
     if second_take != aio.Closed { os.exit(34i32) }
 
