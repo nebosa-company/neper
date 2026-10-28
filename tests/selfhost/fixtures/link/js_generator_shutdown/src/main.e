@@ -2,11 +2,14 @@
 // realms must release them first (`shutdown_generators`), or a later generator whose event lands at the same address wakes
 // a stale thread. Each realm here abandons two suspended generators, shuts them down and resets the arena.
 use e.js.interp as js
+use e.js.lex
 use e.js.realm as realm
 use e.mem
 use e.os
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // U+0378 is unassigned, while nearby U+0377 is an assigned Greek letter.
+    if lex.id_start_cp(888u32) || lex.id_part_cp(888u32) || !lex.id_start_cp(887u32) || !lex.id_part_cp(887u32) { os.exit(4i32) }
     let base = mem.mark(a)
     var round = 0u32
     while round < 80u32 {
