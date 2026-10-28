@@ -48,7 +48,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let expected: [80]u8 = [80]u8{ 223, 22, 144, 174, 19, 179, 99, 206, 160, 96, 20, 19, 219, 84, 158, 134, 39, 44, 207, 139, 100, 201, 156, 150, 39, 62, 8, 81, 194, 68, 61, 22, 232, 43, 77, 54, 99, 111, 233, 79, 159, 71, 6, 89, 5, 13, 189, 143, 128, 167, 150, 241, 23, 172, 130, 174, 45, 46, 6, 252, 140, 174, 184, 141, 79, 160, 20, 76, 16, 10, 247, 119, 149, 87, 8, 244, 75, 231, 56, 20 }
     var shares: [80]u8 = zero
-    if secret.share_size(16usize, 5u8) != 80usize { os.exit(2i32) }
+    let (share_bytes, share_size_error) = secret.share_size(16usize, 5u8)
+    if share_size_error != ok || share_bytes != 80usize { os.exit(2i32) }
     if secret.split(plain[..], 5u8, 3u8, coefficients[..], shares[..]) != ok { os.exit(2i32) }
     if !same(shares[..], expected[..]) { os.exit(2i32) }
 
@@ -145,6 +146,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     xs[1] = 4u8
     if secret.combine(xs[..3usize], picked[..], 15usize, out[..]) != secret.Invalid { os.exit(8i32) }
     if secret.combine(xs[..3usize], picked[..], 16usize, out[..15usize]) != secret.TooSmall { os.exit(8i32) }
+
+    // 9: byte-count overflow is rejected before any buffer access or output mutation.
+    let max_size = secret.MAX_USIZE
+    let half_size = max_size / 2usize
+    let (largest_size, largest_error) = secret.share_size(half_size, 2u8)
+    if largest_error != ok || largest_size != max_size - 1usize { os.exit(9i32) }
+    let (overflow_size, overflow_error) = secret.share_size(half_size + 1usize, 2u8)
+    if overflow_error != secret.Invalid || overflow_size != 0usize { os.exit(9i32) }
+    let (_, _, coefficient_error) = secret.split_sizes(half_size + 1usize, 5u8, 3u8)
+    if coefficient_error != secret.Invalid { os.exit(9i32) }
+    let share_overflow_len = max_size / 5usize + 1usize
+    let (_, _, split_share_error) = secret.split_sizes(share_overflow_len, 5u8, 2u8)
+    if split_share_error != secret.Invalid { os.exit(9i32) }
+    var overflow_xs: [2]u8 = [2]u8{ 1u8, 2u8 }
+    var guarded_out: [4]u8 = [4]u8{ 165u8, 165u8, 165u8, 165u8 }
+    if secret.combine(overflow_xs[..], shares[..0usize], half_size + 1usize, guarded_out[..]) != secret.Invalid { os.exit(9i32) }
+    i = 0usize
+    while i < guarded_out.len {
+        if guarded_out[i] != 165u8 { os.exit(9i32) }
+        i += 1usize
+    }
 
     try io.print("crypto secret ok\n")
     ret ok
