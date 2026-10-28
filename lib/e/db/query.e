@@ -71,8 +71,11 @@ fn output_columns(plan: []const Op, tables: []const Table, node: u32) -> usize {
     ret output_columns(plan, tables, op.input_a)
 }
 
-// ponytail: a cycle in `plan` recurses forever; a visited mark per node would catch it.
-fn validate(plan: []const Op, tables: []const Table) -> err {
+// `scratch` is caller-owned temporary storage with STRIDE entries per plan node. An
+// iterative three-colour walk keeps forward references valid, runs in O(nodes + edges),
+// and proves the graph acyclic before `output_columns` or the cursor recurses through it.
+fn validate(plan: []const Op, tables: []const Table, scratch: []usize) -> err {
+    if plan.len > scratch.len / STRIDE { ret TooSmall }
     var i = 0usize
     while i < plan.len {
         let op = plan[i]
@@ -82,6 +85,45 @@ fn validate(plan: []const Op, tables: []const Table) -> err {
         } else {
             if usize(op.input_a) >= plan.len { ret Invalid }
             if op.kind == JOIN && usize(op.input_b) >= plan.len { ret Invalid }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < plan.len {
+        scratch[i * STRIDE] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < plan.len {
+        if scratch[i * STRIDE] == 0usize {
+            var depth = 1usize
+            scratch[2usize] = i
+            scratch[i * STRIDE] = 1usize
+            scratch[i * STRIDE + 1usize] = 0usize
+            while depth > 0usize {
+                let node = u32(scratch[(depth - 1usize) * STRIDE + 2usize])
+                let base = usize(node) * STRIDE
+                let op = plan[usize(node)]
+                var child_count = 1usize
+                if op.kind == SCAN { child_count = 0usize }
+                if op.kind == JOIN { child_count = 2usize }
+                if scratch[base + 1usize] >= child_count {
+                    scratch[base] = 2usize
+                    depth -= 1usize
+                    continue
+                }
+                var child = op.input_a
+                if scratch[base + 1usize] == 1usize { child = op.input_b }
+                scratch[base + 1usize] += 1usize
+                let colour = scratch[usize(child) * STRIDE]
+                if colour == 1usize { ret Invalid }
+                if colour == 0usize {
+                    scratch[usize(child) * STRIDE] = 1usize
+                    scratch[usize(child) * STRIDE + 1usize] = 0usize
+                    scratch[depth * STRIDE + 2usize] = usize(child)
+                    depth += 1usize
+                }
+            }
         }
         i += 1usize
     }
@@ -124,7 +166,8 @@ fn passes(cmp: u8, x: i64, v: i64) -> bool {
 // `state` needs STRIDE entries per node; `buf` needs (2 * plan.len + 1) * W * batch cells,
 // W being the widest node: two row buffers per node plus one staging area.
 fn cursor(plan: []const Op, root: u32, tables: []const Table, batch: usize, state: []usize, buf: []i64) -> (Cursor, err) {
-    let e = validate(plan, tables)
+    if plan.len > state.len / STRIDE { ret (zero, TooSmall) }
+    let e = validate(plan, tables, state)
     if e != ok { ret (zero, e) }
     if usize(root) >= plan.len || batch == 0usize { ret (zero, Invalid) }
     var w = 0usize
@@ -134,7 +177,7 @@ fn cursor(plan: []const Op, root: u32, tables: []const Table, batch: usize, stat
         if wi > w { w = wi }
         i += 1usize
     }
-    if state.len < STRIDE * plan.len || buf.len < (2usize * plan.len + 1usize) * w * batch { ret (zero, TooSmall) }
+    if buf.len < (2usize * plan.len + 1usize) * w * batch { ret (zero, TooSmall) }
     i = 0usize
     while i < STRIDE * plan.len {
         state[i] = 0usize
