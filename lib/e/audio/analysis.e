@@ -170,7 +170,7 @@ fn pitch_autocorrelation(x: []const f64, sample_rate: f64, f_min: f64, f_max: f6
 // f0, refined by a parabola through the log product; `scratch.len >= 3 * x.len`.
 fn pitch_hps(x: []const f64, sample_rate: f64, harmonics: usize, scratch: []f64) -> (f64, err) {
     let n = x.len
-    if harmonics == 0usize || n < 4usize * harmonics { ret (0.0f64, Invalid) }
+    if harmonics == 0usize || harmonics > n / 4usize { ret (0.0f64, Invalid) }
     if scratch.len < 3usize * n { ret (0.0f64, TooSmall) }
     var re = scratch[..n]
     var im = scratch[n..2usize * n]

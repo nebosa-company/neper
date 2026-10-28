@@ -24,6 +24,13 @@ fn main(a: *mem.Arena) -> err {
     var short: [7]u8 = zero
     let (_, short_error) = audio.view(short[0..], format)
     if short_error != audio.Truncated { os.exit(7i32) }
+    let nan_format = audio.Format { rate: 48000u32, channels: 1u8, sample: .F32 }
+    var nan_bytes: [4]u8 = [4]u8{ 0u8, 0u8, 192u8, 127u8 }
+    let (nan_frames, nan_view_error) = audio.view(nan_bytes[..], nan_format)
+    if nan_view_error != ok { os.exit(8i32) }
+    let before_convert = mem.mark(a)
+    let (_, nan_convert_error) = audio.convert(a, nan_frames, .I16)
+    if nan_convert_error != audio.Unsupported || mem.mark(a) != before_convert { os.exit(8i32) }
     if audio.silence(&frames) != ok { os.exit(8i32) }
     var at = 0usize
     while at < bytes.len {

@@ -61,6 +61,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if hps_error != ok || !near(hps_f0, 219.99999514793356f64, 1.0e-6f64) || !near(hps_f0, 220.0f64, 0.5f64) { os.exit(2i32) }
     let (_, room_error) = analysis.pitch_hps(x[..], sr, 3usize, scratch[..100usize])
     if room_error != analysis.TooSmall { os.exit(2i32) }
+    let (_, overflow_error) = analysis.pitch_hps(x[..4usize], sr, 4611686018427387904usize, scratch[..12usize])
+    if overflow_error != analysis.Invalid { os.exit(2i32) }
 
     // 3: onsets, tempo and beats of a click train at 120 BPM.
     let (clicks, clicks_error) = mem.alloc[f64](a, 16384usize)

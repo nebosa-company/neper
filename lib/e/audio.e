@@ -99,17 +99,27 @@ fn convert(a: *mem.Arena, src: Frames, to: SampleFormat) -> (Frames, err) {
     let target_format = Format { rate: src.format.rate, channels: src.format.channels, sample: to }
     let target_width = frame_bytes(target_format)
     if src.count != 0usize && target_width > 18446744073709551615usize / src.count { ret (zero, mem.Exhausted) }
+    let start = mem.mark(a)
     let (bytes, allocation_error) = mem.alloc[u8](a, src.count * target_width)
-    if allocation_error != ok { ret (zero, allocation_error) }
+    if allocation_error != ok {
+        mem.reset(a, start)
+        ret (zero, allocation_error)
+    }
     var out = Frames { bytes: bytes, format: target_format, count: src.count }
     var frame = 0usize
     while frame < src.count {
         var channel = 0u8
         while channel < src.format.channels {
             let (value, read_error) = sample_i32(src, frame, channel)
-            if read_error != ok { ret (zero, read_error) }
+            if read_error != ok {
+                mem.reset(a, start)
+                ret (zero, read_error)
+            }
             let write_error = set_sample_i32(&out, frame, channel, value)
-            if write_error != ok { ret (zero, write_error) }
+            if write_error != ok {
+                mem.reset(a, start)
+                ret (zero, write_error)
+            }
             channel += 1u8
         }
         frame += 1usize
