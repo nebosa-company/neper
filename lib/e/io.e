@@ -85,6 +85,7 @@ type MemoryWriter = struct {
     arena: *mem.Arena,
     start: usize,
     len: usize,
+    backing: *MemoryWriter,
 }
 
 // The buffered adapters hold their state behind a `*void` so the surface does not fix
@@ -323,6 +324,7 @@ fn tee_writer(state: *TeeWriter, left: Writer, right: Writer) -> Writer {
 
 fn memory_write(ctx: *void, src: []const u8) -> (usize, err) {
     var state = mem.cast[*MemoryWriter](ctx)
+    if state.backing != nil { state = state.backing }
     let (claim, claim_error) = mem.alloc[u8](state.arena, src.len)
     if claim_error != ok { ret (0usize, claim_error) }
     var at = 0usize
@@ -336,22 +338,38 @@ fn memory_write(ctx: *void, src: []const u8) -> (usize, err) {
 
 fn memory_writer(a: *mem.Arena, capacity: usize) -> (MemoryWriter, Writer, err) {
     var state: MemoryWriter = zero
-    state.arena = a
-    state.start = mem.mark(a)
-    state.len = 0usize
     var sink: Writer = zero
+    let start = mem.mark(a)
+    let (stored, state_error) = mem.alloc[MemoryWriter](a, 1usize)
+    if state_error != ok { ret (state, sink, state_error) }
+    stored[0usize].arena = a
+    stored[0usize].start = mem.mark(a)
+    stored[0usize].len = 0usize
+    stored[0usize].backing = &stored[0usize]
     if capacity > 0usize {
         // Reserve and give it straight back, so the caller learns now rather than on
         // the first write whether the arena can hold what it asked for.
         let (claim, claim_error) = mem.alloc[u8](a, capacity)
-        if claim_error != ok { ret (state, sink, claim_error) }
-        mem.reset(a, state.start)
+        if claim_error != ok {
+            mem.reset(a, start)
+            ret (state, sink, claim_error)
+        }
+        mem.reset(a, stored[0usize].start)
     }
+    state.arena = a
+    state.start = stored[0usize].start
+    state.len = 0usize
+    state.backing = &stored[0usize]
+    sink.ctx = mem.cast[*void](&stored[0usize])
+    sink.write = memory_write
+    sink.flush = no_flush
     ret (state, sink, ok)
 }
 
 fn memory_bytes(w: *const MemoryWriter) -> []const u8 {
-    ret mem.view(w.arena, w.start, w.len)
+    var state = w
+    if state.backing != nil { state = state.backing }
+    ret mem.view(state.arena, state.start, state.len)
 }
 
 fn read(r: *Reader, dst: []u8) -> (usize, err) {

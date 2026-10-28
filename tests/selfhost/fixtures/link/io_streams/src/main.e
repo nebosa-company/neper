@@ -257,6 +257,13 @@ fn main(a: *mem.Arena) -> err {
     if io.flush(&retry_sink) != ok { ret Failed }
     if !str.eq(support.captured(&scripted), "held") { ret Failed }
 
+    // `memory_writer` returns a ready-to-use sink with stable state behind the handle.
+    var (memory, memory_sink, memory_error) = io.memory_writer(a, 0usize)
+    if memory_error != ok { ret memory_error }
+    let memory_write_error = io.write_all(&memory_sink, "direct")
+    if memory_write_error != ok { ret Failed }
+    if !str.eq(io.memory_bytes(&memory), "direct") { ret Failed }
+
     // Detail streams compose without changing success provenance.
     var detail_source_state = io.SliceReader { data: "detail copy", off: 0usize }
     var detail_sink_bytes: [16]u8 = zero
@@ -289,13 +296,13 @@ fn main(a: *mem.Arena) -> err {
 
     // Plain buffered constructors roll back their state allocation when the byte
     // buffer cannot fit, just as their detail forms do.
-    var plain_reader_bytes: [512]u8 = zero
+    var plain_reader_bytes: [128]u8 = zero
     var plain_reader_arena = mem.arena_from(plain_reader_bytes[..])
     var plain_source_state = io.SliceReader { data: "", off: 0usize }
     let (_, plain_reader_error) = io.buffered_reader(&plain_reader_arena, io.slice_reader(&plain_source_state), 1024usize)
     if plain_reader_error != mem.Exhausted || mem.mark(&plain_reader_arena) != 0usize { ret Failed }
 
-    var plain_writer_bytes: [512]u8 = zero
+    var plain_writer_bytes: [128]u8 = zero
     var plain_writer_arena = mem.arena_from(plain_writer_bytes[..])
     var plain_sink_bytes: [1]u8 = zero
     var plain_sink_state = io.SliceWriter { data: plain_sink_bytes[..], off: 0usize }
