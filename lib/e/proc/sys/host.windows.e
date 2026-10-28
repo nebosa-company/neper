@@ -8,16 +8,18 @@
 use e.mem
 use e.os
 use e.proc.sys.format as format
+use e.proc.sys.win_heap as win_heap
 use e.text.utf8 as utf8
 
 type SystemTimes = struct { idle: u64, kernel: u64, user: u64 }
 type MemoryStatus = struct { length: u32, load: u32, total_phys: u64, avail_phys: u64, total_page: u64, avail_page: u64, total_virtual: u64, avail_virtual: u64, avail_extended: u64 }
-type ProcessEntry = struct { size: u32, usage: u32, pid: u32, pad0: u32, heap: usize, module: u32, threads: u32, parent: u32, priority: i32, flags: u32, exe: [260]u16, tail: u32 }
+// `heap` is ULONG_PTR. Neper's pointers and `usize` stay 64 bits on x86, so the
+// architecture variant supplies this field's Windows ABI width explicitly.
+type ProcessEntry = struct { size: u32, usage: u32, pid: u32, heap: win_heap.Heap, module: u32, threads: u32, parent: u32, priority: i32, flags: u32, exe: [260]u16 }
 type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: usize, working_set: usize, quota_peak_paged: usize, quota_paged: usize, quota_peak_nonpaged: usize, quota_nonpaged: usize, pagefile: usize, peak_pagefile: usize }
 
 const SNAPSHOT_PROCESSES: u32 = 2u32
 const ALL_GROUPS: u16 = 65535u16
-const ENTRY_SIZE: u32 = 568u32
 
 @import("kernel32.dll", "GetActiveProcessorCount")
 extern fn raw_processor_count(group: u16) -> u32
@@ -171,7 +173,7 @@ fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
     let snap = raw_snapshot(SNAPSHOT_PROCESSES, 0u32)
     if snap == 0usize || snap == ~0usize { ret (out[0usize..0usize], os.Failed) }
     var entry: ProcessEntry = zero
-    entry.size = ENTRY_SIZE
+    entry.size = u32(mem.size_of[ProcessEntry]())
     var n = 0usize
     var more = raw_first(snap, &entry)
     while more != 0i32 && n < limit {

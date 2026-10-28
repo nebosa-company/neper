@@ -4960,6 +4960,16 @@ $procSysWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $procSysWritten -ne 'executable written') { throw 'proc_sys emission failed' }
 $procSysOutput = & $procSysPath
 if ($LASTEXITCODE -ne 0 -or $procSysOutput -ne 'proc sys ok') { throw "proc_sys answered wrongly: exit $LASTEXITCODE" }
+# PROCESSENTRY32W uses a 556-byte Win32 layout and a 568-byte 64-bit layout.
+$procEntryLayoutSource = Join-Path $PSScriptRoot 'fixtures\link\proc_sys_windows_layout\src\main.e'
+$procEntryLayoutX86Path = Join-Path $testBuild 'proc-entry-layout-x86.em'
+$procEntryLayoutX86Written = & $compiler emit-em $procEntryLayoutSource $repo 'x86' 'windows' $procEntryLayoutX86Path
+if ($LASTEXITCODE -ne 0 -or $procEntryLayoutX86Written -ne 'compiled module written') { throw 'proc_sys_windows_layout x86 compile failed' }
+$procEntryLayoutPath = Join-Path $testBuild 'proc-entry-layout-selfhost.exe'
+$procEntryLayoutWritten = & $compiler emit-executable $procEntryLayoutSource $repo 'x64' 'windows' $procEntryLayoutPath -j 2
+if ($LASTEXITCODE -ne 0 -or $procEntryLayoutWritten -ne 'executable written') { throw 'proc_sys_windows_layout x64 emission failed' }
+$procEntryLayoutOutput = & $procEntryLayoutPath
+if ($LASTEXITCODE -ne 0 -or $procEntryLayoutOutput -ne 'proc entry layout ok') { throw "proc_sys_windows_layout answered wrongly: exit $LASTEXITCODE" }
 # e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
 $metricsExportPath = Join-Path $testBuild 'metrics-export-selfhost.exe'
 $metricsExportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\metrics_export\src\main.e') $repo 'x64' 'windows' $metricsExportPath -j 2
