@@ -341,18 +341,22 @@ fn implicit_list_reset(l: *Layout, e: u32) -> bool {
 
 fn rev_style(l: *Layout, s: *const style.Style, name: str, acc: *RevAcc) {
     let (incr, has) = extra_text(s, "counter-increment")
+    var zero_step = false
     if has {
         let (v, found) = incr_of(l, incr, name)
         if found && v != 0i64 {
             acc.sum += v
             acc.last = v
         }
+        if found && v == 0i64 { zero_step = true }
     }
     // A `counter-set` pins the value after its element, which fixes the start by running the steps back.
     let (setv, has_setv) = extra_text(s, "counter-set")
     if has_setv {
         let (sv, set_found) = incr_of(l, setv, name)
-        if set_found {
+        if set_found && !acc.has_set {
+            // A zero step beside a set takes the step before it again.
+            if zero_step { acc.sum += acc.last }
             acc.has_set = true
             acc.set_val = sv
             acc.set_sum = acc.sum
