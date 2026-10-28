@@ -42,7 +42,7 @@ fn put_bytes(out: []u8, at: usize, src: []const u8) {
 
 // The package holding `parts` in order, every one stored.
 fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err) {
-    if parts.len == 0usize || parts.len > MAX_PARTS { ret (zero, TooLarge) }
+    if parts.len > MAX_PARTS { ret (zero, TooLarge) }
     var total = 22usize
     var i = 0usize
     while i < parts.len {

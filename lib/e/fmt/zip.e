@@ -149,16 +149,21 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
         at -= 1usize
     }
     if !found { ret (zero, Invalid) }
+    // Split archives need another volume; this reader has one seekable source only.
+    if le16(tail, at + 4usize) != 0u32 || le16(tail, at + 6usize) != 0u32 || le16(tail, at + 8usize) != le16(tail, at + 10usize) { ret (zero, Unsupported) }
     var count = u64(le16(tail, at + 10usize))
     var directory_size = u64(le32(tail, at + 12usize))
     var directory_offset = u64(le32(tail, at + 16usize))
     if count == 65535u64 || directory_size == 4294967295u64 || directory_offset == 4294967295u64 {
         if at < 20usize || le32(tail, at - 20usize) != 117853008u32 { ret (zero, Invalid) }
+        // The locator and ZIP64 end record must describe one disk too.
+        if le32(tail, at - 16usize) != 0u32 || le32(tail, at - 4usize) != 1u32 { ret (zero, Unsupported) }
         let record_offset = le64(tail, at - 12usize)
         var record: [56]u8 = zero
         let read_error_125 = read_at(s, record_offset, record[0..])
         if read_error_125 != ok { ret (zero, read_error_125) }
         if le32(record[0..], 0usize) != 101075792u32 { ret (zero, Invalid) }
+        if le32(record[0..], 16usize) != 0u32 || le32(record[0..], 20usize) != 0u32 || le64(record[0..], 24usize) != le64(record[0..], 32usize) { ret (zero, Unsupported) }
         count = le64(record[0..], 32usize)
         directory_size = le64(record[0..], 40usize)
         directory_offset = le64(record[0..], 48usize)
@@ -225,8 +230,8 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
             extra_at += 4usize + field_len
         }
         if entry.size > limits.entry_bytes { ret (zero, TooLarge) }
+        if entry.size > limits.total_bytes || total > limits.total_bytes - entry.size { ret (zero, TooLarge) }
         total += entry.size
-        if total > limits.total_bytes { ret (zero, TooLarge) }
         if offset >= size { ret (zero, Invalid) }
         table[index] = entry
         offsets[index] = offset
