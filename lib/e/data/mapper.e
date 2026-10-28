@@ -161,13 +161,19 @@ fn is_null[F: type](x: F, empty_is_null: bool) -> bool {
     ret false
 }
 
-fn from_default[G: type](d: Default) -> G {
+fn from_default[G: type](a: *mem.Arena, d: Default) -> (G, err) {
     var out: G = zero
-    if meta.kind[G]() == .Int { out = G(d.as_int) }
-    if meta.kind[G]() == .Float { out = G(d.as_real) }
+    if meta.kind[G]() == .Int {
+        let (converted, conversion_error) = convert[G, i64](a, d.as_int)
+        ret (converted, conversion_error)
+    }
+    if meta.kind[G]() == .Float {
+        let (converted, conversion_error) = convert[G, f64](a, d.as_real)
+        ret (converted, conversion_error)
+    }
     if meta.kind[G]() == .Bool { out = d.as_int != 0i64 }
     if meta.kind[G]() == .Slice { out = d.as_str }
-    ret out
+    ret (out, ok)
 }
 
 fn convert[G: type, F: type](a: *mem.Arena, x: F) -> (G, err) {
@@ -288,8 +294,8 @@ fn resolve[DF: meta.Field, D: type, S: type](p: *const Profile) -> Resolution {
 fn put_value[DF: meta.Field, D: type, F: type](a: *mem.Arena, dst: *D, v: F, p: *const Profile, st: *Stats) -> err {
     let (di, has_default) = default_of(p, DF.name)
     if has_default && is_null[F](v, p.empty_is_null) {
-        var dv: DF.ty = zero
-        dv = from_default[DF.ty](p.defaults[di])
+        let (dv, default_error) = from_default[DF.ty](a, p.defaults[di])
+        if default_error != ok { ret default_error }
         meta.set[DF, D](dst, dv)
         st.defaulted += 1usize
         ret ok
@@ -312,8 +318,8 @@ fn map_into[S: type, D: type](a: *mem.Arena, src: *const S, dst: *D, p: *const P
             if res.score == 0u32 {
                 let (di, has_default) = default_of(p, df.name)
                 if has_default {
-                    var dv: df.ty = zero
-                    dv = from_default[df.ty](p.defaults[di])
+                    let (dv, default_error) = from_default[df.ty](a, p.defaults[di])
+                    if default_error != ok { ret (st, default_error) }
                     meta.set[df, D](dst, dv)
                     st.defaulted += 1usize
                 } else {
