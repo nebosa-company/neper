@@ -1371,6 +1371,11 @@ net_cookie_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$net_cookie_written" = 'executable written' ]
 chmod +x "$test_build/net-cookie-selfhost"
 "$test_build/net-cookie-selfhost"
+# `e.net.fetch`: caller credentials are filtered case-insensitively on cross-origin redirects (issue #1103).
+net_fetch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_fetch/src/main.e" "$repo" x64 linux "$test_build/net-fetch-selfhost")
+[ "$net_fetch_written" = 'executable written' ]
+chmod +x "$test_build/net-fetch-selfhost"
+"$test_build/net-fetch-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

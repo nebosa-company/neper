@@ -1470,6 +1470,12 @@ $netcookieWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $netcookieWritten -ne 'executable written') { throw 'net_cookie emission failed' }
 & $netcookiePath
 if ($LASTEXITCODE -ne 0) { throw "a net_cookie check failed: exit $LASTEXITCODE" }
+# `e.net.fetch`: caller credentials are filtered case-insensitively on cross-origin redirects (issue #1103).
+$netFetchPath = Join-Path $testBuild 'net-fetch-selfhost.exe'
+$netFetchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_fetch\src\main.e') $repo 'x64' 'windows' $netFetchPath
+if ($LASTEXITCODE -ne 0 -or $netFetchWritten -ne 'executable written') { throw 'net_fetch emission failed' }
+& $netFetchPath
+if ($LASTEXITCODE -ne 0) { throw "a net_fetch check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath
