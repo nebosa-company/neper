@@ -15,6 +15,57 @@ use e.gfx.scene
 use e.ui.input
 use e.ui.window
 
+// A presenter-shaped fake pool proves that `window.close` releases the callback's slot even on
+// hosts without GL: the seventeenth sequential attachment only fits if every prior close ran it.
+const FAKE_MAX_PRESENTERS: usize = 16usize
+const PRESENTER_CYCLES: usize = 17usize
+
+var fake_slots: [16]bool = zero
+var fake_releases: usize = 0usize
+var fake_present_fails: bool = false
+
+fn fake_present(index: usize, host: os.Window, pixels: []const u32, width: u32, height: u32, changed: window.Changed) -> err {
+    if fake_present_fails { ret window.Invalid }
+    ret ok
+}
+
+fn fake_release(index: usize) -> err {
+    if index >= FAKE_MAX_PRESENTERS || !fake_slots[index] { ret window.Invalid }
+    fake_slots[index] = false
+    fake_releases += 1usize
+    ret ok
+}
+
+fn fake_slots_clear() -> bool {
+    var index = 0usize
+    while index < FAKE_MAX_PRESENTERS {
+        if fake_slots[index] { ret false }
+        index += 1usize
+    }
+    ret true
+}
+
+fn fake_attach(a: *mem.Arena, w: *window.Window) -> err {
+    var index = 0usize
+    while index < FAKE_MAX_PRESENTERS && fake_slots[index] { index += 1usize }
+    if index == FAKE_MAX_PRESENTERS { ret window.Unsupported }
+    fake_slots[index] = true
+    let installed = window.set_presenter(w, window.Presenter { context: index, present: fake_present, release: fake_release })
+    if installed != ok {
+        fake_slots[index] = false
+        ret installed
+    }
+    ret ok
+}
+
+// A factory that reports failure after taking a slot checks the defensive error-path release in
+// `window.open`; a real presenter must itself also make its partially-open path safe.
+fn fake_attach_and_fail(a: *mem.Arena, w: *window.Window) -> err {
+    let attached = fake_attach(a, w)
+    if attached != ok { ret attached }
+    ret window.Invalid
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -80,6 +131,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if stale_error != window.Closed { os.exit(27i32) }
     if input.capture(&events, win.id, 0u32) != input.Closed { os.exit(28i32) }
     if input.close(&events) != ok || input.close(&events) != input.Closed { os.exit(29i32) }
+    window.set_default_presenter(window.PresenterFactory { attach: fake_attach })
+    let (failure_opened, failure_open_error) = window.open(a, device, options)
+    if failure_open_error != ok { os.exit(31i32) }
+    var failure = failure_opened
+    let (failure_canvas, failure_canvas_error) = window.draw_target(&failure)
+    if failure_canvas_error != ok || scene.render(&renderer, compiled, failure_canvas, geometry.Size { width: 320.0, height: 200.0 }) != ok { os.exit(32i32) }
+    fake_present_fails = true
+    if window.request_frame(&failure) != ok { os.exit(33i32) }
+    fake_present_fails = false
+    if window.presenting(&failure) || fake_releases != 1usize || !fake_slots_clear() { os.exit(34i32) }
+    if window.close(&failure) != ok || fake_releases != 1usize { os.exit(35i32) }
+    var cycle = 0usize
+    while cycle < PRESENTER_CYCLES {
+        let (opened, opened_error) = window.open(a, device, options)
+        if opened_error != ok { os.exit(36i32) }
+        var attached = opened
+        if !window.presenting(&attached) { os.exit(37i32) }
+        if window.close(&attached) != ok { os.exit(38i32) }
+        if fake_releases != cycle + 2usize || !fake_slots_clear() { os.exit(39i32) }
+        cycle += 1usize
+    }
+    window.set_default_presenter(window.PresenterFactory { attach: fake_attach_and_fail })
+    let (partially_attached, partial_error) = window.open(a, device, options)
+    if partial_error != ok { os.exit(40i32) }
+    var fallback = partially_attached
+    if window.presenting(&fallback) { os.exit(41i32) }
+    if fake_releases != PRESENTER_CYCLES + 2usize || !fake_slots_clear() { os.exit(42i32) }
+    if window.close(&fallback) != ok { os.exit(43i32) }
+    if fake_releases != PRESENTER_CYCLES + 2usize { os.exit(44i32) }
     if scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(30i32) }
     try io.print("ui window ok\n")
     ret ok

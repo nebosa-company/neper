@@ -19,7 +19,7 @@ use x.khronos.gl
 error Unsupported
 error Failed
 
-type Present = struct { c: context.Context, program: u32, texture: u32, vertex_array: u32, height_slot: i32, origin_slot: i32, width: u32, height: u32, live: bool, unpack: [2]u32, next_unpack: usize, uploaded_bytes: usize }
+type Present = struct { c: context.Context, vertex_shader: u32, fragment_shader: u32, program: u32, texture: u32, vertex_array: u32, corner_buffer: u32, height_slot: i32, origin_slot: i32, width: u32, height: u32, live: bool, loaded: bool, unpack: [2]u32, next_unpack: usize, uploaded_bytes: usize }
 
 const MAX_PRESENTS: usize = 16usize
 
@@ -47,7 +47,10 @@ fn compile(kind: u32, source: str) -> (u32, err) {
     gl.compile_shader(shader)
     var status = 0i32
     gl.get_shaderiv(shader, gl.COMPILE_STATUS, &status)
-    if status == 0i32 { ret (0u32, Failed) }
+    if status == 0i32 {
+        gl.delete_shader(shader)
+        ret (0u32, Failed)
+    }
     ret (shader, ok)
 }
 
@@ -68,30 +71,41 @@ fn open(a: *mem.Arena, host: os.Window, options: context.Options) -> (usize, err
     while slot < MAX_PRESENTS && presents[slot].live { slot += 1usize }
     if slot == MAX_PRESENTS { ret (0usize, Unsupported) }
     let (c, context_error) = context.for_window(a, host, options)
-    if context_error != ok { ret (0usize, Unsupported) }
-    var p = Present { c: c, program: 0u32, texture: 0u32, vertex_array: 0u32, height_slot: 0i32, origin_slot: 0i32, width: 0u32, height: 0u32, live: true, unpack: zero, next_unpack: 0usize, uploaded_bytes: 0usize }
-    if context.load(a, options) != ok {
-        let closed = context.close(&p.c)
+    presents[slot] = Present { c: c, vertex_shader: 0u32, fragment_shader: 0u32, program: 0u32, texture: 0u32, vertex_array: 0u32, corner_buffer: 0u32, height_slot: 0i32, origin_slot: 0i32, width: 0u32, height: 0u32, live: true, loaded: false, unpack: zero, next_unpack: 0usize, uploaded_bytes: 0usize }
+    if context_error != ok {
+        let closed = close(slot)
         ret (0usize, Unsupported)
     }
+    let p = &presents[slot]
+    if context.load(a, options) != ok {
+        let closed = close(slot)
+        ret (0usize, Unsupported)
+    }
+    p.loaded = true
     let synced = context.swap_interval(&p.c, 1i32)
     let es = options.api == .Gles
     let (vertex, vertex_error) = compile(gl.VERTEX_SHADER, vertex_source(es))
+    p.vertex_shader = vertex
     let (fragment, fragment_error) = compile(gl.FRAGMENT_SHADER, fragment_source(es))
+    p.fragment_shader = fragment
     if vertex_error != ok || fragment_error != ok {
-        let closed = context.close(&p.c)
+        let closed = close(slot)
         ret (0usize, Failed)
     }
     p.program = gl.create_program()
-    gl.attach_shader(p.program, vertex)
-    gl.attach_shader(p.program, fragment)
+    gl.attach_shader(p.program, p.vertex_shader)
+    gl.attach_shader(p.program, p.fragment_shader)
     gl.link_program(p.program)
     var linked = 0i32
     gl.get_programiv(p.program, gl.LINK_STATUS, &linked)
     if linked == 0i32 {
-        let closed = context.close(&p.c)
+        let closed = close(slot)
         ret (0usize, Failed)
     }
+    gl.delete_shader(p.vertex_shader)
+    gl.delete_shader(p.fragment_shader)
+    p.vertex_shader = 0u32
+    p.fragment_shader = 0u32
     gl.use_program(p.program)
     gl.uniform_1i(uniform_slot(p.program, "frame"), 0i32)
     p.height_slot = uniform_slot(p.program, "height")
@@ -106,9 +120,8 @@ fn open(a: *mem.Arena, host: os.Window, options: context.Options) -> (usize, err
     corners[3usize] = -1.0f32
     corners[4usize] = -1.0f32
     corners[5usize] = 3.0f32
-    var corner_buffer = 0u32
-    gl.gen_buffers(1i32, &corner_buffer)
-    gl.bind_buffer(gl.ARRAY_BUFFER, corner_buffer)
+    gl.gen_buffers(1i32, &p.corner_buffer)
+    gl.bind_buffer(gl.ARRAY_BUFFER, p.corner_buffer)
     gl.buffer_data(gl.ARRAY_BUFFER, 24isize, context.as_pointer(mem.address_of(&corners[0usize])), gl.STATIC_DRAW)
     gl.enable_vertex_attrib_array(0u32)
     gl.vertex_attrib_pointer(0u32, 2i32, gl.FLOAT, 0u8, 8i32, nil)
@@ -120,10 +133,9 @@ fn open(a: *mem.Arena, host: os.Window, options: context.Options) -> (usize, err
     gl.pixel_storei(gl.UNPACK_ALIGNMENT, 4i32)
     gl.gen_buffers(2i32, &p.unpack[0usize])
     if gl.get_error() != gl.NO_ERROR {
-        let closed = context.close(&p.c)
+        let closed = close(slot)
         ret (0usize, Failed)
     }
-    presents[slot] = p
     ret (slot, ok)
 }
 
@@ -213,7 +225,12 @@ fn attach(a: *mem.Arena, w: *window.Window, options: context.Options) -> err {
     if host_error != ok { ret host_error }
     let (index, open_error) = open(a, host, options)
     if open_error != ok { ret open_error }
-    ret window.set_presenter(w, window.Presenter { context: index, present: present })
+    let attached = window.set_presenter(w, window.Presenter { context: index, present: present, release: close })
+    if attached != ok {
+        let closed = close(index)
+        ret attached
+    }
+    ret ok
 }
 
 // (D5907) Every `e.ui.window` opened from now on presents through GL 3.3 core, or GLES 3.0 with `install_es`.
@@ -235,6 +252,32 @@ fn attach_gles(a: *mem.Arena, w: *window.Window) -> err {
 
 fn close(index: usize) -> err {
     if index >= MAX_PRESENTS || !presents[index].live { ret ok }
-    presents[index].live = false
-    ret context.close(&presents[index].c)
+    let p = &presents[index]
+    p.live = false
+    var released = ok
+    if p.loaded {
+        if context.make_current(&p.c) != ok {
+            released = Failed
+        } else {
+            if p.unpack[0usize] != 0u32 || p.unpack[1usize] != 0u32 { gl.delete_buffers(2i32, &p.unpack[0usize]) }
+            if p.corner_buffer != 0u32 { gl.delete_buffers(1i32, &p.corner_buffer) }
+            if p.vertex_array != 0u32 { gl.delete_vertex_arrays(1i32, &p.vertex_array) }
+            if p.texture != 0u32 { gl.delete_textures(1i32, &p.texture) }
+            if p.program != 0u32 { gl.delete_program(p.program) }
+            if p.vertex_shader != 0u32 { gl.delete_shader(p.vertex_shader) }
+            if p.fragment_shader != 0u32 { gl.delete_shader(p.fragment_shader) }
+        }
+    }
+    p.vertex_shader = 0u32
+    p.fragment_shader = 0u32
+    p.program = 0u32
+    p.texture = 0u32
+    p.vertex_array = 0u32
+    p.corner_buffer = 0u32
+    p.unpack[0usize] = 0u32
+    p.unpack[1usize] = 0u32
+    p.loaded = false
+    let context_closed = context.close(&p.c)
+    if released != ok { ret released }
+    ret context_closed
 }

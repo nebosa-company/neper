@@ -7,6 +7,7 @@
 // presenter's unpack buffers, and the back buffer must again equal the whole new frame, and an
 // empty box must upload nothing. A host without a display or GL exits 0 having printed why.
 
+use e.gpu
 use e.io
 use e.mem
 use e.os
@@ -17,6 +18,7 @@ use x.khronos.present
 
 const WINDOW_W: u32 = 160u32
 const WINDOW_H: u32 = 120u32
+const PRESENTER_CYCLES: usize = 17usize
 
 fn pattern(x: u32, y: u32, size: u32) -> u32 {
     let r = (x * 7u32 + size) & 255u32
@@ -96,6 +98,49 @@ fn run(a: *mem.Arena, host: os.Window, options: context.Options, base: i32) -> e
     ret ok
 }
 
+// Close more GL-presenting UI windows than the presenter's fixed pool can hold at once. Every
+// open must attach again, and the final frame must stay on GL instead of silently falling back.
+// A host that cannot create even the first GL presenter reports Unsupported; a later failure is
+// a lifecycle regression rather than a platform skip.
+fn cycle_presenters(a: *mem.Arena) -> err {
+    let (device, device_error) = gpu.open(a, .Cpu, 0u32)
+    if device_error != ok { ret present.Failed }
+    present.install()
+    let options = window.Options { title: "neper x_khronos_gl_present lifecycle", width: WINDOW_W, height: WINDOW_H, min_width: 0u32, min_height: 0u32, resizable: false, transparent: false, mode: .Windowed }
+    var cycle = 0usize
+    var attached_once = false
+    while cycle < PRESENTER_CYCLES {
+        let (opened, opened_error) = window.open(a, device, options)
+        if opened_error != ok {
+            let released = gpu.close(device)
+            if !attached_once && opened_error == window.Unsupported { ret present.Unsupported }
+            ret present.Failed
+        }
+        var presented = opened
+        if !window.presenting(&presented) {
+            let closed = window.close(&presented)
+            let released = gpu.close(device)
+            if !attached_once { ret present.Unsupported }
+            ret present.Failed
+        }
+        attached_once = true
+        if cycle + 1usize == PRESENTER_CYCLES {
+            if window.request_frame(&presented) != ok || !window.presenting(&presented) {
+                let closed = window.close(&presented)
+                let released = gpu.close(device)
+                ret present.Failed
+            }
+        }
+        if window.close(&presented) != ok {
+            let released = gpu.close(device)
+            ret present.Failed
+        }
+        cycle += 1usize
+    }
+    if gpu.close(device) != ok { ret present.Failed }
+    ret ok
+}
+
 fn pump() {
     var spins = 0usize
     while spins < 64usize {
@@ -124,5 +169,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let es_error = run(a, es_window, context.Options { api: .Gles, major: 3u32, minor: 0u32 }, 50i32)
     if es_error != ok { let es_skipped = io.print("unsupported\n") }
     if os.window_close(es_window) != ok { os.exit(4i32) }
+    let lifecycle_label = io.print("OpenGL presenter lifecycle: ")
+    let lifecycle_error = cycle_presenters(a)
+    if lifecycle_error == present.Unsupported {
+        let skipped = io.print("unsupported\n")
+    } else if lifecycle_error != ok {
+        os.exit(5i32)
+    } else {
+        let passed = io.print("ok\n")
+    }
     ret ok
 }
