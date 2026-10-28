@@ -9,6 +9,7 @@ use e.mem
 use e.io
 use e.str
 use e.fmt.zip as zip
+use e.fmt.zip.write as zipwrite
 
 type Source = struct { data: []const u8, off: usize }
 
@@ -113,6 +114,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if listed64.len != 1usize || !str.eq(listed64[0].name, "z.txt") || listed64[0].size != 20u64 { os.exit(14) }
     let (payload, e7) = zip.extract(a, &big, 0usize)
     if e7 != ok || !str.eq(payload, "zip64 stored payload") { os.exit(15) }
+    // A writer-generated archive corrupted with an invalid raw name is rejected both
+    // with and without bit 11.
+    var no_data: [0]u8 = zero
+    var malformed_parts: [1]zipwrite.Part = zero
+    malformed_parts[0usize] = zipwrite.Part { name: "x", data: no_data[..] }
+    let (malformed, malformed_error) = zipwrite.store(a, malformed_parts[..])
+    if malformed_error != ok { os.exit(24) }
+    let malformed_directory = 30usize + malformed_parts[0usize].name.len
+    malformed[30usize] = 255u8
+    malformed[malformed_directory + 46usize] = 255u8
+    malformed[6usize] = 0u8
+    malformed[7usize] = 8u8
+    malformed[malformed_directory + 8usize] = 0u8
+    malformed[malformed_directory + 9usize] = 8u8
+    var flagged_name_source = Source { data: malformed, off: 0usize }
+    let (_, e16) = open_over(a, &flagged_name_source, limits)
+    if e16 != zip.Invalid { os.exit(25) }
+    malformed[7usize] = 0u8
+    malformed[malformed_directory + 9usize] = 0u8
+    var legacy_name_source = Source { data: malformed, off: 0usize }
+    let (_, e17) = open_over(a, &legacy_name_source, limits)
+    if e17 != zip.Invalid { os.exit(26) }
     // Refusals.
     var enc_source = Source { data: encrypted, off: 0usize }
     let (v1, e8) = open_over(a, &enc_source, limits)

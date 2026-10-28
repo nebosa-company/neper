@@ -22256,9 +22256,12 @@ fn entry_reader(storage: []u8, archive: *Archive, index: usize) -> (io.Reader, e
 fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
 ```
 
-Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It rejects
-encrypted entries, absolute paths and names containing a `..` segment. CRC and all
-per-entry/aggregate limits are checked before successful extraction.
+Version 1 reads stored and DEFLATE entries, ZIP64 sizes and raw, well-formed UTF-8
+names. It rejects encrypted entries, absolute paths, names containing a `..` segment
+and malformed UTF-8 names. Bit 11 declares UTF-8, but an unflagged name is still read
+as raw UTF-8 and is invalid when those bytes are not UTF-8; legacy code pages are not
+decoded. CRC and all per-entry/aggregate limits are checked before successful
+extraction.
 
 ### `e.fmt.zip.write`
 
@@ -22277,7 +22280,7 @@ fn put_bytes(out: []u8, at: usize, src: []const u8)
 fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err)
 ```
 
-ZIP writing (L100): `store` lays named parts out as stored (method 0) entries, local headers then the central directory and end record, the layout `e.fmt.zip` reads and Python's zipfile writes for `ZIP_STORED`. The DOS date is fixed at 1980-01-01 so the same parts always give the same bytes. Limits are the classic ones (65535 parts, 4 GiB - 1, a 65535-byte name); a name `e.fmt.zip` would refuse is `BadName`, no parts or an over-size package `TooLarge`. Nothing is compressed; DEFLATE output is a later slice. Checked byte for byte against Python's zipfile and read back through `e.fmt.zip` in the `fmt_xlsx_book` fixture.
+ZIP writing (L100): `store` lays named parts out as stored (method 0) entries, local headers then the central directory and end record, the layout `e.fmt.zip` reads and Python's zipfile writes for `ZIP_STORED`. The DOS date is fixed at 1980-01-01 so the same parts always give the same bytes. Limits are the classic ones (65535 parts, 4 GiB - 1, a 65535-byte name); a malformed UTF-8 or otherwise invalid `e.fmt.zip` name is `BadName`, no parts or an over-size package `TooLarge`. Nothing is compressed; DEFLATE output is a later slice. Checked byte for byte against Python's zipfile and read back through `e.fmt.zip` in the `fmt_xlsx_book` fixture.
 
 
 ### `e.fmt.sevenzip`
