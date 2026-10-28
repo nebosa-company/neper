@@ -1513,6 +1513,14 @@ fn eval_node(it: *Interp, id: u32) -> (Value, err) {
     if n.kind == N_INDEX {
         let (base, be) = eval(it, n.a)
         if be != ok { ret (no_value(), be) }
+        var skip_index = false
+        switch base {
+        case .Null:
+            skip_index = n.op == 1u8
+        default:
+            skip_index = false
+        }
+        if skip_index { ret (no_value(), ok) }
         let (index, ie) = eval(it, n.b)
         if ie != ok { ret (no_value(), ie) }
         switch base {
@@ -1569,6 +1577,14 @@ fn eval_node(it: *Interp, id: u32) -> (Value, err) {
     if n.kind == N_METHOD {
         let (base, be) = eval(it, n.a)
         if be != ok { ret (no_value(), be) }
+        var skip_method = false
+        switch base {
+        case .Null:
+            skip_method = n.op == 1u8
+        default:
+            skip_method = false
+        }
+        if skip_method { ret (no_value(), ok) }
         var args: [32]Value = zero
         try eval_args(it, n.b, n.c, args[0usize..32usize])
         switch base {
