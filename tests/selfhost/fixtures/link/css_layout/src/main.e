@@ -148,6 +148,47 @@ fn all_text(a: *mem.Arena, pg: *const Page) -> str {
     ret out
 }
 
+fn css_issue_regressions(a: *mem.Arena) {
+    let table_css = "table { border-spacing: 0; font-size: 10px; } td { padding: 0; }"
+
+    // #1193: the baseline of a row-spanning cell belongs to its first row.
+    let (p1193, ok1193) = build(a, "<table><tr><td id=a rowspan=2 style=\"vertical-align:baseline\">a</td><td id=b style=\"vertical-align:baseline;font-size:20px\">b</td></tr><tr><td>c</td></tr></table>", table_css)
+    if !ok1193 { os.exit(153) }
+    let (found1193a, baseline1193a) = layout.first_baseline(&p1193.lay, box_of(p1193, "a"))
+    let (found1193b, baseline1193b) = layout.first_baseline(&p1193.lay, box_of(p1193, "b"))
+    if !found1193a || !found1193b || !near(baseline1193a, baseline1193b) { os.exit(154) }
+
+    // #1194: only the fixed table's first row contributes cell width hints.
+    let (p1194, ok1194) = build(a, "<table style=\"table-layout:fixed;width:200px\"><tr><td id=a>a</td><td id=b>b</td></tr><tr><td style=\"width:150px\">c</td><td>d</td></tr></table>", table_css)
+    if !ok1194 || !near(rect_of(p1194, "a").w, 100.0f64) || !near(rect_of(p1194, "b").w, 100.0f64) { os.exit(155) }
+
+    // #1195: table column order follows direction, including the HTML dir hint.
+    let (p1195, ok1195) = build(a, "<table dir=rtl><tr><td id=a style=\"width:40px\">a</td><td id=b style=\"width:20px\">b</td></tr></table>", table_css)
+    if !ok1195 || !near(rect_of(p1195, "a").x, 20.0f64) || !near(rect_of(p1195, "b").x, 0.0f64) { os.exit(156) }
+    let (p1195_edges, ok1195_edges) = build(a, "<table id=t dir=rtl style=\"border-collapse:collapse\"><tr><td style=\"border-right:10px solid;width:20px\">a</td><td style=\"border-left:4px solid;width:20px\">b</td></tr></table>", table_css)
+    if !ok1195_edges { os.exit(162) }
+    let table1195_edges = &p1195_edges.lay.boxes.items[usize(box_of(p1195_edges, "t"))]
+    if !near(table1195_edges.border[3usize], 2.0f64) || !near(table1195_edges.border[1usize], 5.0f64) { os.exit(163) }
+    let (p1195_ltr_edges, ok1195_ltr_edges) = build(a, "<table id=t style=\"border-collapse:collapse\"><tr><td style=\"border-left:4px solid;width:20px\">a</td><td style=\"border-right:10px solid;width:20px\">b</td></tr></table>", table_css)
+    if !ok1195_ltr_edges { os.exit(164) }
+    let table1195_ltr_edges = &p1195_ltr_edges.lay.boxes.items[usize(box_of(p1195_ltr_edges, "t"))]
+    if !near(table1195_ltr_edges.border[3usize], 2.0f64) || !near(table1195_ltr_edges.border[1usize], 5.0f64) { os.exit(165) }
+
+    // #1196: collapsed table side borders come from the first row, not later rows.
+    let (p1196, ok1196) = build(a, "<table id=t style=\"border-collapse:collapse\"><tr><td style=\"border-left:2px solid;border-right:2px solid;width:10px\"></td></tr><tr><td style=\"border-left:20px solid;border-right:20px solid;width:10px\"></td></tr></table>", table_css)
+    if !ok1196 { os.exit(157) }
+    let table1196 = &p1196.lay.boxes.items[usize(box_of(p1196, "t"))]
+    if !near(table1196.border[3usize], 1.0f64) || !near(table1196.border[1usize], 1.0f64) { os.exit(158) }
+
+    // #1197: inline-start floats and clearance resolve against the containing block direction.
+    let (p1197_start, ok1197_start) = build(a, "<div style=\"direction:rtl;width:100px\"><div id=f style=\"float:inline-start;width:20px;height:20px\"></div></div>", "")
+    if !ok1197_start || !near(rect_of(p1197_start, "f").x, 80.0f64) { os.exit(159) }
+    let (p1197_clear, ok1197_clear) = build(a, "<div style=\"direction:rtl;width:100px\"><div style=\"float:right;width:20px;height:20px\"></div><div id=c style=\"clear:inline-start;height:10px\"></div></div>", "")
+    if !ok1197_clear || !near(rect_of(p1197_clear, "c").y, 20.0f64) { os.exit(160) }
+    let (p1197_vertical, ok1197_vertical) = build(a, "<div style=\"writing-mode:vertical-rl;direction:rtl;width:100px;height:100px\"><div id=f style=\"float:inline-start;width:20px;height:20px\"></div></div>", "")
+    if !ok1197_vertical || !near(rect_of(p1197_vertical, "f").y, 80.0f64) { os.exit(161) }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // 1. Stacking and margin collapsing between siblings.
     let (p1, ok1) = build(a, "<div id=a style=\"height:50px;margin-bottom:10px\"></div><div id=b style=\"height:30px;margin-top:20px\"></div>", "")
@@ -535,5 +576,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 109. A percentage max-height cap on a scroll ancestor constrains a vertical child through an auto wrapper.
     let (p109, ok109) = build(a, "<div style=\"height:200px;font-size:10px\"><div style=\"overflow:hidden;max-height:25%\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div></div>", "")
     if !ok109 || !near(rect_of(p109, "o").h, 50.0f64) { os.exit(150) }
+    css_issue_regressions(a)
     ret ok
 }

@@ -594,6 +594,7 @@ fn paint_collapsed(p: *Painter, t: u32, x: f64, y: f64) {
     let ncols = td.cols
     let nrows = td.rows
     let hw = ncols + 1usize
+    let rtl = layout.st(p.l, tb.style).direction == .Rtl
     let (colx, ce) = mem.alloc[f64](p.a, ncols + 1usize)
     let (rowy, re) = mem.alloc[f64](p.a, nrows + 1usize)
     if ce != ok || re != ok { ret }
@@ -616,8 +617,10 @@ fn paint_collapsed(p: *Painter, t: u32, x: f64, y: f64) {
         let cb = &p.l.boxes.items[usize(info.box)]
         let rx = cox - tox
         let ry = coy - toy
-        if info.col < ncols + 1usize { colx[info.col] = rx }
-        if info.col + info.cs <= ncols { colx[info.col + info.cs] = rx + cb.w }
+        let left_line = layout.table_left_line(ncols, info.col, info.col + info.cs, rtl)
+        let right_line = layout.table_right_line(ncols, info.col, info.col + info.cs, rtl)
+        colx[left_line] = rx
+        colx[right_line] = rx + cb.w
         if info.row < nrows + 1usize { rowy[info.row] = ry }
         if info.row + info.rs <= nrows { rowy[info.row + info.rs] = ry + cb.h }
     }

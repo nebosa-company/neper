@@ -35,6 +35,17 @@ fn sign_of(x: f64) -> f64 {
 
 // A trapezoidal velocity profile over `distance` (the triangle when `v_max` is not reached).
 fn trapezoid_profile(distance: f64, v_max: f64, a_max: f64) -> Profile {
+    if v_max <= 0.0f64 || a_max <= 0.0f64 {
+        ret Profile {
+            distance: 0.0f64,
+            sign: 0.0f64,
+            v_peak: 0.0f64,
+            a_max: 0.0f64,
+            t_acc: 0.0f64,
+            t_flat: 0.0f64,
+            total: 0.0f64,
+        }
+    }
     let d = math.abs[f64](distance)
     let d_acc = v_max * v_max / (2.0f64 * a_max)
     var v_peak = v_max
@@ -65,6 +76,19 @@ fn trapezoid_at(p: Profile, t: f64) -> (f64, f64) {
 // `j_max`, acceleration capped at `a_max`, speed at `v_max`; the constant-
 // acceleration and cruise segments vanish when they cannot be reached.
 fn s_curve_profile(distance: f64, v_max: f64, a_max: f64, j_max: f64) -> SCurve {
+    if v_max <= 0.0f64 || a_max <= 0.0f64 || j_max <= 0.0f64 {
+        ret SCurve {
+            distance: 0.0f64,
+            sign: 0.0f64,
+            v_peak: 0.0f64,
+            a_peak: 0.0f64,
+            j_max: 0.0f64,
+            tj: 0.0f64,
+            ta: 0.0f64,
+            tv: 0.0f64,
+            total: 0.0f64,
+        }
+    }
     let d = math.abs[f64](distance)
     var v_peak = v_max
     var a_peak = a_max

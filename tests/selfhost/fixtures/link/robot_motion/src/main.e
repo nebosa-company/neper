@@ -41,8 +41,39 @@ fn s_curve_hash(p: motion.SCurve) -> f64 {
     ret h
 }
 
+fn finite_number(value: f64) -> bool {
+    ret value - value == 0.0f64
+}
+
+fn profile_is_finite(p: motion.Profile) -> bool {
+    ret finite_number(p.distance) && finite_number(p.sign) && finite_number(p.v_peak) && finite_number(
+        p.a_max,
+    ) && finite_number(p.t_acc) && finite_number(p.t_flat) && finite_number(p.total)
+}
+
+fn s_curve_is_finite(p: motion.SCurve) -> bool {
+    ret finite_number(p.distance) && finite_number(p.sign) && finite_number(p.v_peak) && finite_number(
+        p.a_peak,
+    ) && finite_number(p.j_max) && finite_number(p.tj) && finite_number(p.ta) && finite_number(p.tv) && finite_number(
+        p.total,
+    )
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let pi = 3.141592653589793f64
+
+    let stopped_v = motion.trapezoid_profile(10.0f64, 0.0f64, 1.5f64)
+    let stopped_a = motion.trapezoid_profile(10.0f64, 2.0f64, 0.0f64)
+    if !profile_is_finite(stopped_v) || !profile_is_finite(stopped_a) { os.exit(11i32) }
+    let (stopped_pos, stopped_vel) = motion.trapezoid_at(stopped_v, 1.0f64)
+    if stopped_pos != 0.0f64 || stopped_vel != 0.0f64 { os.exit(11i32) }
+
+    let stopped_sv = motion.s_curve_profile(10.0f64, 0.0f64, 1.5f64, 3.0f64)
+    let stopped_sa = motion.s_curve_profile(10.0f64, 2.0f64, 0.0f64, 3.0f64)
+    let stopped_sj = motion.s_curve_profile(10.0f64, 2.0f64, 1.5f64, 0.0f64)
+    if !s_curve_is_finite(stopped_sv) || !s_curve_is_finite(stopped_sa) || !s_curve_is_finite(stopped_sj) { os.exit(12i32) }
+    let (stopped_s_pos, stopped_s_vel, stopped_s_acc) = motion.s_curve_at(stopped_sv, 1.0f64)
+    if stopped_s_pos != 0.0f64 || stopped_s_vel != 0.0f64 || stopped_s_acc != 0.0f64 { os.exit(12i32) }
 
     // 1: trapezoid profiles, full and triangular.
     let tp = motion.trapezoid_profile(10.0f64, 2.0f64, 1.5f64)
