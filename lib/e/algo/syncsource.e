@@ -20,6 +20,7 @@ use e.algo.sync as sync
 use e.algo.syncjob as syncjob
 use e.data.list as list
 use e.fmt.json as json
+use e.fmt.uri
 use e.mem
 use e.str
 
@@ -376,7 +377,9 @@ fn at_path(a: *mem.Arena, body: json.Value, path: str) -> (json.Value, bool) {
 fn replace_name(a: *mem.Arena, template: str, raw: str) -> str {
     let (at, found) = str.find(template, "{name}")
     if !found { ret template }
-    ret sync.cat(a, sync.cat(a, template[0usize..at], raw), template[at + 6usize..template.len])
+    let (encoded, encode_error) = uri.percent_encode(a, raw[0usize..], .PathSegment)
+    if encode_error != ok { ret "" }
+    ret sync.cat(a, sync.cat(a, template[0usize..at], encoded), template[at + 6usize..template.len])
 }
 
 // An index response as entities `[{path, name, source: "source"}]`: an array of names or of objects named by
@@ -423,7 +426,13 @@ fn entities_from_body(a: *mem.Arena, channel: json.Value, body: json.Value) -> [
         let raw = sync.as_text(names.items[n])
         n += 1usize
         var path = raw
-        if !str.starts_with(raw, "/") { path = replace_name(a, template, raw) }
+        if !str.starts_with(raw, "/") {
+            path = replace_name(a, template, raw)
+        } else {
+            let (encoded, encode_error) = uri.percent_encode(a, raw[0usize..], .Path)
+            if encode_error != ok { continue }
+            path = encoded
+        }
         if str.eq(path, "/") || str.starts_with(path, "/rpc/") { continue }
         if has_path(list.slice_const[json.Value](&out), path) { continue }
         var display = raw
