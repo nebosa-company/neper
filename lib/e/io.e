@@ -308,10 +308,17 @@ fn tee_write(ctx: *void, src: []const u8) -> (usize, err) {
     ret (count, ok)
 }
 
+fn tee_flush(ctx: *void) -> err {
+    var state = mem.cast[*TeeWriter](ctx)
+    let left_error = flush(&state.left)
+    if left_error != ok { ret left_error }
+    ret flush(&state.right)
+}
+
 fn tee_writer(state: *TeeWriter, left: Writer, right: Writer) -> Writer {
     state.left = left
     state.right = right
-    ret Writer { ctx: mem.cast[*void](state), write: tee_write, flush: no_flush }
+    ret Writer { ctx: mem.cast[*void](state), write: tee_write, flush: tee_flush }
 }
 
 fn memory_write(ctx: *void, src: []const u8) -> (usize, err) {
