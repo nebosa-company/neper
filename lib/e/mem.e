@@ -5,6 +5,7 @@
 type Arena = struct { base: *u8, cap: usize, off: usize }
 
 fn arena_from(buf: []u8) -> Arena {
+    if buf.len == 0usize { ret Arena { base: zero, cap: 0usize, off: 0usize } }
     ret Arena { base: &buf[0], cap: buf.len, off: 0usize }
 }
 
@@ -83,6 +84,7 @@ fn pool(storage: []u8, object_size: usize, align: usize) -> (Pool, err) {
     if !is_power_of_two(align) || storage.len == 0usize { ret (zero, Invalid) }
     var size = object_size
     if size < 8usize { size = 8usize }
+    if size > NONE - (align - 1usize) { ret (zero, Invalid) }
     size = (size + align - 1usize) & ~(align - 1usize)
     if size > storage.len { ret (zero, Invalid) }
     var p = Pool { storage: storage, size: size, head: NONE, free_count: 0usize }
@@ -143,7 +145,7 @@ const CLASS_COUNT: usize = 9usize
 type Slab = struct { storage: []u8, page_size: usize, next_page: usize, classes: [9]Pool }
 
 fn slab(storage: []u8, page_size: usize) -> (Slab, err) {
-    if page_size < 4096usize || storage.len < page_size { ret (zero, Invalid) }
+    if page_size < 4096usize || page_size % 4096usize != 0usize || storage.len < page_size { ret (zero, Invalid) }
     var s: Slab = zero
     s.storage = storage
     s.page_size = page_size
