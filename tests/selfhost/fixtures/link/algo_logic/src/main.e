@@ -41,6 +41,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Primes: -100 (B C' D'), 1-1- (A C), 1--0 (A D'), 10-- (A B').
     if !has(primes[..], prime_count, 4u32, 7u32) || !has(primes[..], prime_count, 10u32, 10u32) || !has(primes[..], prime_count, 8u32, 9u32) || !has(primes[..], prime_count, 8u32, 12u32) { os.exit(1i32) }
     if !logic.verify(4usize, minterms[..], dont[..], primes[..], chosen[..chosen_count]) { os.exit(1i32) }
+    var lone_prime: [1]logic.Implicant = zero
+    var invalid_chosen: [1]usize = zero
+    invalid_chosen[0usize] = 1usize
+    if logic.verify(0usize, minterms[..0usize], dont[..0usize], lone_prime[..], invalid_chosen[..]) || logic.verify(17usize, minterms[..0usize], dont[..0usize], lone_prime[..], invalid_chosen[..0usize]) { os.exit(1i32) }
     // The essential primes B C' D' and A C are in the cover.
     var essential = 0usize
     var i = 0usize
