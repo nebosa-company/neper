@@ -81,7 +81,7 @@ fn sized(width: f32, height: f32) -> style.Style {
     ret s
 }
 
-fn build(a: *mem.Arena, ctx: *void, buffer: []u8, len: usize, state: widget.ZoomState) -> (widget.Node, err) {
+fn build(a: *mem.Arena, ctx: *void, buffer: []u8, len: usize, state: widget.ZoomState, min_scale: f32, max_scale: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, parts_error) }
     // The zoom view: 200 by 120 over a 400 by 300 picture.
@@ -90,7 +90,7 @@ fn build(a: *mem.Arena, ctx: *void, buffer: []u8, len: usize, state: widget.Zoom
     var big = sized(400.0, 300.0)
     big.background = paint.Brush { Solid: paint.rgba(0.2, 0.6, 0.2, 1.0) }
     picture[0usize] = widget.box(2u64, big, zero)
-    parts[0usize] = widget.zoom(1u64, widget.Zoom { state: state, min_scale: 0.5, max_scale: 4.0, change: widget.Change[widget.ZoomState] { ctx: ctx, invoke: on_zoom } }, sized(200.0, 120.0), picture[0usize..1usize])
+    parts[0usize] = widget.zoom(1u64, widget.Zoom { state: state, min_scale: min_scale, max_scale: max_scale, change: widget.Change[widget.ZoomState] { ctx: ctx, invoke: on_zoom } }, sized(200.0, 120.0), picture[0usize..1usize])
     // A drag source and a drop target side by side.
     let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
     if pair_error != ok { ret (zero, pair_error) }
@@ -143,7 +143,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if storage_error != ok { os.exit(9i32) }
     var frame = mem.arena_from(frame_storage)
     let now = time.Instant { nanos: 1000000000i64 }
-    let (root, build_error) = build(&frame, ctx, buffer, 5usize, widget.ZoomState { scale: 1.0, offset: zero })
+    let (root, build_error) = build(&frame, ctx, buffer, 5usize, widget.ZoomState { scale: 1.0, offset: zero }, 0.5, 4.0)
     if build_error != ok { os.exit(10i32) }
     if testing.pump(&harness, root, now) != ok { os.exit(11i32) }
     // The zoom view: a notch up at (50, 50) inside it scales to 1.1 about that
@@ -176,7 +176,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(logs[0usize].zoom.scale, 0.5, 0.001) || !near(logs[0usize].zoom.offset.x, 0.0, 0.01) { os.exit(24i32) }
     // The caller's state is taken when it changes: rebuilt at scale 2, the view
     // says 2.
-    let (root_2, build_2_error) = build(&frame, ctx, buffer, 5usize, widget.ZoomState { scale: 2.0, offset: zero })
+    let (root_2, build_2_error) = build(&frame, ctx, buffer, 5usize, widget.ZoomState { scale: 2.0, offset: zero }, 0.5, 4.0)
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(25i32) }
     let (taken, has_taken) = widget.zoom_state_of(&runtime, view)
     if !has_taken || !near(taken.scale, 2.0, 0.001) { os.exit(26i32) }
@@ -216,7 +216,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (emptied, has_emptied) = widget.edit_value(&runtime, editor)
     let (cut_text, cut_error) = widget.clipboard_get(&runtime, &frame)
     if !has_emptied || emptied.len != 0usize || cut_error != ok || !same(cut_text, "xy") { os.exit(41i32) }
-    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }
+    // A zero initial scale with a zero lower limit previously reached 0 / 0
+    // during wheel zoom and retained a NaN offset. Refuse that tree up front.
+    let (invalid_root, invalid_build_error) = build(&frame, ctx, buffer, 0usize, widget.ZoomState { scale: 0.0, offset: zero }, 0.0, 4.0)
+    if invalid_build_error != ok || testing.pump(&harness, invalid_root, now) != widget.InvalidTree { os.exit(42i32) }
+    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(43i32) }
     try io.print("ui manipulation ok\n")
     ret ok
 }

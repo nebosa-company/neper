@@ -148,6 +148,19 @@ type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32
 // content is painted, not pressed: a press on it pans.
 type ZoomState = struct { scale: f32, offset: geometry.Point }
 type Zoom = struct { state: ZoomState, min_scale: f32, max_scale: f32, change: Change[ZoomState] }
+
+// A zoom scale is both a scene-transform operand and a denominator while
+// preserving the pointer's content position. Reject non-finite or nonpositive
+// values before they can enter the retained element state.
+fn zoom_values_valid(value: ZoomState, min_scale: f32, max_scale: f32) -> bool {
+    if value.scale - value.scale != 0.0 || value.offset.x - value.offset.x != 0.0 || value.offset.y - value.offset.y != 0.0 { ret false }
+    if min_scale - min_scale != 0.0 || max_scale - max_scale != 0.0 { ret false }
+    ret value.scale > 0.0 && min_scale > 0.0 && max_scale >= min_scale
+}
+
+fn zoom_valid(z: Zoom) -> bool {
+    ret zoom_values_valid(z.state, z.min_scale, z.max_scale)
+}
 // A paint-only transform about the node's centre. Layout and hit bounds stay put.
 type VisualTransform = struct { scale: f32, rotation: f32, offset: geometry.Point }
 // A drop (D844): what a drag begun with `begin_drag` carried, released over a region
@@ -1325,6 +1338,14 @@ fn owner_of(s: *State, key: usize) -> (usize, bool) {
 fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool, position: usize, old_siblings: []const u32, depth: usize) -> (usize, err) {
     if depth > usize(s.limits.max_depth) { ret (0usize, TooDeep) }
     if style.validate(&node.style) != ok { ret (0usize, InvalidTree) }
+    var zoom_is_valid = true
+    switch node.kind {
+    case .Zoom as z:
+        zoom_is_valid = zoom_valid(z)
+    default:
+        zoom_is_valid = true
+    }
+    if !zoom_is_valid { ret (0usize, InvalidTree) }
     let (index, match_error) = match_element(s, parent, has_parent, node, position, old_siblings)
     if match_error != ok { ret (0usize, match_error) }
     let e = &s.elements[index]
@@ -3127,6 +3148,7 @@ fn hit_zoom(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
 // then bounded and reported.
 fn zoom_by(s: *State, element: usize, factor: f32, p: geometry.Point) -> err {
     let e = &s.elements[element]
+    if !zoom_values_valid(ZoomState { scale: e.zoom_scale, offset: e.zoom_offset }, e.zoom_min, e.zoom_max) { ret InvalidTree }
     var next = e.zoom_scale * factor
     if next < e.zoom_min { next = e.zoom_min }
     if next > e.zoom_max { next = e.zoom_max }
