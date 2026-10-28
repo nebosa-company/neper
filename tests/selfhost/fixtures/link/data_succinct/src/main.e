@@ -40,6 +40,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if succinct.rank(&v, 200usize) != ones || succinct.select(&v, ones) != 200usize || succinct.select0(&v, zeros) != 200usize { os.exit(1i32) }
     let (_, small_error) = succinct.bit_vector(bits[..], 200usize, counts[..3usize])
     if small_error != succinct.TooSmall { os.exit(1i32) }
+    // Padding in the final storage word is not part of the logical vector.
+    var padded_bits: [1]u64 = zero
+    var padded_counts: [2]u32 = zero
+    padded_bits[0usize] = 18446744073709551615u64
+    let (padded, padded_error) = succinct.bit_vector(padded_bits[..], 1usize, padded_counts[..])
+    if padded_error != ok || succinct.rank(&padded, 1usize) != 1usize { os.exit(1i32) }
+    if succinct.select(&padded, 0usize) != 0usize || succinct.select(&padded, 1usize) != 1usize || succinct.select(&padded, 2usize) != 1usize { os.exit(1i32) }
+    if succinct.select0(&padded, 0usize) != 1usize { os.exit(1i32) }
 
     // 2: LOUDS of a tree: 0 -> {1, 2, 3}, 1 -> {4, 5}, 3 -> {6}, 6 -> {7}.
     var first_child: [8]u32 = zero
