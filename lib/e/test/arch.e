@@ -148,6 +148,7 @@ fn scan(g: *Graph, rules: []const Rule, out: []Violation, n: *usize) -> err {
     var r = 0usize
     while r < rules.len {
         let rule = rules[r]
+        if rule.kind == .NoCycles && (g.mark.len < g.modules || g.stack.len < g.modules) { ret TooSmall }
         if rule.kind == .Layering || rule.kind == .Forbid || rule.kind == .OnlyDepend {
             var e = 0usize
             while e < g.edges {
