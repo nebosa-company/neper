@@ -17,6 +17,7 @@
 
 use e.mem
 use e.str
+use e.text.utf8
 
 type Kind = enum u8 { String, Integer, Float, Bool, Datetime, ArrayStart, ArrayEnd, InlineTableStart, InlineTableEnd }
 type EventKind = enum u8 { End, TableStart, ArrayTableStart, Key, Value }
@@ -505,6 +506,7 @@ fn pop(p: *Parser) {
 // the next call.
 fn parse(p: *Parser) -> (Event, err) {
     var event: Event = zero
+    if p.at == 0usize && !utf8.validate(p.source) { ret (event, Invalid) }
     p.used = 0usize
     if p.depth > 0usize {
         let state = p.stack[p.depth - 1usize]
