@@ -9,8 +9,9 @@ error Invalid
 fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
 fn is_separator(c: u8) -> bool { ret c == 32u8 || c == 45u8 }
 
-// The digits of `s` without separators into `out`; answers the count, or
-// `out.len + 1` on a non-digit or when `out` is full.
+// The digits of `s` without separators into `out`; a space or hyphen must sit
+// directly between two digits. Answers the count, or `out.len + 1` on an
+// invalid character, separator placement, or full output.
 fn digits(s: str, out: []u8) -> usize {
     var n = 0usize
     var i = 0usize
@@ -20,7 +21,7 @@ fn digits(s: str, out: []u8) -> usize {
             if n >= out.len { ret out.len + 1usize }
             out[n] = c - 48u8
             n += 1usize
-        } else if !is_separator(c) {
+        } else if !is_separator(c) || i == 0usize || i + 1usize >= s.len || !is_digit(s[i - 1usize]) || !is_digit(s[i + 1usize]) {
             ret out.len + 1usize
         }
         i += 1usize
@@ -90,7 +91,10 @@ fn isbn10(s: str) -> bool {
     while i < s.len {
         let c = s[i]
         i += 1usize
-        if is_separator(c) { continue }
+        if is_separator(c) {
+            if i <= 1usize || i >= s.len || !is_digit(s[i - 2usize]) || !(is_digit(s[i]) || s[i] == 88u8) { ret false }
+            continue
+        }
         if seen >= 10usize { ret false }
         var v = 0u32
         if is_digit(c) {

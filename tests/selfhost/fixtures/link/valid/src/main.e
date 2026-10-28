@@ -14,6 +14,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !valid.luhn("4539 1488 0343 6467") || valid.luhn("4539 1488 1343 6467") || valid.luhn("5439 1488 0343 6467") { os.exit(1i32) }
     if !valid.luhn("79927398713") || valid.luhn("79927498713") || valid.luhn("97927398713") { os.exit(1i32) }
     if valid.luhn("7") || valid.luhn("79927398a13") || valid.luhn("0") || !valid.luhn("00") { os.exit(1i32) }
+    if valid.luhn("-4539 1488 0343 6467") || valid.luhn("4539 1488 0343 6467-") || valid.luhn("4539--1488 0343 6467") || valid.card_brand("-4539 1488 0343 6467") != 0usize { os.exit(1i32) }
     let (d1, e1) = valid.luhn_check_digit("453914880343646")
     if e1 != ok || d1 != 7u8 { os.exit(1i32) }
     let (d2, e2) = valid.luhn_check_digit("7992739871")
@@ -26,6 +27,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !valid.isbn10("0-306-40615-2") || valid.isbn10("0-306-41615-2") || valid.isbn10("3-006-40615-2") { os.exit(2i32) }
     if !valid.isbn10("0-8044-2957-X") || valid.isbn10("0-8045-2957-X") || valid.isbn10("8-0044-2957-X") { os.exit(2i32) }
     if valid.isbn10("0-80X4-2957-X") || valid.isbn10("0-306-40615-23") || valid.isbn13("978-0-306-40615") { os.exit(2i32) }
+    if valid.isbn10("-0-306-40615-2-") || valid.isbn10("0--306-40615-2") || valid.isbn13("-978-0-306-40615-7") || valid.isbn13("978-0-306-40615-7-") { os.exit(2i32) }
 
     // 3: IBAN.
     if !valid.iban("GB82 WEST 1234 5698 7654 32") || valid.iban("GB82 WEST 1234 5608 7654 32") || valid.iban("GB28 WEST 1234 5698 7654 32") { os.exit(3i32) }
