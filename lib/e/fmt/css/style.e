@@ -1391,8 +1391,48 @@ fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -
     ret list.slice_const[cascade.Declared](&best)
 }
 
+// The computed custom-property map for this element. Custom properties do not
+// undergo shorthand or logical-property expansion, so their cascade can be
+// resolved before that expansion needs direction or writing-mode.
+fn resolved_customs(a: *mem.Arena, declared: []const cascade.Declared, inherited: []const Custom) -> ([]const Custom, err) {
+    var i = 0usize
+    while i < declared.len {
+        if str.starts_with(declared[i].declaration.property, "--") { break }
+        i += 1usize
+    }
+    if i == declared.len { ret (inherited, ok) }
+    let (made, made_error) = list.init[cascade.Declared](a, declared.len + 1usize)
+    if made_error != ok { ret (inherited, made_error) }
+    var best = made
+    i = 0usize
+    while i < declared.len {
+        if str.starts_with(declared[i].declaration.property, "--") { consider(&best, declared[i]) }
+        i += 1usize
+    }
+    let (cmade, cerror) = list.init[Custom](a, inherited.len + best.len)
+    if cerror != ok { ret (inherited, cerror) }
+    var customs = cmade
+    i = 0usize
+    while i < inherited.len {
+        let pushed = list.push[Custom](&customs, inherited[i])
+        if pushed != ok { ret (inherited, pushed) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < best.len {
+        let prop = best.items[i].declaration.property
+        let (value, good) = substitute(a, cv.trim_ws(best.items[i].declaration.value), list.slice_const[Custom](&customs), 0usize)
+        if good {
+            let pushed = list.push[Custom](&customs, Custom { name: prop, value: value })
+            if pushed != ok { ret (inherited, pushed) }
+        }
+        i += 1usize
+    }
+    ret (list.slice_const[Custom](&customs), ok)
+}
+
 // The writing mode (0 horizontal, 1 vertical-rl, 2 vertical-lr) this element's logical properties resolve against.
-fn declared_writing_mode(declared: []const cascade.Declared, parent: *const Style) -> u8 {
+fn declared_writing_mode(a: *mem.Arena, declared: []const cascade.Declared, parent: *const Style, customs: []const Custom) -> u8 {
     var wm = 0u8
     if parent.writing_mode == .VerticalRl || parent.writing_mode == .SidewaysRl { wm = 1u8 }
     if parent.writing_mode == .VerticalLr || parent.writing_mode == .SidewaysLr { wm = 2u8 }
@@ -1409,13 +1449,15 @@ fn declared_writing_mode(declared: []const cascade.Declared, parent: *const Styl
         i += 1usize
     }
     if have {
-        let v = cv.trim_ws(winner.declaration.value)
+        let (value, good) = substitute(a, winner.declaration.value, customs, 0usize)
+        if !good { ret wm }
+        let v = cv.trim_ws(value)
         if str.eq(v, "vertical-rl") || str.eq(v, "sideways-rl") { wm = 1u8 } else if str.eq(v, "vertical-lr") || str.eq(v, "sideways-lr") { wm = 2u8 } else if str.eq(v, "horizontal-tb") { wm = 0u8 }
     }
     ret wm
 }
 
-fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> bool {
+fn declared_direction(a: *mem.Arena, declared: []const cascade.Declared, fallback: bool, customs: []const Custom) -> bool {
     var winner: cascade.Declared = zero
     var have = false
     var i = 0usize
@@ -1429,7 +1471,9 @@ fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> boo
         i += 1usize
     }
     if !have { ret fallback }
-    let v = cv.trim_ws(winner.declaration.value)
+    let (value, good) = substitute(a, winner.declaration.value, customs, 0usize)
+    if !good { ret fallback }
+    let v = cv.trim_ws(value)
     if str.eq(v, "rtl") { ret true }
     if str.eq(v, "ltr") { ret false }
     ret fallback
@@ -1500,41 +1544,11 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     }
     let all = list.slice_const[cascade.Declared](&declared)
     if want >= 0i64 && all.len == 0usize { ret (initial_style(), false, ok) }
-    let rtl = declared_direction(all, parent.direction == .Rtl)
-    expand.set_logical_wm(declared_writing_mode(all, parent))
+    let (custom_all, custom_error) = resolved_customs(a, all, parent.custom)
+    if custom_error != ok { ret (initial_style(), false, custom_error) }
+    let rtl = declared_direction(a, all, parent.direction == .Rtl, custom_all)
+    expand.set_logical_wm(declared_writing_mode(a, all, parent, custom_all))
     let winners = rank_expanded(a, all, rtl)
-
-    // Custom properties: the parent's, overridden by this element's, each with its own var() resolved. An element that sets
-    // none shares its parent's list (copying it per element is what made custom-property-heavy sites cost gigabytes).
-    var sets_custom = false
-    var w = 0usize
-    while w < winners.len {
-        if str.starts_with(winners[w].declaration.property, "--") { sets_custom = true }
-        w += 1usize
-    }
-    var custom_all = parent.custom
-    if sets_custom {
-        let (cmade, cerror) = list.init[Custom](a, parent.custom.len + 8usize)
-        if cerror != ok { ret (initial_style(), false, cerror) }
-        var customs = cmade
-        var pc = 0usize
-        while pc < parent.custom.len {
-            let pushed = list.push[Custom](&customs, parent.custom[pc])
-            pc += 1usize
-        }
-        w = 0usize
-        while w < winners.len {
-            let prop = winners[w].declaration.property
-            if str.starts_with(prop, "--") {
-                let (value, good) = substitute(a, cv.trim_ws(winners[w].declaration.value), list.slice_const[Custom](&customs), 0usize)
-                if good {
-                    let pushed = list.push[Custom](&customs, Custom { name: prop, value: value })
-                }
-            }
-            w += 1usize
-        }
-        custom_all = list.slice_const[Custom](&customs)
-    }
 
     var s = inherit_from(parent)
     s.custom = custom_all
