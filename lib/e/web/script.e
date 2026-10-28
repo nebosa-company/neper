@@ -18,8 +18,8 @@ use e.mem
 use e.str
 use e.web.dom_js as dom_js
 
-// A synchronous fetch supplied by the page: (context, url, referrer) -> (body text, status, reached the server).
-type FetchFn = fn(*void, str, str) -> (str, u16, bool)
+// A synchronous fetch supplied by the page: (context, url, referrer, use credentials) -> (body text, status, reached the server).
+type FetchFn = fn(*void, str, str, bool) -> (str, u16, bool)
 
 // Layout and style answers from the page that owns the view: node geometry (`what` 0 bounding client rect, 1 offset box,
 // 2 client box, 3 scroll size, 4 viewport and scroll position; results in the 8 numbers) and computed style text.
@@ -35,11 +35,13 @@ type NetFn = fn(*void, str, str, str, []const u8, *NetResult) -> bool
 // 1 an event handler attribute.
 type CspFn = fn(*void, u32, str, str) -> bool
 
+type ModuleFetch = struct { url: str, include_credentials: bool }
+
 type Host = struct {
     d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool,
     fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool,
     view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool,
-    net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32, csp_ctx: *void, csp_fn: CspFn, has_csp: bool,
+    net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32, module_fetches: list.List[ModuleFetch], csp_ctx: *void, csp_fn: CspFn, has_csp: bool,
     parent: *js.Interp, has_parent: bool, children: list.List[*js.Interp], dom_prog: *void, has_dom_prog: bool
 }
 
@@ -577,13 +579,14 @@ fn n_run_jobs(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     ret (js.undefv(), ok)
 }
 
-// fetchText(url): [status, text] or null when the page has no network or the request failed.
+// fetchText(url, use_credentials): [status, text] or null when the page has no network or the request failed.
 fn n_fetch_text(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let h = host_of(it)
     if !h.has_fetch { ret (js.null_value(), ok) }
     let (u, ue) = sarg(it, args, 0usize)
     if ue != ok { ret (js.undefv(), ue) }
-    let (text, status, reached) = h.fetch_fn(h.fetch_ctx, u, h.base)
+    let use_credentials = js.to_boolean(arg(args, 1usize))
+    let (text, status, reached) = h.fetch_fn(h.fetch_ctx, u, h.base, use_credentials)
     if !reached { ret (js.null_value(), ok) }
     let arr = js.new_array(it)
     try js.array_push(it, arr, js.num_value(f64(status)))
@@ -771,8 +774,29 @@ fn n_net(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Valu
 
 // --- modules
 
+fn remembered_credentials(h: *Host, u: str) -> bool {
+    var i = 0usize
+    while i < h.module_fetches.len {
+        if str.eq(h.module_fetches.items[i].url, u) { ret h.module_fetches.items[i].include_credentials }
+        i += 1usize
+    }
+    ret false
+}
+
+fn remember_credentials(h: *Host, u: str, include_credentials: bool) -> err {
+    var i = 0usize
+    while i < h.module_fetches.len {
+        if str.eq(h.module_fetches.items[i].url, u) {
+            h.module_fetches.items[i].include_credentials = include_credentials
+            ret ok
+        }
+        i += 1usize
+    }
+    ret list.push[ModuleFetch](&h.module_fetches, ModuleFetch { url: u, include_credentials: include_credentials })
+}
+
 // The module loader of a page: a specifier is a URL resolved against the referring module, fetched through the page.
-fn load_module_hook(it: *js.Interp, referrer: str, spec_in: str) -> (*void, err) {
+fn load_module(it: *js.Interp, referrer: str, spec_in: str, include_credentials: bool) -> (*void, err) {
     let (spec, kind) = module.split_spec(spec_in)
     let h = host_of(it)
     if !h.has_fetch { ret (zero, js.throw_type(it, "modules cannot be loaded here")) }
@@ -792,7 +816,8 @@ fn load_module_hook(it: *js.Interp, referrer: str, spec_in: str) -> (*void, err)
     let href = url.href(it.a, &u, true)
     let (found, has) = module.find_typed(it, href, kind)
     if has { ret (mem.cast[*void](found), ok) }
-    let (text, status, reached) = h.fetch_fn(h.fetch_ctx, href, referrer)
+    try remember_credentials(h, href, include_credentials)
+    let (text, status, reached) = h.fetch_fn(h.fetch_ctx, href, referrer, include_credentials)
     if !reached || status < 200u16 || status >= 300u16 { ret (zero, js.throw_type(it, js.str_concat3(it, "Failed to fetch dynamically imported module: ", href, ""))) }
     if kind.len > 0usize {
         let (sm, sme) = module.new_synthetic_module(it, href, text, kind)
@@ -802,6 +827,12 @@ fn load_module_hook(it: *js.Interp, referrer: str, spec_in: str) -> (*void, err)
     let (m, me) = module.new_module(it, href, text)
     if me != ok { ret (zero, me) }
     ret (mem.cast[*void](m), ok)
+}
+
+fn load_module_hook(it: *js.Interp, referrer: str, spec_in: str) -> (*void, err) {
+    let h = host_of(it)
+    let (loaded, e) = load_module(it, referrer, spec_in, remembered_credentials(h, referrer))
+    ret (loaded, e)
 }
 
 fn module_rejected(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -816,9 +847,10 @@ fn n_run_module(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
     let h = host_of(it)
     let (u, ue) = sarg(it, args, 0usize)
     if ue != ok { ret (js.undefv(), ue) }
+    let include_credentials = js.to_boolean(arg(args, 2usize))
     var m: *module.Module = zero
     if js.is_undefined(arg(args, 1usize)) {
-        let (mp, le) = load_module_hook(it, h.base, u)
+        let (mp, le) = load_module(it, h.base, u, include_credentials)
         if le != ok {
             if le == js.Throw { report_thrown(it, u) }
             ret (js.bool_value(false), ok)
@@ -834,6 +866,8 @@ fn n_run_module(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
             ret (js.bool_value(false), ok)
         }
         m = nm
+        let re = remember_credentials(h, m.url, include_credentials)
+        if re != ok { ret (js.bool_value(false), ok) }
     }
     it.script_url = m.url
     let (p, pe) = module.run_module(it, m)
@@ -1153,9 +1187,9 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "log", 2u32, n_log)
     js.add_method(it, n, "base", 0u32, n_base)
     js.add_method(it, n, "runJobs", 0u32, n_run_jobs)
-    js.add_method(it, n, "fetchText", 1u32, n_fetch_text)
+    js.add_method(it, n, "fetchText", 2u32, n_fetch_text)
     js.add_method(it, n, "geom", 2u32, n_geom)
-    js.add_method(it, n, "runModule", 2u32, n_run_module)
+    js.add_method(it, n, "runModule", 3u32, n_run_module)
     js.add_method(it, n, "frameCreate", 2u32, n_frame_create)
     js.add_method(it, n, "frameStart", 1u32, n_frame_start)
     js.add_method(it, n, "frameDrop", 1u32, n_frame_drop)
@@ -1201,6 +1235,9 @@ fn new_context_in(a: *mem.Arena, d: *dom.Dom, base: str, donor: *js.Interp) -> (
     cell[0usize].log = l
     let (kids, ke) = list.init[*js.Interp](a, 4usize)
     cell[0usize].children = kids
+    let (module_fetches, mfe) = list.init[ModuleFetch](a, 8usize)
+    if mfe != ok { ret (it, mfe) }
+    cell[0usize].module_fetches = module_fetches
     let mie = module.install(it, load_module_hook)
     // Scripts get no collector: past 80% of the arena a call throws a RangeError instead of exhausting memory the page still needs.
     it.mem_limit = a.cap - a.cap / 5usize

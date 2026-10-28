@@ -663,15 +663,33 @@ fn cv_numbers(a: *mem.Arena, text: str) -> []const f64 {
     var n = 0usize
     var i = 0usize
     while i < text.len && n < 8usize {
-        while i < text.len && (text[i] == 32u8 || text[i] == 44u8 || text[i] == 9u8 || text[i] == 10u8) { i += 1usize }
+        var saw_space = false
+        while i < text.len && (text[i] == 32u8 || text[i] == 9u8 || text[i] == 10u8 || text[i] == 13u8) {
+            saw_space = true
+            i += 1usize
+        }
+        var saw_comma = false
+        if i < text.len && text[i] == 44u8 {
+            if n == 0usize { ret zero }
+            saw_comma = true
+            i += 1usize
+            while i < text.len && (text[i] == 32u8 || text[i] == 9u8 || text[i] == 10u8 || text[i] == 13u8) { i += 1usize }
+        }
+        if i == text.len {
+            if saw_comma { ret zero }
+            break
+        }
+        if n > 0usize && !saw_space && !saw_comma && text[i] != 43u8 && text[i] != 45u8 { ret zero }
         let start = i
-        while i < text.len && text[i] != 32u8 && text[i] != 44u8 && text[i] != 9u8 && text[i] != 10u8 { i += 1usize }
+        while i < text.len && text[i] != 32u8 && text[i] != 44u8 && text[i] != 9u8 && text[i] != 10u8 && text[i] != 13u8 {
+            if i > start && (text[i] == 43u8 || text[i] == 45u8) && text[i - 1usize] != 69u8 && text[i - 1usize] != 101u8 { break }
+            i += 1usize
+        }
         if i > start {
             let (v, good) = parse_float(text[start..i])
-            if good {
-                out[n] = v
-                n += 1usize
-            }
+            if !good { ret zero }
+            out[n] = v
+            n += 1usize
         }
     }
     ret out[0usize..n]
@@ -702,6 +720,30 @@ fn parse_float(s: str) -> (f64, bool) {
         }
     }
     if !any { ret (0.0f64, false) }
+    var exponent = 0u16
+    var negative_exponent = false
+    if i < s.len && (s[i] == 69u8 || s[i] == 101u8) {
+        i += 1usize
+        if i < s.len && (s[i] == 45u8 || s[i] == 43u8) {
+            negative_exponent = s[i] == 45u8
+            i += 1usize
+        }
+        var exponent_digits = false
+        while i < s.len && s[i] >= 48u8 && s[i] <= 57u8 {
+            let digit = u16(s[i] - 48u8)
+            // Geometry only accepts finite f64 values, so reject exponents outside its finite decimal range.
+            if exponent > 30u16 || (exponent == 30u16 && digit > 8u16) { ret (0.0f64, false) }
+            exponent = exponent * 10u16 + digit
+            exponent_digits = true
+            i += 1usize
+        }
+        if !exponent_digits { ret (0.0f64, false) }
+    }
+    if i != s.len { ret (0.0f64, false) }
+    while exponent > 0u16 {
+        if negative_exponent { v = v / 10.0f64 } else { v = v * 10.0f64 }
+        exponent = exponent - 1u16
+    }
     if neg { v = -v }
     ret (v, true)
 }
@@ -855,10 +897,12 @@ fn net_hook(ctx: *void, method: str, u: str, header_lines: str, body: []const u8
     ret true
 }
 
-fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
+fn fetch_text_hook(ctx: *void, u: str, referrer: str, include_credentials: bool) -> (str, u16, bool) {
     let p = mem.cast[*Page](ctx)
     if !csp_url_ok(p, "script-src-elem", u) { ret ("", 0u16, false) }
-    let (resp, fe) = fetch.fetch(p.client, get_request(u, p.url, fetch.Credentials.Include))
+    var mode = fetch.Credentials.SameOrigin
+    if include_credentials { mode = fetch.Credentials.Include }
+    let (resp, fe) = fetch.fetch(p.client, get_request(u, p.url, mode))
     if fe != ok { ret ("", 0u16, false) }
     let (text, de) = cjk.decode_sniffing_bom(p.pa, "UTF-8", resp.body)
     if de != ok { ret ("", resp.status, true) }
@@ -868,7 +912,7 @@ fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
 // The layout box of a node (layout.NONE when it has none: display none, comments).
 fn box_of(p: *Page, node: html.NodeId) -> u32 {
     let v = p.view
-    if !p.has_box_map {
+    if !p.has_box_map || p.box_map.len < v.tree.nodes.len {
         let (m, me) = mem.alloc[u32](p.pa, v.tree.nodes.len)
         if me != ok { ret layout.NONE }
         p.box_map = m
