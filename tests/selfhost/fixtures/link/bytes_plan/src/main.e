@@ -21,6 +21,9 @@ fn main(a: *mem.Arena) -> err {
     if bytes.swap_bits[u8](10u8, 0u32, 1u32) != 9u8 { os.exit(9i32) }
     if bytes.swap_bits[u8](10u8, 1u32, 3u32) != 10u8 { os.exit(10i32) }
     if bytes.swap_bits[u64](1u64, 0u32, 63u32) != 9223372036854775808u64 { os.exit(11i32) }
+    // Positions that do not name a bit are a no-op, not a checked-shift trap.
+    if bytes.swap_bits[u8](10u8, 8u32, 0u32) != 10u8 { os.exit(89i32) }
+    if bytes.swap_bits[u8](10u8, 0u32, 4294967295u32) != 10u8 { os.exit(90i32) }
     if bytes.parity[u8](0u8) != 0u32 || bytes.parity[u8](1u8) != 1u32 || bytes.parity[u8](3u8) != 0u32 { os.exit(12i32) }
     if bytes.parity[u8](7u8) != 1u32 || bytes.parity[u8](255u8) != 0u32 { os.exit(13i32) }
     if bytes.parity[u64](81985529216486895u64) != 0u32 { os.exit(14i32) }

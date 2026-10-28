@@ -604,8 +604,11 @@ fn reverse_bits[T: type](v: T) -> T {
     ret T.trunc(out)
 }
 
-// `v` with the bits at positions `i` and `j` exchanged.
+// `v` with the bits at positions `i` and `j` exchanged. A position outside `T`'s
+// width names no bit, so it leaves `v` unchanged rather than trapping on a shift.
 fn swap_bits[T: type](v: T, i: u32, j: u32) -> T {
+    let bits = u32(mem.size_of[T]() * 8usize)
+    if i >= bits || j >= bits { ret v }
     let one = T(1u64)
     if (((v >> i) ^ (v >> j)) & one) == T(0u64) { ret v }
     ret v ^ ((one << i) | (one << j))
