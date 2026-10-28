@@ -4421,6 +4421,12 @@ proc_sys_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/proc-sys-selfhost"
 proc_sys_output=$("$test_build/proc-sys-selfhost")
 [ "$proc_sys_output" = 'proc sys ok' ]
+# Linux i386 has its own getpid/statfs syscall table and a four-byte `struct statfs` layout.
+proc_sys_x86_path="$test_build/proc-sys-x86-selfhost"
+proc_sys_x86_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/proc_sys_x86_linux/src/main.e" "$repo" x86 linux "$proc_sys_x86_path" -j 2)
+[ "$proc_sys_x86_written" = 'executable written' ]
+chmod +x "$proc_sys_x86_path"
+"$proc_sys_x86_path"
 # e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
 metrics_export_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/metrics_export/src/main.e" "$repo" x64 linux "$test_build/metrics-export-selfhost" -j 2)
 [ "$metrics_export_written" = 'executable written' ]
