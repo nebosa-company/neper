@@ -47,8 +47,11 @@ fn available() -> bool {
     when target.os == .Macos {
         if os.cocoa_start() != ok { ret false }
         let metal = "/System/Library/Frameworks/Metal.framework/Metal\x00"
-        if os.raw_dlopen(mem.address_of(&metal[0usize]), 2i32) == 0usize { ret false }
-        ret default_device() != 0usize
+        let handle = os.raw_dlopen(mem.address_of(&metal[0usize]), 2i32)
+        if handle == 0usize { ret false }
+        let device = default_device()
+        let closed = os.raw_dlclose(handle)
+        ret device != 0usize
     }
     ret false
 }
@@ -81,7 +84,10 @@ fn buffer(context: Context, bytes: usize) -> (Buffer, err) {
     let handle = os.msg2(context.device, os.cocoa_sel("newBufferWithLength:options:\x00"), bytes, 0usize)
     if handle == 0usize { ret (none, Failed) }
     let data = os.msg0(handle, os.cocoa_sel("contents\x00"))
-    if data == 0usize { ret (none, Failed) }
+    if data == 0usize {
+        let dropped = os.msg0(handle, os.cocoa_sel("release\x00"))
+        ret (none, Failed)
+    }
     // The pointer the system gave, as a pointer: its eight bytes copied into one.
     var mapped: *u8 = zero
     var address = data
