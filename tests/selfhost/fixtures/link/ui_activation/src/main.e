@@ -21,6 +21,16 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
+fn same_bytes(a: []const u8, b: []const u8) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (exe, exe_error) = fs.executable_path(a)
     if exe_error != ok { os.exit(1i32) }
@@ -41,6 +51,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     by_word[0usize] = exe
     by_word[1usize] = "--verbose"
     if app.activation(a, by_word[..]).kind != .Launch { os.exit(5i32) }
+    // Desktop Entry values apply string escaping before Exec parsing. This
+    // encoded executable is one argument despite a space and preserves the
+    // backslash, quote, dollar, backtick and literal percent bytes.
+    let (desktop_exec, desktop_error) = shell.desktop_exec(a, "/opt/my app/a\\b\"c$`%")
+    let desktop_expected: [32]u8 = [32]u8{ 34, 47, 111, 112, 116, 47, 109, 121, 32, 97, 112, 112, 47, 97, 92, 92, 92, 92, 98, 92, 92, 34, 99, 92, 92, 36, 92, 92, 96, 37, 37, 34 }
+    if desktop_error != ok || !same_bytes(desktop_exec, desktop_expected[0..]) { os.exit(25i32) }
     // Associations, for this user, and gone again.
     if app.register_file_type(a, "neper-test", "neper.Test", "Neper test") != shell.Invalid || app.register_protocol(a, "bad/scheme", "") != shell.Invalid { os.exit(6i32) }
     if app.associations_supported() {
