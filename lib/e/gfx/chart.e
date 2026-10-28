@@ -3124,12 +3124,12 @@ fn fan(x: []const f32, median: []const f32, lower: []const f32, upper: []const f
         if f64(upper[i]) > ymax { ymax = f64(upper[i]) }
         i += 1usize
     }
-    let raw_min = f32(ymin)
-    let raw_max = f32(ymax)
     if ymin == ymax {
         ymin -= 1.0f64
         ymax += 1.0f64
     }
+    let raw_min = f32(ymin)
+    let raw_max = f32(ymax)
     let x_span = f64(x[x.len - 1usize]) - f64(x[0usize])
     var band_index = 0usize
     while band_index < bands {

@@ -36,7 +36,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if crossing_error != chart.Invalid || order_error != chart.Invalid || median_error != chart.Invalid || capacity_error != chart.TooLarge || no_bands_error != chart.Invalid { ret chart.Invalid }
     let flat = [3]f32{ 7.0, 7.0, 7.0 }
     let (flat_bands, flat_line, flat_error) = chart.fan(x[..], flat[..], flat[..], flat[..], 1usize, bounds, outlines[..], segments[..], storage[..])
-    if flat_error != ok || !near(flat_bands[0usize].coords[0usize].y, 60.0) || !near(flat_line.segments[0usize].from.y, 60.0) { ret chart.Invalid }
+    if flat_error != ok || !near(flat_bands[0usize].coords[0usize].y, 60.0) || !near(flat_line.segments[0usize].from.y, 60.0) || !near(flat_bands[0usize].y_min, 6.0) || !near(flat_bands[0usize].y_max, 8.0) || !near(flat_line.y_min, 6.0) || !near(flat_line.y_max, 8.0) { ret chart.Invalid }
     let (again, again_line, again_error) = chart.fan(x[..], median[..], lower[..], upper[..], 2usize, bounds, outlines[..], segments[..], storage[..])
     if again_error != ok { ret again_error }
     let (made, builder_error) = scene.builder(a, 8usize)
