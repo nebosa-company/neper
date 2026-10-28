@@ -125,9 +125,23 @@ fn put_option(out: []u8, at: usize, code: u8, body: []const u8) -> usize {
     ret at + 2usize + body.len
 }
 
-// The message as bytes into `out` (at least 300): the length, or TooSmall.
+// The message as bytes into `out`: the length, TooSmall when it cannot hold every option, or BadOption for a public length beyond its backing array.
 fn encode(m: *Message, out: []u8) -> (usize, err) {
-    if out.len < MIN_SIZE { ret (0usize, TooSmall) }
+    if m.hostname_len > m.hostname.len || m.client_id_len > m.client_id.len || m.dns_count > m.dns.len / 4usize { ret (0usize, BadOption) }
+    var need = FIXED + 4usize
+    if m.message_type != 0u8 { need += 3usize }
+    if m.client_id_len > 0usize { need += 2usize + m.client_id_len }
+    if m.has_requested_ip { need += 6usize }
+    if m.has_server_id { need += 6usize }
+    if m.hostname_len > 0usize { need += 2usize + m.hostname_len }
+    if m.has_lease { need += 6usize }
+    if m.has_subnet { need += 6usize }
+    if m.has_router { need += 6usize }
+    if m.dns_count > 0usize { need += 2usize + m.dns_count * 4usize }
+    if m.op == OP_REQUEST && (m.message_type == DISCOVER || m.message_type == REQUEST) { need += 6usize }
+    need += 1usize
+    if need < MIN_SIZE { need = MIN_SIZE }
+    if out.len < need { ret (0usize, TooSmall) }
     var i = 0usize
     while i < MIN_SIZE {
         out[i] = 0u8
