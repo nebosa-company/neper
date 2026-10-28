@@ -159,6 +159,9 @@ fn checks_leaks(a: *mem.Arena) -> i32 {
     if pool.leaks[Obj](&p, 100u64, out[0..]) != 2usize { ret 85i32 }
     let (_, reclaim_error) = pool.reclaim[Obj](&p, 0u32, 100u64)
     if reclaim_error != ok || p.leaked != 1u64 || pool.count[Obj](&p, pool.BORROWED) != 1usize { ret 86i32 }
+    let destroyed_before_invalid_reclaim = p.destroyed
+    let (_, invalid_reclaim_error) = pool.reclaim[Obj](&p, 0u32, 101u64)
+    if invalid_reclaim_error != pool.Invalid || p.leaked != 1u64 || p.destroyed != destroyed_before_invalid_reclaim || pool.count[Obj](&p, pool.BORROWED) != 1usize { ret 86i32 }
     // A creation that fails frees the reserved slot.
     let g2 = pool.acquire[Obj](&p, 101u64, 2u32)
     if g2.outcome != .NeedsCreate { ret 87i32 }
