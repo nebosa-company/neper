@@ -31,6 +31,7 @@ fn popcount(x: u64) -> usize {
 fn words_for(n: usize) -> usize { ret (n + 63usize) / 64usize }
 
 // A bit vector over `bits[..words_for(n)]` with `counts.len > words_for(n)`; the counts are computed here.
+// Any unused high bits in the final storage word are outside the logical vector.
 fn bit_vector(bits: []u64, n: usize, counts: []u32) -> (BitVector, err) {
     let words = words_for(n)
     if bits.len < words || counts.len < words + 1usize { ret (zero, TooSmall) }
@@ -38,7 +39,11 @@ fn bit_vector(bits: []u64, n: usize, counts: []u32) -> (BitVector, err) {
     var w = 0usize
     while w < words {
         counts[w] = total
-        total += u32(popcount(bits[w]))
+        var word = bits[w]
+        if w + 1usize == words && n % 64usize != 0usize {
+            word &= (1u64 << u32(n % 64usize)) - 1u64
+        }
+        total += u32(popcount(word))
         w += 1usize
     }
     counts[words] = total
