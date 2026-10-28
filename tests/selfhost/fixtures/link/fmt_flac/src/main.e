@@ -181,6 +181,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, me) = flac.stream_info("fLaX\x00\x00\x00\x22")
     if me != flac.Malformed { os.exit(82i32) }
 
+    // 83: RFC 9639 requires STREAMINFO to be the first metadata block.
+    var nonstreaminfo_first: [46]u8 = zero
+    mem.copy[u8](nonstreaminfo_first[..4usize], mono[..4usize])
+    nonstreaminfo_first[4usize] = 1u8
+    nonstreaminfo_first[8usize] = 128u8
+    nonstreaminfo_first[11usize] = 34u8
+    mem.copy[u8](nonstreaminfo_first[12usize..], mono[8usize..42usize])
+    let (_, first_block_error) = flac.stream_info(nonstreaminfo_first[..])
+    let (_, first_block_decoder_error) = flac.decoder(nonstreaminfo_first[..])
+    if first_block_error != flac.Malformed || first_block_decoder_error != flac.Malformed { os.exit(83i32) }
+
     try io.print("fmt flac ok\n")
     ret ok
 }

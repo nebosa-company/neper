@@ -116,6 +116,7 @@ fn metadata(src: []const u8) -> (StreamInfo, usize, err) {
         if pos + 4usize > src.len { ret (zero, 0usize, TooSmall) }
         last = (src[pos] & 128u8) != 0u8
         let kind = src[pos] & 127u8
+        if pos == 4usize && kind != 0u8 { ret (zero, 0usize, Malformed) }
         let length = usize(big(src, pos + 1usize, 3usize))
         pos += 4usize
         if length > src.len - pos { ret (zero, 0usize, TooSmall) }

@@ -3,7 +3,7 @@
 use e.audio
 use e.mem
 
-type Decoder = struct { bytes: []const u8, data_start: usize, at: usize, format: audio.Format, frames: usize }
+type Decoder = struct { bytes: []const u8, data_start: usize, data_size: usize, at: usize, format: audio.Format, frames: usize }
 error Invalid
 error Unsupported
 
@@ -79,7 +79,7 @@ fn open(a: *mem.Arena, source_bytes: []const u8) -> (Decoder, err) {
         a.off = checkpoint
         ret (zero, Invalid)
     }
-    ret (Decoder { bytes: owned, data_start: data_start, at: 0usize, format: decoded_format, frames: frames }, ok)
+    ret (Decoder { bytes: owned, data_start: data_start, data_size: data_size, at: 0usize, format: decoded_format, frames: frames }, ok)
 }
 
 fn format(d: Decoder) -> audio.Format {
@@ -91,9 +91,10 @@ fn frame_count(d: Decoder) -> usize {
 }
 
 fn decoded_sample(d: Decoder, frame: usize, channel: u8) -> (i32, err) {
+    if frame >= d.frames || channel >= d.format.channels { ret (0i32, Invalid) }
     let width = audio.sample_bytes(d.format.sample)
     let offset = d.data_start + (frame * usize(d.format.channels) + usize(channel)) * width
-    if offset + width > d.bytes.len { ret (0i32, Invalid) }
+    if offset + width > d.data_start + d.data_size { ret (0i32, Invalid) }
     if d.format.sample == .I16 {
         ret (i32(mem.bitcast[i16](little_u16(d.bytes, offset))) * 65536i32, ok)
     }

@@ -50,8 +50,21 @@ fn main(a: *mem.Arena) -> err {
     invalid_source.count = 3usize
     let (_, invalid_source_error) = wav.encode(a, invalid_source)
     if invalid_source_error != wav.Unsupported { os.exit(10i32) }
+    // A data chunk with one frame followed by a JUNK chunk must not expose the
+    // JUNK bytes through decoded_sample.
+    var bounded_file: [58]u8 = [58]u8{
+        82, 73, 70, 70, 50, 0, 0, 0, 87, 65, 86, 69,
+        102, 109, 116, 32, 16, 0, 0, 0, 1, 0, 1, 0,
+        2, 0, 0, 0, 4, 0, 0, 0, 2, 0, 16, 0,
+        100, 97, 116, 97, 2, 0, 0, 0, 232, 3,
+        74, 85, 78, 75, 4, 0, 0, 0, 24, 252, 255, 127,
+    }
+    let (bounded, bounded_error) = wav.open(a, bounded_file[..])
+    let (_, past_frame_error) = wav.decoded_sample(bounded, 1usize, 0u8)
+    let (_, past_channel_error) = wav.decoded_sample(bounded, 0usize, 1u8)
+    if bounded_error != ok || past_frame_error != wav.Invalid || past_channel_error != wav.Invalid { os.exit(11i32) }
     file[0] = 0u8
     let (_, invalid_error) = wav.open(a, file[0..])
-    if invalid_error != wav.Invalid { os.exit(11i32) }
+    if invalid_error != wav.Invalid { os.exit(12i32) }
     ret ok
 }
