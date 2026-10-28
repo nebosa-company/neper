@@ -4422,7 +4422,8 @@ fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64) {
         let (rhh, has_rh) = ratio_height(l, c, b3.w - horizontal_extras(b3))
         if has_mx && has_rh && rhh > to_content_h(l, c, mxh) {
             let (rwm, has_rwm) = ratio_width(l, c, to_content_h(l, c, mxh))
-            if has_rwm && rwm + horizontal_extras(b3) < b3.w { b3.w = rwm + horizontal_extras(b3) }
+            let nw = maxf(0.0f64, clamp_width(l, c, rwm, cbw)) + horizontal_extras(b3)
+            if has_rwm && nw < b3.w { b3.w = nw }
         }
     }
     if s2.width.kind != .Px && s2.height.kind == .Px && s2.height.pct == 0.0f64 {
