@@ -23,5 +23,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let truncated = [12]u8 { 0u8, 97u8, 115u8, 109u8, 1u8, 0u8, 0u8, 0u8, 1u8, 9u8, 1u8, 96u8 }
     let (m3, e3) = wasm.decode(a, truncated[0usize..12usize])
     if e3 == ok { os.exit(5) }
+    // A start function must be [] -> [], whether it is defined or imported.
+    let start_ok = [27]u8 { 0u8, 97u8, 115u8, 109u8, 1u8, 0u8, 0u8, 0u8, 1u8, 4u8, 1u8, 96u8, 0u8, 0u8, 3u8, 2u8, 1u8, 0u8, 8u8, 1u8, 0u8, 10u8, 4u8, 1u8, 2u8, 0u8, 11u8 }
+    let start_param = [28]u8 { 0u8, 97u8, 115u8, 109u8, 1u8, 0u8, 0u8, 0u8, 1u8, 5u8, 1u8, 96u8, 1u8, 127u8, 0u8, 3u8, 2u8, 1u8, 0u8, 8u8, 1u8, 0u8, 10u8, 4u8, 1u8, 2u8, 0u8, 11u8 }
+    let start_import_result = [27]u8 { 0u8, 97u8, 115u8, 109u8, 1u8, 0u8, 0u8, 0u8, 1u8, 5u8, 1u8, 96u8, 0u8, 1u8, 127u8, 2u8, 7u8, 1u8, 1u8, 109u8, 1u8, 102u8, 0u8, 0u8, 8u8, 1u8, 0u8 }
+    let (_, start_ok_error) = wasm.decode(a, start_ok[..])
+    let (_, start_param_error) = wasm.decode(a, start_param[..])
+    let (_, start_import_result_error) = wasm.decode(a, start_import_result[..])
+    if start_ok_error != ok || start_param_error != wasm.Malformed || start_import_result_error != wasm.Malformed { os.exit(6) }
     ret ok
 }
