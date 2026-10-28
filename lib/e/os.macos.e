@@ -3297,6 +3297,20 @@ fn window_close(w: Window) -> err {
     cocoa_windows[slot] = 0usize
     cocoa_layers[slot] = 0usize
     cocoa_resize_handlers[slot] = 0usize
+    // `[window close]` may synchronously queue its Close request, and the pump may
+    // already have translated other input for this window. Drop all of it before
+    // the handle can be reused, preserving the ring order of other windows.
+    var kept = 0usize
+    var at = 0usize
+    while at < cocoa_count {
+        let event = cocoa_events[(cocoa_head + at) % COCOA_RING]
+        if event.window.raw != w.raw {
+            cocoa_events[(cocoa_head + kept) % COCOA_RING] = event
+            kept += 1usize
+        }
+        at += 1usize
+    }
+    cocoa_count = kept
     objc_pool_pop(pool)
     ret ok
 }
