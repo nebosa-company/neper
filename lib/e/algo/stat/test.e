@@ -197,13 +197,19 @@ fn wilcoxon(a: []const f64, b: []const f64, scratch: []f64, order: []usize) -> (
     ret (Result { statistic: w_plus, p_value: two_sided_normal(z / sigma) }, ok)
 }
 
-// Chi-squared goodness of fit of `observed` counts against `expected`.
+fn finite(x: f64) -> bool {
+    if x != x { ret false }
+    ret x >= 0.0f64 - 1.7976931348623157e308f64 && x <= 1.7976931348623157e308f64
+}
+
+// Chi-squared goodness of fit of finite, non-negative `observed` counts
+// against finite, strictly positive `expected` counts.
 fn chi_squared(observed: []const f64, expected: []const f64) -> (Result, err) {
     if observed.len != expected.len || observed.len < 2usize { ret (zero, Invalid) }
     var statistic = 0.0f64
     var i = 0usize
     while i < observed.len {
-        if expected[i] <= 0.0f64 { ret (zero, Invalid) }
+        if !finite(observed[i]) || !finite(expected[i]) || observed[i] < 0.0f64 || expected[i] <= 0.0f64 { ret (zero, Invalid) }
         let d = observed[i] - expected[i]
         statistic += d * d / expected[i]
         i += 1usize

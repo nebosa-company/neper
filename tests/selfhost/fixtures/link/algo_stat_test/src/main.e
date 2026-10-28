@@ -94,6 +94,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     expected[1usize] = 0.0f64
     let (_, chi_invalid) = test.chi_squared(observed[..], expected[..])
     if chi_invalid != test.Invalid { os.exit(3i32) }
+    var invalid_observed: [2]f64 = zero
+    invalid_observed[0usize] = 0.0f64 - 1.0f64
+    invalid_observed[1usize] = 3.0f64
+    var unit_expected: [2]f64 = zero
+    unit_expected[0usize] = 1.0f64
+    unit_expected[1usize] = 1.0f64
+    let (_, negative_observed_error) = test.chi_squared(invalid_observed[..], unit_expected[..])
+    let infinity = mem.bitcast[f64](9218868437227405312u64)
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    invalid_observed[0usize] = infinity
+    let (_, infinite_observed_error) = test.chi_squared(invalid_observed[..], unit_expected[..])
+    invalid_observed[0usize] = nan
+    let (_, nan_observed_error) = test.chi_squared(invalid_observed[..], unit_expected[..])
+    invalid_observed[0usize] = 1.0f64
+    unit_expected[0usize] = infinity
+    let (_, infinite_expected_error) = test.chi_squared(invalid_observed[..], unit_expected[..])
+    unit_expected[0usize] = nan
+    let (_, nan_expected_error) = test.chi_squared(invalid_observed[..], unit_expected[..])
+    if negative_observed_error != test.Invalid || infinite_observed_error != test.Invalid || nan_observed_error != test.Invalid || infinite_expected_error != test.Invalid || nan_expected_error != test.Invalid { os.exit(3i32) }
     let fisher = test.fisher_exact(8u64, 2u64, 1u64, 5u64)
     if fisher.statistic != 20.0f64 || !near(fisher.p_value, 0.034965034965034975f64, eps) { os.exit(3i32) }
     let balanced = test.fisher_exact(5u64, 5u64, 5u64, 5u64)
