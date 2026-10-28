@@ -169,5 +169,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ce29 != ok || cookie.store(&small, cc29, 100i64) != ok { os.exit(129) }
     let (sh, she) = cookie.header(a, &small, "h.test", "/", false, 100i64)
     if she != ok || !str.eq(sh, "k=v29") { os.exit(250) }
+    // A failed store in a jar too large for compact's stack scratch must not charge
+    // the partially copied name, value, and path against the next cookie.
+    var leak_storage: [2]cookie.Cookie = zero
+    var leak_text: [5000]u8 = zero
+    var leak = cookie.jar_new(leak_storage[..], leak_text[..])
+    var huge_value: [4994]u8 = zero
+    var huge_at = 0usize
+    while huge_at < huge_value.len {
+        huge_value[huge_at] = 120u8
+        huge_at += 1usize
+    }
+    var oversized: cookie.Cookie = zero
+    oversized.name = "x"
+    oversized.value = huge_value[..]
+    oversized.domain = "h.test"
+    oversized.host_only = true
+    oversized.path = "/"
+    if cookie.store(&leak, oversized, 100i64) != cookie.JarFull || leak.count != 0usize || leak.used != 0usize { os.exit(251) }
+    var after_failure: cookie.Cookie = zero
+    after_failure.name = "k"
+    after_failure.value = "v"
+    after_failure.domain = "h.test"
+    after_failure.host_only = true
+    after_failure.path = "/"
+    if cookie.store(&leak, after_failure, 100i64) != ok || leak.count != 1usize || leak.used != 9usize { os.exit(252) }
+    let (after_header, after_header_error) = cookie.header(a, &leak, "h.test", "/", false, 100i64)
+    if after_header_error != ok || !str.eq(after_header, "k=v") { os.exit(253) }
     ret ok
 }

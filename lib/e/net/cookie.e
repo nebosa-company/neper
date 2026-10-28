@@ -324,11 +324,15 @@ fn compact(jar: *Jar, scratch: []u8) -> bool {
 // Copy the cookie's strings into the jar's text: the cookie pointing at the copies, and whether they fitted.
 fn own(jar: *Jar, c: Cookie) -> (Cookie, bool) {
     var out = c
+    let text_start = jar.used
     let (name, name_ok) = keep(jar, c.name)
     let (value, value_ok) = keep(jar, c.value)
     let (domain, domain_ok) = keep(jar, c.domain)
     let (path, path_ok) = keep(jar, c.path)
-    if !name_ok || !value_ok || !domain_ok || !path_ok { ret (c, false) }
+    if !name_ok || !value_ok || !domain_ok || !path_ok {
+        jar.used = text_start
+        ret (c, false)
+    }
     out.name = name
     out.value = value
     out.domain = domain
