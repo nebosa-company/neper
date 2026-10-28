@@ -462,6 +462,13 @@ fn menu_radio_dot(a: *mem.Arena, color: paint.Color, slot: f32) -> (widget.Node,
 // placed only while `open`; a press outside it or Escape fires `dismiss`. The
 // items outlive the frame. The v2 menu of D975 below over plain commands.
 fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, items: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = menu_arrow(a, key, t, anchor, label, items, open, dismiss, 0.0 - 1.0)
+    ret (made, made_error)
+}
+
+// A menu whose root Linux panel may have an arrow centred at `arrow_x`; a
+// negative value makes the regular arrowless menu.
+fn menu_arrow(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, items: []const MenuItem, open: bool, dismiss: *const widget.Submit, arrow_x: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (commands, commands_error) = mem.alloc[MenuCommand](a, items.len)
     if commands_error != ok { ret (zero, TooLarge) }
@@ -471,7 +478,7 @@ fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.
         commands[i].enabled = items[i].enabled
         i += 1usize
     }
-    let (made, made_error) = menu_of(a, key, t, anchor, label, commands[0usize..items.len], open, dismiss)
+    let (made, made_error) = menu_at_arrow(a, key, t, anchor, label, commands[0usize..items.len], open, dismiss, .Below, geometry.Point { x: 0.0, y: 4.0 }, 4.0, true, arrow_x)
     ret (made, made_error)
 }
 
@@ -490,16 +497,23 @@ fn menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // keyed `key + 8192` that is there open or shut (`menu_at_moving` takes another
 // duration and starting scale); closing is at once.
 fn menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool) -> (widget.Node, err) {
-    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, rim, allow_submenus, t.tokens.durations.medium1, 0.8)
+    let (made, made_error) = menu_at_arrow(a, key, t, anchor, label, commands, open, dismiss, placement, offset, rim, allow_submenus, 0.0 - 1.0)
     ret (made, made_error)
 }
 
-fn menu_at_moving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, in_millis: u32, from: f32) -> (widget.Node, err) {
+// A menu with a Linux popover arrow whose centre is `arrow_x` from its surface's
+// left. A negative value omits it; only the root panel receives it.
+fn menu_at_arrow(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, arrow_x: f32) -> (widget.Node, err) {
+    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, rim, allow_submenus, t.tokens.durations.medium1, 0.8, arrow_x)
+    ret (made, made_error)
+}
+
+fn menu_at_moving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, in_millis: u32, from: f32, arrow_x: f32) -> (widget.Node, err) {
     var entering = opening_share_over(t, key, open, in_millis)
     // The Linux look (worker l3) shows its menus settled, as the reference crops are.
     if t.tokens.profile == .Linux { entering = 1.0 }
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
-    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss)
+    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss, arrow_x)
     if panel_error != ok { ret (zero, panel_error) }
     let (scaled, scaled_error) = scaled_in(a, t, panel, entering, from)
     if scaled_error != ok { ret (zero, scaled_error) }
@@ -528,7 +542,7 @@ fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owne
     }
     // (D1428, docs/ux/components/ContextMenu, motion) Pointer menus fade and
     // scale from 95% over `duration-short-4`.
-    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, 8.0, true, t.tokens.durations.short4, 0.95)
+    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, 8.0, true, t.tokens.durations.short4, 0.95, 0.0 - 1.0)
     ret (made, made_error)
 }
 
@@ -692,17 +706,6 @@ fn linux_menu_shadow(a: *mem.Arena, key: widget.Key, across: f32, down: f32) -> 
     ret (node, ok)
 }
 
-// Round 22 (lc): the arrow of a popover opened from a button (GTK's popover arrow). A 45 degree triangle 26 wide and 13 high on the
-// surface's top edge whose centre is `linux_arrow_x` from the surface's left (below 0: no arrow), a 1 px rim (the face at 86 %) on its two
-// slanted sides and the face inside; set with `linux_menu_arrow_at` before the menu is built.
-var linux_arrow_x: f32 = zero
-var linux_arrow_on: bool = zero
-
-fn linux_menu_arrow_at(x: f32) {
-    linux_arrow_x = x
-    linux_arrow_on = x >= 0.0
-}
-
 type LinuxArrow = struct { arena: *mem.Arena, x: f32, face: paint.Color, rim: paint.Color }
 
 fn linux_arrow_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
@@ -734,10 +737,13 @@ fn linux_arrow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&face), brush: paint.Brush { Solid: arrow.face } } })
 }
 
-fn linux_menu_arrow(a: *mem.Arena, across: f32, down: f32, face: paint.Color, rim: paint.Color) -> (widget.Node, err) {
+// Round 22 (lc): the arrow of a popover opened from a button (GTK's popover
+// arrow). Its centre is `x` from the surface's left; the caller keeps that
+// per-panel so an open submenu cannot inherit the root popover's arrow.
+fn linux_menu_arrow(a: *mem.Arena, across: f32, down: f32, x: f32, face: paint.Color, rim: paint.Color) -> (widget.Node, err) {
     let (arrows, arrows_error) = mem.alloc[LinuxArrow](a, 1usize)
     if arrows_error != ok { ret (zero, TooLarge) }
-    arrows[0usize] = LinuxArrow { arena: a, x: linux_arrow_x, face: face, rim: rim }
+    arrows[0usize] = LinuxArrow { arena: a, x: x, face: face, rim: rim }
     var fill = control.sized_style(across, down)
     fill.position = .Absolute
     var none: []const widget.Node = zero
@@ -1076,7 +1082,7 @@ fn menu_back_row(a: *mem.Arena, key: widget.Key, return_key: widget.Key, t: *con
 // aligned to the parent row; Right opens, Left closes, and hover uses D1004's
 // delay and safe triangle. At touch density the child replaces the parent page,
 // led by a Back row and separator.
-fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool, back_label: str, back_target: widget.Key, back: *const widget.Submit) -> (widget.Node, err) {
+fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool, back_label: str, back_target: widget.Key, back: *const widget.Submit, arrow_x: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var around = control.if_else(touch, 8.0, 4.0)
     let linux = t.tokens.profile == .Linux
@@ -1096,7 +1102,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             if c.submenu.len == 0usize || c.submenu.len > 8usize { ret (zero, TooLarge) }
             let item_key = key + 1u64 + u64(opened)
             let submenu_key = key + 1024u64 + 16u64 * u64(opened)
-            let (page, page_error) = menu_panel(a, submenu_key, t, c.label, c.submenu, &c.submenu_toggle, rim, false, c.label, item_key, &c.submenu_toggle)
+            let (page, page_error) = menu_panel(a, submenu_key, t, c.label, c.submenu, &c.submenu_toggle, rim, false, c.label, item_key, &c.submenu_toggle, 0.0 - 1.0)
             ret (page, page_error)
         }
     }
@@ -1248,7 +1254,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         caption.wrap = .None
         var across: f32 = 108.0
         // the popover of a menu button is 133 wide in the capture whatever its rows ask for
-        if linux_arrow_on { across = 121.0 }
+        if arrow_x >= 0.0 { across = 121.0 }
         var down: f32 = 12.0
         var m = 0usize
         while m < commands.len {
@@ -1285,9 +1291,9 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         layers[0usize] = shadow
         layers[1usize] = column[0usize]
         var layer_count = 2usize
-        if linux_arrow_on {
+        if arrow_x >= 0.0 {
             let face = style.color(t.tokens, .SurfaceBright)
-            let (pointer, pointer_error) = linux_menu_arrow(a, linux_across, linux_down, face, paint.rgba(face.red * 0.86, face.green * 0.86, face.blue * 0.86, 1.0))
+            let (pointer, pointer_error) = linux_menu_arrow(a, linux_across, linux_down, arrow_x, face, paint.rgba(face.red * 0.86, face.green * 0.86, face.blue * 0.86, 1.0))
             if pointer_error != ok { ret (zero, pointer_error) }
             layers[2usize] = pointer
             layer_count = 3usize
@@ -1318,10 +1324,20 @@ fn menu_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     if open { states = accessibility.STATE_EXPANDED }
     let (head, head_error) = control.pressable_states(a, key, t, 3u8, label, look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, label_node)
     if head_error != ok { ret (zero, head_error) }
+    var arrow_x: f32 = 0.0 - 1.0
+    if t.tokens.profile == .Linux && open {
+        let (label_width, label_width_error) = control.linux_label_width(a, t, caption, label)
+        if label_width_error != ok { ret (zero, label_width_error) }
+        var end = t.tokens.spacing.md
+        if look.padding > 0.0 || look.custom_padding { end = look.padding }
+        var start = end
+        if look.padding_start > 0.0 { start = look.padding_start }
+        arrow_x = start + label_width * 0.5
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
-    let (opened, opened_error) = menu(a, key + 1u64, t, key, label, items, open, toggle)
+    let (opened, opened_error) = menu_arrow(a, key + 1u64, t, key, label, items, open, toggle, arrow_x)
     if opened_error != ok { ret (zero, opened_error) }
     parts[1usize] = opened
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)

@@ -55,12 +55,12 @@ fn view_menu(a: *mem.Arena, action: widget.Submit) -> ([]overlay.MenuCommand, er
 // The menu's top-left corner on the cell's (24, 22), where the reference crop has its popover surface: it hangs from a 1 px anchor
 // 1 px above.
 fn hung(a: *mem.Arena, t: *const control.Theme, base: widget.Key, commands: []const overlay.MenuCommand, action: *const widget.Submit) -> (widget.Node, err) {
-    let (made, made_error) = hung_at(a, t, base, commands, action, 24.0, 21.0, 210.0, 278.0)
+    let (made, made_error) = hung_at(a, t, base, commands, action, 24.0, 21.0, 210.0, 278.0, 0.0 - 1.0)
     ret (made, made_error)
 }
 
-fn hung_at(a: *mem.Arena, t: *const control.Theme, base: widget.Key, commands: []const overlay.MenuCommand, action: *const widget.Submit, left: f32, top: f32, w: f32, h: f32) -> (widget.Node, err) {
-    let (menu, menu_error) = overlay.menu_at(a, base + 1u64, t, base, "Menu", commands, true, action, .Below, geometry.Point { x: 0.0, y: 0.0 }, 4.0, true)
+fn hung_at(a: *mem.Arena, t: *const control.Theme, base: widget.Key, commands: []const overlay.MenuCommand, action: *const widget.Submit, left: f32, top: f32, w: f32, h: f32, arrow_x: f32) -> (widget.Node, err) {
+    let (menu, menu_error) = overlay.menu_at_arrow(a, base + 1u64, t, base, "Menu", commands, true, action, .Below, geometry.Point { x: 0.0, y: 0.0 }, 4.0, true, arrow_x)
     if menu_error != ok { ret (zero, menu_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, parts_error) }
@@ -136,9 +136,7 @@ fn build_arrow(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     if action_error != ok { ret (0usize, action_error) }
     let (items, items_error) = arrow_menu(a, *action)
     if items_error != ok { ret (0usize, items_error) }
-    overlay.linux_menu_arrow_at(54.0)
-    let (node, node_error) = hung_at(a, t, 100u64, items, action, 38.0, 38.0, 210.0, 300.0)
-    overlay.linux_menu_arrow_at(0.0 - 1.0)
+    let (node, node_error) = hung_at(a, t, 100u64, items, action, 38.0, 38.0, 210.0, 300.0, 54.0)
     if node_error != ok { ret (0usize, node_error) }
     cells[0usize] = looks.Cell { caption: "Popover with its arrow, Submenu hovered", node: node, drive: .Hover }
     looks.aim(0usize, 0.0, 51.0)

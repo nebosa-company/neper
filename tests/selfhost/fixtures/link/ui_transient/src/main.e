@@ -66,6 +66,17 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
+fn near(a: f32, b: f32) -> bool {
+    let d = a - b
+    ret d < 0.01 && d > -0.01
+}
+
+fn close_to(value: u8, expected: f32) -> bool {
+    let wanted = expected * 255.0
+    let found = f32(value)
+    ret found - wanted < 6.0 && wanted - found < 6.0
+}
+
 fn build(a: *mem.Arena, t: *const control.Theme, save: *const widget.Submit, toggle: *const widget.Submit, items: []const overlay.MenuItem, buttons: []const overlay.DialogButton, menu_open: bool, dialog_open: bool) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, parts_error) }
@@ -116,11 +127,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Compact, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 96usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 16u16, max_commands: 256usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 128usize, max_states: 32usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 40u16, max_commands: 8192usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
     let touch_theme = control.Theme { tokens: &touch_tokens, fonts: fonts, language: "", runtime: &runtime }
+    let linux_tokens = style.adwaita(.Light)
+    let linux_theme = control.Theme { tokens: &linux_tokens, fonts: fonts, language: "", runtime: &runtime }
     let (h, harness_error) = testing.harness(a, &runtime, 320u32, 320u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
@@ -215,6 +228,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if root_closed_last_error != ok || testing.pump(&harness, root_closed_last, now) != ok || testing.tap(&harness, file_at.x, file_at.y) != ok || logs[0usize].toggles != 7usize { os.exit(49i32) }
     let (root_outside, root_outside_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], true, false)
     if root_outside_error != ok || testing.pump(&harness, root_outside, now) != ok || testing.tap(&harness, save_at.x, save_at.y) != ok || logs[0usize].toggles != 8usize || logs[0usize].saves != 0usize { os.exit(50i32) }
+    // A menu button supplies its own arrow to its root panel: GTK's minimum
+    // arrowed popover is 133 px, while an ordinary menu built afterward
+    // remains the 120 px arrowless minimum.
+    let linux_now = time.Instant { nanos: 4000000000i64 }
+    if testing.begin(&harness, linux_now) != ok { os.exit(68i32) }
+    frame = mem.arena_from(frame_storage)
+    let (linux_root, linux_root_error) = build(&frame, &linux_theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], true, false)
+    if linux_root_error != ok { os.exit(206i32) }
+    if testing.pump(&harness, linux_root, linux_now) != ok { os.exit(207i32) }
+    let (arrow_menu_bounds, has_arrow_menu_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 11u64).element)
+    if !has_arrow_menu_bounds || !near(arrow_menu_bounds.width, 133.0) || arrow_menu_bounds.y < 14.0 { os.exit(70i32) }
+    let (linux_file_bounds, has_linux_file_bounds) = widget.bounds_of(&runtime, testing.by_key(&harness, 10u64).element)
+    if !has_linux_file_bounds { os.exit(208i32) }
+    let (linux_shot, linux_shot_error) = testing.snapshot(&harness, a)
+    if linux_shot_error != ok { os.exit(209i32) }
+    let arrow_x = usize(linux_file_bounds.x + linux_file_bounds.width * 0.5)
+    let arrow_y = usize(arrow_menu_bounds.y - 4.0)
+    let arrow_pixel = (arrow_y * 320usize + arrow_x) * 4usize
+    let arrow_face = style.color(&linux_tokens, .SurfaceBright)
+    if !close_to(linux_shot.pixels[arrow_pixel], arrow_face.red) || !close_to(linux_shot.pixels[arrow_pixel + 1usize], arrow_face.green) || !close_to(linux_shot.pixels[arrow_pixel + 2usize], arrow_face.blue) { os.exit(210i32) }
+    let (plain_anchor, plain_anchor_error) = control.button(&frame, 400u64, &linux_theme, "Anchor", &actions[0usize], control.button_options())
+    let (plain_menu, plain_menu_error) = overlay.menu(&frame, 401u64, &linux_theme, 400u64, "Plain", items[0usize..3usize], true, &actions[1usize])
+    let (plain_parts, plain_parts_error) = mem.alloc[widget.Node](&frame, 2usize)
+    if plain_anchor_error != ok || plain_menu_error != ok || plain_parts_error != ok { os.exit(71i32) }
+    plain_parts[0usize] = plain_anchor
+    plain_parts[1usize] = plain_menu
+    if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(320.0, 320.0), plain_parts[0usize..2usize]), linux_now) != ok { os.exit(72i32) }
+    let (plain_menu_bounds, has_plain_menu_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 401u64).element)
+    if !has_plain_menu_bounds || !near(plain_menu_bounds.width, 120.0) { os.exit(73i32) }
     // The dialog: modal, labelled by its title, described by its message, a heading
     // inside (level 2 since v2, D977); Enter does nothing without a default button,
     // Escape cancels.
