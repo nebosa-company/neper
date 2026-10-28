@@ -37,8 +37,7 @@ fn from_int(n: i32) -> Fx {
 
 // Truncates toward zero, as a conversion does; `floor` rounds down instead.
 fn to_int(x: Fx) -> i32 {
-    if x < 0i32 { ret -((-x) >> SHIFT) }
-    ret x >> SHIFT
+    ret i32(i64(x) / i64(ONE))
 }
 
 fn from_ratio(num: i32, den: i32) -> (Fx, err) {
@@ -63,14 +62,18 @@ fn floor(x: Fx) -> i32 {
 }
 
 fn ceil(x: Fx) -> i32 {
-    ret (x + ONE - 1i32) >> SHIFT
+    ret i32((i64(x) + i64(ONE) - 1i64) >> SHIFT)
 }
 
 fn round(x: Fx) -> i32 {
-    ret (x + HALF) >> SHIFT
+    ret i32((i64(x) + i64(HALF)) >> SHIFT)
 }
 
+// The positive magnitude of i32.MIN cannot be represented as an Fx, so this
+// helper saturates that one input instead of overflowing or preserving a
+// negative result.
 fn abs(x: Fx) -> Fx {
+    if x == (-2147483647i32 - 1i32) { ret 2147483647i32 }
     if x < 0i32 { ret -x }
     ret x
 }

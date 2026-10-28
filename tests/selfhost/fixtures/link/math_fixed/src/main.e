@@ -13,6 +13,12 @@ fn main() -> i64 {
     if fixed.floor(-98304i32) != -2i32 { ret 4i64 }
     if fixed.ceil(98304i32) != 2i32 { ret 5i64 }
     if fixed.round(98304i32) != 2i32 { ret 6i64 }
+// The extrema stay defined: conversion truncates toward zero, ceil/round may
+// answer 32768, and the unrepresentable positive magnitude saturates.
+let min_fx = mem.bitcast[i32](2147483648u32)
+if fixed.to_int(min_fx) != -32768i32 || fixed.to_int(min_fx + 1i32) != -32767i32 { ret 39i64 }
+if fixed.ceil(2147483647i32) != 32768i32 || fixed.round(2147483647i32) != 32768i32 { ret 40i64 }
+if fixed.abs(min_fx) != 2147483647i32 { ret 41i64 }
 
     // Multiplication and division carry a 64-bit intermediate.
     if fixed.mul(131072i32, 196608i32) != 393216i32 { ret 7i64 }
