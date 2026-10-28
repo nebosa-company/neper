@@ -555,6 +555,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if rp_p_2 != 0u8 { os.exit(i32(rp_p_2) + 20i32) }
     let pr = patterns()
     if pr != 0u32 { os.exit(i32(pr)) }
+    var handshake_bytes: [8]u8 = zero
+    let (_, handshake_error) = sp.encode_handshake(handshake_bytes[..], .Pair)
+    if handshake_error != ok { os.exit(160i32) }
+    handshake_bytes[6usize] = 1u8
+    let (_, suffix_error_a) = sp.decode_handshake(handshake_bytes[..])
+    if suffix_error_a != sp.Malformed { os.exit(161i32) }
+    handshake_bytes[6usize] = 0u8
+    handshake_bytes[7usize] = 1u8
+    let (_, suffix_error_b) = sp.decode_handshake(handshake_bytes[..])
+    if suffix_error_b != sp.Malformed { os.exit(162i32) }
     try io.print("net sp ok")
     ret ok
 }

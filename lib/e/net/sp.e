@@ -88,6 +88,7 @@ fn encode_handshake(dst: []u8, p: Protocol) -> (usize, err) {
 fn decode_handshake(src: []const u8) -> (Protocol, err) {
     if src.len < 8usize { ret (.Pair, NeedMore) }
     if src[0usize] != 0u8 || src[1usize] != 83u8 || src[2usize] != 80u8 || src[3usize] != 0u8 { ret (.Pair, Malformed) }
+    if src[6usize] != 0u8 || src[7usize] != 0u8 { ret (.Pair, Malformed) }
     let (p, known) = protocol_of(u16(src[4usize]) * 256u16 + u16(src[5usize]))
     if !known { ret (.Pair, Malformed) }
     ret (p, ok)
