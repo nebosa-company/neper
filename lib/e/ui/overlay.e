@@ -8600,13 +8600,25 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     // the button row
     let (row, row_error) = mem.alloc[widget.Node](a, buttons.len)
     if row_error != ok { ret (zero, TooLarge) }
+    var idle: []widget.Submit = zero
+    if busy {
+        let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if idle_error != ok { ret (zero, TooLarge) }
+        made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+        idle = made_idle
+    }
     var i = 0usize
     while i < buttons.len {
         var options = control.button_options()
         options.variant = .Filled
-        if buttons[i].kind == .Default { options.variant = .Default }
-        if busy && buttons[i].kind != .Default { options.enabled = false }
-        let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, buttons[i].label, &buttons[i].action, options)
+        if buttons[i].kind == .Default {
+            options.variant = .Default
+            options.loading = busy
+        }
+        if busy { options.enabled = false }
+        var action = &buttons[i].action
+        if busy { action = &idle[0usize] }
+        let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, buttons[i].label, action, options)
         if pressed_error != ok { ret (zero, pressed_error) }
         row[i] = pressed
         i += 1usize
@@ -8763,19 +8775,26 @@ fn cupertino_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.K
 // hairline, then the buttons 44 tall -- two sit side by side, more stack -- in the accent (the default one semibold,
 // a destructive one red), pressed they take a grey fill. The card is a flat, near-opaque face (iOS blurs what is
 // behind it).
-fn cupertino_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton) -> (widget.Node, err) {
+fn cupertino_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton, busy: bool) -> (widget.Node, err) {
     let dark = t.tokens.palette == .Dark
     let sideways = buttons.len == 2usize
     var each: f32 = 270.0
     if sideways { each = 135.0 }
     let (cells, cells_error) = mem.alloc[widget.Node](a, buttons.len * 2usize)
     if cells_error != ok { ret (zero, TooLarge) }
+    var idle: []widget.Submit = zero
+    if busy {
+        let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if idle_error != ok { ret (zero, TooLarge) }
+        made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+        idle = made_idle
+    }
     var used = 0usize
     let rule_ink = style.cupertino_separator(t.tokens)
     var i = 0usize
     while i < buttons.len {
         let button_key = key + 3u64 + u64(i)
-        let state = control.control_state(t, button_key, true, false)
+        let state = control.control_state(t, button_key, !busy, false)
         var look = style.cupertino_resolve(t.tokens, .Plain, state, 44.0)
         look.background = control.with_alpha(style.color(t.tokens, .Text), 0.0)
         if state.hovered && !state.pressed { look.background = style.cup_fill(t.tokens, 0.8) }
@@ -8796,7 +8815,11 @@ fn cupertino_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if one_error != ok { ret (zero, TooLarge) }
         one[0usize] = word
         let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 44.0), one[0usize..1usize])
-        let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, buttons[i].label, look, true, false, &buttons[i].action, content)
+        var sem_states = 0u32
+        if busy && buttons[i].kind == .Default { sem_states = accessibility.STATE_BUSY }
+        var action = &buttons[i].action
+        if busy { action = &idle[0usize] }
+        let (pressed, pressed_error) = control.pressable_states(a, button_key, t, 3u8, buttons[i].label, look, !busy, false, sem_states, 0u32, 0u64, action, content)
         if pressed_error != ok { ret (zero, pressed_error) }
         cells[used] = pressed
         used += 1usize
@@ -8866,7 +8889,7 @@ fn dialog_cupertino(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
         i += 1usize
     }
     if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
-    let (card, card_error) = cupertino_alert_card(a, key, t, title, content, buttons)
+    let (card, card_error) = cupertino_alert_card(a, key, t, title, content, buttons, busy)
     if card_error != ok { ret (zero, card_error) }
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -8916,7 +8939,7 @@ fn linux_scrim_share(t: *const control.Theme) -> f32 {
     ret wanted / t.tokens.states.scrim
 }
 
-fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton) -> (widget.Node, err) {
+fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton, busy: bool) -> (widget.Node, err) {
     let width: f32 = 300.0
     let ink = style.color(t.tokens, .OnSurface)
     var heading = control.text_options()
@@ -8952,11 +8975,18 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     rule.background = paint.Brush { Solid: rule_ink }
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * buttons.len)
     if cells_error != ok { ret (zero, TooLarge) }
+    var idle: []widget.Submit = zero
+    if busy {
+        let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if idle_error != ok { ret (zero, TooLarge) }
+        made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+        idle = made_idle
+    }
     var used = 0usize
     var i = 0usize
     while i < buttons.len {
         let button_key = key + 3u64 + u64(i)
-        let state = control.control_state(t, button_key, true, false)
+        let state = control.control_state(t, button_key, !busy, false)
         var look = style.adwaita_resolve(t.tokens, .Plain, state)
         look.radius = 0.0
         look.min_height = 43.0
@@ -8981,7 +9011,11 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
         if i == 0usize { shove_left = 1.0 } else { shove_right = 2.0 }
         let held = widget.padded(0u64, shove_left, 0.0, shove_right, 2.0, style.defaults(), one_of_node(a, word))
         let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 43.0), one_of_node(a, held))
-        let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, buttons[i].label, look, true, false, &buttons[i].action, content)
+        var sem_states = 0u32
+        if busy && buttons[i].kind == .Default { sem_states = accessibility.STATE_BUSY }
+        var action = &buttons[i].action
+        if busy { action = &idle[0usize] }
+        let (pressed, pressed_error) = control.pressable_states(a, button_key, t, 3u8, buttons[i].label, look, !busy, false, sem_states, 0u32, 0u64, action, content)
         if pressed_error != ok { ret (zero, pressed_error) }
         cells[used] = pressed
         used += 1usize
@@ -9040,7 +9074,7 @@ fn dialog_linux(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         i += 1usize
     }
     if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
-    let (card, card_error) = linux_alert_card(a, key, t, title, content, buttons)
+    let (card, card_error) = linux_alert_card(a, key, t, title, content, buttons, busy)
     if card_error != ok { ret (zero, card_error) }
     var none: []const widget.Shortcut = zero
     let scoped = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), one_of_node(a, card))
