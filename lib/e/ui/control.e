@@ -16249,12 +16249,16 @@ fn windows_scroll_bar_disabled(a: *mem.Arena, t: *const Theme, vertical: bool, l
     if arrow_a_error != ok { ret (zero, arrow_a_error) }
     let (arrow_b, arrow_b_error) = gl.pixels(a, second, aw, ah)
     if arrow_b_error != ok { ret (zero, arrow_b_error) }
+    let (arrow_a_children, arrow_a_children_error) = one_widget(a, arrow_a)
+    if arrow_a_children_error != ok { ret (zero, arrow_a_children_error) }
+    let (arrow_b_children, arrow_b_children_error) = one_widget(a, arrow_b)
+    if arrow_b_children_error != ok { ret (zero, arrow_b_children_error) }
     if vertical {
-        parts[1usize] = widget.positioned(0u64, 4.0, 6.0, style.defaults(), one_widget(a, arrow_a))
-        parts[2usize] = widget.positioned(0u64, 4.0, length - 11.0, style.defaults(), one_widget(a, arrow_b))
+        parts[1usize] = widget.positioned(0u64, 4.0, 6.0, style.defaults(), arrow_a_children)
+        parts[2usize] = widget.positioned(0u64, 4.0, length - 11.0, style.defaults(), arrow_b_children)
     } else {
-        parts[1usize] = widget.positioned(0u64, 5.0, 4.0, style.defaults(), one_widget(a, arrow_a))
-        parts[2usize] = widget.positioned(0u64, length - 11.0, 4.0, style.defaults(), one_widget(a, arrow_b))
+        parts[1usize] = widget.positioned(0u64, 5.0, 4.0, style.defaults(), arrow_a_children)
+        parts[2usize] = widget.positioned(0u64, length - 11.0, 4.0, style.defaults(), arrow_b_children)
     }
     var face = sized_style(17.0, length)
     if !vertical { face = sized_style(length, 17.0) }
@@ -16417,27 +16421,33 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             // round 13: the navigator's horizontal thumb, rows of end pixels round a constant body (main window grabs, rest and hot)
             let (hthumb, hthumb_error) = windows_hthumb(a, thumb_len, state.hovered || state.pressed)
             if hthumb_error != ok { ret (zero, hthumb_error) }
+            let (hthumb_children, hthumb_children_error) = one_widget(a, hthumb)
+            if hthumb_children_error != ok { ret (zero, hthumb_children_error) }
             var htop: f32 = 2.0
             if state.hovered || state.pressed { htop = 0.0 }
             var hstyle = sized_style(thumb_len, 14.0)
             hstyle.margin = style.EdgeLengths { left: style.Length { Px: at }, top: style.Length { Px: htop }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, hstyle, one_widget(a, hthumb))
+            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, hstyle, hthumb_children)
         }
         // looks11-g1: at rest the live grid bar's thumb is three pixel columns (#B6 #85 #BF) with soft ends, 7 px from the bar's first pixel
         if vertical && hot_pill && !crisp && !style.windows_dark_on() && thumb_len >= 6.0 {
             // round 13: the hot or held thumb is the capture's 7 pixel pill (columns of end pixels cut from the main window grabs)
             let (pill_node, pill_error) = windows_pill(a, thumb_len)
             if pill_error != ok { ret (zero, pill_error) }
+            let (pill_children, pill_children_error) = one_widget(a, pill_node)
+            if pill_children_error != ok { ret (zero, pill_children_error) }
             var pill_style = sized_style(7.0, thumb_len)
             pill_style.margin = style.EdgeLengths { left: style.Length { Px: 5.0 }, top: style.Length { Px: at - 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pill_style, one_widget(a, pill_node))
+            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pill_style, pill_children)
         }
         if vertical && !hot_pill && !crisp && !style.windows_dark_on() && thumb_len >= 6.0 {
             let (pixel_thumb, pixel_thumb_error) = windows_thumb(a, thumb_len)
             if pixel_thumb_error != ok { ret (zero, pixel_thumb_error) }
+            let (pixel_thumb_children, pixel_thumb_children_error) = one_widget(a, pixel_thumb)
+            if pixel_thumb_children_error != ok { ret (zero, pixel_thumb_children_error) }
             var pixel_style = sized_style(3.0, thumb_len)
             pixel_style.margin = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: at - 1.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pixel_style, one_widget(a, pixel_thumb))
+            layers[count] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pixel_style, pixel_thumb_children)
         }
         count += 1usize
     }
@@ -16450,13 +16460,17 @@ fn windows_scroll_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, vertical:
             // the native pressed upper arrow (the grabs of v3 show only the lower one held)
             let (held_up, held_up_error) = gl.pixels(a, native_arrow_up_pressed(), 12.0, 8.0)
             if held_up_error != ok { ret (zero, held_up_error) }
-            layers[count] = widget.positioned(0u64, 2.0, 5.0, style.defaults(), one_widget(a, held_up))
+            let (held_up_children, held_up_children_error) = one_widget(a, held_up)
+            if held_up_children_error != ok { ret (zero, held_up_children_error) }
+            layers[count] = widget.positioned(0u64, 2.0, 5.0, style.defaults(), held_up_children)
             count += 1usize
         }
         if has_held_box && widget.pointer_position(t.runtime).y - held_box.y > length - 16.0 {
             let (held_arrow, held_arrow_error) = gl.pixels(a, gl.gx_arrow_down(), gl.gx_arrow_down_w(), gl.gx_arrow_down_h())
             if held_arrow_error != ok { ret (zero, held_arrow_error) }
-            layers[count] = widget.positioned(0u64, 4.0, length - 11.0, style.defaults(), one_widget(a, held_arrow))
+            let (held_arrow_children, held_arrow_children_error) = one_widget(a, held_arrow)
+            if held_arrow_children_error != ok { ret (zero, held_arrow_children_error) }
+            layers[count] = widget.positioned(0u64, 4.0, length - 11.0, style.defaults(), held_arrow_children)
             count += 1usize
         }
         arrow_done = true
@@ -22746,19 +22760,27 @@ fn windows_thumb(a: *mem.Arena, h: f32) -> (widget.Node, err) {
         let col = f32(c)
         var s0 = sized_style(1.0, 1.0)
         s0.background = paint.Brush { Solid: gl.rgb(tops[c]) }
-        parts[n] = widget.positioned(0u64, col, 0.0, style.defaults(), one_widget(a, widget.box(0u64, s0, zero)))
+        let (top_first_children, top_first_children_error) = one_widget(a, widget.box(0u64, s0, zero))
+        if top_first_children_error != ok { ret (zero, top_first_children_error) }
+        parts[n] = widget.positioned(0u64, col, 0.0, style.defaults(), top_first_children)
         n += 1usize
         var s1 = sized_style(1.0, 1.0)
         s1.background = paint.Brush { Solid: gl.rgb(tops[3usize + c]) }
-        parts[n] = widget.positioned(0u64, col, 1.0, style.defaults(), one_widget(a, widget.box(0u64, s1, zero)))
+        let (top_second_children, top_second_children_error) = one_widget(a, widget.box(0u64, s1, zero))
+        if top_second_children_error != ok { ret (zero, top_second_children_error) }
+        parts[n] = widget.positioned(0u64, col, 1.0, style.defaults(), top_second_children)
         n += 1usize
         var sb = sized_style(1.0, h - 4.0)
         sb.background = paint.Brush { Solid: gl.rgb(body[c]) }
-        parts[n] = widget.positioned(0u64, col, 2.0, style.defaults(), one_widget(a, widget.box(0u64, sb, zero)))
+        let (body_children, body_children_error) = one_widget(a, widget.box(0u64, sb, zero))
+        if body_children_error != ok { ret (zero, body_children_error) }
+        parts[n] = widget.positioned(0u64, col, 2.0, style.defaults(), body_children)
         n += 1usize
         var s2 = sized_style(1.0, 1.0)
         s2.background = paint.Brush { Solid: gl.rgb(feet[c]) }
-        parts[n] = widget.positioned(0u64, col, h - 2.0, style.defaults(), one_widget(a, widget.box(0u64, s2, zero)))
+        let (foot_first_children, foot_first_children_error) = one_widget(a, widget.box(0u64, s2, zero))
+        if foot_first_children_error != ok { ret (zero, foot_first_children_error) }
+        parts[n] = widget.positioned(0u64, col, h - 2.0, style.defaults(), foot_first_children)
         n += 1usize
         c += 1usize
     }
@@ -22767,7 +22789,9 @@ fn windows_thumb(a: *mem.Arena, h: f32) -> (widget.Node, err) {
     while k < 3usize {
         var sf = sized_style(1.0, 1.0)
         sf.background = paint.Brush { Solid: gl.rgb(feet[3usize + k]) }
-        s3 = widget.positioned(0u64, f32(k), h - 1.0, style.defaults(), one_widget(a, widget.box(0u64, sf, zero)))
+        let (foot_last_children, foot_last_children_error) = one_widget(a, widget.box(0u64, sf, zero))
+        if foot_last_children_error != ok { ret (zero, foot_last_children_error) }
+        s3 = widget.positioned(0u64, f32(k), h - 1.0, style.defaults(), foot_last_children)
         parts[n] = s3
         n += 1usize
         k += 1usize
@@ -22854,7 +22878,9 @@ fn windows_hthumb(a: *mem.Arena, w: f32, hot: bool) -> (widget.Node, err) {
                 if run_value != 0xF0F0F0u32 {
                     var piece = sized_style(cx - run_start, h)
                     piece.background = paint.Brush { Solid: gl.rgb(run_value) }
-                    parts[n] = widget.positioned(0u64, run_start, y, style.defaults(), one_widget(a, widget.box(0u64, piece, zero)))
+                    let (piece_children, piece_children_error) = one_widget(a, widget.box(0u64, piece, zero))
+                    if piece_children_error != ok { ret (zero, piece_children_error) }
+                    parts[n] = widget.positioned(0u64, run_start, y, style.defaults(), piece_children)
                     n += 1usize
                 }
                 run_value = value
@@ -22903,28 +22929,34 @@ fn windows_pill(a: *mem.Arena, h: f32) -> (widget.Node, err) {
         while j < k {
             var st = sized_style(1.0, 1.0)
             st.background = paint.Brush { Solid: gl.rgb(tops[c][j]) }
-            parts[n] = widget.positioned(0u64, col, top_at + f32(j), style.defaults(), one_widget(a, widget.box(0u64, st, zero)))
+            let (top_children, top_children_error) = one_widget(a, widget.box(0u64, st, zero))
+            if top_children_error != ok { ret (zero, top_children_error) }
+            parts[n] = widget.positioned(0u64, col, top_at + f32(j), style.defaults(), top_children)
             n += 1usize
             var sf = sized_style(1.0, 1.0)
             sf.background = paint.Brush { Solid: gl.rgb(feet[c][j]) }
-            parts[n] = widget.positioned(0u64, col, foot_at + f32(j), style.defaults(), one_widget(a, widget.box(0u64, sf, zero)))
+            let (foot_children, foot_children_error) = one_widget(a, widget.box(0u64, sf, zero))
+            if foot_children_error != ok { ret (zero, foot_children_error) }
+            parts[n] = widget.positioned(0u64, col, foot_at + f32(j), style.defaults(), foot_children)
             n += 1usize
             j += 1usize
         }
         var sb = sized_style(1.0, h - 2.0 * (top_at + f32(k)))
         sb.background = paint.Brush { Solid: gl.rgb(body[c]) }
-        parts[n] = widget.positioned(0u64, col, top_at + f32(k), style.defaults(), one_widget(a, widget.box(0u64, sb, zero)))
+        let (body_children, body_children_error) = one_widget(a, widget.box(0u64, sb, zero))
+        if body_children_error != ok { ret (zero, body_children_error) }
+        parts[n] = widget.positioned(0u64, col, top_at + f32(k), style.defaults(), body_children)
         n += 1usize
         c += 1usize
     }
     ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
 }
 
-fn one_widget(a: *mem.Arena, node: widget.Node) -> []widget.Node {
+fn one_widget(a: *mem.Arena, node: widget.Node) -> ([]widget.Node, err) {
     let (nodes, nodes_error) = mem.alloc[widget.Node](a, 1usize)
-    if nodes_error != ok { ret zero }
+    if nodes_error != ok { ret (zero, TooLarge) }
     nodes[0usize] = node
-    ret nodes[0usize..1usize]
+    ret (nodes[0usize..1usize], ok)
 }
 
 // ---- round 15: the native Windows 11 SysLink (syslink-* of docs/ui/looks/ref/windows-native/{light,dark}) -----------------------------------
