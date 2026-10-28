@@ -188,20 +188,61 @@ fn tracestate_get(state: str, key: str) -> (str, bool) {
     ret ("", false)
 }
 
+fn tracestate_key_char(c: u8) -> bool {
+    if c >= 97u8 && c <= 122u8 { ret true }
+    if c >= 48u8 && c <= 57u8 { ret true }
+    ret c == 95u8 || c == 45u8 || c == 42u8 || c == 47u8
+}
+
+// A simple key starts with a lowercase letter. A multi-tenant key has a
+// digit-or-letter tenant (at most 241 bytes), one `@`, and a lowercase-letter
+// system id (at most 14 bytes), per the W3C Trace Context grammar.
+fn valid_tracestate_key(key: str) -> bool {
+    if key.len == 0usize || key.len > 256usize { ret false }
+    var at = 0usize
+    while at < key.len && key[at] != 64u8 { at += 1usize }
+    if at == key.len {
+        if key[0usize] < 97u8 || key[0usize] > 122u8 { ret false }
+        var i = 1usize
+        while i < key.len {
+            if !tracestate_key_char(key[i]) { ret false }
+            i += 1usize
+        }
+        ret true
+    }
+    if at == 0usize || at > 241usize || at + 1usize >= key.len || key.len - at - 1usize > 14usize { ret false }
+    if !((key[0usize] >= 97u8 && key[0usize] <= 122u8) || (key[0usize] >= 48u8 && key[0usize] <= 57u8)) { ret false }
+    if key[at + 1usize] < 97u8 || key[at + 1usize] > 122u8 { ret false }
+    var i = 1usize
+    while i < at {
+        if !tracestate_key_char(key[i]) { ret false }
+        i += 1usize
+    }
+    i = at + 2usize
+    while i < key.len {
+        if !tracestate_key_char(key[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Values are printable ASCII other than comma and equals, and their final
+// byte must be non-space. Leading spaces are valid opaque value data.
+fn valid_tracestate_value(value: str) -> bool {
+    if value.len == 0usize || value.len > 256usize { ret false }
+    var i = 0usize
+    while i < value.len {
+        let c = value[i]
+        if c < 32u8 || c > 126u8 || c == 44u8 || c == 61u8 { ret false }
+        i += 1usize
+    }
+    ret value[value.len - 1usize] != 32u8
+}
+
 // `state` with `key=value` first and any earlier `key` removed, at most 32
 // members (the last dropped when full); answers the length written.
 fn tracestate_set(state: str, key: str, value: str, out: []u8) -> (usize, err) {
-    if key.len == 0usize || key.len > 256usize || value.len == 0usize || value.len > 256usize { ret (0usize, Invalid) }
-    var i = 0usize
-    while i < key.len {
-        if key[i] == 44u8 || key[i] == 61u8 || key[i] == 32u8 { ret (0usize, Invalid) }
-        i += 1usize
-    }
-    i = 0usize
-    while i < value.len {
-        if value[i] == 44u8 || value[i] == 61u8 { ret (0usize, Invalid) }
-        i += 1usize
-    }
+    if !valid_tracestate_key(key) || !valid_tracestate_value(value) { ret (0usize, Invalid) }
     var n = 0usize
     let (n1, e1) = append(out, n, key)
     if e1 != ok { ret (0usize, e1) }

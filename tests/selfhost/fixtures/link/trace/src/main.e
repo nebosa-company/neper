@@ -66,6 +66,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, e5d) = trace.tracestate_set(state, "new", "v", big[..10usize])
     if e5c != trace.Invalid || e5d != trace.TooSmall { os.exit(5i32) }
 
+    // 5b: W3C tracestate grammar admits the two key forms, but not arbitrary
+    // punctuation, upper-case names, malformed tenant ids, or control bytes.
+    let (n5e, e5e) = trace.tracestate_set("", "1tenant@system-id", " leading value", big[..])
+    let (n5f, e5f) = trace.tracestate_set("", "simple/trace_*", "v", big[..])
+    if e5e != ok || n5e != 32usize || e5f != ok || n5f != 16usize { os.exit(5i32) }
+    let (_, e5g) = trace.tracestate_set("", "a:b", "v", big[..])
+    let (_, e5h) = trace.tracestate_set("", "Upper", "v", big[..])
+    let (_, e5i) = trace.tracestate_set("", "tenant@9system", "v", big[..])
+    let (_, e5j) = trace.tracestate_set("", "tenant@system@again", "v", big[..])
+    let (_, e5k) = trace.tracestate_set("", "a@abcdefghijklmno", "v", big[..])
+    if e5g != trace.Invalid || e5h != trace.Invalid || e5i != trace.Invalid || e5j != trace.Invalid || e5k != trace.Invalid { os.exit(5i32) }
+    var max_key: [256]u8 = zero
+    var max_value: [256]u8 = zero
+    var i5 = 0usize
+    while i5 < 256usize {
+        max_key[i5] = 97u8
+        max_value[i5] = 118u8
+        i5 += 1usize
+    }
+    let (n5l, e5l) = trace.tracestate_set("", max_key[..], "v", big[..])
+    let (n5m, e5m) = trace.tracestate_set("", "a", max_value[..], big[..])
+    if e5l != ok || n5l != 258usize || e5m != ok || n5m != 258usize { os.exit(5i32) }
+    var long_tenant: [244]u8 = zero
+    i5 = 0usize
+    while i5 < 242usize {
+        long_tenant[i5] = 97u8
+        i5 += 1usize
+    }
+    long_tenant[242usize] = 64u8
+    long_tenant[243usize] = 115u8
+    let (_, e5n) = trace.tracestate_set("", long_tenant[..], "v", big[..])
+    var bad_value: [4]u8 = zero
+    bad_value[0usize] = 111u8
+    bad_value[1usize] = 107u8
+    bad_value[2usize] = 13u8
+    let (_, e5o) = trace.tracestate_set("", "a", bad_value[..3usize], big[..])
+    bad_value[2usize] = 10u8
+    let (_, e5p) = trace.tracestate_set("", "a", bad_value[..3usize], big[..])
+    bad_value[2usize] = 9u8
+    let (_, e5q) = trace.tracestate_set("", "a", bad_value[..3usize], big[..])
+    bad_value[2usize] = 32u8
+    let (_, e5r) = trace.tracestate_set("", "a", bad_value[..3usize], big[..])
+    if e5n != trace.Invalid || e5o != trace.Invalid || e5p != trace.Invalid || e5q != trace.Invalid || e5r != trace.Invalid { os.exit(5i32) }
+
     // 6: thirty-two members k0=v0,...,k31=v31; setting x drops the last.
     var list: [512]u8 = zero
     var len = 0usize
