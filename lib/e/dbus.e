@@ -974,9 +974,22 @@ fn bus_new(calls: []Pending) -> Bus {
 }
 
 fn next_serial(b: *Bus) -> u32 {
-    b.serial += 1u32
+    // Serial numbers intentionally wrap; `+` would trap at u32.max in a debug build.
+    b.serial = b.serial +% 1u32
     if b.serial == 0u32 { b.serial = 1u32 }
     ret b.serial
+}
+
+// A reply-expected call must not reuse the serial of another outstanding call. A
+// caller can keep one pending across the 32-bit counter's wrap, so call checks
+// this table before it registers the new one.
+fn serial_pending(b: *const Bus, serial: u32) -> bool {
+    var i = 0usize
+    while i < b.calls.len {
+        if b.calls[i].used && b.calls[i].serial == serial { ret true }
+        i += 1usize
+    }
+    ret false
 }
 
 // A method call message ready for `message_encode`, serial allocated and registered as pending unless the caller set
@@ -1001,6 +1014,14 @@ fn call(b: *Bus, destination: str, path: str, interface: str, member: str, signa
             i += 1usize
         }
         if free == b.calls.len { ret (m, TooSmall) }
+        // Advance past every collision after a counter wrap. Returning to the
+        // first candidate covers the theoretical case where every nonzero serial
+        // is already pending even though this caller supplied a spare slot.
+        let first_serial = m.serial
+        while serial_pending(b, m.serial) {
+            m.serial = next_serial(b)
+            if m.serial == first_serial { ret (m, TooSmall) }
+        }
         b.calls[free] = Pending { used: true, serial: m.serial }
     }
     ret (m, ok)

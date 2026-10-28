@@ -522,6 +522,28 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// A pending call can survive until the 32-bit serial counter wraps. The next
+// reply-expected call must skip the old serial, and replies must retire their
+// own slots rather than the first equal serial.
+fn serial_wrap_regression() -> bool {
+    var slots: [2]dbus.Pending = zero
+    var bus = dbus.bus_new(slots[..])
+    slots[0usize] = dbus.Pending { used: true, serial: 1u32 }
+    bus.serial = 4294967295u32
+    var no_body: []const dbus.Value = zero
+    let (call, call_error) = dbus.call(&bus, "org.example.Service", "/org/example/Object", "org.example.Interface", "Ping", "", no_body, 0u8)
+    if call_error != ok || call.serial != 2u32 { ret false }
+    if !slots[0usize].used || !slots[1usize].used || slots[1usize].serial != 2u32 { ret false }
+    var first_reply = dbus.message(dbus.METHOD_RETURN, 9u32)
+    first_reply.reply_serial = 1u32
+    if !dbus.retire(&bus, &first_reply) { ret false }
+    if slots[0usize].used || !slots[1usize].used { ret false }
+    var second_reply = dbus.message(dbus.METHOD_RETURN, 10u32)
+    second_reply.reply_serial = call.serial
+    if !dbus.retire(&bus, &second_reply) { ret false }
+    ret !slots[1usize].used
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(100i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(101i32) }
@@ -546,6 +568,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_20()) != 0u8 { os.exit(120i32) }
     if run_chunk(a, vectors_21()) != 0u8 { os.exit(121i32) }
     if run_chunk(a, vectors_22()) != 0u8 { os.exit(122i32) }
+    if !serial_wrap_regression() { os.exit(123i32) }
     try io.print("dbus ok")
     ret ok
 }
