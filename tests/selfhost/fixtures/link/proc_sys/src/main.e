@@ -201,18 +201,78 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (list, e9) = sys.processes(a, 8192usize)
     if e9 != ok || list.len == 0usize { os.exit(109i32) }
     var found = false
+    var own_name: str = ""
     var k = 0usize
     while k < list.len {
         if list[k].pid == me {
             found = true
+            own_name = list[k].name
             if list[k].name.len == 0usize || list[k].threads == 0u32 { os.exit(110i32) }
         }
         if list[k].name.len == 0usize { os.exit(111i32) }
         k += 1usize
     }
     if !found { os.exit(112i32) }
+    let (overflow_list, overflow_error) = sys.processes(a, 18446744073709551615usize)
+    if overflow_error == ok || overflow_list.len != 0usize { os.exit(114i32) }
     let (_, e10) = sys.disk_usage(a, "no-such-volume-xyz/none")
-    if e10 == ok { os.exit(113i32) }
+    if e10 != os.NotFound { os.exit(113i32) }
+    when target.os == .Linux {
+        var rounds = 0usize
+        while rounds < 8usize {
+            let before_count = mem.mark(a)
+            let (_, count_error) = sys.cpu_count(a)
+            if count_error != ok || mem.mark(a) != before_count { os.exit(115i32) }
+            let before_times = mem.mark(a)
+            let (_, times_error) = sys.cpu_times(a)
+            if times_error != ok || mem.mark(a) != before_times { os.exit(115i32) }
+            let before_memory = mem.mark(a)
+            let (_, memory_error) = sys.memory(a)
+            if memory_error != ok || mem.mark(a) != before_memory { os.exit(115i32) }
+            let before_uptime = mem.mark(a)
+            let (_, uptime_error) = sys.uptime_ms(a)
+            if uptime_error != ok || mem.mark(a) != before_uptime { os.exit(115i32) }
+            let before_self_memory = mem.mark(a)
+            let (_, self_memory_error) = sys.self_memory(a)
+            if self_memory_error != ok || mem.mark(a) != before_self_memory { os.exit(115i32) }
+            rounds += 1usize
+        }
+        var process_rounds = 0usize
+        var saved_small_name: str = ""
+        var saved_name_address = 0usize
+        while process_rounds < 8usize {
+            let before_small_processes = mem.mark(a)
+            let (small_list, small_error) = sys.processes(a, 1usize)
+            if small_error != ok || small_list.len != 1usize || small_list[0usize].name.len == 0usize { os.exit(116i32) }
+            let small_growth = mem.mark(a) - before_small_processes
+            let small_bound = 4usize * mem.size_of[sys.ProcessInfo]() + 128usize
+            if small_growth > small_bound { os.exit(116i32) }
+            let name_address = mem.address_of(&small_list[0usize].name[0usize])
+            if process_rounds == 0usize {
+                saved_small_name = small_list[0usize].name
+                saved_name_address = name_address
+            } else if name_address == saved_name_address || !str.eq(saved_small_name, small_list[0usize].name) {
+                os.exit(116i32)
+            }
+            process_rounds += 1usize
+        }
+        let (later_list, later_error) = sys.processes(a, 8192usize)
+        if later_error != ok { os.exit(117i32) }
+        var later_found = false
+        var later_index = 0usize
+        while later_index < later_list.len {
+            if later_list[later_index].pid == me {
+                later_found = true
+                if !str.eq(own_name, later_list[later_index].name) { os.exit(117i32) }
+            }
+            later_index += 1usize
+        }
+        if !later_found { os.exit(117i32) }
+        let (_, not_dir_error) = sys.disk_usage(a, "/proc/self/stat/child")
+        if not_dir_error != os.Failed { os.exit(118i32) }
+        let (_, nul_error) = sys.disk_usage(a, "/proc\0/self")
+        if nul_error != os.Failed { os.exit(119i32) }
+    }
     try io.print("proc sys ok")
     ret ok
 }

@@ -168,7 +168,10 @@ fn narrow(a: *mem.Arena, units: []const u16) -> (str, err) {
 
 // Up to `limit` running processes, the parent and thread counts the snapshot carries.
 fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
-    let (out, oe) = mem.alloc[format.ProcessInfo](a, limit + 1usize)
+    if limit == 18446744073709551615usize { ret (zero, os.OutOfMemory) }
+    let capacity = limit + 1usize
+    if capacity > 18446744073709551615usize / mem.size_of[format.ProcessInfo]() { ret (zero, os.OutOfMemory) }
+    let (out, oe) = mem.alloc[format.ProcessInfo](a, capacity)
     if oe != ok { ret (out, oe) }
     let snap = raw_snapshot(SNAPSHOT_PROCESSES, 0u32)
     if snap == 0usize || snap == ~0usize { ret (out[0usize..0usize], os.Failed) }

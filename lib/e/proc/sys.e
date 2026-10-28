@@ -80,6 +80,9 @@ fn self_memory(a: *mem.Arena) -> (u64, err) {
 
 // Up to `limit` entries of the process table; names borrow from `a`.
 fn processes(a: *mem.Arena, limit: usize) -> ([]ProcessInfo, err) {
+    if limit == 18446744073709551615usize { ret (zero, os.OutOfMemory) }
+    let capacity = limit + 1usize
+    if capacity > 18446744073709551615usize / mem.size_of[ProcessInfo]() { ret (zero, os.OutOfMemory) }
     let (raw, e) = host.processes(a, limit)
     if e != ok { ret (zero, e) }
     let (out, oe) = mem.alloc[ProcessInfo](a, raw.len + 1usize)

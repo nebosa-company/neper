@@ -39,6 +39,8 @@ fn read_small(a: *mem.Arena, path: str, cap: usize) -> (str, err) {
 }
 
 fn cpu_count(a: *mem.Arena) -> (u32, err) {
+    let mark = mem.mark(a)
+    defer { mem.reset(a, mark) }
     let (src, e) = read_small(a, "/proc/stat", 262144usize)
     if e != ok { ret (0u32, e) }
     let n = format.count_cpus(src)
@@ -47,6 +49,8 @@ fn cpu_count(a: *mem.Arena) -> (u32, err) {
 }
 
 fn cpu_times(a: *mem.Arena) -> (format.CpuTimes, err) {
+    let mark = mem.mark(a)
+    defer { mem.reset(a, mark) }
     var t: format.CpuTimes = zero
     let (src, e) = read_small(a, "/proc/stat", 262144usize)
     if e != ok { ret (t, e) }
@@ -55,6 +59,8 @@ fn cpu_times(a: *mem.Arena) -> (format.CpuTimes, err) {
 }
 
 fn memory(a: *mem.Arena) -> (format.MemoryInfo, err) {
+    let mark = mem.mark(a)
+    defer { mem.reset(a, mark) }
     var m: format.MemoryInfo = zero
     let (src, e) = read_small(a, "/proc/meminfo", 16384usize)
     if e != ok { ret (m, e) }
@@ -63,6 +69,8 @@ fn memory(a: *mem.Arena) -> (format.MemoryInfo, err) {
 }
 
 fn uptime_ms(a: *mem.Arena) -> (u64, err) {
+    let mark = mem.mark(a)
+    defer { mem.reset(a, mark) }
     let (src, e) = read_small(a, "/proc/uptime", 256usize)
     if e != ok { ret (0u64, e) }
     let (ms, pe) = format.parse_uptime_ms(src)
@@ -81,6 +89,14 @@ fn le64(b: []const u8, at: usize) -> u64 {
 
 // (total, free to an unprivileged caller, used) of the filesystem holding `path`.
 fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err) {
+    let mark = mem.mark(a)
+    defer { mem.reset(a, mark) }
+    if path.len == 18446744073709551615usize { ret (0u64, 0u64, 0u64, os.OutOfMemory) }
+    var path_index = 0usize
+    while path_index < path.len {
+        if path[path_index] == 0u8 { ret (0u64, 0u64, 0u64, os.Failed) }
+        path_index += 1usize
+    }
     let (z, ze) = mem.alloc[u8](a, path.len + 1usize)
     if ze != ok { ret (0u64, 0u64, 0u64, ze) }
     var i = 0usize
@@ -96,7 +112,8 @@ fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err) {
     when target.arch == .Aarch64 { number = 43usize }
     if number == 0usize { ret (0u64, 0u64, 0u64, os.Unsupported) }
     let r = os.syscall(number, mem.address_of(&z[0usize]), mem.address_of(&info[0usize]), 0usize, 0usize, 0usize, 0usize)
-    if r != 0isize { ret (0u64, 0u64, 0u64, os.NotFound) }
+    if r < 0isize { ret (0u64, 0u64, 0u64, os.from_errno(r)) }
+    if r != 0isize { ret (0u64, 0u64, 0u64, os.Failed) }
     // i386 `struct statfs`: f_bsize at 4, then f_blocks/f_bfree/f_bavail at 8/12/16,
     // each an unsigned long. Do not interpret it through the x86-64 offsets below.
     when target.arch == .X86 {
@@ -129,6 +146,8 @@ fn process_id() -> u32 {
 }
 
 fn self_memory(a: *mem.Arena) -> (u64, err) {
+    let mark = mem.mark(a)
+    defer { mem.reset(a, mark) }
     let (src, e) = read_small(a, "/proc/self/statm", 256usize)
     if e != ok { ret (0u64, e) }
     let (size, next, found) = format.read_number(src, 0usize)
@@ -150,10 +169,28 @@ fn all_digits(s: str) -> bool {
 
 // Up to `limit` processes: every numeric directory of /proc whose stat file parses.
 fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
-    let (out, oe) = mem.alloc[format.ProcessInfo](a, limit + 1usize)
-    if oe != ok { ret (out, oe) }
+    let start = mem.mark(a)
+    if limit == 18446744073709551615usize { ret (zero, os.OutOfMemory) }
+    let capacity = limit + 1usize
+    if capacity > 18446744073709551615usize / mem.size_of[format.ProcessInfo]() { ret (zero, os.OutOfMemory) }
+    let (out, out_error) = mem.alloc[format.ProcessInfo](a, capacity)
+    if out_error != ok {
+        mem.reset(a, start)
+        ret (zero, out_error)
+    }
+    // Linux comm has a 16-byte TASK_COMM_LEN including its terminator.
+    let (names, names_error) = mem.alloc[u8](a, limit * 16usize)
+    if names_error != ok {
+        mem.reset(a, start)
+        ret (zero, names_error)
+    }
+    let scratch = mem.mark(a)
     let (entries, re) = os.readdir(a, "/proc")
-    if re != ok { ret (out[0usize..0usize], re) }
+    if re != ok {
+        mem.reset(a, start)
+        ret (zero, re)
+    }
+    let entry_mark = mem.mark(a)
     var n = 0usize
     var i = 0usize
     while i < entries.len && n < limit {
@@ -161,18 +198,54 @@ fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
         i += 1usize
         if !all_digits(name) { continue }
         let (b0, be) = str.builder(a, name.len + 24usize)
-        if be != ok { ret (out[0usize..n], be) }
+        if be != ok {
+            mem.reset(a, start)
+            ret (zero, be)
+        }
         var b = b0
-        try str.push(&b, "/proc/")
-        try str.push(&b, name)
-        try str.push(&b, "/stat")
+        let e0 = str.push(&b, "/proc/")
+        if e0 != ok {
+            mem.reset(a, start)
+            ret (zero, e0)
+        }
+        let e1 = str.push(&b, name)
+        if e1 != ok {
+            mem.reset(a, start)
+            ret (zero, e1)
+        }
+        let e2 = str.push(&b, "/stat")
+        if e2 != ok {
+            mem.reset(a, start)
+            ret (zero, e2)
+        }
         let path = str.done(&b)
         let (src, fe) = read_small(a, path, 2048usize)
-        if fe != ok { continue }
+        if fe != ok {
+            mem.reset(a, entry_mark)
+            continue
+        }
         let (p, pe) = format.parse_stat(src)
-        if pe != ok { continue }
-        out[n] = p
+        if pe != ok {
+            mem.reset(a, entry_mark)
+            continue
+        }
+        if p.name.len > 16usize {
+            mem.reset(a, start)
+            ret (zero, os.Failed)
+        }
+        let name_start = n * 16usize
+        let name_len = p.name.len
+        var name_index = 0usize
+        while name_index < name_len {
+            names[name_start + name_index] = p.name[name_index]
+            name_index += 1usize
+        }
+        var row = p
+        row.name = names[name_start..name_start + name_len]
+        out[n] = row
         n += 1usize
+        mem.reset(a, entry_mark)
     }
+    mem.reset(a, scratch)
     ret (out[0usize..n], ok)
 }
