@@ -1335,7 +1335,7 @@ fn owner_of(s: *State, key: usize) -> (usize, bool) {
     ret (0usize, false)
 }
 
-fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool, position: usize, old_siblings: []const u32, depth: usize) -> (usize, err) {
+fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool, position: usize, old_siblings: []const u32, scratch: []u32, depth: usize) -> (usize, err) {
     if depth > usize(s.limits.max_depth) { ret (0usize, TooDeep) }
     if style.validate(&node.style) != ok { ret (0usize, InvalidTree) }
     var zoom_is_valid = true
@@ -1520,14 +1520,14 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     let previous_has = e.has_child
     // The old children are gathered and unvisited before the new list is threaded
     // over the same links, so the ones left unmatched can still be found.
-    var old_children: [64]u32 = zero
+    let old_children = scratch
     var old_count = 0usize
     var at = previous_first
     var has = previous_has
     while has {
         let old = &s.elements[usize(at)]
         old.visited = false
-        if old_count >= 64usize { ret (0usize, TooLarge) }
+        if old_count >= old_children.len { ret (0usize, TooLarge) }
         old_children[old_count] = at
         old_count += 1usize
         has = old.has_sibling
@@ -1543,7 +1543,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     var static_subtree = own_static
     i = 0usize
     while i < node.children.len {
-        let (child, child_error) = reconcile_node(s, &node.children[i], index, true, i, old_children[0usize..old_count], depth + 1usize)
+        let (child, child_error) = reconcile_node(s, &node.children[i], index, true, i, old_children[0usize..old_count], scratch[old_count..], depth + 1usize)
         if child_error != ok { ret (0usize, child_error) }
         subtree_hash = hash_u64(subtree_hash, s.elements[child].subtree_hash)
         if !s.elements[child].static_subtree { static_subtree = false }
@@ -3239,7 +3239,7 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     let old_has = s.has_root
     s.measure_stamp += 1u32
     if s.measure_stamp == 0u32 { s.measure_stamp = 1u32 }
-    let (root_index, reconcile_error) = reconcile_node(s, &root, 0usize, false, 0usize, old_roots[0usize..old_root_count], 1usize)
+    let (root_index, reconcile_error) = reconcile_node(s, &root, 0usize, false, 0usize, old_roots[0usize..old_root_count], s.focus_order, 1usize)
     if reconcile_error != ok { ret (zero, reconcile_error) }
     if old_has && usize(old_root) != root_index { retire_element(s, usize(old_root)) }
     s.root = u32(root_index)

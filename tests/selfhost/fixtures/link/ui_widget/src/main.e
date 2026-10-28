@@ -168,6 +168,22 @@ fn build_tree(a: *mem.Arena, font: shape.Font, counter: *Counter, swapped: bool)
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, column, children[0usize..3usize]), ok)
 }
 
+// More than 64 children must reconcile repeatedly when the runtime capacity
+// permits them; sibling matching is not a public 64-child limit.
+fn wide_tree(a: *mem.Arena) -> (widget.Node, err) {
+    let (children, children_error) = mem.alloc[widget.Node](a, 65usize)
+    if children_error != ok { ret (zero, children_error) }
+    var i = 0usize
+    while i < children.len {
+        children[i] = widget.box(u64(i) + 1u64, style.defaults(), zero)
+        i += 1usize
+    }
+    let (shell, shell_error) = mem.alloc[widget.Node](a, 1usize)
+    if shell_error != ok { ret (zero, shell_error) }
+    shell[0usize] = widget.box(100u64, style.defaults(), children)
+    ret (widget.box(0u64, style.defaults(), shell[0usize..1usize]), ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -285,8 +301,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let (_, depth_error) = widget.reconcile(&runtime, &frame, deep[0usize], limits_64)
     if depth_error != widget.TooDeep { os.exit(43i32) }
-    if widget.close(&runtime) != ok || widget.close(&runtime) != widget.InvalidTree { os.exit(44i32) }
-    if scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(45i32) }
+    let wide_limits = widget.Limits { max_elements: 80usize, max_states: 1usize, state_bytes: 16usize, state_classes: 1u16, max_depth: 4u16, max_commands: 128usize }
+    let (wide_rt, wide_runtime_error) = widget.runtime(a, &renderer, wide_limits)
+    if wide_runtime_error != ok { os.exit(44i32) }
+    var wide_runtime = wide_rt
+    mem.reset(&frame, 0usize)
+    let (wide_first, wide_first_build_error) = wide_tree(&frame)
+    if wide_first_build_error != ok { os.exit(45i32) }
+    let (_, wide_first_error) = widget.reconcile(&wide_runtime, &frame, wide_first, limits_64)
+    if wide_first_error != ok { os.exit(46i32) }
+    mem.reset(&frame, 0usize)
+    let (wide_second, wide_second_build_error) = wide_tree(&frame)
+    if wide_second_build_error != ok { os.exit(47i32) }
+    let (_, wide_second_error) = widget.reconcile(&wide_runtime, &frame, wide_second, limits_64)
+    if wide_second_error != ok { os.exit(48i32) }
+    let (_, wide_child_count) = widget.find_by_key(mem.cast[*widget.State](wide_runtime.state), 65u64)
+    if wide_child_count != 1usize { os.exit(49i32) }
+    if widget.close(&wide_runtime) != ok { os.exit(50i32) }
+    if widget.close(&runtime) != ok || widget.close(&runtime) != widget.InvalidTree { os.exit(51i32) }
+    if scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(52i32) }
     try io.print("ui widget ok\n")
     ret ok
 }
