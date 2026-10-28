@@ -2,6 +2,9 @@
 
 type BitSet = struct { words: []u64, len: usize }
 
+// Invalid bit indices read false and writes are ignored.
+// Mismatched operations return false or leave their destination unchanged.
+
 error TooSmall
 
 fn init(storage: []u64, bit_count: usize) -> (BitSet, err) {
@@ -39,37 +42,28 @@ fn fill_all(s: *BitSet) {
 }
 
 fn get(s: *const BitSet, index: usize) -> bool {
-    if index >= s.len { ret s.words[s.words.len] != 0u64 }
+    if index >= s.len { ret false }
     let word = index / 64usize
     let bit = index % 64usize
     ret ((s.words[word] & (1u64 << u64(bit))) != 0u64)
 }
 
 fn set(s: *BitSet, index: usize) {
-    if index >= s.len {
-        s.words[s.words.len] = 0u64
-        ret
-    }
+    if index >= s.len { ret }
     let word = index / 64usize
     let bit = index % 64usize
     s.words[word] = s.words[word] | (1u64 << u64(bit))
 }
 
 fn unset(s: *BitSet, index: usize) {
-    if index >= s.len {
-        s.words[s.words.len] = 0u64
-        ret
-    }
+    if index >= s.len { ret }
     let word = index / 64usize
     let bit = index % 64usize
     s.words[word] = s.words[word] & ~(1u64 << u64(bit))
 }
 
 fn toggle(s: *BitSet, index: usize) {
-    if index >= s.len {
-        s.words[s.words.len] = 0u64
-        ret
-    }
+    if index >= s.len { ret }
     let word = index / 64usize
     let bit = index % 64usize
     s.words[word] = s.words[word] ^ (1u64 << u64(bit))
@@ -109,10 +103,7 @@ fn next_set(s: *const BitSet, after: usize) -> (usize, bool) {
 }
 
 fn union_in_place(dst: *BitSet, src: *const BitSet) {
-    if dst.len != src.len {
-        dst.words[dst.words.len] = 0u64
-        ret
-    }
+    if dst.len != src.len { ret }
     var at = 0usize
     while at < dst.words.len {
         dst.words[at] = dst.words[at] | src.words[at]
@@ -121,10 +112,7 @@ fn union_in_place(dst: *BitSet, src: *const BitSet) {
 }
 
 fn intersect_in_place(dst: *BitSet, src: *const BitSet) {
-    if dst.len != src.len {
-        dst.words[dst.words.len] = 0u64
-        ret
-    }
+    if dst.len != src.len { ret }
     var at = 0usize
     while at < dst.words.len {
         dst.words[at] = dst.words[at] & src.words[at]
@@ -133,10 +121,7 @@ fn intersect_in_place(dst: *BitSet, src: *const BitSet) {
 }
 
 fn difference_in_place(dst: *BitSet, src: *const BitSet) {
-    if dst.len != src.len {
-        dst.words[dst.words.len] = 0u64
-        ret
-    }
+    if dst.len != src.len { ret }
     var at = 0usize
     while at < dst.words.len {
         dst.words[at] = dst.words[at] & ~src.words[at]
@@ -157,7 +142,7 @@ fn complement_in_place(s: *BitSet) {
 }
 
 fn is_subset(a: *const BitSet, b: *const BitSet) -> bool {
-    if a.len != b.len { ret a.words[a.words.len] == 0u64 }
+    if a.len != b.len { ret false }
     var at = 0usize
     while at < a.words.len {
         if (a.words[at] & ~b.words[at]) != 0u64 { ret false }
@@ -167,7 +152,7 @@ fn is_subset(a: *const BitSet, b: *const BitSet) -> bool {
 }
 
 fn eq(a: *const BitSet, b: *const BitSet) -> bool {
-    if a.len != b.len { ret a.words[a.words.len] == 0u64 }
+    if a.len != b.len { ret false }
     var at = 0usize
     while at < a.words.len {
         if a.words[at] != b.words[at] { ret false }
@@ -176,12 +161,9 @@ fn eq(a: *const BitSet, b: *const BitSet) -> bool {
     ret true
 }
 
-// `out = a & b`; all three must share a length, else the trap lands on `out`.
+// `out = a & b`; all three must share a length, else `out` is unchanged.
 fn intersect(a: *const BitSet, b: *const BitSet, out: *BitSet) {
-    if a.len != b.len || a.len != out.len {
-        out.words[out.words.len] = 0u64
-        ret
-    }
+    if a.len != b.len || a.len != out.len { ret }
     var at = 0usize
     while at < out.words.len {
         out.words[at] = a.words[at] & b.words[at]
@@ -191,10 +173,7 @@ fn intersect(a: *const BitSet, b: *const BitSet, out: *BitSet) {
 
 // `out = a | b`.
 fn union_into(a: *const BitSet, b: *const BitSet, out: *BitSet) {
-    if a.len != b.len || a.len != out.len {
-        out.words[out.words.len] = 0u64
-        ret
-    }
+    if a.len != b.len || a.len != out.len { ret }
     var at = 0usize
     while at < out.words.len {
         out.words[at] = a.words[at] | b.words[at]
@@ -204,10 +183,7 @@ fn union_into(a: *const BitSet, b: *const BitSet, out: *BitSet) {
 
 // `out = a & ~b`.
 fn difference(a: *const BitSet, b: *const BitSet, out: *BitSet) {
-    if a.len != b.len || a.len != out.len {
-        out.words[out.words.len] = 0u64
-        ret
-    }
+    if a.len != b.len || a.len != out.len { ret }
     var at = 0usize
     while at < out.words.len {
         out.words[at] = a.words[at] & ~b.words[at]
