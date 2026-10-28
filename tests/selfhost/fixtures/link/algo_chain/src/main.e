@@ -206,6 +206,15 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // Invalid custom retention values must report an error before filtering can
+    // rebuild or truncate a valid chain.
+    let (negative_windows, negative_parse_error) = json.parse(a, "{\"custom\":-1}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    let (infinite_windows, infinite_parse_error) = json.parse(a, "{\"custom\":1e999}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    if negative_parse_error != ok || infinite_parse_error != ok { os.exit(100i32) }
+    var no_chain: [1]json.Value = zero
+    let (_, negative_error) = chain.apply_history_retention(a, no_chain[0usize..0usize], "custom", 0i64, negative_windows, true)
+    let (_, infinite_error) = chain.apply_history_retention(a, no_chain[0usize..0usize], "custom", 0i64, infinite_windows, true)
+    if negative_error != chain.Invalid || infinite_error != chain.Invalid { os.exit(101i32) }
     //__VECTOR_CALLS__
     try io.print("algo chain ok")
     ret ok

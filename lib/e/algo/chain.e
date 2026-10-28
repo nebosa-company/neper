@@ -565,22 +565,29 @@ fn field_history(a: *mem.Arena, revisions: []const json.Value, record_id: json.V
 
 // --- retention and export -------------------------------------------------------------------------------------------
 
-fn window_days(plan: str, windows: json.Value, has_windows: bool) -> (f64, bool) {
+fn valid_window_days(days: f64) -> bool {
+    if days != days || days < 0.0f64 { ret false }
+    // Infinity minus itself is NaN, while every finite value subtracts to zero.
+    ret days - days == 0.0f64
+}
+
+fn window_days(plan: str, windows: json.Value, has_windows: bool) -> (f64, bool, err) {
     if has_windows {
         let (w, found) = get(windows, plan)
-        if !found || ir.is_null(w) { ret (0.0f64, false) }
+        if !found || ir.is_null(w) { ret (0.0f64, false, ok) }
         switch w {
         case .Number as n:
             let (x, e) = json.number_f64(n)
-            ret (x, e == ok)
+            if e != ok || !valid_window_days(x) { ret (0.0f64, false, Invalid) }
+            ret (x, true, ok)
         default:
-            ret (0.0f64, false)
+            ret (0.0f64, false, ok)
         }
     }
-    if str.eq(plan, "free") { ret (14.0f64, true) }
-    if str.eq(plan, "pro") { ret (365.0f64, true) }
-    if str.eq(plan, "business") { ret (1095.0f64, true) }
-    ret (0.0f64, false)
+    if str.eq(plan, "free") { ret (14.0f64, true, ok) }
+    if str.eq(plan, "pro") { ret (365.0f64, true, ok) }
+    if str.eq(plan, "business") { ret (1095.0f64, true, ok) }
+    ret (0.0f64, false, ok)
 }
 
 // Milliseconds since the epoch of an ISO timestamp, or absent.
@@ -607,7 +614,8 @@ fn iso_ms(a: *mem.Arena, ms: i64) -> (str, err) {
 // `{chain, purged}`.
 fn apply_history_retention(a: *mem.Arena, chain: []const json.Value, plan: str, now_ms: i64, windows: json.Value, has_windows: bool) -> (json.Value, err) {
     var o = obj(a)
-    let (days, have_days) = window_days(plan, windows, has_windows)
+    let (days, have_days, window_error) = window_days(plan, windows, has_windows)
+    if window_error != ok { ret (.Null, window_error) }
     if !have_days {
         put(&o, "chain", json.Value{ Array: chain })
         put(&o, "purged", number(a, 0i64))
