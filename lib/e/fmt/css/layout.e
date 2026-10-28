@@ -3969,6 +3969,10 @@ fn layout_atomic(l: *Layout, b: u32, cbw: f64, cbh: f64) {
         if cbw >= 0.0f64 { avail = cbw - bb.margin[1usize] - bb.margin[3usize] - extras_h }
         if s.width.kind == .MinContent { cw = mn } else if s.width.kind == .MaxContent { cw = mx } else { cw = minf(maxf(mn, avail), mx) }
         if bb.inner == .Table { cw = mx }
+        if s.min_height.kind == .Px && bb.inner == .Flow {
+            let (rwm, has_rwm) = ratio_width(l, b, to_content_h(l, b, s.min_height.px))
+            if has_rwm { cw = maxf(cw, rwm) }
+        }
     }
     cw = maxf(0.0f64, clamp_width(l, b, cw, base))
     bb.w = cw + extras_h
