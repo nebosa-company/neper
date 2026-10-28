@@ -20,9 +20,10 @@
 // nothing. `wait_all` answers the first error in input order.
 //
 // `parallel_for` cuts `[begin, end)` into ranges of `grain` (the last one shorter),
-// submits them and waits; when the ring is full the calling thread runs the range
-// itself, so the loop always completes and never needs more records than the ring
-// has. Scheduling order is not observable; shared state is the caller's to guard.
+// submits them and waits; when its settled ranges hold every record it reclaims them,
+// and when the ring is still full the calling thread runs the range itself. The loop
+// always completes and never needs more records than the ring has. Scheduling order
+// is not observable; shared state is the caller's to guard.
 
 use e.atomic
 use e.cancel
@@ -233,17 +234,22 @@ fn future[T: type, Ctx: type](p: *Pool, cancel_token: *Cancel, ctx: *Ctx, f: fn(
     let state = mem.cast[*PoolState](p.state)
     if p.state == nil { ret (zero, Invalid) }
     sync.mutex_lock(&state.lock)
-    let (slot, slot_error) = mem.alloc[T](state.arena, 1usize)
-    if slot_error != ok {
-        sync.mutex_unlock(&state.lock)
-        ret (zero, slot_error)
-    }
     let (index, take_error) = take_record(state, cancel_token)
     if take_error != ok {
         sync.mutex_unlock(&state.lock)
         ret (zero, take_error)
     }
     let r = &state.records[index]
+    let (slot, slot_error) = mem.alloc[T](state.arena, 1usize)
+    if slot_error != ok {
+        state.count -= 1usize
+        r.status = FREE
+        r.token = nil
+        r.result = nil
+        r.stamp = 0usize
+        sync.mutex_unlock(&state.lock)
+        ret (zero, slot_error)
+    }
     let job = mem.cast[*FutureJob[T, Ctx]](&r.job[0usize])
     job.ctx = ctx
     job.run = f
@@ -318,9 +324,16 @@ fn future_get[T: type](f: *Future[T]) -> (T, err) {
 }
 
 // The first settled task in input order, waiting up to `timeout` for one to settle.
+// Every task must belong to one pool; a mixed-pool input answers `Invalid`.
 fn wait_any(tasks: []*Task, timeout: time.Duration) -> (usize, bool, err) {
     if tasks.len == 0usize { ret (0usize, false, Invalid) }
     let p = mem.cast[*Record](tasks[0].state).pool
+    var task_at = 1usize
+    while task_at < tasks.len {
+        let other = mem.cast[*Record](tasks[task_at].state)
+        if other.pool != p { ret (0usize, false, Invalid) }
+        task_at += 1usize
+    }
     let deadline = sync.deadline_for(timeout)
     sync.mutex_lock(&p.lock)
     while true {
@@ -366,11 +379,28 @@ fn parallel_for[Ctx: type](p: *Pool, cancel_token: *Cancel, begin: usize, end: u
     state.next_stamp += 1usize
     sync.mutex_unlock(&state.lock)
     var lo = begin
-    while lo < end {
-        var hi = lo + grain
-        if hi > end { hi = end }
+    var stopped = false
+    while lo < end && !stopped {
+        var hi = end
+        if grain <= end - lo { hi = lo + grain }
         sync.mutex_lock(&state.lock)
-        let (index, take_error) = take_record(state, cancel_token)
+        let (taken, initial_error) = take_record(state, cancel_token)
+        var index = taken
+        var take_error = initial_error
+        if take_error == Invalid {
+            var record_at = 0usize
+            while record_at < state.records.len {
+                let released = &state.records[record_at]
+                if released.status != FREE && released.stamp == stamp && settled(released.status) {
+                    if released.failure != ok && first == ok { first = released.failure }
+                    released.status = FREE
+                }
+                record_at += 1usize
+            }
+            let (retried, retry_error) = take_record(state, cancel_token)
+            index = retried
+            take_error = retry_error
+        }
         if take_error == ok {
             let r = &state.records[index]
             let job = mem.cast[*RangeJob[Ctx]](&r.job[0usize])
@@ -384,17 +414,21 @@ fn parallel_for[Ctx: type](p: *Pool, cancel_token: *Cancel, begin: usize, end: u
             sync.condition_signal(&state.work)
         } else {
             sync.mutex_unlock(&state.lock)
-            if take_error == Closed { ret Closed }
-            // The ring is full: this thread takes the range itself.
-            var outcome = ok
-            if cancel.requested(cancel_token) {
-                outcome = Cancelled
+            if take_error == Closed {
+                first = Closed
+                stopped = true
             } else {
-                outcome = body(ctx, lo, hi, cancel_token)
+                // The ring is full: this thread takes the range itself.
+                var outcome = ok
+                if cancel.requested(cancel_token) {
+                    outcome = Cancelled
+                } else {
+                    outcome = body(ctx, lo, hi, cancel_token)
+                }
+                if outcome != ok && first == ok { first = outcome }
             }
-            if outcome != ok && first == ok { first = outcome }
         }
-        lo = hi
+        if !stopped { lo = hi }
     }
     // Every range this call queued, known by its stamp: wait for each and release it.
     sync.mutex_lock(&state.lock)
