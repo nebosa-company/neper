@@ -93,7 +93,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (start, end, range_error) = arrow.list_range(&cols[4usize], 3usize)
     if range_error != ok || start != 2usize || end != 7usize { os.exit(6i32) }
 
-    // 7: list ranges and child values.
+    // 7: Utf8 data must be valid UTF-8, while Binary remains arbitrary bytes.
+    let short_offsets: [8]u8 = [8]u8{ 0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8 }
+    let invalid_bytes: [2]u8 = [2]u8{ 195u8, 40u8 }
+    var invalid_utf8: arrow.Column = zero
+    invalid_utf8.kind = .Utf8
+    invalid_utf8.len = 1usize
+    invalid_utf8.offsets = short_offsets[..]
+    invalid_utf8.data = invalid_bytes[..]
+    let (bad_text, bad_valid, bad_error) = arrow.get_utf8(&invalid_utf8, 0usize)
+    if bad_error != arrow.Malformed || bad_valid || bad_text.len != 0usize { os.exit(11i32) }
+    invalid_utf8.kind = .Binary
+    let (binary_bytes, binary_valid, binary_error) = arrow.get_binary(&invalid_utf8, 0usize)
+    if binary_error != ok || !binary_valid || binary_bytes.len != 2usize || binary_bytes[0usize] != 195u8 || binary_bytes[1usize] != 40u8 { os.exit(11i32) }
+
+    // 8: list ranges and child values.
     let li_offsets: [8]usize = [8]usize{ 0, 2, 2, 2, 3, 6, 6, 7 }
     let li_valid: [7]bool = [7]bool{ true, true, false, true, true, true, true }
     let (item, item_error) = arrow.struct_child(cols[..count], 5usize, 0usize)
@@ -118,7 +132,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, _, not_a_list) = arrow.list_range(&cols[1usize], 0usize)
     if not_a_list != arrow.Invalid { os.exit(7i32) }
 
-    // 8: struct children.
+    // 9: struct children.
     let (child_a, a_error) = arrow.struct_child(cols[..count], 7usize, 0usize)
     let (child_b, b_error) = arrow.struct_child(cols[..count], 7usize, 1usize)
     if a_error != ok || b_error != ok || child_a != 8usize || child_b != 9usize { os.exit(8i32) }
@@ -137,11 +151,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
 
-    // 9: a dictionary-encoded column is unsupported.
+    // 10: a dictionary-encoded column is unsupported.
     let (_, dict_error) = arrow.columns(dict_stream[..], cols[..], names[..])
     if dict_error != arrow.Unsupported { os.exit(9i32) }
 
-    // 10: truncated streams are malformed (inside the body, inside the
+    // 11: truncated streams are malformed (inside the body, inside the
     // metadata, and inside the framing), and too few column slots is TooSmall.
     let (_, body_error) = arrow.columns(stream[..1400usize], cols[..], names[..])
     if body_error != arrow.Malformed { os.exit(10i32) }

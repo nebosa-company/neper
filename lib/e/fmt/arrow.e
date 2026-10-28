@@ -19,6 +19,7 @@
 
 use e.bytes as raw
 use e.fmt.flatbuffers as fb
+use e.text.utf8 as utf8
 
 type Kind = enum u8 { Bool, Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, Float32, Float64, Utf8, Binary, List, Struct }
 type Column = struct { kind: Kind, len: usize, null_count: usize, validity: []const u8, offsets: []const u8, data: []const u8, child: u32, child_count: u32 }
@@ -160,7 +161,9 @@ fn get_utf8(c: *const Column, i: usize) -> (str, bool, err) {
     if e != ok { ret ("", false, e) }
     if !is_valid(c, i) { ret ("", false, ok) }
     if end > c.data.len { ret ("", false, Malformed) }
-    ret (c.data[start..end], true, ok)
+    let text = c.data[start..end]
+    if c.kind == .Utf8 && !utf8.validate(text) { ret ("", false, Malformed) }
+    ret (text, true, ok)
 }
 
 fn get_binary(c: *const Column, i: usize) -> ([]const u8, bool, err) {
