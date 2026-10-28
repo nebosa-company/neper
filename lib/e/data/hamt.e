@@ -167,7 +167,10 @@ fn get(h: *const Hamt, root: u32, key: u64) -> (u64, bool) {
 fn remove_at(h: *Hamt, node: u32, hash: u64, shift: u32, key: u64) -> (u32, bool, err) {
     if node == NONE { ret (NONE, false, ok) }
     let n = usize(node)
-    if is_leaf(h, node) { ret (NONE, h.key[n] == key, ok) }
+    if is_leaf(h, node) {
+        if h.key[n] == key { ret (NONE, true, ok) }
+        ret (node, false, ok)
+    }
     let bit = 1u32 << lane(hash, shift)
     let bitmap = h.bitmap[n]
     if bitmap & bit == 0u32 { ret (node, false, ok) }

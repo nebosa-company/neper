@@ -66,6 +66,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (same, absent_error) = hamt.remove(&h, roots[60usize], 1000u64)
     if absent_error != ok || same != roots[60usize] || h.used != 112usize { os.exit(4i32) }
 
+    // 4: an absent key under a single leaf preserves the root and its pool state.
+    var leaf_bitmap: [1]u32 = zero
+    var leaf_first: [1]u32 = zero
+    var leaf_key: [1]u64 = zero
+    var leaf_value: [1]u64 = zero
+    var leaf_slots: [1]u32 = zero
+    var leaf_h = hamt.hamt(leaf_bitmap[..], leaf_first[..], leaf_key[..], leaf_value[..], leaf_slots[..])
+    let (leaf_root, leaf_put_error) = hamt.put(&leaf_h, hamt.NONE, 1001u64, 55u64)
+    let (leaf_same, leaf_remove_error) = hamt.remove(&leaf_h, leaf_root, 1002u64)
+    let (leaf_value_at_root, leaf_found) = hamt.get(&leaf_h, leaf_same, 1001u64)
+    if leaf_put_error != ok || leaf_remove_error != ok || leaf_same != leaf_root || leaf_h.used != 1usize || leaf_h.slots_used != 0usize { os.exit(4i32) }
+    if !leaf_found || leaf_value_at_root != 55u64 || hamt.count(&leaf_h, leaf_root) != 1usize || hamt.count(&leaf_h, leaf_same) != 1usize { os.exit(4i32) }
+
     // 5: four hundred 50/50 steps over 64 keys from the last version.
     var root = roots[60usize]
     step = 0usize
