@@ -486,6 +486,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     bounded_page[0usize] = bounded
     if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), bounded_page[0usize..1usize]), time.Instant { nanos: 3370000000i64 }) != ok { os.exit(154i32) }
     if testing.by_label(&harness, "Choose a date from September 8, 2026").count == 0usize { os.exit(155i32) }
+    var no_bound_pick: time.Date = zero
+    stores[0usize].last_date = no_bound_pick
+    if widget.focus(&runtime, testing.by_key(&harness, 3300u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || stores[0usize].last_date.day != 0u8 { os.exit(200i32) }
+    // (D1395) Enter cannot bypass either side of a date-entry range.
+    let (late_bytes, late_bytes_error) = mem.alloc[u8](a, 16usize)
+    if late_bytes_error != ok { os.exit(201i32) }
+    let late_text = "9/25/2026"
+    var late_at = 0usize
+    while late_at < late_text.len {
+        late_bytes[late_at] = late_text[late_at]
+        late_at += 1usize
+    }
+    f = mem.arena_from(frame_storage)
+    let (latest_bounded, latest_bounded_error) = overlay.date_entry_within(&f, 3302u64, &us_theme, "End", late_bytes, late_text.len, zero, picked_dates, typed_today, 280.0, no_latest, time.Date { year: 2026i32, month: 9u8, day: 20u8 })
+    let (latest_page, latest_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if latest_bounded_error != ok || latest_page_error != ok { os.exit(202i32) }
+    latest_page[0usize] = latest_bounded
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), latest_page[0usize..1usize]), time.Instant { nanos: 3370000001i64 }) != ok { os.exit(203i32) }
+    if testing.by_label(&harness, "Choose a date up to September 20, 2026").count == 0usize { os.exit(204i32) }
+    stores[0usize].last_date = no_bound_pick
+    if widget.focus(&runtime, testing.by_key(&harness, 3302u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || stores[0usize].last_date.day != 0u8 { os.exit(205i32) }
     // (D1277) With the week of the 16th to the 22nd unavailable, Down from the
     // 11th goes to the 25th.
     var closed_week: [7]time.Date = zero

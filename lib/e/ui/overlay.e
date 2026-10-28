@@ -4758,9 +4758,10 @@ fn date_range_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     ret (made, made_error)
 }
 
-// (D1257) A typed date's Enter: the text as last built, parsed in the theme's
-// language against `today`, reaching `picked` when it reads as a date.
-type DateCommit = struct { text: str, language: str, today: time.Date, picked: widget.Change[time.Date] }
+// (D1257, D1395) A typed date's Enter: the text as last built, parsed in the
+// theme's language against `today`, reaching `picked` only when it reads as a
+// date within the optional bounds.
+type DateCommit = struct { text: str, language: str, today: time.Date, earliest: time.Date, latest: time.Date, picked: widget.Change[time.Date] }
 
 // (D1366) Whether an element held the focus at the last build, kept on it.
 type FocusMemo = struct { held: bool }
@@ -4782,6 +4783,8 @@ fn date_commit_fire(ctx: *void) -> err {
     let c = mem.cast[*DateCommit](ctx)
     let (day, read) = parse_date(c.text, c.language, c.today)
     if !read { ret ok }
+    if c.earliest.year != 0i32 && date_before(day, c.earliest) { ret ok }
+    if c.latest.year != 0i32 && date_before(c.latest, day) { ret ok }
     ret widget.fire_change[time.Date](c.picked, day)
 }
 
@@ -4846,7 +4849,7 @@ fn date_entry_within(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     let hint = date_format_hint(t.language)
     let (commits, commits_error) = mem.alloc[DateCommit](a, 1usize)
     if commits_error != ok { ret (zero, TooLarge) }
-    commits[0usize] = DateCommit { text: text, language: t.language, today: today, picked: picked }
+    commits[0usize] = DateCommit { text: text, language: t.language, today: today, earliest: earliest, latest: latest, picked: picked }
     var options = control.field_options()
     options.width = width
     options.invalid = wrong || outside
@@ -5416,7 +5419,7 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     if footer.typing {
         let (commits, commits_error) = mem.alloc[DateCommit](a, 1usize)
         if commits_error != ok { ret (zero, TooLarge) }
-        commits[0usize] = DateCommit { text: footer.buffer[0usize..footer.len], language: t.language, today: footer.today, picked: pick }
+        commits[0usize] = DateCommit { text: footer.buffer[0usize..footer.len], language: t.language, today: footer.today, earliest: zero, latest: zero, picked: pick }
         committing = widget.Submit { ctx: mem.cast[*void](&commits[0usize]), invoke: date_commit_fire }
     }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: committing, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
