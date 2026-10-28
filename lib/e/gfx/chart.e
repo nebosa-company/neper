@@ -902,6 +902,9 @@ fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Dat
     let first_day = time.days_from_civil(i64(start.year), i64(start.month), i64(start.day))
     let last_day = time.days_from_civil(i64(end.year), i64(end.month), i64(end.day))
     if last_day <= first_day { ret (zero, Invalid) }
+    let layout_y_min = f32(y_min)
+    let layout_y_max = f32(y_max)
+    if !finite(layout_y_min) || !finite(layout_y_max) || layout_y_max <= layout_y_min { ret (zero, Invalid) }
     if points.len < n || segments.len < n - 1usize { ret (zero, TooLarge) }
     var previous = first_day - 1i64
     var i = 0usize
@@ -917,7 +920,7 @@ fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Dat
         previous = day
         i += 1usize
     }
-    ret (Layout { kind: .PointLine, coords: points[..n], segments: segments[..n - 1usize], bars: zero, x_min: f32(first_day), x_max: f32(last_day), y_min: f32(y_min), y_max: f32(y_max) }, ok)
+    ret (Layout { kind: .PointLine, coords: points[..n], segments: segments[..n - 1usize], bars: zero, x_min: f32(first_day), x_max: f32(last_day), y_min: layout_y_min, y_max: layout_y_max }, ok)
 }
 
 // Palette stays with the caller; each swatch and label shares its series index.
