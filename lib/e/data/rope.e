@@ -16,8 +16,15 @@ fn rope(text: []u8, weight: []u32, left: []u32, right: []u32, start: []u32) -> R
     ret Rope { text: text, used: 0usize, weight: weight, left: left, right: right, start: start, nodes: 0usize }
 }
 
+// Whether `needed` fresh nodes fit in every caller pool without changing it.
+fn has_nodes(r: *const Rope, needed: usize) -> bool {
+    if r.nodes > r.weight.len || r.nodes > r.left.len || r.nodes > r.right.len || r.nodes > r.start.len { ret false }
+    if needed > r.weight.len - r.nodes || needed > r.left.len - r.nodes || needed > r.right.len - r.nodes || needed > r.start.len - r.nodes { ret false }
+    ret true
+}
+
 fn new_node(r: *Rope, weight: u32, left: u32, right: u32, start: u32) -> (u32, err) {
-    if r.nodes >= r.weight.len || r.nodes >= r.left.len || r.nodes >= r.right.len || r.nodes >= r.start.len { ret (NONE, TooSmall) }
+    if !has_nodes(r, 1usize) { ret (NONE, TooSmall) }
     let id = r.nodes
     r.nodes += 1usize
     r.weight[id] = weight
@@ -30,7 +37,7 @@ fn new_node(r: *Rope, weight: u32, left: u32, right: u32, start: u32) -> (u32, e
 // A leaf over `text` appended to the pool; an empty text is `NONE`.
 fn from_text(r: *Rope, text: []const u8) -> (u32, err) {
     if text.len == 0usize { ret (NONE, ok) }
-    if r.used + text.len > r.text.len { ret (NONE, TooSmall) }
+    if r.used > r.text.len || text.len > r.text.len - r.used || !has_nodes(r, 1usize) { ret (NONE, TooSmall) }
     let at_start = r.used
     var i = 0usize
     while i < text.len {
@@ -69,6 +76,34 @@ fn byte_at(r: *const Rope, root: u32, i: usize) -> (u8, bool) {
         }
     }
     ret (0u8, false)
+}
+
+// A split only allocates when its cut falls strictly inside one leaf.
+fn split_nodes(r: *const Rope, root: u32, i: usize) -> usize {
+    var node = root
+    var index = i
+    while node != NONE {
+        let at = usize(node)
+        let width = usize(r.weight[at])
+        if r.left[at] == NONE {
+            if index > 0usize && index < width { ret 1usize }
+            ret 0usize
+        }
+        if index <= width {
+            node = r.left[at]
+        } else {
+            index -= width
+            node = r.right[at]
+        }
+    }
+    ret 0usize
+}
+
+// The exact nodes `build` creates for a byte run of this length.
+fn build_nodes(length: usize) -> usize {
+    if length <= LEAF { ret 1usize }
+    let middle = length / 2usize
+    ret 1usize + build_nodes(middle) + build_nodes(length - middle)
 }
 
 fn concat(r: *Rope, a: u32, b: u32) -> (u32, err) {
@@ -112,7 +147,18 @@ fn split(r: *Rope, root: u32, i: usize) -> (u32, u32, err) {
 
 // Insert `text` before byte `i` (`i == len` appends).
 fn insert(r: *Rope, root: u32, i: usize, text: []const u8) -> (u32, err) {
-    if i > len(r, root) { ret (root, Invalid) }
+    let total = len(r, root)
+    if i > total { ret (root, Invalid) }
+    if text.len > 0usize && (r.used > r.text.len || text.len > r.text.len - r.used) { ret (root, TooSmall) }
+    var needed = split_nodes(r, root, i)
+    if text.len > 0usize {
+        needed += 1usize
+        if i > 0usize { needed += 1usize }
+        if i < total { needed += 1usize }
+    } else if i > 0usize && i < total {
+        needed += 1usize
+    }
+    if !has_nodes(r, needed) { ret (root, TooSmall) }
     let (leaf, leaf_error) = from_text(r, text)
     if leaf_error != ok { ret (root, leaf_error) }
     let (l, rest, split_error) = split(r, root, i)
@@ -125,7 +171,14 @@ fn insert(r: *Rope, root: u32, i: usize, text: []const u8) -> (u32, err) {
 
 // Remove `count` bytes starting at `i`.
 fn remove(r: *Rope, root: u32, i: usize, count: usize) -> (u32, err) {
-    if i + count > len(r, root) { ret (root, Invalid) }
+    let total = len(r, root)
+    if i > total || count > total - i { ret (root, Invalid) }
+    if count == 0usize { ret (root, ok) }
+    let end = i + count
+    var needed = split_nodes(r, root, i)
+    if end < total { needed += split_nodes(r, root, end) }
+    if i > 0usize && end < total { needed += 1usize }
+    if !has_nodes(r, needed) { ret (root, TooSmall) }
     let (l, rest, split_error) = split(r, root, i)
     if split_error != ok { ret (root, split_error) }
     let (_, tail, cut_error) = split(r, rest, count)
@@ -156,6 +209,7 @@ fn report(r: *const Rope, root: u32, out: []u8) -> (usize, err) {
 }
 
 fn build(r: *Rope, lo: usize, hi: usize) -> (u32, err) {
+    if !has_nodes(r, build_nodes(hi - lo)) { ret (NONE, TooSmall) }
     if hi - lo <= LEAF {
         let (leaf, e) = new_node(r, u32(hi - lo), NONE, NONE, u32(lo))
         ret (leaf, e)
@@ -175,7 +229,7 @@ fn build(r: *Rope, lo: usize, hi: usize) -> (u32, err) {
 fn rebalance(r: *Rope, root: u32) -> (u32, err) {
     let n = len(r, root)
     if n == 0usize { ret (NONE, ok) }
-    if r.used + n > r.text.len { ret (root, TooSmall) }
+    if r.used > r.text.len || n > r.text.len - r.used || !has_nodes(r, build_nodes(n)) { ret (root, TooSmall) }
     let lo = r.used
     var i = 0usize
     while i < n {

@@ -1196,10 +1196,13 @@ const NONE: u32 = 4294967295u32
 const LEAF: usize = 64usize
 
 fn rope(text: []u8, weight: []u32, left: []u32, right: []u32, start: []u32) -> Rope
+fn has_nodes(r: *const Rope, needed: usize) -> bool
 fn new_node(r: *Rope, weight: u32, left: u32, right: u32, start: u32) -> (u32, err)
 fn from_text(r: *Rope, text: []const u8) -> (u32, err)
 fn len(r: *const Rope, root: u32) -> usize
 fn byte_at(r: *const Rope, root: u32, i: usize) -> (u8, bool)
+fn split_nodes(r: *const Rope, root: u32, i: usize) -> usize
+fn build_nodes(length: usize) -> usize
 fn concat(r: *Rope, a: u32, b: u32) -> (u32, err)
 fn split(r: *Rope, root: u32, i: usize) -> (u32, u32, err)
 fn insert(r: *Rope, root: u32, i: usize, text: []const u8) -> (u32, err)
@@ -1211,7 +1214,8 @@ fn rebalance(r: *Rope, root: u32) -> (u32, err)
 
 A rope over caller pools (leaves reference a text pool, internal nodes carry the left
 weight): `from_text`, `len`, `byte_at`, `concat`, `split`, `insert`, `remove`, `report`
-(flatten) and `rebalance` (rebuilt from a flat copy).
+(flatten) and `rebalance` (rebuilt from a flat copy). A `TooSmall` result from a
+mutating operation leaves the prior root and caller-pool state unchanged.
 
 ### `e.data.cartesian_tree`
 
