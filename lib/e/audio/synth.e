@@ -1,5 +1,5 @@
 // Sound synthesis primitives over caller storage: an ADSR envelope state
-// machine (per-sample rates, linear segments), PolyBLEP anti-aliased saw and
+// machine (per-stage durations, linear segments), PolyBLEP anti-aliased saw and
 // square oscillators, a wavetable read with linear or Catmull-Rom cubic
 // interpolation and an additive band-limited saw to fill one, and
 // Karplus-Strong plucked strings from a PCG noise burst.
@@ -14,7 +14,7 @@ error Invalid
 error TooSmall
 
 type Stage = enum u8 { Idle, Attack, Decay, Sustain, Release }
-type Adsr = struct { attack: f64, decay: f64, sustain: f64, release: f64, stage: Stage, level: f64 }
+type Adsr = struct { attack: f64, decay: f64, sustain: f64, release: f64, stage: Stage, level: f64, stage_start: f64, stage_elapsed: f64 }
 type Waveform = enum u8 { Saw, Square, Triangle }
 type Interpolation = enum u8 { Linear, Cubic }
 
@@ -28,10 +28,28 @@ fn rate(seconds: f64, sample_rate: f64) -> f64 {
     ret 1.0f64 / (seconds * sample_rate)
 }
 
+// The number of whole samples a stage owns. A positive fractional duration rounds
+// up because a stage can only finish on a sample boundary; zero remains one
+// immediate sample, matching `rate`. Snap products that are within floating-point
+// noise of a whole sample first, so `0.07 * 100` remains seven samples.
+fn duration_samples(seconds: f64, sample_rate: f64) -> f64 {
+    if seconds <= 0.0f64 || sample_rate <= 0.0f64 { ret 1.0f64 }
+    let samples = seconds * sample_rate
+    let rounded = math.round[f64](samples)
+    let tolerance = math.max[f64](1.0f64, math.abs[f64](samples)) * 1.0e-14f64
+    if math.abs[f64](samples - rounded) <= tolerance {
+        if rounded < 1.0f64 { ret 1.0f64 }
+        ret rounded
+    }
+    let duration = math.ceil[f64](samples)
+    if duration < 1.0f64 { ret 1.0f64 }
+    ret duration
+}
+
 // An idle envelope whose attack, decay and release take that many seconds at
 // `sample_rate` and whose sustain level is `sustain`.
 fn adsr(attack: f64, decay: f64, sustain: f64, release: f64, sample_rate: f64) -> Adsr {
-    ret Adsr { attack: rate(attack, sample_rate), decay: rate(decay, sample_rate), sustain: sustain, release: rate(release, sample_rate), stage: .Idle, level: 0.0f64 }
+    ret Adsr { attack: duration_samples(attack, sample_rate), decay: duration_samples(decay, sample_rate), sustain: sustain, release: duration_samples(release, sample_rate), stage: .Idle, level: 0.0f64, stage_start: 0.0f64, stage_elapsed: 0.0f64 }
 }
 
 // A note on restarts the attack from the current level; a note off releases
@@ -39,33 +57,53 @@ fn adsr(attack: f64, decay: f64, sustain: f64, release: f64, sample_rate: f64) -
 fn adsr_gate(e: *Adsr, on: bool) {
     if on {
         e.stage = .Attack
-    } else if e.stage != .Idle {
+        e.stage_start = e.level
+        e.stage_elapsed = 0.0f64
+    } else if e.stage != .Idle && e.stage != .Release {
         e.stage = .Release
+        e.stage_start = e.level
+        e.stage_elapsed = 0.0f64
     }
+}
+
+// Advance a finite stage once and answer its fraction, clamped exactly at one
+// so accumulated floating-point rounding cannot add an extra sample.
+fn stage_fraction(e: *Adsr, duration: f64) -> f64 {
+    e.stage_elapsed += 1.0f64
+    if e.stage_elapsed >= duration { ret 1.0f64 }
+    ret e.stage_elapsed / duration
 }
 
 // The next envelope value: attack rises to 1, decay falls to the sustain
 // level and holds there, release falls to 0 and idles.
 fn adsr_next(e: *Adsr) -> f64 {
     if e.stage == .Attack {
-        e.level += e.attack
-        if e.level >= 1.0f64 {
+        let fraction = stage_fraction(e, e.attack)
+        e.level = e.stage_start + (1.0f64 - e.stage_start) * fraction
+        if fraction >= 1.0f64 {
             e.level = 1.0f64
             e.stage = .Decay
+            e.stage_start = 1.0f64
+            e.stage_elapsed = 0.0f64
         }
     } else if e.stage == .Decay {
-        e.level -= e.decay
-        if e.level <= e.sustain {
+        let fraction = stage_fraction(e, e.decay)
+        e.level = 1.0f64 + (e.sustain - 1.0f64) * fraction
+        if fraction >= 1.0f64 {
             e.level = e.sustain
             e.stage = .Sustain
+            e.stage_elapsed = 0.0f64
         }
     } else if e.stage == .Sustain {
         e.level = e.sustain
     } else if e.stage == .Release {
-        e.level -= e.release
-        if e.level <= 0.0f64 {
+        let fraction = stage_fraction(e, e.release)
+        e.level = e.stage_start * (1.0f64 - fraction)
+        if fraction >= 1.0f64 {
             e.level = 0.0f64
             e.stage = .Idle
+            e.stage_start = 0.0f64
+            e.stage_elapsed = 0.0f64
         }
     }
     ret e.level

@@ -32516,7 +32516,7 @@ and `pitch_shift` (phase vocoder over the STFT) and `psola`.
 
 ```neper
 type Stage = enum u8 { Idle, Attack, Decay, Sustain, Release }
-type Adsr = struct { attack: f64, decay: f64, sustain: f64, release: f64, stage: Stage, level: f64 }
+type Adsr = struct { attack: f64, decay: f64, sustain: f64, release: f64, stage: Stage, level: f64, stage_start: f64, stage_elapsed: f64 }
 type Waveform = enum u8 { Saw, Square, Triangle }
 type Interpolation = enum u8 { Linear, Cubic }
 error Invalid
@@ -32524,6 +32524,7 @@ error TooSmall
 
 fn fract(x: f64) -> f64
 fn rate(seconds: f64, sample_rate: f64) -> f64
+fn duration_samples(seconds: f64, sample_rate: f64) -> f64
 fn adsr(attack: f64, decay: f64, sustain: f64, release: f64, sample_rate: f64) -> Adsr
 fn adsr_gate(e: *Adsr, on: bool)
 fn adsr_next(e: *Adsr) -> f64
@@ -32535,9 +32536,11 @@ fn wavetable(table: []const f64, phase: f64, interpolation: Interpolation) -> f6
 fn karplus_strong(frequency: f64, sample_rate: f64, decay: f64, r: *rand.Pcg64, out: []f64) -> err
 ```
 
-`adsr` envelopes (`adsr_gate`, `adsr_next`), `oscillator_polyblep` (saw, square,
-triangle) beside `oscillator_naive`, `wavetable_build`/`wavetable` (linear and
-Catmull-Rom) and `karplus_strong`.
+`adsr` envelopes (`adsr_gate`, `adsr_next`) advance every attack, decay and
+release over its configured sample duration (positive fractional sample counts
+round up), alongside `oscillator_polyblep` (saw, square, triangle) beside
+`oscillator_naive`, `wavetable_build`/`wavetable` (linear and Catmull-Rom) and
+`karplus_strong`.
 
 ### `e.audio.spatial`
 
