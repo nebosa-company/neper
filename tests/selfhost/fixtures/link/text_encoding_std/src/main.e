@@ -40,6 +40,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.eq(decoded(a, "gb18030", "\x81\x30\x81\x30"), "\xc2\x80") { os.exit(11i32) }
     if !str.eq(decoded(a, "EUC-KR", "\xb0\xa1"), "\xea\xb0\x80") { os.exit(12i32) }
     if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B$\x22\x1b(Bx"), "\xe3\x81\x82x") { os.exit(13i32) }
+    // ISO-2022-JP's state machine rejects malformed bytes without treating them
+    // as ASCII, and an ESC after a pending JIS lead first reports that lead.
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B!\x1b(BA"), "\xef\xbf\xbdA") { os.exit(25i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b(I\x20"), "\xef\xbf\xbd") { os.exit(26i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B\x20"), "\xef\xbf\xbd") { os.exit(27i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$"), "\xef\xbf\xbd") { os.exit(28i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$X"), "\xef\xbf\xbd$X") { os.exit(29i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B!\x1b$X"), "\xef\xbf\xbd\xef\xbf\xbd\xe3\x81\xb8") { os.exit(30i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b(I\x1b$X"), "\xef\xbf\xbd\xef\xbd\xa4\xef\xbe\x98") { os.exit(31i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b(B\x1b(B"), "\xef\xbf\xbd") { os.exit(32i32) }
     // A malformed sequence is one replacement character; an ASCII byte after a lone lead byte survives.
     if !str.eq(decoded(a, "Shift_JIS", "\x82A"), "\xef\xbf\xbdA") { os.exit(14i32) }
     // UTF-16 through the BOM.

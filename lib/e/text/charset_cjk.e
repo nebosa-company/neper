@@ -349,7 +349,9 @@ fn decode_iso_2022_jp(a: *mem.Arena, bytes: []const u8) -> (str, err) {
     if oe != ok { ret ("", oe) }
     var out = o
     let j0208 = cjk.index_jis0208()
-    // Modes: 0 ASCII, 1 Roman, 2 Katakana, 3 lead byte, 4 trail byte.
+    // Modes: 0 ASCII, 1 Roman, 2 Katakana, 3 JIS lead, 4 JIS trail,
+    // 5 escape start and 6 escape. `out_mode` is the last designated output
+    // state, which malformed escapes restore before reprocessing their bytes.
     var mode = 0usize
     var out_mode = 0usize
     var lead = 0u8
@@ -358,32 +360,13 @@ fn decode_iso_2022_jp(a: *mem.Arena, bytes: []const u8) -> (str, err) {
     while i < bytes.len {
         let b = bytes[i]
         i += 1usize
-        if b == 27u8 && (mode != 5usize) {
-            // Escape: ESC ( B, ESC ( J, ESC $ @, ESC $ B (and ESC ( I for katakana).
-            if i + 1usize < bytes.len {
-                let c1 = bytes[i]
-                let c2 = bytes[i + 1usize]
-                var newmode = 99usize
-                if c1 == 40u8 && c2 == 66u8 { newmode = 0usize }
-                if c1 == 40u8 && c2 == 74u8 { newmode = 1usize }
-                if c1 == 40u8 && c2 == 73u8 { newmode = 2usize }
-                if c1 == 36u8 && (c2 == 64u8 || c2 == 66u8) { newmode = 3usize }
-                if newmode != 99usize {
-                    i += 2usize
-                    if out_flag { error_mark(&out) }
-                    out_mode = newmode
-                    mode = newmode
-                    out_flag = true
-                    continue
-                }
-            }
-            error_mark(&out)
-            continue
-        }
         if mode == 0usize || mode == 1usize {
-            if b == 14u8 || b == 15u8 {
+            if b == 27u8 {
+                mode = 5usize
+            } else if b == 14u8 || b == 15u8 {
+                out_flag = false
                 error_mark(&out)
-            } else if b <= 127u8 && b != 14u8 && b != 15u8 {
+            } else if b <= 127u8 {
                 if mode == 1usize && b == 92u8 {
                     emit(&out, 165u32)
                 } else if mode == 1usize && b == 126u8 {
@@ -393,46 +376,86 @@ fn decode_iso_2022_jp(a: *mem.Arena, bytes: []const u8) -> (str, err) {
                 }
                 out_flag = false
             } else {
+                out_flag = false
                 error_mark(&out)
             }
         } else if mode == 2usize {
-            if b >= 33u8 && b <= 95u8 {
+            if b == 27u8 {
+                mode = 5usize
+            } else if b >= 33u8 && b <= 95u8 {
                 emit(&out, 65377u32 - 33u32 + u32(b))
                 out_flag = false
-            } else if b == 14u8 || b == 15u8 {
-                error_mark(&out)
-            } else if b <= 127u8 {
-                emit(&out, u32(b))
-                out_flag = false
             } else {
+                out_flag = false
                 error_mark(&out)
             }
         } else if mode == 3usize {
-            if b >= 33u8 && b <= 126u8 {
+            if b == 27u8 {
+                mode = 5usize
+            } else if b >= 33u8 && b <= 126u8 {
                 lead = b
                 mode = 4usize
                 out_flag = false
-            } else if b == 14u8 || b == 15u8 {
-                error_mark(&out)
-            } else if b <= 127u8 {
-                emit(&out, u32(b))
             } else {
+                out_flag = false
                 error_mark(&out)
             }
-        } else {
+        } else if mode == 4usize {
             // Trail byte of a JIS X 0208 pair.
-            mode = 3usize
-            if b >= 33u8 && b <= 126u8 {
+            if b == 27u8 {
+                // The ESC is not a JIS trail. It starts a fresh escape sequence,
+                // but first reports the pending lead as malformed.
+                mode = 5usize
+                error_mark(&out)
+            } else if b >= 33u8 && b <= 126u8 {
+                mode = 3usize
                 let pointer = (usize(lead) - 33usize) * 94usize + usize(b) - 33usize
                 var cp = NONE_CP
                 if pointer < cjk.index_jis0208_len() { cp = entry(j0208, pointer) }
                 if cp == NONE_CP { error_mark(&out) } else { emit(&out, cp) }
             } else {
+                mode = 3usize
                 error_mark(&out)
+            }
+        } else if mode == 5usize {
+            // ESC begins only `ESC $` and `ESC (` sequences. An invalid byte is
+            // reprocessed in the old designated output state after one error.
+            if b == 36u8 || b == 40u8 {
+                lead = b
+                mode = 6usize
+            } else {
+                out_flag = false
+                mode = out_mode
+                error_mark(&out)
+                i -= 1usize
+            }
+        } else {
+            // Finish an escape designator. Invalid designators restore both
+            // bytes to the designated output state, exactly as the Standard's
+            // queue restoration does.
+            let escape_lead = lead
+            lead = 0u8
+            var next_mode = 99usize
+            if escape_lead == 40u8 && b == 66u8 { next_mode = 0usize }
+            if escape_lead == 40u8 && b == 74u8 { next_mode = 1usize }
+            if escape_lead == 40u8 && b == 73u8 { next_mode = 2usize }
+            if escape_lead == 36u8 && (b == 64u8 || b == 66u8) { next_mode = 3usize }
+            if next_mode != 99usize {
+                mode = next_mode
+                out_mode = next_mode
+                if out_flag { error_mark(&out) }
+                out_flag = true
+            } else {
+                out_flag = false
+                mode = out_mode
+                error_mark(&out)
+                i -= 2usize
             }
         }
     }
-    if mode == 4usize { error_mark(&out) }
+    // A pending trail or incomplete escape is malformed at end of input. A JIS
+    // leading-byte state itself has no pending scalar, so it ends cleanly.
+    if mode == 4usize || mode == 5usize || mode == 6usize { error_mark(&out) }
     ret (out.data[0usize..out.len], ok)
 }
 
