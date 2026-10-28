@@ -2106,11 +2106,11 @@ fn variable_name(node: Node) -> (str, bool) {
     ret ("", false)
 }
 
-fn bind(a: *mem.Arena, parent: *const Scope, has_parent: bool, name: str, value: Value) -> *const Scope {
-    let (cell, e) = mem.alloc[Scope](a, 1usize)
-    if e != ok { ret parent }
+fn bind(a: *mem.Arena, parent: *const Scope, has_parent: bool, name: str, value: Value) -> (*const Scope, err) {
+    let (cell, bind_error) = mem.alloc[Scope](a, 1usize)
+    if bind_error != ok { ret (parent, bind_error) }
     cell[0usize] = Scope { name: name, value: value, parent: parent, has_parent: has_parent }
-    ret &cell[0usize]
+    ret (&cell[0usize], ok)
 }
 
 fn let_handler(c: *Call) -> Value {
@@ -2118,7 +2118,8 @@ fn let_handler(c: *Call) -> Value {
     if !named { ret value_error("LET expects a variable name as its first argument") }
     let v = eval_node(c, c.nodes[1usize])
     if is_error(v) { ret v }
-    let inner = bind(c.a, c.scope, c.has_scope, name, v)
+    let (inner, bind_error) = bind(c.a, c.scope, c.has_scope, name, v)
+    if bind_error != ok { ret generic_error("Out of memory") }
     ret eval(c.ev, c.nodes[2usize], inner, true)
 }
 
@@ -2132,7 +2133,9 @@ fn lets_handler(c: *Call) -> Value {
         if !named { ret value_error("LETS variable names must be identifiers") }
         let v = eval(c.ev, c.nodes[i + 1usize], scope, has)
         if is_error(v) { ret v }
-        scope = bind(c.a, scope, has, name, v)
+        let (inner, bind_error) = bind(c.a, scope, has, name, v)
+        if bind_error != ok { ret generic_error("Out of memory") }
+        scope = inner
         has = true
         i += 2usize
     }
