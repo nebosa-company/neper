@@ -15,6 +15,10 @@ type Address = struct { city: str, zip: i32, geo: Geo }
 type Customer = struct { id: i64, first_name: str, last_name: str, email: str, age: u8, active: bool, address: Address, score: f64, nickname: str }
 type CustomerDto = struct { Id: i32, FirstName: str, lastname: str, mail: str, age: i32, active: i32, AddressCity: str, address_zip: i32, address_geo_lat: f64, score: f32, nickname: str, extra: i64 }
 type Narrow = struct { id: i8, age: u8 }
+type DefaultSource = struct { ignored: i32 }
+type DefaultValues = struct { count: u8, enabled: bool, label: str }
+type NullSource = struct { value: f64 }
+type NullDestination = struct { value: f32 }
 
 fn conv_is[G: type, F: type](a: *mem.Arena, x: F, want_ok: bool, want: i64) -> bool {
     let (y, e) = mapper.convert[G, F](a, x)
@@ -158,7 +162,35 @@ fn refusals(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
-// 5x: a slice of sources.
+// 5x: defaults use checked conversions when a source is absent, and still work through a null source.
+fn default_checks(a: *mem.Arena) -> i32 {
+    var missing_defaults: [3]mapper.Default = zero
+    missing_defaults[0usize] = mapper.Default { dest: "count", as_int: 255i64, as_real: 0.0, as_str: "" }
+    missing_defaults[1usize] = mapper.Default { dest: "enabled", as_int: 1i64, as_real: 0.0, as_str: "" }
+    missing_defaults[2usize] = mapper.Default { dest: "label", as_int: 0i64, as_real: 0.0, as_str: "default" }
+    var missing_profile: mapper.Profile = zero
+    missing_profile.defaults = missing_defaults[..]
+    var missing_source: DefaultSource = zero
+    var missing_out: DefaultValues = zero
+    let (valid_stats, valid_error) = mapper.map_into[DefaultSource, DefaultValues](a, &missing_source, &missing_out, &missing_profile)
+    if valid_error != ok || missing_out.count != 255u8 || !missing_out.enabled || !str.eq(missing_out.label, "default") || valid_stats.defaulted != 3usize { ret 77i32 }
+    missing_defaults[0usize].as_int = -1i64
+    let (_, overflow_error) = mapper.map_into[DefaultSource, DefaultValues](a, &missing_source, &missing_out, &missing_profile)
+    if overflow_error != mapper.Overflow { ret 78i32 }
+
+    var null_defaults: [1]mapper.Default = zero
+    null_defaults[0usize] = mapper.Default { dest: "value", as_int: 0i64, as_real: 3.5, as_str: "" }
+    var null_profile: mapper.Profile = zero
+    null_profile.defaults = null_defaults[..]
+    var null_source: NullSource = zero
+    null_source.value = 0.0f64 / 0.0f64
+    var null_out: NullDestination = zero
+    let (null_stats, null_error) = mapper.map_into[NullSource, NullDestination](a, &null_source, &null_out, &null_profile)
+    if null_error != ok || null_out.value != 3.5f32 || null_stats.defaulted != 1usize { ret 79i32 }
+    ret 0i32
+}
+
+// 6x: a slice of sources.
 fn collection(a: *mem.Arena) -> i32 {
     var src: [3]Customer = zero
     src[0] = customer()
@@ -179,7 +211,7 @@ fn collection(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
-// 6x: the projection selects only what the destination reads.
+// 7x: the projection selects only what the destination reads.
 fn projection(a: *mem.Arena) -> i32 {
     var renames: [1]mapper.Rename = zero
     renames[0] = mapper.Rename { dest: "mail", src: "email" }
@@ -206,6 +238,7 @@ fn main(a: *mem.Arena) -> err {
     if code == 0i32 { code = ranges(a) }
     if code == 0i32 { code = nested(a) }
     if code == 0i32 { code = refusals(a) }
+    if code == 0i32 { code = default_checks(a) }
     if code == 0i32 { code = collection(a) }
     if code == 0i32 { code = projection(a) }
     if code != 0i32 { os.exit(code) }

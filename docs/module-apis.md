@@ -17941,7 +17941,7 @@ fn default_of(p: *const Profile, dest: str) -> (usize, bool)
 fn ignored(p: *const Profile, dest: str) -> bool
 fn compatible[F: type, G: type]() -> bool
 fn is_null[F: type](x: F, empty_is_null: bool) -> bool
-fn from_default[G: type](d: Default) -> G
+fn from_default[G: type](a: *mem.Arena, d: Default) -> (G, err)
 fn convert[G: type, F: type](a: *mem.Arena, x: F) -> (G, err)
 fn resolve[DF: meta.Field, D: type, S: type](p: *const Profile) -> Resolution
 fn put_value[DF: meta.Field, D: type, F: type](a: *mem.Arena, dst: *D, v: F, p: *const Profile, st: *Stats) -> err
