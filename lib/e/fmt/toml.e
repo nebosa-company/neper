@@ -388,6 +388,10 @@ fn number(p: *Parser, text: str) -> (Value, err) {
     }
     let (digits, digits_error) = strip_underscores(p, body)
     if digits_error != ok { ret (out, digits_error) }
+    // This is a decimal spelling. Check after removing separators so an underscore
+    // cannot hide a prohibited leading zero (for example `0_1` or `0_1.0`).
+    // Non-decimal radices returned above keep their own digit rules.
+    if digits.len > 1usize && digits[0usize] == 48u8 && is_digit(digits[1usize]) { ret (out, Invalid) }
     if is_float {
         // `e.str` reads a lowercase exponent and no `+` before it, so the copy is folded to
         // that form: it is the scratch's own bytes already.

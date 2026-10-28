@@ -266,6 +266,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (raw_utf8, raw_utf8_error) = only_value("a = \"é😀\"\n", room[..])
     if raw_utf8_error != ok || !str.eq(raw_utf8.text, "é😀") { os.exit(33i32) }
 
+    // 34-39: leading zeroes remain invalid when an underscore hides the next decimal digit;
+    // ordinary zero and a non-decimal spelling retain their own valid forms.
+    let (plain_zero, zero_error) = only_value("a = 0\n", room[..])
+    if zero_error != ok || plain_zero.kind != .Integer || plain_zero.integer != 0i64 { os.exit(34i32) }
+    let (radix, radix_error) = only_value("a = 0x0_1\n", room[..])
+    if radix_error != ok || radix.kind != .Integer || radix.integer != 1i64 { os.exit(35i32) }
+    if outcome("a = 0_1\n") != toml.Invalid { os.exit(36i32) }
+    if outcome("a = 0_1.0\n") != toml.Invalid { os.exit(37i32) }
+    if outcome("a = -0_1\n") != toml.Invalid { os.exit(38i32) }
+    if outcome("a = +0_1.0\n") != toml.Invalid { os.exit(39i32) }
+
     try io.print("fmt toml ok\n")
     ret ok
 }
