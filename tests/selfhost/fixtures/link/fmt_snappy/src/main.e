@@ -59,6 +59,59 @@ fn fill(out: []u8, seed: u64) {
     }
 }
 
+fn framed_prefix(dst: []u8, kind: u8, size: usize) {
+    let ident: [10]u8 = [10]u8{ 255, 6, 0, 0, 115, 78, 97, 80, 112, 89 }
+    var i = 0usize
+    while i < ident.len {
+        dst[i] = ident[i]
+        i += 1usize
+    }
+    dst[10usize] = kind
+    dst[11usize] = u8(size & 255usize)
+    dst[12usize] = u8((size >> 8u32) & 255usize)
+    dst[13usize] = u8((size >> 16u32) & 255usize)
+}
+
+fn oversized_framed_untouched() -> bool {
+    var out: [65537]u8 = zero
+    var i = 0usize
+    while i < out.len {
+        out[i] = 165u8
+        i += 1usize
+    }
+    var compressed: [3095]u8 = zero
+    framed_prefix(compressed[..], 0u8, 3081usize)
+    compressed[18usize] = 129u8
+    compressed[19usize] = 128u8
+    compressed[20usize] = 4u8
+    compressed[21usize] = 0u8
+    compressed[22usize] = 120u8
+    i = 0usize
+    while i < 1024usize {
+        let at = 23usize + i * 3usize
+        compressed[at] = 254u8
+        compressed[at + 1usize] = 1u8
+        compressed[at + 2usize] = 0u8
+        i += 1usize
+    }
+    let (_, compressed_error) = snappy.decode_framed(compressed[..], out[..])
+    if compressed_error != snappy.Invalid || out[0usize] != 165u8 { ret false }
+    i = 0usize
+    while i < out.len {
+        out[i] = 90u8
+        i += 1usize
+    }
+    var uncompressed: [65555]u8 = zero
+    framed_prefix(uncompressed[..], 1u8, 65541usize)
+    i = 0usize
+    while i < 65537usize {
+        uncompressed[18usize + i] = 120u8
+        i += 1usize
+    }
+    let (_, uncompressed_error) = snappy.decode_framed(uncompressed[..], out[..])
+    ret uncompressed_error == snappy.Invalid && out[0usize] == 90u8
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var table: [16384]u16 = zero
     let phrase = "the quick brown fox jumps over the lazy dog. "
@@ -131,6 +184,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e6d != ok || n6d != 68usize || packed[10] != 1u8 { os.exit(6i32) }
     let (m6d, d6d) = snappy.decode_framed(packed[..n6d], out[..])
     if d6d != ok || m6d != 50usize || !same(out[..50usize], inc[..]) { os.exit(12i32) }
+
+    if !oversized_framed_untouched() { os.exit(13i32) }
 
     try io.print("fmt snappy ok\n")
     ret ok

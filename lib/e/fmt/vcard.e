@@ -337,6 +337,7 @@ fn write(cards: []const Card, buf: []u8) -> (usize, err) {
     var i = 0usize
     while i < cards.len {
         let card = cards[i]
+        if card.tel_count > 4usize || card.email_count > 2usize { ret (0usize, Malformed) }
         out_raw(&o, "BEGIN:VCARD")
         out_end(&o)
         out_raw(&o, "VERSION:3.0")

@@ -421,10 +421,14 @@ fn decode_framed(src: []const u8, dst: []u8) -> (usize, err) {
         let data = body[4usize..]
         var produced = 0usize
         if kind == 0u8 {
+            let (raw_len, raw_len_error) = decoded_length(data)
+            if raw_len_error != ok { ret (d, raw_len_error) }
+            if raw_len > block_size() { ret (d, Invalid) }
             let (n, e) = decode(data, dst[d..])
             if e != ok { ret (d, e) }
             produced = n
         } else {
+            if data.len > block_size() { ret (d, Invalid) }
             if data.len > dst.len - d { ret (d, TooSmall) }
             var i = 0usize
             while i < data.len {

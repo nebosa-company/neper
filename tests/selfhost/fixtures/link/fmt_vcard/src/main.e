@@ -114,5 +114,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if r != 0usize { os.exit(48 + i32(r)) }
     let (none_count, none_error) = vcard.parse(a, "just text", cards[0usize..4usize])
     if none_error != vcard.Malformed { os.exit(56) }
+    var malformed_cards: [1]vcard.Card = zero
+    var malformed_output: [512]u8 = zero
+    malformed_cards[0usize].tel_count = 5usize
+    let (_, tel_error) = vcard.write(malformed_cards[..], malformed_output[..])
+    if tel_error != vcard.Malformed { os.exit(56i32) }
+    malformed_cards[0usize].tel_count = 0usize
+    malformed_cards[0usize].email_count = 3usize
+    let (_, email_error) = vcard.write(malformed_cards[..], malformed_output[..])
+    if email_error != vcard.Malformed { os.exit(57i32) }
     ret ok
 }
