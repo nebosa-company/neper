@@ -85,7 +85,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if fenwick.lower_bound(&h, 3i64) != 3usize || fenwick.lower_bound(&h, 5i64) != 3usize { os.exit(3i32) }
     if fenwick.lower_bound(&h, 6i64) != 6usize || fenwick.lower_bound(&h, 11i64) != 7usize { os.exit(3i32) }
     if fenwick.lower_bound(&h, 15i64) != 10usize || fenwick.lower_bound(&h, 16i64) != 11usize { os.exit(3i32) }
-    if fenwick.lower_bound(&h, 0i64) != 1usize { os.exit(3i32) }
+    if fenwick.lower_bound(&h, 0i64) != 0usize || fenwick.lower_bound(&h, -1i64) != 0usize { os.exit(3i32) }
 
     // 4: range minimum and maximum over every window.
     if sparse_table.levels_for(13usize) != 4usize || sparse_table.levels_for(0usize) != 1usize || sparse_table.levels_for(16usize) != 5usize { os.exit(4i32) }
