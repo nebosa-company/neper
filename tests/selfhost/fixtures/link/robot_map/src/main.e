@@ -212,6 +212,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 5: the storage and shape errors.
     let (_, short_grid) = map.occupancy(learned_grid[..100usize], 40usize, 40usize, 0.25f64)
     if short_grid != map.TooSmall { os.exit(5i32) }
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    let infinity = mem.bitcast[f64](9218868437227405312u64)
+    let (_, nan_resolution) = map.occupancy(learned_grid[..], 40usize, 40usize, nan)
+    let (_, infinite_resolution) = map.occupancy(learned_grid[..], 40usize, 40usize, infinity)
+    if nan_resolution != map.Invalid || infinite_resolution != map.Invalid { os.exit(5i32) }
     if map.occupancy_update(&learned_o, 1.0f64, 1.0f64, 0.0f64, ranges18[..], angles36[..], 6.0f64, 0.85f64, 0.0f64 - 0.4f64) != map.Invalid { os.exit(5i32) }
     let (_, few) = map.particles(xs[..], ys[..], ths[..], weights[..], scratch[..10usize], 200usize)
     if few != map.TooSmall { os.exit(5i32) }
