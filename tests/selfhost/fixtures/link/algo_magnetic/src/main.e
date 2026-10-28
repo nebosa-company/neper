@@ -52,5 +52,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let hz: [7]f64 = [7]f64{ 3.000f64, 3.000f64, 3.000f64, 3.000f64, 43.000f64, -37.000f64, 23.000f64 }
     let (ox, oy, oz) = mag.calibrate_hard_iron(hx[0usize..7usize], hy[0usize..7usize], hz[0usize..7usize], 7usize)
     if !near(ox, 12.0f64, 0.001f64) || !near(oy, -7.0f64, 0.001f64) || !near(oz, 3.0f64, 0.001f64) { os.exit(21) }
+    let (bad_x, _, _) = mag.calibrate_hard_iron(hx[0usize..6usize], hy[0usize..7usize], hz[0usize..7usize], 7usize)
+    let (_, bad_y, _) = mag.calibrate_hard_iron(hx[0usize..7usize], hy[0usize..6usize], hz[0usize..7usize], 7usize)
+    let (_, _, bad_z) = mag.calibrate_hard_iron(hx[0usize..7usize], hy[0usize..7usize], hz[0usize..6usize], 7usize)
+    if bad_x != 0.0f64 || bad_y != 0.0f64 || bad_z != 0.0f64 { os.exit(22) }
     ret ok
 }

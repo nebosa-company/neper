@@ -164,9 +164,11 @@ fn field(latitude: f64, longitude: f64, height: f64, year: f64) -> Field {
     ret Field { declination: rad_to_deg(math.atan2[f64](east, north)), inclination: rad_to_deg(math.atan2[f64](down, horizontal)), horizontal: horizontal, total: total, north: north, east: east, down: down }
 }
 
-// The offset of a magnetometer: the centre of the box around `count` samples (x, y, z each as a separate slice).
+// The offset of a magnetometer: the centre of the box around `count` samples
+// (x, y, z each as a separate slice). A zero or incomplete sample set answers
+// the zero offset rather than indexing beyond caller storage.
 fn calibrate_hard_iron(xs: []const f64, ys: []const f64, zs: []const f64, count: usize) -> (f64, f64, f64) {
-    if count == 0usize { ret (0.0f64, 0.0f64, 0.0f64) }
+    if count == 0usize || count > xs.len || count > ys.len || count > zs.len { ret (0.0f64, 0.0f64, 0.0f64) }
     var min_x = xs[0usize]
     var max_x = xs[0usize]
     var min_y = ys[0usize]
