@@ -284,6 +284,7 @@ fn evict(texture_cache: *Cache, renderer: *scene.Renderer, base: str) -> err {
         let e = &s.entries[i]
         if e.live && same(e.base, base) {
             let released = scene.release_image(renderer, e.texture)
+            if released != ok { ret released }
             e.live = false
             s.count = s.count - 1usize
             found = true
@@ -302,11 +303,12 @@ fn clear(texture_cache: *Cache, renderer: *scene.Renderer) -> err {
         let e = &s.entries[i]
         if e.live {
             let released = scene.release_image(renderer, e.texture)
+            if released != ok { ret released }
             e.live = false
+            s.count = s.count - 1usize
         }
         i += 1usize
     }
-    s.count = 0usize
     ret ok
 }
 
