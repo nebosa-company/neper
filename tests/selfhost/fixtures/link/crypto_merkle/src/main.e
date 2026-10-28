@@ -132,6 +132,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, proof_short) = merkle.consistency_proof(&t7, 3usize, proof[..127usize])
     if proof_short != merkle.TooSmall { os.exit(9i32) }
 
+    // 10: byte sizing and split points stay defined at the top bit without an allocation.
+    let maximum = 18446744073709551615usize
+    let last_fit = 288230376151711744usize
+    let top_bit = 9223372036854775808usize
+    if merkle.nodes_required(last_fit) != maximum - 31usize { os.exit(10i32) }
+    if merkle.nodes_required(last_fit + 1usize) != maximum || merkle.nodes_required(top_bit) != maximum { os.exit(10i32) }
+    if merkle.split_point(0usize) != 1usize || merkle.split_point(2usize) != 1usize || merkle.split_point(3usize) != 2usize { os.exit(10i32) }
+    if merkle.split_point(top_bit) != 4611686018427387904usize || merkle.split_point(maximum) != top_bit { os.exit(10i32) }
+
     try io.print("crypto merkle ok\n")
     ret ok
 }
