@@ -7130,6 +7130,15 @@ fn clock_digits(text: str) -> i64 {
     ret n
 }
 
+// The complete spelling of a typed duration unit, in seconds. Keeping this
+// table exact prevents a typo such as `minutely` from silently becoming minutes.
+fn duration_unit(text: str) -> i64 {
+    if clock_word(text, "h") || clock_word(text, "hr") || clock_word(text, "hrs") || clock_word(text, "hour") || clock_word(text, "hours") { ret 3600i64 }
+    if clock_word(text, "m") || clock_word(text, "min") || clock_word(text, "mins") || clock_word(text, "minute") || clock_word(text, "minutes") { ret 60i64 }
+    if clock_word(text, "s") || clock_word(text, "sec") || clock_word(text, "secs") || clock_word(text, "second") || clock_word(text, "seconds") { ret 1i64 }
+    ret 0i64
+}
+
 fn write_clock(out: []u8, value: time.Time) -> usize {
     if out.len < 5usize { ret 0usize }
     let at = write_two(out, 0usize, i64(value.hour))
@@ -7240,14 +7249,11 @@ fn read_duration(text: str) -> (time.Duration, bool) {
         if !seen { ret (zero, false) }
         while i < text.len && text[i] == 32u8 { i += 1usize }
         var unit = 0i64
-        if i < text.len {
-            let u = text[i] | 32u8
-            if u == 104u8 { unit = 3600i64 }
-            if u == 109u8 { unit = 60i64 }
-            if u == 115u8 { unit = 1i64 }
-            if unit != 0i64 {
-                while i < text.len && (text[i] | 32u8) >= 97u8 && (text[i] | 32u8) <= 122u8 { i += 1usize }
-            }
+        let unit_from = i
+        while i < text.len && clock_letter(text[i]) { i += 1usize }
+        if i > unit_from {
+            unit = duration_unit(text[unit_from..i])
+            if unit == 0i64 { ret (zero, false) }
         }
         if unit == 0i64 {
             if last == 0i64 { unit = 60i64 }
