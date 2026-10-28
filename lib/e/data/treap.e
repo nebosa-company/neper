@@ -106,14 +106,30 @@ fn collect[K: type](t: *const Treap[K], root: u32, out: []K) -> (usize, err) {
 // Persistent insert: the nodes on the way down are copied, so `root` still
 // describes the old version; answers the new version's root.
 fn persistent_insert[K: type](t: *Treap[K], root: u32, key: K, r: *rand.Pcg64) -> (u32, err) {
+    // Recursive copies may have been allocated before any of these errors. None are
+    // reachable from an older version, so release every slot from this attempt.
+    let used_before = t.used
     let (node, node_error) = new_node[K](t, key, r)
-    if node_error != ok { ret (root, node_error) }
+    if node_error != ok {
+        t.used = used_before
+        ret (root, node_error)
+    }
     let (l, rest, split_error) = persistent_split[K](t, root, key)
-    if split_error != ok { ret (root, split_error) }
+    if split_error != ok {
+        t.used = used_before
+        ret (root, split_error)
+    }
     let (inner, inner_error) = persistent_merge[K](t, l, node)
-    if inner_error != ok { ret (root, inner_error) }
+    if inner_error != ok {
+        t.used = used_before
+        ret (root, inner_error)
+    }
     let (version, merge_error) = persistent_merge[K](t, inner, rest)
-    ret (version, merge_error)
+    if merge_error != ok {
+        t.used = used_before
+        ret (root, merge_error)
+    }
+    ret (version, ok)
 }
 
 fn copy_node[K: type](t: *Treap[K], from: u32) -> (u32, err) {
