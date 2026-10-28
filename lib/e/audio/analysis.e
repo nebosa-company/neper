@@ -338,8 +338,17 @@ fn beats(envelope: []const f64, bpm: f64, hop: usize, sample_rate: f64, tightnes
     var score = scratch[..n]
     var link = scratch[n..2usize * n]
     let period = 60.0f64 * sample_rate / (bpm * f64(hop))
-    let lo = usize(math.round[f64](period / 2.0f64))
-    let hi = usize(math.round[f64](period * 2.0f64))
+    if !(period > 0.0f64) || period == math.inf64() { ret (0usize, Invalid) }
+    let low_period = math.round[f64](period / 2.0f64)
+    let high_period = math.round[f64](period * 2.0f64)
+    if low_period < 1.0f64 || high_period < low_period { ret (0usize, Invalid) }
+    // A lag beyond the envelope cannot be a predecessor, so cap it before
+    // converting a large finite floating-point period to `usize`.
+    var lo = n
+    if low_period < f64(n) { lo = usize(low_period) }
+    var hi = n
+    if high_period < f64(n) { hi = usize(high_period) }
+    if hi < lo { ret (0usize, Invalid) }
     var t = 0usize
     while t < n {
         var best = 0.0f64
@@ -432,14 +441,16 @@ fn block_loudness(z: f64) -> f64 { ret -0.691f64 + 10.0f64 * math.log10[f64](z) 
 // (the high shelf and the high-pass as tabulated for 48 kHz), 400 ms blocks
 // every 100 ms, blocks below -70 LUFS dropped, then blocks more than 10 LU
 // below the mean of the rest dropped; answers the mean loudness of what
-// remains, `-inf` for silence; `scratch.len >= 2 * x.len + 4`.
+// remains, `-inf` for silence; `sample_rate` must be exactly 48 kHz and
+// `scratch.len >= 2 * x.len + 4`.
 // ponytail: the filter coefficients are the specification's 48 kHz table;
 // another rate needs the Annex 1 redesign, which is not done here.
 fn loudness_lufs(x: []const f64, sample_rate: f64, scratch: []f64) -> (f64, err) {
     let n = x.len
+    if sample_rate != 48000.0f64 { ret (0.0f64, Invalid) }
     let block = usize(0.4f64 * sample_rate)
     let hop = usize(0.1f64 * sample_rate)
-    if sample_rate <= 0.0f64 || block == 0usize || hop == 0usize || n < block { ret (0.0f64, Invalid) }
+    if block == 0usize || hop == 0usize || n < block { ret (0.0f64, Invalid) }
     if scratch.len < 2usize * n + 4usize { ret (0.0f64, TooSmall) }
     var shelf: [6]f64 = zero
     shelf[0usize] = 1.53512485958697f64

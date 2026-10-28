@@ -85,6 +85,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if beats_error != ok || beat_count != 4usize || marks[0usize] != 0usize || marks[1usize] != 32usize || marks[2usize] != 64usize || marks[3usize] != 96usize { os.exit(3i32) }
     let (_, beats_room) = analysis.beats(envelope[..], bpm, 128usize, sr, 100.0f64, scratch, marks[..2usize])
     if beats_room != analysis.TooSmall { os.exit(3i32) }
+    let (_, zero_lag_error) = analysis.beats(envelope[..], 1000000000.0f64, 128usize, sr, 100.0f64, scratch, marks[..])
+    if zero_lag_error != analysis.Invalid { os.exit(3i32) }
 
     // 4: chroma of a C major chord.
     var chord: [2048]f64 = zero
@@ -117,7 +119,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (lufs, lufs_error) = analysis.loudness_lufs(tone, 48000.0f64, scratch)
     if lufs_error != ok || !near(lufs, -23.00363837508022f64, 1.0e-6f64) || !near(lufs, -23.0f64, 0.1f64) { os.exit(5i32) }
     var quiet: [4096]f64 = zero
-    let (silence_lufs, silence_error) = analysis.loudness_lufs(quiet[..], sr, scratch)
+    let (_, wrong_rate_error) = analysis.loudness_lufs(quiet[..], sr, scratch)
+    if wrong_rate_error != analysis.Invalid { os.exit(5i32) }
+    let (_, negative_rate_error) = analysis.loudness_lufs(quiet[..], -1.0f64, scratch)
+    if negative_rate_error != analysis.Invalid { os.exit(5i32) }
+    i = 0usize
+    while i < tone.len {
+        tone[i] = 0.0f64
+        i += 1usize
+    }
+    let (silence_lufs, silence_error) = analysis.loudness_lufs(tone, 48000.0f64, scratch)
     if silence_error != ok || silence_lufs > -1000.0f64 { os.exit(5i32) }
 
     // 6: voice activity: tone, noise, silence.
