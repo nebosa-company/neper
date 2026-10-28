@@ -47,9 +47,16 @@ fn bytes_per_pixel(format: Format) -> usize {
     ret 4usize
 }
 
+fn row_bytes(width: u32, format: Format) -> (usize, err) {
+    let pixel_bytes = bytes_per_pixel(format)
+    if usize(width) > 18446744073709551615usize / pixel_bytes { ret (0usize, TooLarge) }
+    ret (usize(width) * pixel_bytes, ok)
+}
+
 fn required_bytes(width: u32, height: u32, format: Format, stride: usize) -> (usize, err) {
     if u64(width) * u64(height) > MAX_PIXELS { ret (0usize, TooLarge) }
-    let row = usize(width) * bytes_per_pixel(format)
+    let (row, row_error) = row_bytes(width, format)
+    if row_error != ok { ret (0usize, row_error) }
     if stride < row { ret (0usize, Invalid) }
     if height == 0u32 { ret (0usize, ok) }
     if stride > 18446744073709551615usize / usize(height) { ret (0usize, TooLarge) }
@@ -71,7 +78,8 @@ fn make_const(pixels: []const u8, width: u32, height: u32, stride: usize, format
 }
 
 fn allocate(a: *mem.Arena, width: u32, height: u32, format: Format, alpha: Alpha) -> (Image, err) {
-    let stride = usize(width) * bytes_per_pixel(format)
+    let (stride, stride_error) = row_bytes(width, format)
+    if stride_error != ok { ret (zero, stride_error) }
     let (needed, needed_error) = required_bytes(width, height, format, stride)
     if needed_error != ok { ret (zero, needed_error) }
     let (pixels, alloc_error) = mem.alloc[u8](a, needed)
@@ -131,23 +139,35 @@ fn put16(pixels: []u8, at: usize, v: u32) {
 fn clear(image: Image, color: paint.Color) {
     var pixel: [8]u8 = zero
     let width = bytes_per_pixel(image.format)
+    var red = color.red
+    var green = color.green
+    var blue = color.blue
+    var alpha = color.alpha
+    if alpha < 0.0 { alpha = 0.0 }
+    if alpha > 1.0 { alpha = 1.0 }
+    if image.alpha == .Premultiplied {
+        red = red * alpha
+        green = green * alpha
+        blue = blue * alpha
+    }
+    if image.alpha == .Opaque { alpha = 1.0 }
     if image.format == .R8 {
-        pixel[0] = srgb_byte(color.red)
+        pixel[0] = srgb_byte(red)
     } else if image.format == .Rgba8 {
-        pixel[0] = srgb_byte(color.red)
-        pixel[1] = srgb_byte(color.green)
-        pixel[2] = srgb_byte(color.blue)
-        pixel[3] = unit_byte(color.alpha)
+        pixel[0] = srgb_byte(red)
+        pixel[1] = srgb_byte(green)
+        pixel[2] = srgb_byte(blue)
+        pixel[3] = unit_byte(alpha)
     } else if image.format == .Bgra8 {
-        pixel[0] = srgb_byte(color.blue)
-        pixel[1] = srgb_byte(color.green)
-        pixel[2] = srgb_byte(color.red)
-        pixel[3] = unit_byte(color.alpha)
+        pixel[0] = srgb_byte(blue)
+        pixel[1] = srgb_byte(green)
+        pixel[2] = srgb_byte(red)
+        pixel[3] = unit_byte(alpha)
     } else {
-        put16(pixel[0..], 0usize, half_bits(color.red))
-        put16(pixel[0..], 2usize, half_bits(color.green))
-        put16(pixel[0..], 4usize, half_bits(color.blue))
-        put16(pixel[0..], 6usize, half_bits(color.alpha))
+        put16(pixel[0..], 0usize, half_bits(red))
+        put16(pixel[0..], 2usize, half_bits(green))
+        put16(pixel[0..], 4usize, half_bits(blue))
+        put16(pixel[0..], 6usize, half_bits(alpha))
     }
     var y = 0usize
     while y < usize(image.height) {
