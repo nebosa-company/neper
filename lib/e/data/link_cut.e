@@ -192,6 +192,7 @@ fn euler_tour_tree(n: usize, left: []u32, right: []u32, parent: []u32, edge_u: [
     i = 0usize
     while i < edge_u.len {
         edge_u[i] = 0u32
+        edge_v[i] = 0u32
         i += 1usize
     }
     ret (Euler { n: n, left: left, right: right, parent: parent, edge_u: edge_u, edge_v: edge_v }, ok)
@@ -263,10 +264,12 @@ fn ett_link(t: *Euler, u: u32, v: u32) -> err {
 }
 
 fn ett_cut(t: *Euler, u: u32, v: u32) -> err {
+    if u == 0u32 || v == 0u32 || usize(u) > t.n || usize(v) > t.n { ret Invalid }
     var k = 0usize
     while k < t.edge_u.len && !((t.edge_u[k] == u && t.edge_v[k] == v) || (t.edge_u[k] == v && t.edge_v[k] == u)) { k += 1usize }
     if k >= t.edge_u.len { ret Invalid }
     t.edge_u[k] = 0u32
+    t.edge_v[k] = 0u32
     let a = u32(t.n + 1usize + 2usize * k)
     let b = a + 1u32
     // Rotate the tour to start at `a`: [a, tour of v's side, b, tour of u's side].
