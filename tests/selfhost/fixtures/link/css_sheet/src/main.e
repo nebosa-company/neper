@@ -77,6 +77,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if c.rules[1usize].containers.len != 1usize || c.rules[1usize].containers[0usize].has_name || c.rules[1usize].containers[0usize].condition.op != container.Op.Gt { os.exit(20) }
     if c.rules[2usize].scopes.len != 1usize || c.rules[2usize].scopes[0usize].starts.len != 1usize || c.rules[2usize].scopes[0usize].limits.len != 1usize { os.exit(21) }
 
+    // #1187: a name without a condition is invalid, so its declaration cannot become global.
+    let guarded = "@container sidebar{a{--outside:1}} @container (width > 10px){b{--matches:1}} @container (width > 1000px){c{--misses:1}}"
+    let (guarded_sheet, guarded_error) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), guarded)
+    if guarded_error != ok || guarded_sheet.rules.len != 2usize { os.exit(47) }
+    if count_with(guarded_sheet.rules, "--outside") != 0usize || count_with(guarded_sheet.rules, "--matches") != 1usize || count_with(guarded_sheet.rules, "--misses") != 1usize { os.exit(48) }
+    let guarded_size = container.Size { has_width: true, width: 20.0f64, has_height: false, height: 0.0f64 }
+    if !container.matches(guarded_sheet.rules[0usize].containers[0usize].condition, guarded_size) { os.exit(49) }
+    if container.matches(guarded_sheet.rules[1usize].containers[0usize].condition, guarded_size) { os.exit(50) }
+
     // Every grouping kind can nest, and the rule keeps the accumulated context.
     let nested = "@media (min-width: 1px){@supports (display: grid){@container (width > 10px){@scope (.card){@layer nested{a{--nested:1}}}}}}"
     let (nested_sheet, nested_error) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), nested)

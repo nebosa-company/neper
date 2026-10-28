@@ -680,7 +680,7 @@ fn container_cond(a: *mem.Arena, text: str) -> (container.Condition, bool) {
     ret (parts_cond(a, kind, list.slice_const[container.Condition](&parts)), true)
 }
 
-// `[<name>] <condition>`; false when no condition can be read (the body then applies, so unknown syntax never hides content).
+// `[<name>] <condition>`; false when no condition can be read (an invalid group rule skips its body).
 fn container_query(a: *mem.Arena, prelude: str) -> (cascade.ContainerQuery, bool) {
     var t = cv.trim_ws(prelude)
     var has_name = false
@@ -1100,7 +1100,7 @@ fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err {
     if str.eq(name, "container") {
         let (q, good) = container_query(l.a, prelude)
         if good { ret walk_block(l, src, one, with_container(l, ctx, q)) }
-        ret walk_block(l, src, one, ctx)
+        ret ok
     }
     if str.eq(name, "scope") {
         ret walk_block(l, src, one, with_scope(l, ctx, scope_rule(l.a, prelude)))
