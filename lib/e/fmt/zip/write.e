@@ -6,7 +6,8 @@
 // readers accept stored parts, and the DEFLATE encoder belongs to a later slice.
 //
 // Limits are the classic (non-ZIP64) ones: 65535 parts, 4 GiB - 1 in total, a 65535-byte
-// name. A name `e.fmt.zip` would refuse (absolute, `..`, backslash, drive) is `BadName`.
+// name. A name `e.fmt.zip` would refuse (malformed UTF-8, absolute, `..`, backslash,
+// drive) is `BadName`.
 //
 // Memory: the whole package is one allocation from the arena passed in.
 use e.mem

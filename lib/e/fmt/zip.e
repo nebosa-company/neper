@@ -4,8 +4,9 @@
 // exposed, then entries read through a seek to their local header -- stored ones
 // straight from the source, DEFLATE ones through `e.algo.deflate` -- with the CRC-32
 // and size compared at the end. Encryption and any method but 0 and 8 are
-// `Unsupported`; an absolute name, a `..` segment, a backslash or a bad signature is
-// `Invalid`. Names are taken as UTF-8 as written.
+// `Unsupported`; an absolute name, a `..` segment, a backslash, malformed UTF-8 or a
+// bad signature is `Invalid`. Entry names are raw UTF-8 whether or not general-purpose
+// bit 11 declares UTF-8; legacy code pages are not decoded.
 //
 // One entry reader at a time: it seeks the shared source. `entry_reader` needs
 // `entry_storage()` bytes of 8-aligned storage; `extract` takes them from the arena.
@@ -67,7 +68,38 @@ fn read_at(s: *State, offset: u64, dst: []u8) -> err {
     ret ok
 }
 
+fn utf8_valid(name: str) -> bool {
+    var i = 0usize
+    while i < name.len {
+        let b0 = u32(name[i])
+        var need = 0usize
+        if b0 < 128u32 {
+            i += 1usize
+            continue
+        }
+        if b0 >= 194u32 && b0 < 224u32 { need = 1usize } else {
+        if b0 >= 224u32 && b0 < 240u32 { need = 2usize } else {
+        if b0 >= 240u32 && b0 < 245u32 { need = 3usize } else { ret false }
+        }
+        }
+        if i + need >= name.len { ret false }
+        var k = 1usize
+        var scalar = b0 & (127u32 >> u32(need + 1usize))
+        while k <= need {
+            let byte = u32(name[i + k])
+            if byte & 192u32 != 128u32 { ret false }
+            scalar = (scalar << 6u32) | (byte & 63u32)
+            k += 1usize
+        }
+        if need == 2usize && (scalar < 2048u32 || (scalar >= 55296u32 && scalar <= 57343u32)) { ret false }
+        if need == 3usize && (scalar < 65536u32 || scalar > 1114111u32) { ret false }
+        i += need + 1usize
+    }
+    ret true
+}
+
 fn name_legal(name: str) -> bool {
+    if !utf8_valid(name) { ret false }
     if name.len == 0usize { ret false }
     if name[0] == 47u8 { ret false }
     if name.len >= 2usize && name[1] == 58u8 { ret false }
