@@ -2125,6 +2125,7 @@ fn choropleth(regions: []const MapRegion, rings: []const MapRing, vertices: []co
 // Circle area, not radius, is proportional to a nonnegative site value.
 fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds: geometry.Rect, max_radius: f32, bars: []geometry.Rect) -> (ProportionalMapLayout, err) {
     if !valid_bounds(bounds) || sites.len == 0usize || !finite(max_radius) || max_radius <= 0.0f32 { ret (zero, Invalid) }
+    if !finite(2.0f32 * max_radius) { ret (zero, Invalid) }
     if bars.len < sites.len { ret (zero, TooLarge) }
     var maximum = 0.0f64
     var present_count = 0usize
@@ -2145,7 +2146,9 @@ fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds
         if sites[i].present && sites[i].value > 0.0f64 && maximum > 0.0f64 {
             let (point, _) = map_point(sites[i].lon, sites[i].lat, window, bounds)
             let radius = max_radius * f32(math.sqrt[f64](sites[i].value / maximum))
-            bars[i] = geometry.rect(point.x - radius, point.y - radius, 2.0f32 * radius, 2.0f32 * radius)
+            let circle_rect = geometry.rect(point.x - radius, point.y - radius, 2.0f32 * radius, 2.0f32 * radius)
+            if !finite(circle_rect.x) || !finite(circle_rect.y) || !finite(circle_rect.width) || !finite(circle_rect.height) || !finite(circle_rect.x + circle_rect.width) || !finite(circle_rect.y + circle_rect.height) { ret (zero, Invalid) }
+            bars[i] = circle_rect
         }
         i += 1usize
     }
