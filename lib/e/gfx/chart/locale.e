@@ -27,7 +27,11 @@ fn tick_decimals(values: []const chart.Tick) -> (u8, err) {
         i = 0usize
         while exact && i < values.len {
             let scaled = f64(values[i].value) * scale
-            if math.abs[f64](scaled - math.round[f64](scaled)) > 0.001f64 { exact = false }
+            // Tick values originate as f32, so permit their representation error but
+            // not a visible fractional unit at this decimal precision.
+            var tolerance = math.abs[f64](scaled) * 0.0000001f64
+            if tolerance < 0.0000001f64 { tolerance = 0.0000001f64 }
+            if math.abs[f64](scaled - math.round[f64](scaled)) > tolerance { exact = false }
             i += 1usize
         }
         if exact { ret (digits, ok) }
