@@ -11,6 +11,8 @@ fn near(got: f64, want: f64) -> bool {
     ret d <= 0.000000001
 }
 
+fn finite(v: f64) -> bool { ret v - v == 0.0 }
+
 fn main() {
     let a = cx.make[f64](3.0, 4.0)
     let b = cx.make[f64](1.0, -2.0)
@@ -47,6 +49,13 @@ fn main() {
     if inverse_zero32.re != inverse_zero32.re || inverse_zero32.re <= 1.0e30f32 || inverse_zero32.im != 0.0f32 { os.exit(17) }
     let big = cx.abs[f64](cx.make[f64](1.0e200, 1.0e200))
     if !near(big / 1.0e200, 1.4142135623730951) { os.exit(15) }
+    // #1082: sinh/cosh at 710 remain finite, even though exp(710) does not.
+    let large_sin = cx.sin[f64](cx.make[f64](0.0, 710.0))
+    let negative_large_sin = cx.sin[f64](cx.make[f64](0.0, -710.0))
+    let large_cos = cx.cos[f64](cx.make[f64](0.0, 710.0))
+    if large_sin.re != 0.0 || !finite(large_sin.im) || large_sin.im < 1.0e307 || !finite(negative_large_sin.im) || negative_large_sin.im > -1.0e307 || !finite(large_cos.re) || large_cos.re < 1.0e307 { os.exit(18) }
+    let large_sin32 = cx.sin[f32](cx.make[f32](0.0f32, 89.0f32))
+    if large_sin32.re != 0.0f32 || large_sin32.im != large_sin32.im || large_sin32.im < 1.0e37f32 { os.exit(18) }
     let n = cx.neg[f64](a)
     let d = cx.sub[f64](a, cx.neg[f64](n))
     if n.re != -3.0 || n.im != -4.0 || d.re != 0.0 || d.im != 0.0 { os.exit(16) }

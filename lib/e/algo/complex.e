@@ -94,15 +94,43 @@ fn pow[F: type](z: Complex[F], w: Complex[F]) -> Complex[F] {
 }
 
 fn cosh_of[F: type](x: F) -> F {
-    let up = math.exp[F](x)
-    let both = up + F(1.0f64) / up
-    ret both * F(0.5f64)
+    let ax = math.abs[F](x)
+    if ax < F(0.5f64) {
+        let x2 = x * x
+        var tail = F(0.000000000011470745597729f64)
+        tail = F(0.00000000208767569878681f64) + x2 * tail
+        tail = F(0.0000002755731922398589f64) + x2 * tail
+        tail = F(0.000024801587301587f64) + x2 * tail
+        tail = F(0.001388888888888889f64) + x2 * tail
+        tail = F(0.041666666666666666f64) + x2 * tail
+        tail = F(0.5f64) + x2 * tail
+        ret F(1.0f64) + x2 * tail
+    }
+    // Form each half before the final multiplication: exp(|x|) itself can
+    // overflow although cosh(x) still fits.
+    let half = math.exp[F](ax * F(0.5f64))
+    let inverse = F(1.0f64) / half
+    ret (half * F(0.5f64)) * half + (inverse * F(0.5f64)) * inverse
 }
 
 fn sinh_of[F: type](x: F) -> F {
-    let up = math.exp[F](x)
-    let difference = up - F(1.0f64) / up
-    ret difference * F(0.5f64)
+    let ax = math.abs[F](x)
+    if ax < F(0.5f64) {
+        let x2 = x * x
+        var tail = F(0.0000000000007647163731819816f64)
+        tail = F(0.00000000016059043836821615f64) + x2 * tail
+        tail = F(0.00000002505210838544172f64) + x2 * tail
+        tail = F(0.0000027557319223985893f64) + x2 * tail
+        tail = F(0.0001984126984126984f64) + x2 * tail
+        tail = F(0.008333333333333333f64) + x2 * tail
+        tail = F(0.16666666666666667f64) + x2 * tail
+        ret x * (F(1.0f64) + x2 * tail)
+    }
+    let half = math.exp[F](ax * F(0.5f64))
+    let inverse = F(1.0f64) / half
+    let magnitude = (half * F(0.5f64)) * half - (inverse * F(0.5f64)) * inverse
+    if x < zero_of[F]() { ret zero_of[F]() - magnitude }
+    ret magnitude
 }
 
 fn sin[F: type](z: Complex[F]) -> Complex[F] {
