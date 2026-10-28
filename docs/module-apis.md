@@ -19072,10 +19072,14 @@ type Lifecycle = enum u8 { Active, Inactive, Background, Suspended }
 type Orientation = enum u8 { Landscape, Portrait }
 type Screen = struct { bounds: geometry.Rect, work_area: geometry.Rect, scale: f32, primary: bool }
 type Metrics = struct { logical_size: geometry.Size, framebuffer_width: u32, framebuffer_height: u32, scale: f32, focused: bool, visible: bool }
+type Changed = struct { x0: u32, y0: u32, x1: u32, y1: u32 }
+type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32, Changed) -> err, release: fn(usize) -> err }
+type PresenterFactory = struct { attach: fn(*mem.Arena, *Window) -> err }
 error Unsupported
 error Invalid
 error Closed
 
+fn set_default_presenter(factory: PresenterFactory)
 fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err)
 fn metrics(window: *const Window) -> (Metrics, err)
 fn draw_target(window: *const Window) -> (scene.Target, err)
@@ -19084,6 +19088,9 @@ fn title(window: *Window, value: str) -> err
 fn cursor(window: *Window, value: Cursor) -> err
 fn visible(window: *Window, value: bool) -> err
 fn request_frame(window: *Window) -> err
+fn report_changed(window: *Window, changed: Changed) -> err
+fn set_presenter(window: *Window, presenter: Presenter) -> err
+fn presenting(window: *const Window) -> bool
 fn clipboard_get(a: *mem.Arena, window: *Window) -> (str, err)
 fn clipboard_set(window: *Window, value: str) -> err
 fn capabilities(window: *const Window) -> (style.Capabilities, err)
@@ -19101,6 +19108,12 @@ Windows are logically linear handles backed only by reviewed `e.os` primitives.
 Coordinates exposed above the module are logical pixels; framebuffer dimensions are
 physical pixels. `draw_target` (named so because `target` is a reserved word, D797) is
 non-owning and becomes invalid when the window closes.
+
+A `Presenter` owns the opaque `context` it receives. Once selected, the window calls
+`release` exactly once after a failed `present`, a replacement, or `close`, before it
+falls back to software or drops its host resources. A factory that fails before
+installing its presenter releases its own partial work; if it reports failure after an
+installation, `open` defensively releases the installed presenter too.
 
 The host capability model (D811, widget plan P0-08): `capabilities` answers what a
 window's host can do as the `style.Capabilities` that `style.adapt` takes -- every

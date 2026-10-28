@@ -68,11 +68,14 @@ type Changed = struct { x0: u32, y0: u32, x1: u32, y1: u32 }
 // uploads it to a GL texture and swaps. `present(context, host, pixels, width, height, changed)`
 // takes the frame as `os.window_present` would, with the box that differs from the last frame
 // it was given (the whole frame unless the renderer said otherwise, D5905); any error hands
-// this and every later frame back to the software path.
-type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32, Changed) -> err }
+// this and every later frame back to the software path. `release(context)` then releases the
+// presenter's context and every object it owns; the window calls it once on that fallback, a
+// replacement, or close.
+type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32, Changed) -> err, release: fn(usize) -> err }
 
 // (D5907) A presenter every window opened from now on gets: `x.khronos.present.install` sets one, so a program opts every
-// window (an `e.ui.app`'s too) into GL with one call. A window it cannot attach to stays on the software path.
+// window (an `e.ui.app`'s too) into GL with one call. A window it cannot attach to stays on the software path. An
+// attachment that opens a presenter and then fails must release it before it returns.
 type PresenterFactory = struct { attach: fn(*mem.Arena, *Window) -> err }
 
 var default_presenter: PresenterFactory = zero
@@ -133,11 +136,18 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
         ret (none, Invalid)
     }
     states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false, presenter: zero, has_presenter: false, changed: zero, has_changed: false }
+    let opened_state = &states[0usize]
     generations[slot] += 1u32
-    slots[slot] = &states[0usize]
+    slots[slot] = opened_state
     live[slot] = true
-    var opened = Window { state: mem.cast[*void](&states[0usize]), id: Id { slot: u32(slot), generation: generations[slot] } }
-    if has_default_presenter { let attached = default_presenter.attach(a, &opened) }
+    var opened = Window { state: mem.cast[*void](opened_state), id: Id { slot: u32(slot), generation: generations[slot] } }
+    if has_default_presenter {
+        let attached = default_presenter.attach(a, &opened)
+        if attached != ok && opened_state.has_presenter {
+            opened_state.has_presenter = false
+            let released = opened_state.presenter.release(opened_state.presenter.context)
+        }
+    }
     ret (opened, ok)
 }
 
@@ -266,7 +276,10 @@ fn request_frame(window: *Window) -> err {
             var changed = Changed { x0: 0u32, y0: 0u32, x1: shown.width, y1: shown.height }
             if s.has_changed { changed = s.changed }
             presented = s.presenter.present(s.presenter.context, s.handle, s.scratch[0usize..count], shown.width, shown.height, changed) == ok
-            if !presented { s.has_presenter = false }
+            if !presented {
+                s.has_presenter = false
+                let released = s.presenter.release(s.presenter.context)
+            }
         }
         if !presented && os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
     }
@@ -286,10 +299,16 @@ fn report_changed(window: *Window, changed: Changed) -> err {
     ret ok
 }
 
-// Shows this window's frames through `presenter` from the next `request_frame` on.
+// Shows this window's frames through `presenter` from the next `request_frame` on, releasing any
+// presenter it replaces before it takes ownership of the new one.
 fn set_presenter(window: *Window, presenter: Presenter) -> err {
     let (s, state_error) = state_of(window)
     if state_error != ok { ret state_error }
+    if s.has_presenter {
+        s.has_presenter = false
+        let released = s.presenter.release(s.presenter.context)
+        if released != ok { ret Invalid }
+    }
     s.presenter = presenter
     s.has_presenter = true
     ret ok
@@ -383,10 +402,15 @@ fn close(window: *Window) -> err {
     if state_error != ok { ret state_error }
     let slot = usize(window.id.slot)
     if slot < MAX_WINDOWS && live[slot] && generations[slot] == window.id.generation { live[slot] = false }
+    var presenter_closed = ok
+    if s.has_presenter {
+        s.has_presenter = false
+        presenter_closed = s.presenter.release(s.presenter.context)
+    }
     let target_closed = gpu.close_target(s.frames)
     let host_closed = os.window_close(s.handle)
     s.closed = true
-    if host_closed != ok { ret Invalid }
+    if presenter_closed != ok || target_closed != ok || host_closed != ok { ret Invalid }
     ret ok
 }
 
