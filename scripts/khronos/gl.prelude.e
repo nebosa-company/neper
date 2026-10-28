@@ -70,23 +70,20 @@ fn activate(d: *const Dispatch) -> bool {
         let owner = atomic.load(&active_threads[at], .Acquire)
         if owner == thread {
             if slot == MAX_DISPATCHES {
-                atomic.store(&active_slots[at], 0u32, .Release)
-                atomic.store(&active_threads[at], 0usize, .Release)
+                // Clear the slot conditionally, then clear the owner only if no concurrent
+                // release or later claim has changed the mapping.
+                let active = atomic.load(&active_slots[at], .Acquire)
+                let (cleared, _) = atomic.cas(&active_slots[at], active, 0u32, .AcqRel, .Acquire)
+                if cleared {
+                    let (_, _) = atomic.cas(&active_threads[at], thread, 0usize, .AcqRel, .Acquire)
+                }
             } else {
                 atomic.store(&active_slots[at], u32(slot + 1usize), .Release)
             }
             ret true
         }
-        if owner == 0usize {
+        if owner == 0usize && atomic.load(&active_slots[at], .Acquire) == 0u32 {
             let (won, seen) = atomic.cas(&active_threads[at], 0usize, thread, .AcqRel, .Acquire)
-            if won || seen == thread {
-                if slot != MAX_DISPATCHES { atomic.store(&active_slots[at], u32(slot + 1usize), .Release) }
-                ret true
-            }
-        } else if atomic.load(&active_slots[at], .Acquire) == 0u32 {
-            // A thread that closed its last context leaves a reusable mapping; this also handles
-            // host thread-id reuse after that thread has exited.
-            let (won, seen) = atomic.cas(&active_threads[at], owner, thread, .AcqRel, .Acquire)
             if won || seen == thread {
                 if slot != MAX_DISPATCHES { atomic.store(&active_slots[at], u32(slot + 1usize), .Release) }
                 ret true
@@ -133,9 +130,14 @@ fn release(d: *Dispatch) {
     let encoded = u32(slot + 1usize)
     var at = 0usize
     while at < MAX_DISPATCHES {
-        if atomic.load(&active_slots[at], .Acquire) == encoded {
-            atomic.store(&active_slots[at], 0u32, .Release)
-            atomic.store(&active_threads[at], 0usize, .Release)
+        let owner = atomic.load(&active_threads[at], .Acquire)
+        if owner != 0usize && atomic.load(&active_slots[at], .Acquire) == encoded {
+            // The conditional exchanges leave a mapping intact if another closer or a later
+            // claimant has changed this row after we observed this dispatch's slot.
+            let (cleared, _) = atomic.cas(&active_slots[at], encoded, 0u32, .AcqRel, .Acquire)
+            if cleared {
+                let (_, _) = atomic.cas(&active_threads[at], owner, 0usize, .AcqRel, .Acquire)
+            }
         }
         at += 1usize
     }

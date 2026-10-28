@@ -54,11 +54,19 @@ fn load_on_thread(task: *DispatchTask) {
     }
     let posted = sync.semaphore_post(&task.race.ready, 1u32)
     sync.semaphore_wait(&task.race.release)
-    if atomic.load(&task.race.failed, .Acquire) == 0u32 { atomic.store(&task.race.answers[task.index], gl.get_error(), .Release) }
+    if atomic.load(&task.race.failed, .Acquire) == 0u32 {
+        // A lost activation mapping must be reported as a fixture failure rather than calling
+        // through a null entry point.
+        if !gl.present(gl.GET_ERROR_ENTRY) {
+            atomic.store(&task.race.failed, 1u32, .Release)
+        } else {
+            atomic.store(&task.race.answers[task.index], gl.get_error(), .Release)
+        }
+    }
     gl.release(&dispatch)
 }
 
-fn isolated_dispatches() -> bool {
+fn isolated_dispatches_once() -> bool {
     var race: DispatchRace = zero
     race.gate = sync.semaphore(0u32)
     race.ready = sync.semaphore(0u32)
@@ -81,6 +89,17 @@ fn isolated_dispatches() -> bool {
     if os.thread_join(first) != ok || os.thread_join(second) != ok { ret false }
     if atomic.load(&race.failed, .Acquire) != 0u32 { ret false }
     ret atomic.load(&race.answers[0usize], .Acquire) == 17u32 && atomic.load(&race.answers[1usize], .Acquire) == 29u32
+}
+
+// Repeat concurrent first activation enough times to cover the brief row-claim transition
+// without making the no-driver loader fixture slow.
+fn isolated_dispatches() -> bool {
+    var round = 0usize
+    while round < 16usize {
+        if !isolated_dispatches_once() { ret false }
+        round += 1usize
+    }
+    ret true
 }
 
 // Whether `name` is `entry` or `entry` with a vendor suffix: `load` asks for those too (glGetnTexImageARB on Intel).
