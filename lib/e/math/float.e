@@ -43,9 +43,14 @@ fn exponent_of(x: f64) -> i32 {
 // Round a `u32` bit pattern right by `shift` bits, to nearest, ties to even.
 fn round_shift(bits: u32, shift: u32) -> u32 {
     if shift == 0u32 { ret bits }
-    if shift > 31u32 {
+    // Shifting by 32 cannot use a u32 mask, but the discarded half still
+    // determines whether the zero kept bit rounds up. The exact half ties to
+    // zero because it is even.
+    if shift == 32u32 {
+        if bits > 2147483648u32 { ret 1u32 }
         ret 0u32
     }
+    if shift > 32u32 { ret 0u32 }
     let kept = bits >> shift
     let dropped = bits & ((1u32 << shift) - 1u32)
     let half = 1u32 << (shift - 1u32)

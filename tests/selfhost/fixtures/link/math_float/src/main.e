@@ -57,6 +57,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if float.to_bf16(inf) != 32640u16 { os.exit(4i32) }
     let bnan = float.from_bf16(float.to_bf16(nan))
     if bnan == bnan { os.exit(4i32) }
+    // The general rounding helper handles its u32-width boundary without a
+    // shift-by-width mask; exactly half remains tied to the even zero.
+    if float.round_shift(2147483647u32, 32u32) != 0u32 || float.round_shift(2147483648u32, 32u32) != 0u32 || float.round_shift(3221225472u32, 32u32) != 1u32 || float.round_shift(4294967295u32, 33u32) != 0u32 { os.exit(4i32) }
     if float.from_bf16(16457u16) != 3.140625f32 || float.from_bf16(16256u16) != 1.0f32 { os.exit(4i32) }
 
     try io.print("math float ok\n")
