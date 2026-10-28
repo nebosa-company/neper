@@ -15,6 +15,13 @@ fn main(a: *mem.Arena) -> err {
     if mem.size_of[host.ProcessEntry]() != expected { os.exit(1i32) }
     if mem.size_of[host.MemoryCounters]() != counter_expected { os.exit(2i32) }
     if mem.size_of[os.MemoryCounters]() != counter_expected { os.exit(3i32) }
+    // Toolhelp reports normal exhaustion with ERROR_NO_MORE_FILES, but another
+    // failed enumeration must not become a successful empty process list.
+    if !host.toolhelp_finished(0i32, 18u32) || host.toolhelp_finished(0i32, 5u32) || !host.toolhelp_finished(1i32, 5u32) { os.exit(4i32) }
+    var invalid: host.ProcessEntry = zero
+    invalid.size = u32(mem.size_of[host.ProcessEntry]())
+    let first = host.raw_first(0usize, &invalid)
+    if first != 0i32 || host.toolhelp_finished(first, host.raw_last_error()) { os.exit(5i32) }
     when target.arch == .X86 {
         try io.print("proc entry layout ok\n")
         ret ok

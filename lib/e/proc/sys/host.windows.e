@@ -21,6 +21,7 @@ type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: wi
 
 const SNAPSHOT_PROCESSES: u32 = 2u32
 const ALL_GROUPS: u16 = 65535u16
+const ERROR_NO_MORE_FILES: u32 = 18u32
 
 @import("kernel32.dll", "GetActiveProcessorCount")
 extern fn raw_processor_count(group: u16) -> u32
@@ -49,6 +50,9 @@ extern fn raw_process_memory(process: usize, counters: *MemoryCounters, size: u3
 @import("kernel32.dll", "CreateToolhelp32Snapshot")
 extern fn raw_snapshot(flags: u32, pid: u32) -> usize
 
+@import("kernel32.dll", "GetLastError")
+extern fn raw_last_error() -> u32
+
 @import("kernel32.dll", "Process32FirstW")
 extern fn raw_first(snapshot: usize, entry: *ProcessEntry) -> i32
 
@@ -57,6 +61,13 @@ extern fn raw_next(snapshot: usize, entry: *ProcessEntry) -> i32
 
 @import("kernel32.dll", "CloseHandle")
 extern fn raw_close_handle(handle: usize) -> i32
+
+// Toolhelp reports the normal end of an enumeration as a false return with
+// ERROR_NO_MORE_FILES. Any other false return is an operation failure rather
+// than an empty process table.
+fn toolhelp_finished(result: i32, last_error: u32) -> bool {
+    ret result != 0i32 || last_error == ERROR_NO_MORE_FILES
+}
 
 fn cpu_count(a: *mem.Arena) -> (u32, err) {
     let n = raw_processor_count(ALL_GROUPS)
@@ -181,6 +192,13 @@ fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
     entry.size = u32(mem.size_of[ProcessEntry]())
     var n = 0usize
     var more = raw_first(snap, &entry)
+    if more == 0i32 {
+        let first_error = raw_last_error()
+        if !toolhelp_finished(more, first_error) {
+            let closed = raw_close_handle(snap)
+            ret (out[0usize..0usize], os.Failed)
+        }
+    }
     while more != 0i32 && n < limit {
         let (name, ne) = narrow(a, entry.exe[0usize..260usize])
         if ne != ok {
@@ -196,6 +214,13 @@ fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
         out[n] = p
         n += 1usize
         more = raw_next(snap, &entry)
+        if more == 0i32 {
+            let next_error = raw_last_error()
+            if !toolhelp_finished(more, next_error) {
+                let closed = raw_close_handle(snap)
+                ret (out[0usize..n], os.Failed)
+            }
+        }
     }
     let closed = raw_close_handle(snap)
     ret (out[0usize..n], ok)
