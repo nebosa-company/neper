@@ -613,6 +613,56 @@ fn autostart_path(a: *mem.Arena, id: str) -> (str, err) {
     ret (path, path_error)
 }
 
+// Quote one executable path for an Exec string. The Desktop Entry string parser
+// runs before its command-line parser: a command-line backslash therefore takes
+// four backslashes in the file, while quote, dollar and backtick take two before
+// the character. `%%` keeps a literal percent from becoming a field code.
+fn desktop_exec(a: *mem.Arena, exe: str) -> (str, err) {
+    let (out, allocation_error) = mem.alloc[u8](a, exe.len * 4usize + 2usize)
+    if allocation_error != ok { ret ("", allocation_error) }
+    var at = 0usize
+    out[at] = 34u8
+    at += 1usize
+    var i = 0usize
+    while i < exe.len {
+        let c = exe[i]
+        if c == 92u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 92u8
+            out[at + 2usize] = 92u8
+            out[at + 3usize] = 92u8
+            at += 4usize
+        } else if c == 34u8 || c == 36u8 || c == 96u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 92u8
+            out[at + 2usize] = c
+            at += 3usize
+        } else if c == 37u8 {
+            out[at] = 37u8
+            out[at + 1usize] = 37u8
+            at += 2usize
+        } else if c == 10u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 110u8
+            at += 2usize
+        } else if c == 9u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 116u8
+            at += 2usize
+        } else if c == 13u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 114u8
+            at += 2usize
+        } else {
+            out[at] = c
+            at += 1usize
+        }
+        i += 1usize
+    }
+    out[at] = 34u8
+    ret (out[0usize..at + 1usize], ok)
+}
+
 fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
     if !valid_name(id) { ret Invalid }
     let (path, path_error) = autostart_path(a, id)
@@ -624,10 +674,12 @@ fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
     }
     let (exe, exe_error) = fs.executable_path(a)
     if exe_error != ok { ret exe_error }
+    let (exec, exec_error) = desktop_exec(a, exe)
+    if exec_error != ok { ret exec_error }
     try fs.make_dirs(a, parent_of(path))
     let (head, head_error) = join3(a, "[Desktop Entry]\nType=Application\nName=", id, "\nExec=")
     if head_error != ok { ret head_error }
-    let (content, content_error) = join3(a, head, exe, "\nX-GNOME-Autostart-enabled=true\n")
+    let (content, content_error) = join3(a, head, exec, "\nX-GNOME-Autostart-enabled=true\n")
     if content_error != ok { ret content_error }
     ret fs.write_file(a, path, content)
 }
