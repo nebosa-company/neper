@@ -35,9 +35,9 @@ fn painted(a: *mem.Arena, n: widget.Node, w: f32, h: f32) -> (usize, err) {
     ret (made, failure)
 }
 
-fn painted_scaled(a: *mem.Arena, n: widget.Node, w: f32, h: f32, scale: f32) -> (usize, err) {
+fn painted_scaled(a: *mem.Arena, n: widget.Node, w: f32, h: f32, scale: f32) -> (usize, f32, err) {
     let (b, be) = scene.builder(a, 4096usize)
-    if be != ok { ret (0usize, be) }
+    if be != ok { ret (0usize, 0.0, be) }
     var builder = b
     scene.set_builder_scale(&builder, scale)
     var made = 0usize
@@ -49,7 +49,20 @@ fn painted_scaled(a: *mem.Arena, n: widget.Node, w: f32, h: f32, scale: f32) -> 
     default:
         failure = scene.Invalid
     }
-    ret (made, failure)
+    let display = scene.finish(&builder)
+    var right: f32 = 0.0
+    var i = 0usize
+    while i < display.commands.len {
+        switch display.commands[i] {
+        case .FillRect as fill:
+            let edge = (fill.rect.x + fill.rect.width) * scale
+            if edge > right { right = edge }
+        default:
+            right = right
+        }
+        i += 1usize
+    }
+    ret (made, right, failure)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -112,12 +125,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
     let (mark, mark_error) = linuxmark.mark_node(a, 0u8, white)
     if mark_error != ok { os.exit(22) }
-    let (mark_count, mark_paint_error) = painted_scaled(a, mark, 14.0, 14.0, 10.0)
-    if mark_paint_error != ok || mark_count == 0usize { os.exit(23) }
+    let (mark_count, mark_right, mark_paint_error) = painted_scaled(a, mark, 14.0, 14.0, 10.0)
+    if mark_paint_error != ok || mark_count == 0usize || mark_right <= 32.0 { os.exit(23) }
     let (spinner, spinner_error) = linuxspin.node(a, 2u64, white, 0.0)
     if spinner_error != ok { os.exit(24) }
-    let (spinner_count, spinner_paint_error) = painted_scaled(a, spinner, 32.0, 32.0, 7.0)
-    if spinner_paint_error != ok || spinner_count == 0usize { os.exit(25) }
+    let (spinner_count, spinner_right, spinner_paint_error) = painted_scaled(a, spinner, 32.0, 32.0, 7.0)
+    if spinner_paint_error != ok || spinner_count == 0usize || spinner_right <= 192.0 { os.exit(25) }
 
     // looks: the sheet maths and the look tables
     if looks.rows_of(7usize, 3usize) != 3usize { os.exit(17) }
