@@ -87,12 +87,13 @@ fn matches(w: *World, expect: str) -> bool {
     ret true
 }
 
-// Every fiber Done, every thread joined, nothing left inside a critical region.
+// Every fiber Done, `run` already joined every thread, and `join_fiber` is idempotent.
 fn settled(w: *World, s: *thread.Scheduler[World], count: u32) -> bool {
     var id = 0u32
     while id < count {
         let (st, state_error) = thread.fiber_state[World](s, id)
         if state_error != ok || st != .Done { ret false }
+        if !s.fibers[usize(id)].joined { ret false }
         if thread.join_fiber[World](s, id) != ok { ret false }
         id += 1u32
     }
@@ -189,6 +190,13 @@ fn held(w: *World, part: str, whole: str) -> i32 {
     if thread.run[World](&s) != thread.Invalid { ret 17i32 }
     let (st, state_error) = thread.fiber_state[World](&s, 1u32)
     if state_error != ok || st != .Suspended { ret 18i32 }
+    var id = 0u32
+    while id < 3u32 {
+        let (after, after_error) = thread.fiber_state[World](&s, id)
+        if after_error != ok { ret 19i32 }
+        if after == .Done && !s.fibers[usize(id)].joined { ret 19i32 }
+        id += 1u32
+    }
     if !matches(w, part) { ret 19i32 }
     if thread.join_fiber[World](&s, 1u32) != thread.Invalid { ret 20i32 }
     if thread.resume[World](&s, 1u32) != ok { ret 20i32 }

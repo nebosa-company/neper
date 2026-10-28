@@ -297,17 +297,39 @@ fn resume[Ctx: type](s: *Scheduler[Ctx], id: u32) -> err {
     ret ok
 }
 
-// Drives the schedule until every fiber is Done. `Invalid` when nothing is Ready and
-// fibers remain -- every one of them suspended -- so a `resume` and another `run`
-// finish what is left; calling it from inside a fiber is `Invalid` too.
+// Joins every fiber whose body is Done. It deliberately leaves Suspended fibers alone:
+// joining one would block the scheduler thread that must resume it.
+fn join_done[Ctx: type](s: *Scheduler[Ctx]) -> err {
+    var first = ok
+    var i = 0usize
+    while i < s.count {
+        let f = &s.fibers[i]
+        if f.state == .Done && f.started && !f.joined {
+            f.joined = true
+            let joined = join(f.thread)
+            if joined != ok && first == ok { first = joined }
+        }
+        i += 1usize
+    }
+    ret first
+}
+
+// Drives the schedule until every fiber is Done, joining each completed OS thread before
+// it returns. `Invalid` when nothing is Ready and fibers remain -- every one of them
+// suspended -- so a `resume` and another `run` finish what is left; completed fibers
+// are still joined on that path. Calling it from inside a fiber is `Invalid` too.
 fn run[Ctx: type](s: *Scheduler[Ctx]) -> err {
     if s.running != NO_FIBER { ret Invalid }
     while s.done < s.count {
         let pick = next_ready_after[Ctx](s, s.cursor)
-        if pick == NO_FIBER { ret Invalid }
+        if pick == NO_FIBER {
+            let joined = join_done[Ctx](s)
+            if joined != ok { ret joined }
+            ret Invalid
+        }
         dispatch[Ctx](s, pick)
     }
-    ret ok
+    ret join_done[Ctx](s)
 }
 
 // Returns once fiber `id` is Done, driving the schedule to get it there: from the host
