@@ -17633,7 +17633,7 @@ fn project(input: u32, cols: []const u32) -> Op
 fn join(a: u32, b: u32, column_a: u32, column_b: u32) -> Op
 fn limit(input: u32, count: usize) -> Op
 fn output_columns(plan: []const Op, tables: []const Table, node: u32) -> usize
-fn validate(plan: []const Op, tables: []const Table) -> err
+fn validate(plan: []const Op, tables: []const Table, scratch: []usize) -> err
 fn validate_columns(plan: []const Op, tables: []const Table, node: u32) -> err
 fn passes(cmp: u8, x: i64, v: i64) -> bool
 fn cursor(plan: []const Op, root: u32, tables: []const Table, batch: usize, state: []usize, buf: []i64) -> (Cursor, err)
@@ -17706,6 +17706,8 @@ batched `vectorized` executor over scan, filter, project, join and limit; `join_
 `join_hash`, `join_hash_parallel` (radix partitions), `join_sort_merge`, `join_semi`,
 `join_anti`; `estimate_join_size`, Selinger `join_order`, `push_predicates`,
 `push_projections`, `optimize`, `prune_partitions`, `index_only_scan`, `materialize_cte`.
+`validate` consumes caller-owned `STRIDE`-per-node scratch while it checks an acyclic plan,
+so forward references produced by predicate pushdown remain valid.
 
 ### `e.db.storage`
 

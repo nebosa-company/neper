@@ -254,6 +254,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n11, e11v) = query.vectorized(plan[..p11.count], 6u32, tables[..3usize], 16usize, state[..], buf[..], out[..])
     if e11v != ok || n11 != 170usize || fold(out[..], 3usize, n11) != 4825550860999645306u64 { os.exit(11i32) }
 
+    // 12: cyclic plans are refused before column calculation or cursor recursion.
+    var self_cycle: [1]query.Op = zero
+    self_cycle[0usize] = query.filter(0u32, 0u32, query.EQ, 0i64)
+    if query.validate(self_cycle[..], tables[..3usize], state[..]) != query.Invalid { os.exit(12i32) }
+    let (_, self_cycle_error) = query.iterator(self_cycle[..], 0u32, tables[..3usize], state[..], buf[..])
+    if self_cycle_error != query.Invalid { os.exit(12i32) }
+    var two_cycle: [2]query.Op = zero
+    two_cycle[0usize] = query.filter(1u32, 0u32, query.EQ, 0i64)
+    two_cycle[1usize] = query.filter(0u32, 0u32, query.EQ, 0i64)
+    if query.validate(two_cycle[..], tables[..3usize], state[..]) != query.Invalid { os.exit(12i32) }
+    let (_, two_cycle_error) = query.vectorized(two_cycle[..], 0u32, tables[..3usize], 1usize, state[..], buf[..], out[..])
+    if two_cycle_error != query.Invalid { os.exit(12i32) }
+    // Forward references remain valid: predicate pushdown makes this shape too.
+    var forward: [2]query.Op = zero
+    forward[0usize] = query.filter(1u32, 0u32, query.EQ, 0i64)
+    forward[1usize] = query.scan(0u32)
+    if query.validate(forward[..], tables[..3usize], state[..2usize]) != query.TooSmall { os.exit(12i32) }
+    if query.validate(forward[..], tables[..3usize], state[..]) != ok { os.exit(12i32) }
+    let (forward_rows, forward_error) = query.vectorized(forward[..], 0u32, tables[..3usize], 1usize, state[..], buf[..], out[..])
+    if forward_error != ok || forward_rows != 1usize || out[0usize] != 0i64 { os.exit(12i32) }
+
     try io.print("db query ok\n")
     ret ok
 }
