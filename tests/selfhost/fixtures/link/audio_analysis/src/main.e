@@ -64,7 +64,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, overflow_error) = analysis.pitch_hps(x[..4usize], sr, 4611686018427387904usize, scratch[..12usize])
     if overflow_error != analysis.Invalid { os.exit(2i32) }
 
-    // 3: onsets, tempo and beats of a click train at 120 BPM.
+    // 3: frame counting and onsets, tempo and beats of a click train at 120 BPM.
+    if analysis.frame_count(512usize, 0usize, 128usize) != 0usize { os.exit(3i32) }
+    if analysis.frame_count(512usize, 256usize, 0usize) != 0usize { os.exit(3i32) }
+    if analysis.frame_count(255usize, 256usize, 128usize) != 0usize { os.exit(3i32) }
+    if analysis.frame_count(512usize, 256usize, 128usize) != 3usize { os.exit(3i32) }
     let (clicks, clicks_error) = mem.alloc[f64](a, 16384usize)
     if clicks_error != ok { ret clicks_error }
     i = 0usize

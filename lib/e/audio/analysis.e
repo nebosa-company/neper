@@ -212,15 +212,18 @@ fn pitch_hps(x: []const f64, sample_rate: f64, harmonics: usize, scratch: []f64)
 
 // --- onsets, tempo and beats ------------------------------------------------------
 
-fn frame_count(n: usize, frame: usize, hop: usize) -> usize { ret (n - frame) / hop + 1usize }
+fn frame_count(n: usize, frame: usize, hop: usize) -> usize {
+    if frame == 0usize || hop == 0usize || n < frame { ret 0usize }
+    ret (n - frame) / hop + 1usize
+}
 
 // Spectral flux: the half-wave rectified magnitude increase summed over the
 // bins up to Nyquist of every Hann-windowed STFT frame (`frame` a power of
 // two), the first frame against silence; answers the frame count
 // `(x.len - frame) / hop + 1`; `scratch.len >= (2 * frames + 1) * frame`.
 fn onset_strength(x: []const f64, frame: usize, hop: usize, scratch: []f64, out: []f64) -> (usize, err) {
-    if hop == 0usize || frame == 0usize || x.len < frame { ret (0usize, Invalid) }
     let frames = frame_count(x.len, frame, hop)
+    if frames == 0usize { ret (0usize, Invalid) }
     if out.len < frames || scratch.len < (2usize * frames + 1usize) * frame { ret (0usize, TooSmall) }
     var win = scratch[..frame]
     var re = scratch[frame..(frames + 1usize) * frame]
@@ -280,8 +283,8 @@ fn onsets_pick(envelope: []const f64, threshold: f64, out: []usize) -> (usize, e
 // Onset frames of `x`: `onset_strength` followed by `onsets_pick`;
 // `scratch.len >= (2 * frames + 1) * frame + frames`; answers the onset count.
 fn onsets(x: []const f64, frame: usize, hop: usize, threshold: f64, scratch: []f64, out: []usize) -> (usize, err) {
-    if hop == 0usize || frame == 0usize || x.len < frame { ret (0usize, Invalid) }
     let frames = frame_count(x.len, frame, hop)
+    if frames == 0usize { ret (0usize, Invalid) }
     if scratch.len < frames { ret (0usize, TooSmall) }
     let (_, strength_error) = onset_strength(x, frame, hop, scratch[frames..], scratch[..frames])
     if strength_error != ok { ret (0usize, strength_error) }
@@ -399,8 +402,9 @@ fn beats(envelope: []const f64, bpm: f64, hop: usize, sample_rate: f64, tightnes
 // pitch class nearest its centre (C = 0); `out` holds `12 * frames`, frame
 // major; `scratch.len >= (2 * frames + 1) * frame`; answers the frame count.
 fn chroma(x: []const f64, sample_rate: f64, frame: usize, hop: usize, scratch: []f64, out: []f64) -> (usize, err) {
-    if hop == 0usize || frame == 0usize || x.len < frame || sample_rate <= 0.0f64 { ret (0usize, Invalid) }
+    if sample_rate <= 0.0f64 { ret (0usize, Invalid) }
     let frames = frame_count(x.len, frame, hop)
+    if frames == 0usize { ret (0usize, Invalid) }
     if out.len < 12usize * frames || scratch.len < (2usize * frames + 1usize) * frame { ret (0usize, TooSmall) }
     var win = scratch[..frame]
     var re = scratch[frame..(frames + 1usize) * frame]
