@@ -5,6 +5,7 @@
 
 use e.data.spatial as spatial
 use e.io
+use e.math
 use e.mem
 use e.os
 
@@ -58,7 +59,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var far_query: [1]f64 = zero
     far_query[0usize] = 3.0e151f64
     let (far_best, far_distance, far_near_error) = spatial.kd_nearest(&far_tree, far_query[..])
-    if far_near_error != ok || far_best != 1usize || far_distance <= 1.0e301f64 { os.exit(1i32) }
+    let far_delta = far_query[0usize] - far_points[1usize]
+    let far_expected_distance = far_delta * far_delta
+    if far_near_error != ok || far_best != 1usize || far_distance != far_expected_distance { os.exit(1i32) }
+    // A split-plane bound above 1e300 still searches the far branch when it
+    // can contain the nearer point.
+    var prune_points: [6]f64 = zero
+    prune_points[0usize] = 1.0e151f64
+    prune_points[1usize] = 5.0e151f64
+    prune_points[2usize] = 2.0e151f64
+    prune_points[3usize] = 5.0e151f64
+    prune_points[4usize] = 3.0e151f64
+    var prune_order: [3]usize = zero
+    let (prune_tree, prune_build_error) = spatial.kd_build(prune_points[..], 3usize, 2usize, prune_order[..])
+    if prune_build_error != ok { os.exit(1i32) }
+    var prune_query: [2]f64 = zero
+    let (prune_best, prune_distance, prune_near_error) = spatial.kd_nearest(&prune_tree, prune_query[..])
+    let prune_delta_x = prune_points[4usize] - prune_query[0usize]
+    let prune_delta_y = prune_points[5usize] - prune_query[1usize]
+    let prune_expected_distance = prune_delta_x * prune_delta_x + prune_delta_y * prune_delta_y
+    if prune_near_error != ok || prune_best != 2usize || prune_distance != prune_expected_distance { os.exit(1i32) }
+    // An overflowed candidate is +infinity, not a sentinel: a later finite
+    // candidate still wins.
+    var overflow_points: [4]f64 = zero
+    overflow_points[0usize] = 1.0f64
+    overflow_points[1usize] = 1.0e200f64
+    overflow_points[2usize] = 2.0f64
+    var overflow_order: [2]usize = zero
+    let (overflow_tree, overflow_build_error) = spatial.kd_build(overflow_points[..], 2usize, 2usize, overflow_order[..])
+    if overflow_build_error != ok { os.exit(1i32) }
+    var overflow_query: [2]f64 = zero
+    let (overflow_best, overflow_distance, overflow_near_error) = spatial.kd_nearest(&overflow_tree, overflow_query[..])
+    if overflow_near_error != ok || overflow_best != 1usize || overflow_distance != 4.0f64 { os.exit(1i32) }
+    // If no squared distance fits in f64, the successful result reports IEEE
+    // positive infinity.
+    var only_overflow_points: [4]f64 = zero
+    only_overflow_points[0usize] = 1.0f64
+    only_overflow_points[1usize] = 1.0e200f64
+    only_overflow_points[2usize] = 2.0f64
+    only_overflow_points[3usize] = 2.0e200f64
+    var only_overflow_order: [2]usize = zero
+    let (only_overflow_tree, only_overflow_build_error) = spatial.kd_build(only_overflow_points[..], 2usize, 2usize, only_overflow_order[..])
+    if only_overflow_build_error != ok { os.exit(1i32) }
+    let (_, only_overflow_distance, only_overflow_near_error) = spatial.kd_nearest(&only_overflow_tree, overflow_query[..])
+    if only_overflow_near_error != ok || only_overflow_distance != math.inf64() { os.exit(1i32) }
 
     // 2: quadtree range.
     var child: [1024]u32 = zero
@@ -279,7 +323,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (far_ball, far_ball_error) = spatial.ball_tree_build(far_points[..], 2usize, 1usize, far_ball_order[..], far_centres[..], far_radius[..])
     if far_ball_error != ok { os.exit(9i32) }
     let (far_ball_best, far_ball_distance, far_ball_near_error) = spatial.ball_tree_nearest(&far_ball, far_query[..])
-    if far_ball_near_error != ok || far_ball_best != 1usize || far_ball_distance <= 1.0e301f64 { os.exit(9i32) }
+    if far_ball_near_error != ok || far_ball_best != 1usize || far_ball_distance != far_expected_distance { os.exit(9i32) }
     // Every point is its own nearest.
     i = 0usize
     while i < 200usize {

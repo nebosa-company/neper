@@ -92,7 +92,9 @@ fn nearest_range(t: *const KdTree, lo: usize, hi: usize, depth: usize, query: []
     }
 }
 
-// The nearest point to `query` and its squared distance.
+// The nearest point to `query` and its squared distance. Finite distances
+// above 1e300 are ordinary candidates. If f64 accumulation overflows, it
+// reports +infinity; a finite candidate still replaces it.
 fn kd_nearest(t: *const KdTree, query: []const f64) -> (usize, f64, err) {
     if query.len < t.d { ret (0usize, 0.0f64, TooSmall) }
     if t.order.len == 0usize { ret (0usize, 0.0f64, Invalid) }
@@ -1259,7 +1261,9 @@ fn ball_nearest_range(b: *const BallTree, lo: usize, hi: usize, query: []const f
     ball_nearest_range(b, mid + 1usize, hi, query, best)
 }
 
-// The nearest point to `query` and its squared distance.
+// The nearest point to `query` and its squared distance. Finite distances
+// above 1e300 are ordinary candidates. If f64 accumulation overflows, it
+// reports +infinity; a finite candidate still replaces it.
 fn ball_tree_nearest(b: *const BallTree, query: []const f64) -> (usize, f64, err) {
     if query.len < b.tree.d { ret (0usize, 0.0f64, TooSmall) }
     if b.tree.order.len == 0usize { ret (0usize, 0.0f64, Invalid) }
