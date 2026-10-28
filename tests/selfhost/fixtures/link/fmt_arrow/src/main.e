@@ -20,6 +20,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var cols: [16]arrow.Column = zero
     var names: [16]str = zero
 
+    // The first record-batch node is length seven with a one-byte validity
+    // bitmap. Both impossible metadata and a mismatched bitmap are rejected.
+    var bad_count = stream
+    bad_count[984usize] = 8u8
+    let (_, count_error) = arrow.columns(bad_count[..], cols[..], names[..])
+    if count_error != arrow.Malformed { os.exit(12i32) }
+    var bad_validity = stream
+    bad_validity[984usize] = 0u8
+    bad_validity[1136usize] = 0u8
+    let (_, validity_error) = arrow.columns(bad_validity[..], cols[..], names[..])
+    if validity_error != arrow.Malformed { os.exit(12i32) }
+
     // 1: schema count and names (pre-order, children included).
     let (count, e) = arrow.columns(stream[..], cols[..], names[..])
     if e != ok || count != 10usize { os.exit(1i32) }

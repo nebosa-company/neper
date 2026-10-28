@@ -330,13 +330,27 @@ fn bind(m: *const Message, cols: []Column, count: usize) -> err {
         let here = nodes.at + 16usize * i
         let (n, n_error) = fb.load[i64](m.meta, here)
         let (nulls, nulls_error) = fb.load[i64](m.meta, here + 8usize)
-        if n_error != ok || nulls_error != ok || n < 0i64 || nulls < 0i64 { ret Malformed }
-        cols[i].len = usize(n)
-        cols[i].null_count = usize(nulls)
+        if n_error != ok || nulls_error != ok || n < 0i64 || nulls < 0i64 || nulls > n { ret Malformed }
+        let length = usize(n)
+        cols[i].len = length
         let (validity, validity_error) = buffer(m, buffers, b)
         if validity_error != ok { ret validity_error }
         b += 1usize
-        if validity.len != 0usize && validity.len * 8usize < usize(n) { ret Malformed }
+        var validity_bytes = length / 8usize
+        if length % 8usize != 0usize { validity_bytes += 1usize }
+        if validity.len != 0usize && validity.len < validity_bytes { ret Malformed }
+        if validity.len == 0usize {
+            if nulls != 0i64 { ret Malformed }
+        } else {
+            var found_nulls = 0usize
+            var row = 0usize
+            while row < length {
+                if ((validity[row >> 3u32] >> u32(row & 7usize)) & 1u8) == 0u8 { found_nulls += 1usize }
+                row += 1usize
+            }
+            if found_nulls != usize(nulls) { ret Malformed }
+        }
+        cols[i].null_count = usize(nulls)
         cols[i].validity = validity
         let kind = cols[i].kind
         if kind == .Utf8 || kind == .Binary || kind == .List {
