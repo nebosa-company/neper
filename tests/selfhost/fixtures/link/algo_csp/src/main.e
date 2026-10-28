@@ -432,7 +432,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     huge_demand[0usize] = 1usize
     if csp.cumulative(huge_domain[..], 2usize, huge_start[..], huge_duration[..], huge_demand[..], 1usize, 8usize, profile[..]) != csp.Invalid { os.exit(4i32) }
 
-    // Two compulsory maximum demands cannot wrap back below maximum capacity.
+    // A compulsory maximum demand followed by one more unit cannot wrap back
+    // below maximum capacity, on either usize width.
     var overflow_domain: [2]u8 = zero
     overflow_domain[0usize] = 1u8
     overflow_domain[1usize] = 1u8
@@ -442,10 +443,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     overflow_duration[0usize] = 1usize
     overflow_duration[1usize] = 1usize
     var overflow_demand: [2]usize = zero
-    overflow_demand[0usize] = 18446744073709551615usize
-    overflow_demand[1usize] = 18446744073709551615usize
+    let maximum = 0usize -% 1usize
+    overflow_demand[0usize] = maximum
+    overflow_demand[1usize] = 1usize
     var overflow_profile: [1]usize = zero
-    if csp.cumulative(overflow_domain[..], 1usize, overflow_starts[..], overflow_duration[..], overflow_demand[..], 18446744073709551615usize, 1usize, overflow_profile[..]) != csp.Unsatisfiable { os.exit(4i32) }
+    if csp.cumulative(overflow_domain[..], 1usize, overflow_starts[..], overflow_duration[..], overflow_demand[..], maximum, 1usize, overflow_profile[..]) != csp.Unsatisfiable { os.exit(4i32) }
 
     // 5..10: AC-2001 against AC-3.
     let ac2001_code = check_ac2001()
