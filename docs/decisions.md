@@ -43369,3 +43369,20 @@ depend on the current context are the isolated state.
 `x_khronos_gl_load` synchronizes two fake-resolver threads that return distinct
 `glGetError` functions. Both must retain their own result after both tables are loaded;
 the fixture runs without a graphics driver and catches a process-global table overwrite.
+
+## D5917 — Special-function limits and signed extended gcd boundaries
+
+`e.math.special` recognizes the valid extended-real arguments before evaluating its
+finite approximations: `lgamma` and `gamma` map `+infinity` to `+infinity`; `erf`
+and `erfc` take their signed limits; the regularised gamma pair handles a finite
+shape or finite argument against `+infinity`; and the normal, Student, chi-squared
+and F CDFs return their limiting probabilities. `choose(+infinity, 0)` is one and a
+finite positive lower argument gives `+infinity`; indeterminate paired limits remain
+NaN rather than being assigned an arbitrary path-dependent value.
+
+`e.math.ntheory.extended_gcd` now returns `(g, x, y, err)`. A non-negative gcd of
+`2^63` has no `i64` representation, so `(i64::MIN, 0)`, `(0, i64::MIN)` and the
+same-minimum pair report `Unrepresentable`. Other minimum operands are reduced before
+the signed Euclidean loop, including the former `i64::MIN / -1` trap, and successful
+calls retain `a*x + b*y == g`. The math-special and math-ntheory fixtures pin these
+limits, failures and ordinary signed Bezout identities.

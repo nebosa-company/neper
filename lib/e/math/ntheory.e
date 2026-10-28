@@ -7,8 +7,11 @@
 // Miller-Rabin test with the twelve bases that decide every 64-bit integer. Tables
 // are caller storage sized as each declaration states.
 
+use e.mem
+
 error TooSmall
 error Invalid
+error Unrepresentable
 
 // Stein's binary gcd; `gcd(0, 0)` is 0.
 fn gcd(a: u64, b: u64) -> u64 {
@@ -41,8 +44,51 @@ fn lcm(a: u64, b: u64) -> u64 {
     ret a / gcd(a, b) * b
 }
 
-// `g`, `x`, `y` with `a * x + b * y == g == gcd(a, b)`.
-fn extended_gcd(a: i64, b: i64) -> (i64, i64, i64) {
+fn minimum_i64() -> i64 { ret mem.bitcast[i64](9223372036854775808u64) }
+
+fn maximum_i64() -> i64 { ret 9223372036854775807i64 }
+
+// `a - b * c`, if its intermediate product and final difference are `i64`.
+fn subtract_product(a: i64, b: i64, c: i64) -> (i64, bool) {
+    let product = b *% c
+    if c == 0i64 { ret (a, true) }
+    if b == minimum_i64() && c == 0i64 - 1i64 { ret (0i64, false) }
+    if product / c != b { ret (0i64, false) }
+    if product > 0i64 && a < minimum_i64() + product { ret (0i64, false) }
+    if product < 0i64 && a > maximum_i64() + product { ret (0i64, false) }
+    ret (a - product, true)
+}
+
+// `g`, `x`, `y` with `a * x + b * y == g == gcd(a, b)`. The only positive
+// gcd outside `i64` is 2^63, which answers `Unrepresentable`; successful
+// results retain the signed Bézout identity.
+fn extended_gcd(a: i64, b: i64) -> (i64, i64, i64, err) {
+    let lowest = minimum_i64()
+    if (a == lowest && b == 0i64) || (a == 0i64 && b == lowest) || (a == lowest && b == lowest) {
+        ret (0i64, 0i64, 0i64, Unrepresentable)
+    }
+    // Reduce a lowest operand before the signed Euclidean loop. The quotient is
+    // safe after the -1 case, and substitution restores the Bézout coefficient.
+    if a == lowest {
+        if b == 0i64 - 1i64 { ret (1i64, 0i64, 0i64 - 1i64, ok) }
+        let q = a / b
+        let r = a % b
+        let (g, x, y, gcd_error) = extended_gcd(r, b)
+        if gcd_error != ok { ret (0i64, 0i64, 0i64, gcd_error) }
+        let (next_y, fits) = subtract_product(y, q, x)
+        if !fits { ret (0i64, 0i64, 0i64, Unrepresentable) }
+        ret (g, x, next_y, ok)
+    }
+    if b == lowest {
+        if a == 0i64 - 1i64 { ret (1i64, 0i64 - 1i64, 0i64, ok) }
+        let q = b / a
+        let r = b % a
+        let (g, x, y, gcd_error) = extended_gcd(a, r)
+        if gcd_error != ok { ret (0i64, 0i64, 0i64, gcd_error) }
+        let (next_x, fits) = subtract_product(x, q, y)
+        if !fits { ret (0i64, 0i64, 0i64, Unrepresentable) }
+        ret (g, next_x, y, ok)
+    }
     var old_r = a
     var r = b
     var old_s = 1i64
@@ -61,8 +107,8 @@ fn extended_gcd(a: i64, b: i64) -> (i64, i64, i64) {
         old_t = t
         t = next_t
     }
-    if old_r < 0i64 { ret (0i64 - old_r, 0i64 - old_s, 0i64 - old_t) }
-    ret (old_r, old_s, old_t)
+    if old_r < 0i64 { ret (0i64 - old_r, 0i64 - old_s, 0i64 - old_t, ok) }
+    ret (old_r, old_s, old_t, ok)
 }
 
 // `(a + b) mod m` without overflow; `a` and `b` must already be below `m`.

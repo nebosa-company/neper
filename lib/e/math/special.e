@@ -9,12 +9,18 @@
 // double precision. Arguments outside each function's domain answer NaN.
 
 use e.math
+use e.mem
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
+
+fn infinity() -> f64 { ret mem.bitcast[f64](9218868437227405312u64) }
+
+fn negative_infinity() -> f64 { ret 0.0f64 - infinity() }
 
 // ln Γ(x) for x > 0.
 fn lgamma(x: f64) -> f64 {
     if x <= 0.0f64 { ret nan() }
+    if x == infinity() { ret infinity() }
     if x < 0.5f64 {
         // Reflection: Γ(x) Γ(1 - x) = π / sin(π x).
         let pi = 3.141592653589793f64
@@ -37,12 +43,15 @@ fn lgamma(x: f64) -> f64 {
 // Γ(x) for x > 0; overflows to infinity past about 171.6.
 fn gamma(x: f64) -> f64 {
     if x <= 0.0f64 { ret nan() }
+    if x == infinity() { ret infinity() }
     ret math.exp[f64](lgamma(x))
 }
 
 // The error function, by the erfc continued fraction for |x| >= 2 and the
 // Taylor series below (Abramowitz & Stegun 7.1.5 / 7.1.14).
 fn erf(x: f64) -> f64 {
+    if x == infinity() { ret 1.0f64 }
+    if x == negative_infinity() { ret 0.0f64 - 1.0f64 }
     if x < 0.0f64 { ret 0.0f64 - erf(0.0f64 - x) }
     if x < 2.5f64 {
         var term = x
@@ -64,6 +73,8 @@ fn erf(x: f64) -> f64 {
 
 // The complementary error function, accurate in the tail.
 fn erfc(x: f64) -> f64 {
+    if x == infinity() { ret 0.0f64 }
+    if x == negative_infinity() { ret 2.0f64 }
     if x < 2.5f64 { ret 1.0f64 - erf(x) }
     // Lentz's continued fraction: erfc(x) = exp(-x^2)/sqrt(pi) * 1/(x + 1/2/(x + 1/(x + 3/2/(x + ...)))).
     var f = x
@@ -90,6 +101,11 @@ fn erfc(x: f64) -> f64 {
 // The regularised lower incomplete gamma P(a, x), a > 0, x >= 0.
 fn gamma_p(a: f64, x: f64) -> f64 {
     if a <= 0.0f64 || x < 0.0f64 { ret nan() }
+    if a == infinity() {
+        if x == infinity() { ret nan() }
+        ret 0.0f64
+    }
+    if x == infinity() { ret 1.0f64 }
     if x == 0.0f64 { ret 0.0f64 }
     if x < a + 1.0f64 {
         // Series.
@@ -112,6 +128,11 @@ fn gamma_p(a: f64, x: f64) -> f64 {
 // The regularised upper incomplete gamma Q(a, x) = 1 - P(a, x).
 fn gamma_q(a: f64, x: f64) -> f64 {
     if a <= 0.0f64 || x < 0.0f64 { ret nan() }
+    if a == infinity() {
+        if x == infinity() { ret nan() }
+        ret 1.0f64
+    }
+    if x == infinity() { ret 0.0f64 }
     if x < a + 1.0f64 { ret 1.0f64 - gamma_p(a, x) }
     // Lentz's continued fraction.
     var b = x + 1.0f64 - a
@@ -211,6 +232,8 @@ fn normal_quantile(p: f64) -> f64 {
 // Student's t distribution function with `df` degrees of freedom.
 fn t_cdf(t: f64, df: f64) -> f64 {
     if df <= 0.0f64 { ret nan() }
+    if t == infinity() { ret 1.0f64 }
+    if t == negative_infinity() { ret 0.0f64 }
     let x = df / (df + t * t)
     let tail = 0.5f64 * beta_i(df / 2.0f64, 0.5f64, x)
     if t >= 0.0f64 { ret 1.0f64 - tail }
@@ -220,17 +243,23 @@ fn t_cdf(t: f64, df: f64) -> f64 {
 // The chi-squared distribution function with `df` degrees of freedom.
 fn chi_squared_cdf(x: f64, df: f64) -> f64 {
     if df <= 0.0f64 || x < 0.0f64 { ret nan() }
+    if x == infinity() { ret 1.0f64 }
     ret gamma_p(df / 2.0f64, x / 2.0f64)
 }
 
 // The F distribution function with `d1` and `d2` degrees of freedom.
 fn f_cdf(x: f64, d1: f64, d2: f64) -> f64 {
     if d1 <= 0.0f64 || d2 <= 0.0f64 || x < 0.0f64 { ret nan() }
+    if x == infinity() { ret 1.0f64 }
     ret beta_i(d1 / 2.0f64, d2 / 2.0f64, d1 * x / (d1 * x + d2))
 }
 
 // The binomial coefficient as a real number, through the log-gamma.
 fn choose(n: f64, k: f64) -> f64 {
     if k < 0.0f64 || k > n { ret 0.0f64 }
+    if n == infinity() {
+        if k == 0.0f64 { ret 1.0f64 }
+        if k < infinity() { ret infinity() }
+    }
     ret math.floor[f64](0.5f64 + math.exp[f64](lgamma(n + 1.0f64) - lgamma(k + 1.0f64) - lgamma(n - k + 1.0f64)))
 }

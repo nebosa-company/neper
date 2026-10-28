@@ -23,12 +23,15 @@ fn is_nan(x: f64) -> bool { ret x != x }
 fn main(a: *mem.Arena, args: []str) -> err {
     let tight = 0.000000000001f64
     let loose = 0.00000001f64
+    let infinity = mem.bitcast[f64](9218868437227405312u64)
+    let negative_infinity = 0.0f64 - infinity
 
     // 1: gamma.
     if !near(special.lgamma(0.5f64), 0.5723649429247f64, tight) || !near(special.lgamma(10.0f64), 12.801827480081469f64, tight) { os.exit(1i32) }
     if !near(special.lgamma(100.5f64), 361.43554046777757f64, tight) || !near(special.lgamma(0.1f64), 2.252712651734206f64, tight) { os.exit(1i32) }
     if !near(special.gamma(5.0f64), 24.0f64, loose) || !near(special.gamma(1.0f64), 1.0f64, loose) || !near(special.gamma(0.5f64), 1.7724538509055159f64, loose) { os.exit(1i32) }
     if !is_nan(special.lgamma(0.0f64)) || !is_nan(special.gamma(0.0f64 - 1.0f64)) { os.exit(1i32) }
+    if special.lgamma(infinity) != infinity || special.gamma(infinity) != infinity { os.exit(1i32) }
     if special.choose(10.0f64, 3.0f64) != 120.0f64 || special.choose(52.0f64, 5.0f64) != 2598960.0f64 || special.choose(3.0f64, 5.0f64) != 0.0f64 { os.exit(1i32) }
 
     // 2: erf and erfc.
@@ -37,6 +40,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(special.erfc(4.0f64), 0.00000001541725790028002f64, 0.0000001f64) || special.erf(0.0f64) != 0.0f64 { os.exit(2i32) }
     if !near(special.erfc(4.0f64) / 0.00000001541725790028002f64, 1.0f64, loose) { os.exit(2i32) }
     if !near(special.erfc(0.5f64), 1.0f64 - 0.5204998778130465f64, tight) { os.exit(2i32) }
+    if special.erf(infinity) != 1.0f64 || special.erf(negative_infinity) != 0.0f64 - 1.0f64 || special.erfc(infinity) != 0.0f64 || special.erfc(negative_infinity) != 2.0f64 { os.exit(2i32) }
 
     // 3: incomplete gamma and beta.
     if !near(special.gamma_p(2.5f64, 1.0f64), 0.15085496391539038f64, loose) || !near(special.gamma_p(2.5f64, 6.0f64), 0.9652122194937581f64, loose) { os.exit(3i32) }
@@ -45,6 +49,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(special.beta_i(2.0f64, 3.0f64, 0.4f64), 0.5248f64, loose) || !near(special.beta_i(0.5f64, 0.5f64, 0.9f64), 0.7951672353008665f64, loose) { os.exit(3i32) }
     if !near(special.beta_i(10.0f64, 2.0f64, 0.95f64), 0.8981054088575682f64, loose) { os.exit(3i32) }
     if special.beta_i(2.0f64, 3.0f64, 0.0f64) != 0.0f64 || special.beta_i(2.0f64, 3.0f64, 1.0f64) != 1.0f64 || !is_nan(special.beta_i(2.0f64, 3.0f64, 1.5f64)) { os.exit(3i32) }
+    if special.gamma_p(2.0f64, infinity) != 1.0f64 || special.gamma_q(2.0f64, infinity) != 0.0f64 || special.gamma_p(infinity, 2.0f64) != 0.0f64 || special.gamma_q(infinity, 2.0f64) != 1.0f64 { os.exit(3i32) }
 
     // 4: distribution functions.
     if !near(special.normal_cdf(1.96f64), 0.9750021048517795f64, loose) || !near(special.normal_cdf(0.0f64), 0.5f64, tight) { os.exit(4i32) }
@@ -53,6 +58,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(special.chi_squared_cdf(3.84f64, 1.0f64), 0.9499564787512949f64, loose) || !near(special.chi_squared_cdf(10.0f64, 4.0f64), 0.9595723180054873f64, loose) { os.exit(4i32) }
     if !near(special.f_cdf(3.0f64, 3.0f64, 10.0f64), 0.9182530481901753f64, loose) || special.f_cdf(0.0f64, 3.0f64, 10.0f64) != 0.0f64 { os.exit(4i32) }
     if !is_nan(special.t_cdf(1.0f64, 0.0f64)) || !is_nan(special.chi_squared_cdf(0.0f64 - 1.0f64, 2.0f64)) { os.exit(4i32) }
+    if special.normal_cdf(infinity) != 1.0f64 || special.normal_cdf(negative_infinity) != 0.0f64 || special.t_cdf(infinity, 5.0f64) != 1.0f64 || special.t_cdf(negative_infinity, 5.0f64) != 0.0f64 || special.chi_squared_cdf(infinity, 2.0f64) != 1.0f64 || special.f_cdf(infinity, 3.0f64, 10.0f64) != 1.0f64 { os.exit(4i32) }
+    if special.choose(infinity, 0.0f64) != 1.0f64 || special.choose(infinity, 3.0f64) != infinity { os.exit(4i32) }
 
     // 5: the normal quantile inverts the CDF.
     if !near(special.normal_quantile(0.975f64), 1.959963984540054f64, loose) || !near(special.normal_quantile(0.001f64), 0.0f64 - 3.090232306167813f64, loose) { os.exit(5i32) }
