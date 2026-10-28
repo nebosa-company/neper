@@ -94,11 +94,23 @@ fn decode_handshake(src: []const u8) -> (Protocol, err) {
     ret (p, ok)
 }
 
+// The body size accepted by `decode_message`, optionally prefixed by a valid SP id.
+fn message_body_length(has_id: bool, id: u32, payload_length: usize) -> (usize, err) {
+    var header = 0usize
+    if has_id {
+        if id & 2147483648u32 == 0u32 { ret (0usize, NoId) }
+        header = 4usize
+    }
+    if payload_length > 1073741824usize - header { ret (0usize, TooLarge) }
+    ret (header + payload_length, ok)
+}
+
 // A message with an optional 4-byte `id` header (`has_id`) followed by `payload`.
 fn encode_message(dst: []u8, has_id: bool, id: u32, payload: []const u8) -> (usize, err) {
+    let (total, length_error) = message_body_length(has_id, id, payload.len)
+    if length_error != ok { ret (0usize, length_error) }
     var header = 0usize
     if has_id { header = 4usize }
-    let total = header + payload.len
     if dst.len < 8usize + total { ret (0usize, TooSmall) }
     var i = 0usize
     while i < 8usize {
@@ -211,11 +223,15 @@ fn handshake(c: *Conn) -> err {
 fn send(c: *Conn, id: u32, payload: []const u8) -> err {
     var small: [1500]u8 = zero
     let with_id = carries_id(c.local)
-    if payload.len + 12usize <= 1500usize {
+    var small_payload_limit = 1492usize
+    if with_id { small_payload_limit = 1488usize }
+    if payload.len <= small_payload_limit {
         let (n, e) = encode_message(small[0usize..1500usize], with_id, id, payload)
         if e != ok { ret e }
         ret send_all(c.sock, small[0usize..n])
     }
+    let (_, length_error) = message_body_length(with_id, id, payload.len)
+    if length_error != ok { ret length_error }
     // large: the header first, then the payload straight from the caller's slice
     let (hn, he) = encode_message(small[0usize..1500usize], with_id, id, payload[0usize..0usize])
     if he != ok { ret he }
