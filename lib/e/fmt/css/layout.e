@@ -4429,7 +4429,7 @@ fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64) {
     if s2.width.kind != .Px && s2.height.kind == .Px && s2.height.pct == 0.0f64 {
         let b2 = bx(l, c)
         if b2.inner == .Flow {
-            let (rw, has_rw) = ratio_width(l, c, to_content_h(l, c, s2.height.px))
+            let (rw, has_rw) = ratio_width(l, c, clamp_height(l, c, to_content_h(l, c, s2.height.px), -1.0f64))
             if has_rw {
                 var rw_floor = rw
                 if s2.min_width.kind == .Auto && s2.overflow_x == .Visible {
