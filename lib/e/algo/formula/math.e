@@ -95,11 +95,11 @@ fn mean_of(nums: []const f64) -> f64 {
 }
 
 // A copy of `nums` sorted by `order` (1 ascending, -1 descending); a stable insertion sort.
-fn sorted(c: *f.Call, nums: []const f64, descending: bool) -> []f64 {
+fn sorted(c: *f.Call, nums: []const f64, descending: bool) -> ([]f64, f.Value) {
     var none: []f64 = zero
-    if nums.len == 0usize { ret none }
+    if nums.len == 0usize { ret (none, f.blank()) }
     let (out, e) = mem.alloc[f64](c.a, nums.len)
-    if e != ok { ret none }
+    if e != ok { ret (none, f.generic_error("Out of memory")) }
     var i = 0usize
     while i < nums.len {
         let v = nums[i]
@@ -118,7 +118,7 @@ fn sorted(c: *f.Call, nums: []const f64, descending: bool) -> []f64 {
         out[k] = v
         i += 1usize
     }
-    ret out
+    ret (out, f.blank())
 }
 
 // variance: a number, or the `#NUM!` error for too little data.
@@ -325,7 +325,8 @@ fn h_median(c: *f.Call) -> f.Value {
     let (nums, failure) = numbers(c, c.args)
     if f.is_error(failure) { ret failure }
     if nums.len == 0usize { ret f.num_error(msg1(c.a, "fnOfNoNumbers", "MEDIAN")) }
-    let s = sorted(c, nums, false)
+    let (s, sort_error) = sorted(c, nums, false)
+    if f.is_error(sort_error) { ret sort_error }
     let mid = s.len / 2usize
     if s.len % 2usize == 1usize { ret f.number(s[mid]) }
     ret f.number((s[mid - 1usize] + s[mid]) / 2.0f64)
@@ -1063,7 +1064,8 @@ fn h_is_normal(c: *f.Call) -> f.Value {
     let v = variance(c, nums, false)
     let sd = math.sqrt[f64](v.n)
     if sd == 0.0f64 { ret f.boolean(true) }
-    let s = sorted(c, nums, false)
+    let (s, sort_error) = sorted(c, nums, false)
+    if f.is_error(sort_error) { ret sort_error }
     var total = 0.0f64
     var i = 0usize
     while i < n {
@@ -1093,7 +1095,8 @@ fn nth(c: *f.Call, name: str, descending: bool) -> f.Value {
         if k.kind != .Blank { position = f.number_text(c.a, k.n) }
         ret f.num_error(msg2(c.a, "noValueAtPosition", name, position))
     }
-    let s = sorted(c, pool, descending)
+    let (s, sort_error) = sorted(c, pool, descending)
+    if f.is_error(sort_error) { ret sort_error }
     ret f.number(s[usize(rank) - 1usize])
 }
 
