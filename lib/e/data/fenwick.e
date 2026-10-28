@@ -64,6 +64,7 @@ fn set(f: *Fenwick, index: usize, value: i64) { add(f, index, value - get(f, ind
 // For non-negative elements: the least `count` whose prefix sum reaches `total`,
 // or `len + 1` when no prefix does. A binary descent over the tree, `O(log n)`.
 fn lower_bound(f: *const Fenwick, total: i64) -> usize {
+    if total <= 0i64 { ret 0usize }
     var remaining = total
     var position = 0usize
     var step = 1usize
