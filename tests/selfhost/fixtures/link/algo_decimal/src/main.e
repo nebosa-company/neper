@@ -89,6 +89,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     big_at_max_scale.scale = 38u8
     let (large_reduced_product, large_reduced_error) = dec.mul(big_at_max_scale, ten)
     if large_reduced_error != ok || dec.compare(large_reduced_product, big_at_max_scale) != 0i32 { os.exit(25) }
+    let cross_overflowing = dec.Decimal { coefficient: dec.Coefficient { low: 0u64, high: 4611686018427387904i64 }, scale: 38u8 }
+    let (cross_reduced_product, cross_reduced_error) = dec.mul(cross_overflowing, five)
+    if cross_reduced_error != ok || cross_reduced_product.coefficient.low != 0u64 || cross_reduced_product.coefficient.high != 2305843009213693952i64 || cross_reduced_product.scale != 38u8 { os.exit(26) }
     let (_, too_big) = dec.parse("170141183460469231731687303715884105728")
     if too_big != dec.Overflow { os.exit(20) }
     let (_, overflow) = dec.mul(big, dec_from("2"))

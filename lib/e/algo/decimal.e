@@ -274,17 +274,29 @@ fn mul(a: Decimal, b: Decimal) -> (Decimal, err) {
             scale -= 1usize
             continue
         }
-        break
+        // A zero of the product can also be split across the operands, e.g.
+        // 2 * 5. Remove one such pair before the multiplication overflows.
+        let (a_half, a_half_remainder) = magnitude_divmod_small(ma, 2u64)
+        let (b_fifth, b_fifth_remainder) = magnitude_divmod_small(mb, 5u64)
+        if a_half_remainder == 0u64 && b_fifth_remainder == 0u64 {
+            ma = a_half
+            mb = b_fifth
+            scale -= 1usize
+            continue
+        }
+        let (a_fifth, a_fifth_remainder) = magnitude_divmod_small(ma, 5u64)
+        let (b_half, b_half_remainder) = magnitude_divmod_small(mb, 2u64)
+        if a_fifth_remainder == 0u64 && b_half_remainder == 0u64 {
+            ma = a_fifth
+            mb = b_half
+            scale -= 1usize
+            continue
+        }
+        ret (zero, Overflow)
     }
     let (raw_product, fits) = magnitude_mul(ma, mb)
     if !fits { ret (zero, Overflow) }
     var product = raw_product
-    while scale > usize(MAX_SCALE) {
-        let (quotient, remainder) = magnitude_divmod_small(product, 10u64)
-        if remainder != 0u64 { ret (zero, Overflow) }
-        product = quotient
-        scale -= 1usize
-    }
     var negative = na != nb
     if is_zero(product) { negative = false }
     let (coefficient, coefficient_error) = coefficient_of(product, negative)
