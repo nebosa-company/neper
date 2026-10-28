@@ -2,14 +2,15 @@
 // options with positionals and `--`; `validate` refusing a duplicate long and a
 // required bool; `Unknown`, `InvalidArgument` (a bad integer, a missing value, a
 // repeat of a single option), `Missing` for a required option whose env variable is
-// unset; `help` rendered and wrapped; `parse_into` over a struct. Every check has its
-// own exit code.
+// unset; `help` rendered and wrapped; and `parse_into` over a struct with checked
+// integer ranges. Every check has its own exit code.
 use e.os
 use e.mem
 use e.str
 use e.cli
 
 type Settings = struct { name: str, count: i32, ratio: f64, verbose: bool }
+type NarrowSettings = struct { unsigned: u8, signed: i8, wide: u64 }
 
 fn make_args(a: *mem.Arena, one: str, two: str, three: str, four: str, five: str, six: str, count: usize) -> []const str {
     let (args, args_error) = mem.alloc[str](a, 6usize)
@@ -77,6 +78,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let a4 = make_args(a, "run", "input", "", "", "", "", 2usize)
     let (r4, e4) = cli.parse(a, &root, a4)
     if e4 != cli.Missing { os.exit(17) }
+    // Root options cannot be represented in a selected subcommand result, so they
+    // are refused rather than silently discarded when the parser descends.
+    let before_subcommand = make_args(a, "--verbose", "run", "--key", "k1", "", "", 4usize)
+    let (_, before_subcommand_error) = cli.parse(a, &root, before_subcommand)
+    if before_subcommand_error != cli.InvalidArgument { os.exit(33) }
     // Refusals.
     let a5 = make_args(a, "--nope", "", "", "", "", "", 1usize)
     let (r5, e5) = cli.parse(a, &root, a5)
@@ -99,6 +105,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     required_bool[0] = cli.Option { long: "flag", short: 0u8, kind: .Bool, required: true, repeated: false, env: "", help: "" }
     let bad2 = cli.Command { name: "bad", help: "", options: required_bool[0..], subcommands: zero }
     if cli.validate(&bad2) != cli.InvalidSpec { os.exit(23) }
+    // `parse` has 256 fixed option slots, so a larger declaration is invalid before
+    // a required entry can be skipped at the end of that table.
+    var option_bytes: [258]u8 = zero
+    var many_options: [257]cli.Option = zero
+    var option_at = 0usize
+    while option_at < 256usize {
+        option_bytes[option_at] = u8(option_at)
+        many_options[option_at] = cli.Option { long: option_bytes[option_at..option_at + 1usize], short: 0u8, kind: .String, required: false, repeated: false, env: "", help: "" }
+        option_at += 1usize
+    }
+    many_options[256usize] = cli.Option { long: option_bytes[256usize..258usize], short: 0u8, kind: .String, required: true, repeated: false, env: "", help: "" }
+    let too_many = cli.Command { name: "many", help: "", options: many_options[..], subcommands: zero }
+    if cli.validate(&too_many) != cli.InvalidSpec { os.exit(34) }
+    // Optional options do not read the process environment. PATH is guaranteed by
+    // the environment fixture on every supported host and is not an integer.
+    let (_, path_error) = os.env(a, "PATH")
+    if path_error != ok { os.exit(35) }
+    var optional_env_options: [1]cli.Option = zero
+    optional_env_options[0usize] = cli.Option { long: "from-path", short: 0u8, kind: .I64, required: false, repeated: false, env: "PATH", help: "" }
+    let optional_env = cli.Command { name: "env", help: "", options: optional_env_options[..], subcommands: zero }
+    let (optional_env_result, optional_env_error) = cli.parse(a, &optional_env, zero)
+    if optional_env_error != ok || optional_env_result.options.len != 0usize { os.exit(36) }
     // Help.
     let (text, e9) = cli.help(a, &root, 60u16)
     if e9 != ok { os.exit(24) }
@@ -118,5 +146,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let a11 = make_args(a, "--count", "x", "", "", "", "", 2usize)
     let (settings3, e13) = cli.parse_into[Settings](a, a11)
     if e13 != cli.InvalidArgument { os.exit(32) }
+    let unsigned_negative = make_args(a, "--unsigned", "-1", "", "", "", "", 2usize)
+    let (_, unsigned_negative_error) = cli.parse_into[NarrowSettings](a, unsigned_negative)
+    if unsigned_negative_error != cli.InvalidArgument { os.exit(37) }
+    let unsigned_large = make_args(a, "--unsigned", "256", "", "", "", "", 2usize)
+    let (_, unsigned_large_error) = cli.parse_into[NarrowSettings](a, unsigned_large)
+    if unsigned_large_error != cli.InvalidArgument { os.exit(38) }
+    let signed_large = make_args(a, "--signed", "128", "", "", "", "", 2usize)
+    let (_, signed_large_error) = cli.parse_into[NarrowSettings](a, signed_large)
+    if signed_large_error != cli.InvalidArgument { os.exit(39) }
+    let wide_max = make_args(a, "--wide", "18446744073709551615", "", "", "", "", 2usize)
+    let (wide_settings, wide_error) = cli.parse_into[NarrowSettings](a, wide_max)
+    if wide_error != ok || wide_settings.wide != 18446744073709551615u64 { os.exit(40) }
     ret ok
 }
