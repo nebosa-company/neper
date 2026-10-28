@@ -11,11 +11,13 @@
 // operation whose token it carries and ignores the rest, which a level-triggered poller
 // reports again. `wait_any` does the same for a slice and answers the first settled
 // operation in input order; a pending callback operation in the slice is run first,
-// since nothing else can complete it. The control's token and deadline are checked
-// before every attempt: a request wins as `Cancelled`, an expired deadline as
-// `TimedOut`, and a completed operation wins over both. `cancel` marks a pending
-// operation cancelled at once and answers whether it did. Bytes moved before a failure
-// or a cancellation stay counted in `progress` and are never reported rolled back.
+// since nothing else can complete it. A zero `wait_any` timeout still polls once, and
+// an unbounded one stops at the earliest pending control deadline. The control's token
+// and deadline are checked before every attempt: a request wins as `Cancelled`, an
+// expired deadline as `TimedOut`, and a completed operation wins over both. `cancel`
+// marks a pending operation cancelled at once and answers whether it did. Bytes moved
+// before a failure or a cancellation stay counted in `progress` and are never reported
+// rolled back.
 //
 // `take` on an operation that is still pending, or was taken already, is `Closed`; a
 // loop that refuses a registration (closed) is `Closed` at submission.
@@ -141,9 +143,11 @@ fn settle(r: *Record, outcome: State, failure: err) {
     }
 }
 
-// One attempt at the operation, after the control's checks; `failed` is the poller's
-// verdict on the socket, which is how a refused connection arrives.
-fn attempt(r: *Record, failed: bool) {
+// One attempt at the operation, after the control's checks. `ready` means the poller
+// named this socket; `failed` is its failure verdict, which is how a refused connect
+// arrives. A timer or wake event may produce no matching event, so it may only check a
+// pending socket's control and must not perform socket I/O or complete a connect.
+fn attempt(r: *Record, ready: bool, failed: bool) {
     if terminal(r) { ret }
     let (now, now_error) = time.monotonic()
     if now_error == ok {
@@ -157,6 +161,7 @@ fn attempt(r: *Record, failed: bool) {
             ret
         }
     }
+    if !ready && (r.kind == .Accept || r.kind == .Connect) { ret }
     if r.kind == .Read {
         let (got, read_error) = r.reader.read(r.reader.ctx, r.dst)
         r.bytes = got
@@ -212,7 +217,7 @@ fn poll_limit(control: cancel_api.Control) -> time.Duration {
 // Drives `r` to a terminal state: a callback runs now; a socket waits on the loop.
 fn drive(loop: *async.Loop, r: *Record) -> err {
     if r.kind == .Read || r.kind == .Write {
-        attempt(r, false)
+        attempt(r, false, false)
         ret ok
     }
     var events: [16]async.Event = zero
@@ -230,7 +235,7 @@ fn drive(loop: *async.Loop, r: *Record) -> err {
             }
             i += 1usize
         }
-        if mine || count == 0usize { attempt(r, failed) }
+        attempt(r, mine, failed)
     }
     ret ok
 }
@@ -270,6 +275,7 @@ fn wait_any(loop: *async.Loop, ops: []AnyOp, timeout: time.Duration) -> (usize, 
     let (start, start_error) = time.monotonic()
     if start_error != ok { ret (0usize, false, start_error) }
     var events: [16]async.Event = zero
+    var polled = false
     while true {
         var i = 0usize
         while i < ops.len {
@@ -282,7 +288,7 @@ fn wait_any(loop: *async.Loop, ops: []AnyOp, timeout: time.Duration) -> (usize, 
         while i < ops.len {
             let r = mem.cast[*Record](ops[i].state)
             if r.kind == .Read || r.kind == .Write {
-                attempt(r, false)
+                attempt(r, false, false)
                 ret (i, true, ok)
             }
             i += 1usize
@@ -291,10 +297,23 @@ fn wait_any(loop: *async.Loop, ops: []AnyOp, timeout: time.Duration) -> (usize, 
         if now_error != ok { ret (0usize, false, now_error) }
         var left = timeout.nanos - (now.nanos - start.nanos)
         if timeout.nanos < 0i64 { left = -1i64 }
-        if timeout.nanos >= 0i64 && left <= 0i64 { ret (0usize, false, ok) }
+        if timeout.nanos >= 0i64 && left <= 0i64 {
+            if polled { ret (0usize, false, ok) }
+            left = 0i64
+        }
+        i = 0usize
+        while i < ops.len {
+            let r = mem.cast[*Record](ops[i].state)
+            if !terminal(r) {
+                let limit = poll_limit(r.control)
+                if limit.nanos >= 0i64 && (left < 0i64 || limit.nanos < left) { left = limit.nanos }
+            }
+            i += 1usize
+        }
         let (count, poll_error) = async.poll(loop, events[0..], time.Duration { nanos: left })
         if poll_error == async.Invalid { ret (0usize, false, Closed) }
         if poll_error != ok { ret (0usize, false, poll_error) }
+        polled = true
         i = 0usize
         while i < ops.len {
             let r = mem.cast[*Record](ops[i].state)
@@ -308,7 +327,7 @@ fn wait_any(loop: *async.Loop, ops: []AnyOp, timeout: time.Duration) -> (usize, 
                 }
                 e += 1usize
             }
-            if mine || count == 0usize { attempt(r, failed) }
+            attempt(r, mine, failed)
             i += 1usize
         }
     }

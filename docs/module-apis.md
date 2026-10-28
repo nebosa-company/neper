@@ -15165,10 +15165,11 @@ requested cancellation; it does not acknowledge completion. A completed operatio
 wins a later cancellation request. Otherwise cancellation is cooperative and the
 terminal state reports Cancelled/TimedOut with observable partial effects preserved.
 No consumed bytes or transmitted bytes are silently reported as rolled back. `wait` drives
-the supplied loop; applications may instead poll it directly. `take` consumes a
-completed operation and returns its exact I/O error. `erase` is a non-owning typed
-conversion used only to build a heterogeneous `wait_any` slice; the original `Op[T]`
-must remain live.
+the supplied loop; applications may instead poll it directly. `wait_any` polls once for
+a zero timeout, and an unbounded caller timeout still wakes at the earliest pending
+operation deadline. `take` consumes a completed operation and returns its exact I/O
+error. `erase` is a non-owning typed conversion used only to build a heterogeneous
+`wait_any` slice; the original `Op[T]` must remain live.
 
 
 Progress is a monotonic observation, not completion acknowledgement. Byte operations
