@@ -68,7 +68,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     stops[1].offset = -0.5
     if paint.validate(&linear) != paint.Invalid { os.exit(21i32) }
     stops[1].offset = 1.0
-    var radial = paint.Brush { Radial: paint.RadialGradient { center: pt(0.0, 0.0), radius: -1.0, stops: stops[0..] } }
+    let nan = mem.bitcast[f32](2143289345u32)
+    let inf = mem.bitcast[f32](2139095040u32)
+    linear = paint.Brush { Linear: paint.LinearGradient { start: pt(0.0, nan), end: pt(1.0, 0.0), stops: stops[0..] } }
+    if paint.validate(&linear) != paint.Invalid { os.exit(180i32) }
+    linear = paint.Brush { Linear: paint.LinearGradient { start: pt(0.0, 0.0), end: pt(1.0, inf), stops: stops[0..] } }
+    if paint.validate(&linear) != paint.Invalid { os.exit(181i32) }
+    var radial = paint.Brush { Radial: paint.RadialGradient { center: pt(nan, 0.0), radius: 1.0, stops: stops[0..] } }
+    if paint.validate(&radial) != paint.Invalid { os.exit(182i32) }
+    radial = paint.Brush { Radial: paint.RadialGradient { center: pt(0.0, inf), radius: 1.0, stops: stops[0..] } }
+    if paint.validate(&radial) != paint.Invalid { os.exit(183i32) }
+    radial = paint.Brush { Radial: paint.RadialGradient { center: pt(0.0, 0.0), radius: nan, stops: stops[0..] } }
+    if paint.validate(&radial) != paint.Invalid { os.exit(184i32) }
+    radial = paint.Brush { Radial: paint.RadialGradient { center: pt(0.0, 0.0), radius: inf, stops: stops[0..] } }
+    if paint.validate(&radial) != paint.Invalid { os.exit(185i32) }
+    radial = paint.Brush { Radial: paint.RadialGradient { center: pt(0.0, 0.0), radius: -1.0, stops: stops[0..] } }
     var empty = paint.Brush { Radial: paint.RadialGradient { center: pt(0.0, 0.0), radius: 1.0, stops: stops[0..0usize] } }
     if paint.validate(&radial) != paint.Invalid || paint.validate(&empty) != paint.Invalid { os.exit(22i32) }
 

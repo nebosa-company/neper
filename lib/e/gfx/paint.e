@@ -96,6 +96,14 @@ fn unit(v: f32) -> bool {
     ret v >= 0.0 && v <= 1.0
 }
 
+fn finite(v: f32) -> bool {
+    ret v == v && v - v == 0.0
+}
+
+fn point_ok(point: geometry.Point) -> bool {
+    ret finite(point.x) && finite(point.y)
+}
+
 fn color_ok(c: Color) -> bool {
     ret unit(c.red) && unit(c.green) && unit(c.blue) && unit(c.alpha)
 }
@@ -117,10 +125,9 @@ fn validate(brush: *const Brush) -> err {
     case .Solid as color:
         if !color_ok(color) { ret Invalid }
     case .Linear as linear:
-        if !stops_ok(linear.stops) { ret Invalid }
-        if linear.start.x != linear.start.x || linear.end.x != linear.end.x { ret Invalid }
+        if !stops_ok(linear.stops) || !point_ok(linear.start) || !point_ok(linear.end) { ret Invalid }
     case .Radial as radial:
-        if !stops_ok(radial.stops) || radial.radius < 0.0 { ret Invalid }
+        if !stops_ok(radial.stops) || !point_ok(radial.center) || !finite(radial.radius) || radial.radius < 0.0 { ret Invalid }
     }
     ret ok
 }
