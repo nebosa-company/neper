@@ -336,6 +336,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if backwards_error != ok || backwards.direction != .RightToLeft || backwards.glyphs[0].id != 6u32 || backwards.glyphs[0].cluster != 1usize || backwards.glyphs[1].id != 5u32 { os.exit(11i32) }
     let (missing, missing_error) = shape.shape(a, font, "zé", plain)
     if missing_error != ok || missing.glyphs.len != 2usize || missing.glyphs[0].id != 0u32 || !near(missing.glyphs[0].advance_x, 0.5) || missing.glyphs[1].id != 0u32 || missing.glyphs[1].cluster != 1usize { os.exit(12i32) }
+    // Default-ignorable code points take no space, including gaps in the former
+    // handwritten list and the generated table's supplementary-plane range.
+    let (ignorable_run, ignorable_error) = shape.shape(a, font, "\xe2\x81\xaa\xf3\xa0\x84\x80", plain)
+    if ignorable_error != ok || ignorable_run.glyphs.len != 2usize || ignorable_run.glyphs[0].cluster != 0usize || !near(ignorable_run.glyphs[0].advance_x, 0.0) || ignorable_run.glyphs[1].cluster != 3usize || !near(ignorable_run.glyphs[1].advance_x, 0.0) { os.exit(90i32) }
     let (empty, empty_error) = shape.shape(a, font, "", plain)
     if empty_error != ok || empty.glyphs.len != 0usize { os.exit(13i32) }
 

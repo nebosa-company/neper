@@ -25,6 +25,7 @@
 
 use e.mem
 use e.text.unicode
+use e.text.uprops
 use e.text.utf8
 
 type FontId = u32
@@ -661,13 +662,7 @@ fn pango_advances(font: Font, size26: i64, b: *Buffer) {
 }
 
 fn ignorable_scalar(c: u32) -> bool {
-    if c == 173u32 || c == 847u32 || c == 6158u32 || c == 65279u32 { ret true }
-    if c >= 8203u32 && c <= 8207u32 { ret true }
-    if c >= 8234u32 && c <= 8238u32 { ret true }
-    if c >= 8288u32 && c <= 8292u32 { ret true }
-    if c >= 8294u32 && c <= 8297u32 { ret true }
-    if c >= 65024u32 && c <= 65039u32 { ret true }
-    ret false
+    ret uprops.default_ignorable(c)
 }
 
 fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err) {
