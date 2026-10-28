@@ -403,7 +403,7 @@ fn rev_initial(l: *Layout, node: u32, name: str) -> i64 {
         if l.d.nodes[usize(sib)].kind == .Element {
             let (rs, has_rs) = extra_text(&l.styles[usize(sib)], "counter-reset")
             if (has_rs && resets_name(l, rs, name)) || (!has_rs && str.eq(name, "list-item") && implicit_list_reset(l, sib)) { break }
-            if !(str.eq(name, "list-item") && l.styles[usize(sib)].display == .ListItem) { rev_walk(l, sib, name, &acc, false) }
+            if l.styles[usize(sib)].display != .ListItem { rev_walk(l, sib, name, &acc, false) }
         }
         sib = l.d.nodes[usize(sib)].next_sibling
     }
@@ -842,8 +842,31 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
         }
     }
     apply_counter_props(l, s, node)
+    if s.display == .ListItem && l.d.nodes[usize(node)].parent != html.NONE && css_resets_list_item(l, l.d.nodes[usize(node)].parent) {
+        let (vtext, has_vtext) = dom.get_attribute(l.d, node, "value")
+        let vat = find_counter(l, "list-item")
+        if has_vtext && vat >= 0i64 {
+            let (vn, vgood) = str.parse_i64(str.trim(vtext))
+            if vgood == ok {
+                l.counters.items[usize(vat)].value = vn
+                l.counters.items[usize(vat)].has_pend = false
+            }
+        }
+    }
     // The implicit `list-item` counter: a list starts one and each item steps it (see `list_ordinal`).
     if n.namespace == .Html && (str.eq(n.name, "ol") || str.eq(n.name, "ul") || str.eq(n.name, "menu")) && !css_resets_list_item(l, node) { counter_instantiate(l, "list-item", 0i64) }
+    if implicit_list_reset(l, node) && !is_reversed_ol(l, node) {
+        let (fwd_rs, has_fwd_rs) = extra_text(s, "counter-reset")
+        if !has_fwd_rs {
+            // Like a reversed list's, the start takes effect at the first step: before it the counter reads 0.
+            counter_instantiate(l, "list-item", 0i64)
+            let fat = find_counter(l, "list-item")
+            if fat >= 0i64 {
+                l.counters.items[usize(fat)].pend = forward_list_start(l, node)
+                l.counters.items[usize(fat)].has_pend = true
+            }
+        }
+    }
     if n.namespace == .Html && is_reversed_ol(l, node) && css_resets_list_item(l, node) {
         let (own_rs, has_own_rs) = extra_text(s, "counter-reset")
         if !has_own_rs {
@@ -961,7 +984,19 @@ fn css_resets_list_item(l: *Layout, node: u32) -> bool {
         let (sv, has_sv) = dom.get_attribute(l.d, node, "start")
         ret !has_sv
     }
-    ret false
+    ret implicit_list_reset(l, node)
+}
+
+// The value a forward list's counter holds before its first item steps it: one before `start` (0 without one).
+fn forward_list_start(l: *Layout, node: u32) -> i64 {
+    if dom.is_html_named(l.d, node, "ol") {
+        let (sv, has_sv) = dom.get_attribute(l.d, node, "start")
+        if has_sv {
+            let (n, good) = str.parse_i64(str.trim(sv))
+            if good == ok { ret n - 1i64 }
+        }
+    }
+    ret 0i64
 }
 
 // The step of a list item: its own `counter-increment` of `list-item`, else 1 (-1 in a reversed list).
