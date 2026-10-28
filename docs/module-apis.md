@@ -13014,8 +13014,9 @@ last_error_detail is a legacy M2 bridge; the `_detail` forms (D479, H07) are the
 checked API's transport: each writes the host's account of its own failing call into
 the caller's `os.ErrorDetail` at that call, before any cleanup, naming the `e.os`
 operation that failed (`stat` under `read_file`, `rename` under `move`) and its path;
-`make_dirs_detail` names the component that could not be made. Partial effects are
-the plain form's: what was made before the failing step stays made.
+`make_dirs_detail` names the component that could not be made; on that failure its
+normalized subject stays in the caller arena until the caller resets it. Partial effects
+are the plain form's: what was made before the failing step stays made.
 
 ### `e.fs.mmap`
 

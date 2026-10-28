@@ -192,7 +192,7 @@ fn make_dirs(a: *mem.Arena, path_text: str) -> err {
     let (normalized, normalize_error) = path.normalize(a, path_text, style)
     if normalize_error != ok {
         mem.reset(a, checkpoint)
-        ret from_os(normalize_error)
+        ret normalize_error
     }
     var at = path.root_length(normalized, style)
     while at <= normalized.len {
@@ -626,7 +626,7 @@ fn walk_next_err(it: *Walk) -> (Entry, bool, err) {
         parts[0usize] = state.levels[level].path
         parts[1usize] = name
         let (full, join_error) = path.join(state.arena, parts[..], host_style())
-        if join_error != ok { ret (entry, false, from_os(join_error)) }
+        if join_error != ok { ret (entry, false, join_error) }
         // The listing gives a kind but no size, and whether the link or its target is
         // described is the caller's choice, so each entry is looked up.
         var info: os.FileInfo = zero
@@ -720,8 +720,10 @@ fn make_dirs_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> e
     let (normalized, normalize_error) = path.normalize(a, path_text, style)
     if normalize_error != ok {
         mem.reset(a, checkpoint)
-        ret from_os(normalize_error)
+        ret normalize_error
     }
+    // A detail error below borrows a normalized prefix, so its failure path retains
+    // this allocation until the caller has consumed `detail.subject`.
     var at = path.root_length(normalized, style)
     while at <= normalized.len {
         if at == normalized.len || path.is_separator(normalized[at], style) {
@@ -732,21 +734,18 @@ fn make_dirs_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> e
                 let step_error = os.mkdir(a, prefix)
                 if step_error != ok && step_error != os.Exists {
                     *detail = os.last_error_detail("mkdir", prefix)
-                    mem.reset(a, checkpoint)
                     ret from_os(step_error)
                 }
                 if step_error == os.Exists {
                     let (info, stat_error) = os.stat_detail(a, prefix, detail)
                     if stat_error != ok {
-                        mem.reset(a, checkpoint)
                         ret from_os(stat_error)
                     }
                     if info.kind != .Dir {
                         detail.kind = .Exists
                         detail.native_code = 0i32
                         detail.operation = "mkdir"
-                        detail.subject = path_text
-                        mem.reset(a, checkpoint)
+                        detail.subject = prefix
                         ret Exists
                     }
                 }
