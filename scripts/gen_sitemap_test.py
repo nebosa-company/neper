@@ -3,9 +3,10 @@
 Reference: Python's `xml.etree.ElementTree` over random sitemap documents (urlset and
 sitemapindex; default and prefixed namespaces, extension elements, comments, CDATA, entity
 references, whitespace), reading each entry's `loc`, `lastmod`, `changefreq` and `priority`
-by local name and applying the protocol's value checks. Writer output is verified by reading
-it back through the library and, at generation, by ElementTree (the entries written are
-the entries the fixture rebuilds from the same hex fields).
+only when it is in the root sitemap namespace and applying the protocol's value checks.
+Writer output is verified by reading it back through the library and, at generation, by
+ElementTree (the entries written are the entries the fixture rebuilds from the same hex
+fields).
 """
 import random
 import sys
@@ -45,17 +46,26 @@ def expected(text):
         root = ET.fromstring(text.encode('utf-8'))
     except ET.ParseError:
         return None
-    name = root.tag.split('}')[-1]
+    root_ns, _, name = root.tag.rpartition('}')
+    if root_ns:
+        root_ns = root_ns[1:]
     if name not in ('urlset', 'sitemapindex'):
         return None
     item = 'url' if name == 'urlset' else 'sitemap'
     out = []
     for child in root:
-        if child.tag.split('}')[-1] != item:
+        child_ns, _, child_name = child.tag.rpartition('}')
+        if child_ns:
+            child_ns = child_ns[1:]
+        if child_ns != root_ns or child_name != item:
             continue
         e = {'loc': '', 'lastmod': '', 'changefreq': '', 'priority': ''}
         for f in child:
-            n = f.tag.split('}')[-1]
+            field_ns, _, n = f.tag.rpartition('}')
+            if field_ns:
+                field_ns = field_ns[1:]
+            if field_ns != root_ns:
+                continue
             if n in e:
                 e[n] = (f.text or '').strip()
         if not e['loc'] or len(e['loc'].encode()) > 2048:
@@ -124,6 +134,17 @@ for _ in range(80):
             e['changefreq'] = ''
             e['priority'] = ''
     text = render(entries, index, random.choice([0, 0, 1]))
+    exp = expected(text)
+    assert exp is not None, text
+    isindex, got = exp
+    lines.append('P %s => %d %d %s' % (hx(text), len(got), 1 if isindex else 0, ' '.join('%s %s %s %s' % tuple(hx(e[k]) for k in ('loc', 'lastmod', 'changefreq', 'priority')) for e in got)))
+namespace_cases = [
+    '<urlset xmlns="%s" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"><image:url><image:loc>https://extension.example/</image:loc></image:url></urlset>' % NS,
+    '<urlset xmlns="%s" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"><url><image:loc>https://extension.example/</image:loc><loc>https://core.example/</loc></url></urlset>' % NS,
+    '<sm:urlset xmlns:sm="%s" xmlns="%s" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"><url><image:loc>https://extension.example/</image:loc><loc>https://core.example/default</loc></url></sm:urlset>' % (NS, NS),
+    '<urlset xmlns="%s" xmlns:sm="%s"><sm:url><sm:loc>https://core.example/prefix</sm:loc></sm:url></urlset>' % (NS, NS),
+]
+for text in namespace_cases:
     exp = expected(text)
     assert exp is not None, text
     isindex, got = exp
