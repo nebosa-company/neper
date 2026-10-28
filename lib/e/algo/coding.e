@@ -1014,6 +1014,10 @@ fn ans_decode(src: []const u8, freqs: []const u32, dst: []u8) -> (usize, err) {
         }
         i += 1usize
     }
+    // The encoder begins from this state and writes every renormalisation byte.
+    // Accepting any other end state would silently treat damaged or concatenated
+    // payloads as a valid message.
+    if x != 8388608u64 || at != src.len { ret (0usize, Invalid) }
     ret (n, ok)
 }
 
