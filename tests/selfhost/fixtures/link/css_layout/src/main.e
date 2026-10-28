@@ -241,6 +241,11 @@ fn css_issue_regressions(a: *mem.Arena) {
         fi1199 += 1usize
     }
     if tabs1199 != 2usize || !near(first_tab1199, 40.0f64) || !near(second_tab1199, 80.0f64) { os.exit(169) }
+
+    // #1192: the minimum signed named-line occurrence is unresolvable, not a
+    // signed-negation overflow during grid placement.
+    let (p1192, ok1192) = build(a, "<div style=\"display:grid;grid-template-columns:[foo] 50px [foo] 50px [foo]\"><div id=a style=\"grid-column:foo -2147483648;height:10px\"></div></div>", "")
+    if !ok1192 || !is_rect(rect_of(p1192, "a"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(170) }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

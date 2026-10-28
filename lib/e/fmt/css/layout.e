@@ -5756,14 +5756,14 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
         if pass == 1usize {
             if end { want = cv.cat(a, spec.name, "-end") } else { want = cv.cat(a, spec.name, "-start") }
         }
-        var count = 0i32
+        var count = 0i64
         var found = 0i32
         var k = 0usize
         if spec.n > 0i32 {
             while k < names.len {
                 if str.eq(names.items[k].name, want) {
-                    count += 1i32
-                    if count == spec.n { found = names.items[k].line }
+                    count += 1i64
+                    if count == i64(spec.n) { found = names.items[k].line }
                 }
                 k += 1usize
             }
@@ -5772,8 +5772,8 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
             while k > 0usize {
                 k -= 1usize
                 if str.eq(names.items[k].name, want) {
-                    count += 1i32
-                    if count == -spec.n { found = names.items[k].line }
+                    count += 1i64
+                    if count == -i64(spec.n) { found = names.items[k].line }
                 }
             }
         }
