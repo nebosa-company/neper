@@ -4,7 +4,7 @@
 // (`1.3.6.1.2.1.1.1.0` is `[1, 3, 6, 1, 2, 1, 1, 1, 0]`, at most 16 arcs); values are an INTEGER or Gauge32,
 // Counter32, TimeTicks, Counter64 (saturating at the largest i64), an octet string or IpAddress (bytes), an OID, NULL or one
 // of the v2c exceptions (noSuchObject, noSuchInstance, endOfMibView). Lengths are definite, short or long
-// form (up to four length bytes); anything longer, a truncated element or a tag the message does not allow
+// form through 65535 content bytes; anything longer, a truncated element or a tag the message does not allow
 // is `Malformed`. No UDP here: the caller sends the bytes to port 161. SNMPv3 is not covered.
 
 error Malformed
@@ -33,6 +33,7 @@ const T_NO_SUCH_INSTANCE: u8 = 129u8
 const T_END_OF_MIB: u8 = 130u8
 const MAX_BINDINGS: usize = 8usize
 const MAX_ARCS: usize = 16usize
+const MAX_LENGTH: usize = 65535usize
 
 type Message = struct {
     version: u8,
@@ -144,6 +145,14 @@ fn put_base128(out: []u8, at: usize, v: u32) -> usize {
     ret at + n
 }
 
+fn oid_valid(arcs: []const u32) -> bool {
+    if arcs.len < 2usize || arcs.len > MAX_ARCS { ret false }
+    if arcs[0usize] > 2u32 { ret false }
+    if arcs[0usize] < 2u32 && arcs[1usize] > 39u32 { ret false }
+    if arcs[0usize] == 2u32 && arcs[1usize] > 4294967215u32 { ret false }
+    ret true
+}
+
 fn oid_content_size(arcs: []const u32) -> usize {
     if arcs.len < 2usize { ret 0usize }
     var n = base128_size(arcs[0usize] * 40u32 + arcs[1usize])
@@ -181,17 +190,21 @@ fn integer_total(value: i64) -> usize {
 // A request message for one binding: `kind` GET, GET_NEXT or SET; for SET the value is `text` (an octet string) when
 // `has_text` is set and the integer `number` otherwise; GET and GET_NEXT carry NULL. The length, or TooSmall.
 fn build_request(out: []u8, version: u8, community: str, kind: u8, request_id: i64, oid: []const u32, has_text: bool, text: str, number: i64) -> (usize, err) {
-    if oid.len < 2usize || oid.len > MAX_ARCS || community.len > 64usize { ret (0usize, Malformed) }
+    if !oid_valid(oid) || community.len > 64usize || (has_text && text.len > MAX_LENGTH) { ret (0usize, Malformed) }
     var value_total = 2usize
     if kind == SET {
         if has_text { value_total = 1usize + length_size(text.len) + text.len } else { value_total = integer_total(number) }
     }
     let binding_content = oid_total(oid) + value_total
+    if binding_content > MAX_LENGTH { ret (0usize, Malformed) }
     let binding_total = 1usize + length_size(binding_content) + binding_content
+    if binding_total > MAX_LENGTH { ret (0usize, Malformed) }
     let list_total = 1usize + length_size(binding_total) + binding_total
     let pdu_content = integer_total(request_id) + integer_total(0i64) + integer_total(0i64) + list_total
+    if pdu_content > MAX_LENGTH { ret (0usize, Malformed) }
     let pdu_total = 1usize + length_size(pdu_content) + pdu_content
     let message_content = integer_total(i64(version)) + 1usize + length_size(community.len) + community.len + pdu_total
+    if message_content > MAX_LENGTH { ret (0usize, Malformed) }
     let total = 1usize + length_size(message_content) + message_content
     if out.len < total { ret (0usize, TooSmall) }
     var at = 0usize
@@ -255,6 +268,7 @@ fn read_header(data: []const u8, at: usize, limit: usize) -> (u8, usize, usize, 
             length = length * 256usize + usize(data[at + 2usize + i])
             i += 1usize
         }
+        if length > MAX_LENGTH { ret (0u8, 0usize, 0usize, Malformed) }
         start = at + 2usize + count
     }
     if start + length > limit { ret (0u8, 0usize, 0usize, Malformed) }
@@ -327,9 +341,12 @@ fn decode(data: []const u8) -> (Message, err) {
         var value = 0u32
         var k = 0usize
         var first = true
+        var group = 0usize
         while k < o_len {
             let b = data[o_start + k]
+            if group >= 5usize || value > 33554431u32 { ret (m, Malformed) }
             value = value * 128u32 + u32(b & 127u8)
+            group += 1usize
             if (b & 128u8) == 0u8 {
                 if first {
                     var a = value / 40u32
@@ -345,9 +362,11 @@ fn decode(data: []const u8) -> (Message, err) {
                     arcs += 1usize
                 }
                 value = 0u32
+                group = 0usize
             }
             k += 1usize
         }
+        if first || group != 0usize { ret (m, Malformed) }
         m.oid_len[n] = arcs
         let (v2_tag, v2_start, v2_len, v2_error) = read_header(data, o_start + o_len, b_end)
         if v2_error != ok { ret (m, Malformed) }
