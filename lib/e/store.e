@@ -107,10 +107,17 @@ fn list(s: *Store, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err) {
 // value's bytes stay allocated until the arena is reset.
 fn memory(a: *mem.Arena, capacity: usize) -> (MemoryStore, err) {
     var m: MemoryStore = zero
+    let start = mem.mark(a)
     let (keys, ke) = mem.alloc[str](a, capacity + 1usize)
-    if ke != ok { ret (m, ke) }
+    if ke != ok {
+        mem.reset(a, start)
+        ret (m, ke)
+    }
     let (values, ve) = mem.alloc[str](a, capacity + 1usize)
-    if ve != ok { ret (m, ve) }
+    if ve != ok {
+        mem.reset(a, start)
+        ret (m, ve)
+    }
     m.keys = keys[0usize..capacity]
     m.values = values[0usize..capacity]
     ret (m, ok)
@@ -146,15 +153,22 @@ fn copy_str(a: *mem.Arena, s: str) -> (str, err) {
 fn memory_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err {
     var m = mem.cast[*MemoryStore](ctx)
     let (at, found) = memory_find(m, key)
+    if !found && m.count == m.keys.len { ret TooLarge }
+    let start = mem.mark(a)
     let (value, ve) = copy_str(a, data)
-    if ve != ok { ret ve }
+    if ve != ok {
+        mem.reset(a, start)
+        ret ve
+    }
     if found {
         m.values[at] = value
         ret ok
     }
-    if m.count == m.keys.len { ret TooLarge }
     let (k, ke) = copy_str(a, key)
-    if ke != ok { ret ke }
+    if ke != ok {
+        mem.reset(a, start)
+        ret ke
+    }
     var i = m.count
     while i > at {
         m.keys[i] = m.keys[i - 1usize]

@@ -278,6 +278,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if store.put(&ss, a, "a", "1") != ok || store.put(&ss, a, "b", "1") != ok { os.exit(3i32) }
     if store.put(&ss, a, "c", "1") != store.TooLarge { os.exit(4i32) }
     if store.put(&ss, a, "a", "22") != ok { os.exit(5i32) }
+    // A failed memory-store constructor and an insertion rejected for capacity both
+    // preserve the caller arena for a later request.
+    var constructor_bytes: [24]u8 = zero
+    var constructor_arena = mem.arena_from(constructor_bytes[..])
+    let constructor_start = constructor_arena.off
+    let (_, constructor_error) = store.memory(&constructor_arena, 0usize)
+    if constructor_error != mem.Exhausted || constructor_arena.off != constructor_start { os.exit(131i32) }
+    var full_bytes: [256]u8 = zero
+    var full_arena = mem.arena_from(full_bytes[..])
+    let (full_memory, full_memory_error) = store.memory(&full_arena, 1usize)
+    if full_memory_error != ok { os.exit(132i32) }
+    var full = full_memory
+    var full_store = store.memory_store(&full)
+    if store.put(&full_store, &full_arena, "a", "one") != ok { os.exit(133i32) }
+    let full_start = full_arena.off
+    if store.put(&full_store, &full_arena, "b", "value which cannot be stored") != store.TooLarge || full_arena.off != full_start { os.exit(134i32) }
     // 2. filesystem
     let (tmp, te) = fs.temp_dir(a)
     if te != ok { os.exit(6i32) }
