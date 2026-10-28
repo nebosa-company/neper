@@ -10,6 +10,12 @@ use e.io
 use e.mem
 use e.os
 
+fn persistent_failure_keeps_pool(t: *treap.Treap[i64], root: u32, r: *rand.Pcg64) -> bool {
+    let before = t.used
+    let (failed_root, insert_error) = treap.persistent_insert[i64](t, root, 7i64, r)
+    ret insert_error == treap.TooSmall && failed_root == root && t.used == before
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var keys: [2048]i64 = zero
     var priority: [2048]u64 = zero
@@ -179,6 +185,62 @@ fn main(a: *mem.Arena, args: []str) -> err {
         k += 1usize
     }
     if full != treap.TooSmall || k != 4usize { os.exit(4i32) }
+
+    // 5: every persistent-insert exhaustion path releases all slots from the attempt.
+    var pool_keys: [10]i64 = zero
+    var pool_priority: [10]u64 = zero
+    var pool_left: [10]u32 = zero
+    var pool_right: [10]u32 = zero
+    pool_keys[1usize] = 10i64
+    pool_keys[2usize] = 5i64
+    pool_priority[1usize] = 100u64
+    pool_priority[2usize] = 50u64
+    pool_left[1usize] = 2u32
+    var limited = treap.treap[i64](pool_keys[..3usize], pool_priority[..3usize], pool_left[..3usize], pool_right[..3usize])
+    limited.used = 3usize
+    var retries = 0usize
+    while retries < 2usize {
+        if !persistent_failure_keeps_pool(&limited, 1u32, &r) { os.exit(5i32) }
+        retries += 1usize
+    }
+    // One split copy succeeds before its recursive child runs out.
+    limited.keys = pool_keys[..5usize]
+    limited.priority = pool_priority[..5usize]
+    limited.left = pool_left[..5usize]
+    limited.right = pool_right[..5usize]
+    retries = 0usize
+    while retries < 2usize {
+        if !persistent_failure_keeps_pool(&limited, 1u32, &r) { os.exit(5i32) }
+        retries += 1usize
+    }
+    // The split fits; the first merge cannot allocate its copy.
+    limited.keys = pool_keys[..6usize]
+    limited.priority = pool_priority[..6usize]
+    limited.left = pool_left[..6usize]
+    limited.right = pool_right[..6usize]
+    retries = 0usize
+    while retries < 2usize {
+        if !persistent_failure_keeps_pool(&limited, 1u32, &r) { os.exit(5i32) }
+        retries += 1usize
+    }
+    // The first merge fits; the final merge cannot allocate its copy.
+    limited.keys = pool_keys[..7usize]
+    limited.priority = pool_priority[..7usize]
+    limited.left = pool_left[..7usize]
+    limited.right = pool_right[..7usize]
+    retries = 0usize
+    while retries < 2usize {
+        if !persistent_failure_keeps_pool(&limited, 1u32, &r) { os.exit(5i32) }
+        retries += 1usize
+    }
+    if !treap.contains[i64](&limited, 1u32, 5i64) || !treap.contains[i64](&limited, 1u32, 10i64) || treap.contains[i64](&limited, 1u32, 7i64) { os.exit(5i32) }
+    // Restoring the pool counter leaves enough room for a later valid insert.
+    limited.keys = pool_keys[..]
+    limited.priority = pool_priority[..]
+    limited.left = pool_left[..]
+    limited.right = pool_right[..]
+    let (inserted, recovered_error) = treap.persistent_insert[i64](&limited, 1u32, 7i64, &r)
+    if recovered_error != ok || limited.used <= 3usize || !treap.contains[i64](&limited, inserted, 7i64) || treap.contains[i64](&limited, 1u32, 7i64) { os.exit(5i32) }
 
     try io.print("data treap ok\n")
     ret ok
