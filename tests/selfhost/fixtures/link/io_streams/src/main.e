@@ -213,5 +213,20 @@ fn main(a: *mem.Arena) -> err {
     if large_error == ok || buffer_allocation_detail.kind != .OutOfMemory { ret Failed }
     if !str.eq(buffer_allocation_detail.operation, "buffered_reader") || !str.eq(buffer_allocation_detail.subject, "buffer") { ret Failed }
     if mem.mark(&one_step) != 0usize { ret Failed }
+
+    // Plain buffered constructors roll back their state allocation when the byte
+    // buffer cannot fit, just as their detail forms do.
+    var plain_reader_bytes: [512]u8 = zero
+    var plain_reader_arena = mem.arena_from(plain_reader_bytes[..])
+    var plain_source_state = io.SliceReader { data: "", off: 0usize }
+    let (_, plain_reader_error) = io.buffered_reader(&plain_reader_arena, io.slice_reader(&plain_source_state), 1024usize)
+    if plain_reader_error != mem.Exhausted || mem.mark(&plain_reader_arena) != 0usize { ret Failed }
+
+    var plain_writer_bytes: [512]u8 = zero
+    var plain_writer_arena = mem.arena_from(plain_writer_bytes[..])
+    var plain_sink_bytes: [1]u8 = zero
+    var plain_sink_state = io.SliceWriter { data: plain_sink_bytes[..], off: 0usize }
+    let (_, plain_writer_error) = io.buffered_writer(&plain_writer_arena, io.slice_writer(&plain_sink_state), 1024usize)
+    if plain_writer_error != mem.Exhausted || mem.mark(&plain_writer_arena) != 0usize { ret Failed }
     ret ok
 }
