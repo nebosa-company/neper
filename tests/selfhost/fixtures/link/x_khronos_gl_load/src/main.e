@@ -43,6 +43,8 @@ fn separated(a: *mem.Arena, context: usize, name: str) -> usize {
 
 type DispatchRace = struct { gate: sync.Semaphore, ready: sync.Semaphore, release: sync.Semaphore, abort: Atomic[u32], failed: Atomic[u32], answers: [2]Atomic[u32] }
 type DispatchTask = struct { race: *DispatchRace, index: usize, context: usize }
+type EglLoadRace = struct { gate: sync.Semaphore, ready: sync.Semaphore, release: sync.Semaphore, done: sync.Semaphore, abort: Atomic[u32], answers: [2]Atomic[u32] }
+type EglLoadTask = struct { race: *EglLoadRace, index: usize }
 
 fn load_on_thread(task: *DispatchTask) {
     sync.semaphore_wait(&task.race.gate)
@@ -97,6 +99,61 @@ fn isolated_dispatches() -> bool {
     var round = 0usize
     while round < 16usize {
         if !isolated_dispatches_once() { ret false }
+        round += 1usize
+    }
+    ret true
+}
+
+// egl.load deliberately does not expose a resolver hook, so a portable fixture cannot
+// hold a successful table fill at a chosen entry without a platform-specific fake DLL.
+// Coordinate two no-driver attempts instead: both threads are at the release gate before
+// either calls load, and each must be released from the retryable NoLoader state.
+fn load_egl_on_thread(task: *EglLoadTask) {
+    sync.semaphore_wait(&task.race.gate)
+    if atomic.load(&task.race.abort, .Acquire) != 0u32 { ret }
+    let waiting = sync.semaphore_post(&task.race.ready, 1u32)
+    sync.semaphore_wait(&task.race.release)
+    var scratch: mem.Arena = zero
+    let result = egl.load(&scratch, "no-such-egl-library")
+    var answer = 2u32
+    if result == egl.NoLoader { answer = 1u32 }
+    atomic.store(&task.race.answers[task.index], answer, .Release)
+    let completed = sync.semaphore_post(&task.race.done, 1u32)
+}
+
+fn concurrent_egl_no_loader_once() -> bool {
+    var race: EglLoadRace = zero
+    race.gate = sync.semaphore(0u32)
+    race.ready = sync.semaphore(0u32)
+    race.release = sync.semaphore(0u32)
+    race.done = sync.semaphore(0u32)
+    var left = EglLoadTask { race: &race, index: 0usize }
+    var right = EglLoadTask { race: &race, index: 1usize }
+    let (first, first_error) = os.thread_create[EglLoadTask](load_egl_on_thread, &left, 1048576usize)
+    if first_error != ok { ret false }
+    let (second, second_error) = os.thread_create[EglLoadTask](load_egl_on_thread, &right, 1048576usize)
+    if second_error != ok {
+        atomic.store(&race.abort, 1u32, .Release)
+        let opened = sync.semaphore_post(&race.gate, 1u32)
+        let joined = os.thread_join(first)
+        ret false
+    }
+    let opened = sync.semaphore_post(&race.gate, 2u32)
+    sync.semaphore_wait(&race.ready)
+    sync.semaphore_wait(&race.ready)
+    let released = sync.semaphore_post(&race.release, 2u32)
+    sync.semaphore_wait(&race.done)
+    sync.semaphore_wait(&race.done)
+    if os.thread_join(first) != ok || os.thread_join(second) != ok { ret false }
+    ret atomic.load(&race.answers[0usize], .Acquire) == 1u32 && atomic.load(&race.answers[1usize], .Acquire) == 1u32
+}
+
+// Repeat the coordinated attempt to cover the process-global retry transition while
+// keeping this no-driver fixture quick.
+fn concurrent_egl_no_loader() -> bool {
+    var round = 0usize
+    while round < 16usize {
+        if !concurrent_egl_no_loader_once() { ret false }
         round += 1usize
     }
     ret true
@@ -168,6 +225,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if gl.COLOR_BUFFER_BIT != 16384u32 || gl.COMPUTE_SHADER != 37305u32 || gl.TIMEOUT_IGNORED != 18446744073709551615u64 { os.exit(19i32) }
     if egl.DONT_CARE != -1i32 || egl.NO_CONTEXT != 0usize || egl.TRUE != 1u32 || egl.PLATFORM_SURFACELESS_MESA != 12765i32 { os.exit(20i32) }
 
+    if !concurrent_egl_no_loader() { os.exit(23i32) }
+    if egl.present(egl.BIND_API_ENTRY) || egl.missing().len != 0usize { os.exit(24i32) }
     if egl.load(a, "no-such-egl-library") != egl.NoLoader { os.exit(21i32) }
     gl.release(&dispatch)
     ret ok
