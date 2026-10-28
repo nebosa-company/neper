@@ -32,12 +32,22 @@ error Full
 
 fn mediator(a: *mem.Arena, handlers: usize, listeners: usize, behaviors: usize) -> (Mediator, err) {
     var m: Mediator = zero
+    let start = mem.mark(a)
     let (h, he) = mem.alloc[Handler](a, handlers + 1usize)
-    if he != ok { ret (m, he) }
+    if he != ok {
+        mem.reset(a, start)
+        ret (m, he)
+    }
     let (l, le) = mem.alloc[Listener](a, listeners + 1usize)
-    if le != ok { ret (m, le) }
+    if le != ok {
+        mem.reset(a, start)
+        ret (m, le)
+    }
     let (b, be) = mem.alloc[Behavior](a, behaviors + 1usize)
-    if be != ok { ret (m, be) }
+    if be != ok {
+        mem.reset(a, start)
+        ret (m, be)
+    }
     m.handlers = h[0usize..handlers]
     m.listeners = l[0usize..listeners]
     m.behaviors = b[0usize..behaviors]
