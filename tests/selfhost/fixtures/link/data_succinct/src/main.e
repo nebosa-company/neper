@@ -95,6 +95,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if succinct.bp_enclose(&bp, 0usize) != 16usize || succinct.bp_enclose(&bp, 4usize) != 1usize || succinct.bp_enclose(&bp, 11usize) != 10usize || succinct.bp_enclose(&bp, 9usize) != 0usize { os.exit(3i32) }
     if succinct.bp_preorder(&bp, 11usize) != 7usize { os.exit(3i32) }
 
+    // Malformed adjacency IDs must be reported, not used to index caller storage.
+    var malformed_first: [3]u32 = zero
+    var malformed_next: [3]u32 = zero
+    var malformed_bits: [1]u64 = zero
+    var malformed_counts: [2]u32 = zero
+    var malformed_queue: [3]u32 = zero
+    var malformed_order: [3]usize = zero
+    i = 0usize
+    while i < 3usize {
+        malformed_first[i] = succinct.NONE
+        malformed_next[i] = succinct.NONE
+        i += 1usize
+    }
+    malformed_first[0usize] = 3u32
+    let (_, bad_louds_child) = succinct.louds_encode(malformed_first[..], malformed_next[..], 3usize, 0usize, malformed_bits[..], malformed_counts[..], malformed_queue[..], malformed_order[..])
+    if bad_louds_child != succinct.Invalid { os.exit(3i32) }
+    let (_, bad_bp_child) = succinct.bp_encode(malformed_first[..], malformed_next[..], 3usize, 0usize, malformed_bits[..], malformed_counts[..], malformed_queue[..], malformed_order[..])
+    if bad_bp_child != succinct.Invalid { os.exit(3i32) }
+    malformed_first[0usize] = 1u32
+    malformed_next[1usize] = 3u32
+    let (_, bad_louds_sibling) = succinct.louds_encode(malformed_first[..], malformed_next[..], 3usize, 0usize, malformed_bits[..], malformed_counts[..], malformed_queue[..], malformed_order[..])
+    if bad_louds_sibling != succinct.Invalid { os.exit(3i32) }
+    let (_, bad_bp_sibling) = succinct.bp_encode(malformed_first[..], malformed_next[..], 3usize, 0usize, malformed_bits[..], malformed_counts[..], malformed_queue[..], malformed_order[..])
+    if bad_bp_sibling != succinct.Invalid { os.exit(3i32) }
+
     // 4: wavelet matrix over the text.
     let text = "mississippi_banana_mississippi\x00"
     let n = text.len
