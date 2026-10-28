@@ -18,7 +18,7 @@ use e.ui.style
 use e.ui.widget
 use e.ui.window
 
-type Log = struct { taps_3: usize, taps_5: usize, taps_7: usize, dismissed: usize }
+type Log = struct { taps_3: usize, taps_5: usize, taps_7: usize, dismissed: usize, shortcuts: usize }
 
 fn on_3(ctx: *void, g: widget.Gesture) -> err {
     let log = mem.cast[*Log](ctx)
@@ -44,6 +44,12 @@ fn on_dismiss(ctx: *void) -> err {
     ret ok
 }
 
+fn on_shortcut(ctx: *void) -> err {
+    let log = mem.cast[*Log](ctx)
+    log.shortcuts += 1usize
+    ret ok
+}
+
 fn sized(width: f32, height: f32, r: f32, g: f32, b: f32) -> style.Style {
     var s = style.defaults()
     s.width = style.Length { Px: width }
@@ -65,6 +71,10 @@ fn tab() -> input.Event {
     ret input.Event { KeyDown: input.KeyEvent { window: window.Id { slot: 0u32, generation: 0u32 }, key: input.Key { physical: 9u32, logical: 9u32 }, modifiers: zero, repeat: false } }
 }
 
+fn ctrl_s() -> input.Event {
+    ret input.Event { KeyDown: input.KeyEvent { window: window.Id { slot: 0u32, generation: 0u32 }, key: input.Key { physical: 83u32, logical: 83u32 }, modifiers: input.Modifiers { shift: false, control: true, alt: false, meta: false, caps_lock: false, num_lock: false }, repeat: false } }
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.001 && d > -0.001
@@ -74,6 +84,9 @@ fn near(a: f32, b: f32) -> bool {
 // region, an overlay to the right of the box kept inside the window, and -- when
 // asked -- a modal overlay in the centre holding a green focusable region.
 fn build(a: *mem.Arena, ctx: *void, with_modal: bool) -> (widget.Node, err) {
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
+    if shortcuts_error != ok { ret (zero, shortcuts_error) }
+    shortcuts[0usize] = widget.Shortcut { key: 83u32, modifiers: input.Modifiers { shift: false, control: true, alt: false, meta: false, caps_lock: false, num_lock: false }, action: widget.Submit { ctx: ctx, invoke: on_shortcut } }
     let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
     if popup_error != ok { ret (zero, popup_error) }
     popup[0usize] = widget.region(5u64, widget.Region { gesture: widget.GestureAction { ctx: ctx, invoke: on_5 }, gestures: 1u8, enabled: true, focusable: false }, sized(30.0, 10.0, 1.0, 0.0, 0.0), zero)
@@ -95,7 +108,10 @@ fn build(a: *mem.Arena, ctx: *void, with_modal: bool) -> (widget.Node, err) {
     var column = style.defaults()
     column.width = style.Length { Px: 64.0 }
     column.height = style.Length { Px: 64.0 }
-    ret (widget.flex(1u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, children[0usize..count]), ok)
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, body_error) }
+    body[0usize] = widget.flex(1u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, children[0usize..count])
+    ret (widget.scope(10u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..1usize], default_action: zero, cancel_action: zero, keys: zero }, column, body[0usize..1usize]), ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -158,6 +174,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_modal || !near(modal_bounds.x, 22.0) || !near(modal_bounds.y, 22.0) { os.exit(24i32) }
     let (focus_2, has_focus_2) = widget.focused(&runtime)
     if !has_focus_2 || focus_2.slot != region_7.slot { os.exit(25i32) }
+    // The modal contains no scope. Its focused region must not climb out to the
+    // background scope's Ctrl+S shortcut.
+    if widget.dispatch(&runtime, ctrl_s()) != ok || log.shortcuts != 0usize { os.exit(44i32) }
     if scene.render(&renderer, second_scene, canvas, geometry.Size { width: 64.0, height: 64.0 }) != ok { os.exit(26i32) }
     let (shown_2, shown_2_error) = gpu.presented(t)
     if shown_2_error != ok { os.exit(27i32) }
@@ -181,6 +200,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if modal_count != 0usize { os.exit(38i32) }
     let (focus_4, has_focus_4) = widget.focused(&runtime)
     if !has_focus_4 || focus_4.slot != region_3.slot { os.exit(39i32) }
+    if widget.dispatch(&runtime, ctrl_s()) != ok || log.shortcuts != 1usize { os.exit(45i32) }
     press(&runtime, 10.0, 25.0, 40i32)
     if log.taps_5 != 2usize || log.dismissed != 1usize { os.exit(41i32) }
     if scene.render(&renderer, third_scene, canvas, geometry.Size { width: 64.0, height: 64.0 }) != ok { os.exit(42i32) }

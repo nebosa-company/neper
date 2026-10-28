@@ -3743,9 +3743,11 @@ fn collect_focusable(s: *State, index: usize, out: []u32, count: usize) -> usize
     ret n
 }
 
-// Where Tab walks: the trapping scope or modal overlay the focus sits in, or the tree.
+// Where Tab walks: the topmost modal overlay, the trapping scope, or the tree.
 fn focus_root(s: *State) -> usize {
     var root = usize(s.root)
+    let (modal, has_modal) = topmost_modal(s)
+    if has_modal { ret modal }
     if s.has_focus {
         let (found_scope, has_scope) = scope_of(s, usize(s.focus))
         if has_scope && s.elements[found_scope].traps_focus { root = found_scope }
@@ -5047,9 +5049,10 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
     if s.has_focus { at = usize(s.focus) }
     // A modal overlay bounds the keyboard to itself: with nothing focused under it
     // (its content may not be focusable), or the focus left outside it, the walk
-    // starts at its scope, so its Escape still dismisses it (D841).
+    // starts at the overlay or an inner scope. It never reaches a background scope.
     let (modal, has_modal) = topmost_modal(s)
     if has_modal && (!s.has_focus || !descends_from(s, usize(s.focus), modal)) {
+        at = modal
         let (inner, has_inner) = scope_under(s, modal)
         if has_inner { at = inner }
     }
@@ -5079,6 +5082,7 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
                 ret (true, fired)
             }
         }
+        if has_modal && at == modal { break }
         if !e.has_parent { break }
         at = usize(e.parent)
     }
