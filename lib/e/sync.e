@@ -185,6 +185,15 @@ fn rwlock_try_read_lock(l: *RwLock) -> bool {
     ret won
 }
 
+// A state value can become stale between a failed reader acquisition and the
+// futex registration. Retry after observing it so an intervening unlock is
+// acquired directly rather than waited on as an unchanged zero.
+fn rwlock_wait_read_after_seen(l: *RwLock, seen: u32, timeout_ns: i64) -> bool {
+    if rwlock_try_read_lock(l) { ret true }
+    let waited = os.wait_u32(&l.state, seen, timeout_ns)
+    ret false
+}
+
 fn rwlock_read_lock_for(l: *RwLock, timeout: time.Duration) -> bool {
     if time.as_nanos(timeout) < 0i64 { ret false }
     let deadline = deadline_for(timeout)
@@ -192,7 +201,7 @@ fn rwlock_read_lock_for(l: *RwLock, timeout: time.Duration) -> bool {
         if rwlock_try_read_lock(l) { ret true }
         let left = remaining_for(deadline)
         let seen = atomic.load(&l.state, .Acquire)
-        let waited = os.wait_u32(&l.state, seen, left)
+        if rwlock_wait_read_after_seen(l, seen, left) { ret true }
         if left == 0i64 { ret rwlock_try_read_lock(l) }
     }
     ret false
