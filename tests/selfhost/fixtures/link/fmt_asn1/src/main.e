@@ -70,6 +70,57 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if wide_encoded[1] != 129u8 || wide_encoded[2] != 203u8 || wide_encoded[4] != 129u8 || wide_encoded[5] != 200u8 { os.exit(18) }
     let (wide_back, e13) = asn1.decode[Wide](a, wide_encoded, 4u16)
     if e13 != ok || wide_back.data.len != 200usize || wide_back.data[199] != 199u8 { os.exit(19) }
+    // The first OBJECT IDENTIFIER subidentifier can exceed u32 even though every exposed arc
+    // fits in u32. It must round-trip rather than wrapping to a different OID.
+    let huge_arcs: [2]u32 = [2]u32{ 2u32, 4294967295u32 }
+    let huge_oid = asn1.Item{ Oid: huge_arcs[0..] }
+    let huge_oid_want: [7]u8 = [7]u8{ 6u8, 5u8, 144u8, 128u8, 128u8, 128u8, 79u8 }
+    var huge_oid_out: [16]u8 = zero
+    let (huge_oid_der, huge_oid_error) = asn1.der_encode(huge_oid_out[..], &huge_oid)
+    if huge_oid_error != ok || !same(huge_oid_der, huge_oid_want[..]) { os.exit(26) }
+    let (huge_oid_back, huge_oid_back_error) = asn1.ber_decode(a, huge_oid_der, 4u16)
+    if huge_oid_back_error != ok { os.exit(27) }
+    switch huge_oid_back {
+    case .Oid as arcs:
+        if arcs.len != 2usize || arcs[0] != 2u32 || arcs[1] != 4294967295u32 { os.exit(28) }
+    default:
+        os.exit(29)
+    }
+    // Five base-128 tag octets may represent a number beyond Tag's u32 range.
+    let high_tag: [7]u8 = [7]u8{ 31u8, 144u8, 128u8, 128u8, 128u8, 31u8, 0u8 }
+    var high_reader = asn1.reader(high_tag[..], 4u16)
+    let (high_value, high_present, high_error) = asn1.reader_next_err(&high_reader)
+    if high_error != asn1.TooLarge { os.exit(30) }
+    let high_context: [7]u8 = [7]u8{ 191u8, 144u8, 128u8, 128u8, 128u8, 31u8, 0u8 }
+    let (high_context_value, high_context_error) = asn1.ber_decode(a, high_context[..], 4u16)
+    if high_context_error != asn1.TooLarge { os.exit(31) }
+    // BIT STRING padding and constructed segments must preserve the ASN.1 bit value.
+    let dirty_bits: [1]u8 = [1]u8{ 255u8 }
+    let dirty_bit_string = asn1.Item{ BitString: asn1.BitString { unused: 1u8, data: dirty_bits[..] } }
+    var dirty_out: [8]u8 = zero
+    let (dirty_der, dirty_error) = asn1.der_encode(dirty_out[..], &dirty_bit_string)
+    if dirty_error != asn1.Invalid { os.exit(32) }
+    let empty_unused: [3]u8 = [3]u8{ 3u8, 1u8, 1u8 }
+    let (empty_unused_value, empty_unused_error) = asn1.ber_decode(a, empty_unused[..], 4u16)
+    if empty_unused_error != asn1.Invalid { os.exit(33) }
+    let dirty_unused: [4]u8 = [4]u8{ 3u8, 2u8, 1u8, 255u8 }
+    let (dirty_unused_value, dirty_unused_error) = asn1.ber_decode(a, dirty_unused[..], 4u16)
+    if dirty_unused_error != asn1.Invalid { os.exit(34) }
+    let broken_segments: [12]u8 = [12]u8{ 35u8, 128u8, 3u8, 2u8, 1u8, 128u8, 3u8, 2u8, 0u8, 170u8, 0u8, 0u8 }
+    let (broken_segments_value, broken_segments_error) = asn1.ber_decode(a, broken_segments[..], 4u16)
+    if broken_segments_error != asn1.Invalid { os.exit(35) }
+    let mixed_segments: [7]u8 = [7]u8{ 35u8, 128u8, 4u8, 1u8, 170u8, 0u8, 0u8 }
+    let (mixed_segments_value, mixed_segments_error) = asn1.ber_decode(a, mixed_segments[..], 4u16)
+    if mixed_segments_error != asn1.Invalid { os.exit(36) }
+    let valid_segments: [12]u8 = [12]u8{ 35u8, 128u8, 3u8, 2u8, 0u8, 170u8, 3u8, 2u8, 1u8, 128u8, 0u8, 0u8 }
+    let (valid_segments_value, valid_segments_error) = asn1.ber_decode(a, valid_segments[..], 4u16)
+    if valid_segments_error != ok { os.exit(37) }
+    switch valid_segments_value {
+    case .BitString as bits:
+        if bits.unused != 1u8 || bits.data.len != 2usize || bits.data[0] != 170u8 || bits.data[1] != 128u8 { os.exit(38) }
+    default:
+        os.exit(39)
+    }
     // Refusals.
     let long_zero: [4]u8 = [4]u8{ 4, 129, 2, 104 }
     var r2 = asn1.reader(long_zero[0..], 4u16)

@@ -30,6 +30,15 @@ fn class_of(first: u8) -> Class {
     ret .Universal
 }
 
+// Add one base-128 tag digit without letting a five-octet tag wrap the u32
+// representation used by Tag.
+fn append_tag_number(current: u32, byte: u8) -> (u32, err) {
+    let part = u32(byte & 127u8)
+    let maximum = (4294967295u32 - part) >> 7u32
+    if current > maximum { ret (0u32, TooLarge) }
+    ret ((current << 7u32) | part, ok)
+}
+
 // The next value at the reader's offset; `false` once the data is exhausted.
 fn reader_next_err(source_reader: *Reader) -> (Value, bool, err) {
     var r = source_reader
@@ -57,7 +66,9 @@ fn reader_next_err(source_reader: *Reader) -> (Value, bool, err) {
             let byte = data[at]
             at += 1usize
             count += 1usize
-            number = (number << 7u32) | u32(byte & 127u8)
+            let (next, next_error) = append_tag_number(number, byte)
+            if next_error != ok { ret (zero, false, next_error) }
+            number = next
             if byte & 128u8 == 0u8 { break }
         }
         if number < 31u32 { ret (zero, false, NonCanonical) }
@@ -309,6 +320,16 @@ type BitString = struct { unused: u8, data: []const u8 }
 type Context = struct { number: u32, items: []const Item }
 type Item = union enum u8 { Null, Bool: bool, Integer: i64, BitString: BitString, OctetString: []const u8, Oid: []const u32, Utf8String: str, Sequence: []const Item, Set: []const Item, Context: Context }
 
+// A BIT STRING has a final payload octet exactly when it declares unused bits,
+// and those unused low bits must be zero.
+fn bit_string_valid(unused: u8, data: []const u8) -> bool {
+    if unused > 7u8 { ret false }
+    if data.len == 0usize { ret unused == 0u8 }
+    if unused == 0u8 { ret true }
+    let mask = 255u8 >> (8u8 - unused)
+    ret data[data.len - 1usize] & mask == 0u8
+}
+
 fn tag_len(number: u32) -> usize {
     if number < 31u32 { ret 1usize }
     var count = 2usize
@@ -320,10 +341,10 @@ fn tag_len(number: u32) -> usize {
     ret count
 }
 
-fn arc_len(arc: u32) -> usize {
+fn arc_len(arc: u64) -> usize {
     var count = 1usize
     var n = arc >> 7u32
-    while n > 0u32 {
+    while n > 0u64 {
         n = n >> 7u32
         count += 1usize
     }
@@ -332,10 +353,10 @@ fn arc_len(arc: u32) -> usize {
 
 fn oid_len(arcs: []const u32) -> (usize, err) {
     if arcs.len < 2usize || arcs[0] > 2u32 || (arcs[0] < 2u32 && arcs[1] > 39u32) { ret (0usize, Invalid) }
-    var total = arc_len(arcs[0] * 40u32 + arcs[1])
+    var total = arc_len(u64(arcs[0]) * 40u64 + u64(arcs[1]))
     var i = 2usize
     while i < arcs.len {
-        total += arc_len(arcs[i])
+        total += arc_len(u64(arcs[i]))
         i += 1usize
     }
     ret (total, ok)
@@ -363,7 +384,7 @@ fn item_content_len(item: *const Item) -> (usize, err) {
     case .Integer as number:
         ret (integer_len(number), ok)
     case .BitString as bits:
-        if bits.unused > 7u8 || (bits.unused > 0u8 && bits.data.len == 0usize) { ret (0usize, Invalid) }
+        if !bit_string_valid(bits.unused, bits.data) { ret (0usize, Invalid) }
         ret (1usize + bits.data.len, ok)
     case .OctetString as data:
         ret (data.len, ok)
@@ -436,14 +457,14 @@ fn put_tag(dst: []u8, at: usize, first: u8, number: u32) -> usize {
         ret at + 1usize
     }
     dst[at] = first | 31u8
-    ret put_base128(dst, at + 1usize, number)
+    ret put_base128(dst, at + 1usize, u64(number))
 }
 
-fn put_base128(dst: []u8, at: usize, value: u32) -> usize {
+fn put_base128(dst: []u8, at: usize, value: u64) -> usize {
     var out = at
     var shift = (arc_len(value) - 1usize) * 7usize
     while true {
-        var byte = u8((value >> u32(shift)) & 127u32)
+        var byte = u8((value >> u32(shift)) & 127u64)
         if shift > 0usize { byte = byte | 128u8 }
         dst[out] = byte
         out += 1usize
@@ -547,10 +568,10 @@ fn put_item(dst: []u8, at: usize, item: *const Item) -> (usize, err) {
         mem.copy[u8](dst[out..out + data.len], data)
         ret (out + data.len, ok)
     case .Oid as arcs:
-        out = put_base128(dst, out, arcs[0] * 40u32 + arcs[1])
+        out = put_base128(dst, out, u64(arcs[0]) * 40u64 + u64(arcs[1]))
         var i = 2usize
         while i < arcs.len {
-            out = put_base128(dst, out, arcs[i])
+            out = put_base128(dst, out, u64(arcs[i]))
             i += 1usize
         }
         ret (out, ok)
@@ -603,7 +624,9 @@ fn ber_header(data: []const u8, at: usize) -> (Tag, usize, bool, usize, err) {
             let byte = data[cursor]
             cursor += 1usize
             count += 1usize
-            number = (number << 7u32) | u32(byte & 127u8)
+            let (next, next_error) = append_tag_number(number, byte)
+            if next_error != ok { ret (tag, 0usize, false, cursor, next_error) }
+            number = next
             if byte & 128u8 == 0u8 { break }
         }
         tag.number = number
@@ -660,44 +683,55 @@ fn ber_oid(a: *mem.Arena, c: []const u8) -> ([]const u32, err) {
     let (arcs, arcs_error) = mem.alloc[u32](a, count)
     if arcs_error != ok { ret (zero, arcs_error) }
     var filled = 0usize
-    var arc = 0u32
+    var arc = 0u64
     i = 0usize
     while i < c.len {
-        if arc > 33554431u32 { ret (zero, TooLarge) }
-        arc = (arc << 7u32) | u32(c[i] & 127u8)
+        let part = u64(c[i] & 127u8)
+        var maximum = 4294967295u64
+        // The first encoded subidentifier combines arcs 0 and 1, so it can be
+        // eighty larger than the largest representable second arc.
+        if filled == 0usize { maximum = 4294967375u64 }
+        if arc > (maximum - part) >> 7u32 { ret (zero, TooLarge) }
+        arc = (arc << 7u32) | part
         if c[i] & 128u8 == 0u8 {
             if filled == 0usize {
-                if arc < 80u32 {
-                    arcs[0] = arc / 40u32
-                    arcs[1] = arc % 40u32
+                if arc < 80u64 {
+                    arcs[0] = u32(arc / 40u64)
+                    arcs[1] = u32(arc % 40u64)
                 } else {
                     arcs[0] = 2u32
-                    arcs[1] = arc - 80u32
+                    arcs[1] = u32(arc - 80u64)
                 }
                 filled = 2usize
             } else {
-                arcs[filled] = arc
+                arcs[filled] = u32(arc)
                 filled += 1usize
             }
-            arc = 0u32
+            arc = 0u64
         }
         i += 1usize
     }
     ret (arcs[0usize..filled], ok)
 }
 
-// The bytes of the string segments in `items`, joined: (bytes, unused bits of the last).
-fn ber_join(a: *mem.Arena, items: []const Item) -> ([]u8, u8, err) {
+// The bytes of one constructed string's homogeneous segments, joined: (bytes, unused bits of
+// the last BIT STRING segment). A non-final BIT STRING has no unused bits because its payload
+// continues in the next segment.
+fn ber_join(a: *mem.Arena, items: []const Item, number: u32) -> ([]u8, u8, err) {
     var total = 0usize
     var unused = 0u8
     var i = 0usize
     while i < items.len {
         switch items[i] {
         case .OctetString as data:
+            if number != 4u32 { ret (zero, 0u8, Invalid) }
             total += data.len
         case .Utf8String as text:
+            if number != 12u32 { ret (zero, 0u8, Invalid) }
             total += text.len
         case .BitString as bits:
+            if number != 3u32 || !bit_string_valid(bits.unused, bits.data) { ret (zero, 0u8, Invalid) }
+            if i + 1usize < items.len && bits.unused != 0u8 { ret (zero, 0u8, Invalid) }
             total += bits.data.len
             unused = bits.unused
         default:
@@ -787,7 +821,7 @@ fn ber_item(a: *mem.Arena, data: []const u8, at: usize, depth: u16) -> (Item, us
     if tag.number == 17u32 && tag.constructed { ret (Item{ Set: members }, next_at, ok) }
     if tag.constructed {
         // A constructed string: its segments joined.
-        let (joined, unused, join_error) = ber_join(a, members)
+        let (joined, unused, join_error) = ber_join(a, members, tag.number)
         if join_error != ok { ret (none, at, join_error) }
         if tag.number == 4u32 { ret (Item{ OctetString: joined }, next_at, ok) }
         if tag.number == 12u32 { ret (Item{ Utf8String: joined }, next_at, ok) }
@@ -813,7 +847,8 @@ fn ber_item(a: *mem.Arena, data: []const u8, at: usize, depth: u16) -> (Item, us
         ret (Item{ Oid: arcs }, next_at, ok)
     }
     if tag.number == 3u32 {
-        if content.len == 0usize || content[0] > 7u8 { ret (none, at, Invalid) }
+        if content.len == 0usize { ret (none, at, Invalid) }
+        if !bit_string_valid(content[0usize], content[1usize..]) { ret (none, at, Invalid) }
         ret (Item{ BitString: BitString { unused: content[0], data: content[1usize..] } }, next_at, ok)
     }
     if tag.number == 4u32 { ret (Item{ OctetString: content }, next_at, ok) }
