@@ -50,10 +50,12 @@ fn decide(m: *const Model, x: []const f64, y: []const f64, n: usize, d: usize, q
 // Train on labels `y` in {-1, +1} with box constraint `c` and KKT tolerance
 // `tolerance`; the search ends after `passes` full sweeps without a change
 // or `max_sweeps` in all. `alphas.len >= n` receives the multipliers.
+// At least two samples are required; smaller training sets return Invalid.
 // Answers the model and the sweeps taken.
 fn smo(x: []const f64, y: []const f64, n: usize, d: usize, k: Kernel, c: f64, tolerance: f64, passes: u32, max_sweeps: u32, r: *rand.Pcg64, alphas: []f64) -> (Model, u32, err) {
+    if n < 2usize { ret (zero, 0u32, Invalid) }
     if x.len < n * d || y.len < n || alphas.len < n { ret (zero, 0u32, TooSmall) }
-    if n == 0usize || c <= 0.0f64 { ret (zero, 0u32, Invalid) }
+    if c <= 0.0f64 { ret (zero, 0u32, Invalid) }
     var i = 0usize
     while i < n {
         if y[i] != 1.0f64 && y[i] != 0.0f64 - 1.0f64 { ret (zero, 0u32, Invalid) }
