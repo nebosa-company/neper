@@ -14,9 +14,10 @@ use e.text.utf8 as utf8
 type SystemTimes = struct { idle: u64, kernel: u64, user: u64 }
 type MemoryStatus = struct { length: u32, load: u32, total_phys: u64, avail_phys: u64, total_page: u64, avail_page: u64, total_virtual: u64, avail_virtual: u64, avail_extended: u64 }
 // `heap` is ULONG_PTR. Neper's pointers and `usize` stay 64 bits on x86, so the
-// architecture variant supplies this field's Windows ABI width explicitly.
+// architecture variant supplies this field's Windows ABI width explicitly. SIZE_T
+// has the same target-specific width, including in PROCESS_MEMORY_COUNTERS.
 type ProcessEntry = struct { size: u32, usage: u32, pid: u32, heap: win_heap.Heap, module: u32, threads: u32, parent: u32, priority: i32, flags: u32, exe: [260]u16 }
-type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: usize, working_set: usize, quota_peak_paged: usize, quota_paged: usize, quota_peak_nonpaged: usize, quota_nonpaged: usize, pagefile: usize, peak_pagefile: usize }
+type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: win_heap.Heap, working_set: win_heap.Heap, quota_peak_paged: win_heap.Heap, quota_paged: win_heap.Heap, quota_peak_nonpaged: win_heap.Heap, quota_nonpaged: win_heap.Heap, pagefile: win_heap.Heap, peak_pagefile: win_heap.Heap }
 
 const SNAPSHOT_PROCESSES: u32 = 2u32
 const ALL_GROUPS: u16 = 65535u16
@@ -136,8 +137,9 @@ fn process_id() -> u32 {
 
 fn self_memory(a: *mem.Arena) -> (u64, err) {
     var c: MemoryCounters = zero
-    c.size = 72u32
-    if raw_process_memory(raw_current_process(), &c, 72u32) == 0i32 { ret (0u64, os.Failed) }
+    let counter_size = u32(mem.size_of[MemoryCounters]())
+    c.size = counter_size
+    if raw_process_memory(raw_current_process(), &c, counter_size) == 0i32 { ret (0u64, os.Failed) }
     ret (u64(c.working_set), ok)
 }
 

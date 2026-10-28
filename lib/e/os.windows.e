@@ -14,6 +14,7 @@
 // appear in no `.e` file and are not written here either.
 
 use e.mem
+use e.proc.sys.win_heap as win_heap
 
 // The separator this target's paths are written with. `e.path` is pure -- it applies
 // whatever `Style` it is handed and asks the host nothing -- and no comptime query
@@ -2213,18 +2214,20 @@ fn dup(f: File) -> (File, err) {
 
 const DUPLICATE_SAME_ACCESS: u32 = 2u32
 
-// `PROCESS_MEMORY_COUNTERS`: the size first, then a page-fault count, then eight sizes of
-// which the peak working set is the first. The layout is the ABI.
-type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: usize, working_set: usize, quota_peak_paged: usize, quota_paged: usize, quota_peak_nonpaged: usize, quota_nonpaged: usize, pagefile: usize, peak_pagefile: usize }
+// `PROCESS_MEMORY_COUNTERS`: the size first, then a page-fault count, then eight SIZE_Ts of
+// which the peak working set is the first. `usize` stays 64-bit on Neper's x86 target, so the
+// target-specific Windows ABI width has to come from `win_heap.Heap` instead.
+type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: win_heap.Heap, working_set: win_heap.Heap, quota_peak_paged: win_heap.Heap, quota_paged: win_heap.Heap, quota_peak_nonpaged: win_heap.Heap, quota_nonpaged: win_heap.Heap, pagefile: win_heap.Heap, peak_pagefile: win_heap.Heap }
 
 const WAIT_OBJECT_0: u32 = 0u32
 const WAIT_INFINITE: u32 = 4294967295u32
 
 fn peak_of(process: usize) -> (usize, err) {
     var counters: MemoryCounters = zero
-    counters.size = 72u32
-    if raw_process_memory_info(process, &counters, 72u32) == 0i32 { ret (0usize, from_last_error()) }
-    ret (counters.peak_working_set, ok)
+    let counter_size = u32(mem.size_of[MemoryCounters]())
+    counters.size = counter_size
+    if raw_process_memory_info(process, &counters, counter_size) == 0i32 { ret (0usize, from_last_error()) }
+    ret (usize(counters.peak_working_set), ok)
 }
 
 // The peak working set of this process so far, which at the end of a run is its peak.
