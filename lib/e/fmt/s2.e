@@ -345,7 +345,7 @@ fn encode_framed(src: []const u8, dst: []u8, table: []u16) -> (usize, err) {
 
 // Reads a framed S2 or Snappy stream into `dst`; answers the bytes written.
 fn decode_framed(src: []const u8, dst: []u8) -> (usize, err) {
-    if src.len == 0usize { ret (0usize, ok) }
+    if src.len == 0usize { ret (0usize, Invalid) }
     let ident: [10]u8 = [10]u8{ 255, 6, 0, 0, 83, 50, 115, 84, 119, 79 }
     let snappy_ident: [6]u8 = [6]u8{ 115, 78, 97, 80, 112, 89 }
     var s = 0usize

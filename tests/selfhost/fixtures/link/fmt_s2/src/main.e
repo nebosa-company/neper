@@ -209,5 +209,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if framed_error(headless[..]) != s2.Invalid { os.exit(28i32) }
     let reserved: [14]u8 = [14]u8{ 255, 6, 0, 0, 83, 50, 115, 84, 119, 79, 2, 0, 0, 0 }
     if framed_error(reserved[..]) != s2.Invalid { os.exit(29i32) }
+    let empty_stream: [0]u8 = zero
+    if framed_error(empty_stream[..]) != s2.Invalid { os.exit(30i32) }
     ret ok
 }
