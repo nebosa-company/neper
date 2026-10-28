@@ -9568,6 +9568,11 @@ fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64, fi: f64, fb: f64)
         inline = to_content_w(l, c, wv)
     } else if s.width.kind == .Auto && fb < 0.0f64 && s.height.kind == .Px && s.height.pct == 0.0f64 && has_ro {
         inline = rwo
+        if s.min_width.kind == .Auto && s.overflow_x == .Visible && s.overflow_y == .Visible {
+            clear_widths(l, c)
+            let (mnc, mxc) = content_widths(l, c)
+            inline = maxf(inline, mnc)
+        }
     } else {
         // Automatic inline size of an orthogonal flow: shrink-to-fit against the container's block space (Writing Modes 3 7.3).
         clear_widths(l, c)
