@@ -23,27 +23,33 @@ use e.text.utf8 as utf8
 // --- helpers ----------------------------------------------------------------------------------------------------
 
 // The elements of an array value; a blank is none and any other value is one element.
-fn items_of(a: *mem.Arena, v: f.Value) -> []const f.Value {
-    if v.kind == .Array { ret v.items }
-    if f.is_blank(v) { ret f.zero_items() }
+// The boolean distinguishes a genuine empty collection from an exhausted arena.
+fn items_of(a: *mem.Arena, v: f.Value) -> ([]const f.Value, bool) {
+    if v.kind == .Array { ret (v.items, true) }
+    if f.is_blank(v) { ret (f.zero_items(), true) }
     let (cell, e) = mem.alloc[f.Value](a, 1usize)
-    if e != ok { ret f.zero_items() }
+    if e != ok {
+        var none: []const f.Value = zero
+        ret (none, false)
+    }
     cell[0usize] = v
-    ret cell[0usize..1usize]
+    ret (cell[0usize..1usize], true)
 }
 
-fn values_of(a: *mem.Arena, count: usize) -> []f.Value {
+fn values_of(a: *mem.Arena, count: usize) -> ([]f.Value, bool) {
     var none: []f.Value = zero
-    if count == 0usize { ret none }
+    if count == 0usize { ret (none, true) }
     let (out, e) = mem.alloc[f.Value](a, count)
-    if e != ok { ret none }
-    ret out
+    if e != ok { ret (none, false) }
+    ret (out, true)
 }
 
 fn array_of(out: []f.Value, n: usize) -> f.Value {
     if n == 0usize { ret f.array(f.zero_items()) }
     ret f.array(out[0usize..n])
 }
+
+fn out_of_memory() -> f.Value { ret f.generic_error("Out of memory") }
 
 // JavaScript's `Number(value)`.
 fn js_number(a: *mem.Arena, v: f.Value) -> f64 {
@@ -424,8 +430,10 @@ fn eval_element(c: *f.Call, node: f.Node, element: f.Value, index: usize) -> f.V
 fn h_map(c: *f.Call) -> f.Value {
     let arr = f.eval_node(c, c.nodes[0usize])
     if f.is_error(arr) { ret arr }
-    let items = items_of(c.a, arr)
-    let out = values_of(c.a, items.len)
+    let (items, items_ok) = items_of(c.a, arr)
+    if !items_ok { ret out_of_memory() }
+    let (out, out_ok) = values_of(c.a, items.len)
+    if !out_ok { ret out_of_memory() }
     var i = 0usize
     while i < items.len {
         let v = eval_element(c, c.nodes[1usize], items[i], i)
@@ -439,8 +447,10 @@ fn h_map(c: *f.Call) -> f.Value {
 fn h_filter(c: *f.Call) -> f.Value {
     let arr = f.eval_node(c, c.nodes[0usize])
     if f.is_error(arr) { ret arr }
-    let items = items_of(c.a, arr)
-    let out = values_of(c.a, items.len)
+    let (items, items_ok) = items_of(c.a, arr)
+    if !items_ok { ret out_of_memory() }
+    let (out, out_ok) = values_of(c.a, items.len)
+    if !out_ok { ret out_of_memory() }
     var n = 0usize
     var i = 0usize
     while i < items.len {
@@ -458,7 +468,8 @@ fn h_filter(c: *f.Call) -> f.Value {
 fn h_reduce(c: *f.Call) -> f.Value {
     let arr = f.eval_node(c, c.nodes[0usize])
     if f.is_error(arr) { ret arr }
-    let items = items_of(c.a, arr)
+    let (items, items_ok) = items_of(c.a, arr)
+    if !items_ok { ret out_of_memory() }
     var acc = f.blank()
     var start = 0usize
     if c.nodes.len > 2usize {
@@ -585,7 +596,8 @@ fn merge_sort(a: *mem.Arena, order: []usize, tmp: []usize, keys: []const f.Value
 fn h_sort(c: *f.Call) -> f.Value {
     let arr = f.eval_node(c, c.nodes[0usize])
     if f.is_error(arr) { ret arr }
-    let items = items_of(c.a, arr)
+    let (items, items_ok) = items_of(c.a, arr)
+    if !items_ok { ret out_of_memory() }
     var desc = false
     var has_key = false
     var key_node = c.nodes[0usize]
@@ -604,7 +616,8 @@ fn h_sort(c: *f.Call) -> f.Value {
     }
     let n = items.len
     if n == 0usize { ret f.array(f.zero_items()) }
-    let keys = values_of(c.a, n)
+    let (keys, keys_ok) = values_of(c.a, n)
+    if !keys_ok { ret out_of_memory() }
     var i = 0usize
     while i < n {
         if has_key {
@@ -633,7 +646,8 @@ fn h_sort(c: *f.Call) -> f.Value {
         if te != ok { ret f.generic_error("Out of memory") }
         merge_sort(c.a, order, tmp, keys, desc, 0usize, n)
     }
-    let out = values_of(c.a, n)
+    let (out, out_ok) = values_of(c.a, n)
+    if !out_ok { ret out_of_memory() }
     i = 0usize
     while i < n {
         out[i] = items[order[i]]
@@ -645,7 +659,8 @@ fn h_sort(c: *f.Call) -> f.Value {
 fn h_any(c: *f.Call) -> f.Value {
     let arr = f.eval_node(c, c.nodes[0usize])
     if f.is_error(arr) { ret arr }
-    let items = items_of(c.a, arr)
+    let (items, items_ok) = items_of(c.a, arr)
+    if !items_ok { ret out_of_memory() }
     var i = 0usize
     while i < items.len {
         var test = items[i]
@@ -660,7 +675,8 @@ fn h_any(c: *f.Call) -> f.Value {
 fn h_all(c: *f.Call) -> f.Value {
     let arr = f.eval_node(c, c.nodes[0usize])
     if f.is_error(arr) { ret arr }
-    let items = items_of(c.a, arr)
+    let (items, items_ok) = items_of(c.a, arr)
+    if !items_ok { ret out_of_memory() }
     var i = 0usize
     while i < items.len {
         var test = items[i]
@@ -706,7 +722,8 @@ fn join_parts(a: *mem.Arena, parts: []const str, delim: str) -> str {
 }
 
 fn h_join(c: *f.Call) -> f.Value {
-    let items = items_of(c.a, c.args[0usize])
+    let (items, items_ok) = items_of(c.a, c.args[0usize])
+    if !items_ok { ret out_of_memory() }
     var delim = ","
     if c.args.len > 1usize {
         let d = f.to_text(c.a, c.args[1usize])
@@ -734,20 +751,26 @@ fn h_join(c: *f.Call) -> f.Value {
 
 fn h_flat(c: *f.Call) -> f.Value {
     let total = f.flatten_values(c.args, f.zero_items_mut(), 0usize)
-    let out = values_of(c.a, total)
+    let (out, out_ok) = values_of(c.a, total)
+    if !out_ok { ret out_of_memory() }
     let n = f.flatten_values(c.args, out, 0usize)
     ret array_of(out, n)
 }
 
 // The elements an array function works on: the one array argument's, or the arguments themselves.
-fn operands(c: *f.Call) -> []const f.Value {
-    if c.args.len == 1usize { ret items_of(c.a, c.args[0usize]) }
-    ret c.args
+fn operands(c: *f.Call) -> ([]const f.Value, bool) {
+    if c.args.len == 1usize {
+        let (items, items_ok) = items_of(c.a, c.args[0usize])
+        ret (items, items_ok)
+    }
+    ret (c.args, true)
 }
 
 fn h_unique(c: *f.Call) -> f.Value {
-    let items = operands(c)
-    let out = values_of(c.a, items.len)
+    let (items, items_ok) = operands(c)
+    if !items_ok { ret out_of_memory() }
+    let (out, out_ok) = values_of(c.a, items.len)
+    if !out_ok { ret out_of_memory() }
     var n = 0usize
     var i = 0usize
     while i < items.len {
@@ -767,8 +790,10 @@ fn h_unique(c: *f.Call) -> f.Value {
 }
 
 fn h_compact(c: *f.Call) -> f.Value {
-    let items = operands(c)
-    let out = values_of(c.a, items.len)
+    let (items, items_ok) = operands(c)
+    if !items_ok { ret out_of_memory() }
+    let (out, out_ok) = values_of(c.a, items.len)
+    if !out_ok { ret out_of_memory() }
     var n = 0usize
     var i = 0usize
     while i < items.len {
@@ -811,10 +836,13 @@ fn criterion(s: str) -> (str, str, bool) {
 }
 
 fn h_collect(c: *f.Call) -> f.Value {
-    let range = items_of(c.a, c.args[0usize])
-    let crange = items_of(c.a, c.args[1usize])
+    let (range, range_ok) = items_of(c.a, c.args[0usize])
+    if !range_ok { ret out_of_memory() }
+    let (crange, crange_ok) = items_of(c.a, c.args[1usize])
+    if !crange_ok { ret out_of_memory() }
     let crit = c.args[2usize]
-    let out = values_of(c.a, range.len)
+    let (out, out_ok) = values_of(c.a, range.len)
+    if !out_ok { ret out_of_memory() }
     var n = 0usize
     var op = ""
     var rhs = f.blank()
@@ -862,7 +890,8 @@ fn h_collect(c: *f.Call) -> f.Value {
 }
 
 fn h_get(c: *f.Call) -> f.Value {
-    let items = items_of(c.a, c.args[0usize])
+    let (items, items_ok) = items_of(c.a, c.args[0usize])
+    if !items_ok { ret out_of_memory() }
     let x = js_number(c.a, c.args[1usize])
     if x != x || x - x != 0.0f64 { ret f.blank() }
     let n = math.trunc[f64](x)
@@ -874,13 +903,15 @@ fn h_get(c: *f.Call) -> f.Value {
 }
 
 fn h_first(c: *f.Call) -> f.Value {
-    let items = items_of(c.a, c.args[0usize])
+    let (items, items_ok) = items_of(c.a, c.args[0usize])
+    if !items_ok { ret out_of_memory() }
     if items.len == 0usize { ret f.blank() }
     ret items[0usize]
 }
 
 fn h_last(c: *f.Call) -> f.Value {
-    let items = items_of(c.a, c.args[0usize])
+    let (items, items_ok) = items_of(c.a, c.args[0usize])
+    if !items_ok { ret out_of_memory() }
     if items.len == 0usize { ret f.blank() }
     ret items[items.len - 1usize]
 }
@@ -904,7 +935,8 @@ fn h_split(c: *f.Call) -> f.Value {
         // one piece per UTF-16 unit; a half of an astral character reads as U+FFFD
         if source.len == 0usize { ret f.array(f.zero_items()) }
         let units = tx.utf16_len(source)
-        let out = values_of(c.a, units)
+        let (out, out_ok) = values_of(c.a, units)
+        if !out_ok { ret out_of_memory() }
         var n = 0usize
         var it = utf8.iterator(source)
         var more = true
@@ -920,16 +952,15 @@ fn h_split(c: *f.Call) -> f.Value {
                 var piece: [4]u8 = zero
                 let (width, we) = utf8.encode(scalar, piece[0..])
                 let (cell, ce) = mem.alloc[u8](c.a, usize(width))
-                if ce == ok {
-                    var q = 0usize
-                    while q < usize(width) {
-                        cell[q] = piece[q]
-                        q += 1usize
-                    }
-                    var one: str = cell[0usize..usize(width)]
-                    if trim { one = js_trim(one) }
-                    out[n] = f.text(one)
+                if ce != ok { ret out_of_memory() }
+                var q = 0usize
+                while q < usize(width) {
+                    cell[q] = piece[q]
+                    q += 1usize
                 }
+                var one: str = cell[0usize..usize(width)]
+                if trim { one = js_trim(one) }
+                out[n] = f.text(one)
                 n += 1usize
             }
         }
@@ -946,7 +977,8 @@ fn h_split(c: *f.Call) -> f.Value {
             at += 1usize
         }
     }
-    let out = values_of(c.a, pieces)
+    let (out, out_ok) = values_of(c.a, pieces)
+    if !out_ok { ret out_of_memory() }
     var n = 0usize
     var from = 0usize
     at = 0usize
@@ -980,7 +1012,8 @@ fn slice_position(a: *mem.Arena, raw: f.Value, len: usize, fallback: f64) -> f64
 }
 
 fn h_slice(c: *f.Call) -> f.Value {
-    let items = items_of(c.a, c.args[0usize])
+    let (items, items_ok) = items_of(c.a, c.args[0usize])
+    if !items_ok { ret out_of_memory() }
     let len = items.len
     let start = slice_position(c.a, c.args[1usize], len, 0.0f64)
     var end = f64(len) - 1.0f64
@@ -1114,10 +1147,12 @@ fn h_property(c: *f.Call) -> f.Value {
 fn h_properties(c: *f.Call) -> f.Value {
     let (props, good) = meta_for(c, c.nodes[0usize])
     if !good { ret f.na_error("PROPERTIES requires a field reference and host field metadata") }
-    let out = values_of(c.a, props.len)
+    let (out, out_ok) = values_of(c.a, props.len)
+    if !out_ok { ret out_of_memory() }
     var i = 0usize
     while i < props.len {
-        let pair = values_of(c.a, 2usize)
+        let (pair, pair_ok) = values_of(c.a, 2usize)
+        if !pair_ok { ret out_of_memory() }
         pair[0usize] = f.text(props[i].name)
         pair[1usize] = props[i].value
         out[i] = f.array(pair[0usize..2usize])
@@ -1138,18 +1173,24 @@ fn from_json(a: *mem.Arena, v: json.Value) -> f.Value {
     case .Bool as b:
         ret f.boolean(b)
     case .Array as items:
-        let out = values_of(a, items.len)
+        let (out, out_ok) = values_of(a, items.len)
+        if !out_ok { ret out_of_memory() }
         var i = 0usize
         while i < items.len {
-            out[i] = from_json(a, items[i])
+            let child = from_json(a, items[i])
+            if f.is_error(child) { ret child }
+            out[i] = child
             i += 1usize
         }
         ret array_of(out, items.len)
     case .Object as members:
-        let out = values_of(a, members.len)
+        let (out, out_ok) = values_of(a, members.len)
+        if !out_ok { ret out_of_memory() }
         var i = 0usize
         while i < members.len {
-            out[i] = from_json(a, members[i].value)
+            let child = from_json(a, members[i].value)
+            if f.is_error(child) { ret child }
+            out[i] = child
             i += 1usize
         }
         if members.len == 0usize { ret f.record(f.zero_items()) }
@@ -1559,7 +1600,8 @@ fn h_xmlquery(c: *f.Call) -> f.Value {
         s += 1usize
     }
     if current_n == 0usize { ret f.blank() }
-    let out = values_of(c.a, current_n)
+    let (out, out_ok) = values_of(c.a, current_n)
+    if !out_ok { ret out_of_memory() }
     var n = 0usize
     var j = 0usize
     while j < current_n {
