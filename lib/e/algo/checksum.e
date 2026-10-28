@@ -1,6 +1,7 @@
 // Identifier checksum validators (L030), after appdor's `src/fields/{specialized,barcode,nace}.js`: IBAN and LEI
 // (ISO 7064 mod 97-10), Luhn, credit-card and IMEI lengths, ISBN-10, EAN-13/ISBN-13, UPC-A, ISIN, VIN, BIC, EU VAT
-// structure per member state, MIC, DUNS, HS code, UN/LOCODE, Incoterms 2020, ICD-10, SNOMED CT (Verhoeff), LOINC,
+// structure per member state, MIC, DUNS, HS code, UN/LOCODE, Incoterms 2020, and VIN's position-9 checksum for
+// North American and Chinese identifiers, plus ICD-10, SNOMED CT (Verhoeff), LOINC,
 // NDC, RxCUI, MAC address and NACE Rev. 2.1, plus the barcode symbology rules (GS1 mod 10, Code 39 mod 43), the
 // scan-capability decision and the scan-to-field-value narrowing. Every function reads text as the original does:
 // upper-cased, with white space and hyphens removed for the code types that tolerate them, and ASCII only in the
@@ -377,6 +378,9 @@ fn is_vin(a: *mem.Arena, value: str) -> bool {
         sum += vin_value(c) * vin_weight(i)
         i += 1usize
     }
+    // The ninth character is a checksum only for North American WMIs 1--5 and
+    // China's L prefix; elsewhere it is an ordinary identifier character.
+    if !((s[0usize] >= 49u8 && s[0usize] <= 53u8) || s[0usize] == 76u8) { ret true }
     let check = sum % 11i64
     var expected = 88u8
     if check != 10i64 { expected = u8(48i64 + check) }
@@ -1129,8 +1133,8 @@ fn scan_to_value(a: *mem.Arena, raw_value: str, format: str, accepted: []const s
     var key = "code128"
     if format.len > 0usize { key = symbology_key(a, format) }
     let (label, length, kind, known) = symbology_spec(key)
+    if !known { ret barcode_fail("unknown-symbology", join3(a, "Unknown symbology \"", key, "\".")) }
     var symbology = key
-    if !known { symbology = "code128" }
     var any = false
     var allowed = false
     var names = ""
