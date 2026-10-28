@@ -7914,16 +7914,24 @@ fn clear_widths(l: *Layout, b: u32) {
 // The content block size of `b` from its own `height`, else its `max-height`, raised by `min-height`; negative when it has neither.
 fn fixed_block_size(l: *const Layout, b: u32) -> f64 {
     let s = bstyle(l, b)
+    var cbh = -1.0f64
+    if s.height.pct != 0.0f64 || s.max_height.pct != 0.0f64 || s.min_height.pct != 0.0f64 {
+        let parent_id = l.boxes.items[usize(b)].parent
+        if parent_id != NONE {
+            let parent_style = bstyle(l, parent_id)
+            if parent_style.height.kind == .Px { cbh = fixed_block_size(l, parent_id) }
+        }
+    }
     var h = -1.0f64
-    let (hv, has_h) = resolve_len(s.height, -1.0f64)
-    let (mv, has_m) = resolve_len(s.max_height, -1.0f64)
+    let (hv, has_h) = resolve_len(s.height, cbh)
+    let (mv, has_m) = resolve_len(s.max_height, cbh)
     if s.height.kind == .Px && has_h {
         h = to_content_h(l, b, hv)
     } else if s.max_height.kind == .Px && has_m {
         h = to_content_h(l, b, mv)
     }
     if h < 0.0f64 { ret h }
-    ret clamp_height(l, b, h, -1.0f64)
+    ret clamp_height(l, b, h, cbh)
 }
 
 // The block space an orthogonal flow sizes its inline axis against (Writing Modes 3 7.3, WPT available-size-*): the containing

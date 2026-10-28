@@ -526,5 +526,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 108. A scroll container taller than the viewport gives a vertical flow only the viewport height.
     let (p108, ok108) = build(a, "<div style=\"overflow:hidden;max-height:2000px;font-size:100px\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div>", "")
     if !ok108 || !near(rect_of(p108, "o").h, 600.0f64) { os.exit(149) }
+    // 109. A percentage max-height cap on a scroll ancestor constrains a vertical child through an auto wrapper.
+    let (p109, ok109) = build(a, "<div style=\"height:200px;font-size:10px\"><div style=\"overflow:hidden;max-height:25%\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div></div>", "")
+    if !ok109 || !near(rect_of(p109, "o").h, 50.0f64) { os.exit(150) }
     ret ok
 }
