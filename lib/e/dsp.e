@@ -23,6 +23,8 @@ error NoConvergence
 
 type Window = enum u8 { Rectangular, Hann, Hamming, Blackman }
 
+fn finite_f64(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
+
 fn ipow(t: f64, e: usize) -> f64 {
     var r = 1.0f64
     var i = 0usize
@@ -245,6 +247,7 @@ fn biquad(x: []const f64, c: []const f64, out: []f64, state: []f64) -> err {
 // fraction of Nyquist, `gain_db` only matters for the peaking filter.
 fn biquad_cookbook(kind: u8, frequency: f64, q: f64, gain_db: f64, out: []f64) -> err {
     if out.len < 6usize { ret TooSmall }
+    if kind > 2u8 || !finite_f64(frequency) || frequency <= 0.0f64 || frequency >= 1.0f64 || !finite_f64(q) || q <= 0.0f64 || (kind == 2u8 && !finite_f64(gain_db)) { ret Invalid }
     let w0 = 3.141592653589793f64 * frequency
     let cw = math.cos[f64](w0)
     let alpha = math.sin[f64](w0) / (2.0f64 * q)

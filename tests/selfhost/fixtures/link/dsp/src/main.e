@@ -59,6 +59,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dsp.biquad_lowpass(0.2f64, 0.707f64, section[..]) != ok || dsp.biquad(x[..], section[..], out[..], scratch[..2usize]) != ok { os.exit(2i32) }
     if !near(digest(out[..64usize]), 0.20164901440908806f64, 1.0e-9f64) { os.exit(2i32) }
     if dsp.biquad_peak(0.5f64, 1.0f64, 6.0f64, section[..]) != ok || !near(digest(section[..]), 0.42686390851238154f64, 1.0e-9f64) { os.exit(2i32) }
+    section[0usize] = 77.0f64
+    if dsp.biquad_lowpass(0.5f64, 0.0f64, section[..]) != dsp.Invalid || dsp.biquad_highpass(0.5f64, 0.0f64, section[..]) != dsp.Invalid || dsp.biquad_peak(0.5f64, 0.0f64, 6.0f64, section[..]) != dsp.Invalid || section[0usize] != 77.0f64 { os.exit(2i32) }
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    if dsp.biquad_lowpass(nan, 1.0f64, section[..]) != dsp.Invalid || dsp.biquad_peak(0.5f64, 1.0f64, nan, section[..]) != dsp.Invalid { os.exit(2i32) }
+    if dsp.biquad_lowpass(0.5f64, 1.0f64, section[..]) != ok { os.exit(2i32) }
+    var section_i = 0usize
+    while section_i < section.len {
+        if section[section_i] != section[section_i] || section[section_i] - section[section_i] != 0.0f64 { os.exit(2i32) }
+        section_i += 1usize
+    }
 
     // 3: windows and the windowed sinc.
     if dsp.window(.Hann, 8usize, out[..]) != ok || !near(digest(out[..8usize]), -1.36076155786124f64, 1.0e-9f64) { os.exit(3i32) }
