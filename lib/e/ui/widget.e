@@ -5446,14 +5446,22 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         s.long_press_fired = false
         s.has_tooltip_touch = false
         s.has_rich_tooltip = false
+        // Wheel input follows the same topmost-overlay rule as a press: a modal
+        // miss is consumed, while an inside wheel searches only its subtree.
+        var from = usize(s.root)
+        let (over, inside, has_over) = overlay_at(s, p.position)
+        if has_over {
+            if !inside { ret ok }
+            from = over
+        }
         // A region that takes the wheel (D2114) has it before any zoom or scroll view.
         // ponytail: even one nested inside it; compare depths if a wheel region ever
         // holds a scroll view.
-        let (wheeled, has_wheeled) = hit_region(s, usize(s.root), p.position, GESTURE_WHEEL)
+        let (wheeled, has_wheeled) = hit_region(s, from, p.position, GESTURE_WHEEL)
         if has_wheeled {
             ret fire_gesture(s.elements[wheeled].gesture, Gesture { Wheel: Wheel { position: p.position, notches: f32(mem.bitcast[i32](p.device)) / 120.0 } })
         }
-        let (zoomed, has_zoomed) = hit_zoom(s, usize(s.root), p.position)
+        let (zoomed, has_zoomed) = hit_zoom(s, from, p.position)
         if has_zoomed {
             // A notch scales by a tenth either way.
             let notches = f32(mem.bitcast[i32](p.device)) / 120.0
@@ -5462,7 +5470,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             if notches < 0.0 { factor = 1.0 / 1.1 }
             ret zoom_by(s, zoomed, factor, p.position)
         }
-        let (found, has_found) = hit_scroll(s, usize(s.root), p.position)
+        let (found, has_found) = hit_scroll(s, from, p.position)
         if has_found {
             // The notch count rides in `device` as its bits (D797); a notch is 40 px.
             let notches = f32(mem.bitcast[i32](p.device)) / 120.0
