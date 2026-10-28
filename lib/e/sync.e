@@ -289,15 +289,22 @@ fn condition() -> Condition {
 fn condition_wait(c: *Condition, m: *Mutex) {
     let generation = atomic.load(&c.state, .Acquire)
     mutex_unlock(m)
-    let ignored = os.wait_u32(&c.state, generation, -1i64)
+    while atomic.load(&c.state, .Acquire) == generation {
+        let ignored = os.wait_u32(&c.state, generation, -1i64)
+    }
     mutex_lock(m)
 }
 
 fn condition_wait_for(c: *Condition, m: *Mutex, timeout: time.Duration) -> bool {
     if time.as_nanos(timeout) < 0i64 { ret false }
+    let deadline = deadline_for(timeout)
     let generation = atomic.load(&c.state, .Acquire)
     mutex_unlock(m)
-    let waited = os.wait_u32(&c.state, generation, time.as_nanos(timeout))
+    while atomic.load(&c.state, .Acquire) == generation {
+        let left = remaining_for(deadline)
+        let waited = os.wait_u32(&c.state, generation, left)
+        if left == 0i64 { break }
+    }
     mutex_lock(m)
     ret atomic.load(&c.state, .Acquire) != generation
 }
