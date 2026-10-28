@@ -97,8 +97,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if gpu.sort_bitonic(device, q, ds, 1usize) != ok { os.exit(21i32) }
     let (after_one, _) = gpu.token(q)
     if after_one.serial != before_one.serial { os.exit(22i32) }
-    // These forged lengths avoid allocating huge buffers: the public guards must
-    // reject before accessing backing storage or rounding a sort to an invalid grid.
+    // These forged lengths avoid allocating huge buffers: 8,388,608 keys need
+    // 32,768 groups, while the next padded sort needs 65,536 and is rejected.
     var past_sort_grid = ds
     past_sort_grid.len = 8388609usize
     if gpu.sort_bitonic(device, q, past_sort_grid, 8388609usize) != gpu.TooLarge { os.exit(43i32) }

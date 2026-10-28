@@ -16,9 +16,20 @@ fn check(a: *mem.Arena, backend: gpu.Backend, index: u32) -> err {
     defer let _ = gpu.close(device)
     let (_, empty_error) = gpu.queue_with(device, gpu.StagingLimits { blocks: 0u32, block_bytes: 3usize })
     if empty_error != gpu.TooLarge { os.exit(1i32) }
-    let (q, queue_error) = gpu.queue_with(device, gpu.StagingLimits { blocks: 2u32, block_bytes: 3usize })
-    if queue_error != ok { ret queue_error }
     var initial: [5]u32 = [5]u32 { 1u32, 2u32, 3u32, 4u32, 5u32 }
+    // Twenty bytes need seven three-byte blocks. CPU queues copy directly; a
+    // Vulkan queue must reject the one-block pool instead of silently chunking.
+    let (limited, limited_error) = gpu.queue_with(device, gpu.StagingLimits { blocks: 1u32, block_bytes: 3usize })
+    if limited_error != ok { ret limited_error }
+    let (limited_buf, limited_upload_error) = gpu.upload[u32](limited, initial[0..])
+    if backend == .Cpu {
+        if limited_upload_error != ok { os.exit(2i32) }
+        if gpu.release(limited, limited_buf) != ok { os.exit(3i32) }
+    } else {
+        if limited_upload_error != gpu.TooLarge { os.exit(2i32) }
+    }
+    let (q, queue_error) = gpu.queue_with(device, gpu.StagingLimits { blocks: 7u32, block_bytes: 3usize })
+    if queue_error != ok { ret queue_error }
     let (buf, upload_error) = gpu.upload[u32](q, initial[0..])
     if upload_error != ok { ret upload_error }
     defer let _ = gpu.release(q, buf)
@@ -27,7 +38,7 @@ fn check(a: *mem.Arena, backend: gpu.Backend, index: u32) -> err {
     try gpu.launch[increment](q, gpu.grid1(5usize), buf)
     var result: [5]u32 = zero
     try gpu.download[u32](q, buf, result[0..])
-    if result[0usize] != 2u32 || result[1usize] != 21u32 || result[2usize] != 31u32 || result[3usize] != 41u32 || result[4usize] != 6u32 { os.exit(2i32) }
+    if result[0usize] != 2u32 || result[1usize] != 21u32 || result[2usize] != 31u32 || result[3usize] != 41u32 || result[4usize] != 6u32 { os.exit(4i32) }
     ret ok
 }
 

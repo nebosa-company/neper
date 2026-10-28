@@ -107,7 +107,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_command: usize, pending_block: mtl.Buffer, pending_queue: *QueueState, pending_checked: bool }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_command: usize, pending_block: mtl.Buffer, pending_queue: *QueueState, pending_checked: bool }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
@@ -161,7 +161,7 @@ fn heap_available(backend: Backend) -> bool {
     ret driver.available()
 }
 
-type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
+type QueueState = struct { device: *DeviceState, index: u32, staging_blocks: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
 // An offscreen target: two images, the front one presented, the back one acquired.
 type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquired: bool, closed: bool }
@@ -1012,6 +1012,11 @@ fn open_physical(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (*Devi
 }
 
 fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
+    // Reserve capacity before any caller-arena allocation; keeping the registry
+    // lock through publication makes simultaneous opens observe the reservation.
+    locks.mutex_lock(&registry_locks[0usize])
+    defer locks.mutex_unlock(&registry_locks[0usize])
+    if open_count >= MAX_DEVICES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[DeviceState](a, 1usize)
     if states_error != ok { ret (zero, states_error) }
     let (buffers, buffers_error) = mem.alloc[Buffer](a, MAX_BUFFERS)
@@ -1023,7 +1028,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
         i += 1usize
     }
     let state = &states[0usize]
-    var empty_stage: vulkan.Buffer = zero
+    var empty_stage: []vulkan.Buffer = zero
     var stage_at = 0usize
     while stage_at < MAX_QUEUES {
         state.staging[stage_at] = empty_stage
@@ -1055,9 +1060,6 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Device { state: mem.cast[*void](state) }
-    locks.mutex_lock(&registry_locks[0usize])
-    defer locks.mutex_unlock(&registry_locks[0usize])
-    if open_count >= MAX_DEVICES { ret (zero, TooLarge) }
     state.owner = next_owner
     next_owner += 1u32
     open_devices[open_count] = state
@@ -1227,8 +1229,12 @@ fn close(device: *Device) -> err {
         }
         var stage_at = 0usize
         while stage_at < usize(state.queues) {
-            let stage = state.staging[stage_at]
-            if stage.handle != 0usize { vulkan.free(state.context, stage) }
+            let stages = state.staging[stage_at]
+            var block_at = 0usize
+            while block_at < stages.len {
+                if stages[block_at].handle != 0usize { vulkan.free(state.context, stages[block_at]) }
+                block_at += 1usize
+            }
             stage_at += 1usize
         }
         vulkan.close(state.context)
@@ -1264,20 +1270,19 @@ fn has(device: *Device, capability: Cap) -> bool {
 }
 
 fn queue(device: *Device) -> (*Queue, err) {
-    let (q, queue_error) = queue_with(device, StagingLimits { blocks: 1u32, block_bytes: 65536usize })
+    let (q, queue_error) = queue_with(device, StagingLimits { blocks: 4u32, block_bytes: 16777216usize })
     ret (q, queue_error)
 }
 
 fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err) {
-    if limits.blocks == 0u32 || limits.block_bytes == 0usize { ret (zero, TooLarge) }
+    if limits.blocks == 0u32 || limits.block_bytes == 0usize || limits.block_bytes > MAX_AXIS / usize(limits.blocks) { ret (zero, TooLarge) }
     let (state, state_error) = state_of(device)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state)
     if usize(state.queues) >= MAX_QUEUES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[QueueState](state.arena, 1usize)
     if states_error != ok { ret (zero, states_error) }
-    // ponytail: synchronous transfers reuse one block; use more only if transfers overlap.
-    states[0usize] = QueueState { device: state, index: state.queues, staging_bytes: limits.block_bytes, serial: 0u64, fault_count: 0u32, fault: zero, last: zero, has_last: false }
+    states[0usize] = QueueState { device: state, index: state.queues, staging_blocks: limits.blocks, staging_bytes: limits.block_bytes, serial: 0u64, fault_count: 0u32, fault: zero, last: zero, has_last: false }
     let (handles, handles_error) = mem.alloc[Queue](state.arena, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Queue { state: mem.cast[*void](&states[0usize]) }
@@ -1387,6 +1392,31 @@ fn len[T: type](buf: Buf[T]) -> usize {
     ret buf.len
 }
 
+// Allocate every configured driver block together, so an upload cannot grow a
+// queue's staging pool after first use. The queue lock keeps this pool exclusive.
+fn staging_pool(state: *QueueState) -> err {
+    let staging = state.device.staging[usize(state.index)]
+    if staging.len != 0usize { ret ok }
+    let (blocks, blocks_error) = mem.alloc[vulkan.Buffer](state.device.arena, usize(state.staging_blocks))
+    if blocks_error != ok { ret OutOfMemory }
+    var made = 0usize
+    while made < blocks.len {
+        let (made_block, make_error) = vulkan.buffer(state.device.arena, state.device.context, state.staging_bytes)
+        if make_error != ok {
+            var cleanup = 0usize
+            while cleanup < made {
+                vulkan.free(state.device.context, blocks[cleanup])
+                cleanup += 1usize
+            }
+            ret OutOfMemory
+        }
+        blocks[made] = made_block
+        made += 1usize
+    }
+    state.device.staging[usize(state.index)] = blocks
+    ret ok
+}
+
 fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
@@ -1399,20 +1429,21 @@ fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err {
     let elem = buffer.elem
     let input = host_bytes[T](src)
     if state.device.backend == .Vulkan {
-        let stage = &state.device.staging[usize(state.index)]
-        if stage.handle == 0usize {
-            let (made, make_error) = vulkan.buffer(state.device.arena, state.device.context, state.staging_bytes)
-            if make_error != ok { ret OutOfMemory }
-            *stage = made
-        }
+        let block_count = usize(state.staging_blocks)
+        if input.len > state.staging_bytes * block_count { ret TooLarge }
+        let pool_error = staging_pool(state)
+        if pool_error != ok { ret pool_error }
         var copied = 0usize
+        var block_at = 0usize
         while copied < input.len {
             var chunk = input.len - copied
             if chunk > state.staging_bytes { chunk = state.staging_bytes }
+            let stage = state.device.staging[usize(state.index)][block_at]
             copy_bytes(stage.bytes[..chunk], input[copied..copied + chunk])
             let at = off * elem + copied
             copy_bytes(buffer.bytes[at..at + chunk], stage.bytes[..chunk])
             copied += chunk
+            block_at += 1usize
         }
         ret ok
     }

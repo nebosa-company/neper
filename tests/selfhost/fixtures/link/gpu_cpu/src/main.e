@@ -114,6 +114,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if limit_error != gpu.TooLarge { os.exit(3i32) }
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(4i32) }
+    // The seventeenth open is rejected before allocating its bookkeeping block.
+    var held: [15]*gpu.Device = zero
+    var held_at = 0usize
+    while held_at < held.len {
+        let (extra, extra_error) = gpu.open(a, .Cpu, 0u32)
+        if extra_error != ok { os.exit(47i32) }
+        held[held_at] = extra
+        held_at += 1usize
+    }
+    let before_limit = a.off
+    let (_, capacity_error) = gpu.open(a, .Cpu, 0u32)
+    if capacity_error != gpu.TooLarge || a.off != before_limit { os.exit(48i32) }
+    while held_at > 0usize {
+        held_at = held_at - 1usize
+        if gpu.close(held[held_at]) != ok { os.exit(47i32) }
+    }
     let (_, index_error) = gpu.open(a, .Cpu, 1u32)
     if index_error != gpu.NoDevice { os.exit(5i32) }
     let (_, cuda_error) = gpu.open(a, .Cuda, 0u32)
