@@ -84,6 +84,10 @@ fn sqrt[F: type](z: Complex[F]) -> Complex[F] {
 fn pow[F: type](z: Complex[F], w: Complex[F]) -> Complex[F] {
     if z.re == zero_of[F]() && z.im == zero_of[F]() {
         if w.re == zero_of[F]() && w.im == zero_of[F]() { ret make[F](F(1.0f64), zero_of[F]()) }
+        // The reciprocal of zero has infinite magnitude. Handle a real
+        // negative exponent before the generic zero shortcut so 0^-n does
+        // not silently become zero.
+        if w.im == zero_of[F]() && w.re < zero_of[F]() { ret make[F](F(1.0f64) / zero_of[F](), zero_of[F]()) }
         ret make[F](zero_of[F](), zero_of[F]())
     }
     ret exp[F](mul[F](w, log[F](z)))

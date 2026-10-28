@@ -41,6 +41,10 @@ fn main() {
     if f.re != 6.25 || f.im != 0.0 { os.exit(13) }
     let z0 = cx.pow[f64](cx.make[f64](0.0, 0.0), cx.make[f64](0.0, 0.0))
     if z0.re != 1.0 { os.exit(14) }
+    let inverse_zero = cx.pow[f64](cx.make[f64](0.0, 0.0), cx.make[f64](-1.0, 0.0))
+    if inverse_zero.re != inverse_zero.re || inverse_zero.re <= 1.0e308 || inverse_zero.im != 0.0 { os.exit(17) }
+    let inverse_zero32 = cx.pow[f32](cx.make[f32](0.0f32, 0.0f32), cx.make[f32](-1.0f32, 0.0f32))
+    if inverse_zero32.re != inverse_zero32.re || inverse_zero32.re <= 1.0e30f32 || inverse_zero32.im != 0.0f32 { os.exit(17) }
     let big = cx.abs[f64](cx.make[f64](1.0e200, 1.0e200))
     if !near(big / 1.0e200, 1.4142135623730951) { os.exit(15) }
     let n = cx.neg[f64](a)
