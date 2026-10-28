@@ -195,7 +195,7 @@ fn normalize(a: *mem.Arena, path: str, style: Style) -> (str, err) {
                     continue
                 }
             }
-            if written > body_start || (root != 0usize && !absolute) {
+            if written > body_start {
                 buffer[written] = separator(style)
                 written += 1usize
             }
