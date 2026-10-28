@@ -22,15 +22,20 @@ error Long
 error Overflow
 error TooSmall
 error Mismatch
+error TooLarge
 
-fn record_width(fields: []const Field) -> usize {
+// The total record width, rejecting layouts that cannot fit in `usize` on the
+// active target rather than wrapping their field offsets.
+fn record_width(fields: []const Field) -> (usize, err) {
     var total = 0usize
     var i = 0usize
     while i < fields.len {
-        total += usize(fields[i].width)
+        let width = usize(fields[i].width)
+        if width > 18446744073709551615usize - total { ret (0usize, TooLarge) }
+        total += width
         i += 1usize
     }
-    ret total
+    ret (total, ok)
 }
 
 fn trimmed(f: Field, cut: str) -> str {
@@ -48,7 +53,8 @@ fn trimmed(f: Field, cut: str) -> str {
 // Cuts `line` into `out` (one value per field). `out` must hold `fields.len` values.
 fn read(fields: []const Field, mode: Mode, line: str, out: []str) -> err {
     if out.len < fields.len { ret TooSmall }
-    let width = record_width(fields)
+    let (width, width_error) = record_width(fields)
+    if width_error != ok { ret width_error }
     if line.len > width && (mode == .Exact || mode == .AllowLess) { ret Long }
     if line.len < width && (mode == .Exact || mode == .AllowMore) { ret Short }
     var at = 0usize
@@ -72,7 +78,8 @@ fn read(fields: []const Field, mode: Mode, line: str, out: []str) -> err {
 // Pads and aligns `values` into `dst`; returns the record.
 fn write(fields: []const Field, values: []const str, dst: []u8) -> (str, err) {
     if values.len != fields.len { ret ("", Mismatch) }
-    let width = record_width(fields)
+    let (width, width_error) = record_width(fields)
+    if width_error != ok { ret ("", width_error) }
     if dst.len < width { ret ("", TooSmall) }
     var at = 0usize
     var i = 0usize
