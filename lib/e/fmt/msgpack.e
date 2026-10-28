@@ -11,6 +11,7 @@ use e.io
 use e.mem
 use e.meta
 use e.str
+use e.text.utf8
 
 type Pair = struct { key: Value, value: Value }
 type Ext = struct { kind: i8, data: []const u8 }
@@ -85,6 +86,7 @@ fn read_depth(a: *mem.Arena, s: *State, depth: u16) -> (Value, err) {
     if format >= 160u8 && format <= 191u8 {
         let (text, text_error) = read_bytes(a, s, usize(format - 160u8))
         if text_error != ok { ret (nil_value, text_error) }
+        if !utf8.validate(text[0..]) { ret (nil_value, Invalid) }
         ret (Value{ String: text[0..] }, ok)
     }
     if format >= 144u8 && format <= 159u8 {
@@ -152,6 +154,7 @@ fn read_depth(a: *mem.Arena, s: *State, depth: u16) -> (Value, err) {
         if count_error != ok { ret (nil_value, count_error) }
         let (text, text_error) = read_bytes(a, s, usize(count))
         if text_error != ok { ret (nil_value, text_error) }
+        if !utf8.validate(text[0..]) { ret (nil_value, Invalid) }
         ret (Value{ String: text[0..] }, ok)
     }
     // array 16/32, map 16/32
@@ -285,6 +288,7 @@ fn write_u64(writer: *io.Writer, value: u64) -> err {
 }
 
 fn write_string(writer: *io.Writer, text: str) -> err {
+    if !utf8.validate(text) { ret Invalid }
     if text.len < 32usize {
         try write_byte(writer, 160u8 + u8(text.len))
     } else {
@@ -400,6 +404,37 @@ fn integer_of(value: Value) -> (i64, u64, bool, bool) {
     }
 }
 
+// Decide the target range before converting: a direct narrowing cast traps in debug
+// and truncates in release. `signed` is used only when `is_signed` is true.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
 fn float_of(value: Value) -> (f64, bool) {
     switch value {
     case .F64 as number:
@@ -453,8 +488,8 @@ fn decode[T: type](a: *mem.Arena, source: io.Reader, max_depth: u16) -> (T, err)
             if meta.kind[f.ty]() == .Int {
                 let (signed, unsigned, is_signed, is_integer) = integer_of(found)
                 if !is_integer { ret (out, Invalid) }
-                var slot: f.ty = zero
-                if is_signed { slot = f.ty(signed) } else { slot = f.ty(unsigned) }
+                let (slot, slot_error) = integer_into[f.ty](signed, unsigned, is_signed)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
             if meta.kind[f.ty]() == .Float {

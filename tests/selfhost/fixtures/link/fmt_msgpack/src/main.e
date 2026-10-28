@@ -9,6 +9,9 @@ use e.str
 use e.fmt.msgpack as msgpack
 
 type Record = struct { name: str, count: u32, ratio: f64, enabled: bool, delta: i16 }
+type SignedByte = struct { number: i8 }
+type UnsignedByte = struct { number: u8 }
+type SignedWord = struct { number: i64 }
 
 fn bytes_equal(a: []const u8, b: []const u8) -> bool {
     if a.len != b.len { ret false }
@@ -128,6 +131,65 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (decoded, decode_error) = msgpack.decode[Record](a, io.slice_reader(&unpack_state), 8u16)
     if decode_error != ok { os.exit(17) }
     if !str.eq(decoded.name, "widget") || decoded.count != 70000u32 || decoded.ratio != 0.25 || !decoded.enabled || decoded.delta != -5i16 { os.exit(18) }
+
+    // Typed integer decode must decide the target range before it casts.
+    let unsigned_to_signed: [10]u8 = [10]u8{ 129, 166, 110, 117, 109, 98, 101, 114, 204, 255 }
+    var unsigned_to_signed_state: io.SliceReader = zero
+    unsigned_to_signed_state.data = unsigned_to_signed[0..]
+    let (_, unsigned_to_signed_error) = msgpack.decode[SignedByte](a, io.slice_reader(&unsigned_to_signed_state), 8u16)
+    if unsigned_to_signed_error != msgpack.Invalid { os.exit(19) }
+    let signed_to_unsigned: [10]u8 = [10]u8{ 129, 166, 110, 117, 109, 98, 101, 114, 208, 255 }
+    var signed_to_unsigned_state: io.SliceReader = zero
+    signed_to_unsigned_state.data = signed_to_unsigned[0..]
+    let (_, signed_to_unsigned_error) = msgpack.decode[UnsignedByte](a, io.slice_reader(&signed_to_unsigned_state), 8u16)
+    if signed_to_unsigned_error != msgpack.Invalid { os.exit(20) }
+    let signed_narrowing: [11]u8 = [11]u8{ 129, 166, 110, 117, 109, 98, 101, 114, 209, 255, 127 }
+    var signed_narrowing_state: io.SliceReader = zero
+    signed_narrowing_state.data = signed_narrowing[0..]
+    let (_, signed_narrowing_error) = msgpack.decode[SignedByte](a, io.slice_reader(&signed_narrowing_state), 8u16)
+    if signed_narrowing_error != msgpack.Invalid { os.exit(21) }
+    let unsigned_narrowing: [11]u8 = [11]u8{ 129, 166, 110, 117, 109, 98, 101, 114, 205, 1, 0 }
+    var unsigned_narrowing_state: io.SliceReader = zero
+    unsigned_narrowing_state.data = unsigned_narrowing[0..]
+    let (_, unsigned_narrowing_error) = msgpack.decode[UnsignedByte](a, io.slice_reader(&unsigned_narrowing_state), 8u16)
+    if unsigned_narrowing_error != msgpack.Invalid { os.exit(22) }
+    let u64_to_i64: [17]u8 = [17]u8{ 129, 166, 110, 117, 109, 98, 101, 114, 207, 255, 255, 255, 255, 255, 255, 255, 255 }
+    var u64_to_i64_state: io.SliceReader = zero
+    u64_to_i64_state.data = u64_to_i64[0..]
+    let (_, u64_to_i64_error) = msgpack.decode[SignedWord](a, io.slice_reader(&u64_to_i64_state), 8u16)
+    if u64_to_i64_error != msgpack.Invalid { os.exit(23) }
+    let valid_unsigned_to_signed: [10]u8 = [10]u8{ 129, 166, 110, 117, 109, 98, 101, 114, 204, 127 }
+    var valid_unsigned_to_signed_state: io.SliceReader = zero
+    valid_unsigned_to_signed_state.data = valid_unsigned_to_signed[0..]
+    let (valid_signed, valid_unsigned_to_signed_error) = msgpack.decode[SignedByte](a, io.slice_reader(&valid_unsigned_to_signed_state), 8u16)
+    if valid_unsigned_to_signed_error != ok || valid_signed.number != 127i8 { os.exit(24) }
+    let valid_signed_to_unsigned: [10]u8 = [10]u8{ 129, 166, 110, 117, 109, 98, 101, 114, 208, 127 }
+    var valid_signed_to_unsigned_state: io.SliceReader = zero
+    valid_signed_to_unsigned_state.data = valid_signed_to_unsigned[0..]
+    let (valid_unsigned, valid_signed_to_unsigned_error) = msgpack.decode[UnsignedByte](a, io.slice_reader(&valid_signed_to_unsigned_state), 8u16)
+    if valid_signed_to_unsigned_error != ok || valid_unsigned.number != 127u8 { os.exit(25) }
+
+    // MessagePack str is UTF-8, unlike bin; reject malformed payloads on both paths.
+    let invalid_fixstr: [2]u8 = [2]u8{ 161, 255 }
+    var invalid_fixstr_state: io.SliceReader = zero
+    invalid_fixstr_state.data = invalid_fixstr[0..]
+    let (invalid_fixstr_reader, _) = msgpack.reader(a, io.slice_reader(&invalid_fixstr_state), 8u16)
+    var invalid_fixstr_read = invalid_fixstr_reader
+    let (_, invalid_fixstr_error) = msgpack.read_value(a, &invalid_fixstr_read)
+    if invalid_fixstr_error != msgpack.Invalid { os.exit(26) }
+    let invalid_str8: [3]u8 = [3]u8{ 217, 1, 255 }
+    var invalid_str8_state: io.SliceReader = zero
+    invalid_str8_state.data = invalid_str8[0..]
+    let (invalid_str8_reader, _) = msgpack.reader(a, io.slice_reader(&invalid_str8_state), 8u16)
+    var invalid_str8_read = invalid_str8_reader
+    let (_, invalid_str8_error) = msgpack.read_value(a, &invalid_str8_read)
+    if invalid_str8_error != msgpack.Invalid { os.exit(27) }
+    let invalid_text = msgpack.Value{ String: "\xff" }
+    var invalid_text_bytes: [8]u8 = zero
+    var invalid_text_state: io.SliceWriter = zero
+    invalid_text_state.data = invalid_text_bytes[0..]
+    var invalid_text_writer = io.slice_writer(&invalid_text_state)
+    if msgpack.write(&invalid_text_writer, &invalid_text) != msgpack.Invalid || invalid_text_state.off != 0usize { os.exit(28) }
     os.exit(0)
     ret ok
 }
