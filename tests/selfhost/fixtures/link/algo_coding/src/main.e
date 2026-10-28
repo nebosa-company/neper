@@ -129,6 +129,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var no_values: [0]u64 = zero
     let (nothing, nothing_error) = coding.for_encode(no_values[..], out[..])
     if nothing_error != ok || nothing != 2usize { os.exit(5i32) }
+    // A corrupted offset must not wrap past u64::MAX on decode.
+    let (overflow_head, overflow_head_error) = coding.varint_encode(18446744073709551614u64, out[..])
+    if overflow_head_error != ok { os.exit(5i32) }
+    out[overflow_head] = 2u8
+    out[overflow_head + 1usize] = 128u8
+    var overflow_value: [1]u64 = zero
+    if coding.for_decode(out[..overflow_head + 2usize], overflow_value[..]) != coding.Invalid { os.exit(5i32) }
 
     // 6: Elias gamma and Rice through one cursor.
     var w = coding.bit_writer(out[..])

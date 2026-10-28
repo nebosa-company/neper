@@ -275,7 +275,8 @@ fn for_decode(src: []const u8, values: []u64) -> err {
     while at < values.len {
         let (offset, read_error) = read_bits(&r, width)
         if read_error != ok { ret read_error }
-        values[at] = least +% offset
+        if offset > 18446744073709551615u64 - least { ret Invalid }
+        values[at] = least + offset
         at += 1usize
     }
     ret ok
