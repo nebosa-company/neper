@@ -218,7 +218,62 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if total_sum != 200010000u64 { os.exit(37i32) }
     if deque.len[u64](&sh.d) != 0usize { os.exit(38i32) }
 
-    // --- 4: the stack under threads.
+    // --- 4: four slots force every concurrent steal to race reuse pressure.
+    var tight_ring: [4]u64 = zero
+    let (tight0, tight_init_error) = deque.deque[u64](tight_ring[..])
+    if tight_init_error != ok { os.exit(49i32) }
+    var tight = Shared { d: tight0, done: atomic.init(0u32) }
+    var tight_thieves: [3]Thief = zero
+    var tight_workers: [3]thread.Thread = zero
+    k = 0usize
+    while k < 3usize {
+        tight_thieves[k] = Thief { s: &tight, sum: 0u64, count: 0u64 }
+        let (tight_started, tight_spawn_error) = thread.spawn[Thief](thieve, &tight_thieves[k], 0usize)
+        if tight_spawn_error != ok { os.exit(50i32) }
+        tight_workers[k] = tight_started
+        k += 1usize
+    }
+    var tight_owner_sum = 0u64
+    var tight_owner_count = 0u64
+    i = 1u64
+    while i <= 60000u64 {
+        let push_error = deque.push[u64](&tight.d, i)
+        if push_error == ok {
+            i += 1u64
+            continue
+        }
+        if push_error != deque.Full { os.exit(51i32) }
+        let (v, got) = deque.pop[u64](&tight.d)
+        if got {
+            tight_owner_sum +%= v
+            tight_owner_count += 1u64
+        }
+    }
+    atomic.store(&tight.done, 1u32, .Release)
+    while true {
+        let (v, got) = deque.pop[u64](&tight.d)
+        if !got { break }
+        tight_owner_sum +%= v
+        tight_owner_count += 1u64
+    }
+    k = 0usize
+    while k < 3usize {
+        if thread.join(tight_workers[k]) != ok { os.exit(52i32) }
+        k += 1usize
+    }
+    var tight_sum = tight_owner_sum
+    var tight_count = tight_owner_count
+    k = 0usize
+    while k < 3usize {
+        tight_sum +%= tight_thieves[k].sum
+        tight_count += tight_thieves[k].count
+        k += 1usize
+    }
+    if tight_count != 60000u64 { os.exit(53i32) }
+    if tight_sum != 1800030000u64 { os.exit(54i32) }
+    if deque.len[u64](&tight.d) != 0usize { os.exit(55i32) }
+
+    // --- 5: the stack under threads.
     let (nexts, e9) = mem.alloc[u32](a, 20000usize)
     if e9 != ok { os.exit(39i32) }
     let (values, e10) = mem.alloc[u64](a, 20000usize)
