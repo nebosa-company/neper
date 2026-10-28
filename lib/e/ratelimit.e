@@ -157,6 +157,8 @@ fn sliding_log_count(l: *SlidingLog, now: u64) -> u64 {
 
 // `limit` units per trailing `width` ticks estimated from the current and
 // previous fixed windows: previous * (unelapsed part of the window) / width + current.
+// `window` is the aligned start tick of the current bucket, rather than its
+// quotient, so its phase survives a wrapping caller clock.
 fn sliding_window(limit: u64, width: u64) -> (SlidingWindow, err) {
     if width == 0u64 { ret (SlidingWindow { limit: 0u64, width: 1u64, window: 0u64, count: 0u64, previous: 0u64 }, Invalid) }
     if limit > 18446744073709551615u64 / width { ret (SlidingWindow { limit: 0u64, width: 1u64, window: 0u64, count: 0u64, previous: 0u64 }, Invalid) }
@@ -164,14 +166,13 @@ fn sliding_window(limit: u64, width: u64) -> (SlidingWindow, err) {
 }
 
 fn sliding_window_roll(w: *SlidingWindow, now: u64) {
-    let index = now / w.width
-    if index == w.window { ret }
-    if index > w.window {
-        if index - w.window == 1u64 { w.previous = w.count } else { w.previous = 0u64 }
-    } else {
-        w.previous = 0u64
-    }
-    w.window = index
+    let elapsed = now -% w.window
+    if elapsed < w.width { ret }
+    let windows = elapsed / w.width
+    if windows == 1u64 { w.previous = w.count } else { w.previous = 0u64 }
+    // Keep the bucket phase relative to its prior start. `now / width` would
+    // lose that phase where 2^64 is not a multiple of width.
+    w.window = now -% (elapsed % w.width)
     w.count = 0u64
 }
 
@@ -180,7 +181,8 @@ fn sliding_window_count(w: *SlidingWindow, now: u64) -> u64 {
     sliding_window_roll(w, now)
     if w.previous > w.limit { w.previous = w.limit }
     if w.count > w.limit { w.count = w.limit }
-    let weighted = w.previous * (w.width - now % w.width) / w.width
+    let age = now -% w.window
+    let weighted = w.previous * (w.width - age) / w.width
     if weighted > w.limit - w.count { ret w.limit }
     ret weighted + w.count
 }

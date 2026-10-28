@@ -29385,7 +29385,9 @@ Limiters over the caller's clock in exact integer arithmetic: `token_bucket`,
 `sliding_window`, each with `_allow` and a level or count query. Constructors
 return `Invalid` for a zero interval or width, an empty log ring, or an
 unrepresentable scaled capacity (`capacity * interval`) or sliding-window
-weight (`limit * width`); oversized costs are denied rather than charged.
+weight (`limit * width`); oversized costs are denied rather than charged. The
+sliding-window bucket retains its aligned tick phase across a wrapping `u64`
+clock.
 
 ### `e.resilience`
 

@@ -231,7 +231,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if clock_window_error != ok { os.exit(8i32) }
     var wrapped_window = clock_window
     if !ratelimit.sliding_window_allow(&wrapped_window, 18446744073709551615u64, 1u64) { os.exit(8i32) }
-    if ratelimit.sliding_window_count(&wrapped_window, 0u64) != 0u64 { os.exit(8i32) }
+    if ratelimit.sliding_window_count(&wrapped_window, 0u64) != 1u64 { os.exit(8i32) }
+
+    // A width not dividing 2^64 keeps its bucket phase over rollover: MAX-5 is
+    // a width-10 boundary, so zero is still six ticks into the same bucket.
+    let (phase_window, phase_window_error) = ratelimit.sliding_window(10u64, 10u64)
+    if phase_window_error != ok { os.exit(8i32) }
+    var phase_wrapped = phase_window
+    if !ratelimit.sliding_window_allow(&phase_wrapped, 18446744073709551610u64, 10u64) { os.exit(8i32) }
+    if ratelimit.sliding_window_count(&phase_wrapped, 0u64) != 10u64 { os.exit(8i32) }
+    if ratelimit.sliding_window_allow(&phase_wrapped, 0u64, 1u64) { os.exit(8i32) }
+    // At the next aligned start it is the previous bucket, then it decays and
+    // disappears when that whole following bucket has elapsed.
+    if ratelimit.sliding_window_count(&phase_wrapped, 4u64) != 10u64 { os.exit(8i32) }
+    if ratelimit.sliding_window_count(&phase_wrapped, 13u64) != 1u64 { os.exit(8i32) }
+    if ratelimit.sliding_window_count(&phase_wrapped, 14u64) != 0u64 { os.exit(8i32) }
 
     try io.print("ratelimit ok\n")
     ret ok
