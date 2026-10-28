@@ -333,11 +333,17 @@ fn resets_name(l: *Layout, text: str, name: str) -> bool {
     ret false
 }
 
+// A list element with no `counter-reset` of its own starts a `list-item` counter by the default style sheet.
+fn implicit_list_reset(l: *Layout, e: u32) -> bool {
+    let n = &l.d.nodes[usize(e)]
+    ret n.namespace == .Html && (str.eq(n.name, "ol") || str.eq(n.name, "ul") || str.eq(n.name, "menu"))
+}
+
 fn rev_style(l: *Layout, s: *const style.Style, name: str, acc: *RevAcc) {
     let (incr, has) = extra_text(s, "counter-increment")
     if !has { ret }
     let (v, found) = incr_of(l, incr, name)
-    if found {
+    if found && v != 0i64 {
         acc.sum += v
         acc.last = v
     }
@@ -350,10 +356,23 @@ fn rev_walk(l: *Layout, e: u32, name: str, acc: *RevAcc, origin: bool) {
     if s.display == .None { ret }
     if !origin {
         let (rs, has_rs) = extra_text(s, "counter-reset")
-        if has_rs && resets_name(l, rs, name) { ret }
+        if (has_rs && resets_name(l, rs, name)) || (!has_rs && str.eq(name, "list-item") && implicit_list_reset(l, e)) { ret }
     }
     let pb = s.pseudo[0usize]
     if mem.address_of(pb) != 0usize && pb.display != .None { rev_style(l, pb, name, acc) }
+    if str.eq(name, "list-item") && s.display == .ListItem {
+        let (ci, has_ci) = extra_text(s, "counter-increment")
+        var own_step = false
+        if has_ci {
+            let (cv2, found2) = incr_of(l, ci, "list-item")
+            own_step = found2
+        }
+        if !own_step {
+            let step = li_default_step(l, e)
+            acc.sum += step
+            acc.last = step
+        }
+    }
     rev_style(l, s, name, acc)
     var kid = l.d.nodes[usize(e)].first_child
     while kid != html.NONE {
@@ -372,7 +391,7 @@ fn rev_initial(l: *Layout, node: u32, name: str) -> i64 {
     while sib != html.NONE {
         if l.d.nodes[usize(sib)].kind == .Element {
             let (rs, has_rs) = extra_text(&l.styles[usize(sib)], "counter-reset")
-            if has_rs && resets_name(l, rs, name) { break }
+            if (has_rs && resets_name(l, rs, name)) || (!has_rs && str.eq(name, "list-item") && implicit_list_reset(l, sib)) { break }
             rev_walk(l, sib, name, &acc, false)
         }
         sib = l.d.nodes[usize(sib)].next_sibling
@@ -796,6 +815,17 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     apply_counter_props(l, s, node)
     // The implicit `list-item` counter: a list starts one and each item steps it (see `list_ordinal`).
     if n.namespace == .Html && (str.eq(n.name, "ol") || str.eq(n.name, "ul") || str.eq(n.name, "menu")) && !css_resets_list_item(l, node) { counter_instantiate(l, "list-item", 0i64) }
+    if n.namespace == .Html && is_reversed_ol(l, node) && css_resets_list_item(l, node) {
+        let (own_rs, has_own_rs) = extra_text(s, "counter-reset")
+        if !has_own_rs {
+            counter_instantiate(l, "list-item", 0i64)
+            let rat = find_counter(l, "list-item")
+            if rat >= 0i64 {
+                l.counters.items[usize(rat)].pend = rev_initial(l, node, "list-item")
+                l.counters.items[usize(rat)].has_pend = true
+            }
+        }
+    }
     if s.display == .ListItem {
         var li_at = find_counter(l, "list-item")
         if li_at < 0i64 {
@@ -816,7 +846,7 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
                     l.counters.items[usize(li_at)].value = l.counters.items[usize(li_at)].pend
                     l.counters.items[usize(li_at)].has_pend = false
                 }
-                l.counters.items[usize(li_at)].value += 1i64
+                l.counters.items[usize(li_at)].value += li_default_step(l, node)
             }
         } else {
             l.counters.items[usize(li_at)].value = list_ordinal(l, node)
@@ -893,10 +923,29 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     fix_anonymous(l, b)
 }
 
-// Whether the stylesheet resets `list-item` on list `node` itself.
+fn is_reversed_ol(l: *Layout, node: u32) -> bool {
+    if !dom.is_html_named(l.d, node, "ol") { ret false }
+    let (rv, has_rv) = dom.get_attribute(l.d, node, "reversed")
+    ret has_rv
+}
+
+// The step an item of a list takes when its own `counter-increment` does not name `list-item`.
+fn li_default_step(l: *Layout, item: u32) -> i64 {
+    let par = l.d.nodes[usize(item)].parent
+    if par != html.NONE && is_reversed_ol(l, par) { ret 0i64 - 1i64 }
+    ret 1i64
+}
+
+// Whether the counting of list `node` is left to the counter rules: its own `counter-reset` takes over from the implicit
+// one, or it is a reversed list without a start (whose counter starts where its last step lands on its own size).
 fn css_resets_list_item(l: *Layout, node: u32) -> bool {
     let (rs, has_rs) = extra_text(&l.styles[usize(node)], "counter-reset")
-    ret has_rs && resets_name(l, rs, "list-item")
+    if has_rs && !str.eq(cv.lower(l.a, cv.trim_ws(rs)), "none") { ret true }
+    if is_reversed_ol(l, node) {
+        let (sv, has_sv) = dom.get_attribute(l.d, node, "start")
+        ret !has_sv
+    }
+    ret false
 }
 
 // The step of a list item: its own `counter-increment` of `list-item`, else 1 (-1 in a reversed list).
