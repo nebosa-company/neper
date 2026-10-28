@@ -460,8 +460,9 @@ fn seek(s: *Seeker, off: i64, whence: os.SeekWhence) -> (u64, err) {
     ret (position, seek_error)
 }
 
-// `limit` is a hard maximum: crossing it is `TooSmall` and keeps no partial result,
-// which is why the claim is released before returning.
+// `limit` is a hard maximum: an input ending exactly at it succeeds, while one more
+// byte is `TooSmall` and keeps no partial result. The extra-byte probe is necessary
+// because a Reader reports End only after (or alongside) its final bytes.
 fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err) {
     let start = mem.mark(a)
     var filled = 0usize
@@ -472,6 +473,17 @@ fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err) {
             if grow == 0usize { grow = 512usize }
             if reserved + grow > limit { grow = limit - reserved }
             if grow == 0usize {
+                var probe: [1]u8 = zero
+                let (probe_count, probe_error) = read(r, probe[..])
+                if probe_count > 0usize {
+                    mem.reset(a, start)
+                    ret (zero, TooSmall)
+                }
+                if probe_error == End { break }
+                if probe_error != ok {
+                    mem.reset(a, start)
+                    ret (zero, probe_error)
+                }
                 mem.reset(a, start)
                 ret (zero, TooSmall)
             }
@@ -484,12 +496,12 @@ fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err) {
         }
         let window = mem.view(a, start + filled, reserved - filled)
         let (count, read_error) = read(r, window)
+        filled += count
         if read_error == End { break }
         if read_error != ok {
             mem.reset(a, start)
             ret (zero, read_error)
         }
-        filled += count
     }
     mem.reset(a, start + filled)
     ret (mem.view(a, start, filled), ok)
@@ -505,6 +517,21 @@ fn read_all_detail(a: *mem.Arena, r: *DetailReader, limit: usize, detail: *os.Er
             if grow == 0usize { grow = 512usize }
             if reserved + grow > limit { grow = limit - reserved }
             if grow == 0usize {
+                var probe: [1]u8 = zero
+                let (probe_count, probe_error) = read_detail(r, probe[..], detail)
+                if probe_count > 0usize {
+                    mem.reset(a, start)
+                    detail.kind = .Invalid
+                    detail.native_code = 0i32
+                    detail.operation = "read_all"
+                    detail.subject = "limit"
+                    ret (zero, TooSmall)
+                }
+                if probe_error == End { break }
+                if probe_error != ok {
+                    mem.reset(a, start)
+                    ret (zero, probe_error)
+                }
                 mem.reset(a, start)
                 detail.kind = .Invalid
                 detail.native_code = 0i32
@@ -543,6 +570,17 @@ fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, 
     var filled = 0usize
     while true {
         if filled == limit {
+            var probe: [1]u8 = zero
+            let (probe_count, probe_error) = read(r, probe[..])
+            if probe_count > 0usize {
+                mem.reset(a, start)
+                ret (zero, TooSmall)
+            }
+            if probe_error == End { break }
+            if probe_error != ok {
+                mem.reset(a, start)
+                ret (zero, probe_error)
+            }
             mem.reset(a, start)
             ret (zero, TooSmall)
         }
@@ -552,13 +590,13 @@ fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, 
             ret (zero, claim_error)
         }
         let (count, read_error) = read(r, claim)
-        if read_error == End { break }
-        if read_error != ok {
+        filled += count
+        if read_error != ok && read_error != End {
             mem.reset(a, start)
             ret (zero, read_error)
         }
-        filled += count
-        if claim[0usize] == delimiter { break }
+        if count > 0usize && claim[0usize] == delimiter { break }
+        if read_error == End { break }
     }
     mem.reset(a, start + filled)
     ret (mem.view(a, start, filled), ok)
@@ -569,11 +607,13 @@ fn copy(dst: *Writer, src: *Reader, scratch: []u8) -> (u64, err) {
     var moved = 0u64
     while true {
         let (count, read_error) = read(src, scratch)
+        if count > 0usize {
+            let write_error = write_all(dst, scratch[0usize..count])
+            if write_error != ok { ret (moved, write_error) }
+            moved += u64(count)
+        }
         if read_error == End { ret (moved, ok) }
         if read_error != ok { ret (moved, read_error) }
-        let write_error = write_all(dst, scratch[0usize..count])
-        if write_error != ok { ret (moved, write_error) }
-        moved += u64(count)
     }
     ret (moved, ok)
 }

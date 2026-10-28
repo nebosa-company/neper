@@ -157,12 +157,66 @@ fn main(a: *mem.Arena) -> err {
     let (nothing, small_error) = io.read_all(a, &small_from, 4usize)
     if small_error != io.TooSmall { ret Failed }
 
+    // A hard limit allows an input that ends exactly at it: the helper probes once
+    // for EOF rather than rejecting the full buffer before asking the source.
+    var exact_all_source = io.SliceReader { data: "four", off: 0usize }
+    var exact_all = io.slice_reader(&exact_all_source)
+    let (exact_all_bytes, exact_all_error) = io.read_all(a, &exact_all, 4usize)
+    if exact_all_error != ok || !str.eq(exact_all_bytes, "four") { ret Failed }
+
+    var empty_all_source = io.SliceReader { data: "", off: 0usize }
+    var empty_all = io.slice_reader(&empty_all_source)
+    let (empty_all_bytes, empty_all_error) = io.read_all(a, &empty_all, 0usize)
+    if empty_all_error != ok || empty_all_bytes.len != 0usize { ret Failed }
+
+    var exact_detail_source = io.SliceReader { data: "detail", off: 0usize }
+    var exact_detail = io.slice_detail_reader(&exact_detail_source)
+    var exact_detail_error_info: os.ErrorDetail = zero
+    let (exact_detail_bytes, exact_detail_error) = io.read_all_detail(a, &exact_detail, 6usize, &exact_detail_error_info)
+    if exact_detail_error != ok || !str.eq(exact_detail_bytes, "detail") { ret Failed }
+
     // `read_until` stops after the delimiter and keeps it.
     var line_source = io.SliceReader { data: "first\nsecond\n", off: 0usize }
     var lines = io.slice_reader(&line_source)
     let (line, line_error) = io.read_until(a, &lines, 10u8, 64usize)
     if line_error != ok { ret line_error }
     if !str.eq(line, "first\n") { ret Failed }
+
+    var exact_until_source = io.SliceReader { data: "edge", off: 0usize }
+    var exact_until = io.slice_reader(&exact_until_source)
+    let (exact_until_bytes, exact_until_error) = io.read_until(a, &exact_until, 10u8, 4usize)
+    if exact_until_error != ok || !str.eq(exact_until_bytes, "edge") { ret Failed }
+
+    var empty_until_source = io.SliceReader { data: "", off: 0usize }
+    var empty_until = io.slice_reader(&empty_until_source)
+    let (empty_until_bytes, empty_until_error) = io.read_until(a, &empty_until, 10u8, 0usize)
+    if empty_until_error != ok || empty_until_bytes.len != 0usize { ret Failed }
+
+    // A callback may carry its final bytes with End. Every aggregation helper keeps
+    // that payload, including when the delimiter is the final byte.
+    let final_all_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "all end", failure: io.End } }
+    var (final_all_script, final_all_script_error) = support.scripted_reader(a, final_all_steps[..])
+    if final_all_script_error != ok { ret final_all_script_error }
+    var final_all = support.reader(&final_all_script)
+    let (final_all_bytes, final_all_error) = io.read_all(a, &final_all, 64usize)
+    if final_all_error != ok || !str.eq(final_all_bytes, "all end") { ret Failed }
+
+    let final_until_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "last\n", failure: io.End } }
+    var (final_until_script, final_until_script_error) = support.scripted_reader(a, final_until_steps[..])
+    if final_until_script_error != ok { ret final_until_script_error }
+    var final_until = support.reader(&final_until_script)
+    let (final_until_bytes, final_until_error) = io.read_until(a, &final_until, 10u8, 64usize)
+    if final_until_error != ok || !str.eq(final_until_bytes, "last\n") { ret Failed }
+
+    let final_copy_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end copy", failure: io.End } }
+    var (final_copy_script, final_copy_script_error) = support.scripted_reader(a, final_copy_steps[..])
+    if final_copy_script_error != ok { ret final_copy_script_error }
+    var final_copy_from = support.reader(&final_copy_script)
+    var final_copy_bytes: [16]u8 = zero
+    var final_copy_sink_state = io.SliceWriter { data: final_copy_bytes[..], off: 0usize }
+    var final_copy_sink = io.slice_writer(&final_copy_sink_state)
+    let (final_copy_count, final_copy_error) = io.copy(&final_copy_sink, &final_copy_from, scratch[..])
+    if final_copy_error != ok || final_copy_count != 8u64 || !str.eq(final_copy_bytes[0usize..8usize], "end copy") { ret Failed }
 
     // A buffered source reads through a buffer of its own and hands back the same
     // bytes the unbuffered one would.
