@@ -31,6 +31,8 @@ fn symbolize(address: usize) -> Frame {
 // ponytail: no template arguments (`I...E`), substitutions (`S_`), function
 // types, arrays or operator names; those answer `Unsupported`.
 
+use e.str
+
 type Symbol = struct { module: str, function: str }
 type Out = struct { dst: []u8, used: usize }
 error Malformed
@@ -61,13 +63,14 @@ fn emit(o: *Out, text: str) -> err {
 
 // `<len><chars>` at `at`; answers the name and the position after it.
 fn source_name(s: str, at: usize) -> (str, usize, err) {
-    var n = 0usize
     var p = at
     while p < s.len && s[p] >= 48u8 && s[p] <= 57u8 {
-        n = n * 10usize + usize(s[p] - 48u8)
         p += 1usize
     }
-    if p == at || n == 0usize || p + n > s.len { ret ("", at, Malformed) }
+    if p == at { ret ("", at, Malformed) }
+    let (parsed, parse_error) = str.parse_u64(s[at..p])
+    if parse_error != ok || parsed == 0u64 || parsed > u64(s.len - p) { ret ("", at, Malformed) }
+    let n = usize(parsed)
     ret (s[p..p + n], p + n, ok)
 }
 

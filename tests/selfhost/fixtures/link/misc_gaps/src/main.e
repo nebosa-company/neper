@@ -331,6 +331,8 @@ fn check_demangle() -> i32 {
     if plain_error != ok || !str.eq(plain, "e.io.print") { ret 10i32 }
     let (_, short_error) = debug.demangle("_Z3fooi", dst[..5usize])
     if short_error != debug.TooSmall { ret 10i32 }
+    let (_, long_length_error) = debug.demangle("_Z99999999999999999999x", dst[..])
+    if long_length_error != debug.Malformed { ret 10i32 }
     ret 0i32
 }
 
