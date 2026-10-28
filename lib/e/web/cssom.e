@@ -15,30 +15,11 @@ fn cat3(a: *mem.Arena, x: str, y: str, z: str) -> str {
 }
 
 fn push_number(b: *str.Builder, x: f64) {
-    var v = x
-    if v < 0.0f64 {
-        let e0 = str.push(b, "-")
-        v = 0.0f64 - v
-    }
-    let scaled = f64(i64(v * 1000.0f64 + 0.5f64))
-    let whole = i64(scaled / 1000.0f64)
-    var frac = i64(scaled) - whole * 1000i64
-    let e1 = str.push_i64(b, whole)
-    if frac != 0i64 {
-        let e2 = str.push(b, ".")
-        var f = frac
-        var pad = 100i64
-        while pad > 0i64 && f > 0i64 {
-            let d = f / pad
-            let e3 = str.push_byte(b, u8(48i64 + d))
-            f = f - d * pad
-            pad = pad / 10i64
-        }
-    }
+    let e = str.push_f64(b, x)
 }
 
 fn px_text(a: *mem.Arena, x: f64) -> str {
-    let (bb, be) = str.builder(a, 24usize)
+    let (bb, be) = str.builder(a, 32usize)
     var b = bb
     if be != ok { ret "" }
     push_number(&b, x)
@@ -47,7 +28,7 @@ fn px_text(a: *mem.Arena, x: f64) -> str {
 }
 
 fn number_text(a: *mem.Arena, x: f64) -> str {
-    let (bb, be) = str.builder(a, 24usize)
+    let (bb, be) = str.builder(a, 32usize)
     var b = bb
     if be != ok { ret "" }
     push_number(&b, x)
@@ -72,7 +53,7 @@ fn len_text(a: *mem.Arena, l: style.Len) -> str {
         ret number_text(a, l.px)
     case .Px:
         if l.pct != 0.0f64 && l.px == 0.0f64 {
-            let (bb, be) = str.builder(a, 24usize)
+            let (bb, be) = str.builder(a, 32usize)
             var b = bb
             if be != ok { ret "" }
             push_number(&b, l.pct * 100.0f64)

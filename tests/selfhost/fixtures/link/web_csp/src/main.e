@@ -3,7 +3,9 @@
 use e.mem
 use e.os
 use e.str
+use e.fmt.css.style as css_style
 use e.web.csp as csp
+use e.web.cssom
 
 fn set_of(a: *mem.Arena, text: str) -> csp.PolicySet {
     let (s, e) = csp.parse_set(a, text, false)
@@ -86,5 +88,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 10. base-uri has no default-src fallback.
     let s13 = set_of(a, "default-src 'none'")
     if !allow(a, s13, "base-uri", "https://anything.test/") { os.exit(34i32) }
+    // CSSOM numeric serialization must preserve computed precision past three decimals.
+    var computed = css_style.initial_style()
+    computed.opacity = 0.12345f64
+    let (opacity, has_opacity) = cssom.value(a, &computed, "opacity")
+    if !has_opacity || !str.eq(opacity, "0.12345") { os.exit(56i32) }
+    computed.color = 16777216u32
+    let (alpha_color, has_color) = cssom.value(a, &computed, "color")
+    if !has_color || !str.eq(alpha_color, "rgba(0, 0, 0, 0.00392156862745098)") { os.exit(57i32) }
     ret ok
 }
