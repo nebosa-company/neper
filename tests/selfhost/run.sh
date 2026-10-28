@@ -8960,6 +8960,10 @@ $test_build/neper-self build-manifest-file "$conformance_root/tools/manifest_uns
 cmp -s "$test_build/conformance-tools-manifest-unsafe.jsonl" "$conformance_root/tools/manifest_unsafe.x64-linux.expected.jsonl" || { echo "the unsafe inventory differs from the conformance corpus" >&2; exit 1; }
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
+window_helpers_status=0
+$test_build/neper-self test-file "$repo/lib/e/os/window_helpers.e" "$repo" x64 linux "$test_build" --json > "$test_build/window-helpers-test.jsonl" || window_helpers_status=$?
+[ "$window_helpers_status" -eq 0 ]
+grep -q '"passed":2,"failed":0' "$test_build/window-helpers-test.jsonl"
 test_actual="$test_build/conformance-tools-test.jsonl"
 test_status=0
 $test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 linux "$test_build" --json > "$test_actual" || test_status=$?

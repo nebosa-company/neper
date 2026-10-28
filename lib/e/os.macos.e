@@ -10,6 +10,7 @@
 // process surface (e.fs, e.proc, sockets) lands once libSystem calls back it.
 
 use e.mem
+use e.os.window_helpers
 
 // The separator this target's paths are written with.
 const NATIVE_SEPARATOR: u8 = 47u8
@@ -2839,13 +2840,13 @@ fn cocoa_translate(event: usize) -> bool {
         // A resize or display transition can already be reflected in AppKit's event queue while cocoa_poll_state still
         // owes its Resize event. Read the event window directly, without mutating that post-drain state cache.
         let scale_percent = cocoa_scale_percent(cocoa_windows[slot])
-        let scale = f64(scale_percent) / 100.0f64
         let (_, height) = cocoa_content_pixels_at_scale(slot, scale_percent)
         let at = msg_point_ret(event, cocoa_sel("locationInWindow\x00"))
+        let (pointer_x, pointer_y) = window_helpers.pointer_pixels(at.x, at.y, height, scale_percent)
         var pointer: WindowEvent = zero
         pointer.window = window
-        pointer.x = i32(at.x * scale)
-        pointer.y = i32(f64(height) - at.y * scale)
+        pointer.x = pointer_x
+        pointer.y = pointer_y
         pointer.modifiers = modifiers
         // The title bar is above the content: AppKit's, not the program's.
         if pointer.y < 0i32 || at.x < 0.0f64 { ret false }
@@ -3311,17 +3312,7 @@ fn window_close(w: Window) -> err {
     // `[window close]` may synchronously queue its Close request, and the pump may
     // already have translated other input for this window. Drop all of it before
     // the handle can be reused, preserving the ring order of other windows.
-    var kept = 0usize
-    var at = 0usize
-    while at < cocoa_count {
-        let event = cocoa_events[(cocoa_head + at) % COCOA_RING]
-        if event.window.raw != w.raw {
-            cocoa_events[(cocoa_head + kept) % COCOA_RING] = event
-            kept += 1usize
-        }
-        at += 1usize
-    }
-    cocoa_count = kept
+    cocoa_count = window_helpers.purge_closed_window[WindowEvent](cocoa_events[..], cocoa_head, cocoa_count, w.raw)
     objc_pool_pop(pool)
     ret ok
 }

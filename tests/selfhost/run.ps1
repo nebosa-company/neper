@@ -9642,6 +9642,8 @@ cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestUnsafeActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest_unsafe.x64-windows.expected.jsonl')).Hash) { throw "the unsafe inventory differs from the conformance corpus" }
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
+$windowHelpersTest = & $compiler test-file (Join-Path $repo 'lib\e\os\window_helpers.e') $repo 'x64' 'windows' $testBuild --json
+if ($LASTEXITCODE -ne 0 -or ($windowHelpersTest -join "`n") -notmatch '"passed":2,"failed":0') { throw 'portable Cocoa window helper regression tests failed' }
 $testActual = Join-Path $testBuild 'conformance-tools-test.jsonl'
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test.e')`" `"$repo`" x64 windows `"$($testBuild.Replace('\', '/'))`" --json > `"$testActual`""
 if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" }
