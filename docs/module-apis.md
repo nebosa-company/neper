@@ -10274,7 +10274,7 @@ list whose rows select their node. The caller owns the graph and the state and a
 ### `e.ui.state`
 
 ```neper
-type Graph[Ctx: type] = struct { ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32, edge_count: usize, used: usize, running: u32, batch: u32, lost: usize }
+type Graph[Ctx: type] = struct { ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32, edge_count: usize, used: usize, running: u32, batch: u32, lost: usize, cycle: bool }
 error TooSmall
 error Invalid
 
@@ -10285,8 +10285,9 @@ fn kind_disposed() -> u8
 fn graph[Ctx: type](ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32) -> (Graph[Ctx], err)
 fn new_node[Ctx: type](g: *Graph[Ctx], kind: u8) -> (u32, err)
 fn signal[Ctx: type](g: *Graph[Ctx], initial: i64) -> (u32, err)
+fn reaches[Ctx: type](g: *Graph[Ctx], source: u32, goal: u32) -> bool
 fn get[Ctx: type](g: *Graph[Ctx], id: u32) -> i64
-fn record_edge[Ctx: type](g: *Graph[Ctx], from: u32, to: u32)
+fn record_edge[Ctx: type](g: *Graph[Ctx], from: u32, to: u32) -> bool
 fn drop_edges[Ctx: type](g: *Graph[Ctx], id: u32, into: bool)
 fn mark_dependents[Ctx: type](g: *Graph[Ctx], id: u32)
 fn set[Ctx: type](g: *Graph[Ctx], id: u32, value: i64) -> err
@@ -10306,7 +10307,8 @@ fn edge_count[Ctx: type](g: *const Graph[Ctx]) -> usize
 Signals over caller arrays: `signal`, `get` (recording the dependency of the running
 computation), `set`, `memo` (skipping dependents when unchanged), `effect`, batches and
 `schedule_effects` running dirty nodes once each in height order with dynamic
-dependencies; `dispose`, `run_count`.
+dependencies; a cycle-closing read is rejected and reported as `Invalid`; `dispose`,
+`run_count`.
 
 ### `e.ui.ink`
 

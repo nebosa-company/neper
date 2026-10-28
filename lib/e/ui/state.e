@@ -10,7 +10,7 @@
 // richer state through the node index. `Graph[Ctx]` is generic over the one
 // context type its computations receive.
 
-type Graph[Ctx: type] = struct { ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32, edge_count: usize, used: usize, running: u32, batch: u32, lost: usize }
+type Graph[Ctx: type] = struct { ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32, edge_count: usize, used: usize, running: u32, batch: u32, lost: usize, cycle: bool }
 error TooSmall
 error Invalid
 
@@ -23,7 +23,7 @@ fn kind_disposed() -> u8 { ret 3u8 }
 // the edge arrays `from`/`to` (the shorter bounds the edge count).
 fn graph[Ctx: type](ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32) -> (Graph[Ctx], err) {
     if value.len == 0usize || kind.len == 0usize || height.len == 0usize || dirty.len == 0usize || runs.len == 0usize || compute.len == 0usize || run.len == 0usize || from.len == 0usize || to.len == 0usize { ret (zero, TooSmall) }
-    ret (Graph[Ctx] { ctx: ctx, value: value, kind: kind, height: height, dirty: dirty, runs: runs, compute: compute, run: run, from: from, to: to, edge_count: 0usize, used: 0usize, running: 0u32, batch: 0u32, lost: 0usize }, ok)
+    ret (Graph[Ctx] { ctx: ctx, value: value, kind: kind, height: height, dirty: dirty, runs: runs, compute: compute, run: run, from: from, to: to, edge_count: 0usize, used: 0usize, running: 0u32, batch: 0u32, lost: 0usize, cycle: false }, ok)
 }
 
 fn new_node[Ctx: type](g: *Graph[Ctx], kind: u8) -> (u32, err) {
@@ -46,28 +46,64 @@ fn signal[Ctx: type](g: *Graph[Ctx], initial: i64) -> (u32, err) {
     ret (id, ok)
 }
 
+// Whether `goal` is reachable from `source`.  The second bit in `dirty` is a
+// temporary work mark; its low bit is preserved for the scheduler.  This is
+// iterative so rejecting a back-edge cannot itself exhaust the call stack.
+fn reaches[Ctx: type](g: *Graph[Ctx], source: u32, goal: u32) -> bool {
+    var i = 0usize
+    while i < g.used {
+        g.dirty[i] = g.dirty[i] & 1u8
+        i += 1usize
+    }
+    g.dirty[usize(source)] = g.dirty[usize(source)] | 2u8
+    var changed = true
+    while changed {
+        changed = false
+        i = 0usize
+        while i < g.edge_count {
+            let from = usize(g.from[i])
+            let to = usize(g.to[i])
+            if (g.dirty[from] & 2u8) != 0u8 && (g.dirty[to] & 2u8) == 0u8 {
+                g.dirty[to] = g.dirty[to] | 2u8
+                changed = true
+            }
+            i += 1usize
+        }
+    }
+    let found = (g.dirty[usize(goal)] & 2u8) != 0u8
+    i = 0usize
+    while i < g.used {
+        g.dirty[i] = g.dirty[i] & 1u8
+        i += 1usize
+    }
+    ret found
+}
+
 // The value of node `id`; inside a running computation the read is recorded
-// as a dependency. An invalid `id` answers 0 (the next fallible entry point
-// reports `TooSmall` when an edge could not be recorded).
+// as a dependency. An invalid `id` answers 0; the enclosing fallible run
+// reports `TooSmall` for exhausted edge storage or `Invalid` for a cycle.
 fn get[Ctx: type](g: *Graph[Ctx], id: u32) -> i64 {
     if usize(id) >= g.used { ret 0i64 }
-    if g.running != 0u32 { record_edge[Ctx](g, id, g.running - 1u32) }
+    if g.running != 0u32 && !record_edge[Ctx](g, id, g.running - 1u32) { g.cycle = true }
     ret g.value[usize(id)]
 }
 
-fn record_edge[Ctx: type](g: *Graph[Ctx], from: u32, to: u32) {
+// Record `from -> to` unless it would close a dependency cycle.
+fn record_edge[Ctx: type](g: *Graph[Ctx], from: u32, to: u32) -> bool {
     var i = 0usize
     while i < g.edge_count {
-        if g.from[i] == from && g.to[i] == to { ret }
+        if g.from[i] == from && g.to[i] == to { ret true }
         i += 1usize
     }
+    if reaches[Ctx](g, to, from) { ret false }
     if g.edge_count >= g.from.len || g.edge_count >= g.to.len {
         g.lost += 1usize
-        ret
+        ret true
     }
     g.from[g.edge_count] = from
     g.to[g.edge_count] = to
     g.edge_count += 1usize
+    ret true
 }
 
 // Drop every edge into `to` (when `into`) or touching `id` (otherwise).
@@ -123,14 +159,17 @@ fn run_node[Ctx: type](g: *Graph[Ctx], id: u32) -> bool {
     let n = usize(id)
     drop_edges[Ctx](g, id, true)
     let previous = g.running
+    g.cycle = false
     g.running = id + 1u32
     g.runs[n] += 1u32
     var changed = false
     if g.kind[n] == kind_memo() {
         let compute = g.compute[n]
         let value = compute(g.ctx, g)
-        changed = value != g.value[n]
-        g.value[n] = value
+        if !g.cycle {
+            changed = value != g.value[n]
+            g.value[n] = value
+        }
     } else {
         let run = g.run[n]
         run(g.ctx, g)
@@ -144,29 +183,37 @@ fn run_node[Ctx: type](g: *Graph[Ctx], id: u32) -> bool {
     }
     g.height[n] = height
     raise_dependents[Ctx](g, id)
+    if g.cycle {
+        g.dirty[n] = 1u8
+        ret false
+    }
     ret changed
 }
 
 // A derived value: `compute` runs once now to record its inputs and again
-// whenever one of them changed.
+// whenever one of them changed. `Invalid` rejects nested construction and a
+// cycle-closing dynamic read.
 fn memo[Ctx: type](g: *Graph[Ctx], compute: fn(*Ctx, *Graph[Ctx]) -> i64) -> (u32, err) {
     if g.running != 0u32 { ret (0u32, Invalid) }
     let (id, e) = new_node[Ctx](g, kind_memo())
     if e != ok { ret (0u32, e) }
     g.compute[usize(id)] = compute
     let _ = run_node[Ctx](g, id)
+    if g.cycle { ret (id, Invalid) }
     if g.lost != 0usize { ret (id, TooSmall) }
     ret (id, ok)
 }
 
 // A side-effecting computation: `run` runs once now and again whenever one
-// of the nodes it read changed.
+// of the nodes it read changed. `Invalid` rejects nested construction and a
+// cycle-closing dynamic read.
 fn effect[Ctx: type](g: *Graph[Ctx], run: fn(*Ctx, *Graph[Ctx])) -> (u32, err) {
     if g.running != 0u32 { ret (0u32, Invalid) }
     let (id, e) = new_node[Ctx](g, kind_effect())
     if e != ok { ret (0u32, e) }
     g.run[usize(id)] = run
     let _ = run_node[Ctx](g, id)
+    if g.cycle { ret (id, Invalid) }
     if g.lost != 0usize { ret (id, TooSmall) }
     ret (id, ok)
 }
@@ -184,7 +231,8 @@ fn batch_end[Ctx: type](g: *Graph[Ctx]) -> err {
 }
 
 // Run every dirty node once, lowest height first; a memo that kept its value
-// leaves its dependents asleep. `TooSmall` when an edge could not be recorded.
+// leaves its dependents asleep. `TooSmall` reports exhausted edge storage and
+// `Invalid` a cycle-closing dynamic read.
 fn schedule_effects[Ctx: type](g: *Graph[Ctx]) -> err {
     if g.running != 0u32 { ret Invalid }
     // ponytail: a linear scan per step, O(nodes * dirty); a height-bucketed queue if graphs grow past a few hundred nodes
@@ -203,6 +251,7 @@ fn schedule_effects[Ctx: type](g: *Graph[Ctx]) -> err {
         if found {
             g.dirty[best] = 0u8
             let changed = run_node[Ctx](g, u32(best))
+            if g.cycle { ret Invalid }
             if changed && g.kind[best] == kind_memo() { mark_dependents[Ctx](g, u32(best)) }
         }
     }
