@@ -4389,6 +4389,10 @@ fn parallel_line_assay(dose_s: []const f64, resp_s: []const f64, dose_t: []const
     let log_potency = shift + difference / slope
     let intercept_s = mean_ys - slope * mean_xs
     let intercept_t = mean_yt - slope * mean_xt
+    let potency = math.pow[f64](10.0f64, log_potency)
+    let potency_lower = math.pow[f64](10.0f64, shift + low_ratio)
+    let potency_upper = math.pow[f64](10.0f64, shift + high_ratio)
+    if !finite64(log_potency) || !finite64(potency) || !finite64(potency_lower) || !finite64(potency_upper) { ret (zero, Invalid) }
     var x_lo = xs[0usize]
     var x_hi = xs[0usize]
     var y_lo = resp_s[0usize]
@@ -4444,8 +4448,8 @@ fn parallel_line_assay(dose_s: []const f64, resp_s: []const f64, dose_t: []const
     let fitted = Layout { kind: .Line, coords: zero, segments: lines[..2usize], bars: zero, x_min: f32(x_lo), x_max: f32(x_hi), y_min: f32(y_lo), y_max: f32(y_hi) }
     ret (ParallelLineFit {
         observations: observations, lines: fitted, slope: slope, intercept_standard: intercept_s, intercept_test: intercept_t,
-        log_potency: log_potency, potency: math.pow[f64](10.0f64, log_potency),
-        potency_lower: math.pow[f64](10.0f64, shift + low_ratio), potency_upper: math.pow[f64](10.0f64, shift + high_ratio),
+        log_potency: log_potency, potency: potency,
+        potency_lower: potency_lower, potency_upper: potency_upper,
         parallelism_f: f_statistic, parallel: f_statistic <= f_critical, residual_df: df,
     }, ok)
 }

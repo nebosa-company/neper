@@ -62,6 +62,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, pl_none) = chart.parallel_line_assay(pl_dose_s[..0usize], pl_resp_s[..0usize], pl_dose_t[..], pl_resp_t[..], 0.05, bounds, pl_points[..], pl_lines[..])
     let (_, pl_room) = chart.parallel_line_assay(pl_dose_s[..], pl_resp_s[..], pl_dose_t[..], pl_resp_t[..], 0.05, bounds, pl_points[..23usize], pl_lines[..])
     let (_, pl_line_room) = chart.parallel_line_assay(pl_dose_s[..], pl_resp_s[..], pl_dose_t[..], pl_resp_t[..], 0.05, bounds, pl_points[..], pl_lines[..1usize])
+    let overflow_dose = [3]f64{ 1.0f64, 10.0f64, 100.0f64 }
+    let overflow_standard = [3]f64{ 0.0f64, 0.00010001f64, 0.00019999f64 }
+    let overflow_test = [3]f64{ 1.0f64, 1.00010001f64, 1.00019999f64 }
+    let (_, pl_potency_overflow) = chart.parallel_line_assay(overflow_dose[..], overflow_standard[..], overflow_dose[..], overflow_test[..], 0.05, bounds, pl_points[..], pl_lines[..])
     if pl_flat != chart.Invalid { os.exit(15) }
     if pl_nonpositive != chart.Invalid { os.exit(16) }
     if pl_few != chart.Invalid { os.exit(17) }
@@ -69,7 +73,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if pl_shape != chart.Invalid { os.exit(19) }
     if pl_none != chart.Empty { os.exit(20) }
     if pl_room != chart.TooLarge { os.exit(21) }
-    if pl_line_room != chart.TooLarge { os.exit(22) }
+    if pl_line_room != chart.TooLarge || pl_potency_overflow != chart.Invalid { os.exit(22) }
     let sc_b = [6]f64{ 1e-08f64, 3e-08f64, 1e-07f64, 3e-07f64, 1e-06f64, 3e-06f64 }
     let sc_dr = [6]f64{ 1.5307f64, 2.586f64, 5.6901f64, 16.0822f64, 59.9977f64, 136.4075f64 }
     var sc_points: [6]chart.Coord = zero
