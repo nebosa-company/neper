@@ -13463,7 +13463,7 @@ receivable before `Closed` is returned.
 ### `e.concurrent.deque`
 
 ```neper
-type Deque[T: type] = struct { items: []T, top: Atomic[i64], bottom: Atomic[i64], mask: usize }
+type Deque[T: type] = struct { items: []T, items_lock: sync.Mutex, top: Atomic[i64], bottom: Atomic[i64], mask: usize }
 type Outcome = enum u8 { Stolen, Empty, Retry }
 error Invalid
 error Full
@@ -13477,8 +13477,9 @@ fn capacity[T: type](d: *const Deque[T]) -> usize
 ```
 
 A Chase-Lev work-stealing deque over a caller power-of-two buffer, generic over the item
-type with `Atomic[i64]` ends: the owner's `push` and `pop`, any thread's `steal`
-(`Stolen`, `Empty` or `Retry`), `len`, `capacity`; no growth, `Full` instead.
+type with `Atomic[i64]` ends and a short slot mutex for its non-atomic elements: the
+owner's `push` and `pop`, any thread's `steal` (`Stolen`, `Empty` or `Retry`), `len`,
+`capacity`; no growth, `Full` instead.
 
 ### `e.concurrent.stack`
 
