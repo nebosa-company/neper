@@ -150,6 +150,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 10: MFCC and CQT.
     let (mel_frames, mfcc_error) = dsp.mfcc(x[..], 8000.0f64, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
     if mfcc_error != ok || mel_frames != 3usize || !near(digest(out[..12usize]), 5.153441009829327f64, 1.0e-6f64) { os.exit(10i32) }
+    let quiet_nan = mem.bitcast[f64](9221120237041090560u64)
+    let positive_inf = mem.bitcast[f64](9218868437227405312u64)
+    let (_, zero_rate_error) = dsp.mfcc(x[..], 0.0f64, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
+    if zero_rate_error != dsp.Invalid { os.exit(10i32) }
+    let (_, negative_rate_error) = dsp.mfcc(x[..], 0.0f64 - 8000.0f64, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
+    if negative_rate_error != dsp.Invalid { os.exit(10i32) }
+    let (_, nan_rate_error) = dsp.mfcc(x[..], quiet_nan, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
+    if nan_rate_error != dsp.Invalid { os.exit(10i32) }
+    let (_, infinite_rate_error) = dsp.mfcc(x[..], positive_inf, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
+    if infinite_rate_error != dsp.Invalid { os.exit(10i32) }
     if dsp.cqt(x[..], 8000.0f64, 800.0f64, 4usize, 6usize, re[..], im[..]) != ok { os.exit(10i32) }
     if !near(digest(re[..6usize]), -0.05881112089956119f64, 1.0e-9f64) || !near(digest(im[..6usize]), -0.015473974604131234f64, 1.0e-9f64) { os.exit(10i32) }
     if dsp.cqt(x[..], 8000.0f64, 100.0f64, 4usize, 1usize, re[..], im[..]) != dsp.Invalid { os.exit(10i32) }
@@ -195,6 +205,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dsp.design_windowed_sinc(15usize, 1.0f64 / 3.0f64, .Hamming, taps15[..]) != ok || !near(digest(taps15[..]), 0.41915786647357584f64, 1.0e-9f64) { os.exit(12i32) }
     let (resampled, poly_error) = dsp.resample_polyphase(x[..], 3usize, 2usize, taps15[..], out[..])
     if poly_error != ok || resampled != 96usize || !near(digest(out[..96usize]), 1.3415902801838204f64, 1.0e-9f64) { os.exit(12i32) }
+    // The final `+ down - 1` in a naive ceiling formula overflows here even
+    // though the product itself fits. A real output would be enormous, so this
+    // must be the ordinary capacity error, not a debug trap or release success.
+    let max_up = 18446744073709551615usize
+    let (oversized, oversized_error) = dsp.resample_polyphase(x[..1usize], max_up, 2usize, taps15[..], out[..0usize])
+    if oversized != 0usize || oversized_error != dsp.TooSmall { os.exit(12i32) }
     if dsp.resample_sinc(x[..], 1.5f64, 4usize, out[..96usize]) != ok || !near(digest(out[..96usize]), 1.417640258162624f64, 1.0e-9f64) { os.exit(12i32) }
 
     try io.print("dsp ok\n")

@@ -986,7 +986,10 @@ fn mel_to_hz(m: f64) -> f64 { ret 700.0f64 * (math.exp[f64](m / 2595.0f64 * 2.30
 // `log(energy + 1e-10)`, then the first `n_coeffs` of an unnormalised DCT-II;
 // `out[frame * n_coeffs + c]`, `scratch.len >= 3 * frame + 2 * n_mels`.
 fn mfcc(x: []const f64, sample_rate: f64, frame: usize, hop: usize, n_mels: usize, n_coeffs: usize, out: []f64, scratch: []f64) -> (usize, err) {
-    if hop == 0usize || frame < 2usize || x.len < frame || n_mels == 0usize || n_coeffs > n_mels { ret (0usize, Invalid) }
+    // `x - x` is zero for every finite input, but NaN for either infinity; together
+    // with the ordered positive test it rejects zero, negatives, NaN and both infinities
+    // before they can collapse mel-filter edges or produce NaN feature values.
+    if hop == 0usize || frame < 2usize || x.len < frame || n_mels == 0usize || n_coeffs > n_mels || !(sample_rate > 0.0f64) || sample_rate - sample_rate != 0.0f64 { ret (0usize, Invalid) }
     let frames = (x.len - frame) / hop + 1usize
     if out.len < frames * n_coeffs || scratch.len < 3usize * frame + 2usize * n_mels { ret (0usize, TooSmall) }
     var win = scratch[..frame]
@@ -1373,7 +1376,12 @@ fn rls(x: []const f64, d: []const f64, lambda: f64, delta: f64, w: []f64, p: []f
 // output is centred); answers `ceil(x.len * up / down)` samples into `out`.
 fn resample_polyphase(x: []const f64, up: usize, down: usize, taps: []const f64, out: []f64) -> (usize, err) {
     if up == 0usize || down == 0usize || taps.len == 0usize { ret (0usize, Invalid) }
-    let n_out = (x.len * up + down - 1usize) / down
+    // Form the ceiling from a checked product and quotient/remainder instead of
+    // adding `down - 1`, which would wrap for a representable product near usize max.
+    if x.len != 0usize && up > 18446744073709551615usize / x.len { ret (0usize, TooSmall) }
+    let produced = x.len * up
+    var n_out = produced / down
+    if produced % down != 0usize { n_out += 1usize }
     if out.len < n_out { ret (0usize, TooSmall) }
     let half = (taps.len - 1usize) / 2usize
     let pre_pad = down - half % down
