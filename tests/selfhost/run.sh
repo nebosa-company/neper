@@ -775,6 +775,11 @@ math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$math_written" = 'executable written' ]
 chmod +x "$test_build/math-exact-selfhost"
 "$test_build/math-exact-selfhost"
+# f16 and bf16 use the same bit helpers as f32/f64.  This is a NIR check rather than a
+# runtime fixture because the host narrow-float backend is covered independently by
+# narrow_float; it pins the generic lowering that used to reject these instances.
+math_narrow=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/link/math_narrow/src/main.e" "$repo" x64 linux)
+[ "$math_narrow" = 'module nir ok' ]
 # `exp`, `exp2`, `log`, `log2` and `log10` against mpmath at 200 bits: within 1 ULP of the correctly rounded answer at every input, the reductions and the subnormal results included.
 math_exp_log_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_exp_log/src/main.e" "$repo" x64 linux "$test_build/math-exp-log-selfhost")
 [ "$math_exp_log_written" = 'executable written' ]

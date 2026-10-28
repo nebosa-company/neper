@@ -33,6 +33,7 @@ use e.mem
 
 // Every float carries its sign in its top bit, so the sign is a mask on the bits of the width
 // -- which `size_of` folds for a scalar, so the branch that is not this width is gone (D144).
+fn sign_bit_f16() -> u16 { ret 32768u16 }
 fn sign_bit_f32() -> u32 { ret 2147483648u32 }
 fn sign_bit_f64() -> u64 { ret 9223372036854775808u64 }
 
@@ -43,6 +44,10 @@ fn rsqrt[F: type](x: F) -> F {
 }
 
 fn abs[F: type](x: F) -> F {
+    if mem.size_of[F]() == 2usize {
+        let bits = mem.bitcast[u16](x) & (sign_bit_f16() - 1u16)
+        ret mem.bitcast[F](bits)
+    }
     if mem.size_of[F]() == 4usize {
         let bits = mem.bitcast[u32](x) & (sign_bit_f32() - 1u32)
         ret mem.bitcast[F](bits)
@@ -73,6 +78,10 @@ fn max[F: type](a: F, b: F) -> F {
 }
 
 fn is_negative[F: type](x: F) -> bool {
+    if mem.size_of[F]() == 2usize {
+        let narrowest = mem.bitcast[u16](x) & sign_bit_f16()
+        ret narrowest != 0u16
+    }
     if mem.size_of[F]() == 4usize {
         let narrow = mem.bitcast[u32](x) & sign_bit_f32()
         ret narrow != 0u32
@@ -120,6 +129,11 @@ fn round[F: type](x: F) -> F {
 }
 
 fn copysign[F: type](x: F, y: F) -> F {
+    if mem.size_of[F]() == 2usize {
+        let magnitude = mem.bitcast[u16](x) & (sign_bit_f16() - 1u16)
+        let sign = mem.bitcast[u16](y) & sign_bit_f16()
+        ret mem.bitcast[F](magnitude | sign)
+    }
     if mem.size_of[F]() == 4usize {
         let magnitude = mem.bitcast[u32](x) & (sign_bit_f32() - 1u32)
         let sign = mem.bitcast[u32](y) & sign_bit_f32()

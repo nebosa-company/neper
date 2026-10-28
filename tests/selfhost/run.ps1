@@ -790,6 +790,11 @@ $mathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $mathWritten -ne 'executable written') { throw 'e.math emission failed' }
 & $mathPath
 if ($LASTEXITCODE -ne 0) { throw "an e.math answer is wrong: exit $LASTEXITCODE" }
+# f16 and bf16 use the same bit helpers as f32/f64.  This is a NIR check rather than a
+# runtime fixture because the host narrow-float backend is covered independently by
+# narrow_float; it pins the generic lowering that used to reject these instances.
+$mathNarrow = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\link\math_narrow\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $mathNarrow -ne 'module nir ok') { throw 'narrow e.math generic lowering failed' }
 # `exp`, `exp2`, `log`, `log2` and `log10` against mpmath at 200 bits: within 1 ULP of the correctly rounded answer at every input, the reductions and the subnormal results included.
 $mathExpLogPath = Join-Path $testBuild 'math-exp-log-selfhost.exe'
 $mathExpLogWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_exp_log\src\main.e') $repo 'x64' 'windows' $mathExpLogPath
