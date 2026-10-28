@@ -177,7 +177,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (bad_hours_value, bad_hours) = overlay.read_duration("1hgarbage")
     let (bad_minutes_value, bad_minutes) = overlay.read_duration("2 minutely")
     let (bad_seconds_value, bad_seconds) = overlay.read_duration("4 sfoo")
-    if junk || empty || bad_hours || bad_minutes || bad_seconds { os.exit(41i32) }
+    let (bad_colon_minute_value, bad_colon_minute) = overlay.read_duration("1:99")
+    let (bad_colon_second_value, bad_colon_second) = overlay.read_duration("1:30:99")
+    if junk || empty || bad_hours || bad_minutes || bad_seconds || bad_colon_minute || bad_colon_second { os.exit(41i32) }
     var written: [32]u8 = zero
     let n1 = overlay.write_duration(written[0usize..32usize], time.Duration { nanos: 5400000000000i64 })
     if !same(written[0usize..n1], "1 h 30 min") { os.exit(42i32) }

@@ -7194,15 +7194,18 @@ fn read_duration(text: str) -> (time.Duration, bool) {
         var acc = 0i64
         var part = 0i64
         var digits = 0usize
+        var field = 0usize
         i = 0usize
         while i <= text.len {
             var c = 58u8
             if i < text.len { c = text[i] }
             if c == 58u8 {
                 if digits == 0usize || digits > 6usize { ret (zero, false) }
+                if field > 0usize && part > 59i64 { ret (zero, false) }
                 acc = acc * 60i64 + part
                 part = 0i64
                 digits = 0usize
+                field += 1usize
             } else {
                 if is_digit(c) {
                     part = part * 10i64 + i64(c - 48u8)
