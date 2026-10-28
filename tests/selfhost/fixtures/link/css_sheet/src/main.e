@@ -7,6 +7,7 @@ use e.str
 use e.fmt.css.cascade as cascade
 use e.fmt.css.container as container
 use e.fmt.css.sheet as sheet
+use e.fmt.css.syntax as syntax
 
 fn count_with(rules: []const cascade.Rule, name: str) -> usize {
     var n = 0usize
@@ -86,5 +87,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if x.keyframes.len != 1usize || !str.eq(x.keyframes[0usize].name, "spin") || x.keyframes[0usize].stops.len != 3usize { os.exit(26) }
     if x.keyframes[0usize].stops[0usize].offset != 0.0f64 || x.keyframes[0usize].stops[1usize].offset != 0.5f64 || x.keyframes[0usize].stops[2usize].offset != 1.0f64 { os.exit(27) }
     if x.properties.len != 1usize || !str.eq(x.properties[0usize].name, "--x") || x.properties[0usize].inherits || !str.eq(x.properties[0usize].syntax, "<length>") { os.exit(28) }
+
+    // Semantic token names are decoded in declaration values, including hashes and an escaped URL function name.
+    let escaped = "a{width:\\63 alc(50px);height:10\\70 x;color:#\\66 0f;background-image:\\75 rl(\"foo.svg\")}"
+    let (escaped_sheet, escaped_error) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), escaped)
+    if escaped_error != ok { os.exit(29) }
+    if !str.eq(value_of(escaped_sheet.rules, "width"), "calc(50px)") || !str.eq(value_of(escaped_sheet.rules, "height"), "10px") || !str.eq(value_of(escaped_sheet.rules, "color"), "#f0f") || !str.eq(value_of(escaped_sheet.rules, "background-image"), "url(\"foo.svg\")") { os.exit(30) }
+
+    // A long escaped custom-property value is decoded with bounded retained storage.
+    var source_bytes: [16384]u8 = zero
+    var source_arena = mem.arena_from(source_bytes[..])
+    let (source_builder, source_error) = str.builder(&source_arena, 16384usize)
+    if source_error != ok { os.exit(31) }
+    var source_out = source_builder
+    let open_error = str.push(&source_out, "a{--x:")
+    if open_error != ok { os.exit(32) }
+    var repeats = 0usize
+    while repeats < 256usize {
+        let piece_error = str.push(&source_out, "\\61+")
+        if piece_error != ok { os.exit(33) }
+        repeats += 1usize
+    }
+    let close_error = str.push(&source_out, ";}")
+    if close_error != ok { os.exit(34) }
+    let long_source = str.done(&source_out)
+    var token_bytes: [1048576]u8 = zero
+    var token_arena = mem.arena_from(token_bytes[..])
+    let (long_tokens, token_error) = syntax.tokenize(&token_arena, long_source)
+    if token_error != ok { os.exit(35) }
+    let (long_rules, rule_error) = syntax.parse_rules(&token_arena, long_tokens, true)
+    if rule_error != ok || long_rules.len != 1usize { os.exit(36) }
+    let (long_decls, decl_error) = syntax.parse_declarations(&token_arena, long_rules[0usize].block.inner)
+    if decl_error != ok || long_decls.len != 1usize { os.exit(37) }
+    var decoded_bytes: [32768]u8 = zero
+    var decoded_arena = mem.arena_from(decoded_bytes[..])
+    let decoded = syntax.decoded_text(&decoded_arena, long_source, long_decls[0usize].value)
+    if decoded.len != 512usize || decoded[0usize] != 97u8 || decoded[1usize] != 43u8 || decoded[510usize] != 97u8 || decoded[511usize] != 43u8 { os.exit(38) }
+    if mem.mark(&decoded_arena) != 512usize { os.exit(39) }
     ret ok
 }
