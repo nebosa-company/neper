@@ -23,7 +23,7 @@ error Cancelled
 type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool, printing: bool, print_dialogs: bool, permissions: bool, credentials: bool, screen_capture: bool, biometrics: bool, photo_picker: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
-type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
+type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss, Overflow }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 // One representation of transferred data: text, a list of paths, an image as
 // pixels, bytes under a MIME name the other side registers the same way, or a
@@ -47,7 +47,7 @@ type Activation = struct { kind: ActivationKind, payload: str, args: []const str
 // host answers for background work; the lifecycle events a session sends.
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
 type Permission = enum u8 { Granted, Denied, Unavailable }
-type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
+type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume, Overflow }
 // A printer opened for a job, the page a printer draws in device pixels, a
 // page setup in hundredths of a millimetre, and a job in progress.
 type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }

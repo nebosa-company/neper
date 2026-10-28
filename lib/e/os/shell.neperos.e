@@ -11,7 +11,7 @@ use e.os
 
 type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool, printing: bool, print_dialogs: bool, permissions: bool, credentials: bool, screen_capture: bool, biometrics: bool, photo_picker: bool }
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
-type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
+type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss, Overflow }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 type ContentKind = enum u8 { Text, Files, Image, Bytes, Promise }
 type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
@@ -24,7 +24,7 @@ type ActivationKind = enum u8 { Launch, File, Url }
 type Activation = struct { kind: ActivationKind, payload: str, args: []const str }
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
 type Permission = enum u8 { Granted, Denied, Unavailable }
-type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
+type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume, Overflow }
 type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
 type PrintPage = struct { width: u32, height: u32, dpi_x: u32, dpi_y: u32 }
 type PageSetup = struct { paper_width: u32, paper_height: u32, margin_left: u32, margin_top: u32, margin_right: u32, margin_bottom: u32 }

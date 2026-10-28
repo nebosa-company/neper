@@ -23,7 +23,7 @@ error Cancelled
 type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool, printing: bool, print_dialogs: bool, permissions: bool, credentials: bool, screen_capture: bool, biometrics: bool, photo_picker: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
-type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
+type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss, Overflow }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 // One representation of transferred data: text, a list of paths, an image as
 // pixels, bytes under a MIME name the other side registers the same way, or a
@@ -47,7 +47,7 @@ type Activation = struct { kind: ActivationKind, payload: str, args: []const str
 // host answers for background work; the lifecycle events a session sends.
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
 type Permission = enum u8 { Granted, Denied, Unavailable }
-type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
+type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume, Overflow }
 // A printer opened for a job, the page a printer draws in device pixels, a
 // page setup in hundredths of a millimetre, and a job in progress.
 type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
@@ -110,6 +110,7 @@ var tray_used: [16]bool = zero
 var tray_events: [64]TrayEvent = zero
 var tray_event_head: usize = 0usize
 var tray_event_count: usize = 0usize
+var tray_event_overflow: bool = false
 
 @import("kernel32.dll", "MultiByteToWideChar")
 extern fn raw_widen(code_page: u32, flags: u32, source: *const u8, source_len: i32, out: *u16, out_len: i32) -> i32
@@ -257,7 +258,10 @@ fn shell_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) ->
     let found = raw_cursor_position(&at)
     event.x = at.x
     event.y = at.y
-    if tray_event_count == TRAY_RING { ret 0isize }
+    if tray_event_count == TRAY_RING {
+        tray_event_overflow = true
+        ret 0isize
+    }
     tray_events[(tray_event_head + tray_event_count) % TRAY_RING] = event
     tray_event_count += 1usize
     ret 0isize
@@ -393,7 +397,9 @@ fn tray_remove(a: *mem.Arena, id: u32) -> err {
     ret removed
 }
 
-// Pumps the hidden window's messages, then answers the oldest tray event.
+// Pumps the hidden window's messages, then answers the oldest tray event. If a
+// callback arrived while the ring was full, an `.Overflow` event follows the
+// retained events so callers know delivery was incomplete.
 fn tray_poll() -> (TrayEvent, bool) {
     var none: TrayEvent = zero
     if shell_window == 0usize { ret (none, false) }
@@ -402,11 +408,19 @@ fn tray_poll() -> (TrayEvent, bool) {
         let translated = raw_translate_message(&message)
         let dispatched = raw_dispatch_message(&message)
     }
-    if tray_event_count == 0usize { ret (none, false) }
-    let event = tray_events[tray_event_head]
-    tray_event_head = (tray_event_head + 1usize) % TRAY_RING
-    tray_event_count -= 1usize
-    ret (event, true)
+    if tray_event_count != 0usize {
+        let event = tray_events[tray_event_head]
+        tray_event_head = (tray_event_head + 1usize) % TRAY_RING
+        tray_event_count -= 1usize
+        ret (event, true)
+    }
+    if tray_event_overflow {
+        tray_event_overflow = false
+        var overflow: TrayEvent = zero
+        overflow.kind = .Overflow
+        ret (overflow, true)
+    }
+    ret (none, false)
 }
 
 // The shell's own popup menu at a screen point, blocking until a choice or a
@@ -1086,8 +1100,38 @@ fn ensure_promise_formats(a: *mem.Arena) -> err {
     ret ok
 }
 
+// Check the FILEDESCRIPTORW constraints before a drag begins. The name field is
+// 259 UTF-16 units plus a terminator, so counting widened units avoids splitting a
+// surrogate pair at the boundary.
+fn promised_descriptors_valid(a: *mem.Arena, items: []const Content) -> err {
+    let validation_mark = mem.mark(a)
+    var at = 0usize
+    while at < items.len {
+        if items[at].kind == .Promise {
+            if items[at].text.len > 1036usize {
+                mem.reset(a, validation_mark)
+                ret Invalid
+            }
+            let (name, widen_error) = widen(a, items[at].text)
+            if widen_error != ok {
+                mem.reset(a, validation_mark)
+                ret widen_error
+            }
+            var units = 0usize
+            while name[units] != 0u16 { units += 1usize }
+            if units > 259usize {
+                mem.reset(a, validation_mark)
+                ret Invalid
+            }
+        }
+        at += 1usize
+    }
+    mem.reset(a, validation_mark)
+    ret ok
+}
+
 // FILEGROUPDESCRIPTORW over the promised items: a count, then 592 bytes per file
-// with the size flag, the size and the name.
+// with the size flag, the full 64-bit size and the scalar-safe name.
 fn descriptor_block(a: *mem.Arena, items: []const Content) -> (usize, err) {
     var count = 0usize
     var at = 0usize
@@ -1111,11 +1155,16 @@ fn descriptor_block(a: *mem.Arena, items: []const Content) -> (usize, err) {
         if items[at].kind == .Promise {
             let base = 4usize + index * 592usize
             put_u32(block, base, 64u32)
-            put_u32(block, base + 68usize, u32(items[at].bytes.len))
+            let size = u64(items[at].bytes.len)
+            put_u32(block, base + 64usize, u32(size >> 32u32))
+            put_u32(block, base + 68usize, u32(size & 4294967295u64))
             let (name, widen_error) = widen(a, items[at].text)
             if widen_error != ok { ret (0usize, widen_error) }
+            var name_count = 0usize
+            while name[name_count] != 0u16 { name_count += 1usize }
+            if name_count > 259usize { ret (0usize, Invalid) }
             var unit = 0usize
-            while unit < 259usize && name[unit] != 0u16 {
+            while unit < name_count {
                 block[base + 72usize + unit * 2usize] = u8(name[unit] & 255u16)
                 block[base + 72usize + unit * 2usize + 1usize] = u8(name[unit] >> 8u16)
                 unit += 1usize
@@ -1141,6 +1190,18 @@ fn promised_item(items: []const Content, index: i32) -> (usize, bool) {
         at += 1usize
     }
     ret (0usize, false)
+}
+
+fn descriptor_query_valid(items: []const Content, index: i32) -> bool {
+    if index != 0i32 - 1i32 { ret false }
+    let (first, has_first) = promised_item(items, 0i32)
+    ret has_first
+}
+
+fn contents_query_valid(items: []const Content, index: i32) -> bool {
+    if index < 0i32 { ret false }
+    let (item, found) = promised_item(items, index)
+    ret found
 }
 
 fn clipboard_open() -> err {
@@ -1321,18 +1382,35 @@ fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Co
     item.kind = kind
     item.mime = mime
     if kind == .Text {
-        let units = mem.cast[*const u16](raw_global_lock(handle))
-        if mem.address_of(units) == 0usize { ret (item, Failed) }
-        let count = usize(raw_wide_length(units))
+        let (block, locked) = global_bytes(handle)
+        if !locked { ret (item, Failed) }
         var text_error = ok
-        if count != 0usize {
-            let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
-            if bytes_error != ok {
-                text_error = bytes_error
+        let byte_count = block.len
+        if byte_count == 0usize || byte_count % 2usize != 0usize {
+            text_error = Invalid
+        } else {
+            let capacity = byte_count / 2usize
+            var count = 0usize
+            while count < capacity {
+                let offset = count * 2usize
+                let unit = u16(block[offset]) | (u16(block[offset + 1usize]) << 8u16)
+                if unit == 0u16 { break }
+                count += 1usize
+            }
+            if count == capacity {
+                text_error = Invalid
             } else {
-                os.touch(&bytes[0usize], count * 3usize)
-                let converted = raw_narrow(CP_UTF8, 0u32, units, i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
-                if converted <= 0i32 { text_error = Failed } else { item.text = bytes[0usize..usize(converted)] }
+                if count != 0usize {
+                    let units = mem.cast[*const u16](&block[0usize])
+                    let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+                    if bytes_error != ok {
+                        text_error = bytes_error
+                    } else {
+                        os.touch(&bytes[0usize], count * 3usize)
+                        let converted = raw_narrow(CP_UTF8, 0u32, units, i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+                        if converted <= 0i32 { text_error = Failed } else { item.text = bytes[0usize..usize(converted)] }
+                    }
+                }
             }
         }
         let unlocked = raw_global_unlock(handle)
@@ -1771,11 +1849,13 @@ fn data_get_data(this: usize, request: *const FormatEtc, medium: *StgMedium) -> 
     if (request.tymed & TYMED_HGLOBAL) == 0u32 { ret hresult(DV_E_FORMATETC) }
     var handle = 0usize
     if descriptor_format != 0u32 && u32(request.format) == descriptor_format {
+        if !descriptor_query_valid(drag_items, request.index) { ret hresult(DV_E_FORMATETC) }
         let (descriptor, descriptor_error) = descriptor_block(drag_arena, drag_items)
         if descriptor_error != ok { ret hresult(DV_E_FORMATETC) }
         handle = descriptor
     } else {
         if contents_format != 0u32 && u32(request.format) == contents_format {
+            if !contents_query_valid(drag_items, request.index) { ret hresult(DV_E_FORMATETC) }
             let (promised, has_promised) = promised_item(drag_items, request.index)
             if !has_promised { ret hresult(DV_E_FORMATETC) }
             handle = global_from_bytes(drag_items[promised].bytes)
@@ -1802,9 +1882,12 @@ fn data_get_data_here(this: usize, request: *const FormatEtc, medium: *StgMedium
 @cc(c)
 fn data_query_get_data(this: usize, request: *const FormatEtc) -> i32 {
     if (request.tymed & TYMED_HGLOBAL) == 0u32 { ret hresult(DV_E_FORMATETC) }
-    if descriptor_format != 0u32 && (u32(request.format) == descriptor_format || u32(request.format) == contents_format) {
-        let (promised, has_promised) = promised_item(drag_items, 0i32)
-        if !has_promised { ret hresult(DV_E_FORMATETC) }
+    if descriptor_format != 0u32 && u32(request.format) == descriptor_format {
+        if !descriptor_query_valid(drag_items, request.index) { ret hresult(DV_E_FORMATETC) }
+        ret S_OK
+    }
+    if contents_format != 0u32 && u32(request.format) == contents_format {
+        if !contents_query_valid(drag_items, request.index) { ret hresult(DV_E_FORMATETC) }
         ret S_OK
     }
     let (index, found) = drag_item_for(request.format)
@@ -1878,6 +1961,8 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
         if items[at].kind == .Promise && items[at].text.len == 0usize { ret (.Cancelled, Invalid) }
         at += 1usize
     }
+    let descriptor_error = promised_descriptors_valid(a, items)
+    if descriptor_error != ok { ret (.Cancelled, descriptor_error) }
     let ole_error = ensure_ole()
     if ole_error != ok { ret (.Cancelled, ole_error) }
     let promise_error = ensure_promise_formats(a)
@@ -2727,9 +2812,11 @@ const LIFECYCLE_RING: usize = 8usize
 var hotkeys_pressed: [32]u32 = zero
 var hotkey_head: usize = 0usize
 var hotkey_count: usize = 0usize
+var hotkey_overflow: bool = false
 var lifecycle_events: [8]LifecycleEvent = zero
 var lifecycle_head: usize = 0usize
 var lifecycle_count: usize = 0usize
+var lifecycle_overflow: bool = false
 var inhibiting: bool = zero
 
 @import("user32.dll", "RegisterHotKey")
@@ -2754,6 +2841,8 @@ fn session_message(message: u32, wparam: usize) -> (bool, isize) {
         if hotkey_count < HOTKEY_RING {
             hotkeys_pressed[(hotkey_head + hotkey_count) % HOTKEY_RING] = u32(wparam & 4294967295usize)
             hotkey_count += 1usize
+        } else {
+            hotkey_overflow = true
         }
         ret (true, 0isize)
     }
@@ -2770,7 +2859,10 @@ fn session_message(message: u32, wparam: usize) -> (bool, isize) {
 }
 
 fn push_lifecycle(event: LifecycleEvent) {
-    if lifecycle_count == LIFECYCLE_RING { ret }
+    if lifecycle_count == LIFECYCLE_RING {
+        lifecycle_overflow = true
+        ret
+    }
     lifecycle_events[(lifecycle_head + lifecycle_count) % LIFECYCLE_RING] = event
     lifecycle_count += 1usize
 }
@@ -2805,13 +2897,21 @@ fn hotkey_unregister(a: *mem.Arena, id: u32) -> err {
     ret ok
 }
 
+// A successful poll with id zero reports that one or more hotkey callbacks were
+// dropped. Registered hotkey ids cannot be zero.
 fn hotkey_poll() -> (u32, bool) {
     pump_hidden()
-    if hotkey_count == 0usize { ret (0u32, false) }
-    let id = hotkeys_pressed[hotkey_head]
-    hotkey_head = (hotkey_head + 1usize) % HOTKEY_RING
-    hotkey_count -= 1usize
-    ret (id, true)
+    if hotkey_count != 0usize {
+        let id = hotkeys_pressed[hotkey_head]
+        hotkey_head = (hotkey_head + 1usize) % HOTKEY_RING
+        hotkey_count -= 1usize
+        ret (id, true)
+    }
+    if hotkey_overflow {
+        hotkey_overflow = false
+        ret (0u32, true)
+    }
+    ret (0u32, false)
 }
 
 fn background_permission(a: *mem.Arena) -> Permission {
@@ -2836,11 +2936,17 @@ fn power_release(a: *mem.Arena) -> err {
 
 fn lifecycle_poll() -> (LifecycleEvent, bool) {
     pump_hidden()
-    if lifecycle_count == 0usize { ret (.Resume, false) }
-    let event = lifecycle_events[lifecycle_head]
-    lifecycle_head = (lifecycle_head + 1usize) % LIFECYCLE_RING
-    lifecycle_count -= 1usize
-    ret (event, true)
+    if lifecycle_count != 0usize {
+        let event = lifecycle_events[lifecycle_head]
+        lifecycle_head = (lifecycle_head + 1usize) % LIFECYCLE_RING
+        lifecycle_count -= 1usize
+        ret (event, true)
+    }
+    if lifecycle_overflow {
+        lifecycle_overflow = false
+        ret (.Overflow, true)
+    }
+    ret (.Resume, false)
 }
 
 // After a crash, a hang or an update's restart, this program again with these
