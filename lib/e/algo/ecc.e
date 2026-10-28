@@ -222,6 +222,16 @@ fn reed_solomon_decode(f: *const Field, code: []u8, parity: usize, erasures: []c
     let n = code.len
     let e = erasures.len
     if parity == 0usize || parity >= n || n > 255usize || e > parity { ret (0usize, Invalid) }
+    var checked = 0usize
+    while checked < e {
+        if erasures[checked] >= n { ret (0usize, Invalid) }
+        var prior = 0usize
+        while prior < checked {
+            if erasures[prior] == erasures[checked] { ret (0usize, Invalid) }
+            prior += 1usize
+        }
+        checked += 1usize
+    }
     var syndromes: [256]u8 = zero
     var clean = true
     var i = 0usize
@@ -239,7 +249,6 @@ fn reed_solomon_decode(f: *const Field, code: []u8, parity: usize, erasures: []c
     factor[0usize] = 1u8
     i = 0usize
     while i < e {
-        if erasures[i] >= n { ret (0usize, Invalid) }
         factor[1usize] = alpha_pow(f, n - 1usize - erasures[i])
         poly_mul(f, gamma[..i + 1usize], factor[..], product[..i + 2usize])
         var j = 0usize

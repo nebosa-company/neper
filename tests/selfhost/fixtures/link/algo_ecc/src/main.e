@@ -104,6 +104,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if error_five != ecc.Invalid { os.exit(1i32) }
     let (_, clean_error) = ecc.reed_solomon_decode(&f, code[..], 8usize, none[..])
     if clean_error != ok || state != 14016802753645532771u64 { os.exit(1i32) }
+    // #1085: caller-provided erasure positions are part of the input contract,
+    // even when the codeword is already clean.
+    var invalid_erasures: [2]usize = zero
+    invalid_erasures[0usize] = code.len
+    let (_, out_of_range_erasure) = ecc.reed_solomon_decode(&f, code[..], 8usize, invalid_erasures[0usize..1usize])
+    invalid_erasures[0usize] = 7usize
+    invalid_erasures[1usize] = 7usize
+    let (_, duplicate_erasures) = ecc.reed_solomon_decode(&f, code[..], 8usize, invalid_erasures[..])
+    if out_of_range_erasure != ecc.Invalid || duplicate_erasures != ecc.Invalid { os.exit(1i32) }
     var small: [39]u8 = zero
     let (_, small_error) = ecc.reed_solomon_encode(&f, data[..], 8usize, small[..])
     if small_error != ecc.TooSmall { os.exit(1i32) }
