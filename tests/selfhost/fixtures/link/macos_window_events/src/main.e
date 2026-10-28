@@ -161,13 +161,19 @@ fn main(a: *mem.Arena) -> err {
     if back[0usize] != 104u8 || back[1usize] != 195u8 || back[2usize] != 169u8 || back[11usize] != 114u8 { os.exit(52i32) }
 
     let sized = msg_size(handle, sel("setContentSize:\x00"), CgSize { w: 600.0f64, h: 400.0f64 })
+    // The pump translates the native move before its final state poll produces Resize. Its y coordinate must already
+    // use the new 400-point content height, not the 320-point height cached before this resize.
+    post_mouse(app, window_id, 5usize, 100.0f64, 300.0f64)
     event = next(60i32)
-    if event.kind != .Resize || event.width != 600u32 || event.height != 400u32 { os.exit(61i32) }
+    if event.kind != .PointerMove || event.x != 100i32 || event.y != 100i32 { os.exit(61i32) }
     event = next(62i32)
-    if event.kind != .Paint { os.exit(63i32) }
+    if event.kind != .Resize || event.width != 600u32 || event.height != 400u32 { os.exit(63i32) }
+    event = next(64i32)
+    if event.kind != .Paint { os.exit(65i32) }
     let (metrics, metrics_error) = os.window_metrics(window)
-    if metrics_error != ok || metrics.width != 600u32 || metrics.height != 400u32 { os.exit(64i32) }
-    if os.window_cursor(window, .Hand) != ok || os.window_cursor(window, .Hidden) != ok || os.window_cursor(window, .Arrow) != ok { os.exit(65i32) }
+    if metrics_error != ok || metrics.width != 600u32 || metrics.height != 400u32 { os.exit(66i32) }
+    if os.window_cursor(window, .Hand) != ok || os.window_cursor(window, .Hidden) != ok || os.window_cursor(window, .Arrow) != ok { os.exit(67i32) }
+    quiet(68i32)
 
     // `performClose:` takes the same delegate path as the title-bar close button:
     // it asks the program, which leaves the window open until `window_close` below.
