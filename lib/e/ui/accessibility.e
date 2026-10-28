@@ -276,12 +276,12 @@ fn acting(runtime: *const widget.Runtime, id: Id) -> Id {
     ret child.id
 }
 
-// The element a semantics relationship names by key, or the none Id; a folded
-// element is named by its wrapper.
+// The unique element a semantics relationship names by key, or the none Id; a
+// folded element is named by its wrapper. Ambiguous keys never name a target.
 fn related(runtime: *const widget.Runtime, key: widget.Key) -> Id {
     if key == 0u64 { ret zero }
     let (found, count) = widget.find_by_key(mem.cast[*widget.State](runtime.state), key)
-    if count == 0usize { ret zero }
+    if count != 1usize { ret zero }
     let (wrapper, folded) = folded_into(runtime, usize(found.slot))
     if folded {
         let (outer, _) = widget.summary_at(runtime, wrapper)
