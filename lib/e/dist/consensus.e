@@ -26,7 +26,7 @@ type Message = struct { from: u32, to: u32, kind: Kind, term: u64, index: u64, t
 type Pool = struct { items: []Message, len: usize }
 
 type Role = enum u8 { Follower, Candidate, Leader }
-type Node = struct { id: u32, role: Role, term: u64, voted_for: u32, votes: u64, leader: u32, log: []Entry, log_len: usize, snap_index: u64, snap_term: u64, snap_state: i64, commit: u64, applied: u64, state: i64, next_index: []u64, match_index: []u64, cfg_old: u64, cfg_new: u64, timeout_at: u64, heartbeat_at: u64 }
+type Node = struct { id: u32, role: Role, term: u64, voted_for: u32, votes: u64, leader: u32, log: []Entry, log_len: usize, snap_index: u64, snap_term: u64, snap_state: i64, snap_cfg_old: u64, snap_cfg_new: u64, commit: u64, applied: u64, state: i64, next_index: []u64, match_index: []u64, cfg_old: u64, cfg_new: u64, timeout_at: u64, heartbeat_at: u64 }
 type Cluster = struct { nodes: []Node, rng: rand.Pcg64, timeout_min: u64, timeout_max: u64, heartbeat: u64 }
 
 type Acceptor = struct { promised: u64, accepted_n: u64, accepted_value: i64 }
@@ -94,7 +94,7 @@ fn has_majority(n: *const Node, mask: u64) -> bool {
 // ---- Raft ----
 
 fn raft_node(id: u32, log: []Entry, next_index: []u64, match_index: []u64, config: u64) -> Node {
-    ret Node { id: id, role: .Follower, term: 0u64, voted_for: NONE, votes: 0u64, leader: NONE, log: log, log_len: 0usize, snap_index: 0u64, snap_term: 0u64, snap_state: 0i64, commit: 0u64, applied: 0u64, state: 0i64, next_index: next_index, match_index: match_index, cfg_old: config, cfg_new: config, timeout_at: 0u64, heartbeat_at: 0u64 }
+    ret Node { id: id, role: .Follower, term: 0u64, voted_for: NONE, votes: 0u64, leader: NONE, log: log, log_len: 0usize, snap_index: 0u64, snap_term: 0u64, snap_state: 0i64, snap_cfg_old: config, snap_cfg_new: config, commit: 0u64, applied: 0u64, state: 0i64, next_index: next_index, match_index: match_index, cfg_old: config, cfg_new: config, timeout_at: 0u64, heartbeat_at: 0u64 }
 }
 
 // Election timeouts are drawn uniformly from [timeout_min, timeout_max].
@@ -136,6 +136,31 @@ fn append_entry(n: *Node, e: Entry) -> err {
         n.cfg_new = e.cfg_new
     }
     ret ok
+}
+
+// The membership in a snapshot is the membership after its applied prefix,
+// not the membership of a later entry that happens to remain in the log.
+fn snapshot_configuration(n: *const Node, count: usize) -> (u64, u64) {
+    var old = n.snap_cfg_old
+    var new = n.snap_cfg_new
+    var i = 0usize
+    while i < count {
+        let e = n.log[i]
+        if e.cfg_new != 0u64 {
+            old = e.cfg_old
+            new = e.cfg_new
+        }
+        i += 1usize
+    }
+    ret (old, new)
+}
+
+// After installing a snapshot, retained entries can describe a configuration
+// newer than the snapshot. Rebuild the current quorum from that boundary.
+fn restore_configuration(n: *Node) {
+    let (old, new) = snapshot_configuration(n, n.log_len)
+    n.cfg_old = old
+    n.cfg_new = new
 }
 
 // Apply committed entries; a leader that applies a joint configuration
@@ -197,8 +222,7 @@ fn send_append(c: *Cluster, n: *const Node, to: u32, out: *Pool) -> err {
         m.index = n.snap_index
         m.term2 = n.snap_term
         m.value = n.snap_state
-        // ponytail: the snapshot ships the current configuration, not the one as of snap_index
-        m.entry = Entry { term: n.snap_term, value: 0i64, cfg_old: n.cfg_old, cfg_new: n.cfg_new }
+        m.entry = Entry { term: n.snap_term, value: 0i64, cfg_old: n.snap_cfg_old, cfg_new: n.snap_cfg_new }
         ret pool_push(out, m)
     }
     m.kind = .AppendEntries
@@ -408,9 +432,12 @@ fn raft_snapshot(c: *Cluster, node: usize) -> err {
     let n = &c.nodes[node]
     if n.applied <= n.snap_index { ret ok }
     let count = usize(n.applied - n.snap_index)
+    let (snapshot_old, snapshot_new) = snapshot_configuration(n, count)
     n.snap_term = term_at(n, n.applied)
     n.snap_index = n.applied
     n.snap_state = n.state
+    n.snap_cfg_old = snapshot_old
+    n.snap_cfg_new = snapshot_new
     var i = 0usize
     while i + count < n.log_len {
         n.log[i] = n.log[i + count]
@@ -452,15 +479,14 @@ fn raft_snapshot_step(c: *Cluster, node: usize, now: u64, msg: *const Message, o
             n.snap_index = msg.index
             n.snap_term = msg.term2
             n.snap_state = msg.value
+            n.snap_cfg_old = msg.entry.cfg_old
+            n.snap_cfg_new = msg.entry.cfg_new
             if msg.index > n.applied {
                 n.applied = msg.index
                 n.state = msg.value
             }
             if msg.index > n.commit { n.commit = msg.index }
-            if msg.entry.cfg_new != 0u64 {
-                n.cfg_old = msg.entry.cfg_old
-                n.cfg_new = msg.entry.cfg_new
-            }
+            restore_configuration(n)
         }
         r.flag = true
         r.index = n.snap_index
