@@ -242,6 +242,11 @@ fn css_issue_regressions(a: *mem.Arena) {
     }
     if tabs1199 != 2usize || !near(first_tab1199, 40.0f64) || !near(second_tab1199, 80.0f64) { os.exit(169) }
 
+    // #1190: a deferred run-in applies its counters exactly once when it is
+    // inserted into the following block.
+    let (p1190, ok1190) = build(a, "<div class=run>heading</div><div>body</div>", "body { counter-reset:n; } .run { display:run-in; font-size:10px; counter-increment:n; } .run::before { content:counter(n) \". \"; }")
+    if !ok1190 || !frag_has(p1190, "1. ") { os.exit(171) }
+
     // #1192: the minimum signed named-line occurrence is unresolvable, not a
     // signed-negation overflow during grid placement.
     let (p1192, ok1192) = build(a, "<div style=\"display:grid;grid-template-columns:[foo] 50px [foo] 50px [foo]\"><div id=a style=\"grid-column:foo -2147483648;height:10px\"></div></div>", "")

@@ -675,6 +675,9 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     if n.kind != .Element { ret }
     let s = &l.styles[usize(node)]
     if s.display == .None { ret }
+    // A run-in is generated only when its target block is visited below; do
+    // not mutate counter state during this deferred traversal.
+    if s.display == .RunIn && run_in_target(l, node) != NONE { ret }
     apply_counter_props(l, s)
     if s.display == .Contents {
         // The element has no box of its own, but its ::before and ::after still generate boxes in its parent.
@@ -683,7 +686,6 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
         gen_pseudo(l, node, parent_box, 1usize)
         ret
     }
-    if s.display == .RunIn && run_in_target(l, node) != NONE { ret }
     if n.namespace == .Html && str.eq(n.name, "br") {
         let b = new_box(l, .Break, true, false, node, node)
         append(l, parent_box, b)
