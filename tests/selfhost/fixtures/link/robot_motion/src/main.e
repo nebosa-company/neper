@@ -198,6 +198,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(out[0usize], 0.0f64 - 0.9986858969178134f64, 1.0e-9f64) || !near(out[1usize], 0.051249188261511924f64, 1.0e-9f64) { os.exit(8i32) }
     if motion.orca(agents[..], 0usize, 2.0f64, 0.1f64, out[..], scratch[..31usize]) != motion.TooSmall { os.exit(8i32) }
     if motion.orca(agents[..], 4usize, 2.0f64, 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    // Invalid horizons and integration steps are refused before their inverses.
+    if motion.orca(agents[..], 0usize, 0.0f64, 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 0.0f64 - 1.0f64, 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, math.inf64(), 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, math.nan64(), 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 2.0f64, 0.0f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 2.0f64, 0.0f64 - 1.0f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 2.0f64, math.inf64(), out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 2.0f64, math.nan64(), out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
     var coincident: [2]motion.Agent = zero
     coincident[0usize] = motion.agent(0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.5f64, 0.0f64, 0.0f64, 1.0f64)
     coincident[1usize] = motion.agent(0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.5f64, 0.0f64, 0.0f64, 1.0f64)

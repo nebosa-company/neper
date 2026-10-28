@@ -552,6 +552,7 @@ fn lp3(lines: []const f64, count: usize, begin: usize, radius: f64, result: []f6
 // `scratch.len >= 8 * agents.len`.
 fn orca(agents: []const Agent, i: usize, tau: f64, time_step: f64, out: []f64, scratch: []f64) -> err {
     if i >= agents.len { ret Invalid }
+    if !(tau > 0.0f64) || tau == math.inf64() || !(time_step > 0.0f64) || time_step == math.inf64() { ret Invalid }
     if out.len < 2usize || scratch.len < 8usize * agents.len { ret TooSmall }
     let me = agents[i]
     var lines = scratch[..4usize * agents.len]
