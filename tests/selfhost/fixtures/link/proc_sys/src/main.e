@@ -157,6 +157,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e_1024 != ok || at_1024.user_ms != 8u64 || at_1024.system_ms != 18u64 || at_1024.idle_ms != 4u64 || at_1024.iowait_ms != 5u64 { os.exit(115i32) }
     let (_, zero_hz) = format.parse_cpu_times(cpu_src, 0u64)
     if zero_hz == ok { os.exit(116i32) }
+    // Numeric text and unit conversions must refuse overflow instead of wrapping values.
+    let (_, _, decimal_overflow) = format.read_number("18446744073709551616", 0usize)
+    if decimal_overflow { os.exit(117i32) }
+    let (_, cpu_overflow) = format.parse_cpu_times("cpu 1 1 1 1 18446744073709551616\n", 100u64)
+    if cpu_overflow != format.Malformed { os.exit(118i32) }
+    let (_, kib_overflow) = format.parse_meminfo("MemTotal: 18014398509481984 kB\n")
+    if kib_overflow != format.Malformed { os.exit(119i32) }
+    let (_, fallback_overflow) = format.parse_meminfo("MemTotal: 1 kB\nMemFree: 18014398509481983 kB\nBuffers: 1 kB\nCached: 1 kB\n")
+    if fallback_overflow != format.Malformed { os.exit(120i32) }
+    let (_, uptime_whole_overflow) = format.parse_uptime_ms("18446744073709552")
+    if uptime_whole_overflow != format.Malformed { os.exit(121i32) }
+    let (_, uptime_fraction_overflow) = format.parse_uptime_ms("18446744073709551.999")
+    if uptime_fraction_overflow != format.Malformed { os.exit(122i32) }
+    let (_, stat_valid) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17\n")
+    if stat_valid != ok { os.exit(123i32) }
+    let (_, stat_overflow) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 18446744073709551616\n")
+    if stat_overflow != format.Malformed { os.exit(124i32) }
     if run_chunk(a, vectors_0()) != 0u32 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u32 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u32 { os.exit(3i32) }
