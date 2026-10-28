@@ -11,6 +11,7 @@ use e.gpu
 use e.fs
 use e.gpu.metal as mtl
 use e.mem
+use e.atomic
 use e.sync
 use e.thread
 use x.khronos.context
@@ -139,9 +140,32 @@ type Request = struct {
     outcome: u8,
 }
 
-type Worker = struct { lock: sync.Mutex, posted: sync.Condition, done: sync.Condition, pending: bool, request: Request, running: bool, fence: usize }
+type Worker = struct { lock: sync.Mutex, posted: sync.Condition, done: sync.Condition, pending: bool, request: Request, running: Atomic[u32], fence: usize }
 
 var workers: [4]Worker = zero
+
+// A worker is claimed before its request state is initialized, so concurrent opens cannot
+// both rebuild the mutex and conditions for the same slot. `running` is also the lifetime
+// marker every public operation observes; release only happens after the worker has answered.
+fn worker_running(at: usize) -> bool {
+    if at >= MAX_DEVICES { ret false }
+    ret atomic.load(&workers[at].running, .Acquire) != 0u32
+}
+
+fn reserve_worker() -> usize {
+    var at = 0usize
+    while at < MAX_DEVICES {
+        let (won, seen) = atomic.cas(&workers[at].running, 0u32, 1u32, .AcqRel, .Acquire)
+        if won { ret at }
+        at += 1usize
+    }
+    ret MAX_DEVICES
+}
+
+fn release_worker(at: usize) {
+    if at >= MAX_DEVICES { ret }
+    atomic.store(&workers[at].running, 0u32, .Release)
+}
 
 fn outcome_of(e: err) -> u8 {
     if e == ok { ret 0u8 }
@@ -204,7 +228,7 @@ fn post(at: usize, request: Request) -> Request {
 }
 
 // The slot's thread leaves its loop on its own after a close or a failed open; it was detached when it started.
-fn retire(at: usize) { workers[at].running = false }
+fn retire(at: usize) { release_worker(at) }
 
 fn start_worker(at: usize) -> err {
     let (spawned, spawn_error) = thread.spawn[Worker](serve, &workers[at], 8388608usize)
@@ -214,17 +238,15 @@ fn start_worker(at: usize) -> err {
 
 fn open(a: *mem.Arena) -> (mtl.Context, err) {
     var none: mtl.Context = zero
-    var at = 0usize
-    while at < MAX_DEVICES && workers[at].running { at += 1usize }
+    let at = reserve_worker()
     if at == MAX_DEVICES { ret (none, Unsupported) }
     workers[at].lock = sync.mutex()
     workers[at].posted = sync.condition()
     workers[at].done = sync.condition()
     workers[at].pending = false
     workers[at].fence = 0usize
-    workers[at].running = true
     if start_worker(at) != ok {
-        workers[at].running = false
+        release_worker(at)
         ret (none, Unsupported)
     }
     var request: Request = zero
@@ -241,7 +263,7 @@ fn open(a: *mem.Arena) -> (mtl.Context, err) {
 
 fn close(handle: mtl.Context) {
     let at = slot_of(handle)
-    if at == MAX_DEVICES || !workers[at].running { ret }
+    if !worker_running(at) { ret }
     var request: Request = zero
     request.kind = DO_CLOSE
     request.handle = handle
@@ -251,7 +273,7 @@ fn close(handle: mtl.Context) {
 
 fn name(handle: mtl.Context, out: []u8) -> usize {
     let at = slot_of(handle)
-    if at == MAX_DEVICES || !workers[at].running { ret 0usize }
+    if !worker_running(at) { ret 0usize }
     var request: Request = zero
     request.kind = DO_NAME
     request.handle = handle
@@ -263,7 +285,7 @@ fn name(handle: mtl.Context, out: []u8) -> usize {
 fn buffer(handle: mtl.Context, requested: usize) -> (mtl.Buffer, err) {
     var none: mtl.Buffer = zero
     let at = slot_of(handle)
-    if at == MAX_DEVICES || !workers[at].running { ret (none, Unsupported) }
+    if !worker_running(at) { ret (none, Unsupported) }
     var request: Request = zero
     request.kind = DO_BUFFER
     request.handle = handle
@@ -281,7 +303,7 @@ fn slot_of_tagged(tagged: usize) -> usize {
 
 fn free(buffer_value: mtl.Buffer) {
     let at = slot_of_tagged(buffer_value.handle)
-    if at == MAX_DEVICES || !workers[at].running { ret }
+    if !worker_running(at) { ret }
     var request: Request = zero
     request.kind = DO_FREE
     request.buffer_value = buffer_value
@@ -291,7 +313,7 @@ fn free(buffer_value: mtl.Buffer) {
 fn compile(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, err) {
     var none: mtl.Pipeline = zero
     let at = slot_of(handle)
-    if at == MAX_DEVICES || !workers[at].running { ret (none, Unsupported) }
+    if !worker_running(at) { ret (none, Unsupported) }
     var request: Request = zero
     request.kind = DO_COMPILE
     request.handle = handle
@@ -304,7 +326,7 @@ fn compile(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, err) 
 
 fn destroy(pipeline: mtl.Pipeline) {
     let at = slot_of_tagged(pipeline.state)
-    if at == MAX_DEVICES || !workers[at].running { ret }
+    if !worker_running(at) { ret }
     var request: Request = zero
     request.kind = DO_DESTROY
     request.pipeline = pipeline
@@ -313,7 +335,7 @@ fn destroy(pipeline: mtl.Pipeline) {
 
 fn dispatch_begin(handle: mtl.Context, pipeline: mtl.Pipeline, buffers: []const mtl.Buffer, groups: mtl.Size, per_group: mtl.Size, shared_bytes: usize) -> (usize, err) {
     let at = slot_of(handle)
-    if at == MAX_DEVICES || !workers[at].running { ret (0usize, Unsupported) }
+    if !worker_running(at) { ret (0usize, Unsupported) }
     var request: Request = zero
     request.kind = DO_BEGIN
     request.handle = handle
@@ -330,7 +352,7 @@ fn dispatch_begin(handle: mtl.Context, pipeline: mtl.Pipeline, buffers: []const 
 
 fn dispatch_wait(command: usize) -> err {
     var at = 0usize
-    while at < MAX_DEVICES && !(workers[at].running && workers[at].fence == command) { at += 1usize }
+    while at < MAX_DEVICES && !(worker_running(at) && workers[at].fence == command) { at += 1usize }
     if at == MAX_DEVICES { ret Unsupported }
     var request: Request = zero
     request.kind = DO_WAIT

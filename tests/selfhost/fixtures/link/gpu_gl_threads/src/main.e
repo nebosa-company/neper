@@ -2,12 +2,16 @@
 // on the device's own thread, so a launch and a download from another thread, and then from the opening one again, answer
 // as the CPU backend does. A host without an OpenGL compute device exits 0 having printed why.
 
+use e.atomic
 use e.gpu
 use e.io
 use e.mem
 use e.os
+use e.sync
 use e.thread
 use x.khronos.compute
+
+error Failed
 
 @gpu(64)
 fn scale(n: u32, k: u32, out: []u32) {
@@ -19,6 +23,52 @@ fn scale(n: u32, k: u32, out: []u32) {
 const N: usize = 1000usize
 
 type Job = struct { queue: *gpu.Queue, factor: u32, result: []u32, failed: bool }
+
+// This bypasses context creation so the claim race is checked even on a host without GL.
+// Both threads wait behind one gate and keep their claims until the main thread observes them.
+type SlotRace = struct { gate: sync.Semaphore, ready: sync.Semaphore, release: sync.Semaphore, abort: Atomic[u32], slots: [2]Atomic[u32] }
+type SlotClaim = struct { race: *SlotRace, index: usize }
+
+fn claim_slot(c: *SlotClaim) {
+    sync.semaphore_wait(&c.race.gate)
+    if atomic.load(&c.race.abort, .Acquire) != 0u32 { ret }
+    let at = compute.reserve_worker()
+    atomic.store(&c.race.slots[c.index], u32(at) + 1u32, .Release)
+    let ready_error = sync.semaphore_post(&c.race.ready, 1u32)
+    sync.semaphore_wait(&c.race.release)
+    compute.release_worker(at)
+}
+
+fn check_worker_slots() -> err {
+    var race: SlotRace = zero
+    race.gate = sync.semaphore(0u32)
+    race.ready = sync.semaphore(0u32)
+    race.release = sync.semaphore(0u32)
+    var left = SlotClaim { race: &race, index: 0usize }
+    var right = SlotClaim { race: &race, index: 1usize }
+    let (first, first_error) = os.thread_create[SlotClaim](claim_slot, &left, 1048576usize)
+    if first_error != ok { ret first_error }
+    let (second, second_error) = os.thread_create[SlotClaim](claim_slot, &right, 1048576usize)
+    if second_error != ok {
+        atomic.store(&race.abort, 1u32, .Release)
+        let opened = sync.semaphore_post(&race.gate, 1u32)
+        let joined = os.thread_join(first)
+        ret second_error
+    }
+    let opened = sync.semaphore_post(&race.gate, 2u32)
+    sync.semaphore_wait(&race.ready)
+    sync.semaphore_wait(&race.ready)
+    let first_slot = atomic.load(&race.slots[0usize], .Acquire)
+    let second_slot = atomic.load(&race.slots[1usize], .Acquire)
+    let released = sync.semaphore_post(&race.release, 2u32)
+    if os.thread_join(first) != ok || os.thread_join(second) != ok { ret Failed }
+    if first_slot == 0u32 || first_slot == second_slot { ret Failed }
+    // Both claims must be reusable: this is also the release path used after a failed open.
+    let recycled = compute.reserve_worker()
+    if recycled != 0usize { ret Failed }
+    compute.release_worker(recycled)
+    ret ok
+}
 
 fn launch_and_read(job: *Job) {
     let (buffer, buffer_error) = gpu.alloc[u32](job.queue, N)
@@ -32,6 +82,7 @@ fn launch_and_read(job: *Job) {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     compute.install()
+    if check_worker_slots() != ok { os.exit(1i32) }
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
     if found_error != ok || found.len == 0usize {
         let printed = io.print("no OpenGL compute device; nothing checked\n")
