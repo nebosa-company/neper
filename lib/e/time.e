@@ -5,12 +5,15 @@
 // spec 12 has no visibility, so a module held to its fence exactly could not have
 // them -- not because anything the fence names is missing.
 //
-// Every duration is a signed nanosecond count, so the whole module is i64 arithmetic
-// and the only failure is the clock's own. That count is also what bounds the
+// Every duration is a signed nanosecond count. Public duration and timestamp arithmetic
+// saturates at the i64 endpoints rather than wrapping, so an oversized deadline cannot
+// become a time in the opposite direction. The clock is still the only operation that
+// reports a failure. That count is also what bounds the
 // calendar: an i64 of nanoseconds reaches from 1677 to 2262, and no date outside
 // that is representable at all.
 
 use e.os
+use e.math
 
 type Timestamp = struct { nanos: i64 }
 type Instant = struct { nanos: i64 }
@@ -51,11 +54,11 @@ fn since(start: Instant) -> Duration {
 }
 
 fn timestamp_add(t: Timestamp, d: Duration) -> Timestamp {
-    ret Timestamp { nanos: t.nanos + d.nanos }
+    ret Timestamp { nanos: math.saturating_add[i64](t.nanos, d.nanos) }
 }
 
 fn timestamp_diff(a: Timestamp, b: Timestamp) -> Duration {
-    ret Duration { nanos: a.nanos - b.nanos }
+    ret Duration { nanos: math.saturating_sub[i64](a.nanos, b.nanos) }
 }
 
 fn timestamp_cmp(a: Timestamp, b: Timestamp) -> i32 {
@@ -63,11 +66,11 @@ fn timestamp_cmp(a: Timestamp, b: Timestamp) -> i32 {
 }
 
 fn instant_add(t: Instant, d: Duration) -> Instant {
-    ret Instant { nanos: t.nanos + d.nanos }
+    ret Instant { nanos: math.saturating_add[i64](t.nanos, d.nanos) }
 }
 
 fn instant_diff(a: Instant, b: Instant) -> Duration {
-    ret Duration { nanos: a.nanos - b.nanos }
+    ret Duration { nanos: math.saturating_sub[i64](a.nanos, b.nanos) }
 }
 
 fn instant_cmp(a: Instant, b: Instant) -> i32 {
@@ -75,19 +78,19 @@ fn instant_cmp(a: Instant, b: Instant) -> i32 {
 }
 
 fn duration_add(a: Duration, b: Duration) -> Duration {
-    ret Duration { nanos: a.nanos + b.nanos }
+    ret Duration { nanos: math.saturating_add[i64](a.nanos, b.nanos) }
 }
 
 fn duration_sub(a: Duration, b: Duration) -> Duration {
-    ret Duration { nanos: a.nanos - b.nanos }
+    ret Duration { nanos: math.saturating_sub[i64](a.nanos, b.nanos) }
 }
 
 fn duration_neg(d: Duration) -> Duration {
-    ret Duration { nanos: 0i64 - d.nanos }
+    ret Duration { nanos: math.saturating_mul[i64](d.nanos, -1i64) }
 }
 
 fn duration_scale(d: Duration, n: i64) -> Duration {
-    ret Duration { nanos: d.nanos * n }
+    ret Duration { nanos: math.saturating_mul[i64](d.nanos, n) }
 }
 
 fn duration_cmp(a: Duration, b: Duration) -> i32 {
@@ -101,27 +104,27 @@ fn compare_nanos(a: i64, b: i64) -> i32 {
 }
 
 fn days(n: i64) -> Duration {
-    ret Duration { nanos: n * 86400000000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 86400000000000i64) }
 }
 
 fn hours(n: i64) -> Duration {
-    ret Duration { nanos: n * 3600000000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 3600000000000i64) }
 }
 
 fn minutes(n: i64) -> Duration {
-    ret Duration { nanos: n * 60000000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 60000000000i64) }
 }
 
 fn seconds(n: i64) -> Duration {
-    ret Duration { nanos: n * 1000000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 1000000000i64) }
 }
 
 fn millis(n: i64) -> Duration {
-    ret Duration { nanos: n * 1000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 1000000i64) }
 }
 
 fn micros(n: i64) -> Duration {
-    ret Duration { nanos: n * 1000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 1000i64) }
 }
 
 fn nanos(n: i64) -> Duration {
@@ -249,13 +252,15 @@ fn civil_from_days(count: i64) -> (i64, i64, i64) {
 // The offset is minutes and nothing more. A named zone is `e.tz`'s work, and so is
 // deciding which offset a local time had -- this only shifts by one it is given.
 fn to_date_at(t: Timestamp, offset_minutes: i32) -> Date {
-    let local = t.nanos + i64(offset_minutes) * NANOS_PER_MINUTE
+    let offset = math.saturating_mul[i64](i64(offset_minutes), NANOS_PER_MINUTE)
+    let local = math.saturating_add[i64](t.nanos, offset)
     let (year, month, day) = civil_from_days(floor_div(local, NANOS_PER_DAY))
     ret Date { year: i32(year), month: u8(month), day: u8(day) }
 }
 
 fn to_time_at(t: Timestamp, offset_minutes: i32) -> Time {
-    let local = t.nanos + i64(offset_minutes) * NANOS_PER_MINUTE
+    let offset = math.saturating_mul[i64](i64(offset_minutes), NANOS_PER_MINUTE)
+    let local = math.saturating_add[i64](t.nanos, offset)
     let within_day = floor_mod(local, NANOS_PER_DAY)
     let second_of_day = within_day / NANOS_PER_SECOND
     ret Time {
