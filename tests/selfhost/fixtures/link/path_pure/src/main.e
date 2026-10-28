@@ -100,6 +100,19 @@ fn main(a: *mem.Arena) -> err {
     two[0usize] = "/base"
     two[1usize] = "rel"
     try check_join(a, two[..], .Posix, "/base/rel", 4i32)
+    // A drive-relative part names its own drive and cannot be nested under the prior one.
+    two[0usize] = "D:\\base"
+    two[1usize] = "C:foo"
+    try check_join(a, two[..], .Windows, "C:foo", 5i32)
+    two[0usize] = "C:"
+    two[1usize] = "foo"
+    try check_join(a, two[..], .Windows, "C:foo", 6i32)
+    two[0usize] = "C:foo"
+    two[1usize] = "bar"
+    try check_join(a, two[..], .Windows, "C:foo\\bar", 7i32)
+    two[0usize] = "D:\\base"
+    two[1usize] = "C:\\foo"
+    try check_join(a, two[..], .Windows, "C:\\foo", 8i32)
 
     // Normalising.
     try check_normalize(a, "a/./b", .Posix, "a/b")

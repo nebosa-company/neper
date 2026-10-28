@@ -58,6 +58,17 @@ fn is_absolute(path: str, style: Style) -> bool {
     ret is_separator(path[root - 1usize], style)
 }
 
+fn is_drive_relative(path: str, style: Style) -> bool {
+    if style != .Windows || path.len < 2usize { ret false }
+    if !is_drive_letter(path[0usize]) || path[1usize] != 58u8 { ret false }
+    ret !is_absolute(path, style)
+}
+
+fn is_drive_root(path: str, style: Style) -> bool {
+    if style != .Windows || path.len != 2usize { ret false }
+    ret is_drive_letter(path[0usize]) && path[1usize] == 58u8
+}
+
 fn split(path: str, style: Style) -> Parts {
     let root = root_length(path, style)
     // Trailing separators are not part of the name: `a/b/` names `b`.
@@ -118,13 +129,14 @@ fn copy_into(destination: []u8, at: usize, text: str) -> usize {
     ret at + text.len
 }
 
-// An absolute part discards everything before it, which is what makes `join` usable for
-// resolving a possibly-absolute argument against a base.
+// An absolute part, or a Windows drive-relative part, discards everything before it,
+// which makes `join` usable for resolving an argument against a base without embedding
+// a later drive inside an earlier component.
 fn join(a: *mem.Arena, parts: []const str, style: Style) -> (str, err) {
     var first = 0usize
     var at = 0usize
     while at < parts.len {
-        if is_absolute(parts[at], style) { first = at }
+        if is_absolute(parts[at], style) || is_drive_relative(parts[at], style) { first = at }
         at += 1usize
     }
     var total = 0usize
@@ -141,7 +153,7 @@ fn join(a: *mem.Arena, parts: []const str, style: Style) -> (str, err) {
     while at < parts.len {
         let part = parts[at]
         if part.len != 0usize {
-            if written != 0usize && !is_separator(buffer[written - 1usize], style) {
+            if written != 0usize && !is_separator(buffer[written - 1usize], style) && !is_drive_root(buffer[0usize..written], style) {
                 buffer[written] = separator(style)
                 written += 1usize
             }
