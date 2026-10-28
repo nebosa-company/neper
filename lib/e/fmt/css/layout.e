@@ -268,7 +268,7 @@ fn apply_first_letter(l: *Layout, b: u32, ps: *const style.Style) {
 
 // --- Generated content: counters, quotes and the `content` property of ::before, ::after and ::marker.
 
-type CounterInst = struct { name: str, value: i64, depth: usize, nested: bool }
+type CounterInst = struct { name: str, value: i64, depth: usize, nested: bool, pend: i64, has_pend: bool }
 
 fn find_counter(l: *const Layout, name: str) -> i64 {
     var i = l.counters.len
@@ -288,13 +288,14 @@ fn counter_instantiate(l: *Layout, name: str, value: i64) {
         if str.eq(l.counters.items[i].name, name) {
             if l.counters.items[i].depth == l.gen_depth {
                 l.counters.items[i].value = value
+                l.counters.items[i].has_pend = false
                 ret
             }
             nested = true
             break
         }
     }
-    let pushed = list.push[CounterInst](&l.counters, CounterInst { name: name, value: value, depth: l.gen_depth, nested: nested })
+    let pushed = list.push[CounterInst](&l.counters, CounterInst { name: name, value: value, depth: l.gen_depth, nested: nested, pend: 0i64, has_pend: false })
 }
 
 type RevAcc = struct { sum: i64, last: i64 }
@@ -413,12 +414,26 @@ fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64, node: u32) {
         }
         if rev && !explicit && node != NONE { v = rev_initial(l, node, name) }
         if op == 0u8 {
-            counter_instantiate(l, name, v)
+            if rev && !explicit && node != NONE {
+                // A reversed counter reads 0 until its first step, which is where its start value takes effect.
+                counter_instantiate(l, name, 0i64)
+                let rat = find_counter(l, name)
+                if rat >= 0i64 {
+                    l.counters.items[usize(rat)].pend = v
+                    l.counters.items[usize(rat)].has_pend = true
+                }
+            } else {
+                counter_instantiate(l, name, v)
+            }
         } else {
             var at = find_counter(l, name)
             if at < 0i64 {
                 counter_instantiate(l, name, 0i64)
                 at = i64(l.counters.len) - 1i64
+            }
+            if l.counters.items[usize(at)].has_pend {
+                l.counters.items[usize(at)].value = l.counters.items[usize(at)].pend
+                l.counters.items[usize(at)].has_pend = false
             }
             if op == 1u8 { l.counters.items[usize(at)].value += v } else { l.counters.items[usize(at)].value = v }
         }
