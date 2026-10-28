@@ -3,6 +3,8 @@
 // builds one, `tsp_two_opt` and `tsp_or_opt` improve one (segment
 // reversal; segment relocation of one to three cities) until no move
 // helps, `tsp_held_karp` is the exact dynamic programme for `n <= 16`.
+// The local-search routines and Christofides require a symmetric matrix;
+// nearest-neighbor and Held-Karp also support directed distances.
 // `set_cover_greedy` is Chvátal's greedy, `bin_pack_ffd` first fit
 // decreasing, `vrp_savings` Clarke-Wright with a vehicle capacity,
 // `knapsack_branch_and_bound` the 0/1 knapsack with the fractional bound,
@@ -31,6 +33,19 @@ fn has_scaled(len: usize, count: usize, factor: usize, extra: usize) -> bool {
 }
 
 fn at(d: []const f64, n: usize, i: usize, j: usize) -> f64 { ret d[i * n + j] }
+
+fn matrix_symmetric(d: []const f64, n: usize) -> bool {
+    var i = 0usize
+    while i < n {
+        var j = i + 1usize
+        while j < n {
+            if at(d, n, i, j) != at(d, n, j, i) { ret false }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
 
 fn tour_length(d: []const f64, n: usize, tour: []const usize) -> f64 {
     var total = 0.0f64
@@ -81,10 +96,11 @@ fn reverse(tour: []usize, i: usize, j: usize) {
     }
 }
 
-// 2-opt: reverse the segment `i + 1 ..= j` while that shortens the tour;
+// 2-opt on a symmetric matrix: reverse the segment `i + 1 ..= j` while that shortens the tour;
 // answers the length and the improving moves made.
 fn tsp_two_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err) {
     if !has_product(d.len, n, n) || tour.len < n { ret (0.0f64, 0usize, TooSmall) }
+    if !matrix_symmetric(d, n) { ret (0.0f64, 0usize, Invalid) }
     if n < 4usize { ret (tour_length(d, n, tour), 0usize, ok) }
     var moves = 0usize
     var improved = true
@@ -112,10 +128,11 @@ fn tsp_two_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err) {
     ret (tour_length(d, n, tour), moves, ok)
 }
 
-// Or-opt: move a segment of one to three consecutive cities elsewhere
+// Or-opt on a symmetric matrix: move a segment of one to three consecutive cities elsewhere
 // (either orientation) while that shortens the tour; `scratch.len >= n`.
 fn tsp_or_opt(d: []const f64, n: usize, tour: []usize, scratch: []usize) -> (f64, usize, err) {
     if !has_product(d.len, n, n) || tour.len < n || scratch.len < n { ret (0.0f64, 0usize, TooSmall) }
+    if !matrix_symmetric(d, n) { ret (0.0f64, 0usize, Invalid) }
     if n < 5usize { ret (tour_length(d, n, tour), 0usize, ok) }
     var moves = 0usize
     var improved = true
@@ -197,27 +214,29 @@ fn tsp_held_karp(d: []const f64, n: usize, tour: []usize, table: []f64, parent: 
     if n < 2usize || n > 16usize { ret (0.0f64, Invalid) }
     let subsets = 1usize << u32(n)
     if !has_product(d.len, n, n) || tour.len < n || !has_product(table.len, subsets, n) || !has_product(parent.len, subsets, n) { ret (0.0f64, TooSmall) }
-    let none = 1.0e300f64
     var s = 0usize
     while s < subsets * n {
-        table[s] = none
+        table[s] = 0.0f64
+        parent[s] = n
         s += 1usize
     }
     table[1usize * n + 0usize] = 0.0f64
+    parent[1usize * n + 0usize] = 0usize
     s = 1usize
     while s < subsets {
         if (s & 1usize) == 1usize {
             var last = 0usize
             while last < n {
-                if (s >> u32(last)) & 1usize == 1usize && table[s * n + last] < none {
+                if (s >> u32(last)) & 1usize == 1usize && parent[s * n + last] != n {
                     var next = 1usize
                     while next < n {
                         if (s >> u32(next)) & 1usize == 0usize {
                             let t = s | (1usize << u32(next))
                             let cost = table[s * n + last] + at(d, n, last, next)
-                            if cost < table[t * n + next] {
-                                table[t * n + next] = cost
-                                parent[t * n + next] = last
+                            let cell = t * n + next
+                            if parent[cell] == n || cost < table[cell] {
+                                table[cell] = cost
+                                parent[cell] = last
                             }
                         }
                         next += 1usize
@@ -229,17 +248,20 @@ fn tsp_held_karp(d: []const f64, n: usize, tour: []usize, table: []f64, parent: 
         s += 1usize
     }
     let full = subsets - 1usize
-    var best = none
-    var last = 0usize
+    var best = 0.0f64
+    var last = n
     var c = 1usize
     while c < n {
-        let cost = table[full * n + c] + at(d, n, c, 0usize)
-        if cost < best {
-            best = cost
-            last = c
+        if parent[full * n + c] != n {
+            let cost = table[full * n + c] + at(d, n, c, 0usize)
+            if last == n || cost < best {
+                best = cost
+                last = c
+            }
         }
         c += 1usize
     }
+    if last == n { ret (0.0f64, Invalid) }
     var set = full
     var position = n
     while position > 0usize {
@@ -551,13 +573,14 @@ fn large_neighborhood_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, iterations: u
     ret (best, improvements)
 }
 
-// Christofides: a minimum spanning tree (Prim), a perfect matching of its
+// Christofides on a symmetric matrix: a minimum spanning tree (Prim), a perfect matching of its
 // odd-degree vertices, an Euler tour of the union and the tour that skips
 // repeats. `scratch.len >= 10 * n + 4`, `flags.len >= 3 * n`. Answers the length.
 // ponytail: the matching is greedy nearest-unmatched, not minimum weight, so
 // the 3/2 bound is not guaranteed; a weighted blossom matching is the upgrade.
 fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, flags: []u8) -> (f64, err) {
     if !has_product(d.len, n, n) || tour.len < n || !has_scaled(scratch.len, n, 10usize, 4usize) || !has_product(flags.len, n, 3usize) { ret (0.0f64, TooSmall) }
+    if !matrix_symmetric(d, n) { ret (0.0f64, Invalid) }
     if n < 3usize { ret (0.0f64, Invalid) }
     let parent = scratch[..n]
     let degree = scratch[n..2usize * n]
@@ -681,12 +704,13 @@ fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, f
     ret (tour_length(d, n, tour), ok)
 }
 
-// 3-opt: for every three edges the seven reconnections, applied by segment
+// 3-opt on a symmetric matrix: for every three edges the seven reconnections, applied by segment
 // reversals at the first that shortens the tour, until none does. Answers the
 // length and the moves made.
 // ponytail: every triple is scanned, O(n^3) per pass; neighbour lists are the upgrade.
 fn tsp_three_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err) {
     if !has_product(d.len, n, n) || tour.len < n { ret (0.0f64, 0usize, TooSmall) }
+    if !matrix_symmetric(d, n) { ret (0.0f64, 0usize, Invalid) }
     if n < 4usize { ret (tour_length(d, n, tour), 0usize, ok) }
     var moves = 0usize
     var improved = true
@@ -808,13 +832,14 @@ fn lk_chain(d: []const f64, n: usize, work: []usize, pos: []usize, t1: usize, fi
     ret record
 }
 
-// Lin-Kernighan, bounded: from every city and in both tour directions, chains
+// Lin-Kernighan on a symmetric matrix, bounded: from every city and in both tour directions, chains
 // of up to `depth` sequential 2-opt moves under the positive-gain criterion,
 // the first step tried for the `breadth` best candidates and later steps
 // greedy; the best closing tour of a round is kept while rounds improve.
 // `scratch.len >= 4 * n`. Answers the length and the rounds that improved.
 fn tsp_lin_kernighan(d: []const f64, n: usize, tour: []usize, scratch: []usize, depth: usize, breadth: usize) -> (f64, usize, err) {
     if !has_product(d.len, n, n) || tour.len < n || !has_product(scratch.len, n, 4usize) { ret (0.0f64, 0usize, TooSmall) }
+    if !matrix_symmetric(d, n) { ret (0.0f64, 0usize, Invalid) }
     if n < 4usize || depth == 0usize || breadth == 0usize { ret (tour_length(d, n, tour), 0usize, ok) }
     let view = scratch[..n]
     let work = scratch[n..2usize * n]

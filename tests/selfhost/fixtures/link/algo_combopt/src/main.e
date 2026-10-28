@@ -157,6 +157,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, nn_invalid) = combopt.tsp_nearest_neighbor(d[..], 8usize, 9usize, tour[..], visited[..])
     if nn_invalid != combopt.Invalid { os.exit(1i32) }
 
+    // #1080: finite tours above the former 1e300 sentinel are reachable.
+    var large_costs: [4]f64 = zero
+    large_costs[1usize] = 1.0e301f64
+    large_costs[2usize] = 1.0e301f64
+    var large_tour: [2]usize = zero
+    var large_table: [8]f64 = zero
+    var large_parent: [8]usize = zero
+    let (large_optimum, large_error) = combopt.tsp_held_karp(large_costs[..], 2usize, large_tour[..], large_table[..], large_parent[..])
+    if large_error != ok || large_optimum < 1.9e301f64 || large_tour[0usize] != 0usize || large_tour[1usize] != 1usize { os.exit(8i32) }
+
+    // #1081: the delta-based TSP heuristics reject directed matrices instead
+    // of accepting a reversal whose unseen internal arcs increase its cost.
+    var directed: [25]f64 = zero
+    directed[1usize] = 1.0f64
+    var directed_tour: [5]usize = [5]usize{ 0usize, 1usize, 2usize, 3usize, 4usize }
+    var directed_scratch: [54]usize = zero
+    var directed_flags: [15]u8 = zero
+    let (_, _, directed_two) = combopt.tsp_two_opt(directed[..], 5usize, directed_tour[..])
+    let (_, _, directed_or) = combopt.tsp_or_opt(directed[..], 5usize, directed_tour[..], directed_scratch[..5usize])
+    let (_, _, directed_three) = combopt.tsp_three_opt(directed[..], 5usize, directed_tour[..])
+    let (_, _, directed_lk) = combopt.tsp_lin_kernighan(directed[..], 5usize, directed_tour[..], directed_scratch[..20usize], 2usize, 2usize)
+    let (_, directed_christofides) = combopt.tsp_christofides(directed[..], 5usize, directed_tour[..], directed_scratch[..], directed_flags[..])
+    if directed_two != combopt.Invalid || directed_or != combopt.Invalid || directed_three != combopt.Invalid || directed_lk != combopt.Invalid || directed_christofides != combopt.Invalid { os.exit(9i32) }
+
     // 2: set cover, bin packing, routing.
     var membership: [24]u8 = zero
     // Sets over 6 elements: {0,1,2}, {3,4,5}, {0,3}, {1,4,5}.
