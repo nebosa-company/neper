@@ -317,6 +317,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
         at2 += 1usize
     }
     if !stack.is_empty(&pool.st) || stack.len(&pool.st) != 0usize { os.exit(48i32) }
+    // Reuse every slot after the first all-node drain. This keeps concurrent takes and
+    // gives cycling the same `next` cells, which is the stale-link race fixed in #1218.
+    k = 0usize
+    while k < 4usize {
+        pushers[k] = Pusher { p: &pool, base: u64(k) * 5000u64, popped: 0u64, failed: false }
+        let (started, start_error) = thread.spawn[Pusher](push_then_pop, &pushers[k], 0usize)
+        if start_error != ok { os.exit(56i32) }
+        hands[k] = started
+        k += 1usize
+    }
+    k = 0usize
+    while k < 4usize {
+        if thread.join(hands[k]) != ok { os.exit(57i32) }
+        if pushers[k].failed { os.exit(58i32) }
+        k += 1usize
+    }
+    at2 = 0usize
+    while at2 < 20000usize {
+        if seen[at2] != 2u8 { os.exit(59i32) }
+        at2 += 1usize
+    }
+    if !stack.is_empty(&pool.st) || stack.len(&pool.st) != 0usize { os.exit(60i32) }
     try io.print("concurrent deque stack ok\n")
     ret ok
 }
