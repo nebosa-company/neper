@@ -79,30 +79,6 @@ fn le64(b: []const u8, at: usize) -> u64 {
     ret v
 }
 
-fn le32(b: []const u8, at: usize) -> u64 {
-    var v = 0u64
-    var i = 4usize
-    while i > 0usize {
-        i -= 1usize
-        v = (v << 8u64) | u64(b[at + i])
-    }
-    ret v
-}
-
-fn statfs_syscall_number() -> (usize, bool) {
-    when target.arch == .X64 { ret (137usize, true) }
-    when target.arch == .X86 { ret (99usize, true) }
-    when target.arch == .Aarch64 { ret (43usize, true) }
-    ret (0usize, false)
-}
-
-fn getpid_syscall_number() -> (usize, bool) {
-    when target.arch == .X64 { ret (39usize, true) }
-    when target.arch == .X86 { ret (20usize, true) }
-    when target.arch == .Aarch64 { ret (172usize, true) }
-    ret (0usize, false)
-}
-
 // (total, free to an unprivileged caller, used) of the filesystem holding `path`.
 fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err) {
     let (z, ze) = mem.alloc[u8](a, path.len + 1usize)
@@ -114,17 +90,20 @@ fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err) {
     }
     z[path.len] = 0u8
     var info: [128]u8 = zero
-    let (number, supported) = statfs_syscall_number()
-    if !supported { ret (0u64, 0u64, 0u64, os.Unsupported) }
+    var number = 0usize
+    when target.arch == .X64 { number = 137usize }
+    when target.arch == .X86 { number = 99usize }
+    when target.arch == .Aarch64 { number = 43usize }
+    if number == 0usize { ret (0u64, 0u64, 0u64, os.Unsupported) }
     let r = os.syscall(number, mem.address_of(&z[0usize]), mem.address_of(&info[0usize]), 0usize, 0usize, 0usize, 0usize)
     if r != 0isize { ret (0u64, 0u64, 0u64, os.NotFound) }
     // i386 `struct statfs`: f_bsize at 4, then f_blocks/f_bfree/f_bavail at 8/12/16,
     // each an unsigned long. Do not interpret it through the x86-64 offsets below.
     when target.arch == .X86 {
-        let unit = le32(info[0usize..128usize], 4usize)
-        let blocks = le32(info[0usize..128usize], 8usize)
-        let free_all = le32(info[0usize..128usize], 12usize)
-        let free_user = le32(info[0usize..128usize], 16usize)
+        let unit = u64(info[4usize]) | (u64(info[5usize]) << 8u64) | (u64(info[6usize]) << 16u64) | (u64(info[7usize]) << 24u64)
+        let blocks = u64(info[8usize]) | (u64(info[9usize]) << 8u64) | (u64(info[10usize]) << 16u64) | (u64(info[11usize]) << 24u64)
+        let free_all = u64(info[12usize]) | (u64(info[13usize]) << 8u64) | (u64(info[14usize]) << 16u64) | (u64(info[15usize]) << 24u64)
+        let free_user = u64(info[16usize]) | (u64(info[17usize]) << 8u64) | (u64(info[18usize]) << 16u64) | (u64(info[19usize]) << 24u64)
         ret (blocks * unit, free_user * unit, (blocks - free_all) * unit, ok)
     }
     // x86-64 and aarch64 both have eight-byte f_bsize and block counters at 8/16/24/32.
@@ -139,8 +118,11 @@ fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err) {
 }
 
 fn process_id() -> u32 {
-    let (number, supported) = getpid_syscall_number()
-    if !supported { ret 0u32 }
+    var number = 0usize
+    when target.arch == .X64 { number = 39usize }
+    when target.arch == .X86 { number = 20usize }
+    when target.arch == .Aarch64 { number = 172usize }
+    if number == 0usize { ret 0u32 }
     let pid = os.syscall(number, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
     if pid <= 0isize { ret 0u32 }
     ret u32(pid)
