@@ -90,6 +90,34 @@ fn split_node(t: *Btree, node: u32) -> (u32, u64, err) {
 // Insert into the subtree at `node`; when it overflows the split's right
 // node and separator come back for the parent to add.
 fn insert_into(t: *Btree, node: u32, key: u64, value: u32) -> (u32, u64, bool, err) {
+    // Every split below this node needs one fresh node.  Count the run of
+    // already-full nodes from the leaf back towards `node` before mutating so
+    // a failed allocation cannot leave a leaf overfull.
+    var probe = node
+    var splits = 0usize
+    while true {
+        if usize(t.count[usize(probe)]) >= t.order - 1usize {
+            splits += 1usize
+        } else {
+            splits = 0usize
+        }
+        if t.leaf[usize(probe)] {
+            let i = lower_bound(t, probe, key)
+            if i < usize(t.count[usize(probe)]) && key_at(t, probe, i) == key {
+                set_value(t, probe, i, value)
+                ret (NONE, 0u64, false, ok)
+            }
+            break
+        }
+        probe = value_at(t, probe, child_for(t, probe, key))
+    }
+    var available = t.count.len - t.used
+    var free = t.free
+    while free != NONE && available < splits {
+        available += 1usize
+        free = t.next[usize(free)]
+    }
+    if available < splits { ret (NONE, 0u64, false, TooSmall) }
     if t.leaf[usize(node)] {
         let i = lower_bound(t, node, key)
         let n = usize(t.count[usize(node)])
@@ -134,6 +162,37 @@ fn insert_into(t: *Btree, node: u32, key: u64, value: u32) -> (u32, u64, bool, e
 }
 
 fn insert(t: *Btree, key: u64, value: u32) -> err {
+    // `insert_into` reserves every split in the existing tree.  A root split
+    // also needs a new top node, so reserve it before allowing the recursive
+    // insertion to change any node.
+    var probe = t.root
+    var splits = 0usize
+    var root_splits = true
+    while true {
+        if usize(t.count[usize(probe)]) >= t.order - 1usize {
+            splits += 1usize
+        } else {
+            splits = 0usize
+            root_splits = false
+        }
+        if t.leaf[usize(probe)] {
+            let i = lower_bound(t, probe, key)
+            if i < usize(t.count[usize(probe)]) && key_at(t, probe, i) == key {
+                set_value(t, probe, i, value)
+                ret ok
+            }
+            break
+        }
+        probe = value_at(t, probe, child_for(t, probe, key))
+    }
+    if root_splits && splits > 0usize { splits += 1usize }
+    var available = t.count.len - t.used
+    var free = t.free
+    while free != NONE && available < splits {
+        available += 1usize
+        free = t.next[usize(free)]
+    }
+    if available < splits { ret TooSmall }
     let (right, separator, split, insert_error) = insert_into(t, t.root, key, value)
     if insert_error != ok { ret insert_error }
     if split {
