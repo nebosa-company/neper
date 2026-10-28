@@ -247,6 +247,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ratelimit.sliding_window_count(&phase_wrapped, 13u64) != 1u64 { os.exit(8i32) }
     if ratelimit.sliding_window_count(&phase_wrapped, 14u64) != 0u64 { os.exit(8i32) }
 
+    // 9: an oversized u64 cost cannot wrap below a partially used limit or
+    // become a small interval-scaled bucket charge.
+    let (overflow_fixed, overflow_fixed_error) = ratelimit.fixed_window(10u64, 10u64)
+    if overflow_fixed_error != ok { os.exit(9i32) }
+    var fixed_cost = overflow_fixed
+    if !ratelimit.fixed_window_allow(&fixed_cost, 0u64, 5u64) || ratelimit.fixed_window_allow(&fixed_cost, 0u64, 18446744073709551615u64) || fixed_cost.count != 5u64 { os.exit(9i32) }
+    let (overflow_window, overflow_window_error) = ratelimit.sliding_window(10u64, 10u64)
+    if overflow_window_error != ok { os.exit(9i32) }
+    var window_cost = overflow_window
+    if !ratelimit.sliding_window_allow(&window_cost, 0u64, 5u64) || ratelimit.sliding_window_allow(&window_cost, 0u64, 18446744073709551615u64) || ratelimit.sliding_window_count(&window_cost, 0u64) != 5u64 { os.exit(9i32) }
+    let (overflow_token, overflow_token_error) = ratelimit.token_bucket(10u64, 1u64, 2u64, 0u64)
+    if overflow_token_error != ok { os.exit(9i32) }
+    var token_cost = overflow_token
+    if ratelimit.token_bucket_allow(&token_cost, 0u64, 18446744073709551615u64) || ratelimit.token_bucket_tokens(&token_cost, 0u64) != 10u64 { os.exit(9i32) }
+    let (overflow_leaky, overflow_leaky_error) = ratelimit.leaky_bucket(10u64, 1u64, 2u64, 0u64)
+    if overflow_leaky_error != ok { os.exit(9i32) }
+    var leaky_cost = overflow_leaky
+    if ratelimit.leaky_bucket_allow(&leaky_cost, 0u64, 18446744073709551615u64) || ratelimit.leaky_bucket_level(&leaky_cost, 0u64) != 0u64 { os.exit(9i32) }
+
     try io.print("ratelimit ok\n")
     ret ok
 }
