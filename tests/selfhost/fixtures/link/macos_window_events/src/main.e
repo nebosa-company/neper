@@ -18,6 +18,9 @@ extern fn objc_sel_register(name: *const u8) -> usize
 extern fn msg0(receiver: usize, selector: usize) -> usize
 
 @import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg1(receiver: usize, selector: usize, a: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
 extern fn msg2(receiver: usize, selector: usize, a: usize, b: usize) -> usize
 
 @import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
@@ -166,11 +169,21 @@ fn main(a: *mem.Arena) -> err {
     if metrics_error != ok || metrics.width != 600u32 || metrics.height != 400u32 { os.exit(64i32) }
     if os.window_cursor(window, .Hand) != ok || os.window_cursor(window, .Hidden) != ok || os.window_cursor(window, .Arrow) != ok { os.exit(65i32) }
 
-    let closed = msg0(handle, sel("close\x00"))
+    // `performClose:` takes the same delegate path as the title-bar close button:
+    // it asks the program, which leaves the window open until `window_close` below.
+    let closed = msg1(handle, sel("performClose:\x00"), 0usize)
     event = next(70i32)
     if event.kind != .Close { os.exit(71i32) }
-    if os.window_close(window) != ok { os.exit(72i32) }
+    // The first poll drains both native moves into Cocoa's translated-event ring.
+    // Closing must discard the second one rather than return it for a dead handle.
+    post_mouse(app, window_id, 5usize, 50.0f64, 300.0f64)
+    post_mouse(app, window_id, 5usize, 60.0f64, 300.0f64)
+    event = next(72i32)
+    if event.kind != .PointerMove || event.x != 50i32 || event.y != 100i32 { os.exit(73i32) }
+    if os.window_close(window) != ok { os.exit(76i32) }
+    let (_, has_stale, stale_error) = os.window_poll(0i64)
+    if stale_error != ok || has_stale { os.exit(74i32) }
     let (gone, gone_error) = os.window_metrics(window)
-    if gone_error == ok { os.exit(73i32) }
+    if gone_error == ok { os.exit(75i32) }
     ret ok
 }
