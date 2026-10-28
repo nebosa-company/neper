@@ -658,7 +658,8 @@ removes the terminator and does not synthesize a final empty line. Radices are i
 ### `e.path`
 
 Paths are pure strings and always name the convention being applied; host behavior is
-never inferred inside this module.
+never inferred inside this module. In particular, normalization preserves a Windows
+drive-relative path (`C:file`) rather than making it drive-rooted.
 
 ```neper
 type Style = enum u8 { Posix, Windows }

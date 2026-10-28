@@ -111,6 +111,10 @@ fn main(a: *mem.Arena) -> err {
     try check_normalize(a, ".", .Posix, ".")
     try check_normalize(a, "/", .Posix, "/")
     try check_normalize(a, "C:\\a\\..\\b", .Windows, "C:\\b")
+    try check_normalize(a, "C:foo", .Windows, "C:foo")
+    try check_normalize(a, "C:foo\\.\\bar", .Windows, "C:foo\\bar")
+    try check_normalize(a, "C:foo\\..\\bar", .Windows, "C:bar")
+    try check_normalize(a, "C:..\\bar", .Windows, "C:..\\bar")
 
     // Relating.
     try check_relative(a, "/a/b", "/a/b/c", .Posix, "c")
