@@ -39,6 +39,21 @@ fn child(t: *const Trie, node: u32, b: u8) -> u32 {
 // Stores `value` under `key`, replacing an earlier value; answers whether the
 // key was new.
 fn insert(t: *Trie, key: []const u8, value: u64) -> (bool, err) {
+    // Count the missing suffix before linking it: a full pool must leave the
+    // existing trie unchanged rather than retaining a partial key path.
+    var probe = 0u32
+    var needed = 0usize
+    var probe_i = 0usize
+    while probe_i < key.len {
+        let here = child(t, probe, key[probe_i])
+        if here == NONE {
+            needed = key.len - probe_i
+            break
+        }
+        probe = here
+        probe_i += 1usize
+    }
+    if needed > t.bytes.len - t.used { ret (false, TooSmall) }
     var node = 0u32
     var i = 0usize
     while i < key.len {

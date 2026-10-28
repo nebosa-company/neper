@@ -75,6 +75,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, fits) = trie.insert(&s, "abc", 1u64)
     let (_, overflows) = trie.insert(&s, "abd", 2u64)
     if fits != ok || overflows != trie.TooSmall { os.exit(1i32) }
+    // A multi-byte failure leaves no partial path or consumed nodes behind.
+    var partial_bytes: [3]u8 = zero
+    var partial_first: [3]u32 = zero
+    var partial_next: [3]u32 = zero
+    var partial_terminal: [3]u8 = zero
+    var partial_values: [3]u64 = zero
+    let (partial0, partial_init_error) = trie.init(partial_bytes[..], partial_first[..], partial_next[..], partial_terminal[..], partial_values[..], 3usize)
+    if partial_init_error != ok { os.exit(1i32) }
+    var partial = partial0
+    let (_, partial_error) = trie.insert(&partial, "abc", 1u64)
+    let (_, partial_found) = trie.get(&partial, "abc")
+    if partial_error != trie.TooSmall || partial_found || trie.len(&partial) != 1usize { os.exit(1i32) }
+    let (independent_new, independent_error) = trie.insert(&partial, "xy", 2u64)
+    let (independent_value, independent_found) = trie.get(&partial, "xy")
+    if independent_error != ok || !independent_new || !independent_found || independent_value != 2u64 || trie.len(&partial) != 3usize { os.exit(1i32) }
 
     // 2: the prefix walk visits keys in byte order and can stop.
     var scratch: [16]u8 = zero
