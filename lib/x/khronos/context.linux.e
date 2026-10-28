@@ -17,7 +17,7 @@ error Failed
 
 type Api = eglcontext.Api
 type Options = eglcontext.Options
-type Context = struct { egl_state: eglcontext.State, x_display: usize, window: usize, host: os.Window, has_host: bool }
+type Context = struct { egl_state: eglcontext.State, dispatch: gl.Dispatch, x_display: usize, window: usize, host: os.Window, has_host: bool }
 
 type OpenDisplay = fn(*const u8) -> usize
 type CloseDisplay = fn(usize) -> i32
@@ -33,6 +33,8 @@ fn profile_of(options: Options) -> gl.Profile { ret eglcontext.profile_of(option
 
 // The resolver `gl.load` takes once a context is current.
 fn resolve(a: *mem.Arena, context: usize, name: str) -> usize { ret egl.proc_address(a, context, name) }
+
+fn resolver_context(c: *const Context) -> usize { ret 0usize }
 
 // An address as the `void *` a GL call takes, and as the base of a `mem.view` over mapped memory.
 fn as_pointer(bits: usize) -> *void {
@@ -178,10 +180,13 @@ fn make_current(c: *const Context) -> err {
         let surface = hosted_surface(c)
         if surface == egl.NO_SURFACE || !c.egl_state.live { ret Failed }
         if egl.make_current(c.egl_state.display, surface, surface, c.egl_state.context) != egl.TRUE { ret Failed }
+        if !gl.activate(&c.dispatch) { ret Failed }
         ret ok
     }
     let made = mapped(eglcontext.make_current(&c.egl_state))
-    if made != ok || !c.has_host || c.egl_state.surface == egl.NO_SURFACE { ret made }
+    if made != ok { ret made }
+    if !gl.activate(&c.dispatch) { ret Failed }
+    if !c.has_host || c.egl_state.surface == egl.NO_SURFACE { ret made }
     let (metrics, metrics_error) = os.window_metrics(c.host)
     if metrics_error != ok { ret made }
     var slot = 0usize
@@ -208,11 +213,14 @@ fn swap(c: *const Context) -> err {
 // 1 waits for the vertical blank, 0 does not.
 fn swap_interval(c: *const Context, interval: i32) -> err { ret mapped(eglcontext.swap_interval(&c.egl_state, interval)) }
 
-// Fills `gl`'s table for the current context and the profile `options` names.
-fn load(a: *mem.Arena, options: Options) -> err { ret gl.load(a, profile_of(options), resolve, 0usize) }
+// Fills this current context's dispatch table for the profile `options` names.
+fn load(a: *mem.Arena, c: *Context, options: Options) -> err {
+    ret gl.load(a, profile_of(options), resolve, resolver_context(c), &c.dispatch)
+}
 
 fn close(c: *Context) -> err {
     let closed = eglcontext.close(&c.egl_state)
+    gl.release(&c.dispatch)
     if c.x_display != 0usize {
         let gone = xlib.close_display(c.x_display)
         c.x_display = 0usize

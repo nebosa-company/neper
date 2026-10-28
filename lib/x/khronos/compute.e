@@ -376,9 +376,9 @@ fn open_here(a: *mem.Arena, at: usize) -> (mtl.Context, err) {
     if c_error != ok { ret (none, Unsupported) }
     slots[at] = Slot { c: c, live: true, arena: a }
     storage_ext = 0usize
-    var loaded = context.load(a, options)
+    var loaded = context.load(a, &slots[at].c, options)
     if loaded == ok && !gl.present(gl.BUFFER_STORAGE_ENTRY) {
-        storage_ext = context.resolve(a, 0usize, "glBufferStorageEXT")
+        storage_ext = context.resolve(a, context.resolver_context(&slots[at].c), "glBufferStorageEXT")
         if storage_ext == 0usize { loaded = Unsupported }
     }
     if loaded == ok {

@@ -94,7 +94,7 @@ fn draw(a: *mem.Arena, options: context.Options, base: i32) -> err {
     let (c, open_error) = context.headless(a, options)
     if open_error != ok { ret open_error }
     var live = c
-    if context.load(a, options) != ok {
+    if context.load(a, &live, options) != ok {
         let printed = io.print(gl.missing())
         os.exit(base + 1i32)
     }
@@ -167,7 +167,7 @@ fn draw(a: *mem.Arena, options: context.Options, base: i32) -> err {
     var compute_options = options
     if es { compute_options.minor = 1u32 } else { compute_options = context.Options { api: .Gl, major: 4u32, minor: 3u32 } }
     if major > compute_options.major || (major == compute_options.major && minor >= compute_options.minor) {
-        if gl.load(a, context.profile_of(compute_options), context.resolve, 0usize) != ok { os.exit(base + 11i32) }
+        if gl.load(a, context.profile_of(compute_options), context.resolve, context.resolver_context(&live), &live.dispatch) != ok { os.exit(base + 11i32) }
         let (kernel, kernel_error) = compile(gl.COMPUTE_SHADER, compute_source(es))
         if kernel_error != ok { os.exit(base + 12i32) }
         var one: [1]u32 = zero

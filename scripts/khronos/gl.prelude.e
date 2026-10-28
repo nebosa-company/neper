@@ -9,7 +9,9 @@
 // a parameter declared `GLint` takes `i32(X)`. `void *` is `*void`, any other pointer is typed,
 // and a pointer to pointers is a `usize` address.
 
+use e.atomic
 use e.mem
+use e.os
 
 error Unsupported
 error Failed
@@ -21,8 +23,126 @@ type Resolve = fn(*mem.Arena, usize, str) -> usize
 
 type AddressPun = union { pointer: *u8, bits: usize }
 type OffsetPun = union { pointer: *void, bits: usize }
+// A dispatch table belongs to one GL context. The native context module owns this value and
+// activates it after making that context current on a thread.
+type Dispatch = struct { slot: u32 }
 
-var missing_name: str = zero
+const MAX_DISPATCHES: usize = 64usize
+
+// Context tables and the active table for each owning host thread. A closed context releases
+// its slot, so repeated short-lived GL workers do not exhaust the fixed table.
+var dispatch_used: [64]Atomic[u32] = zero
+var active_threads: [64]Atomic[usize] = zero
+var active_slots: [64]Atomic[u32] = zero
+var missing_names: [64]str = zero
+
+fn dispatch_slot(d: *const Dispatch) -> usize {
+    if d.slot == 0u32 || usize(d.slot) > MAX_DISPATCHES { ret MAX_DISPATCHES }
+    ret usize(d.slot - 1u32)
+}
+
+// The table active on this host thread, or MAX_DISPATCHES before a loaded context is made
+// current. A GL wrapper then calls address and preserves the old null-entry failure mode.
+fn active_slot() -> usize {
+    let thread = os.current_thread_id()
+    if thread == 0usize { ret MAX_DISPATCHES }
+    var at = 0usize
+    while at < MAX_DISPATCHES {
+        if atomic.load(&active_threads[at], .Acquire) == thread {
+            let active = atomic.load(&active_slots[at], .Acquire)
+            if active == 0u32 || usize(active) > MAX_DISPATCHES { ret MAX_DISPATCHES }
+            ret usize(active - 1u32)
+        }
+        at += 1usize
+    }
+    ret MAX_DISPATCHES
+}
+
+// Select `d` for the calling host thread. An unloaded Dispatch deliberately clears any old
+// table selection, because making a native context current before its gl.load must not retain a
+// different context's function pointers.
+fn activate(d: *const Dispatch) -> bool {
+    let slot = dispatch_slot(d)
+    let thread = os.current_thread_id()
+    if thread == 0usize { ret false }
+    var at = 0usize
+    while at < MAX_DISPATCHES {
+        let owner = atomic.load(&active_threads[at], .Acquire)
+        if owner == thread {
+            if slot == MAX_DISPATCHES {
+                atomic.store(&active_slots[at], 0u32, .Release)
+                atomic.store(&active_threads[at], 0usize, .Release)
+            } else {
+                atomic.store(&active_slots[at], u32(slot + 1usize), .Release)
+            }
+            ret true
+        }
+        if owner == 0usize {
+            let (won, seen) = atomic.cas(&active_threads[at], 0usize, thread, .AcqRel, .Acquire)
+            if won || seen == thread {
+                if slot != MAX_DISPATCHES { atomic.store(&active_slots[at], u32(slot + 1usize), .Release) }
+                ret true
+            }
+        } else if atomic.load(&active_slots[at], .Acquire) == 0u32 {
+            // A thread that closed its last context leaves a reusable mapping; this also handles
+            // host thread-id reuse after that thread has exited.
+            let (won, seen) = atomic.cas(&active_threads[at], owner, thread, .AcqRel, .Acquire)
+            if won || seen == thread {
+                if slot != MAX_DISPATCHES { atomic.store(&active_slots[at], u32(slot + 1usize), .Release) }
+                ret true
+            }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+fn reserve(d: *Dispatch) -> usize {
+    let existing = dispatch_slot(d)
+    if existing != MAX_DISPATCHES { ret existing }
+    var at = 0usize
+    while at < MAX_DISPATCHES {
+        let (won, seen) = atomic.cas(&dispatch_used[at], 0u32, 1u32, .AcqRel, .Acquire)
+        if won {
+            d.slot = u32(at + 1usize)
+            ret at
+        }
+        at += 1usize
+    }
+    ret MAX_DISPATCHES
+}
+
+fn clear_dispatch(slot: usize) {
+    if slot >= MAX_DISPATCHES { ret }
+    var entry = 0usize
+    while entry < ENTRY_COUNT {
+        procs[slot][entry] = 0usize
+        entry += 1usize
+    }
+    missing_names[slot] = ""
+}
+
+// Releases the table once its native context is gone. Any stale active selection is cleared
+// before another context may claim the slot.
+fn release(d: *Dispatch) {
+    let slot = dispatch_slot(d)
+    if slot == MAX_DISPATCHES {
+        d.slot = 0u32
+        ret
+    }
+    let encoded = u32(slot + 1usize)
+    var at = 0usize
+    while at < MAX_DISPATCHES {
+        if atomic.load(&active_slots[at], .Acquire) == encoded {
+            atomic.store(&active_slots[at], 0u32, .Release)
+            atomic.store(&active_threads[at], 0usize, .Release)
+        }
+        at += 1usize
+    }
+    clear_dispatch(slot)
+    atomic.store(&dispatch_used[slot], 0u32, .Release)
+    d.slot = 0u32
+}
 
 fn profile_bit(profile: Profile) -> u8 {
     if profile == .Gl33Core { ret 1u8 }
@@ -33,16 +153,16 @@ fn profile_bit(profile: Profile) -> u8 {
     ret 32u8
 }
 
-fn fetch(a: *mem.Arena, resolve: Resolve, context: usize, index: usize, name: str, required: u8) -> err {
-    var address = resolve(a, context, name)
+fn fetch(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, index: usize, name: str, required: u8) -> err {
+    var entry_address = resolve(a, context, name)
     // A core entry some drivers still export only under the extension it came from (Intel's GL 4.6 has
     // glGetnTexImageARB, not glGetnTexImage): the suffixed names are asked before the entry counts as missing.
-    if address == 0usize { address = suffixed(a, resolve, context, name, "ARB") }
-    if address == 0usize { address = suffixed(a, resolve, context, name, "KHR") }
-    if address == 0usize { address = suffixed(a, resolve, context, name, "EXT") }
-    procs[index] = address
-    if address == 0usize && required != 0u8 {
-        missing_name = name
+    if entry_address == 0usize { entry_address = suffixed(a, resolve, context, name, "ARB") }
+    if entry_address == 0usize { entry_address = suffixed(a, resolve, context, name, "KHR") }
+    if entry_address == 0usize { entry_address = suffixed(a, resolve, context, name, "EXT") }
+    procs[slot][index] = entry_address
+    if entry_address == 0usize && required != 0u8 {
+        missing_names[slot] = name
         ret Unsupported
     }
     ret ok
@@ -64,18 +184,38 @@ fn suffixed(a: *mem.Arena, resolve: Resolve, context: usize, name: str, suffix: 
     ret resolve(a, context, buffer[0usize..name.len + suffix.len])
 }
 
-// Fills the table from the current context. `Unsupported` names the first entry point the
-// profile requires and the driver lacks, through `missing`.
-fn load(a: *mem.Arena, profile: Profile, resolve: Resolve, context: usize) -> err {
-    missing_name = ""
-    ret load_entries(a, resolve, context, profile_bit(profile))
+// Fills `d` from the current native context. `Unsupported` names the first entry point the
+// profile requires and the driver lacks, through `missing`; `d` stays active so the name remains
+// observable until the context closes.
+fn load(a: *mem.Arena, profile: Profile, resolve: Resolve, context: usize, d: *Dispatch) -> err {
+    let slot = reserve(d)
+    if slot == MAX_DISPATCHES { ret Unsupported }
+    if !activate(d) {
+        release(d)
+        ret Unsupported
+    }
+    clear_dispatch(slot)
+    ret load_entries(a, resolve, context, slot, profile_bit(profile))
 }
 
-fn missing() -> str { ret missing_name }
+fn missing() -> str {
+    let slot = active_slot()
+    if slot == MAX_DISPATCHES { ret "" }
+    ret missing_names[slot]
+}
 
 // Whether the driver supplied the entry in slot `entry` (a `*_ENTRY` constant): the check
 // before calling one the loaded profile does not require.
-fn present(entry: usize) -> bool { ret entry < ENTRY_COUNT && procs[entry] != 0usize }
+fn present(entry: usize) -> bool {
+    let slot = active_slot()
+    ret slot < MAX_DISPATCHES && entry < ENTRY_COUNT && procs[slot][entry] != 0usize
+}
+
+fn address(entry: usize) -> usize {
+    let slot = active_slot()
+    if slot == MAX_DISPATCHES || entry >= ENTRY_COUNT { ret 0usize }
+    ret procs[slot][entry]
+}
 
 // A buffer offset where the API takes `const void *`, as `vertex_attrib_pointer`'s last argument.
 fn offset(n: usize) -> *void {

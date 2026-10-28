@@ -77,7 +77,7 @@ fn open(a: *mem.Arena, host: os.Window, options: context.Options) -> (usize, err
         ret (0usize, Unsupported)
     }
     let p = &presents[slot]
-    if context.load(a, options) != ok {
+    if context.load(a, &p.c, options) != ok {
         let closed = close(slot)
         ret (0usize, Unsupported)
     }

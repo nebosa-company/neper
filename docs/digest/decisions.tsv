@@ -2993,4 +2993,5 @@ D5911	1312	`WM_DPICHANGED`: a per-monitor-aware window takes the suggested recta
 D5912	2511	The root arena's default ceiling is 64 GiB, 4 GiB on Android
 D5913	3725	f16 and bf16 on the CPU code generators: widen to f32, operate, round once, in integer instructions
 D5914	2685	f16 and bf16 in GLSL, word-equal to the CPU's
-D5915	1242	Presenter ownership ends at fallback, replacement and window close
+D5915	1243	Presenter ownership ends at fallback, replacement and window close
+D5916	1245	GL dispatch follows the current context, not the process

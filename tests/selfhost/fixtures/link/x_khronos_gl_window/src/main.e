@@ -53,7 +53,7 @@ fn on_window(a: *mem.Arena, options: context.Options, label: str, base: i32) -> 
     }
     if context_error != ok { os.exit(base + 2i32) }
     var live = c
-    if context.load(a, options) != ok { os.exit(base + 3i32) }
+    if context.load(a, &live, options) != ok { os.exit(base + 3i32) }
     if context.make_current(&live) != ok { os.exit(base + 4i32) }
     let interval = context.swap_interval(&live, 1i32)
     if interval != ok && interval != context.Unsupported { os.exit(base + 5i32) }

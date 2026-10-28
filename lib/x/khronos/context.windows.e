@@ -19,7 +19,7 @@ error Failed
 
 type Api = eglcontext.Api
 type Options = eglcontext.Options
-type Context = struct { egl_state: eglcontext.State, uses_egl: bool, hwnd: usize, hdc: usize, wgl: usize, hidden: os.Window, owns_window: bool, live: bool }
+type Context = struct { egl_state: eglcontext.State, dispatch: gl.Dispatch, uses_egl: bool, hwnd: usize, hdc: usize, wgl: usize, hidden: os.Window, owns_window: bool, live: bool }
 
 // WGL_ARB_create_context and WGL_ARB_create_context_profile: wglext.h is not in scripts/khronos,
 // and these four values are all of it this module uses.
@@ -61,9 +61,7 @@ type CreatePun = union { function: CreateContextAttribs, bits: usize }
 type IntervalPun = union { function: SwapIntervalExt, bits: usize }
 type PointerPun = union { pointer: *void, bits: usize }
 type BytesPun = union { pointer: *u8, bits: usize }
-
-// Which interface `resolve` answers for: the context made current last.
-var resolving_egl: bool = false
+type ContextPun = union { pointer: *const Context, bits: usize }
 
 fn profile_of(options: Options) -> gl.Profile { ret eglcontext.profile_of(options) }
 
@@ -92,8 +90,17 @@ fn wgl_proc(name: str) -> usize {
 }
 
 // The resolver `gl.load` takes once a context is current.
+fn resolver_context(c: *const Context) -> usize {
+    var pun: ContextPun = zero
+    pun.pointer = c
+    ret pun.bits
+}
+
 fn resolve(a: *mem.Arena, context: usize, name: str) -> usize {
-    if resolving_egl { ret egl.proc_address(a, context, name) }
+    var pun: ContextPun = zero
+    pun.bits = context
+    if pun.pointer == nil { ret 0usize }
+    if pun.pointer.uses_egl { ret egl.proc_address(a, 0usize, name) }
     ret wgl_proc(name)
 }
 
@@ -165,7 +172,6 @@ fn wgl_on(c: *Context, hwnd: usize, options: Options) -> err {
     c.wgl = context
     c.live = true
     if raw_wgl_make_current(hdc, context) == 0i32 { ret Failed }
-    resolving_egl = false
     ret ok
 }
 
@@ -185,7 +191,6 @@ fn headless(a: *mem.Arena, options: Options) -> (Context, err) {
         let (s, state_error) = eglcontext.headless(display, options, true)
         c.egl_state = s
         c.uses_egl = true
-        resolving_egl = true
         ret (c, mapped(state_error))
     }
     let (w, window_error) = os.window_open(a, os.WindowOptions { title: "neper GL", width: 16u32, height: 16u32, resizable: false, visible: false, mode: .Windowed })
@@ -209,7 +214,6 @@ fn for_window(a: *mem.Arena, w: os.Window, options: Options) -> (Context, err) {
         let (s, state_error) = eglcontext.on_window(display, hwnd, options)
         c.egl_state = s
         c.uses_egl = true
-        resolving_egl = true
         ret (c, mapped(state_error))
     }
     let made = wgl_on(&c, hwnd, options)
@@ -218,11 +222,13 @@ fn for_window(a: *mem.Arena, w: os.Window, options: Options) -> (Context, err) {
 
 fn make_current(c: *const Context) -> err {
     if c.uses_egl {
-        resolving_egl = true
-        ret mapped(eglcontext.make_current(&c.egl_state))
+        let made = mapped(eglcontext.make_current(&c.egl_state))
+        if made != ok { ret made }
+        if !gl.activate(&c.dispatch) { ret Failed }
+        ret ok
     }
     if !c.live || raw_wgl_make_current(c.hdc, c.wgl) == 0i32 { ret Failed }
-    resolving_egl = false
+    if !gl.activate(&c.dispatch) { ret Failed }
     ret ok
 }
 
@@ -243,23 +249,30 @@ fn swap_interval(c: *const Context, interval: i32) -> err {
     ret ok
 }
 
-// Fills `gl`'s table for the current context and the profile `options` names.
-fn load(a: *mem.Arena, options: Options) -> err { ret gl.load(a, profile_of(options), resolve, 0usize) }
+// Fills this current context's dispatch table for the profile `options` names.
+fn load(a: *mem.Arena, c: *Context, options: Options) -> err {
+    ret gl.load(a, profile_of(options), resolve, resolver_context(c), &c.dispatch)
+}
 
 fn close(c: *Context) -> err {
-    if c.uses_egl { ret mapped(eglcontext.close(&c.egl_state)) }
-    if c.live {
-        let released = raw_wgl_make_current(0usize, 0usize)
-        let deleted = raw_wgl_delete_context(c.wgl)
-        c.live = false
+    var closed = ok
+    if c.uses_egl {
+        closed = mapped(eglcontext.close(&c.egl_state))
+    } else {
+        if c.live {
+            let released = raw_wgl_make_current(0usize, 0usize)
+            let deleted = raw_wgl_delete_context(c.wgl)
+            c.live = false
+        }
+        if c.hdc != 0usize {
+            let dropped = raw_release_dc(c.hwnd, c.hdc)
+            c.hdc = 0usize
+        }
+        if c.owns_window {
+            c.owns_window = false
+            closed = os.window_close(c.hidden)
+        }
     }
-    if c.hdc != 0usize {
-        let dropped = raw_release_dc(c.hwnd, c.hdc)
-        c.hdc = 0usize
-    }
-    if c.owns_window {
-        c.owns_window = false
-        ret os.window_close(c.hidden)
-    }
-    ret ok
+    gl.release(&c.dispatch)
+    ret closed
 }

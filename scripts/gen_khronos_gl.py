@@ -202,6 +202,7 @@ class Module:
 
     def emit(self, prelude, header, chunk=100):
         prelude_text = prelude.read_text(encoding='utf-8')
+        dispatch = self.fprefix == 'gl'
         taken = set(re.findall(r'^fn (\w+)', prelude_text, re.M))
         out = [header, prelude_text.rstrip('\n'), '', '// ---- generated below ----', '']
         for name in sorted(self.constants):
@@ -220,7 +221,10 @@ class Module:
             out.append('type U%d = union { function: F%d, bits: usize }' % (k, k))
         out.append('')
         out.append('const ENTRY_COUNT: usize = %dusize' % len(names))
-        out.append('var procs: [%d]usize = zero' % len(names))
+        if dispatch:
+            out.append('var procs: [64][%d]usize = zero' % len(names))
+        else:
+            out.append('var procs: [%d]usize = zero' % len(names))
         out.append('')
         # Each entry's slot, for `present` on one a profile does not require.
         for i, cname in enumerate(names):
@@ -230,17 +234,30 @@ class Module:
             out.append('const %s: usize = %dusize' % (entry, i))
         out.append('')
         for c in range(0, len(names), chunk):
-            out.append('fn load_entries_%d(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {' % (c // chunk))
+            if dispatch:
+                out.append('fn load_entries_%d(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {' % (c // chunk))
+            else:
+                out.append('fn load_entries_%d(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {' % (c // chunk))
             for i in range(c, min(c + chunk, len(names))):
                 cname = names[i]
-                out.append('    if fetch(a, resolve, context, %dusize, "%s", bit & %du8) != ok { ret Unsupported }'
-                           % (i, cname, self.masks[cname]))
+                if dispatch:
+                    out.append('    if fetch(a, resolve, context, slot, %dusize, "%s", bit & %du8) != ok { ret Unsupported }'
+                               % (i, cname, self.masks[cname]))
+                else:
+                    out.append('    if fetch(a, resolve, context, %dusize, "%s", bit & %du8) != ok { ret Unsupported }'
+                               % (i, cname, self.masks[cname]))
             out.append('    ret ok')
             out.append('}')
             out.append('')
-        out.append('fn load_entries(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {')
+        if dispatch:
+            out.append('fn load_entries(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {')
+        else:
+            out.append('fn load_entries(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {')
         for c in range(0, len(names), chunk):
-            out.append('    if load_entries_%d(a, resolve, context, bit) != ok { ret Unsupported }' % (c // chunk))
+            if dispatch:
+                out.append('    if load_entries_%d(a, resolve, context, slot, bit) != ok { ret Unsupported }' % (c // chunk))
+            else:
+                out.append('    if load_entries_%d(a, resolve, context, bit) != ok { ret Unsupported }' % (c // chunk))
         out.append('    ret ok')
         out.append('}')
         out.append('')
@@ -258,7 +275,10 @@ class Module:
             body = call if ret == 'void' else 'ret ' + call
             out.append('fn %s(%s)%s {' % (fname, args, tail))
             out.append('    var pun: U%d = zero' % k)
-            out.append('    pun.bits = procs[%dusize]' % i)
+            if dispatch:
+                out.append('    pun.bits = address(%dusize)' % i)
+            else:
+                out.append('    pun.bits = procs[%dusize]' % i)
             out.append('    %s' % body)
             out.append('}')
         return '\n'.join(out) + '\n'

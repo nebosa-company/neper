@@ -12,7 +12,9 @@
 // a parameter declared `GLint` takes `i32(X)`. `void *` is `*void`, any other pointer is typed,
 // and a pointer to pointers is a `usize` address.
 
+use e.atomic
 use e.mem
+use e.os
 
 error Unsupported
 error Failed
@@ -24,8 +26,126 @@ type Resolve = fn(*mem.Arena, usize, str) -> usize
 
 type AddressPun = union { pointer: *u8, bits: usize }
 type OffsetPun = union { pointer: *void, bits: usize }
+// A dispatch table belongs to one GL context. The native context module owns this value and
+// activates it after making that context current on a thread.
+type Dispatch = struct { slot: u32 }
 
-var missing_name: str = zero
+const MAX_DISPATCHES: usize = 64usize
+
+// Context tables and the active table for each owning host thread. A closed context releases
+// its slot, so repeated short-lived GL workers do not exhaust the fixed table.
+var dispatch_used: [64]Atomic[u32] = zero
+var active_threads: [64]Atomic[usize] = zero
+var active_slots: [64]Atomic[u32] = zero
+var missing_names: [64]str = zero
+
+fn dispatch_slot(d: *const Dispatch) -> usize {
+    if d.slot == 0u32 || usize(d.slot) > MAX_DISPATCHES { ret MAX_DISPATCHES }
+    ret usize(d.slot - 1u32)
+}
+
+// The table active on this host thread, or MAX_DISPATCHES before a loaded context is made
+// current. A GL wrapper then calls address and preserves the old null-entry failure mode.
+fn active_slot() -> usize {
+    let thread = os.current_thread_id()
+    if thread == 0usize { ret MAX_DISPATCHES }
+    var at = 0usize
+    while at < MAX_DISPATCHES {
+        if atomic.load(&active_threads[at], .Acquire) == thread {
+            let active = atomic.load(&active_slots[at], .Acquire)
+            if active == 0u32 || usize(active) > MAX_DISPATCHES { ret MAX_DISPATCHES }
+            ret usize(active - 1u32)
+        }
+        at += 1usize
+    }
+    ret MAX_DISPATCHES
+}
+
+// Select `d` for the calling host thread. An unloaded Dispatch deliberately clears any old
+// table selection, because making a native context current before its gl.load must not retain a
+// different context's function pointers.
+fn activate(d: *const Dispatch) -> bool {
+    let slot = dispatch_slot(d)
+    let thread = os.current_thread_id()
+    if thread == 0usize { ret false }
+    var at = 0usize
+    while at < MAX_DISPATCHES {
+        let owner = atomic.load(&active_threads[at], .Acquire)
+        if owner == thread {
+            if slot == MAX_DISPATCHES {
+                atomic.store(&active_slots[at], 0u32, .Release)
+                atomic.store(&active_threads[at], 0usize, .Release)
+            } else {
+                atomic.store(&active_slots[at], u32(slot + 1usize), .Release)
+            }
+            ret true
+        }
+        if owner == 0usize {
+            let (won, seen) = atomic.cas(&active_threads[at], 0usize, thread, .AcqRel, .Acquire)
+            if won || seen == thread {
+                if slot != MAX_DISPATCHES { atomic.store(&active_slots[at], u32(slot + 1usize), .Release) }
+                ret true
+            }
+        } else if atomic.load(&active_slots[at], .Acquire) == 0u32 {
+            // A thread that closed its last context leaves a reusable mapping; this also handles
+            // host thread-id reuse after that thread has exited.
+            let (won, seen) = atomic.cas(&active_threads[at], owner, thread, .AcqRel, .Acquire)
+            if won || seen == thread {
+                if slot != MAX_DISPATCHES { atomic.store(&active_slots[at], u32(slot + 1usize), .Release) }
+                ret true
+            }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+fn reserve(d: *Dispatch) -> usize {
+    let existing = dispatch_slot(d)
+    if existing != MAX_DISPATCHES { ret existing }
+    var at = 0usize
+    while at < MAX_DISPATCHES {
+        let (won, seen) = atomic.cas(&dispatch_used[at], 0u32, 1u32, .AcqRel, .Acquire)
+        if won {
+            d.slot = u32(at + 1usize)
+            ret at
+        }
+        at += 1usize
+    }
+    ret MAX_DISPATCHES
+}
+
+fn clear_dispatch(slot: usize) {
+    if slot >= MAX_DISPATCHES { ret }
+    var entry = 0usize
+    while entry < ENTRY_COUNT {
+        procs[slot][entry] = 0usize
+        entry += 1usize
+    }
+    missing_names[slot] = ""
+}
+
+// Releases the table once its native context is gone. Any stale active selection is cleared
+// before another context may claim the slot.
+fn release(d: *Dispatch) {
+    let slot = dispatch_slot(d)
+    if slot == MAX_DISPATCHES {
+        d.slot = 0u32
+        ret
+    }
+    let encoded = u32(slot + 1usize)
+    var at = 0usize
+    while at < MAX_DISPATCHES {
+        if atomic.load(&active_slots[at], .Acquire) == encoded {
+            atomic.store(&active_slots[at], 0u32, .Release)
+            atomic.store(&active_threads[at], 0usize, .Release)
+        }
+        at += 1usize
+    }
+    clear_dispatch(slot)
+    atomic.store(&dispatch_used[slot], 0u32, .Release)
+    d.slot = 0u32
+}
 
 fn profile_bit(profile: Profile) -> u8 {
     if profile == .Gl33Core { ret 1u8 }
@@ -36,16 +156,16 @@ fn profile_bit(profile: Profile) -> u8 {
     ret 32u8
 }
 
-fn fetch(a: *mem.Arena, resolve: Resolve, context: usize, index: usize, name: str, required: u8) -> err {
-    var address = resolve(a, context, name)
+fn fetch(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, index: usize, name: str, required: u8) -> err {
+    var entry_address = resolve(a, context, name)
     // A core entry some drivers still export only under the extension it came from (Intel's GL 4.6 has
     // glGetnTexImageARB, not glGetnTexImage): the suffixed names are asked before the entry counts as missing.
-    if address == 0usize { address = suffixed(a, resolve, context, name, "ARB") }
-    if address == 0usize { address = suffixed(a, resolve, context, name, "KHR") }
-    if address == 0usize { address = suffixed(a, resolve, context, name, "EXT") }
-    procs[index] = address
-    if address == 0usize && required != 0u8 {
-        missing_name = name
+    if entry_address == 0usize { entry_address = suffixed(a, resolve, context, name, "ARB") }
+    if entry_address == 0usize { entry_address = suffixed(a, resolve, context, name, "KHR") }
+    if entry_address == 0usize { entry_address = suffixed(a, resolve, context, name, "EXT") }
+    procs[slot][index] = entry_address
+    if entry_address == 0usize && required != 0u8 {
+        missing_names[slot] = name
         ret Unsupported
     }
     ret ok
@@ -67,18 +187,38 @@ fn suffixed(a: *mem.Arena, resolve: Resolve, context: usize, name: str, suffix: 
     ret resolve(a, context, buffer[0usize..name.len + suffix.len])
 }
 
-// Fills the table from the current context. `Unsupported` names the first entry point the
-// profile requires and the driver lacks, through `missing`.
-fn load(a: *mem.Arena, profile: Profile, resolve: Resolve, context: usize) -> err {
-    missing_name = ""
-    ret load_entries(a, resolve, context, profile_bit(profile))
+// Fills `d` from the current native context. `Unsupported` names the first entry point the
+// profile requires and the driver lacks, through `missing`; `d` stays active so the name remains
+// observable until the context closes.
+fn load(a: *mem.Arena, profile: Profile, resolve: Resolve, context: usize, d: *Dispatch) -> err {
+    let slot = reserve(d)
+    if slot == MAX_DISPATCHES { ret Unsupported }
+    if !activate(d) {
+        release(d)
+        ret Unsupported
+    }
+    clear_dispatch(slot)
+    ret load_entries(a, resolve, context, slot, profile_bit(profile))
 }
 
-fn missing() -> str { ret missing_name }
+fn missing() -> str {
+    let slot = active_slot()
+    if slot == MAX_DISPATCHES { ret "" }
+    ret missing_names[slot]
+}
 
 // Whether the driver supplied the entry in slot `entry` (a `*_ENTRY` constant): the check
 // before calling one the loaded profile does not require.
-fn present(entry: usize) -> bool { ret entry < ENTRY_COUNT && procs[entry] != 0usize }
+fn present(entry: usize) -> bool {
+    let slot = active_slot()
+    ret slot < MAX_DISPATCHES && entry < ENTRY_COUNT && procs[slot][entry] != 0usize
+}
+
+fn address(entry: usize) -> usize {
+    let slot = active_slot()
+    if slot == MAX_DISPATCHES || entry >= ENTRY_COUNT { ret 0usize }
+    ret procs[slot][entry]
+}
 
 // A buffer offset where the API takes `const void *`, as `vertex_attrib_pointer`'s last argument.
 fn offset(n: usize) -> *void {
@@ -2342,7 +2482,7 @@ type F249 = extern fn(usize, u32, u64)
 type U249 = union { function: F249, bits: usize }
 
 const ENTRY_COUNT: usize = 659usize
-var procs: [659]usize = zero
+var procs: [64][659]usize = zero
 
 const ACTIVE_SHADER_PROGRAM_ENTRY: usize = 0usize
 const ACTIVE_TEXTURE_ENTRY: usize = 1usize
@@ -3004,3996 +3144,3996 @@ const VIEWPORT_INDEXEDF_ENTRY: usize = 656usize
 const VIEWPORT_INDEXEDFV_ENTRY: usize = 657usize
 const WAIT_SYNC_ENTRY: usize = 658usize
 
-fn load_entries_0(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
-    if fetch(a, resolve, context, 0usize, "glActiveShaderProgram", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 1usize, "glActiveTexture", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 2usize, "glAttachShader", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 3usize, "glBeginConditionalRender", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 4usize, "glBeginQuery", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 5usize, "glBeginQueryIndexed", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 6usize, "glBeginTransformFeedback", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 7usize, "glBindAttribLocation", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 8usize, "glBindBuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 9usize, "glBindBufferBase", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 10usize, "glBindBufferRange", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 11usize, "glBindBuffersBase", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 12usize, "glBindBuffersRange", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 13usize, "glBindFragDataLocation", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 14usize, "glBindFragDataLocationIndexed", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 15usize, "glBindFramebuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 16usize, "glBindImageTexture", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 17usize, "glBindImageTextures", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 18usize, "glBindProgramPipeline", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 19usize, "glBindRenderbuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 20usize, "glBindSampler", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 21usize, "glBindSamplers", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 22usize, "glBindTexture", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 23usize, "glBindTextureUnit", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 24usize, "glBindTextures", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 25usize, "glBindTransformFeedback", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 26usize, "glBindVertexArray", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 27usize, "glBindVertexBuffer", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 28usize, "glBindVertexBuffers", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 29usize, "glBlendBarrier", bit & 32u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 30usize, "glBlendColor", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 31usize, "glBlendEquation", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 32usize, "glBlendEquationSeparate", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 33usize, "glBlendEquationSeparatei", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 34usize, "glBlendEquationi", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 35usize, "glBlendFunc", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 36usize, "glBlendFuncSeparate", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 37usize, "glBlendFuncSeparatei", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 38usize, "glBlendFunci", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 39usize, "glBlitFramebuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 40usize, "glBlitNamedFramebuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 41usize, "glBufferData", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 42usize, "glBufferStorage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 43usize, "glBufferSubData", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 44usize, "glCheckFramebufferStatus", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 45usize, "glCheckNamedFramebufferStatus", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 46usize, "glClampColor", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 47usize, "glClear", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 48usize, "glClearBufferData", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 49usize, "glClearBufferSubData", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 50usize, "glClearBufferfi", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 51usize, "glClearBufferfv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 52usize, "glClearBufferiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 53usize, "glClearBufferuiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 54usize, "glClearColor", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 55usize, "glClearDepth", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 56usize, "glClearDepthf", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 57usize, "glClearNamedBufferData", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 58usize, "glClearNamedBufferSubData", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 59usize, "glClearNamedFramebufferfi", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 60usize, "glClearNamedFramebufferfv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 61usize, "glClearNamedFramebufferiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 62usize, "glClearNamedFramebufferuiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 63usize, "glClearStencil", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 64usize, "glClearTexImage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 65usize, "glClearTexSubImage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 66usize, "glClientWaitSync", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 67usize, "glClipControl", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 68usize, "glColorMask", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 69usize, "glColorMaski", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 70usize, "glCompileShader", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 71usize, "glCompressedTexImage1D", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 72usize, "glCompressedTexImage2D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 73usize, "glCompressedTexImage3D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 74usize, "glCompressedTexSubImage1D", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 75usize, "glCompressedTexSubImage2D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 76usize, "glCompressedTexSubImage3D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 77usize, "glCompressedTextureSubImage1D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 78usize, "glCompressedTextureSubImage2D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 79usize, "glCompressedTextureSubImage3D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 80usize, "glCopyBufferSubData", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 81usize, "glCopyImageSubData", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 82usize, "glCopyNamedBufferSubData", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 83usize, "glCopyTexImage1D", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 84usize, "glCopyTexImage2D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 85usize, "glCopyTexSubImage1D", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 86usize, "glCopyTexSubImage2D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 87usize, "glCopyTexSubImage3D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 88usize, "glCopyTextureSubImage1D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 89usize, "glCopyTextureSubImage2D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 90usize, "glCopyTextureSubImage3D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 91usize, "glCreateBuffers", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 92usize, "glCreateFramebuffers", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 93usize, "glCreateProgram", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 94usize, "glCreateProgramPipelines", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 95usize, "glCreateQueries", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 96usize, "glCreateRenderbuffers", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 97usize, "glCreateSamplers", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 98usize, "glCreateShader", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 99usize, "glCreateShaderProgramv", bit & 54u8) != ok { ret Unsupported }
+fn load_entries_0(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {
+    if fetch(a, resolve, context, slot, 0usize, "glActiveShaderProgram", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 1usize, "glActiveTexture", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 2usize, "glAttachShader", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 3usize, "glBeginConditionalRender", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 4usize, "glBeginQuery", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 5usize, "glBeginQueryIndexed", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 6usize, "glBeginTransformFeedback", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 7usize, "glBindAttribLocation", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 8usize, "glBindBuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 9usize, "glBindBufferBase", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 10usize, "glBindBufferRange", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 11usize, "glBindBuffersBase", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 12usize, "glBindBuffersRange", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 13usize, "glBindFragDataLocation", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 14usize, "glBindFragDataLocationIndexed", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 15usize, "glBindFramebuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 16usize, "glBindImageTexture", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 17usize, "glBindImageTextures", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 18usize, "glBindProgramPipeline", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 19usize, "glBindRenderbuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 20usize, "glBindSampler", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 21usize, "glBindSamplers", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 22usize, "glBindTexture", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 23usize, "glBindTextureUnit", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 24usize, "glBindTextures", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 25usize, "glBindTransformFeedback", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 26usize, "glBindVertexArray", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 27usize, "glBindVertexBuffer", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 28usize, "glBindVertexBuffers", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 29usize, "glBlendBarrier", bit & 32u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 30usize, "glBlendColor", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 31usize, "glBlendEquation", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 32usize, "glBlendEquationSeparate", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 33usize, "glBlendEquationSeparatei", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 34usize, "glBlendEquationi", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 35usize, "glBlendFunc", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 36usize, "glBlendFuncSeparate", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 37usize, "glBlendFuncSeparatei", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 38usize, "glBlendFunci", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 39usize, "glBlitFramebuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 40usize, "glBlitNamedFramebuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 41usize, "glBufferData", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 42usize, "glBufferStorage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 43usize, "glBufferSubData", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 44usize, "glCheckFramebufferStatus", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 45usize, "glCheckNamedFramebufferStatus", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 46usize, "glClampColor", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 47usize, "glClear", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 48usize, "glClearBufferData", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 49usize, "glClearBufferSubData", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 50usize, "glClearBufferfi", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 51usize, "glClearBufferfv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 52usize, "glClearBufferiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 53usize, "glClearBufferuiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 54usize, "glClearColor", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 55usize, "glClearDepth", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 56usize, "glClearDepthf", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 57usize, "glClearNamedBufferData", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 58usize, "glClearNamedBufferSubData", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 59usize, "glClearNamedFramebufferfi", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 60usize, "glClearNamedFramebufferfv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 61usize, "glClearNamedFramebufferiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 62usize, "glClearNamedFramebufferuiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 63usize, "glClearStencil", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 64usize, "glClearTexImage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 65usize, "glClearTexSubImage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 66usize, "glClientWaitSync", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 67usize, "glClipControl", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 68usize, "glColorMask", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 69usize, "glColorMaski", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 70usize, "glCompileShader", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 71usize, "glCompressedTexImage1D", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 72usize, "glCompressedTexImage2D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 73usize, "glCompressedTexImage3D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 74usize, "glCompressedTexSubImage1D", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 75usize, "glCompressedTexSubImage2D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 76usize, "glCompressedTexSubImage3D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 77usize, "glCompressedTextureSubImage1D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 78usize, "glCompressedTextureSubImage2D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 79usize, "glCompressedTextureSubImage3D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 80usize, "glCopyBufferSubData", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 81usize, "glCopyImageSubData", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 82usize, "glCopyNamedBufferSubData", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 83usize, "glCopyTexImage1D", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 84usize, "glCopyTexImage2D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 85usize, "glCopyTexSubImage1D", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 86usize, "glCopyTexSubImage2D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 87usize, "glCopyTexSubImage3D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 88usize, "glCopyTextureSubImage1D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 89usize, "glCopyTextureSubImage2D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 90usize, "glCopyTextureSubImage3D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 91usize, "glCreateBuffers", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 92usize, "glCreateFramebuffers", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 93usize, "glCreateProgram", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 94usize, "glCreateProgramPipelines", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 95usize, "glCreateQueries", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 96usize, "glCreateRenderbuffers", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 97usize, "glCreateSamplers", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 98usize, "glCreateShader", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 99usize, "glCreateShaderProgramv", bit & 54u8) != ok { ret Unsupported }
     ret ok
 }
 
-fn load_entries_1(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
-    if fetch(a, resolve, context, 100usize, "glCreateTextures", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 101usize, "glCreateTransformFeedbacks", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 102usize, "glCreateVertexArrays", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 103usize, "glCullFace", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 104usize, "glDebugMessageCallback", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 105usize, "glDebugMessageControl", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 106usize, "glDebugMessageInsert", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 107usize, "glDeleteBuffers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 108usize, "glDeleteFramebuffers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 109usize, "glDeleteProgram", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 110usize, "glDeleteProgramPipelines", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 111usize, "glDeleteQueries", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 112usize, "glDeleteRenderbuffers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 113usize, "glDeleteSamplers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 114usize, "glDeleteShader", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 115usize, "glDeleteSync", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 116usize, "glDeleteTextures", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 117usize, "glDeleteTransformFeedbacks", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 118usize, "glDeleteVertexArrays", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 119usize, "glDepthFunc", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 120usize, "glDepthMask", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 121usize, "glDepthRange", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 122usize, "glDepthRangeArrayv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 123usize, "glDepthRangeIndexed", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 124usize, "glDepthRangef", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 125usize, "glDetachShader", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 126usize, "glDisable", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 127usize, "glDisableVertexArrayAttrib", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 128usize, "glDisableVertexAttribArray", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 129usize, "glDisablei", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 130usize, "glDispatchCompute", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 131usize, "glDispatchComputeIndirect", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 132usize, "glDrawArrays", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 133usize, "glDrawArraysIndirect", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 134usize, "glDrawArraysInstanced", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 135usize, "glDrawArraysInstancedBaseInstance", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 136usize, "glDrawBuffer", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 137usize, "glDrawBuffers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 138usize, "glDrawElements", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 139usize, "glDrawElementsBaseVertex", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 140usize, "glDrawElementsIndirect", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 141usize, "glDrawElementsInstanced", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 142usize, "glDrawElementsInstancedBaseInstance", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 143usize, "glDrawElementsInstancedBaseVertex", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 144usize, "glDrawElementsInstancedBaseVertexBaseInstance", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 145usize, "glDrawRangeElements", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 146usize, "glDrawRangeElementsBaseVertex", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 147usize, "glDrawTransformFeedback", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 148usize, "glDrawTransformFeedbackInstanced", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 149usize, "glDrawTransformFeedbackStream", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 150usize, "glDrawTransformFeedbackStreamInstanced", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 151usize, "glEnable", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 152usize, "glEnableVertexArrayAttrib", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 153usize, "glEnableVertexAttribArray", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 154usize, "glEnablei", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 155usize, "glEndConditionalRender", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 156usize, "glEndQuery", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 157usize, "glEndQueryIndexed", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 158usize, "glEndTransformFeedback", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 159usize, "glFenceSync", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 160usize, "glFinish", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 161usize, "glFlush", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 162usize, "glFlushMappedBufferRange", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 163usize, "glFlushMappedNamedBufferRange", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 164usize, "glFramebufferParameteri", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 165usize, "glFramebufferRenderbuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 166usize, "glFramebufferTexture", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 167usize, "glFramebufferTexture1D", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 168usize, "glFramebufferTexture2D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 169usize, "glFramebufferTexture3D", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 170usize, "glFramebufferTextureLayer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 171usize, "glFrontFace", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 172usize, "glGenBuffers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 173usize, "glGenFramebuffers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 174usize, "glGenProgramPipelines", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 175usize, "glGenQueries", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 176usize, "glGenRenderbuffers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 177usize, "glGenSamplers", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 178usize, "glGenTextures", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 179usize, "glGenTransformFeedbacks", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 180usize, "glGenVertexArrays", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 181usize, "glGenerateMipmap", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 182usize, "glGenerateTextureMipmap", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 183usize, "glGetActiveAtomicCounterBufferiv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 184usize, "glGetActiveAttrib", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 185usize, "glGetActiveSubroutineName", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 186usize, "glGetActiveSubroutineUniformName", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 187usize, "glGetActiveSubroutineUniformiv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 188usize, "glGetActiveUniform", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 189usize, "glGetActiveUniformBlockName", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 190usize, "glGetActiveUniformBlockiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 191usize, "glGetActiveUniformName", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 192usize, "glGetActiveUniformsiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 193usize, "glGetAttachedShaders", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 194usize, "glGetAttribLocation", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 195usize, "glGetBooleani_v", bit & 55u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 196usize, "glGetBooleanv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 197usize, "glGetBufferParameteri64v", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 198usize, "glGetBufferParameteriv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 199usize, "glGetBufferPointerv", bit & 63u8) != ok { ret Unsupported }
+fn load_entries_1(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {
+    if fetch(a, resolve, context, slot, 100usize, "glCreateTextures", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 101usize, "glCreateTransformFeedbacks", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 102usize, "glCreateVertexArrays", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 103usize, "glCullFace", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 104usize, "glDebugMessageCallback", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 105usize, "glDebugMessageControl", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 106usize, "glDebugMessageInsert", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 107usize, "glDeleteBuffers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 108usize, "glDeleteFramebuffers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 109usize, "glDeleteProgram", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 110usize, "glDeleteProgramPipelines", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 111usize, "glDeleteQueries", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 112usize, "glDeleteRenderbuffers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 113usize, "glDeleteSamplers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 114usize, "glDeleteShader", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 115usize, "glDeleteSync", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 116usize, "glDeleteTextures", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 117usize, "glDeleteTransformFeedbacks", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 118usize, "glDeleteVertexArrays", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 119usize, "glDepthFunc", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 120usize, "glDepthMask", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 121usize, "glDepthRange", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 122usize, "glDepthRangeArrayv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 123usize, "glDepthRangeIndexed", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 124usize, "glDepthRangef", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 125usize, "glDetachShader", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 126usize, "glDisable", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 127usize, "glDisableVertexArrayAttrib", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 128usize, "glDisableVertexAttribArray", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 129usize, "glDisablei", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 130usize, "glDispatchCompute", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 131usize, "glDispatchComputeIndirect", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 132usize, "glDrawArrays", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 133usize, "glDrawArraysIndirect", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 134usize, "glDrawArraysInstanced", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 135usize, "glDrawArraysInstancedBaseInstance", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 136usize, "glDrawBuffer", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 137usize, "glDrawBuffers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 138usize, "glDrawElements", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 139usize, "glDrawElementsBaseVertex", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 140usize, "glDrawElementsIndirect", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 141usize, "glDrawElementsInstanced", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 142usize, "glDrawElementsInstancedBaseInstance", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 143usize, "glDrawElementsInstancedBaseVertex", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 144usize, "glDrawElementsInstancedBaseVertexBaseInstance", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 145usize, "glDrawRangeElements", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 146usize, "glDrawRangeElementsBaseVertex", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 147usize, "glDrawTransformFeedback", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 148usize, "glDrawTransformFeedbackInstanced", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 149usize, "glDrawTransformFeedbackStream", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 150usize, "glDrawTransformFeedbackStreamInstanced", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 151usize, "glEnable", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 152usize, "glEnableVertexArrayAttrib", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 153usize, "glEnableVertexAttribArray", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 154usize, "glEnablei", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 155usize, "glEndConditionalRender", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 156usize, "glEndQuery", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 157usize, "glEndQueryIndexed", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 158usize, "glEndTransformFeedback", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 159usize, "glFenceSync", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 160usize, "glFinish", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 161usize, "glFlush", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 162usize, "glFlushMappedBufferRange", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 163usize, "glFlushMappedNamedBufferRange", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 164usize, "glFramebufferParameteri", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 165usize, "glFramebufferRenderbuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 166usize, "glFramebufferTexture", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 167usize, "glFramebufferTexture1D", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 168usize, "glFramebufferTexture2D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 169usize, "glFramebufferTexture3D", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 170usize, "glFramebufferTextureLayer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 171usize, "glFrontFace", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 172usize, "glGenBuffers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 173usize, "glGenFramebuffers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 174usize, "glGenProgramPipelines", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 175usize, "glGenQueries", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 176usize, "glGenRenderbuffers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 177usize, "glGenSamplers", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 178usize, "glGenTextures", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 179usize, "glGenTransformFeedbacks", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 180usize, "glGenVertexArrays", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 181usize, "glGenerateMipmap", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 182usize, "glGenerateTextureMipmap", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 183usize, "glGetActiveAtomicCounterBufferiv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 184usize, "glGetActiveAttrib", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 185usize, "glGetActiveSubroutineName", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 186usize, "glGetActiveSubroutineUniformName", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 187usize, "glGetActiveSubroutineUniformiv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 188usize, "glGetActiveUniform", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 189usize, "glGetActiveUniformBlockName", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 190usize, "glGetActiveUniformBlockiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 191usize, "glGetActiveUniformName", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 192usize, "glGetActiveUniformsiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 193usize, "glGetAttachedShaders", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 194usize, "glGetAttribLocation", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 195usize, "glGetBooleani_v", bit & 55u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 196usize, "glGetBooleanv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 197usize, "glGetBufferParameteri64v", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 198usize, "glGetBufferParameteriv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 199usize, "glGetBufferPointerv", bit & 63u8) != ok { ret Unsupported }
     ret ok
 }
 
-fn load_entries_2(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
-    if fetch(a, resolve, context, 200usize, "glGetBufferSubData", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 201usize, "glGetCompressedTexImage", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 202usize, "glGetCompressedTextureImage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 203usize, "glGetCompressedTextureSubImage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 204usize, "glGetDebugMessageLog", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 205usize, "glGetDoublei_v", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 206usize, "glGetDoublev", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 207usize, "glGetError", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 208usize, "glGetFloati_v", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 209usize, "glGetFloatv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 210usize, "glGetFragDataIndex", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 211usize, "glGetFragDataLocation", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 212usize, "glGetFramebufferAttachmentParameteriv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 213usize, "glGetFramebufferParameteriv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 214usize, "glGetGraphicsResetStatus", bit & 36u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 215usize, "glGetInteger64i_v", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 216usize, "glGetInteger64v", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 217usize, "glGetIntegeri_v", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 218usize, "glGetIntegerv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 219usize, "glGetInternalformati64v", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 220usize, "glGetInternalformativ", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 221usize, "glGetMultisamplefv", bit & 55u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 222usize, "glGetNamedBufferParameteri64v", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 223usize, "glGetNamedBufferParameteriv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 224usize, "glGetNamedBufferPointerv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 225usize, "glGetNamedBufferSubData", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 226usize, "glGetNamedFramebufferAttachmentParameteriv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 227usize, "glGetNamedFramebufferParameteriv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 228usize, "glGetNamedRenderbufferParameteriv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 229usize, "glGetObjectLabel", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 230usize, "glGetObjectPtrLabel", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 231usize, "glGetPointerv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 232usize, "glGetProgramBinary", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 233usize, "glGetProgramInfoLog", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 234usize, "glGetProgramInterfaceiv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 235usize, "glGetProgramPipelineInfoLog", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 236usize, "glGetProgramPipelineiv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 237usize, "glGetProgramResourceIndex", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 238usize, "glGetProgramResourceLocation", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 239usize, "glGetProgramResourceLocationIndex", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 240usize, "glGetProgramResourceName", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 241usize, "glGetProgramResourceiv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 242usize, "glGetProgramStageiv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 243usize, "glGetProgramiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 244usize, "glGetQueryBufferObjecti64v", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 245usize, "glGetQueryBufferObjectiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 246usize, "glGetQueryBufferObjectui64v", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 247usize, "glGetQueryBufferObjectuiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 248usize, "glGetQueryIndexediv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 249usize, "glGetQueryObjecti64v", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 250usize, "glGetQueryObjectiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 251usize, "glGetQueryObjectui64v", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 252usize, "glGetQueryObjectuiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 253usize, "glGetQueryiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 254usize, "glGetRenderbufferParameteriv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 255usize, "glGetSamplerParameterIiv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 256usize, "glGetSamplerParameterIuiv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 257usize, "glGetSamplerParameterfv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 258usize, "glGetSamplerParameteriv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 259usize, "glGetShaderInfoLog", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 260usize, "glGetShaderPrecisionFormat", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 261usize, "glGetShaderSource", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 262usize, "glGetShaderiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 263usize, "glGetString", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 264usize, "glGetStringi", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 265usize, "glGetSubroutineIndex", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 266usize, "glGetSubroutineUniformLocation", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 267usize, "glGetSynciv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 268usize, "glGetTexImage", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 269usize, "glGetTexLevelParameterfv", bit & 55u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 270usize, "glGetTexLevelParameteriv", bit & 55u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 271usize, "glGetTexParameterIiv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 272usize, "glGetTexParameterIuiv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 273usize, "glGetTexParameterfv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 274usize, "glGetTexParameteriv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 275usize, "glGetTextureImage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 276usize, "glGetTextureLevelParameterfv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 277usize, "glGetTextureLevelParameteriv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 278usize, "glGetTextureParameterIiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 279usize, "glGetTextureParameterIuiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 280usize, "glGetTextureParameterfv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 281usize, "glGetTextureParameteriv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 282usize, "glGetTextureSubImage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 283usize, "glGetTransformFeedbackVarying", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 284usize, "glGetTransformFeedbacki64_v", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 285usize, "glGetTransformFeedbacki_v", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 286usize, "glGetTransformFeedbackiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 287usize, "glGetUniformBlockIndex", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 288usize, "glGetUniformIndices", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 289usize, "glGetUniformLocation", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 290usize, "glGetUniformSubroutineuiv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 291usize, "glGetUniformdv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 292usize, "glGetUniformfv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 293usize, "glGetUniformiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 294usize, "glGetUniformuiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 295usize, "glGetVertexArrayIndexed64iv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 296usize, "glGetVertexArrayIndexediv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 297usize, "glGetVertexArrayiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 298usize, "glGetVertexAttribIiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 299usize, "glGetVertexAttribIuiv", bit & 63u8) != ok { ret Unsupported }
+fn load_entries_2(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {
+    if fetch(a, resolve, context, slot, 200usize, "glGetBufferSubData", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 201usize, "glGetCompressedTexImage", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 202usize, "glGetCompressedTextureImage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 203usize, "glGetCompressedTextureSubImage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 204usize, "glGetDebugMessageLog", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 205usize, "glGetDoublei_v", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 206usize, "glGetDoublev", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 207usize, "glGetError", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 208usize, "glGetFloati_v", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 209usize, "glGetFloatv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 210usize, "glGetFragDataIndex", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 211usize, "glGetFragDataLocation", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 212usize, "glGetFramebufferAttachmentParameteriv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 213usize, "glGetFramebufferParameteriv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 214usize, "glGetGraphicsResetStatus", bit & 36u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 215usize, "glGetInteger64i_v", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 216usize, "glGetInteger64v", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 217usize, "glGetIntegeri_v", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 218usize, "glGetIntegerv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 219usize, "glGetInternalformati64v", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 220usize, "glGetInternalformativ", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 221usize, "glGetMultisamplefv", bit & 55u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 222usize, "glGetNamedBufferParameteri64v", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 223usize, "glGetNamedBufferParameteriv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 224usize, "glGetNamedBufferPointerv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 225usize, "glGetNamedBufferSubData", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 226usize, "glGetNamedFramebufferAttachmentParameteriv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 227usize, "glGetNamedFramebufferParameteriv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 228usize, "glGetNamedRenderbufferParameteriv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 229usize, "glGetObjectLabel", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 230usize, "glGetObjectPtrLabel", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 231usize, "glGetPointerv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 232usize, "glGetProgramBinary", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 233usize, "glGetProgramInfoLog", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 234usize, "glGetProgramInterfaceiv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 235usize, "glGetProgramPipelineInfoLog", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 236usize, "glGetProgramPipelineiv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 237usize, "glGetProgramResourceIndex", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 238usize, "glGetProgramResourceLocation", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 239usize, "glGetProgramResourceLocationIndex", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 240usize, "glGetProgramResourceName", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 241usize, "glGetProgramResourceiv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 242usize, "glGetProgramStageiv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 243usize, "glGetProgramiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 244usize, "glGetQueryBufferObjecti64v", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 245usize, "glGetQueryBufferObjectiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 246usize, "glGetQueryBufferObjectui64v", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 247usize, "glGetQueryBufferObjectuiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 248usize, "glGetQueryIndexediv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 249usize, "glGetQueryObjecti64v", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 250usize, "glGetQueryObjectiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 251usize, "glGetQueryObjectui64v", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 252usize, "glGetQueryObjectuiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 253usize, "glGetQueryiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 254usize, "glGetRenderbufferParameteriv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 255usize, "glGetSamplerParameterIiv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 256usize, "glGetSamplerParameterIuiv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 257usize, "glGetSamplerParameterfv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 258usize, "glGetSamplerParameteriv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 259usize, "glGetShaderInfoLog", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 260usize, "glGetShaderPrecisionFormat", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 261usize, "glGetShaderSource", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 262usize, "glGetShaderiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 263usize, "glGetString", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 264usize, "glGetStringi", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 265usize, "glGetSubroutineIndex", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 266usize, "glGetSubroutineUniformLocation", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 267usize, "glGetSynciv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 268usize, "glGetTexImage", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 269usize, "glGetTexLevelParameterfv", bit & 55u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 270usize, "glGetTexLevelParameteriv", bit & 55u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 271usize, "glGetTexParameterIiv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 272usize, "glGetTexParameterIuiv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 273usize, "glGetTexParameterfv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 274usize, "glGetTexParameteriv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 275usize, "glGetTextureImage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 276usize, "glGetTextureLevelParameterfv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 277usize, "glGetTextureLevelParameteriv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 278usize, "glGetTextureParameterIiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 279usize, "glGetTextureParameterIuiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 280usize, "glGetTextureParameterfv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 281usize, "glGetTextureParameteriv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 282usize, "glGetTextureSubImage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 283usize, "glGetTransformFeedbackVarying", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 284usize, "glGetTransformFeedbacki64_v", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 285usize, "glGetTransformFeedbacki_v", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 286usize, "glGetTransformFeedbackiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 287usize, "glGetUniformBlockIndex", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 288usize, "glGetUniformIndices", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 289usize, "glGetUniformLocation", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 290usize, "glGetUniformSubroutineuiv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 291usize, "glGetUniformdv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 292usize, "glGetUniformfv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 293usize, "glGetUniformiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 294usize, "glGetUniformuiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 295usize, "glGetVertexArrayIndexed64iv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 296usize, "glGetVertexArrayIndexediv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 297usize, "glGetVertexArrayiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 298usize, "glGetVertexAttribIiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 299usize, "glGetVertexAttribIuiv", bit & 63u8) != ok { ret Unsupported }
     ret ok
 }
 
-fn load_entries_3(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
-    if fetch(a, resolve, context, 300usize, "glGetVertexAttribLdv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 301usize, "glGetVertexAttribPointerv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 302usize, "glGetVertexAttribdv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 303usize, "glGetVertexAttribfv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 304usize, "glGetVertexAttribiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 305usize, "glGetnCompressedTexImage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 306usize, "glGetnTexImage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 307usize, "glGetnUniformdv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 308usize, "glGetnUniformfv", bit & 36u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 309usize, "glGetnUniformiv", bit & 36u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 310usize, "glGetnUniformuiv", bit & 36u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 311usize, "glHint", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 312usize, "glInvalidateBufferData", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 313usize, "glInvalidateBufferSubData", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 314usize, "glInvalidateFramebuffer", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 315usize, "glInvalidateNamedFramebufferData", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 316usize, "glInvalidateNamedFramebufferSubData", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 317usize, "glInvalidateSubFramebuffer", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 318usize, "glInvalidateTexImage", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 319usize, "glInvalidateTexSubImage", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 320usize, "glIsBuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 321usize, "glIsEnabled", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 322usize, "glIsEnabledi", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 323usize, "glIsFramebuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 324usize, "glIsProgram", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 325usize, "glIsProgramPipeline", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 326usize, "glIsQuery", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 327usize, "glIsRenderbuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 328usize, "glIsSampler", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 329usize, "glIsShader", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 330usize, "glIsSync", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 331usize, "glIsTexture", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 332usize, "glIsTransformFeedback", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 333usize, "glIsVertexArray", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 334usize, "glLineWidth", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 335usize, "glLinkProgram", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 336usize, "glLogicOp", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 337usize, "glMapBuffer", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 338usize, "glMapBufferRange", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 339usize, "glMapNamedBuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 340usize, "glMapNamedBufferRange", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 341usize, "glMemoryBarrier", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 342usize, "glMemoryBarrierByRegion", bit & 52u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 343usize, "glMinSampleShading", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 344usize, "glMultiDrawArrays", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 345usize, "glMultiDrawArraysIndirect", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 346usize, "glMultiDrawArraysIndirectCount", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 347usize, "glMultiDrawElements", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 348usize, "glMultiDrawElementsBaseVertex", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 349usize, "glMultiDrawElementsIndirect", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 350usize, "glMultiDrawElementsIndirectCount", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 351usize, "glNamedBufferData", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 352usize, "glNamedBufferStorage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 353usize, "glNamedBufferSubData", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 354usize, "glNamedFramebufferDrawBuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 355usize, "glNamedFramebufferDrawBuffers", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 356usize, "glNamedFramebufferParameteri", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 357usize, "glNamedFramebufferReadBuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 358usize, "glNamedFramebufferRenderbuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 359usize, "glNamedFramebufferTexture", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 360usize, "glNamedFramebufferTextureLayer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 361usize, "glNamedRenderbufferStorage", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 362usize, "glNamedRenderbufferStorageMultisample", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 363usize, "glObjectLabel", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 364usize, "glObjectPtrLabel", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 365usize, "glPatchParameterfv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 366usize, "glPatchParameteri", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 367usize, "glPauseTransformFeedback", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 368usize, "glPixelStoref", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 369usize, "glPixelStorei", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 370usize, "glPointParameterf", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 371usize, "glPointParameterfv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 372usize, "glPointParameteri", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 373usize, "glPointParameteriv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 374usize, "glPointSize", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 375usize, "glPolygonMode", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 376usize, "glPolygonOffset", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 377usize, "glPolygonOffsetClamp", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 378usize, "glPopDebugGroup", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 379usize, "glPrimitiveBoundingBox", bit & 32u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 380usize, "glPrimitiveRestartIndex", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 381usize, "glProgramBinary", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 382usize, "glProgramParameteri", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 383usize, "glProgramUniform1d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 384usize, "glProgramUniform1dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 385usize, "glProgramUniform1f", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 386usize, "glProgramUniform1fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 387usize, "glProgramUniform1i", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 388usize, "glProgramUniform1iv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 389usize, "glProgramUniform1ui", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 390usize, "glProgramUniform1uiv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 391usize, "glProgramUniform2d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 392usize, "glProgramUniform2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 393usize, "glProgramUniform2f", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 394usize, "glProgramUniform2fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 395usize, "glProgramUniform2i", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 396usize, "glProgramUniform2iv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 397usize, "glProgramUniform2ui", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 398usize, "glProgramUniform2uiv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 399usize, "glProgramUniform3d", bit & 6u8) != ok { ret Unsupported }
+fn load_entries_3(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {
+    if fetch(a, resolve, context, slot, 300usize, "glGetVertexAttribLdv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 301usize, "glGetVertexAttribPointerv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 302usize, "glGetVertexAttribdv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 303usize, "glGetVertexAttribfv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 304usize, "glGetVertexAttribiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 305usize, "glGetnCompressedTexImage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 306usize, "glGetnTexImage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 307usize, "glGetnUniformdv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 308usize, "glGetnUniformfv", bit & 36u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 309usize, "glGetnUniformiv", bit & 36u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 310usize, "glGetnUniformuiv", bit & 36u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 311usize, "glHint", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 312usize, "glInvalidateBufferData", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 313usize, "glInvalidateBufferSubData", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 314usize, "glInvalidateFramebuffer", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 315usize, "glInvalidateNamedFramebufferData", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 316usize, "glInvalidateNamedFramebufferSubData", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 317usize, "glInvalidateSubFramebuffer", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 318usize, "glInvalidateTexImage", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 319usize, "glInvalidateTexSubImage", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 320usize, "glIsBuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 321usize, "glIsEnabled", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 322usize, "glIsEnabledi", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 323usize, "glIsFramebuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 324usize, "glIsProgram", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 325usize, "glIsProgramPipeline", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 326usize, "glIsQuery", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 327usize, "glIsRenderbuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 328usize, "glIsSampler", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 329usize, "glIsShader", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 330usize, "glIsSync", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 331usize, "glIsTexture", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 332usize, "glIsTransformFeedback", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 333usize, "glIsVertexArray", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 334usize, "glLineWidth", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 335usize, "glLinkProgram", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 336usize, "glLogicOp", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 337usize, "glMapBuffer", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 338usize, "glMapBufferRange", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 339usize, "glMapNamedBuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 340usize, "glMapNamedBufferRange", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 341usize, "glMemoryBarrier", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 342usize, "glMemoryBarrierByRegion", bit & 52u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 343usize, "glMinSampleShading", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 344usize, "glMultiDrawArrays", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 345usize, "glMultiDrawArraysIndirect", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 346usize, "glMultiDrawArraysIndirectCount", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 347usize, "glMultiDrawElements", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 348usize, "glMultiDrawElementsBaseVertex", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 349usize, "glMultiDrawElementsIndirect", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 350usize, "glMultiDrawElementsIndirectCount", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 351usize, "glNamedBufferData", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 352usize, "glNamedBufferStorage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 353usize, "glNamedBufferSubData", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 354usize, "glNamedFramebufferDrawBuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 355usize, "glNamedFramebufferDrawBuffers", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 356usize, "glNamedFramebufferParameteri", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 357usize, "glNamedFramebufferReadBuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 358usize, "glNamedFramebufferRenderbuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 359usize, "glNamedFramebufferTexture", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 360usize, "glNamedFramebufferTextureLayer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 361usize, "glNamedRenderbufferStorage", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 362usize, "glNamedRenderbufferStorageMultisample", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 363usize, "glObjectLabel", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 364usize, "glObjectPtrLabel", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 365usize, "glPatchParameterfv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 366usize, "glPatchParameteri", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 367usize, "glPauseTransformFeedback", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 368usize, "glPixelStoref", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 369usize, "glPixelStorei", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 370usize, "glPointParameterf", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 371usize, "glPointParameterfv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 372usize, "glPointParameteri", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 373usize, "glPointParameteriv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 374usize, "glPointSize", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 375usize, "glPolygonMode", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 376usize, "glPolygonOffset", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 377usize, "glPolygonOffsetClamp", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 378usize, "glPopDebugGroup", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 379usize, "glPrimitiveBoundingBox", bit & 32u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 380usize, "glPrimitiveRestartIndex", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 381usize, "glProgramBinary", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 382usize, "glProgramParameteri", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 383usize, "glProgramUniform1d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 384usize, "glProgramUniform1dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 385usize, "glProgramUniform1f", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 386usize, "glProgramUniform1fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 387usize, "glProgramUniform1i", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 388usize, "glProgramUniform1iv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 389usize, "glProgramUniform1ui", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 390usize, "glProgramUniform1uiv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 391usize, "glProgramUniform2d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 392usize, "glProgramUniform2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 393usize, "glProgramUniform2f", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 394usize, "glProgramUniform2fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 395usize, "glProgramUniform2i", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 396usize, "glProgramUniform2iv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 397usize, "glProgramUniform2ui", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 398usize, "glProgramUniform2uiv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 399usize, "glProgramUniform3d", bit & 6u8) != ok { ret Unsupported }
     ret ok
 }
 
-fn load_entries_4(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
-    if fetch(a, resolve, context, 400usize, "glProgramUniform3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 401usize, "glProgramUniform3f", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 402usize, "glProgramUniform3fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 403usize, "glProgramUniform3i", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 404usize, "glProgramUniform3iv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 405usize, "glProgramUniform3ui", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 406usize, "glProgramUniform3uiv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 407usize, "glProgramUniform4d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 408usize, "glProgramUniform4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 409usize, "glProgramUniform4f", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 410usize, "glProgramUniform4fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 411usize, "glProgramUniform4i", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 412usize, "glProgramUniform4iv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 413usize, "glProgramUniform4ui", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 414usize, "glProgramUniform4uiv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 415usize, "glProgramUniformMatrix2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 416usize, "glProgramUniformMatrix2fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 417usize, "glProgramUniformMatrix2x3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 418usize, "glProgramUniformMatrix2x3fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 419usize, "glProgramUniformMatrix2x4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 420usize, "glProgramUniformMatrix2x4fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 421usize, "glProgramUniformMatrix3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 422usize, "glProgramUniformMatrix3fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 423usize, "glProgramUniformMatrix3x2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 424usize, "glProgramUniformMatrix3x2fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 425usize, "glProgramUniformMatrix3x4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 426usize, "glProgramUniformMatrix3x4fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 427usize, "glProgramUniformMatrix4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 428usize, "glProgramUniformMatrix4fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 429usize, "glProgramUniformMatrix4x2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 430usize, "glProgramUniformMatrix4x2fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 431usize, "glProgramUniformMatrix4x3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 432usize, "glProgramUniformMatrix4x3fv", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 433usize, "glProvokingVertex", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 434usize, "glPushDebugGroup", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 435usize, "glQueryCounter", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 436usize, "glReadBuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 437usize, "glReadPixels", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 438usize, "glReadnPixels", bit & 36u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 439usize, "glReleaseShaderCompiler", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 440usize, "glRenderbufferStorage", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 441usize, "glRenderbufferStorageMultisample", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 442usize, "glResumeTransformFeedback", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 443usize, "glSampleCoverage", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 444usize, "glSampleMaski", bit & 55u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 445usize, "glSamplerParameterIiv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 446usize, "glSamplerParameterIuiv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 447usize, "glSamplerParameterf", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 448usize, "glSamplerParameterfv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 449usize, "glSamplerParameteri", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 450usize, "glSamplerParameteriv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 451usize, "glScissor", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 452usize, "glScissorArrayv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 453usize, "glScissorIndexed", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 454usize, "glScissorIndexedv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 455usize, "glShaderBinary", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 456usize, "glShaderSource", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 457usize, "glShaderStorageBlockBinding", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 458usize, "glSpecializeShader", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 459usize, "glStencilFunc", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 460usize, "glStencilFuncSeparate", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 461usize, "glStencilMask", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 462usize, "glStencilMaskSeparate", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 463usize, "glStencilOp", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 464usize, "glStencilOpSeparate", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 465usize, "glTexBuffer", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 466usize, "glTexBufferRange", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 467usize, "glTexImage1D", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 468usize, "glTexImage2D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 469usize, "glTexImage2DMultisample", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 470usize, "glTexImage3D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 471usize, "glTexImage3DMultisample", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 472usize, "glTexParameterIiv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 473usize, "glTexParameterIuiv", bit & 39u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 474usize, "glTexParameterf", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 475usize, "glTexParameterfv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 476usize, "glTexParameteri", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 477usize, "glTexParameteriv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 478usize, "glTexStorage1D", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 479usize, "glTexStorage2D", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 480usize, "glTexStorage2DMultisample", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 481usize, "glTexStorage3D", bit & 62u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 482usize, "glTexStorage3DMultisample", bit & 38u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 483usize, "glTexSubImage1D", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 484usize, "glTexSubImage2D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 485usize, "glTexSubImage3D", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 486usize, "glTextureBarrier", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 487usize, "glTextureBuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 488usize, "glTextureBufferRange", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 489usize, "glTextureParameterIiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 490usize, "glTextureParameterIuiv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 491usize, "glTextureParameterf", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 492usize, "glTextureParameterfv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 493usize, "glTextureParameteri", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 494usize, "glTextureParameteriv", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 495usize, "glTextureStorage1D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 496usize, "glTextureStorage2D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 497usize, "glTextureStorage2DMultisample", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 498usize, "glTextureStorage3D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 499usize, "glTextureStorage3DMultisample", bit & 4u8) != ok { ret Unsupported }
+fn load_entries_4(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {
+    if fetch(a, resolve, context, slot, 400usize, "glProgramUniform3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 401usize, "glProgramUniform3f", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 402usize, "glProgramUniform3fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 403usize, "glProgramUniform3i", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 404usize, "glProgramUniform3iv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 405usize, "glProgramUniform3ui", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 406usize, "glProgramUniform3uiv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 407usize, "glProgramUniform4d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 408usize, "glProgramUniform4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 409usize, "glProgramUniform4f", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 410usize, "glProgramUniform4fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 411usize, "glProgramUniform4i", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 412usize, "glProgramUniform4iv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 413usize, "glProgramUniform4ui", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 414usize, "glProgramUniform4uiv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 415usize, "glProgramUniformMatrix2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 416usize, "glProgramUniformMatrix2fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 417usize, "glProgramUniformMatrix2x3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 418usize, "glProgramUniformMatrix2x3fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 419usize, "glProgramUniformMatrix2x4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 420usize, "glProgramUniformMatrix2x4fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 421usize, "glProgramUniformMatrix3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 422usize, "glProgramUniformMatrix3fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 423usize, "glProgramUniformMatrix3x2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 424usize, "glProgramUniformMatrix3x2fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 425usize, "glProgramUniformMatrix3x4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 426usize, "glProgramUniformMatrix3x4fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 427usize, "glProgramUniformMatrix4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 428usize, "glProgramUniformMatrix4fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 429usize, "glProgramUniformMatrix4x2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 430usize, "glProgramUniformMatrix4x2fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 431usize, "glProgramUniformMatrix4x3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 432usize, "glProgramUniformMatrix4x3fv", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 433usize, "glProvokingVertex", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 434usize, "glPushDebugGroup", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 435usize, "glQueryCounter", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 436usize, "glReadBuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 437usize, "glReadPixels", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 438usize, "glReadnPixels", bit & 36u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 439usize, "glReleaseShaderCompiler", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 440usize, "glRenderbufferStorage", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 441usize, "glRenderbufferStorageMultisample", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 442usize, "glResumeTransformFeedback", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 443usize, "glSampleCoverage", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 444usize, "glSampleMaski", bit & 55u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 445usize, "glSamplerParameterIiv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 446usize, "glSamplerParameterIuiv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 447usize, "glSamplerParameterf", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 448usize, "glSamplerParameterfv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 449usize, "glSamplerParameteri", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 450usize, "glSamplerParameteriv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 451usize, "glScissor", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 452usize, "glScissorArrayv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 453usize, "glScissorIndexed", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 454usize, "glScissorIndexedv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 455usize, "glShaderBinary", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 456usize, "glShaderSource", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 457usize, "glShaderStorageBlockBinding", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 458usize, "glSpecializeShader", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 459usize, "glStencilFunc", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 460usize, "glStencilFuncSeparate", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 461usize, "glStencilMask", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 462usize, "glStencilMaskSeparate", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 463usize, "glStencilOp", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 464usize, "glStencilOpSeparate", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 465usize, "glTexBuffer", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 466usize, "glTexBufferRange", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 467usize, "glTexImage1D", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 468usize, "glTexImage2D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 469usize, "glTexImage2DMultisample", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 470usize, "glTexImage3D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 471usize, "glTexImage3DMultisample", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 472usize, "glTexParameterIiv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 473usize, "glTexParameterIuiv", bit & 39u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 474usize, "glTexParameterf", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 475usize, "glTexParameterfv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 476usize, "glTexParameteri", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 477usize, "glTexParameteriv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 478usize, "glTexStorage1D", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 479usize, "glTexStorage2D", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 480usize, "glTexStorage2DMultisample", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 481usize, "glTexStorage3D", bit & 62u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 482usize, "glTexStorage3DMultisample", bit & 38u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 483usize, "glTexSubImage1D", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 484usize, "glTexSubImage2D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 485usize, "glTexSubImage3D", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 486usize, "glTextureBarrier", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 487usize, "glTextureBuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 488usize, "glTextureBufferRange", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 489usize, "glTextureParameterIiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 490usize, "glTextureParameterIuiv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 491usize, "glTextureParameterf", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 492usize, "glTextureParameterfv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 493usize, "glTextureParameteri", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 494usize, "glTextureParameteriv", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 495usize, "glTextureStorage1D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 496usize, "glTextureStorage2D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 497usize, "glTextureStorage2DMultisample", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 498usize, "glTextureStorage3D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 499usize, "glTextureStorage3DMultisample", bit & 4u8) != ok { ret Unsupported }
     ret ok
 }
 
-fn load_entries_5(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
-    if fetch(a, resolve, context, 500usize, "glTextureSubImage1D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 501usize, "glTextureSubImage2D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 502usize, "glTextureSubImage3D", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 503usize, "glTextureView", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 504usize, "glTransformFeedbackBufferBase", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 505usize, "glTransformFeedbackBufferRange", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 506usize, "glTransformFeedbackVaryings", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 507usize, "glUniform1d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 508usize, "glUniform1dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 509usize, "glUniform1f", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 510usize, "glUniform1fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 511usize, "glUniform1i", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 512usize, "glUniform1iv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 513usize, "glUniform1ui", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 514usize, "glUniform1uiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 515usize, "glUniform2d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 516usize, "glUniform2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 517usize, "glUniform2f", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 518usize, "glUniform2fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 519usize, "glUniform2i", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 520usize, "glUniform2iv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 521usize, "glUniform2ui", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 522usize, "glUniform2uiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 523usize, "glUniform3d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 524usize, "glUniform3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 525usize, "glUniform3f", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 526usize, "glUniform3fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 527usize, "glUniform3i", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 528usize, "glUniform3iv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 529usize, "glUniform3ui", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 530usize, "glUniform3uiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 531usize, "glUniform4d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 532usize, "glUniform4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 533usize, "glUniform4f", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 534usize, "glUniform4fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 535usize, "glUniform4i", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 536usize, "glUniform4iv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 537usize, "glUniform4ui", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 538usize, "glUniform4uiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 539usize, "glUniformBlockBinding", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 540usize, "glUniformMatrix2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 541usize, "glUniformMatrix2fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 542usize, "glUniformMatrix2x3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 543usize, "glUniformMatrix2x3fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 544usize, "glUniformMatrix2x4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 545usize, "glUniformMatrix2x4fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 546usize, "glUniformMatrix3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 547usize, "glUniformMatrix3fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 548usize, "glUniformMatrix3x2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 549usize, "glUniformMatrix3x2fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 550usize, "glUniformMatrix3x4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 551usize, "glUniformMatrix3x4fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 552usize, "glUniformMatrix4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 553usize, "glUniformMatrix4fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 554usize, "glUniformMatrix4x2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 555usize, "glUniformMatrix4x2fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 556usize, "glUniformMatrix4x3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 557usize, "glUniformMatrix4x3fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 558usize, "glUniformSubroutinesuiv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 559usize, "glUnmapBuffer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 560usize, "glUnmapNamedBuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 561usize, "glUseProgram", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 562usize, "glUseProgramStages", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 563usize, "glValidateProgram", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 564usize, "glValidateProgramPipeline", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 565usize, "glVertexArrayAttribBinding", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 566usize, "glVertexArrayAttribFormat", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 567usize, "glVertexArrayAttribIFormat", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 568usize, "glVertexArrayAttribLFormat", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 569usize, "glVertexArrayBindingDivisor", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 570usize, "glVertexArrayElementBuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 571usize, "glVertexArrayVertexBuffer", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 572usize, "glVertexArrayVertexBuffers", bit & 4u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 573usize, "glVertexAttrib1d", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 574usize, "glVertexAttrib1dv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 575usize, "glVertexAttrib1f", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 576usize, "glVertexAttrib1fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 577usize, "glVertexAttrib1s", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 578usize, "glVertexAttrib1sv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 579usize, "glVertexAttrib2d", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 580usize, "glVertexAttrib2dv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 581usize, "glVertexAttrib2f", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 582usize, "glVertexAttrib2fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 583usize, "glVertexAttrib2s", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 584usize, "glVertexAttrib2sv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 585usize, "glVertexAttrib3d", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 586usize, "glVertexAttrib3dv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 587usize, "glVertexAttrib3f", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 588usize, "glVertexAttrib3fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 589usize, "glVertexAttrib3s", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 590usize, "glVertexAttrib3sv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 591usize, "glVertexAttrib4Nbv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 592usize, "glVertexAttrib4Niv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 593usize, "glVertexAttrib4Nsv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 594usize, "glVertexAttrib4Nub", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 595usize, "glVertexAttrib4Nubv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 596usize, "glVertexAttrib4Nuiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 597usize, "glVertexAttrib4Nusv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 598usize, "glVertexAttrib4bv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 599usize, "glVertexAttrib4d", bit & 7u8) != ok { ret Unsupported }
+fn load_entries_5(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {
+    if fetch(a, resolve, context, slot, 500usize, "glTextureSubImage1D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 501usize, "glTextureSubImage2D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 502usize, "glTextureSubImage3D", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 503usize, "glTextureView", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 504usize, "glTransformFeedbackBufferBase", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 505usize, "glTransformFeedbackBufferRange", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 506usize, "glTransformFeedbackVaryings", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 507usize, "glUniform1d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 508usize, "glUniform1dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 509usize, "glUniform1f", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 510usize, "glUniform1fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 511usize, "glUniform1i", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 512usize, "glUniform1iv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 513usize, "glUniform1ui", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 514usize, "glUniform1uiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 515usize, "glUniform2d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 516usize, "glUniform2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 517usize, "glUniform2f", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 518usize, "glUniform2fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 519usize, "glUniform2i", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 520usize, "glUniform2iv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 521usize, "glUniform2ui", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 522usize, "glUniform2uiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 523usize, "glUniform3d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 524usize, "glUniform3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 525usize, "glUniform3f", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 526usize, "glUniform3fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 527usize, "glUniform3i", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 528usize, "glUniform3iv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 529usize, "glUniform3ui", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 530usize, "glUniform3uiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 531usize, "glUniform4d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 532usize, "glUniform4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 533usize, "glUniform4f", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 534usize, "glUniform4fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 535usize, "glUniform4i", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 536usize, "glUniform4iv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 537usize, "glUniform4ui", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 538usize, "glUniform4uiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 539usize, "glUniformBlockBinding", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 540usize, "glUniformMatrix2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 541usize, "glUniformMatrix2fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 542usize, "glUniformMatrix2x3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 543usize, "glUniformMatrix2x3fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 544usize, "glUniformMatrix2x4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 545usize, "glUniformMatrix2x4fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 546usize, "glUniformMatrix3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 547usize, "glUniformMatrix3fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 548usize, "glUniformMatrix3x2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 549usize, "glUniformMatrix3x2fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 550usize, "glUniformMatrix3x4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 551usize, "glUniformMatrix3x4fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 552usize, "glUniformMatrix4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 553usize, "glUniformMatrix4fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 554usize, "glUniformMatrix4x2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 555usize, "glUniformMatrix4x2fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 556usize, "glUniformMatrix4x3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 557usize, "glUniformMatrix4x3fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 558usize, "glUniformSubroutinesuiv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 559usize, "glUnmapBuffer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 560usize, "glUnmapNamedBuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 561usize, "glUseProgram", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 562usize, "glUseProgramStages", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 563usize, "glValidateProgram", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 564usize, "glValidateProgramPipeline", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 565usize, "glVertexArrayAttribBinding", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 566usize, "glVertexArrayAttribFormat", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 567usize, "glVertexArrayAttribIFormat", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 568usize, "glVertexArrayAttribLFormat", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 569usize, "glVertexArrayBindingDivisor", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 570usize, "glVertexArrayElementBuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 571usize, "glVertexArrayVertexBuffer", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 572usize, "glVertexArrayVertexBuffers", bit & 4u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 573usize, "glVertexAttrib1d", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 574usize, "glVertexAttrib1dv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 575usize, "glVertexAttrib1f", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 576usize, "glVertexAttrib1fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 577usize, "glVertexAttrib1s", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 578usize, "glVertexAttrib1sv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 579usize, "glVertexAttrib2d", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 580usize, "glVertexAttrib2dv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 581usize, "glVertexAttrib2f", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 582usize, "glVertexAttrib2fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 583usize, "glVertexAttrib2s", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 584usize, "glVertexAttrib2sv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 585usize, "glVertexAttrib3d", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 586usize, "glVertexAttrib3dv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 587usize, "glVertexAttrib3f", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 588usize, "glVertexAttrib3fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 589usize, "glVertexAttrib3s", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 590usize, "glVertexAttrib3sv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 591usize, "glVertexAttrib4Nbv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 592usize, "glVertexAttrib4Niv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 593usize, "glVertexAttrib4Nsv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 594usize, "glVertexAttrib4Nub", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 595usize, "glVertexAttrib4Nubv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 596usize, "glVertexAttrib4Nuiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 597usize, "glVertexAttrib4Nusv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 598usize, "glVertexAttrib4bv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 599usize, "glVertexAttrib4d", bit & 7u8) != ok { ret Unsupported }
     ret ok
 }
 
-fn load_entries_6(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
-    if fetch(a, resolve, context, 600usize, "glVertexAttrib4dv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 601usize, "glVertexAttrib4f", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 602usize, "glVertexAttrib4fv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 603usize, "glVertexAttrib4iv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 604usize, "glVertexAttrib4s", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 605usize, "glVertexAttrib4sv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 606usize, "glVertexAttrib4ubv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 607usize, "glVertexAttrib4uiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 608usize, "glVertexAttrib4usv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 609usize, "glVertexAttribBinding", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 610usize, "glVertexAttribDivisor", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 611usize, "glVertexAttribFormat", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 612usize, "glVertexAttribI1i", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 613usize, "glVertexAttribI1iv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 614usize, "glVertexAttribI1ui", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 615usize, "glVertexAttribI1uiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 616usize, "glVertexAttribI2i", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 617usize, "glVertexAttribI2iv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 618usize, "glVertexAttribI2ui", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 619usize, "glVertexAttribI2uiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 620usize, "glVertexAttribI3i", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 621usize, "glVertexAttribI3iv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 622usize, "glVertexAttribI3ui", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 623usize, "glVertexAttribI3uiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 624usize, "glVertexAttribI4bv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 625usize, "glVertexAttribI4i", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 626usize, "glVertexAttribI4iv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 627usize, "glVertexAttribI4sv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 628usize, "glVertexAttribI4ubv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 629usize, "glVertexAttribI4ui", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 630usize, "glVertexAttribI4uiv", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 631usize, "glVertexAttribI4usv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 632usize, "glVertexAttribIFormat", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 633usize, "glVertexAttribIPointer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 634usize, "glVertexAttribL1d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 635usize, "glVertexAttribL1dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 636usize, "glVertexAttribL2d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 637usize, "glVertexAttribL2dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 638usize, "glVertexAttribL3d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 639usize, "glVertexAttribL3dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 640usize, "glVertexAttribL4d", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 641usize, "glVertexAttribL4dv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 642usize, "glVertexAttribLFormat", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 643usize, "glVertexAttribLPointer", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 644usize, "glVertexAttribP1ui", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 645usize, "glVertexAttribP1uiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 646usize, "glVertexAttribP2ui", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 647usize, "glVertexAttribP2uiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 648usize, "glVertexAttribP3ui", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 649usize, "glVertexAttribP3uiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 650usize, "glVertexAttribP4ui", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 651usize, "glVertexAttribP4uiv", bit & 7u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 652usize, "glVertexAttribPointer", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 653usize, "glVertexBindingDivisor", bit & 54u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 654usize, "glViewport", bit & 63u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 655usize, "glViewportArrayv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 656usize, "glViewportIndexedf", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 657usize, "glViewportIndexedfv", bit & 6u8) != ok { ret Unsupported }
-    if fetch(a, resolve, context, 658usize, "glWaitSync", bit & 63u8) != ok { ret Unsupported }
+fn load_entries_6(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {
+    if fetch(a, resolve, context, slot, 600usize, "glVertexAttrib4dv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 601usize, "glVertexAttrib4f", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 602usize, "glVertexAttrib4fv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 603usize, "glVertexAttrib4iv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 604usize, "glVertexAttrib4s", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 605usize, "glVertexAttrib4sv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 606usize, "glVertexAttrib4ubv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 607usize, "glVertexAttrib4uiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 608usize, "glVertexAttrib4usv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 609usize, "glVertexAttribBinding", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 610usize, "glVertexAttribDivisor", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 611usize, "glVertexAttribFormat", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 612usize, "glVertexAttribI1i", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 613usize, "glVertexAttribI1iv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 614usize, "glVertexAttribI1ui", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 615usize, "glVertexAttribI1uiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 616usize, "glVertexAttribI2i", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 617usize, "glVertexAttribI2iv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 618usize, "glVertexAttribI2ui", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 619usize, "glVertexAttribI2uiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 620usize, "glVertexAttribI3i", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 621usize, "glVertexAttribI3iv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 622usize, "glVertexAttribI3ui", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 623usize, "glVertexAttribI3uiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 624usize, "glVertexAttribI4bv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 625usize, "glVertexAttribI4i", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 626usize, "glVertexAttribI4iv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 627usize, "glVertexAttribI4sv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 628usize, "glVertexAttribI4ubv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 629usize, "glVertexAttribI4ui", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 630usize, "glVertexAttribI4uiv", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 631usize, "glVertexAttribI4usv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 632usize, "glVertexAttribIFormat", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 633usize, "glVertexAttribIPointer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 634usize, "glVertexAttribL1d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 635usize, "glVertexAttribL1dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 636usize, "glVertexAttribL2d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 637usize, "glVertexAttribL2dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 638usize, "glVertexAttribL3d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 639usize, "glVertexAttribL3dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 640usize, "glVertexAttribL4d", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 641usize, "glVertexAttribL4dv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 642usize, "glVertexAttribLFormat", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 643usize, "glVertexAttribLPointer", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 644usize, "glVertexAttribP1ui", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 645usize, "glVertexAttribP1uiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 646usize, "glVertexAttribP2ui", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 647usize, "glVertexAttribP2uiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 648usize, "glVertexAttribP3ui", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 649usize, "glVertexAttribP3uiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 650usize, "glVertexAttribP4ui", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 651usize, "glVertexAttribP4uiv", bit & 7u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 652usize, "glVertexAttribPointer", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 653usize, "glVertexBindingDivisor", bit & 54u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 654usize, "glViewport", bit & 63u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 655usize, "glViewportArrayv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 656usize, "glViewportIndexedf", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 657usize, "glViewportIndexedfv", bit & 6u8) != ok { ret Unsupported }
+    if fetch(a, resolve, context, slot, 658usize, "glWaitSync", bit & 63u8) != ok { ret Unsupported }
     ret ok
 }
 
-fn load_entries(a: *mem.Arena, resolve: Resolve, context: usize, bit: u8) -> err {
-    if load_entries_0(a, resolve, context, bit) != ok { ret Unsupported }
-    if load_entries_1(a, resolve, context, bit) != ok { ret Unsupported }
-    if load_entries_2(a, resolve, context, bit) != ok { ret Unsupported }
-    if load_entries_3(a, resolve, context, bit) != ok { ret Unsupported }
-    if load_entries_4(a, resolve, context, bit) != ok { ret Unsupported }
-    if load_entries_5(a, resolve, context, bit) != ok { ret Unsupported }
-    if load_entries_6(a, resolve, context, bit) != ok { ret Unsupported }
+fn load_entries(a: *mem.Arena, resolve: Resolve, context: usize, slot: usize, bit: u8) -> err {
+    if load_entries_0(a, resolve, context, slot, bit) != ok { ret Unsupported }
+    if load_entries_1(a, resolve, context, slot, bit) != ok { ret Unsupported }
+    if load_entries_2(a, resolve, context, slot, bit) != ok { ret Unsupported }
+    if load_entries_3(a, resolve, context, slot, bit) != ok { ret Unsupported }
+    if load_entries_4(a, resolve, context, slot, bit) != ok { ret Unsupported }
+    if load_entries_5(a, resolve, context, slot, bit) != ok { ret Unsupported }
+    if load_entries_6(a, resolve, context, slot, bit) != ok { ret Unsupported }
     ret ok
 }
 
 fn active_shader_program(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[0usize]
+    pun.bits = address(0usize)
     pun.function(p0, p1)
 }
 fn active_texture(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[1usize]
+    pun.bits = address(1usize)
     pun.function(p0)
 }
 fn attach_shader(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[2usize]
+    pun.bits = address(2usize)
     pun.function(p0, p1)
 }
 fn begin_conditional_render(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[3usize]
+    pun.bits = address(3usize)
     pun.function(p0, p1)
 }
 fn begin_query(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[4usize]
+    pun.bits = address(4usize)
     pun.function(p0, p1)
 }
 fn begin_query_indexed(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[5usize]
+    pun.bits = address(5usize)
     pun.function(p0, p1, p2)
 }
 fn begin_transform_feedback(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[6usize]
+    pun.bits = address(6usize)
     pun.function(p0)
 }
 fn bind_attrib_location(p0: u32, p1: u32, p2: *const u8) {
     var pun: U3 = zero
-    pun.bits = procs[7usize]
+    pun.bits = address(7usize)
     pun.function(p0, p1, p2)
 }
 fn bind_buffer(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[8usize]
+    pun.bits = address(8usize)
     pun.function(p0, p1)
 }
 fn bind_buffer_base(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[9usize]
+    pun.bits = address(9usize)
     pun.function(p0, p1, p2)
 }
 fn bind_buffer_range(p0: u32, p1: u32, p2: u32, p3: isize, p4: isize) {
     var pun: U4 = zero
-    pun.bits = procs[10usize]
+    pun.bits = address(10usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn bind_buffers_base(p0: u32, p1: u32, p2: i32, p3: *const u32) {
     var pun: U5 = zero
-    pun.bits = procs[11usize]
+    pun.bits = address(11usize)
     pun.function(p0, p1, p2, p3)
 }
 fn bind_buffers_range(p0: u32, p1: u32, p2: i32, p3: *const u32, p4: *const isize, p5: *const isize) {
     var pun: U6 = zero
-    pun.bits = procs[12usize]
+    pun.bits = address(12usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn bind_frag_data_location(p0: u32, p1: u32, p2: *const u8) {
     var pun: U3 = zero
-    pun.bits = procs[13usize]
+    pun.bits = address(13usize)
     pun.function(p0, p1, p2)
 }
 fn bind_frag_data_location_indexed(p0: u32, p1: u32, p2: u32, p3: *const u8) {
     var pun: U7 = zero
-    pun.bits = procs[14usize]
+    pun.bits = address(14usize)
     pun.function(p0, p1, p2, p3)
 }
 fn bind_framebuffer(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[15usize]
+    pun.bits = address(15usize)
     pun.function(p0, p1)
 }
 fn bind_image_texture(p0: u32, p1: u32, p2: i32, p3: u8, p4: i32, p5: u32, p6: u32) {
     var pun: U8 = zero
-    pun.bits = procs[16usize]
+    pun.bits = address(16usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn bind_image_textures(p0: u32, p1: i32, p2: *const u32) {
     var pun: U9 = zero
-    pun.bits = procs[17usize]
+    pun.bits = address(17usize)
     pun.function(p0, p1, p2)
 }
 fn bind_program_pipeline(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[18usize]
+    pun.bits = address(18usize)
     pun.function(p0)
 }
 fn bind_renderbuffer(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[19usize]
+    pun.bits = address(19usize)
     pun.function(p0, p1)
 }
 fn bind_sampler(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[20usize]
+    pun.bits = address(20usize)
     pun.function(p0, p1)
 }
 fn bind_samplers(p0: u32, p1: i32, p2: *const u32) {
     var pun: U9 = zero
-    pun.bits = procs[21usize]
+    pun.bits = address(21usize)
     pun.function(p0, p1, p2)
 }
 fn bind_texture(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[22usize]
+    pun.bits = address(22usize)
     pun.function(p0, p1)
 }
 fn bind_texture_unit(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[23usize]
+    pun.bits = address(23usize)
     pun.function(p0, p1)
 }
 fn bind_textures(p0: u32, p1: i32, p2: *const u32) {
     var pun: U9 = zero
-    pun.bits = procs[24usize]
+    pun.bits = address(24usize)
     pun.function(p0, p1, p2)
 }
 fn bind_transform_feedback(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[25usize]
+    pun.bits = address(25usize)
     pun.function(p0, p1)
 }
 fn bind_vertex_array(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[26usize]
+    pun.bits = address(26usize)
     pun.function(p0)
 }
 fn bind_vertex_buffer(p0: u32, p1: u32, p2: isize, p3: i32) {
     var pun: U10 = zero
-    pun.bits = procs[27usize]
+    pun.bits = address(27usize)
     pun.function(p0, p1, p2, p3)
 }
 fn bind_vertex_buffers(p0: u32, p1: i32, p2: *const u32, p3: *const isize, p4: *const i32) {
     var pun: U11 = zero
-    pun.bits = procs[28usize]
+    pun.bits = address(28usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn blend_barrier() {
     var pun: U12 = zero
-    pun.bits = procs[29usize]
+    pun.bits = address(29usize)
     pun.function()
 }
 fn blend_color(p0: f32, p1: f32, p2: f32, p3: f32) {
     var pun: U13 = zero
-    pun.bits = procs[30usize]
+    pun.bits = address(30usize)
     pun.function(p0, p1, p2, p3)
 }
 fn blend_equation(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[31usize]
+    pun.bits = address(31usize)
     pun.function(p0)
 }
 fn blend_equation_separate(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[32usize]
+    pun.bits = address(32usize)
     pun.function(p0, p1)
 }
 fn blend_equation_separatei(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[33usize]
+    pun.bits = address(33usize)
     pun.function(p0, p1, p2)
 }
 fn blend_equationi(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[34usize]
+    pun.bits = address(34usize)
     pun.function(p0, p1)
 }
 fn blend_func(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[35usize]
+    pun.bits = address(35usize)
     pun.function(p0, p1)
 }
 fn blend_func_separate(p0: u32, p1: u32, p2: u32, p3: u32) {
     var pun: U14 = zero
-    pun.bits = procs[36usize]
+    pun.bits = address(36usize)
     pun.function(p0, p1, p2, p3)
 }
 fn blend_func_separatei(p0: u32, p1: u32, p2: u32, p3: u32, p4: u32) {
     var pun: U15 = zero
-    pun.bits = procs[37usize]
+    pun.bits = address(37usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn blend_funci(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[38usize]
+    pun.bits = address(38usize)
     pun.function(p0, p1, p2)
 }
 fn blit_framebuffer(p0: i32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: u32, p9: u32) {
     var pun: U16 = zero
-    pun.bits = procs[39usize]
+    pun.bits = address(39usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9)
 }
 fn blit_named_framebuffer(p0: u32, p1: u32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: i32, p9: i32, p10: u32, p11: u32) {
     var pun: U17 = zero
-    pun.bits = procs[40usize]
+    pun.bits = address(40usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11)
 }
 fn buffer_data(p0: u32, p1: isize, p2: *void, p3: u32) {
     var pun: U18 = zero
-    pun.bits = procs[41usize]
+    pun.bits = address(41usize)
     pun.function(p0, p1, p2, p3)
 }
 fn buffer_storage(p0: u32, p1: isize, p2: *void, p3: u32) {
     var pun: U18 = zero
-    pun.bits = procs[42usize]
+    pun.bits = address(42usize)
     pun.function(p0, p1, p2, p3)
 }
 fn buffer_sub_data(p0: u32, p1: isize, p2: isize, p3: *void) {
     var pun: U19 = zero
-    pun.bits = procs[43usize]
+    pun.bits = address(43usize)
     pun.function(p0, p1, p2, p3)
 }
 fn check_framebuffer_status(p0: u32) -> u32 {
     var pun: U20 = zero
-    pun.bits = procs[44usize]
+    pun.bits = address(44usize)
     ret pun.function(p0)
 }
 fn check_named_framebuffer_status(p0: u32, p1: u32) -> u32 {
     var pun: U21 = zero
-    pun.bits = procs[45usize]
+    pun.bits = address(45usize)
     ret pun.function(p0, p1)
 }
 fn clamp_color(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[46usize]
+    pun.bits = address(46usize)
     pun.function(p0, p1)
 }
 fn clear(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[47usize]
+    pun.bits = address(47usize)
     pun.function(p0)
 }
 fn clear_buffer_data(p0: u32, p1: u32, p2: u32, p3: u32, p4: *void) {
     var pun: U22 = zero
-    pun.bits = procs[48usize]
+    pun.bits = address(48usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn clear_buffer_sub_data(p0: u32, p1: u32, p2: isize, p3: isize, p4: u32, p5: u32, p6: *void) {
     var pun: U23 = zero
-    pun.bits = procs[49usize]
+    pun.bits = address(49usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn clear_bufferfi(p0: u32, p1: i32, p2: f32, p3: i32) {
     var pun: U24 = zero
-    pun.bits = procs[50usize]
+    pun.bits = address(50usize)
     pun.function(p0, p1, p2, p3)
 }
 fn clear_bufferfv(p0: u32, p1: i32, p2: *const f32) {
     var pun: U25 = zero
-    pun.bits = procs[51usize]
+    pun.bits = address(51usize)
     pun.function(p0, p1, p2)
 }
 fn clear_bufferiv(p0: u32, p1: i32, p2: *const i32) {
     var pun: U26 = zero
-    pun.bits = procs[52usize]
+    pun.bits = address(52usize)
     pun.function(p0, p1, p2)
 }
 fn clear_bufferuiv(p0: u32, p1: i32, p2: *const u32) {
     var pun: U9 = zero
-    pun.bits = procs[53usize]
+    pun.bits = address(53usize)
     pun.function(p0, p1, p2)
 }
 fn clear_color(p0: f32, p1: f32, p2: f32, p3: f32) {
     var pun: U13 = zero
-    pun.bits = procs[54usize]
+    pun.bits = address(54usize)
     pun.function(p0, p1, p2, p3)
 }
 fn clear_depth(p0: f64) {
     var pun: U27 = zero
-    pun.bits = procs[55usize]
+    pun.bits = address(55usize)
     pun.function(p0)
 }
 fn clear_depthf(p0: f32) {
     var pun: U28 = zero
-    pun.bits = procs[56usize]
+    pun.bits = address(56usize)
     pun.function(p0)
 }
 fn clear_named_buffer_data(p0: u32, p1: u32, p2: u32, p3: u32, p4: *void) {
     var pun: U22 = zero
-    pun.bits = procs[57usize]
+    pun.bits = address(57usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn clear_named_buffer_sub_data(p0: u32, p1: u32, p2: isize, p3: isize, p4: u32, p5: u32, p6: *void) {
     var pun: U23 = zero
-    pun.bits = procs[58usize]
+    pun.bits = address(58usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn clear_named_framebufferfi(p0: u32, p1: u32, p2: i32, p3: f32, p4: i32) {
     var pun: U29 = zero
-    pun.bits = procs[59usize]
+    pun.bits = address(59usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn clear_named_framebufferfv(p0: u32, p1: u32, p2: i32, p3: *const f32) {
     var pun: U30 = zero
-    pun.bits = procs[60usize]
+    pun.bits = address(60usize)
     pun.function(p0, p1, p2, p3)
 }
 fn clear_named_framebufferiv(p0: u32, p1: u32, p2: i32, p3: *const i32) {
     var pun: U31 = zero
-    pun.bits = procs[61usize]
+    pun.bits = address(61usize)
     pun.function(p0, p1, p2, p3)
 }
 fn clear_named_framebufferuiv(p0: u32, p1: u32, p2: i32, p3: *const u32) {
     var pun: U5 = zero
-    pun.bits = procs[62usize]
+    pun.bits = address(62usize)
     pun.function(p0, p1, p2, p3)
 }
 fn clear_stencil(p0: i32) {
     var pun: U32 = zero
-    pun.bits = procs[63usize]
+    pun.bits = address(63usize)
     pun.function(p0)
 }
 fn clear_tex_image(p0: u32, p1: i32, p2: u32, p3: u32, p4: *void) {
     var pun: U33 = zero
-    pun.bits = procs[64usize]
+    pun.bits = address(64usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn clear_tex_sub_image(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: u32, p9: u32, p10: *void) {
     var pun: U34 = zero
-    pun.bits = procs[65usize]
+    pun.bits = address(65usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
 }
 fn client_wait_sync(p0: usize, p1: u32, p2: u64) -> u32 {
     var pun: U35 = zero
-    pun.bits = procs[66usize]
+    pun.bits = address(66usize)
     ret pun.function(p0, p1, p2)
 }
 fn clip_control(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[67usize]
+    pun.bits = address(67usize)
     pun.function(p0, p1)
 }
 fn color_mask(p0: u8, p1: u8, p2: u8, p3: u8) {
     var pun: U36 = zero
-    pun.bits = procs[68usize]
+    pun.bits = address(68usize)
     pun.function(p0, p1, p2, p3)
 }
 fn color_maski(p0: u32, p1: u8, p2: u8, p3: u8, p4: u8) {
     var pun: U37 = zero
-    pun.bits = procs[69usize]
+    pun.bits = address(69usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn compile_shader(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[70usize]
+    pun.bits = address(70usize)
     pun.function(p0)
 }
 fn compressed_tex_image_1d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32, p6: *void) {
     var pun: U38 = zero
-    pun.bits = procs[71usize]
+    pun.bits = address(71usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn compressed_tex_image_2d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32, p6: i32, p7: *void) {
     var pun: U39 = zero
-    pun.bits = procs[72usize]
+    pun.bits = address(72usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn compressed_tex_image_3d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: *void) {
     var pun: U40 = zero
-    pun.bits = procs[73usize]
+    pun.bits = address(73usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8)
 }
 fn compressed_tex_sub_image_1d(p0: u32, p1: i32, p2: i32, p3: i32, p4: u32, p5: i32, p6: *void) {
     var pun: U41 = zero
-    pun.bits = procs[74usize]
+    pun.bits = address(74usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn compressed_tex_sub_image_2d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: u32, p7: i32, p8: *void) {
     var pun: U42 = zero
-    pun.bits = procs[75usize]
+    pun.bits = address(75usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8)
 }
 fn compressed_tex_sub_image_3d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: u32, p9: i32, p10: *void) {
     var pun: U43 = zero
-    pun.bits = procs[76usize]
+    pun.bits = address(76usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
 }
 fn compressed_texture_sub_image_1d(p0: u32, p1: i32, p2: i32, p3: i32, p4: u32, p5: i32, p6: *void) {
     var pun: U41 = zero
-    pun.bits = procs[77usize]
+    pun.bits = address(77usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn compressed_texture_sub_image_2d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: u32, p7: i32, p8: *void) {
     var pun: U42 = zero
-    pun.bits = procs[78usize]
+    pun.bits = address(78usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8)
 }
 fn compressed_texture_sub_image_3d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: u32, p9: i32, p10: *void) {
     var pun: U43 = zero
-    pun.bits = procs[79usize]
+    pun.bits = address(79usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
 }
 fn copy_buffer_sub_data(p0: u32, p1: u32, p2: isize, p3: isize, p4: isize) {
     var pun: U44 = zero
-    pun.bits = procs[80usize]
+    pun.bits = address(80usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn copy_image_sub_data(p0: u32, p1: u32, p2: i32, p3: i32, p4: i32, p5: i32, p6: u32, p7: u32, p8: i32, p9: i32, p10: i32, p11: i32, p12: i32, p13: i32, p14: i32) {
     var pun: U45 = zero
-    pun.bits = procs[81usize]
+    pun.bits = address(81usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14)
 }
 fn copy_named_buffer_sub_data(p0: u32, p1: u32, p2: isize, p3: isize, p4: isize) {
     var pun: U44 = zero
-    pun.bits = procs[82usize]
+    pun.bits = address(82usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn copy_tex_image_1d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32, p6: i32) {
     var pun: U46 = zero
-    pun.bits = procs[83usize]
+    pun.bits = address(83usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn copy_tex_image_2d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32) {
     var pun: U47 = zero
-    pun.bits = procs[84usize]
+    pun.bits = address(84usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn copy_tex_sub_image_1d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32) {
     var pun: U48 = zero
-    pun.bits = procs[85usize]
+    pun.bits = address(85usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn copy_tex_sub_image_2d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32) {
     var pun: U49 = zero
-    pun.bits = procs[86usize]
+    pun.bits = address(86usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn copy_tex_sub_image_3d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: i32) {
     var pun: U50 = zero
-    pun.bits = procs[87usize]
+    pun.bits = address(87usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8)
 }
 fn copy_texture_sub_image_1d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32) {
     var pun: U48 = zero
-    pun.bits = procs[88usize]
+    pun.bits = address(88usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn copy_texture_sub_image_2d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32) {
     var pun: U49 = zero
-    pun.bits = procs[89usize]
+    pun.bits = address(89usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn copy_texture_sub_image_3d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: i32) {
     var pun: U50 = zero
-    pun.bits = procs[90usize]
+    pun.bits = address(90usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8)
 }
 fn create_buffers(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[91usize]
+    pun.bits = address(91usize)
     pun.function(p0, p1)
 }
 fn create_framebuffers(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[92usize]
+    pun.bits = address(92usize)
     pun.function(p0, p1)
 }
 fn create_program() -> u32 {
     var pun: U52 = zero
-    pun.bits = procs[93usize]
+    pun.bits = address(93usize)
     ret pun.function()
 }
 fn create_program_pipelines(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[94usize]
+    pun.bits = address(94usize)
     pun.function(p0, p1)
 }
 fn create_queries(p0: u32, p1: i32, p2: *u32) {
     var pun: U53 = zero
-    pun.bits = procs[95usize]
+    pun.bits = address(95usize)
     pun.function(p0, p1, p2)
 }
 fn create_renderbuffers(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[96usize]
+    pun.bits = address(96usize)
     pun.function(p0, p1)
 }
 fn create_samplers(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[97usize]
+    pun.bits = address(97usize)
     pun.function(p0, p1)
 }
 fn create_shader(p0: u32) -> u32 {
     var pun: U20 = zero
-    pun.bits = procs[98usize]
+    pun.bits = address(98usize)
     ret pun.function(p0)
 }
 fn create_shader_programv(p0: u32, p1: i32, p2: usize) -> u32 {
     var pun: U54 = zero
-    pun.bits = procs[99usize]
+    pun.bits = address(99usize)
     ret pun.function(p0, p1, p2)
 }
 fn create_textures(p0: u32, p1: i32, p2: *u32) {
     var pun: U53 = zero
-    pun.bits = procs[100usize]
+    pun.bits = address(100usize)
     pun.function(p0, p1, p2)
 }
 fn create_transform_feedbacks(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[101usize]
+    pun.bits = address(101usize)
     pun.function(p0, p1)
 }
 fn create_vertex_arrays(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[102usize]
+    pun.bits = address(102usize)
     pun.function(p0, p1)
 }
 fn cull_face(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[103usize]
+    pun.bits = address(103usize)
     pun.function(p0)
 }
 fn debug_message_callback(p0: usize, p1: *void) {
     var pun: U55 = zero
-    pun.bits = procs[104usize]
+    pun.bits = address(104usize)
     pun.function(p0, p1)
 }
 fn debug_message_control(p0: u32, p1: u32, p2: u32, p3: i32, p4: *const u32, p5: u8) {
     var pun: U56 = zero
-    pun.bits = procs[105usize]
+    pun.bits = address(105usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn debug_message_insert(p0: u32, p1: u32, p2: u32, p3: u32, p4: i32, p5: *const u8) {
     var pun: U57 = zero
-    pun.bits = procs[106usize]
+    pun.bits = address(106usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn delete_buffers(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[107usize]
+    pun.bits = address(107usize)
     pun.function(p0, p1)
 }
 fn delete_framebuffers(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[108usize]
+    pun.bits = address(108usize)
     pun.function(p0, p1)
 }
 fn delete_program(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[109usize]
+    pun.bits = address(109usize)
     pun.function(p0)
 }
 fn delete_program_pipelines(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[110usize]
+    pun.bits = address(110usize)
     pun.function(p0, p1)
 }
 fn delete_queries(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[111usize]
+    pun.bits = address(111usize)
     pun.function(p0, p1)
 }
 fn delete_renderbuffers(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[112usize]
+    pun.bits = address(112usize)
     pun.function(p0, p1)
 }
 fn delete_samplers(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[113usize]
+    pun.bits = address(113usize)
     pun.function(p0, p1)
 }
 fn delete_shader(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[114usize]
+    pun.bits = address(114usize)
     pun.function(p0)
 }
 fn delete_sync(p0: usize) {
     var pun: U59 = zero
-    pun.bits = procs[115usize]
+    pun.bits = address(115usize)
     pun.function(p0)
 }
 fn delete_textures(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[116usize]
+    pun.bits = address(116usize)
     pun.function(p0, p1)
 }
 fn delete_transform_feedbacks(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[117usize]
+    pun.bits = address(117usize)
     pun.function(p0, p1)
 }
 fn delete_vertex_arrays(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[118usize]
+    pun.bits = address(118usize)
     pun.function(p0, p1)
 }
 fn depth_func(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[119usize]
+    pun.bits = address(119usize)
     pun.function(p0)
 }
 fn depth_mask(p0: u8) {
     var pun: U60 = zero
-    pun.bits = procs[120usize]
+    pun.bits = address(120usize)
     pun.function(p0)
 }
 fn depth_range(p0: f64, p1: f64) {
     var pun: U61 = zero
-    pun.bits = procs[121usize]
+    pun.bits = address(121usize)
     pun.function(p0, p1)
 }
 fn depth_range_arrayv(p0: u32, p1: i32, p2: *const f64) {
     var pun: U62 = zero
-    pun.bits = procs[122usize]
+    pun.bits = address(122usize)
     pun.function(p0, p1, p2)
 }
 fn depth_range_indexed(p0: u32, p1: f64, p2: f64) {
     var pun: U63 = zero
-    pun.bits = procs[123usize]
+    pun.bits = address(123usize)
     pun.function(p0, p1, p2)
 }
 fn depth_rangef(p0: f32, p1: f32) {
     var pun: U64 = zero
-    pun.bits = procs[124usize]
+    pun.bits = address(124usize)
     pun.function(p0, p1)
 }
 fn detach_shader(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[125usize]
+    pun.bits = address(125usize)
     pun.function(p0, p1)
 }
 fn disable(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[126usize]
+    pun.bits = address(126usize)
     pun.function(p0)
 }
 fn disable_vertex_array_attrib(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[127usize]
+    pun.bits = address(127usize)
     pun.function(p0, p1)
 }
 fn disable_vertex_attrib_array(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[128usize]
+    pun.bits = address(128usize)
     pun.function(p0)
 }
 fn disablei(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[129usize]
+    pun.bits = address(129usize)
     pun.function(p0, p1)
 }
 fn dispatch_compute(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[130usize]
+    pun.bits = address(130usize)
     pun.function(p0, p1, p2)
 }
 fn dispatch_compute_indirect(p0: isize) {
     var pun: U65 = zero
-    pun.bits = procs[131usize]
+    pun.bits = address(131usize)
     pun.function(p0)
 }
 fn draw_arrays(p0: u32, p1: i32, p2: i32) {
     var pun: U66 = zero
-    pun.bits = procs[132usize]
+    pun.bits = address(132usize)
     pun.function(p0, p1, p2)
 }
 fn draw_arrays_indirect(p0: u32, p1: *void) {
     var pun: U67 = zero
-    pun.bits = procs[133usize]
+    pun.bits = address(133usize)
     pun.function(p0, p1)
 }
 fn draw_arrays_instanced(p0: u32, p1: i32, p2: i32, p3: i32) {
     var pun: U68 = zero
-    pun.bits = procs[134usize]
+    pun.bits = address(134usize)
     pun.function(p0, p1, p2, p3)
 }
 fn draw_arrays_instanced_base_instance(p0: u32, p1: i32, p2: i32, p3: i32, p4: u32) {
     var pun: U69 = zero
-    pun.bits = procs[135usize]
+    pun.bits = address(135usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn draw_buffer(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[136usize]
+    pun.bits = address(136usize)
     pun.function(p0)
 }
 fn draw_buffers(p0: i32, p1: *const u32) {
     var pun: U58 = zero
-    pun.bits = procs[137usize]
+    pun.bits = address(137usize)
     pun.function(p0, p1)
 }
 fn draw_elements(p0: u32, p1: i32, p2: u32, p3: *void) {
     var pun: U70 = zero
-    pun.bits = procs[138usize]
+    pun.bits = address(138usize)
     pun.function(p0, p1, p2, p3)
 }
 fn draw_elements_base_vertex(p0: u32, p1: i32, p2: u32, p3: *void, p4: i32) {
     var pun: U71 = zero
-    pun.bits = procs[139usize]
+    pun.bits = address(139usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn draw_elements_indirect(p0: u32, p1: u32, p2: *void) {
     var pun: U72 = zero
-    pun.bits = procs[140usize]
+    pun.bits = address(140usize)
     pun.function(p0, p1, p2)
 }
 fn draw_elements_instanced(p0: u32, p1: i32, p2: u32, p3: *void, p4: i32) {
     var pun: U71 = zero
-    pun.bits = procs[141usize]
+    pun.bits = address(141usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn draw_elements_instanced_base_instance(p0: u32, p1: i32, p2: u32, p3: *void, p4: i32, p5: u32) {
     var pun: U73 = zero
-    pun.bits = procs[142usize]
+    pun.bits = address(142usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn draw_elements_instanced_base_vertex(p0: u32, p1: i32, p2: u32, p3: *void, p4: i32, p5: i32) {
     var pun: U74 = zero
-    pun.bits = procs[143usize]
+    pun.bits = address(143usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn draw_elements_instanced_base_vertex_base_instance(p0: u32, p1: i32, p2: u32, p3: *void, p4: i32, p5: i32, p6: u32) {
     var pun: U75 = zero
-    pun.bits = procs[144usize]
+    pun.bits = address(144usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn draw_range_elements(p0: u32, p1: u32, p2: u32, p3: i32, p4: u32, p5: *void) {
     var pun: U76 = zero
-    pun.bits = procs[145usize]
+    pun.bits = address(145usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn draw_range_elements_base_vertex(p0: u32, p1: u32, p2: u32, p3: i32, p4: u32, p5: *void, p6: i32) {
     var pun: U77 = zero
-    pun.bits = procs[146usize]
+    pun.bits = address(146usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn draw_transform_feedback(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[147usize]
+    pun.bits = address(147usize)
     pun.function(p0, p1)
 }
 fn draw_transform_feedback_instanced(p0: u32, p1: u32, p2: i32) {
     var pun: U78 = zero
-    pun.bits = procs[148usize]
+    pun.bits = address(148usize)
     pun.function(p0, p1, p2)
 }
 fn draw_transform_feedback_stream(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[149usize]
+    pun.bits = address(149usize)
     pun.function(p0, p1, p2)
 }
 fn draw_transform_feedback_stream_instanced(p0: u32, p1: u32, p2: u32, p3: i32) {
     var pun: U79 = zero
-    pun.bits = procs[150usize]
+    pun.bits = address(150usize)
     pun.function(p0, p1, p2, p3)
 }
 fn enable(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[151usize]
+    pun.bits = address(151usize)
     pun.function(p0)
 }
 fn enable_vertex_array_attrib(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[152usize]
+    pun.bits = address(152usize)
     pun.function(p0, p1)
 }
 fn enable_vertex_attrib_array(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[153usize]
+    pun.bits = address(153usize)
     pun.function(p0)
 }
 fn enablei(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[154usize]
+    pun.bits = address(154usize)
     pun.function(p0, p1)
 }
 fn end_conditional_render() {
     var pun: U12 = zero
-    pun.bits = procs[155usize]
+    pun.bits = address(155usize)
     pun.function()
 }
 fn end_query(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[156usize]
+    pun.bits = address(156usize)
     pun.function(p0)
 }
 fn end_query_indexed(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[157usize]
+    pun.bits = address(157usize)
     pun.function(p0, p1)
 }
 fn end_transform_feedback() {
     var pun: U12 = zero
-    pun.bits = procs[158usize]
+    pun.bits = address(158usize)
     pun.function()
 }
 fn fence_sync(p0: u32, p1: u32) -> usize {
     var pun: U80 = zero
-    pun.bits = procs[159usize]
+    pun.bits = address(159usize)
     ret pun.function(p0, p1)
 }
 fn finish() {
     var pun: U12 = zero
-    pun.bits = procs[160usize]
+    pun.bits = address(160usize)
     pun.function()
 }
 fn flush() {
     var pun: U12 = zero
-    pun.bits = procs[161usize]
+    pun.bits = address(161usize)
     pun.function()
 }
 fn flush_mapped_buffer_range(p0: u32, p1: isize, p2: isize) {
     var pun: U81 = zero
-    pun.bits = procs[162usize]
+    pun.bits = address(162usize)
     pun.function(p0, p1, p2)
 }
 fn flush_mapped_named_buffer_range(p0: u32, p1: isize, p2: isize) {
     var pun: U81 = zero
-    pun.bits = procs[163usize]
+    pun.bits = address(163usize)
     pun.function(p0, p1, p2)
 }
 fn framebuffer_parameteri(p0: u32, p1: u32, p2: i32) {
     var pun: U78 = zero
-    pun.bits = procs[164usize]
+    pun.bits = address(164usize)
     pun.function(p0, p1, p2)
 }
 fn framebuffer_renderbuffer(p0: u32, p1: u32, p2: u32, p3: u32) {
     var pun: U14 = zero
-    pun.bits = procs[165usize]
+    pun.bits = address(165usize)
     pun.function(p0, p1, p2, p3)
 }
 fn framebuffer_texture(p0: u32, p1: u32, p2: u32, p3: i32) {
     var pun: U79 = zero
-    pun.bits = procs[166usize]
+    pun.bits = address(166usize)
     pun.function(p0, p1, p2, p3)
 }
 fn framebuffer_texture_1d(p0: u32, p1: u32, p2: u32, p3: u32, p4: i32) {
     var pun: U82 = zero
-    pun.bits = procs[167usize]
+    pun.bits = address(167usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn framebuffer_texture_2d(p0: u32, p1: u32, p2: u32, p3: u32, p4: i32) {
     var pun: U82 = zero
-    pun.bits = procs[168usize]
+    pun.bits = address(168usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn framebuffer_texture_3d(p0: u32, p1: u32, p2: u32, p3: u32, p4: i32, p5: i32) {
     var pun: U83 = zero
-    pun.bits = procs[169usize]
+    pun.bits = address(169usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn framebuffer_texture_layer(p0: u32, p1: u32, p2: u32, p3: i32, p4: i32) {
     var pun: U84 = zero
-    pun.bits = procs[170usize]
+    pun.bits = address(170usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn front_face(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[171usize]
+    pun.bits = address(171usize)
     pun.function(p0)
 }
 fn gen_buffers(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[172usize]
+    pun.bits = address(172usize)
     pun.function(p0, p1)
 }
 fn gen_framebuffers(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[173usize]
+    pun.bits = address(173usize)
     pun.function(p0, p1)
 }
 fn gen_program_pipelines(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[174usize]
+    pun.bits = address(174usize)
     pun.function(p0, p1)
 }
 fn gen_queries(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[175usize]
+    pun.bits = address(175usize)
     pun.function(p0, p1)
 }
 fn gen_renderbuffers(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[176usize]
+    pun.bits = address(176usize)
     pun.function(p0, p1)
 }
 fn gen_samplers(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[177usize]
+    pun.bits = address(177usize)
     pun.function(p0, p1)
 }
 fn gen_textures(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[178usize]
+    pun.bits = address(178usize)
     pun.function(p0, p1)
 }
 fn gen_transform_feedbacks(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[179usize]
+    pun.bits = address(179usize)
     pun.function(p0, p1)
 }
 fn gen_vertex_arrays(p0: i32, p1: *u32) {
     var pun: U51 = zero
-    pun.bits = procs[180usize]
+    pun.bits = address(180usize)
     pun.function(p0, p1)
 }
 fn generate_mipmap(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[181usize]
+    pun.bits = address(181usize)
     pun.function(p0)
 }
 fn generate_texture_mipmap(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[182usize]
+    pun.bits = address(182usize)
     pun.function(p0)
 }
 fn get_active_atomic_counter_bufferiv(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[183usize]
+    pun.bits = address(183usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_active_attrib(p0: u32, p1: u32, p2: i32, p3: *i32, p4: *i32, p5: *u32, p6: *u8) {
     var pun: U86 = zero
-    pun.bits = procs[184usize]
+    pun.bits = address(184usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn get_active_subroutine_name(p0: u32, p1: u32, p2: u32, p3: i32, p4: *i32, p5: *u8) {
     var pun: U87 = zero
-    pun.bits = procs[185usize]
+    pun.bits = address(185usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn get_active_subroutine_uniform_name(p0: u32, p1: u32, p2: u32, p3: i32, p4: *i32, p5: *u8) {
     var pun: U87 = zero
-    pun.bits = procs[186usize]
+    pun.bits = address(186usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn get_active_subroutine_uniformiv(p0: u32, p1: u32, p2: u32, p3: u32, p4: *i32) {
     var pun: U88 = zero
-    pun.bits = procs[187usize]
+    pun.bits = address(187usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_active_uniform(p0: u32, p1: u32, p2: i32, p3: *i32, p4: *i32, p5: *u32, p6: *u8) {
     var pun: U86 = zero
-    pun.bits = procs[188usize]
+    pun.bits = address(188usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn get_active_uniform_block_name(p0: u32, p1: u32, p2: i32, p3: *i32, p4: *u8) {
     var pun: U89 = zero
-    pun.bits = procs[189usize]
+    pun.bits = address(189usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_active_uniform_blockiv(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[190usize]
+    pun.bits = address(190usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_active_uniform_name(p0: u32, p1: u32, p2: i32, p3: *i32, p4: *u8) {
     var pun: U89 = zero
-    pun.bits = procs[191usize]
+    pun.bits = address(191usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_active_uniformsiv(p0: u32, p1: i32, p2: *const u32, p3: u32, p4: *i32) {
     var pun: U90 = zero
-    pun.bits = procs[192usize]
+    pun.bits = address(192usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_attached_shaders(p0: u32, p1: i32, p2: *i32, p3: *u32) {
     var pun: U91 = zero
-    pun.bits = procs[193usize]
+    pun.bits = address(193usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_attrib_location(p0: u32, p1: *const u8) -> i32 {
     var pun: U92 = zero
-    pun.bits = procs[194usize]
+    pun.bits = address(194usize)
     ret pun.function(p0, p1)
 }
 fn get_booleani_v(p0: u32, p1: u32, p2: *u8) {
     var pun: U93 = zero
-    pun.bits = procs[195usize]
+    pun.bits = address(195usize)
     pun.function(p0, p1, p2)
 }
 fn get_booleanv(p0: u32, p1: *u8) {
     var pun: U94 = zero
-    pun.bits = procs[196usize]
+    pun.bits = address(196usize)
     pun.function(p0, p1)
 }
 fn get_buffer_parameteri_64v(p0: u32, p1: u32, p2: *i64) {
     var pun: U95 = zero
-    pun.bits = procs[197usize]
+    pun.bits = address(197usize)
     pun.function(p0, p1, p2)
 }
 fn get_buffer_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[198usize]
+    pun.bits = address(198usize)
     pun.function(p0, p1, p2)
 }
 fn get_buffer_pointerv(p0: u32, p1: u32, p2: usize) {
     var pun: U97 = zero
-    pun.bits = procs[199usize]
+    pun.bits = address(199usize)
     pun.function(p0, p1, p2)
 }
 fn get_buffer_sub_data(p0: u32, p1: isize, p2: isize, p3: *void) {
     var pun: U19 = zero
-    pun.bits = procs[200usize]
+    pun.bits = address(200usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_compressed_tex_image(p0: u32, p1: i32, p2: *void) {
     var pun: U98 = zero
-    pun.bits = procs[201usize]
+    pun.bits = address(201usize)
     pun.function(p0, p1, p2)
 }
 fn get_compressed_texture_image(p0: u32, p1: i32, p2: i32, p3: *void) {
     var pun: U99 = zero
-    pun.bits = procs[202usize]
+    pun.bits = address(202usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_compressed_texture_sub_image(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: i32, p9: *void) {
     var pun: U100 = zero
-    pun.bits = procs[203usize]
+    pun.bits = address(203usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9)
 }
 fn get_debug_message_log(p0: u32, p1: i32, p2: *u32, p3: *u32, p4: *u32, p5: *u32, p6: *i32, p7: *u8) -> u32 {
     var pun: U101 = zero
-    pun.bits = procs[204usize]
+    pun.bits = address(204usize)
     ret pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn get_doublei_v(p0: u32, p1: u32, p2: *f64) {
     var pun: U102 = zero
-    pun.bits = procs[205usize]
+    pun.bits = address(205usize)
     pun.function(p0, p1, p2)
 }
 fn get_doublev(p0: u32, p1: *f64) {
     var pun: U103 = zero
-    pun.bits = procs[206usize]
+    pun.bits = address(206usize)
     pun.function(p0, p1)
 }
 fn get_error() -> u32 {
     var pun: U52 = zero
-    pun.bits = procs[207usize]
+    pun.bits = address(207usize)
     ret pun.function()
 }
 fn get_floati_v(p0: u32, p1: u32, p2: *f32) {
     var pun: U104 = zero
-    pun.bits = procs[208usize]
+    pun.bits = address(208usize)
     pun.function(p0, p1, p2)
 }
 fn get_floatv(p0: u32, p1: *f32) {
     var pun: U105 = zero
-    pun.bits = procs[209usize]
+    pun.bits = address(209usize)
     pun.function(p0, p1)
 }
 fn get_frag_data_index(p0: u32, p1: *const u8) -> i32 {
     var pun: U92 = zero
-    pun.bits = procs[210usize]
+    pun.bits = address(210usize)
     ret pun.function(p0, p1)
 }
 fn get_frag_data_location(p0: u32, p1: *const u8) -> i32 {
     var pun: U92 = zero
-    pun.bits = procs[211usize]
+    pun.bits = address(211usize)
     ret pun.function(p0, p1)
 }
 fn get_framebuffer_attachment_parameteriv(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[212usize]
+    pun.bits = address(212usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_framebuffer_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[213usize]
+    pun.bits = address(213usize)
     pun.function(p0, p1, p2)
 }
 fn get_graphics_reset_status() -> u32 {
     var pun: U52 = zero
-    pun.bits = procs[214usize]
+    pun.bits = address(214usize)
     ret pun.function()
 }
 fn get_integer_64i_v(p0: u32, p1: u32, p2: *i64) {
     var pun: U95 = zero
-    pun.bits = procs[215usize]
+    pun.bits = address(215usize)
     pun.function(p0, p1, p2)
 }
 fn get_integer_64v(p0: u32, p1: *i64) {
     var pun: U106 = zero
-    pun.bits = procs[216usize]
+    pun.bits = address(216usize)
     pun.function(p0, p1)
 }
 fn get_integeri_v(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[217usize]
+    pun.bits = address(217usize)
     pun.function(p0, p1, p2)
 }
 fn get_integerv(p0: u32, p1: *i32) {
     var pun: U107 = zero
-    pun.bits = procs[218usize]
+    pun.bits = address(218usize)
     pun.function(p0, p1)
 }
 fn get_internalformati_64v(p0: u32, p1: u32, p2: u32, p3: i32, p4: *i64) {
     var pun: U108 = zero
-    pun.bits = procs[219usize]
+    pun.bits = address(219usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_internalformativ(p0: u32, p1: u32, p2: u32, p3: i32, p4: *i32) {
     var pun: U109 = zero
-    pun.bits = procs[220usize]
+    pun.bits = address(220usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_multisamplefv(p0: u32, p1: u32, p2: *f32) {
     var pun: U104 = zero
-    pun.bits = procs[221usize]
+    pun.bits = address(221usize)
     pun.function(p0, p1, p2)
 }
 fn get_named_buffer_parameteri_64v(p0: u32, p1: u32, p2: *i64) {
     var pun: U95 = zero
-    pun.bits = procs[222usize]
+    pun.bits = address(222usize)
     pun.function(p0, p1, p2)
 }
 fn get_named_buffer_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[223usize]
+    pun.bits = address(223usize)
     pun.function(p0, p1, p2)
 }
 fn get_named_buffer_pointerv(p0: u32, p1: u32, p2: usize) {
     var pun: U97 = zero
-    pun.bits = procs[224usize]
+    pun.bits = address(224usize)
     pun.function(p0, p1, p2)
 }
 fn get_named_buffer_sub_data(p0: u32, p1: isize, p2: isize, p3: *void) {
     var pun: U19 = zero
-    pun.bits = procs[225usize]
+    pun.bits = address(225usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_named_framebuffer_attachment_parameteriv(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[226usize]
+    pun.bits = address(226usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_named_framebuffer_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[227usize]
+    pun.bits = address(227usize)
     pun.function(p0, p1, p2)
 }
 fn get_named_renderbuffer_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[228usize]
+    pun.bits = address(228usize)
     pun.function(p0, p1, p2)
 }
 fn get_object_label(p0: u32, p1: u32, p2: i32, p3: *i32, p4: *u8) {
     var pun: U89 = zero
-    pun.bits = procs[229usize]
+    pun.bits = address(229usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_object_ptr_label(p0: *void, p1: i32, p2: *i32, p3: *u8) {
     var pun: U110 = zero
-    pun.bits = procs[230usize]
+    pun.bits = address(230usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_pointerv(p0: u32, p1: usize) {
     var pun: U111 = zero
-    pun.bits = procs[231usize]
+    pun.bits = address(231usize)
     pun.function(p0, p1)
 }
 fn get_program_binary(p0: u32, p1: i32, p2: *i32, p3: *u32, p4: *void) {
     var pun: U112 = zero
-    pun.bits = procs[232usize]
+    pun.bits = address(232usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_program_info_log(p0: u32, p1: i32, p2: *i32, p3: *u8) {
     var pun: U113 = zero
-    pun.bits = procs[233usize]
+    pun.bits = address(233usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_program_interfaceiv(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[234usize]
+    pun.bits = address(234usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_program_pipeline_info_log(p0: u32, p1: i32, p2: *i32, p3: *u8) {
     var pun: U113 = zero
-    pun.bits = procs[235usize]
+    pun.bits = address(235usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_program_pipelineiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[236usize]
+    pun.bits = address(236usize)
     pun.function(p0, p1, p2)
 }
 fn get_program_resource_index(p0: u32, p1: u32, p2: *const u8) -> u32 {
     var pun: U114 = zero
-    pun.bits = procs[237usize]
+    pun.bits = address(237usize)
     ret pun.function(p0, p1, p2)
 }
 fn get_program_resource_location(p0: u32, p1: u32, p2: *const u8) -> i32 {
     var pun: U115 = zero
-    pun.bits = procs[238usize]
+    pun.bits = address(238usize)
     ret pun.function(p0, p1, p2)
 }
 fn get_program_resource_location_index(p0: u32, p1: u32, p2: *const u8) -> i32 {
     var pun: U115 = zero
-    pun.bits = procs[239usize]
+    pun.bits = address(239usize)
     ret pun.function(p0, p1, p2)
 }
 fn get_program_resource_name(p0: u32, p1: u32, p2: u32, p3: i32, p4: *i32, p5: *u8) {
     var pun: U87 = zero
-    pun.bits = procs[240usize]
+    pun.bits = address(240usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn get_program_resourceiv(p0: u32, p1: u32, p2: u32, p3: i32, p4: *const u32, p5: i32, p6: *i32, p7: *i32) {
     var pun: U116 = zero
-    pun.bits = procs[241usize]
+    pun.bits = address(241usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn get_program_stageiv(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[242usize]
+    pun.bits = address(242usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_programiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[243usize]
+    pun.bits = address(243usize)
     pun.function(p0, p1, p2)
 }
 fn get_query_buffer_objecti_64v(p0: u32, p1: u32, p2: u32, p3: isize) {
     var pun: U117 = zero
-    pun.bits = procs[244usize]
+    pun.bits = address(244usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_query_buffer_objectiv(p0: u32, p1: u32, p2: u32, p3: isize) {
     var pun: U117 = zero
-    pun.bits = procs[245usize]
+    pun.bits = address(245usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_query_buffer_objectui_64v(p0: u32, p1: u32, p2: u32, p3: isize) {
     var pun: U117 = zero
-    pun.bits = procs[246usize]
+    pun.bits = address(246usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_query_buffer_objectuiv(p0: u32, p1: u32, p2: u32, p3: isize) {
     var pun: U117 = zero
-    pun.bits = procs[247usize]
+    pun.bits = address(247usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_query_indexediv(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[248usize]
+    pun.bits = address(248usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_query_objecti_64v(p0: u32, p1: u32, p2: *i64) {
     var pun: U95 = zero
-    pun.bits = procs[249usize]
+    pun.bits = address(249usize)
     pun.function(p0, p1, p2)
 }
 fn get_query_objectiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[250usize]
+    pun.bits = address(250usize)
     pun.function(p0, p1, p2)
 }
 fn get_query_objectui_64v(p0: u32, p1: u32, p2: *u64) {
     var pun: U118 = zero
-    pun.bits = procs[251usize]
+    pun.bits = address(251usize)
     pun.function(p0, p1, p2)
 }
 fn get_query_objectuiv(p0: u32, p1: u32, p2: *u32) {
     var pun: U119 = zero
-    pun.bits = procs[252usize]
+    pun.bits = address(252usize)
     pun.function(p0, p1, p2)
 }
 fn get_queryiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[253usize]
+    pun.bits = address(253usize)
     pun.function(p0, p1, p2)
 }
 fn get_renderbuffer_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[254usize]
+    pun.bits = address(254usize)
     pun.function(p0, p1, p2)
 }
 fn get_sampler_parameter_iiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[255usize]
+    pun.bits = address(255usize)
     pun.function(p0, p1, p2)
 }
 fn get_sampler_parameter_iuiv(p0: u32, p1: u32, p2: *u32) {
     var pun: U119 = zero
-    pun.bits = procs[256usize]
+    pun.bits = address(256usize)
     pun.function(p0, p1, p2)
 }
 fn get_sampler_parameterfv(p0: u32, p1: u32, p2: *f32) {
     var pun: U104 = zero
-    pun.bits = procs[257usize]
+    pun.bits = address(257usize)
     pun.function(p0, p1, p2)
 }
 fn get_sampler_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[258usize]
+    pun.bits = address(258usize)
     pun.function(p0, p1, p2)
 }
 fn get_shader_info_log(p0: u32, p1: i32, p2: *i32, p3: *u8) {
     var pun: U113 = zero
-    pun.bits = procs[259usize]
+    pun.bits = address(259usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_shader_precision_format(p0: u32, p1: u32, p2: *i32, p3: *i32) {
     var pun: U120 = zero
-    pun.bits = procs[260usize]
+    pun.bits = address(260usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_shader_source(p0: u32, p1: i32, p2: *i32, p3: *u8) {
     var pun: U113 = zero
-    pun.bits = procs[261usize]
+    pun.bits = address(261usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_shaderiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[262usize]
+    pun.bits = address(262usize)
     pun.function(p0, p1, p2)
 }
 fn get_string(p0: u32) -> *const u8 {
     var pun: U121 = zero
-    pun.bits = procs[263usize]
+    pun.bits = address(263usize)
     ret pun.function(p0)
 }
 fn get_stringi(p0: u32, p1: u32) -> *const u8 {
     var pun: U122 = zero
-    pun.bits = procs[264usize]
+    pun.bits = address(264usize)
     ret pun.function(p0, p1)
 }
 fn get_subroutine_index(p0: u32, p1: u32, p2: *const u8) -> u32 {
     var pun: U114 = zero
-    pun.bits = procs[265usize]
+    pun.bits = address(265usize)
     ret pun.function(p0, p1, p2)
 }
 fn get_subroutine_uniform_location(p0: u32, p1: u32, p2: *const u8) -> i32 {
     var pun: U115 = zero
-    pun.bits = procs[266usize]
+    pun.bits = address(266usize)
     ret pun.function(p0, p1, p2)
 }
 fn get_synciv(p0: usize, p1: u32, p2: i32, p3: *i32, p4: *i32) {
     var pun: U123 = zero
-    pun.bits = procs[267usize]
+    pun.bits = address(267usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_tex_image(p0: u32, p1: i32, p2: u32, p3: u32, p4: *void) {
     var pun: U33 = zero
-    pun.bits = procs[268usize]
+    pun.bits = address(268usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn get_tex_level_parameterfv(p0: u32, p1: i32, p2: u32, p3: *f32) {
     var pun: U124 = zero
-    pun.bits = procs[269usize]
+    pun.bits = address(269usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_tex_level_parameteriv(p0: u32, p1: i32, p2: u32, p3: *i32) {
     var pun: U125 = zero
-    pun.bits = procs[270usize]
+    pun.bits = address(270usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_tex_parameter_iiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[271usize]
+    pun.bits = address(271usize)
     pun.function(p0, p1, p2)
 }
 fn get_tex_parameter_iuiv(p0: u32, p1: u32, p2: *u32) {
     var pun: U119 = zero
-    pun.bits = procs[272usize]
+    pun.bits = address(272usize)
     pun.function(p0, p1, p2)
 }
 fn get_tex_parameterfv(p0: u32, p1: u32, p2: *f32) {
     var pun: U104 = zero
-    pun.bits = procs[273usize]
+    pun.bits = address(273usize)
     pun.function(p0, p1, p2)
 }
 fn get_tex_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[274usize]
+    pun.bits = address(274usize)
     pun.function(p0, p1, p2)
 }
 fn get_texture_image(p0: u32, p1: i32, p2: u32, p3: u32, p4: i32, p5: *void) {
     var pun: U126 = zero
-    pun.bits = procs[275usize]
+    pun.bits = address(275usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn get_texture_level_parameterfv(p0: u32, p1: i32, p2: u32, p3: *f32) {
     var pun: U124 = zero
-    pun.bits = procs[276usize]
+    pun.bits = address(276usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_texture_level_parameteriv(p0: u32, p1: i32, p2: u32, p3: *i32) {
     var pun: U125 = zero
-    pun.bits = procs[277usize]
+    pun.bits = address(277usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_texture_parameter_iiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[278usize]
+    pun.bits = address(278usize)
     pun.function(p0, p1, p2)
 }
 fn get_texture_parameter_iuiv(p0: u32, p1: u32, p2: *u32) {
     var pun: U119 = zero
-    pun.bits = procs[279usize]
+    pun.bits = address(279usize)
     pun.function(p0, p1, p2)
 }
 fn get_texture_parameterfv(p0: u32, p1: u32, p2: *f32) {
     var pun: U104 = zero
-    pun.bits = procs[280usize]
+    pun.bits = address(280usize)
     pun.function(p0, p1, p2)
 }
 fn get_texture_parameteriv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[281usize]
+    pun.bits = address(281usize)
     pun.function(p0, p1, p2)
 }
 fn get_texture_sub_image(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: u32, p9: u32, p10: i32, p11: *void) {
     var pun: U127 = zero
-    pun.bits = procs[282usize]
+    pun.bits = address(282usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11)
 }
 fn get_transform_feedback_varying(p0: u32, p1: u32, p2: i32, p3: *i32, p4: *i32, p5: *u32, p6: *u8) {
     var pun: U86 = zero
-    pun.bits = procs[283usize]
+    pun.bits = address(283usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn get_transform_feedbacki_64_v(p0: u32, p1: u32, p2: u32, p3: *i64) {
     var pun: U128 = zero
-    pun.bits = procs[284usize]
+    pun.bits = address(284usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_transform_feedbacki_v(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[285usize]
+    pun.bits = address(285usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_transform_feedbackiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[286usize]
+    pun.bits = address(286usize)
     pun.function(p0, p1, p2)
 }
 fn get_uniform_block_index(p0: u32, p1: *const u8) -> u32 {
     var pun: U129 = zero
-    pun.bits = procs[287usize]
+    pun.bits = address(287usize)
     ret pun.function(p0, p1)
 }
 fn get_uniform_indices(p0: u32, p1: i32, p2: usize, p3: *u32) {
     var pun: U130 = zero
-    pun.bits = procs[288usize]
+    pun.bits = address(288usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_uniform_location(p0: u32, p1: *const u8) -> i32 {
     var pun: U92 = zero
-    pun.bits = procs[289usize]
+    pun.bits = address(289usize)
     ret pun.function(p0, p1)
 }
 fn get_uniform_subroutineuiv(p0: u32, p1: i32, p2: *u32) {
     var pun: U53 = zero
-    pun.bits = procs[290usize]
+    pun.bits = address(290usize)
     pun.function(p0, p1, p2)
 }
 fn get_uniformdv(p0: u32, p1: i32, p2: *f64) {
     var pun: U131 = zero
-    pun.bits = procs[291usize]
+    pun.bits = address(291usize)
     pun.function(p0, p1, p2)
 }
 fn get_uniformfv(p0: u32, p1: i32, p2: *f32) {
     var pun: U132 = zero
-    pun.bits = procs[292usize]
+    pun.bits = address(292usize)
     pun.function(p0, p1, p2)
 }
 fn get_uniformiv(p0: u32, p1: i32, p2: *i32) {
     var pun: U133 = zero
-    pun.bits = procs[293usize]
+    pun.bits = address(293usize)
     pun.function(p0, p1, p2)
 }
 fn get_uniformuiv(p0: u32, p1: i32, p2: *u32) {
     var pun: U53 = zero
-    pun.bits = procs[294usize]
+    pun.bits = address(294usize)
     pun.function(p0, p1, p2)
 }
 fn get_vertex_array_indexed_64iv(p0: u32, p1: u32, p2: u32, p3: *i64) {
     var pun: U128 = zero
-    pun.bits = procs[295usize]
+    pun.bits = address(295usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_vertex_array_indexediv(p0: u32, p1: u32, p2: u32, p3: *i32) {
     var pun: U85 = zero
-    pun.bits = procs[296usize]
+    pun.bits = address(296usize)
     pun.function(p0, p1, p2, p3)
 }
 fn get_vertex_arrayiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[297usize]
+    pun.bits = address(297usize)
     pun.function(p0, p1, p2)
 }
 fn get_vertex_attrib_iiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[298usize]
+    pun.bits = address(298usize)
     pun.function(p0, p1, p2)
 }
 fn get_vertex_attrib_iuiv(p0: u32, p1: u32, p2: *u32) {
     var pun: U119 = zero
-    pun.bits = procs[299usize]
+    pun.bits = address(299usize)
     pun.function(p0, p1, p2)
 }
 fn get_vertex_attrib_ldv(p0: u32, p1: u32, p2: *f64) {
     var pun: U102 = zero
-    pun.bits = procs[300usize]
+    pun.bits = address(300usize)
     pun.function(p0, p1, p2)
 }
 fn get_vertex_attrib_pointerv(p0: u32, p1: u32, p2: usize) {
     var pun: U97 = zero
-    pun.bits = procs[301usize]
+    pun.bits = address(301usize)
     pun.function(p0, p1, p2)
 }
 fn get_vertex_attribdv(p0: u32, p1: u32, p2: *f64) {
     var pun: U102 = zero
-    pun.bits = procs[302usize]
+    pun.bits = address(302usize)
     pun.function(p0, p1, p2)
 }
 fn get_vertex_attribfv(p0: u32, p1: u32, p2: *f32) {
     var pun: U104 = zero
-    pun.bits = procs[303usize]
+    pun.bits = address(303usize)
     pun.function(p0, p1, p2)
 }
 fn get_vertex_attribiv(p0: u32, p1: u32, p2: *i32) {
     var pun: U96 = zero
-    pun.bits = procs[304usize]
+    pun.bits = address(304usize)
     pun.function(p0, p1, p2)
 }
 fn getn_compressed_tex_image(p0: u32, p1: i32, p2: i32, p3: *void) {
     var pun: U99 = zero
-    pun.bits = procs[305usize]
+    pun.bits = address(305usize)
     pun.function(p0, p1, p2, p3)
 }
 fn getn_tex_image(p0: u32, p1: i32, p2: u32, p3: u32, p4: i32, p5: *void) {
     var pun: U126 = zero
-    pun.bits = procs[306usize]
+    pun.bits = address(306usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn getn_uniformdv(p0: u32, p1: i32, p2: i32, p3: *f64) {
     var pun: U134 = zero
-    pun.bits = procs[307usize]
+    pun.bits = address(307usize)
     pun.function(p0, p1, p2, p3)
 }
 fn getn_uniformfv(p0: u32, p1: i32, p2: i32, p3: *f32) {
     var pun: U135 = zero
-    pun.bits = procs[308usize]
+    pun.bits = address(308usize)
     pun.function(p0, p1, p2, p3)
 }
 fn getn_uniformiv(p0: u32, p1: i32, p2: i32, p3: *i32) {
     var pun: U136 = zero
-    pun.bits = procs[309usize]
+    pun.bits = address(309usize)
     pun.function(p0, p1, p2, p3)
 }
 fn getn_uniformuiv(p0: u32, p1: i32, p2: i32, p3: *u32) {
     var pun: U137 = zero
-    pun.bits = procs[310usize]
+    pun.bits = address(310usize)
     pun.function(p0, p1, p2, p3)
 }
 fn hint(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[311usize]
+    pun.bits = address(311usize)
     pun.function(p0, p1)
 }
 fn invalidate_buffer_data(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[312usize]
+    pun.bits = address(312usize)
     pun.function(p0)
 }
 fn invalidate_buffer_sub_data(p0: u32, p1: isize, p2: isize) {
     var pun: U81 = zero
-    pun.bits = procs[313usize]
+    pun.bits = address(313usize)
     pun.function(p0, p1, p2)
 }
 fn invalidate_framebuffer(p0: u32, p1: i32, p2: *const u32) {
     var pun: U9 = zero
-    pun.bits = procs[314usize]
+    pun.bits = address(314usize)
     pun.function(p0, p1, p2)
 }
 fn invalidate_named_framebuffer_data(p0: u32, p1: i32, p2: *const u32) {
     var pun: U9 = zero
-    pun.bits = procs[315usize]
+    pun.bits = address(315usize)
     pun.function(p0, p1, p2)
 }
 fn invalidate_named_framebuffer_sub_data(p0: u32, p1: i32, p2: *const u32, p3: i32, p4: i32, p5: i32, p6: i32) {
     var pun: U138 = zero
-    pun.bits = procs[316usize]
+    pun.bits = address(316usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn invalidate_sub_framebuffer(p0: u32, p1: i32, p2: *const u32, p3: i32, p4: i32, p5: i32, p6: i32) {
     var pun: U138 = zero
-    pun.bits = procs[317usize]
+    pun.bits = address(317usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn invalidate_tex_image(p0: u32, p1: i32) {
     var pun: U139 = zero
-    pun.bits = procs[318usize]
+    pun.bits = address(318usize)
     pun.function(p0, p1)
 }
 fn invalidate_tex_sub_image(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32) {
     var pun: U49 = zero
-    pun.bits = procs[319usize]
+    pun.bits = address(319usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn is_buffer(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[320usize]
+    pun.bits = address(320usize)
     ret pun.function(p0)
 }
 fn is_enabled(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[321usize]
+    pun.bits = address(321usize)
     ret pun.function(p0)
 }
 fn is_enabledi(p0: u32, p1: u32) -> u8 {
     var pun: U141 = zero
-    pun.bits = procs[322usize]
+    pun.bits = address(322usize)
     ret pun.function(p0, p1)
 }
 fn is_framebuffer(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[323usize]
+    pun.bits = address(323usize)
     ret pun.function(p0)
 }
 fn is_program(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[324usize]
+    pun.bits = address(324usize)
     ret pun.function(p0)
 }
 fn is_program_pipeline(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[325usize]
+    pun.bits = address(325usize)
     ret pun.function(p0)
 }
 fn is_query(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[326usize]
+    pun.bits = address(326usize)
     ret pun.function(p0)
 }
 fn is_renderbuffer(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[327usize]
+    pun.bits = address(327usize)
     ret pun.function(p0)
 }
 fn is_sampler(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[328usize]
+    pun.bits = address(328usize)
     ret pun.function(p0)
 }
 fn is_shader(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[329usize]
+    pun.bits = address(329usize)
     ret pun.function(p0)
 }
 fn is_sync(p0: usize) -> u8 {
     var pun: U142 = zero
-    pun.bits = procs[330usize]
+    pun.bits = address(330usize)
     ret pun.function(p0)
 }
 fn is_texture(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[331usize]
+    pun.bits = address(331usize)
     ret pun.function(p0)
 }
 fn is_transform_feedback(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[332usize]
+    pun.bits = address(332usize)
     ret pun.function(p0)
 }
 fn is_vertex_array(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[333usize]
+    pun.bits = address(333usize)
     ret pun.function(p0)
 }
 fn line_width(p0: f32) {
     var pun: U28 = zero
-    pun.bits = procs[334usize]
+    pun.bits = address(334usize)
     pun.function(p0)
 }
 fn link_program(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[335usize]
+    pun.bits = address(335usize)
     pun.function(p0)
 }
 fn logic_op(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[336usize]
+    pun.bits = address(336usize)
     pun.function(p0)
 }
 fn map_buffer(p0: u32, p1: u32) -> *void {
     var pun: U143 = zero
-    pun.bits = procs[337usize]
+    pun.bits = address(337usize)
     ret pun.function(p0, p1)
 }
 fn map_buffer_range(p0: u32, p1: isize, p2: isize, p3: u32) -> *void {
     var pun: U144 = zero
-    pun.bits = procs[338usize]
+    pun.bits = address(338usize)
     ret pun.function(p0, p1, p2, p3)
 }
 fn map_named_buffer(p0: u32, p1: u32) -> *void {
     var pun: U143 = zero
-    pun.bits = procs[339usize]
+    pun.bits = address(339usize)
     ret pun.function(p0, p1)
 }
 fn map_named_buffer_range(p0: u32, p1: isize, p2: isize, p3: u32) -> *void {
     var pun: U144 = zero
-    pun.bits = procs[340usize]
+    pun.bits = address(340usize)
     ret pun.function(p0, p1, p2, p3)
 }
 fn memory_barrier(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[341usize]
+    pun.bits = address(341usize)
     pun.function(p0)
 }
 fn memory_barrier_by_region(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[342usize]
+    pun.bits = address(342usize)
     pun.function(p0)
 }
 fn min_sample_shading(p0: f32) {
     var pun: U28 = zero
-    pun.bits = procs[343usize]
+    pun.bits = address(343usize)
     pun.function(p0)
 }
 fn multi_draw_arrays(p0: u32, p1: *const i32, p2: *const i32, p3: i32) {
     var pun: U145 = zero
-    pun.bits = procs[344usize]
+    pun.bits = address(344usize)
     pun.function(p0, p1, p2, p3)
 }
 fn multi_draw_arrays_indirect(p0: u32, p1: *void, p2: i32, p3: i32) {
     var pun: U146 = zero
-    pun.bits = procs[345usize]
+    pun.bits = address(345usize)
     pun.function(p0, p1, p2, p3)
 }
 fn multi_draw_arrays_indirect_count(p0: u32, p1: *void, p2: isize, p3: i32, p4: i32) {
     var pun: U147 = zero
-    pun.bits = procs[346usize]
+    pun.bits = address(346usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn multi_draw_elements(p0: u32, p1: *const i32, p2: u32, p3: usize, p4: i32) {
     var pun: U148 = zero
-    pun.bits = procs[347usize]
+    pun.bits = address(347usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn multi_draw_elements_base_vertex(p0: u32, p1: *const i32, p2: u32, p3: usize, p4: i32, p5: *const i32) {
     var pun: U149 = zero
-    pun.bits = procs[348usize]
+    pun.bits = address(348usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn multi_draw_elements_indirect(p0: u32, p1: u32, p2: *void, p3: i32, p4: i32) {
     var pun: U150 = zero
-    pun.bits = procs[349usize]
+    pun.bits = address(349usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn multi_draw_elements_indirect_count(p0: u32, p1: u32, p2: *void, p3: isize, p4: i32, p5: i32) {
     var pun: U151 = zero
-    pun.bits = procs[350usize]
+    pun.bits = address(350usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn named_buffer_data(p0: u32, p1: isize, p2: *void, p3: u32) {
     var pun: U18 = zero
-    pun.bits = procs[351usize]
+    pun.bits = address(351usize)
     pun.function(p0, p1, p2, p3)
 }
 fn named_buffer_storage(p0: u32, p1: isize, p2: *void, p3: u32) {
     var pun: U18 = zero
-    pun.bits = procs[352usize]
+    pun.bits = address(352usize)
     pun.function(p0, p1, p2, p3)
 }
 fn named_buffer_sub_data(p0: u32, p1: isize, p2: isize, p3: *void) {
     var pun: U19 = zero
-    pun.bits = procs[353usize]
+    pun.bits = address(353usize)
     pun.function(p0, p1, p2, p3)
 }
 fn named_framebuffer_draw_buffer(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[354usize]
+    pun.bits = address(354usize)
     pun.function(p0, p1)
 }
 fn named_framebuffer_draw_buffers(p0: u32, p1: i32, p2: *const u32) {
     var pun: U9 = zero
-    pun.bits = procs[355usize]
+    pun.bits = address(355usize)
     pun.function(p0, p1, p2)
 }
 fn named_framebuffer_parameteri(p0: u32, p1: u32, p2: i32) {
     var pun: U78 = zero
-    pun.bits = procs[356usize]
+    pun.bits = address(356usize)
     pun.function(p0, p1, p2)
 }
 fn named_framebuffer_read_buffer(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[357usize]
+    pun.bits = address(357usize)
     pun.function(p0, p1)
 }
 fn named_framebuffer_renderbuffer(p0: u32, p1: u32, p2: u32, p3: u32) {
     var pun: U14 = zero
-    pun.bits = procs[358usize]
+    pun.bits = address(358usize)
     pun.function(p0, p1, p2, p3)
 }
 fn named_framebuffer_texture(p0: u32, p1: u32, p2: u32, p3: i32) {
     var pun: U79 = zero
-    pun.bits = procs[359usize]
+    pun.bits = address(359usize)
     pun.function(p0, p1, p2, p3)
 }
 fn named_framebuffer_texture_layer(p0: u32, p1: u32, p2: u32, p3: i32, p4: i32) {
     var pun: U84 = zero
-    pun.bits = procs[360usize]
+    pun.bits = address(360usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn named_renderbuffer_storage(p0: u32, p1: u32, p2: i32, p3: i32) {
     var pun: U152 = zero
-    pun.bits = procs[361usize]
+    pun.bits = address(361usize)
     pun.function(p0, p1, p2, p3)
 }
 fn named_renderbuffer_storage_multisample(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32) {
     var pun: U153 = zero
-    pun.bits = procs[362usize]
+    pun.bits = address(362usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn object_label(p0: u32, p1: u32, p2: i32, p3: *const u8) {
     var pun: U154 = zero
-    pun.bits = procs[363usize]
+    pun.bits = address(363usize)
     pun.function(p0, p1, p2, p3)
 }
 fn object_ptr_label(p0: *void, p1: i32, p2: *const u8) {
     var pun: U155 = zero
-    pun.bits = procs[364usize]
+    pun.bits = address(364usize)
     pun.function(p0, p1, p2)
 }
 fn patch_parameterfv(p0: u32, p1: *const f32) {
     var pun: U156 = zero
-    pun.bits = procs[365usize]
+    pun.bits = address(365usize)
     pun.function(p0, p1)
 }
 fn patch_parameteri(p0: u32, p1: i32) {
     var pun: U139 = zero
-    pun.bits = procs[366usize]
+    pun.bits = address(366usize)
     pun.function(p0, p1)
 }
 fn pause_transform_feedback() {
     var pun: U12 = zero
-    pun.bits = procs[367usize]
+    pun.bits = address(367usize)
     pun.function()
 }
 fn pixel_storef(p0: u32, p1: f32) {
     var pun: U157 = zero
-    pun.bits = procs[368usize]
+    pun.bits = address(368usize)
     pun.function(p0, p1)
 }
 fn pixel_storei(p0: u32, p1: i32) {
     var pun: U139 = zero
-    pun.bits = procs[369usize]
+    pun.bits = address(369usize)
     pun.function(p0, p1)
 }
 fn point_parameterf(p0: u32, p1: f32) {
     var pun: U157 = zero
-    pun.bits = procs[370usize]
+    pun.bits = address(370usize)
     pun.function(p0, p1)
 }
 fn point_parameterfv(p0: u32, p1: *const f32) {
     var pun: U156 = zero
-    pun.bits = procs[371usize]
+    pun.bits = address(371usize)
     pun.function(p0, p1)
 }
 fn point_parameteri(p0: u32, p1: i32) {
     var pun: U139 = zero
-    pun.bits = procs[372usize]
+    pun.bits = address(372usize)
     pun.function(p0, p1)
 }
 fn point_parameteriv(p0: u32, p1: *const i32) {
     var pun: U158 = zero
-    pun.bits = procs[373usize]
+    pun.bits = address(373usize)
     pun.function(p0, p1)
 }
 fn point_size(p0: f32) {
     var pun: U28 = zero
-    pun.bits = procs[374usize]
+    pun.bits = address(374usize)
     pun.function(p0)
 }
 fn polygon_mode(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[375usize]
+    pun.bits = address(375usize)
     pun.function(p0, p1)
 }
 fn polygon_offset(p0: f32, p1: f32) {
     var pun: U64 = zero
-    pun.bits = procs[376usize]
+    pun.bits = address(376usize)
     pun.function(p0, p1)
 }
 fn polygon_offset_clamp(p0: f32, p1: f32, p2: f32) {
     var pun: U159 = zero
-    pun.bits = procs[377usize]
+    pun.bits = address(377usize)
     pun.function(p0, p1, p2)
 }
 fn pop_debug_group() {
     var pun: U12 = zero
-    pun.bits = procs[378usize]
+    pun.bits = address(378usize)
     pun.function()
 }
 fn primitive_bounding_box(p0: f32, p1: f32, p2: f32, p3: f32, p4: f32, p5: f32, p6: f32, p7: f32) {
     var pun: U160 = zero
-    pun.bits = procs[379usize]
+    pun.bits = address(379usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn primitive_restart_index(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[380usize]
+    pun.bits = address(380usize)
     pun.function(p0)
 }
 fn program_binary(p0: u32, p1: u32, p2: *void, p3: i32) {
     var pun: U161 = zero
-    pun.bits = procs[381usize]
+    pun.bits = address(381usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_parameteri(p0: u32, p1: u32, p2: i32) {
     var pun: U78 = zero
-    pun.bits = procs[382usize]
+    pun.bits = address(382usize)
     pun.function(p0, p1, p2)
 }
 fn program_uniform_1d(p0: u32, p1: i32, p2: f64) {
     var pun: U162 = zero
-    pun.bits = procs[383usize]
+    pun.bits = address(383usize)
     pun.function(p0, p1, p2)
 }
 fn program_uniform_1dv(p0: u32, p1: i32, p2: i32, p3: *const f64) {
     var pun: U163 = zero
-    pun.bits = procs[384usize]
+    pun.bits = address(384usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_1f(p0: u32, p1: i32, p2: f32) {
     var pun: U164 = zero
-    pun.bits = procs[385usize]
+    pun.bits = address(385usize)
     pun.function(p0, p1, p2)
 }
 fn program_uniform_1fv(p0: u32, p1: i32, p2: i32, p3: *const f32) {
     var pun: U165 = zero
-    pun.bits = procs[386usize]
+    pun.bits = address(386usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_1i(p0: u32, p1: i32, p2: i32) {
     var pun: U66 = zero
-    pun.bits = procs[387usize]
+    pun.bits = address(387usize)
     pun.function(p0, p1, p2)
 }
 fn program_uniform_1iv(p0: u32, p1: i32, p2: i32, p3: *const i32) {
     var pun: U166 = zero
-    pun.bits = procs[388usize]
+    pun.bits = address(388usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_1ui(p0: u32, p1: i32, p2: u32) {
     var pun: U167 = zero
-    pun.bits = procs[389usize]
+    pun.bits = address(389usize)
     pun.function(p0, p1, p2)
 }
 fn program_uniform_1uiv(p0: u32, p1: i32, p2: i32, p3: *const u32) {
     var pun: U168 = zero
-    pun.bits = procs[390usize]
+    pun.bits = address(390usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_2d(p0: u32, p1: i32, p2: f64, p3: f64) {
     var pun: U169 = zero
-    pun.bits = procs[391usize]
+    pun.bits = address(391usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_2dv(p0: u32, p1: i32, p2: i32, p3: *const f64) {
     var pun: U163 = zero
-    pun.bits = procs[392usize]
+    pun.bits = address(392usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_2f(p0: u32, p1: i32, p2: f32, p3: f32) {
     var pun: U170 = zero
-    pun.bits = procs[393usize]
+    pun.bits = address(393usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_2fv(p0: u32, p1: i32, p2: i32, p3: *const f32) {
     var pun: U165 = zero
-    pun.bits = procs[394usize]
+    pun.bits = address(394usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_2i(p0: u32, p1: i32, p2: i32, p3: i32) {
     var pun: U68 = zero
-    pun.bits = procs[395usize]
+    pun.bits = address(395usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_2iv(p0: u32, p1: i32, p2: i32, p3: *const i32) {
     var pun: U166 = zero
-    pun.bits = procs[396usize]
+    pun.bits = address(396usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_2ui(p0: u32, p1: i32, p2: u32, p3: u32) {
     var pun: U171 = zero
-    pun.bits = procs[397usize]
+    pun.bits = address(397usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_2uiv(p0: u32, p1: i32, p2: i32, p3: *const u32) {
     var pun: U168 = zero
-    pun.bits = procs[398usize]
+    pun.bits = address(398usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_3d(p0: u32, p1: i32, p2: f64, p3: f64, p4: f64) {
     var pun: U172 = zero
-    pun.bits = procs[399usize]
+    pun.bits = address(399usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_3dv(p0: u32, p1: i32, p2: i32, p3: *const f64) {
     var pun: U163 = zero
-    pun.bits = procs[400usize]
+    pun.bits = address(400usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_3f(p0: u32, p1: i32, p2: f32, p3: f32, p4: f32) {
     var pun: U173 = zero
-    pun.bits = procs[401usize]
+    pun.bits = address(401usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_3fv(p0: u32, p1: i32, p2: i32, p3: *const f32) {
     var pun: U165 = zero
-    pun.bits = procs[402usize]
+    pun.bits = address(402usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_3i(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32) {
     var pun: U174 = zero
-    pun.bits = procs[403usize]
+    pun.bits = address(403usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_3iv(p0: u32, p1: i32, p2: i32, p3: *const i32) {
     var pun: U166 = zero
-    pun.bits = procs[404usize]
+    pun.bits = address(404usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_3ui(p0: u32, p1: i32, p2: u32, p3: u32, p4: u32) {
     var pun: U175 = zero
-    pun.bits = procs[405usize]
+    pun.bits = address(405usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_3uiv(p0: u32, p1: i32, p2: i32, p3: *const u32) {
     var pun: U168 = zero
-    pun.bits = procs[406usize]
+    pun.bits = address(406usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_4d(p0: u32, p1: i32, p2: f64, p3: f64, p4: f64, p5: f64) {
     var pun: U176 = zero
-    pun.bits = procs[407usize]
+    pun.bits = address(407usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn program_uniform_4dv(p0: u32, p1: i32, p2: i32, p3: *const f64) {
     var pun: U163 = zero
-    pun.bits = procs[408usize]
+    pun.bits = address(408usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_4f(p0: u32, p1: i32, p2: f32, p3: f32, p4: f32, p5: f32) {
     var pun: U177 = zero
-    pun.bits = procs[409usize]
+    pun.bits = address(409usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn program_uniform_4fv(p0: u32, p1: i32, p2: i32, p3: *const f32) {
     var pun: U165 = zero
-    pun.bits = procs[410usize]
+    pun.bits = address(410usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_4i(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32) {
     var pun: U48 = zero
-    pun.bits = procs[411usize]
+    pun.bits = address(411usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn program_uniform_4iv(p0: u32, p1: i32, p2: i32, p3: *const i32) {
     var pun: U166 = zero
-    pun.bits = procs[412usize]
+    pun.bits = address(412usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_4ui(p0: u32, p1: i32, p2: u32, p3: u32, p4: u32, p5: u32) {
     var pun: U178 = zero
-    pun.bits = procs[413usize]
+    pun.bits = address(413usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn program_uniform_4uiv(p0: u32, p1: i32, p2: i32, p3: *const u32) {
     var pun: U168 = zero
-    pun.bits = procs[414usize]
+    pun.bits = address(414usize)
     pun.function(p0, p1, p2, p3)
 }
 fn program_uniform_matrix_2dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[415usize]
+    pun.bits = address(415usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_2fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[416usize]
+    pun.bits = address(416usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_2x_3dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[417usize]
+    pun.bits = address(417usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_2x_3fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[418usize]
+    pun.bits = address(418usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_2x_4dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[419usize]
+    pun.bits = address(419usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_2x_4fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[420usize]
+    pun.bits = address(420usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_3dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[421usize]
+    pun.bits = address(421usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_3fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[422usize]
+    pun.bits = address(422usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_3x_2dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[423usize]
+    pun.bits = address(423usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_3x_2fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[424usize]
+    pun.bits = address(424usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_3x_4dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[425usize]
+    pun.bits = address(425usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_3x_4fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[426usize]
+    pun.bits = address(426usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_4dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[427usize]
+    pun.bits = address(427usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_4fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[428usize]
+    pun.bits = address(428usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_4x_2dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[429usize]
+    pun.bits = address(429usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_4x_2fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[430usize]
+    pun.bits = address(430usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_4x_3dv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f64) {
     var pun: U179 = zero
-    pun.bits = procs[431usize]
+    pun.bits = address(431usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn program_uniform_matrix_4x_3fv(p0: u32, p1: i32, p2: i32, p3: u8, p4: *const f32) {
     var pun: U180 = zero
-    pun.bits = procs[432usize]
+    pun.bits = address(432usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn provoking_vertex(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[433usize]
+    pun.bits = address(433usize)
     pun.function(p0)
 }
 fn push_debug_group(p0: u32, p1: u32, p2: i32, p3: *const u8) {
     var pun: U154 = zero
-    pun.bits = procs[434usize]
+    pun.bits = address(434usize)
     pun.function(p0, p1, p2, p3)
 }
 fn query_counter(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[435usize]
+    pun.bits = address(435usize)
     pun.function(p0, p1)
 }
 fn read_buffer(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[436usize]
+    pun.bits = address(436usize)
     pun.function(p0)
 }
 fn read_pixels(p0: i32, p1: i32, p2: i32, p3: i32, p4: u32, p5: u32, p6: *void) {
     var pun: U181 = zero
-    pun.bits = procs[437usize]
+    pun.bits = address(437usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn readn_pixels(p0: i32, p1: i32, p2: i32, p3: i32, p4: u32, p5: u32, p6: i32, p7: *void) {
     var pun: U182 = zero
-    pun.bits = procs[438usize]
+    pun.bits = address(438usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn release_shader_compiler() {
     var pun: U12 = zero
-    pun.bits = procs[439usize]
+    pun.bits = address(439usize)
     pun.function()
 }
 fn renderbuffer_storage(p0: u32, p1: u32, p2: i32, p3: i32) {
     var pun: U152 = zero
-    pun.bits = procs[440usize]
+    pun.bits = address(440usize)
     pun.function(p0, p1, p2, p3)
 }
 fn renderbuffer_storage_multisample(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32) {
     var pun: U153 = zero
-    pun.bits = procs[441usize]
+    pun.bits = address(441usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn resume_transform_feedback() {
     var pun: U12 = zero
-    pun.bits = procs[442usize]
+    pun.bits = address(442usize)
     pun.function()
 }
 fn sample_coverage(p0: f32, p1: u8) {
     var pun: U183 = zero
-    pun.bits = procs[443usize]
+    pun.bits = address(443usize)
     pun.function(p0, p1)
 }
 fn sample_maski(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[444usize]
+    pun.bits = address(444usize)
     pun.function(p0, p1)
 }
 fn sampler_parameter_iiv(p0: u32, p1: u32, p2: *const i32) {
     var pun: U184 = zero
-    pun.bits = procs[445usize]
+    pun.bits = address(445usize)
     pun.function(p0, p1, p2)
 }
 fn sampler_parameter_iuiv(p0: u32, p1: u32, p2: *const u32) {
     var pun: U185 = zero
-    pun.bits = procs[446usize]
+    pun.bits = address(446usize)
     pun.function(p0, p1, p2)
 }
 fn sampler_parameterf(p0: u32, p1: u32, p2: f32) {
     var pun: U186 = zero
-    pun.bits = procs[447usize]
+    pun.bits = address(447usize)
     pun.function(p0, p1, p2)
 }
 fn sampler_parameterfv(p0: u32, p1: u32, p2: *const f32) {
     var pun: U187 = zero
-    pun.bits = procs[448usize]
+    pun.bits = address(448usize)
     pun.function(p0, p1, p2)
 }
 fn sampler_parameteri(p0: u32, p1: u32, p2: i32) {
     var pun: U78 = zero
-    pun.bits = procs[449usize]
+    pun.bits = address(449usize)
     pun.function(p0, p1, p2)
 }
 fn sampler_parameteriv(p0: u32, p1: u32, p2: *const i32) {
     var pun: U184 = zero
-    pun.bits = procs[450usize]
+    pun.bits = address(450usize)
     pun.function(p0, p1, p2)
 }
 fn scissor(p0: i32, p1: i32, p2: i32, p3: i32) {
     var pun: U188 = zero
-    pun.bits = procs[451usize]
+    pun.bits = address(451usize)
     pun.function(p0, p1, p2, p3)
 }
 fn scissor_arrayv(p0: u32, p1: i32, p2: *const i32) {
     var pun: U26 = zero
-    pun.bits = procs[452usize]
+    pun.bits = address(452usize)
     pun.function(p0, p1, p2)
 }
 fn scissor_indexed(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32) {
     var pun: U174 = zero
-    pun.bits = procs[453usize]
+    pun.bits = address(453usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn scissor_indexedv(p0: u32, p1: *const i32) {
     var pun: U158 = zero
-    pun.bits = procs[454usize]
+    pun.bits = address(454usize)
     pun.function(p0, p1)
 }
 fn shader_binary(p0: i32, p1: *const u32, p2: u32, p3: *void, p4: i32) {
     var pun: U189 = zero
-    pun.bits = procs[455usize]
+    pun.bits = address(455usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn shader_source(p0: u32, p1: i32, p2: usize, p3: *const i32) {
     var pun: U190 = zero
-    pun.bits = procs[456usize]
+    pun.bits = address(456usize)
     pun.function(p0, p1, p2, p3)
 }
 fn shader_storage_block_binding(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[457usize]
+    pun.bits = address(457usize)
     pun.function(p0, p1, p2)
 }
 fn specialize_shader(p0: u32, p1: *const u8, p2: u32, p3: *const u32, p4: *const u32) {
     var pun: U191 = zero
-    pun.bits = procs[458usize]
+    pun.bits = address(458usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn stencil_func(p0: u32, p1: i32, p2: u32) {
     var pun: U167 = zero
-    pun.bits = procs[459usize]
+    pun.bits = address(459usize)
     pun.function(p0, p1, p2)
 }
 fn stencil_func_separate(p0: u32, p1: u32, p2: i32, p3: u32) {
     var pun: U192 = zero
-    pun.bits = procs[460usize]
+    pun.bits = address(460usize)
     pun.function(p0, p1, p2, p3)
 }
 fn stencil_mask(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[461usize]
+    pun.bits = address(461usize)
     pun.function(p0)
 }
 fn stencil_mask_separate(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[462usize]
+    pun.bits = address(462usize)
     pun.function(p0, p1)
 }
 fn stencil_op(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[463usize]
+    pun.bits = address(463usize)
     pun.function(p0, p1, p2)
 }
 fn stencil_op_separate(p0: u32, p1: u32, p2: u32, p3: u32) {
     var pun: U14 = zero
-    pun.bits = procs[464usize]
+    pun.bits = address(464usize)
     pun.function(p0, p1, p2, p3)
 }
 fn tex_buffer(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[465usize]
+    pun.bits = address(465usize)
     pun.function(p0, p1, p2)
 }
 fn tex_buffer_range(p0: u32, p1: u32, p2: u32, p3: isize, p4: isize) {
     var pun: U4 = zero
-    pun.bits = procs[466usize]
+    pun.bits = address(466usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn tex_image_1d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: u32, p6: u32, p7: *void) {
     var pun: U193 = zero
-    pun.bits = procs[467usize]
+    pun.bits = address(467usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn tex_image_2d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: u32, p7: u32, p8: *void) {
     var pun: U194 = zero
-    pun.bits = procs[468usize]
+    pun.bits = address(468usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8)
 }
 fn tex_image_2d_multisample(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: u8) {
     var pun: U195 = zero
-    pun.bits = procs[469usize]
+    pun.bits = address(469usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn tex_image_3d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: u32, p8: u32, p9: *void) {
     var pun: U196 = zero
-    pun.bits = procs[470usize]
+    pun.bits = address(470usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9)
 }
 fn tex_image_3d_multisample(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32, p6: u8) {
     var pun: U197 = zero
-    pun.bits = procs[471usize]
+    pun.bits = address(471usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn tex_parameter_iiv(p0: u32, p1: u32, p2: *const i32) {
     var pun: U184 = zero
-    pun.bits = procs[472usize]
+    pun.bits = address(472usize)
     pun.function(p0, p1, p2)
 }
 fn tex_parameter_iuiv(p0: u32, p1: u32, p2: *const u32) {
     var pun: U185 = zero
-    pun.bits = procs[473usize]
+    pun.bits = address(473usize)
     pun.function(p0, p1, p2)
 }
 fn tex_parameterf(p0: u32, p1: u32, p2: f32) {
     var pun: U186 = zero
-    pun.bits = procs[474usize]
+    pun.bits = address(474usize)
     pun.function(p0, p1, p2)
 }
 fn tex_parameterfv(p0: u32, p1: u32, p2: *const f32) {
     var pun: U187 = zero
-    pun.bits = procs[475usize]
+    pun.bits = address(475usize)
     pun.function(p0, p1, p2)
 }
 fn tex_parameteri(p0: u32, p1: u32, p2: i32) {
     var pun: U78 = zero
-    pun.bits = procs[476usize]
+    pun.bits = address(476usize)
     pun.function(p0, p1, p2)
 }
 fn tex_parameteriv(p0: u32, p1: u32, p2: *const i32) {
     var pun: U184 = zero
-    pun.bits = procs[477usize]
+    pun.bits = address(477usize)
     pun.function(p0, p1, p2)
 }
 fn tex_storage_1d(p0: u32, p1: i32, p2: u32, p3: i32) {
     var pun: U198 = zero
-    pun.bits = procs[478usize]
+    pun.bits = address(478usize)
     pun.function(p0, p1, p2, p3)
 }
 fn tex_storage_2d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32) {
     var pun: U153 = zero
-    pun.bits = procs[479usize]
+    pun.bits = address(479usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn tex_storage_2d_multisample(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: u8) {
     var pun: U195 = zero
-    pun.bits = procs[480usize]
+    pun.bits = address(480usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn tex_storage_3d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32) {
     var pun: U199 = zero
-    pun.bits = procs[481usize]
+    pun.bits = address(481usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn tex_storage_3d_multisample(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32, p6: u8) {
     var pun: U197 = zero
-    pun.bits = procs[482usize]
+    pun.bits = address(482usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn tex_sub_image_1d(p0: u32, p1: i32, p2: i32, p3: i32, p4: u32, p5: u32, p6: *void) {
     var pun: U200 = zero
-    pun.bits = procs[483usize]
+    pun.bits = address(483usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn tex_sub_image_2d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: u32, p7: u32, p8: *void) {
     var pun: U194 = zero
-    pun.bits = procs[484usize]
+    pun.bits = address(484usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8)
 }
 fn tex_sub_image_3d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: u32, p9: u32, p10: *void) {
     var pun: U34 = zero
-    pun.bits = procs[485usize]
+    pun.bits = address(485usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
 }
 fn texture_barrier() {
     var pun: U12 = zero
-    pun.bits = procs[486usize]
+    pun.bits = address(486usize)
     pun.function()
 }
 fn texture_buffer(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[487usize]
+    pun.bits = address(487usize)
     pun.function(p0, p1, p2)
 }
 fn texture_buffer_range(p0: u32, p1: u32, p2: u32, p3: isize, p4: isize) {
     var pun: U4 = zero
-    pun.bits = procs[488usize]
+    pun.bits = address(488usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn texture_parameter_iiv(p0: u32, p1: u32, p2: *const i32) {
     var pun: U184 = zero
-    pun.bits = procs[489usize]
+    pun.bits = address(489usize)
     pun.function(p0, p1, p2)
 }
 fn texture_parameter_iuiv(p0: u32, p1: u32, p2: *const u32) {
     var pun: U185 = zero
-    pun.bits = procs[490usize]
+    pun.bits = address(490usize)
     pun.function(p0, p1, p2)
 }
 fn texture_parameterf(p0: u32, p1: u32, p2: f32) {
     var pun: U186 = zero
-    pun.bits = procs[491usize]
+    pun.bits = address(491usize)
     pun.function(p0, p1, p2)
 }
 fn texture_parameterfv(p0: u32, p1: u32, p2: *const f32) {
     var pun: U187 = zero
-    pun.bits = procs[492usize]
+    pun.bits = address(492usize)
     pun.function(p0, p1, p2)
 }
 fn texture_parameteri(p0: u32, p1: u32, p2: i32) {
     var pun: U78 = zero
-    pun.bits = procs[493usize]
+    pun.bits = address(493usize)
     pun.function(p0, p1, p2)
 }
 fn texture_parameteriv(p0: u32, p1: u32, p2: *const i32) {
     var pun: U184 = zero
-    pun.bits = procs[494usize]
+    pun.bits = address(494usize)
     pun.function(p0, p1, p2)
 }
 fn texture_storage_1d(p0: u32, p1: i32, p2: u32, p3: i32) {
     var pun: U198 = zero
-    pun.bits = procs[495usize]
+    pun.bits = address(495usize)
     pun.function(p0, p1, p2, p3)
 }
 fn texture_storage_2d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32) {
     var pun: U153 = zero
-    pun.bits = procs[496usize]
+    pun.bits = address(496usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn texture_storage_2d_multisample(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: u8) {
     var pun: U195 = zero
-    pun.bits = procs[497usize]
+    pun.bits = address(497usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn texture_storage_3d(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32) {
     var pun: U199 = zero
-    pun.bits = procs[498usize]
+    pun.bits = address(498usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn texture_storage_3d_multisample(p0: u32, p1: i32, p2: u32, p3: i32, p4: i32, p5: i32, p6: u8) {
     var pun: U197 = zero
-    pun.bits = procs[499usize]
+    pun.bits = address(499usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn texture_sub_image_1d(p0: u32, p1: i32, p2: i32, p3: i32, p4: u32, p5: u32, p6: *void) {
     var pun: U200 = zero
-    pun.bits = procs[500usize]
+    pun.bits = address(500usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6)
 }
 fn texture_sub_image_2d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: u32, p7: u32, p8: *void) {
     var pun: U194 = zero
-    pun.bits = procs[501usize]
+    pun.bits = address(501usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8)
 }
 fn texture_sub_image_3d(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32, p5: i32, p6: i32, p7: i32, p8: u32, p9: u32, p10: *void) {
     var pun: U34 = zero
-    pun.bits = procs[502usize]
+    pun.bits = address(502usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
 }
 fn texture_view(p0: u32, p1: u32, p2: u32, p3: u32, p4: u32, p5: u32, p6: u32, p7: u32) {
     var pun: U201 = zero
-    pun.bits = procs[503usize]
+    pun.bits = address(503usize)
     pun.function(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 fn transform_feedback_buffer_base(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[504usize]
+    pun.bits = address(504usize)
     pun.function(p0, p1, p2)
 }
 fn transform_feedback_buffer_range(p0: u32, p1: u32, p2: u32, p3: isize, p4: isize) {
     var pun: U4 = zero
-    pun.bits = procs[505usize]
+    pun.bits = address(505usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn transform_feedback_varyings(p0: u32, p1: i32, p2: usize, p3: u32) {
     var pun: U202 = zero
-    pun.bits = procs[506usize]
+    pun.bits = address(506usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_1d(p0: i32, p1: f64) {
     var pun: U203 = zero
-    pun.bits = procs[507usize]
+    pun.bits = address(507usize)
     pun.function(p0, p1)
 }
 fn uniform_1dv(p0: i32, p1: i32, p2: *const f64) {
     var pun: U204 = zero
-    pun.bits = procs[508usize]
+    pun.bits = address(508usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_1f(p0: i32, p1: f32) {
     var pun: U205 = zero
-    pun.bits = procs[509usize]
+    pun.bits = address(509usize)
     pun.function(p0, p1)
 }
 fn uniform_1fv(p0: i32, p1: i32, p2: *const f32) {
     var pun: U206 = zero
-    pun.bits = procs[510usize]
+    pun.bits = address(510usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_1i(p0: i32, p1: i32) {
     var pun: U207 = zero
-    pun.bits = procs[511usize]
+    pun.bits = address(511usize)
     pun.function(p0, p1)
 }
 fn uniform_1iv(p0: i32, p1: i32, p2: *const i32) {
     var pun: U208 = zero
-    pun.bits = procs[512usize]
+    pun.bits = address(512usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_1ui(p0: i32, p1: u32) {
     var pun: U209 = zero
-    pun.bits = procs[513usize]
+    pun.bits = address(513usize)
     pun.function(p0, p1)
 }
 fn uniform_1uiv(p0: i32, p1: i32, p2: *const u32) {
     var pun: U210 = zero
-    pun.bits = procs[514usize]
+    pun.bits = address(514usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_2d(p0: i32, p1: f64, p2: f64) {
     var pun: U211 = zero
-    pun.bits = procs[515usize]
+    pun.bits = address(515usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_2dv(p0: i32, p1: i32, p2: *const f64) {
     var pun: U204 = zero
-    pun.bits = procs[516usize]
+    pun.bits = address(516usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_2f(p0: i32, p1: f32, p2: f32) {
     var pun: U212 = zero
-    pun.bits = procs[517usize]
+    pun.bits = address(517usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_2fv(p0: i32, p1: i32, p2: *const f32) {
     var pun: U206 = zero
-    pun.bits = procs[518usize]
+    pun.bits = address(518usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_2i(p0: i32, p1: i32, p2: i32) {
     var pun: U213 = zero
-    pun.bits = procs[519usize]
+    pun.bits = address(519usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_2iv(p0: i32, p1: i32, p2: *const i32) {
     var pun: U208 = zero
-    pun.bits = procs[520usize]
+    pun.bits = address(520usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_2ui(p0: i32, p1: u32, p2: u32) {
     var pun: U214 = zero
-    pun.bits = procs[521usize]
+    pun.bits = address(521usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_2uiv(p0: i32, p1: i32, p2: *const u32) {
     var pun: U210 = zero
-    pun.bits = procs[522usize]
+    pun.bits = address(522usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_3d(p0: i32, p1: f64, p2: f64, p3: f64) {
     var pun: U215 = zero
-    pun.bits = procs[523usize]
+    pun.bits = address(523usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_3dv(p0: i32, p1: i32, p2: *const f64) {
     var pun: U204 = zero
-    pun.bits = procs[524usize]
+    pun.bits = address(524usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_3f(p0: i32, p1: f32, p2: f32, p3: f32) {
     var pun: U216 = zero
-    pun.bits = procs[525usize]
+    pun.bits = address(525usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_3fv(p0: i32, p1: i32, p2: *const f32) {
     var pun: U206 = zero
-    pun.bits = procs[526usize]
+    pun.bits = address(526usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_3i(p0: i32, p1: i32, p2: i32, p3: i32) {
     var pun: U188 = zero
-    pun.bits = procs[527usize]
+    pun.bits = address(527usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_3iv(p0: i32, p1: i32, p2: *const i32) {
     var pun: U208 = zero
-    pun.bits = procs[528usize]
+    pun.bits = address(528usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_3ui(p0: i32, p1: u32, p2: u32, p3: u32) {
     var pun: U217 = zero
-    pun.bits = procs[529usize]
+    pun.bits = address(529usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_3uiv(p0: i32, p1: i32, p2: *const u32) {
     var pun: U210 = zero
-    pun.bits = procs[530usize]
+    pun.bits = address(530usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_4d(p0: i32, p1: f64, p2: f64, p3: f64, p4: f64) {
     var pun: U218 = zero
-    pun.bits = procs[531usize]
+    pun.bits = address(531usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn uniform_4dv(p0: i32, p1: i32, p2: *const f64) {
     var pun: U204 = zero
-    pun.bits = procs[532usize]
+    pun.bits = address(532usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_4f(p0: i32, p1: f32, p2: f32, p3: f32, p4: f32) {
     var pun: U219 = zero
-    pun.bits = procs[533usize]
+    pun.bits = address(533usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn uniform_4fv(p0: i32, p1: i32, p2: *const f32) {
     var pun: U206 = zero
-    pun.bits = procs[534usize]
+    pun.bits = address(534usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_4i(p0: i32, p1: i32, p2: i32, p3: i32, p4: i32) {
     var pun: U220 = zero
-    pun.bits = procs[535usize]
+    pun.bits = address(535usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn uniform_4iv(p0: i32, p1: i32, p2: *const i32) {
     var pun: U208 = zero
-    pun.bits = procs[536usize]
+    pun.bits = address(536usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_4ui(p0: i32, p1: u32, p2: u32, p3: u32, p4: u32) {
     var pun: U221 = zero
-    pun.bits = procs[537usize]
+    pun.bits = address(537usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn uniform_4uiv(p0: i32, p1: i32, p2: *const u32) {
     var pun: U210 = zero
-    pun.bits = procs[538usize]
+    pun.bits = address(538usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_block_binding(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[539usize]
+    pun.bits = address(539usize)
     pun.function(p0, p1, p2)
 }
 fn uniform_matrix_2dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[540usize]
+    pun.bits = address(540usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_2fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[541usize]
+    pun.bits = address(541usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_2x_3dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[542usize]
+    pun.bits = address(542usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_2x_3fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[543usize]
+    pun.bits = address(543usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_2x_4dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[544usize]
+    pun.bits = address(544usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_2x_4fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[545usize]
+    pun.bits = address(545usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_3dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[546usize]
+    pun.bits = address(546usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_3fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[547usize]
+    pun.bits = address(547usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_3x_2dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[548usize]
+    pun.bits = address(548usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_3x_2fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[549usize]
+    pun.bits = address(549usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_3x_4dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[550usize]
+    pun.bits = address(550usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_3x_4fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[551usize]
+    pun.bits = address(551usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_4dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[552usize]
+    pun.bits = address(552usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_4fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[553usize]
+    pun.bits = address(553usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_4x_2dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[554usize]
+    pun.bits = address(554usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_4x_2fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[555usize]
+    pun.bits = address(555usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_4x_3dv(p0: i32, p1: i32, p2: u8, p3: *const f64) {
     var pun: U222 = zero
-    pun.bits = procs[556usize]
+    pun.bits = address(556usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_matrix_4x_3fv(p0: i32, p1: i32, p2: u8, p3: *const f32) {
     var pun: U223 = zero
-    pun.bits = procs[557usize]
+    pun.bits = address(557usize)
     pun.function(p0, p1, p2, p3)
 }
 fn uniform_subroutinesuiv(p0: u32, p1: i32, p2: *const u32) {
     var pun: U9 = zero
-    pun.bits = procs[558usize]
+    pun.bits = address(558usize)
     pun.function(p0, p1, p2)
 }
 fn unmap_buffer(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[559usize]
+    pun.bits = address(559usize)
     ret pun.function(p0)
 }
 fn unmap_named_buffer(p0: u32) -> u8 {
     var pun: U140 = zero
-    pun.bits = procs[560usize]
+    pun.bits = address(560usize)
     ret pun.function(p0)
 }
 fn use_program(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[561usize]
+    pun.bits = address(561usize)
     pun.function(p0)
 }
 fn use_program_stages(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[562usize]
+    pun.bits = address(562usize)
     pun.function(p0, p1, p2)
 }
 fn validate_program(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[563usize]
+    pun.bits = address(563usize)
     pun.function(p0)
 }
 fn validate_program_pipeline(p0: u32) {
     var pun: U1 = zero
-    pun.bits = procs[564usize]
+    pun.bits = address(564usize)
     pun.function(p0)
 }
 fn vertex_array_attrib_binding(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[565usize]
+    pun.bits = address(565usize)
     pun.function(p0, p1, p2)
 }
 fn vertex_array_attrib_format(p0: u32, p1: u32, p2: i32, p3: u32, p4: u8, p5: u32) {
     var pun: U224 = zero
-    pun.bits = procs[566usize]
+    pun.bits = address(566usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn vertex_array_attrib_i_format(p0: u32, p1: u32, p2: i32, p3: u32, p4: u32) {
     var pun: U225 = zero
-    pun.bits = procs[567usize]
+    pun.bits = address(567usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_array_attrib_l_format(p0: u32, p1: u32, p2: i32, p3: u32, p4: u32) {
     var pun: U225 = zero
-    pun.bits = procs[568usize]
+    pun.bits = address(568usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_array_binding_divisor(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[569usize]
+    pun.bits = address(569usize)
     pun.function(p0, p1, p2)
 }
 fn vertex_array_element_buffer(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[570usize]
+    pun.bits = address(570usize)
     pun.function(p0, p1)
 }
 fn vertex_array_vertex_buffer(p0: u32, p1: u32, p2: u32, p3: isize, p4: i32) {
     var pun: U226 = zero
-    pun.bits = procs[571usize]
+    pun.bits = address(571usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_array_vertex_buffers(p0: u32, p1: u32, p2: i32, p3: *const u32, p4: *const isize, p5: *const i32) {
     var pun: U227 = zero
-    pun.bits = procs[572usize]
+    pun.bits = address(572usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn vertex_attrib_1d(p0: u32, p1: f64) {
     var pun: U228 = zero
-    pun.bits = procs[573usize]
+    pun.bits = address(573usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_1dv(p0: u32, p1: *const f64) {
     var pun: U229 = zero
-    pun.bits = procs[574usize]
+    pun.bits = address(574usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_1f(p0: u32, p1: f32) {
     var pun: U157 = zero
-    pun.bits = procs[575usize]
+    pun.bits = address(575usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_1fv(p0: u32, p1: *const f32) {
     var pun: U156 = zero
-    pun.bits = procs[576usize]
+    pun.bits = address(576usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_1s(p0: u32, p1: i16) {
     var pun: U230 = zero
-    pun.bits = procs[577usize]
+    pun.bits = address(577usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_1sv(p0: u32, p1: *const i16) {
     var pun: U231 = zero
-    pun.bits = procs[578usize]
+    pun.bits = address(578usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_2d(p0: u32, p1: f64, p2: f64) {
     var pun: U63 = zero
-    pun.bits = procs[579usize]
+    pun.bits = address(579usize)
     pun.function(p0, p1, p2)
 }
 fn vertex_attrib_2dv(p0: u32, p1: *const f64) {
     var pun: U229 = zero
-    pun.bits = procs[580usize]
+    pun.bits = address(580usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_2f(p0: u32, p1: f32, p2: f32) {
     var pun: U232 = zero
-    pun.bits = procs[581usize]
+    pun.bits = address(581usize)
     pun.function(p0, p1, p2)
 }
 fn vertex_attrib_2fv(p0: u32, p1: *const f32) {
     var pun: U156 = zero
-    pun.bits = procs[582usize]
+    pun.bits = address(582usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_2s(p0: u32, p1: i16, p2: i16) {
     var pun: U233 = zero
-    pun.bits = procs[583usize]
+    pun.bits = address(583usize)
     pun.function(p0, p1, p2)
 }
 fn vertex_attrib_2sv(p0: u32, p1: *const i16) {
     var pun: U231 = zero
-    pun.bits = procs[584usize]
+    pun.bits = address(584usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_3d(p0: u32, p1: f64, p2: f64, p3: f64) {
     var pun: U234 = zero
-    pun.bits = procs[585usize]
+    pun.bits = address(585usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_3dv(p0: u32, p1: *const f64) {
     var pun: U229 = zero
-    pun.bits = procs[586usize]
+    pun.bits = address(586usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_3f(p0: u32, p1: f32, p2: f32, p3: f32) {
     var pun: U235 = zero
-    pun.bits = procs[587usize]
+    pun.bits = address(587usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_3fv(p0: u32, p1: *const f32) {
     var pun: U156 = zero
-    pun.bits = procs[588usize]
+    pun.bits = address(588usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_3s(p0: u32, p1: i16, p2: i16, p3: i16) {
     var pun: U236 = zero
-    pun.bits = procs[589usize]
+    pun.bits = address(589usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_3sv(p0: u32, p1: *const i16) {
     var pun: U231 = zero
-    pun.bits = procs[590usize]
+    pun.bits = address(590usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4_nbv(p0: u32, p1: *const i8) {
     var pun: U237 = zero
-    pun.bits = procs[591usize]
+    pun.bits = address(591usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4_niv(p0: u32, p1: *const i32) {
     var pun: U158 = zero
-    pun.bits = procs[592usize]
+    pun.bits = address(592usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4_nsv(p0: u32, p1: *const i16) {
     var pun: U231 = zero
-    pun.bits = procs[593usize]
+    pun.bits = address(593usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4_nub(p0: u32, p1: u8, p2: u8, p3: u8, p4: u8) {
     var pun: U37 = zero
-    pun.bits = procs[594usize]
+    pun.bits = address(594usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_4_nubv(p0: u32, p1: *const u8) {
     var pun: U238 = zero
-    pun.bits = procs[595usize]
+    pun.bits = address(595usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4_nuiv(p0: u32, p1: *const u32) {
     var pun: U239 = zero
-    pun.bits = procs[596usize]
+    pun.bits = address(596usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4_nusv(p0: u32, p1: *const u16) {
     var pun: U240 = zero
-    pun.bits = procs[597usize]
+    pun.bits = address(597usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4bv(p0: u32, p1: *const i8) {
     var pun: U237 = zero
-    pun.bits = procs[598usize]
+    pun.bits = address(598usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4d(p0: u32, p1: f64, p2: f64, p3: f64, p4: f64) {
     var pun: U241 = zero
-    pun.bits = procs[599usize]
+    pun.bits = address(599usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_4dv(p0: u32, p1: *const f64) {
     var pun: U229 = zero
-    pun.bits = procs[600usize]
+    pun.bits = address(600usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4f(p0: u32, p1: f32, p2: f32, p3: f32, p4: f32) {
     var pun: U242 = zero
-    pun.bits = procs[601usize]
+    pun.bits = address(601usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_4fv(p0: u32, p1: *const f32) {
     var pun: U156 = zero
-    pun.bits = procs[602usize]
+    pun.bits = address(602usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4iv(p0: u32, p1: *const i32) {
     var pun: U158 = zero
-    pun.bits = procs[603usize]
+    pun.bits = address(603usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4s(p0: u32, p1: i16, p2: i16, p3: i16, p4: i16) {
     var pun: U243 = zero
-    pun.bits = procs[604usize]
+    pun.bits = address(604usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_4sv(p0: u32, p1: *const i16) {
     var pun: U231 = zero
-    pun.bits = procs[605usize]
+    pun.bits = address(605usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4ubv(p0: u32, p1: *const u8) {
     var pun: U238 = zero
-    pun.bits = procs[606usize]
+    pun.bits = address(606usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4uiv(p0: u32, p1: *const u32) {
     var pun: U239 = zero
-    pun.bits = procs[607usize]
+    pun.bits = address(607usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_4usv(p0: u32, p1: *const u16) {
     var pun: U240 = zero
-    pun.bits = procs[608usize]
+    pun.bits = address(608usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_binding(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[609usize]
+    pun.bits = address(609usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_divisor(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[610usize]
+    pun.bits = address(610usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_format(p0: u32, p1: i32, p2: u32, p3: u8, p4: u32) {
     var pun: U244 = zero
-    pun.bits = procs[611usize]
+    pun.bits = address(611usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_i_1i(p0: u32, p1: i32) {
     var pun: U139 = zero
-    pun.bits = procs[612usize]
+    pun.bits = address(612usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_1iv(p0: u32, p1: *const i32) {
     var pun: U158 = zero
-    pun.bits = procs[613usize]
+    pun.bits = address(613usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_1ui(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[614usize]
+    pun.bits = address(614usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_1uiv(p0: u32, p1: *const u32) {
     var pun: U239 = zero
-    pun.bits = procs[615usize]
+    pun.bits = address(615usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_2i(p0: u32, p1: i32, p2: i32) {
     var pun: U66 = zero
-    pun.bits = procs[616usize]
+    pun.bits = address(616usize)
     pun.function(p0, p1, p2)
 }
 fn vertex_attrib_i_2iv(p0: u32, p1: *const i32) {
     var pun: U158 = zero
-    pun.bits = procs[617usize]
+    pun.bits = address(617usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_2ui(p0: u32, p1: u32, p2: u32) {
     var pun: U2 = zero
-    pun.bits = procs[618usize]
+    pun.bits = address(618usize)
     pun.function(p0, p1, p2)
 }
 fn vertex_attrib_i_2uiv(p0: u32, p1: *const u32) {
     var pun: U239 = zero
-    pun.bits = procs[619usize]
+    pun.bits = address(619usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_3i(p0: u32, p1: i32, p2: i32, p3: i32) {
     var pun: U68 = zero
-    pun.bits = procs[620usize]
+    pun.bits = address(620usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_i_3iv(p0: u32, p1: *const i32) {
     var pun: U158 = zero
-    pun.bits = procs[621usize]
+    pun.bits = address(621usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_3ui(p0: u32, p1: u32, p2: u32, p3: u32) {
     var pun: U14 = zero
-    pun.bits = procs[622usize]
+    pun.bits = address(622usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_i_3uiv(p0: u32, p1: *const u32) {
     var pun: U239 = zero
-    pun.bits = procs[623usize]
+    pun.bits = address(623usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_4bv(p0: u32, p1: *const i8) {
     var pun: U237 = zero
-    pun.bits = procs[624usize]
+    pun.bits = address(624usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_4i(p0: u32, p1: i32, p2: i32, p3: i32, p4: i32) {
     var pun: U174 = zero
-    pun.bits = procs[625usize]
+    pun.bits = address(625usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_i_4iv(p0: u32, p1: *const i32) {
     var pun: U158 = zero
-    pun.bits = procs[626usize]
+    pun.bits = address(626usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_4sv(p0: u32, p1: *const i16) {
     var pun: U231 = zero
-    pun.bits = procs[627usize]
+    pun.bits = address(627usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_4ubv(p0: u32, p1: *const u8) {
     var pun: U238 = zero
-    pun.bits = procs[628usize]
+    pun.bits = address(628usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_4ui(p0: u32, p1: u32, p2: u32, p3: u32, p4: u32) {
     var pun: U15 = zero
-    pun.bits = procs[629usize]
+    pun.bits = address(629usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_i_4uiv(p0: u32, p1: *const u32) {
     var pun: U239 = zero
-    pun.bits = procs[630usize]
+    pun.bits = address(630usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_4usv(p0: u32, p1: *const u16) {
     var pun: U240 = zero
-    pun.bits = procs[631usize]
+    pun.bits = address(631usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_i_format(p0: u32, p1: i32, p2: u32, p3: u32) {
     var pun: U171 = zero
-    pun.bits = procs[632usize]
+    pun.bits = address(632usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_i_pointer(p0: u32, p1: i32, p2: u32, p3: i32, p4: *void) {
     var pun: U245 = zero
-    pun.bits = procs[633usize]
+    pun.bits = address(633usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_l_1d(p0: u32, p1: f64) {
     var pun: U228 = zero
-    pun.bits = procs[634usize]
+    pun.bits = address(634usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_l_1dv(p0: u32, p1: *const f64) {
     var pun: U229 = zero
-    pun.bits = procs[635usize]
+    pun.bits = address(635usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_l_2d(p0: u32, p1: f64, p2: f64) {
     var pun: U63 = zero
-    pun.bits = procs[636usize]
+    pun.bits = address(636usize)
     pun.function(p0, p1, p2)
 }
 fn vertex_attrib_l_2dv(p0: u32, p1: *const f64) {
     var pun: U229 = zero
-    pun.bits = procs[637usize]
+    pun.bits = address(637usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_l_3d(p0: u32, p1: f64, p2: f64, p3: f64) {
     var pun: U234 = zero
-    pun.bits = procs[638usize]
+    pun.bits = address(638usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_l_3dv(p0: u32, p1: *const f64) {
     var pun: U229 = zero
-    pun.bits = procs[639usize]
+    pun.bits = address(639usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_l_4d(p0: u32, p1: f64, p2: f64, p3: f64, p4: f64) {
     var pun: U241 = zero
-    pun.bits = procs[640usize]
+    pun.bits = address(640usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_l_4dv(p0: u32, p1: *const f64) {
     var pun: U229 = zero
-    pun.bits = procs[641usize]
+    pun.bits = address(641usize)
     pun.function(p0, p1)
 }
 fn vertex_attrib_l_format(p0: u32, p1: i32, p2: u32, p3: u32) {
     var pun: U171 = zero
-    pun.bits = procs[642usize]
+    pun.bits = address(642usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_l_pointer(p0: u32, p1: i32, p2: u32, p3: i32, p4: *void) {
     var pun: U245 = zero
-    pun.bits = procs[643usize]
+    pun.bits = address(643usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn vertex_attrib_p_1ui(p0: u32, p1: u32, p2: u8, p3: u32) {
     var pun: U246 = zero
-    pun.bits = procs[644usize]
+    pun.bits = address(644usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_p_1uiv(p0: u32, p1: u32, p2: u8, p3: *const u32) {
     var pun: U247 = zero
-    pun.bits = procs[645usize]
+    pun.bits = address(645usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_p_2ui(p0: u32, p1: u32, p2: u8, p3: u32) {
     var pun: U246 = zero
-    pun.bits = procs[646usize]
+    pun.bits = address(646usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_p_2uiv(p0: u32, p1: u32, p2: u8, p3: *const u32) {
     var pun: U247 = zero
-    pun.bits = procs[647usize]
+    pun.bits = address(647usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_p_3ui(p0: u32, p1: u32, p2: u8, p3: u32) {
     var pun: U246 = zero
-    pun.bits = procs[648usize]
+    pun.bits = address(648usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_p_3uiv(p0: u32, p1: u32, p2: u8, p3: *const u32) {
     var pun: U247 = zero
-    pun.bits = procs[649usize]
+    pun.bits = address(649usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_p_4ui(p0: u32, p1: u32, p2: u8, p3: u32) {
     var pun: U246 = zero
-    pun.bits = procs[650usize]
+    pun.bits = address(650usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_p_4uiv(p0: u32, p1: u32, p2: u8, p3: *const u32) {
     var pun: U247 = zero
-    pun.bits = procs[651usize]
+    pun.bits = address(651usize)
     pun.function(p0, p1, p2, p3)
 }
 fn vertex_attrib_pointer(p0: u32, p1: i32, p2: u32, p3: u8, p4: i32, p5: *void) {
     var pun: U248 = zero
-    pun.bits = procs[652usize]
+    pun.bits = address(652usize)
     pun.function(p0, p1, p2, p3, p4, p5)
 }
 fn vertex_binding_divisor(p0: u32, p1: u32) {
     var pun: U0 = zero
-    pun.bits = procs[653usize]
+    pun.bits = address(653usize)
     pun.function(p0, p1)
 }
 fn viewport(p0: i32, p1: i32, p2: i32, p3: i32) {
     var pun: U188 = zero
-    pun.bits = procs[654usize]
+    pun.bits = address(654usize)
     pun.function(p0, p1, p2, p3)
 }
 fn viewport_arrayv(p0: u32, p1: i32, p2: *const f32) {
     var pun: U25 = zero
-    pun.bits = procs[655usize]
+    pun.bits = address(655usize)
     pun.function(p0, p1, p2)
 }
 fn viewport_indexedf(p0: u32, p1: f32, p2: f32, p3: f32, p4: f32) {
     var pun: U242 = zero
-    pun.bits = procs[656usize]
+    pun.bits = address(656usize)
     pun.function(p0, p1, p2, p3, p4)
 }
 fn viewport_indexedfv(p0: u32, p1: *const f32) {
     var pun: U156 = zero
-    pun.bits = procs[657usize]
+    pun.bits = address(657usize)
     pun.function(p0, p1)
 }
 fn wait_sync(p0: usize, p1: u32, p2: u64) {
     var pun: U249 = zero
-    pun.bits = procs[658usize]
+    pun.bits = address(658usize)
     pun.function(p0, p1, p2)
 }

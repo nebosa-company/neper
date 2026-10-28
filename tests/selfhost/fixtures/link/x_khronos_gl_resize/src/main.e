@@ -100,7 +100,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var live = c
-    if context.load(a, options) != ok { os.exit(2i32) }
+    if context.load(a, &live, options) != ok { os.exit(2i32) }
     let (r_value, resizer_error) = resizer(a)
     if resizer_error != ok {
         let printed = io.print("no way to resize a window from outside on this host; nothing checked\n")

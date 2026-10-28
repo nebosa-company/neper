@@ -43349,3 +43349,23 @@ open or attachment fails partway through.
 including a factory that fails after attachment. `x_khronos_gl_present` runs the same
 lifecycle against GL and presents the final frame; it skips only when the first real GL
 presenter is unavailable.
+
+## D5916 — GL dispatch follows the current context, not the process
+
+The generated GL wrappers select a fixed dispatch table owned by `gl.Dispatch`, which
+the native `x.khronos.context.Context` stores. `context.load` fills that context's
+table after its native context is current; every successful `context.make_current`
+activates the same table on the calling host thread. Closing a context clears its active
+selection and returns the table slot, so detached GL workers do not consume slots over
+time.
+
+The table is therefore isolated both between GL contexts on one presentation thread and
+between the presentation thread and the per-device compute workers. Windows resolves
+WGL or EGL from the particular `Context` passed to `load`, rather than through the old
+process-global `resolving_egl` flag. EGL's library table remains process-wide: the
+loader opens one EGL implementation for the process, while the GL entry points that
+depend on the current context are the isolated state.
+
+`x_khronos_gl_load` synchronizes two fake-resolver threads that return distinct
+`glGetError` functions. Both must retain their own result after both tables are loaded;
+the fixture runs without a graphics driver and catches a process-global table overwrite.

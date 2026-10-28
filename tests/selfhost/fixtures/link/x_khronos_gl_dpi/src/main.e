@@ -41,7 +41,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var live = c
-    if context.load(a, options) != ok { os.exit(2i32) }
+    if context.load(a, &live, options) != ok { os.exit(2i32) }
     let (user32, user32_error) = os.dlopen(a, "user32.dll")
     if user32_error != ok { os.exit(3i32) }
     let (send, send_error) = os.dlsym[SendMessage](a, user32, "SendMessageW")
