@@ -647,9 +647,7 @@ fn functional_pseudo(p: *const Parser, name: str, arg: []const syntax.Token) -> 
     ret (new_simple(.PseudoClass, name), true)
 }
 
-// Parse a rule's selector list: each comma-separated complex selector that can be represented, with the pseudo-element it
-// targets if any; the rest are dropped.
-fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err) {
+fn parse_selector_list(a: *mem.Arena, source: str, tokens: []const syntax.Token, forgiving: bool) -> ([]const RuleSelector, err) {
     let p = Parser { a: a, src: source }
     let (made, e) = list.init[RuleSelector](a, 4usize)
     if e != ok { ret (zero, e) }
@@ -658,10 +656,26 @@ fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const synt
     var s = 0usize
     while s < segs.len {
         let parsed = parse_complex(&p, trim(segs[s]))
-        if parsed.good {
+        if !parsed.good {
+            if !forgiving { ret (zero, ok) }
+        } else {
             try list.push[RuleSelector](&out, RuleSelector { selector: parsed.selector, has_pseudo: parsed.has_pseudo, pseudo: parsed.pseudo })
         }
         s += 1usize
     }
     ret (list.slice_const[RuleSelector](&out), ok)
+}
+
+// Parse a rule's selector list. Unlike forgiving selector lists used by :is() and
+// :where(), one invalid arm invalidates the entire rule selector list.
+fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err) {
+    let (out, e) = parse_selector_list(a, source, tokens, false)
+    ret (out, e)
+}
+
+// Differential parser tests use Vaper's forgiving list representation to retain
+// the valid arms of intentionally malformed fuzz cases.
+fn parse_selector_list_forgiving(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err) {
+    let (out, e) = parse_selector_list(a, source, tokens, true)
+    ret (out, e)
 }

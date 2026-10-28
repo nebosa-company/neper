@@ -102,7 +102,7 @@ fn selectors_value(a: *mem.Arena, sels: []const selector.Selector) -> json.Value
 fn run_one(a: *mem.Arena, src: str) -> str {
     let (tokens, te) = syntax.tokenize(a, src)
     if te != ok { os.exit(87i32) }
-    let (rules, re) = selector.parse_selector_list_for_rule(a, src, tokens)
+    let (rules, re) = selector.parse_selector_list_forgiving(a, src, tokens)
     if re != ok { os.exit(88i32) }
     let (out, oe) = mem.alloc[json.Value](a, rules.len + 1usize)
     if oe != ok { os.exit(89i32) }
@@ -152,6 +152,12 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
+    // #1182: a style-rule selector list is not forgiving; a malformed arm
+    // cannot leave the preceding valid arm active.
+    let (mixed_tokens, mixed_token_error) = syntax.tokenize(a, "h1, h2::unsupported")
+    if mixed_token_error != ok { os.exit(36i32) }
+    let (mixed, mixed_parse_error) = selector.parse_selector_list_for_rule(a, "h1, h2::unsupported", mixed_tokens)
+    if mixed_parse_error != ok || mixed.len != 0usize { os.exit(37i32) }
     try io.print("css selector ok")
     ret ok
 }
