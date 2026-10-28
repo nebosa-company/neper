@@ -98,6 +98,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 6: Jacobian-transpose IK on the planar arm.
     let goal3: [3]f64 = [3]f64{ 0.5495529447687186, 1.7959060391526764, 0.0 }
     joints3 = [3]f64{ 0.3, 0.5, 0.2 }
+    var short_jac: [9]f64 = zero
+    var short_error: [3]f64 = zero
+    if kin.jacobian(planar[..], joints3[..2usize], goal3[..], short_jac[..], short_error[..], scratch[..]) != kin.TooSmall { os.exit(6i32) }
     let (jt_error, jt_status) = kin.ik_jacobian(planar[..], joints3[..], goal3[..], 200usize, 0.2f64, scratch[..])
     if jt_status != ok || jt_error > 1.0e-4f64 || !near(jt_error, 4.5799050237298015e-08f64, 1.0e-9f64) { os.exit(6i32) }
     if !near(joints3[0usize], 0.5947908144228231f64, 1.0e-6f64) || !near(joints3[1usize], 1.0191730783146138f64, 1.0e-6f64) || !near(joints3[2usize], 0.46706351114510614f64, 1.0e-6f64) { os.exit(6i32) }
