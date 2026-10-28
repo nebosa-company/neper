@@ -4405,6 +4405,22 @@ fn size_block_box(l: *Layout, c: u32, cbw: f64, offer: f64) {
     used_width_block(l, c, cbw, offer)
     // A definite height and a ratio give an automatic width (instead of filling the container).
     let s2 = bstyle(l, c)
+    // An automatic height clamped by max-height hands the clamp to the width through the ratio.
+    if s2.width.kind != .Px && s2.height.kind == .Auto && s2.max_height.kind == .Px && l.boxes.items[usize(c)].inner == .Flow {
+        var pcb = -1.0f64
+        let par = l.boxes.items[usize(c)].parent
+        if par != NONE {
+            let ps = bstyle(l, par)
+            if ps.height.kind == .Px && ps.height.pct == 0.0f64 { pcb = to_content_h(l, par, ps.height.px) }
+        }
+        let (mxh, has_mx) = resolve_len(s2.max_height, pcb)
+        let b3 = bx(l, c)
+        let (rhh, has_rh) = ratio_height(l, c, b3.w - horizontal_extras(b3))
+        if has_mx && has_rh && rhh > to_content_h(l, c, mxh) {
+            let (rwm, has_rwm) = ratio_width(l, c, to_content_h(l, c, mxh))
+            if has_rwm && rwm + horizontal_extras(b3) < b3.w { b3.w = rwm + horizontal_extras(b3) }
+        }
+    }
     if s2.width.kind != .Px && s2.height.kind == .Px && s2.height.pct == 0.0f64 {
         let b2 = bx(l, c)
         if b2.inner == .Flow {
