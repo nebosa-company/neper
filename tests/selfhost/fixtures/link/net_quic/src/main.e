@@ -185,11 +185,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var probe: [1200]u8 = zero
     // A server must defer a probe until the candidate path has enough received
     // bytes for the short header and PATH_CHALLENGE.
-    quic.path_received(&conn, 1usize, 4u64)
-    let (_, e5e0) = quic.migrate(&conn, addr_b, 100u64, challenge, probe[0..])
+    let (_, e5e0) = quic.migrate(&conn, addr_b, 100u64, challenge, 4u64, probe[0..])
     if e5e0 != quic.AmplificationLimited || conn.path_count != 1usize || peer_active[1] != quic.CID_UNUSED { os.exit(5i32) }
-    quic.path_received(&conn, 1usize, 396u64)
-    let (probe_len, e5e) = quic.migrate(&conn, addr_b, 100u64, challenge, probe[0..])
+    let (probe_len, e5e) = quic.migrate(&conn, addr_b, 100u64, challenge, 400u64, probe[0..])
     if e5e != ok || probe_len != 1200usize { os.exit(5i32) }
     let probe_head: [18]u8 = [18]u8{ 64, 176, 177, 178, 179, 180, 181, 182, 183, 26, 90, 1, 2, 3, 4, 5, 6, 165 }
     if !quic.bytes_equal(probe[..18usize], probe_head[0..]) { os.exit(5i32) }
@@ -202,8 +200,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !quic.address_equal(conn.paths[1].remote, addr_b) || !quic.address_equal(conn.paths[1].local, conn.paths[0].local) { os.exit(5i32) }
     let (unused1, found1) = quic.cids_pick_unused(&conn.peer_cids)
     if !found1 || unused1 != 2usize { os.exit(5i32) }
-    quic.path_received(&conn, 2usize, 400u64)
-    let (_, e5f) = quic.migrate(&conn, addr_b, 100u64, challenge, probe[..100usize])
+    let (_, e5f) = quic.migrate(&conn, addr_b, 100u64, challenge, 400u64, probe[..100usize])
     if e5f != quic.TooSmall { os.exit(5i32) }
     var stray: [8]u8 = zero
     let (matched0, e5g) = quic.on_path_response(&conn, stray, 150u64)
@@ -215,22 +212,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if quic.cids_active_count(&conn.peer_cids) != 2usize || peer_active[0] != quic.CID_RETIRED { os.exit(5i32) }
     let (retire_again, e5j) = quic.retire_old(&conn, buf[0..])
     if e5j != ok || retire_again != 0usize { os.exit(5i32) }
-    let (_, e5k) = quic.migrate(&conn, addr_b, 200u64, challenge, probe[0..])
+    let (_, e5k) = quic.migrate(&conn, addr_b, 200u64, challenge, 0u64, probe[0..])
     if e5k != quic.Invalid { os.exit(5i32) }
     let challenge2: [8]u8 = [8]u8{ 9, 8, 7, 6, 5, 4, 3, 2 }
-    let (probe2_len, e5l) = quic.migrate(&conn, addr_c, 200u64, challenge2, probe[0..])
+    let (probe2_len, e5l) = quic.migrate(&conn, addr_c, 200u64, challenge2, 400u64, probe[0..])
     if e5l != ok || probe2_len != 1200usize { os.exit(5i32) }
     let probe2_head: [15]u8 = [15]u8{ 64, 192, 193, 194, 195, 196, 26, 9, 8, 7, 6, 5, 4, 3, 2 }
     if !quic.bytes_equal(probe[..15usize], probe2_head[0..]) || conn.paths[2].dcid_index != 2u32 { os.exit(5i32) }
     if quic.path_timeout(&conn, 289u64, 30u64) || conn.paths[2].state != .Validating { os.exit(5i32) }
     if !quic.path_timeout(&conn, 290u64, 30u64) || conn.paths[2].state != .Failed || conn.active_path != 1u32 { os.exit(5i32) }
-    let (_, e5m) = quic.migrate(&conn, addr_d, 300u64, challenge2, probe[0..])
+    let (_, e5m) = quic.migrate(&conn, addr_d, 300u64, challenge2, 0u64, probe[0..])
     if e5m != quic.NoCid { os.exit(5i32) }
     // A fourth CID lets one more path open; a fifth path has no slot.
     var cid_d: [4]u8 = [4]u8{ 1, 2, 3, 4 }
     if quic.cids_insert(&conn.peer_cids, 3u64, 0u64, cid_d[0..], zero_token[0..]) != ok { os.exit(5i32) }
-    quic.path_received(&conn, 3usize, 400u64)
-    let (_, e5n) = quic.migrate(&conn, addr_d, 300u64, challenge2, probe[0..])
+    let (_, e5n) = quic.migrate(&conn, addr_d, 300u64, challenge2, 400u64, probe[0..])
     if e5n != ok || conn.path_count != 4usize { os.exit(5i32) }
     if quic.cids_insert(&conn.peer_cids, 4u64, 0u64, cid_d[..3usize], zero_token[0..]) != quic.Full { os.exit(5i32) }
     // retire_prior_to sweeps the earlier slots.
@@ -249,8 +245,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if quic.cids_retire(&sweep, 0u64) || !quic.cids_retire(&sweep, 2u64) || quic.cids_active_count(&sweep) != 0usize { os.exit(5i32) }
 
     // 6: the amplification limit and PATH_RESPONSE answers.
-    // This subcase starts with an independent receive accounting sample.
-    conn.paths[2].bytes_received = 0u64
     var server_path: quic.Path = zero
     server_path.state = .Unvalidated
     server_path.bytes_received = 100u64
@@ -269,7 +263,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     quic.path_received(&conn, 2usize, 100u64)
     let (resp2_len, e6b) = quic.on_path_challenge(&conn, peer_challenge, 2usize, probe[0..])
     if e6b != ok || resp2_len != 15usize || probe[0] != 64u8 || probe[1] != 192u8 || probe[6] != 27u8 || probe[14] != 8u8 { os.exit(6i32) }
-    if conn.paths[2].bytes_sent != 1215u64 || conn.paths[2].bytes_received != 100u64 { os.exit(6i32) }
+    if conn.paths[2].bytes_sent != 1215u64 || conn.paths[2].bytes_received != 500u64 { os.exit(6i32) }
     let (_, e6c) = quic.on_path_challenge(&conn, peer_challenge, 7usize, probe[0..])
     if e6c != quic.Invalid { os.exit(6i32) }
 

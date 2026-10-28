@@ -685,21 +685,19 @@ fn path_received(c: *Connection, index: usize, n: u64) {
 
 // Open a path to `new_remote` on a never-used peer CID and write the probe
 // datagram into `out`: a short header, PATH_CHALLENGE with `challenge`, and
-// PADDING up to 1200 bytes (s8.2.1, s9.3). The caller records a server's
-// received bytes in the next path-storage slot with `path_received` before
-// this call; the probe is bounded by that path's 3x allowance. `Invalid` when
-// `new_remote` is the active path's address, `Full` with no path slot, `NoCid`
-// with no unused CID (s9.5 forbids reusing one), `TooSmall` when `out` cannot
-// hold the permitted probe, and `AmplificationLimited` when it cannot hold the
-// short header plus challenge. Answers the datagram size; the new path is
-// `path_count - 1`, Validating.
-fn migrate(c: *Connection, new_remote: Address, now: u64, challenge: [8]u8, out: []u8) -> (usize, err) {
+// PADDING up to 1200 bytes (s8.2.1, s9.3). `received` is the byte count from
+// the datagram that introduced this server-side path; the probe is bounded by
+// that path's 3x allowance. `Invalid` when `new_remote` is the active path's
+// address, `Full` with no path slot, `NoCid` with no unused CID (s9.5 forbids
+// reusing one), `TooSmall` when `out` cannot hold the permitted probe, and
+// `AmplificationLimited` when it cannot hold the short header plus challenge.
+// Answers the datagram size; the new path is `path_count - 1`, Validating.
+fn migrate(c: *Connection, new_remote: Address, now: u64, challenge: [8]u8, received: u64, out: []u8) -> (usize, err) {
     let cur = c.paths[usize(c.active_path)]
     if address_equal(new_remote, cur.remote) { ret (0usize, Invalid) }
     if c.path_count >= c.paths.len { ret (0usize, Full) }
     let (index, found) = cids_pick_unused(&c.peer_cids)
     if !found { ret (0usize, NoCid) }
-    let received = c.paths[c.path_count].bytes_received
     let header_size = 1usize + cid_bytes(&c.peer_cids, index).len
     let probe_min = header_size + 9usize
     var budget_path: Path = zero
