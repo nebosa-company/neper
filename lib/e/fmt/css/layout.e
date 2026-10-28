@@ -795,14 +795,32 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     if s.display == .None { ret }
     apply_counter_props(l, s, node)
     // The implicit `list-item` counter: a list starts one and each item steps it (see `list_ordinal`).
-    if n.namespace == .Html && (str.eq(n.name, "ol") || str.eq(n.name, "ul") || str.eq(n.name, "menu")) { counter_instantiate(l, "list-item", 0i64) }
+    if n.namespace == .Html && (str.eq(n.name, "ol") || str.eq(n.name, "ul") || str.eq(n.name, "menu")) && !css_resets_list_item(l, node) { counter_instantiate(l, "list-item", 0i64) }
     if s.display == .ListItem {
         var li_at = find_counter(l, "list-item")
         if li_at < 0i64 {
             counter_instantiate(l, "list-item", 0i64)
             li_at = i64(l.counters.len) - 1i64
         }
-        l.counters.items[usize(li_at)].value = list_ordinal(l, node)
+        let par = l.d.nodes[usize(node)].parent
+        if par != html.NONE && css_resets_list_item(l, par) {
+            // A list whose counter the stylesheet resets counts by the CSS rules: an item without its own step adds one.
+            let (incr, has_incr) = extra_text(s, "counter-increment")
+            var own = false
+            if has_incr {
+                let (iv, found) = incr_of(l, incr, "list-item")
+                own = found
+            }
+            if !own {
+                if l.counters.items[usize(li_at)].has_pend {
+                    l.counters.items[usize(li_at)].value = l.counters.items[usize(li_at)].pend
+                    l.counters.items[usize(li_at)].has_pend = false
+                }
+                l.counters.items[usize(li_at)].value += 1i64
+            }
+        } else {
+            l.counters.items[usize(li_at)].value = list_ordinal(l, node)
+        }
     }
     if s.display == .Contents {
         // The element has no box of its own, but its ::before and ::after still generate boxes in its parent.
@@ -847,7 +865,15 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
         let ms = s.pseudo[2usize]
         if mem.address_of(ms) != 0usize { marker_style = push_style(l, ms) }
         let m = new_box(l, .Marker, s.list_style_position == .Inside, true, node, marker_style)
-        bx(l, m).aux = u32(list_ordinal(l, node) & 4294967295i64)
+        var marker_value = 0i64
+        let mpar = l.d.nodes[usize(node)].parent
+        let mat = find_counter(l, "list-item")
+        if mpar != html.NONE && css_resets_list_item(l, mpar) && mat >= 0i64 {
+            marker_value = l.counters.items[usize(mat)].value
+        } else {
+            marker_value = list_ordinal(l, node)
+        }
+        bx(l, m).aux = u32(marker_value & 4294967295i64)
         if mem.address_of(ms) != 0usize {
             let (custom, has_custom) = eval_content(l, ms, node)
             if has_custom {
@@ -865,6 +891,12 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     let fl = s.pseudo[3usize]
     if mem.address_of(fl) != 0usize && !inline_level { apply_first_letter(l, b, fl) }
     fix_anonymous(l, b)
+}
+
+// Whether the stylesheet resets `list-item` on list `node` itself.
+fn css_resets_list_item(l: *Layout, node: u32) -> bool {
+    let (rs, has_rs) = extra_text(&l.styles[usize(node)], "counter-reset")
+    ret has_rs && resets_name(l, rs, "list-item")
 }
 
 // The step of a list item: its own `counter-increment` of `list-item`, else 1 (-1 in a reversed list).
