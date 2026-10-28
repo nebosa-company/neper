@@ -79,6 +79,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if eleventh != mem.Full || mem.pool_free_count(&p) != 0usize { os.exit(4i32) }
     if mem.pool_free(&p, 72usize) != ok || mem.pool_free(&p, 168usize) != ok { os.exit(5i32) }
     if mem.pool_free(&p, 70usize) != mem.Invalid { os.exit(5i32) }
+    if mem.pool_free(&p, 18446744073709551608usize) != mem.Invalid { os.exit(5i32) }
     let (first_reuse, _) = mem.pool_alloc(&p)
     let (second_reuse, _) = mem.pool_alloc(&p)
     let (_, third_reuse) = mem.pool_alloc(&p)

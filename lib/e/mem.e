@@ -121,7 +121,7 @@ fn pool_slot(p: *Pool, offset: usize) -> []u8 {
 
 // `Invalid` for an offset that is not a slot of this pool; a double free is not caught.
 fn pool_free(p: *Pool, offset: usize) -> err {
-    if offset + p.size > p.storage.len || offset % p.size != 0usize { ret Invalid }
+    if p.size == 0usize || offset > p.storage.len || p.size > p.storage.len - offset || offset % p.size != 0usize { ret Invalid }
     put_link(p.storage, offset, p.head)
     p.head = offset
     p.free_count += 1usize
