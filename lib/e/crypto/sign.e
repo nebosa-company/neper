@@ -2416,8 +2416,19 @@ type XmssSecretKey = struct { index: u32, height: usize, sk_seed: [32]u8, sk_prf
 type XmssPublicKey = struct { height: usize, root: [32]u8, pub_seed: [32]u8 }
 
 fn xmss_sha2_10_256_height() -> usize { ret 10usize }
-fn xmss_nodes_len(height: usize) -> usize { ret ((2usize << u32(height)) - 1usize) * 32usize }
-fn xmss_sig_len(height: usize) -> usize { ret 36usize + 2144usize + 32usize * height }
+fn xmss_height_valid(height: usize) -> bool { ret height >= 1usize && height <= 20usize }
+
+// Zero denotes an unsupported height, so callers can reject it before sizing storage.
+fn xmss_nodes_len(height: usize) -> usize {
+    if !xmss_height_valid(height) { ret 0usize }
+    ret ((2usize << u32(height)) - 1usize) * 32usize
+}
+
+// Zero denotes an unsupported height, so callers can reject it before sizing storage.
+fn xmss_sig_len(height: usize) -> usize {
+    if !xmss_height_valid(height) { ret 0usize }
+    ret 36usize + 2144usize + 32usize * height
+}
 
 // SHA256(toByte(prefix, 32) || key || m).
 fn xmss_hash(prefix: u8, key: []const u8, m: []const u8) -> [32]u8 {
@@ -2602,8 +2613,9 @@ fn xmss_node_at(height: usize, level: usize, j: usize) -> usize {
 // Algorithm 10 without the OID: every node of the tree into `nodes`, the root in the key.
 fn xmss_keygen(height: usize, sk_seed: [32]u8, sk_prf: [32]u8, pub_seed: [32]u8, nodes: []u8) -> (XmssSecretKey, err) {
     var sk: XmssSecretKey = zero
-    if height < 1usize || height > 20usize { ret (sk, Invalid) }
-    if nodes.len < xmss_nodes_len(height) { ret (sk, TooSmall) }
+    let nodes_len = xmss_nodes_len(height)
+    if nodes_len == 0usize { ret (sk, Invalid) }
+    if nodes.len < nodes_len { ret (sk, TooSmall) }
     sk.height = height
     sk.sk_seed = sk_seed
     sk.sk_prf = sk_prf
@@ -2672,8 +2684,11 @@ fn xmss_message_digest(r: []const u8, root: []const u8, index: u32, message: []c
 // Algorithm 12: sig = idx (4) || r (32) || sig_ots (2144) || auth (32 h); advances sk.index.
 fn xmss_sign(sk: *XmssSecretKey, nodes: []const u8, message: []const u8, sig: []u8) -> err {
     let height = sk.height
-    if sig.len < xmss_sig_len(height) { ret TooSmall }
-    if nodes.len < xmss_nodes_len(height) { ret TooSmall }
+    let sig_len = xmss_sig_len(height)
+    let nodes_len = xmss_nodes_len(height)
+    if sig_len == 0usize || nodes_len == 0usize { ret Invalid }
+    if sig.len < sig_len { ret TooSmall }
+    if nodes.len < nodes_len { ret TooSmall }
     if usize(sk.index) >= (1usize << u32(height)) { ret Invalid }
     let index = sk.index
     sk.index += 1u32
@@ -2714,7 +2729,8 @@ fn xmss_sign(sk: *XmssSecretKey, nodes: []const u8, message: []const u8, sig: []
 // Algorithm 14: the WOTS+ public key from the signature, its L-tree, then the root path.
 fn xmss_verify(pk: XmssPublicKey, message: []const u8, sig: []const u8) -> bool {
     let height = pk.height
-    if sig.len < xmss_sig_len(height) { ret false }
+    let sig_len = xmss_sig_len(height)
+    if sig_len == 0usize || sig.len < sig_len { ret false }
     let index = xmss_adrs_get(sig, 0usize)
     if usize(index) >= (1usize << u32(height)) { ret false }
     let digest = xmss_message_digest(sig[4..36], pk.root[0..], index, message)

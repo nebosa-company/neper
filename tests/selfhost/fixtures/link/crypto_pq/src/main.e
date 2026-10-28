@@ -147,6 +147,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if sign.xmss_verify(xpk, "stateful hash-based signaturex", xsig[0..]) { os.exit(59i32) }
     xsk.index = u32(16usize)
     if sign.xmss_sign(&xsk, nodes[0..], xmsg, xsig[0..]) != sign.Invalid { os.exit(60i32) }
+    if sign.xmss_nodes_len(0usize) != 0usize || sign.xmss_nodes_len(21usize) != 0usize || sign.xmss_sig_len(0usize) != 0usize || sign.xmss_sig_len(100usize) != 0usize { os.exit(61i32) }
+    xsk.height = 100usize
+    if sign.xmss_sign(&xsk, nodes[0..], xmsg, xsig[0..]) != sign.Invalid { os.exit(62i32) }
+    var malformed_pk = xpk
+    malformed_pk.height = 100usize
+    if sign.xmss_verify(malformed_pk, xmsg, xsig[0..]) { os.exit(63i32) }
 
     try io.print("crypto pq ok\n")
     ret ok
