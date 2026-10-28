@@ -478,12 +478,17 @@ fn table(domains: []u8, k: usize, vars: []const usize, tuples: []const usize, ro
 fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const usize, demand: []const usize, capacity: usize, horizon: usize, profile: []usize) -> err {
     let tasks = starts.len
     if duration.len < tasks || demand.len < tasks || profile.len < horizon { ret TooSmall }
+    var i = 0usize
+    while i < tasks {
+        if duration[i] > horizon { ret Invalid }
+        i += 1usize
+    }
     var t = 0usize
     while t < horizon {
         profile[t] = 0usize
         t += 1usize
     }
-    var i = 0usize
+    i = 0usize
     while i < tasks {
         // Earliest and latest start.
         var earliest = k
@@ -498,8 +503,13 @@ fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const 
         }
         if earliest == k { ret Unsatisfiable }
         // Compulsory part: [latest, earliest + duration).
+        var compulsory_end = 0usize
+        if earliest < horizon {
+            if duration[i] <= horizon - earliest { compulsory_end = earliest + duration[i] } else { compulsory_end = horizon }
+        }
         t = latest
-        while t < earliest + duration[i] && t < horizon {
+        while t < compulsory_end {
+            if profile[t] > capacity || demand[i] > capacity - profile[t] { ret Unsatisfiable }
             profile[t] += demand[i]
             t += 1usize
         }
@@ -523,20 +533,28 @@ fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const 
             }
             v += 1usize
         }
+        var compulsory_end = 0usize
+        if earliest < horizon {
+            if duration[i] <= horizon - earliest { compulsory_end = earliest + duration[i] } else { compulsory_end = horizon }
+        }
         v = 0usize
         while v < k {
             if domains[starts[i] * k + v] != 0u8 {
                 var fits = true
                 t = v
-                while t < v + duration[i] && fits {
+                var remaining = duration[i]
+                while remaining > 0usize && fits {
                     if t >= horizon {
                         fits = false
                     } else {
                         var own = 0usize
-                        if t >= latest && t < earliest + duration[i] { own = demand[i] }
-                        if profile[t] - own + demand[i] > capacity { fits = false }
+                        if t >= latest && t < compulsory_end { own = demand[i] }
+                        if own > profile[t] { ret Invalid }
+                        let other = profile[t] - own
+                        if other > capacity { fits = false } else if demand[i] > capacity - other { fits = false }
+                        t += 1usize
+                        remaining -= 1usize
                     }
-                    t += 1usize
                 }
                 if !fits { domains[starts[i] * k + v] = 0u8 }
             }

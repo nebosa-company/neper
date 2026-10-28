@@ -421,6 +421,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     domains[9usize] = 1u8
     if csp.cumulative(domains[..], 5usize, starts_vars[..], duration[..], demand[..], 1usize, 8usize, profile[..]) != csp.Unsatisfiable { os.exit(4i32) }
 
+    // A duration that wraps `start + duration` cannot fit this horizon and must
+    // be rejected before either compulsory-profile or placement endpoint math.
+    var huge_domain: [2]u8 = zero
+    huge_domain[1usize] = 1u8
+    var huge_start: [1]usize = zero
+    var huge_duration: [1]usize = zero
+    huge_duration[0usize] = 18446744073709551615usize
+    var huge_demand: [1]usize = zero
+    huge_demand[0usize] = 1usize
+    if csp.cumulative(huge_domain[..], 2usize, huge_start[..], huge_duration[..], huge_demand[..], 1usize, 8usize, profile[..]) != csp.Invalid { os.exit(4i32) }
+
+    // Two compulsory maximum demands cannot wrap back below maximum capacity.
+    var overflow_domain: [2]u8 = zero
+    overflow_domain[0usize] = 1u8
+    overflow_domain[1usize] = 1u8
+    var overflow_starts: [2]usize = zero
+    overflow_starts[1usize] = 1usize
+    var overflow_duration: [2]usize = zero
+    overflow_duration[0usize] = 1usize
+    overflow_duration[1usize] = 1usize
+    var overflow_demand: [2]usize = zero
+    overflow_demand[0usize] = 18446744073709551615usize
+    overflow_demand[1usize] = 18446744073709551615usize
+    var overflow_profile: [1]usize = zero
+    if csp.cumulative(overflow_domain[..], 1usize, overflow_starts[..], overflow_duration[..], overflow_demand[..], 18446744073709551615usize, 1usize, overflow_profile[..]) != csp.Unsatisfiable { os.exit(4i32) }
+
     // 5..10: AC-2001 against AC-3.
     let ac2001_code = check_ac2001()
     if ac2001_code != 0i32 { os.exit(ac2001_code) }
