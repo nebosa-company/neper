@@ -398,6 +398,14 @@ fn b64_hash(a: *mem.Arena, algo: str, content: str) -> str {
             i += 1usize
         }
         n = 32usize
+    } else if str.eq(algo, "sha384") {
+        let h = hash.sha384(content)
+        var i = 0usize
+        while i < 48usize {
+            digest[i] = h[i]
+            i += 1usize
+        }
+        n = 48usize
     } else if str.eq(algo, "sha512") {
         let h5 = hash.sha512(content)
         var j = 0usize
@@ -416,7 +424,7 @@ fn b64_hash(a: *mem.Arena, algo: str, content: str) -> str {
     ret text
 }
 
-fn inline_ok_for(a: *mem.Arena, d: Directive, nonce: str, content: str, is_script: bool) -> bool {
+fn inline_ok_for(a: *mem.Arena, d: Directive, nonce: str, content: str, is_script: bool, is_attribute: bool) -> bool {
     var i = 0usize
     while i < d.values.len {
         let v = d.values[i]
@@ -426,9 +434,11 @@ fn inline_ok_for(a: *mem.Arena, d: Directive, nonce: str, content: str, is_scrip
         if starts_with_fold(inner, "nonce-") {
             if nonce.len > 0usize && str.eq(inner[6usize..], nonce) { ret true }
         } else if starts_with_fold(inner, "sha256-") {
-            if str.eq(inner[7usize..], b64_hash(a, "sha256", content)) { ret true }
+            if (!is_attribute || has_value(d, "'unsafe-hashes'")) && str.eq(inner[7usize..], b64_hash(a, "sha256", content)) { ret true }
+        } else if starts_with_fold(inner, "sha384-") {
+            if (!is_attribute || has_value(d, "'unsafe-hashes'")) && str.eq(inner[7usize..], b64_hash(a, "sha384", content)) { ret true }
         } else if starts_with_fold(inner, "sha512-") {
-            if str.eq(inner[7usize..], b64_hash(a, "sha512", content)) { ret true }
+            if (!is_attribute || has_value(d, "'unsafe-hashes'")) && str.eq(inner[7usize..], b64_hash(a, "sha512", content)) { ret true }
         }
     }
     if has_nonce_or_hash(d) { ret false }
@@ -440,6 +450,7 @@ fn inline_ok_for(a: *mem.Arena, d: Directive, nonce: str, content: str, is_scrip
 // `script-src-attr` or `style-src-attr`) with this `nonce` attribute (empty when none) and text content run.
 fn inline_allowed(a: *mem.Arena, set: PolicySet, directive: str, nonce: str, content: str) -> bool {
     var is_script = starts_with_fold(directive, "script")
+    let is_attribute = str.ends_with(directive, "-attr")
     var i = 0usize
     while i < set.items.len {
         let p = &set.items[i]
@@ -447,7 +458,7 @@ fn inline_allowed(a: *mem.Arena, set: PolicySet, directive: str, nonce: str, con
         if p.report_only { continue }
         let (d, found) = effective(p, directive)
         if !found { continue }
-        if !inline_ok_for(a, d, nonce, content, is_script) { ret false }
+        if !inline_ok_for(a, d, nonce, content, is_script, is_attribute) { ret false }
     }
     ret true
 }
