@@ -141,6 +141,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     invalid_cell[0usize] = ui_layout.Cell { min: geometry.Size { width: 1.0, height: -2.0 }, max: geometry.Size { width: 1.0, height: -1.0 } }
     let (_, invalid_max_height_error) = ui_layout.table(a, ui_layout.Table { columns: 1usize, column_gap: 0.0, row_gap: 0.0 }, loose, invalid_cell[..])
     if invalid_min_width_error != ui_layout.Invalid || invalid_min_height_error != ui_layout.Invalid || invalid_max_width_error != ui_layout.Invalid || invalid_max_height_error != ui_layout.Invalid { os.exit(51i32) }
+    // A first child cannot be wrapped before itself, so an unfit line reports
+    // Overflow rather than silently clamping only the parent result.
+    var wrap_child: [1]ui_layout.Child = zero
+    wrap_child[0usize] = ui_layout.Child { desired: geometry.Size { width: 11.0, height: 1.0 }, flex: 0.0 }
+    let wrap_narrow = ui_layout.Constraints { min_width: 0.0, max_width: 10.0, min_height: 0.0, max_height: 100.0 }
+    let (_, wrap_width_error) = ui_layout.wrap(a, ui_layout.Wrap { axis: .Horizontal, main_gap: 0.0, cross_gap: 0.0 }, wrap_narrow, wrap_child[..])
+    wrap_child[0usize] = ui_layout.Child { desired: geometry.Size { width: 1.0, height: 11.0 }, flex: 0.0 }
+    let wrap_short = ui_layout.Constraints { min_width: 0.0, max_width: 100.0, min_height: 0.0, max_height: 10.0 }
+    let (_, wrap_height_error) = ui_layout.wrap(a, ui_layout.Wrap { axis: .Vertical, main_gap: 0.0, cross_gap: 0.0 }, wrap_short, wrap_child[..])
+    if wrap_width_error != ui_layout.Overflow || wrap_height_error != ui_layout.Overflow { os.exit(52i32) }
     // Keyed reconciliation and the virtual window, pure.
     var old: [3]widget.Key = zero
     old[0usize] = 7u64

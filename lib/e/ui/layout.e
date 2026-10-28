@@ -297,7 +297,9 @@ fn wrap(a: *mem.Arena, spec: Wrap, limits: Constraints, children: []const Child)
     var total = geometry.Size { width: widest, height: cross_at + line_cross }
     if !horizontal { total = geometry.Size { width: cross_at + line_cross, height: widest } }
     if n == 0usize { total = geometry.Size { width: 0.0, height: 0.0 } }
-    ret (Result { size: constrain(total, limits), children: rects }, ok)
+    let result = Result { size: constrain(total, limits), children: rects }
+    if total.width > limits.max_width || total.height > limits.max_height { ret (result, Overflow) }
+    ret (result, ok)
 }
 
 fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child) -> (Result, err) {
