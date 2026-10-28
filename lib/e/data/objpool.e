@@ -229,8 +229,8 @@ fn leaks[T: type](p: *const Pool[T], now: u64, out: []u32) -> usize {
 
 // Take a leaked object back as if it had been returned unhealthy.
 fn reclaim[T: type](p: *Pool[T], slot: u32, now: u64) -> (Release, err) {
-    p.leaked += 1u64
     let (r, release_error) = release[T](p, slot, now, false)
+    if release_error == ok { p.leaked += 1u64 }
     ret (r, release_error)
 }
 
