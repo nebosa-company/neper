@@ -18063,7 +18063,7 @@ fn win_dark_list_box_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
         let (stack_held, stack_held_error) = mem.alloc[widget.Node](a, 1usize)
         if stack_held_error != ok { ret (zero, TooLarge) }
         stack_held[0usize] = widget.stack(0u64, stack_style, layers[0usize..count])
-        let shown = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, stack_held[0usize..1usize])
+        let shown = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, row_style, stack_held[0usize..1usize])
         var entry: widget.Semantics = zero
         entry.role = accessibility.ROLE_OPTION
         entry.label = options[i]

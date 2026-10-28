@@ -113,6 +113,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, actions: *const Actions, log: *
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, column, items[0usize..2usize]), ok)
 }
 
+// The Windows dark disabled list keeps its native disabled colour but must not
+// accept a row tap or join the keyboard focus order.
+fn build_disabled_list(a: *mem.Arena, t: *const control.Theme, actions: *const Actions) -> (widget.Node, err) {
+    let (options, options_error) = mem.alloc[str](a, 2usize)
+    if options_error != ok { ret (zero, options_error) }
+    options[0usize] = "Apple"
+    options[1usize] = "Pear"
+    let (list, list_error) = control.windows_dark_list_box_disabled(a, 70u64, t, "Disabled fruit", options[0usize..2usize], 0usize, actions.fruits[0usize..2usize], 2u32, 120.0)
+    ret (list, list_error)
+}
+
 // Whether a node of `role` named `label` is selected (D985: the select's popup
 // and the list box are both a Listbox of Options).
 fn selected_is(h: *const testing.Harness, role: accessibility.Role, label: str) -> bool {
@@ -228,7 +239,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_7_error != ok { os.exit(38i32) }
     if testing.pump(&harness, root_7, now) != ok { os.exit(39i32) }
     if !testing.visible(&harness, testing.by_key(&harness, 14u64).element) || testing.visible(&harness, testing.by_key(&harness, 11u64).element) { os.exit(40i32) }
-    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
+    var dark_tokens = style.reference(.Dark)
+    dark_tokens.profile = .Windows
+    let dark_theme = control.Theme { tokens: &dark_tokens, fonts: fonts, language: "", runtime: &runtime }
+    mem.reset(&frame, 0usize)
+    let (disabled_root, disabled_build_error) = build_disabled_list(&frame, &dark_theme, &actions[0usize])
+    if disabled_build_error != ok || testing.pump(&harness, disabled_root, now) != ok { os.exit(41i32) }
+    let (disabled_row, disabled_count) = widget.find_by_key(mem.cast[*widget.State](runtime.state), 71u64)
+    let (disabled_summary, disabled_live) = widget.summary_at(&runtime, usize(disabled_row.slot))
+    if disabled_count != 1usize || !disabled_live || disabled_summary.enabled || disabled_summary.focusable { os.exit(42i32) }
+    let before_disabled_tap = logs[0usize].fruit_picks
+    let (disabled_bounds, has_disabled_bounds) = widget.bounds_of(&runtime, disabled_row)
+    if !has_disabled_bounds || testing.tap(&harness, disabled_bounds.x + 4.0, disabled_bounds.y + 4.0) != ok || logs[0usize].fruit_picks != before_disabled_tap { os.exit(43i32) }
+    if widget.clear_focus(&runtime) != ok || testing.tab(&harness, false) != ok { os.exit(44i32) }
+    let (_, has_disabled_focus) = testing.focused(&harness)
+    if has_disabled_focus { os.exit(45i32) }
+    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(46i32) }
     try io.print("ui choice ok\n")
     ret ok
 }
