@@ -27,6 +27,12 @@ fn main(a: *mem.Arena) -> err {
     if line_sum != 5u32 || column_sum != 11u32 { os.exit(7i32) }
     let (empty, empty_error) = grep.search(a, directory, "")
     if empty_error != grep.Invalid || empty.len != 0usize { os.exit(8i32) }
-    if fs.remove_file(a, "grep-d603/a.txt") != ok || fs.remove_file(a, "grep-d603/b.txt") != ok || fs.remove_dir(a, directory) != ok { os.exit(9i32) }
+    // An index records the trigram snapshot of the tree it saw. Replacing a
+    // three-byte file with a six-byte one makes a stale index reject instead of
+    // searching the changed tree under the old metadata.
+    if fs.write_file(a, "grep-d603/a.txt", "needle") != ok { os.exit(9i32) }
+    let (stale, stale_error) = grep.search_index(a, index, "needle")
+    if stale_error != grep.Invalid || stale.len != 0usize { os.exit(10i32) }
+    if fs.remove_file(a, "grep-d603/a.txt") != ok || fs.remove_file(a, "grep-d603/b.txt") != ok || fs.remove_dir(a, directory) != ok { os.exit(11i32) }
     ret ok
 }

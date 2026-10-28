@@ -32,7 +32,10 @@ fn occurrences(bytes: []const u8, pattern: str) -> usize {
     ret count
 }
 
-fn build_index(a: *mem.Arena, root: str) -> (Index, err) {
+// The only durable index metadata is this bounded count.  It is deliberately
+// recomputed by indexed search, so a changed tree whose trigram metadata differs
+// does not masquerade as the frozen snapshot.
+fn snapshot(a: *mem.Arena, root: str) -> (u32, err) {
     let options = fs.WalkOptions { recursive: true, follow_symlinks: false }
     let (created, walk_error) = fs.walk(a, root, options)
     if walk_error != ok { ret (zero, Invalid) }
@@ -46,16 +49,25 @@ fn build_index(a: *mem.Arena, root: str) -> (Index, err) {
         }
         if !present { break }
         if entry.kind == .File && entry.size >= 3u64 {
-            trigrams += entry.size - 2u64
-            if trigrams > 4294967295u64 {
+            let added = entry.size - 2u64
+            if added > 4294967295u64 - trigrams {
                 let ignored = fs.walk_close(&walker)
                 ret (zero, Invalid)
             }
+            trigrams += added
         }
     }
     let close_error = fs.walk_close(&walker)
     if close_error != ok { ret (zero, Invalid) }
-    ret (Index { root: root, trigrams: u32(trigrams) }, ok)
+    ret (u32(trigrams), ok)
+}
+
+fn build_index(a: *mem.Arena, root: str) -> (Index, err) {
+    let scan_mark = mem.mark(a)
+    let (trigrams, snapshot_error) = snapshot(a, root)
+    mem.reset(a, scan_mark)
+    if snapshot_error != ok { ret (zero, snapshot_error) }
+    ret (Index { root: root, trigrams: trigrams }, ok)
 }
 
 fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
@@ -150,6 +162,25 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
 
 fn search_index(a: *mem.Arena, ix: Index, pattern: str) -> ([]Match, err) {
     if ix.root.len == 0usize { ret (zero, Invalid) }
+    let call_mark = mem.mark(a)
+    let first_scan_mark = mem.mark(a)
+    let (before, before_error) = snapshot(a, ix.root)
+    mem.reset(a, first_scan_mark)
+    if before_error != ok || before != ix.trigrams {
+        mem.reset(a, call_mark)
+        ret (zero, Invalid)
+    }
     let (matches, search_error) = search(a, ix.root, pattern)
-    ret (matches, search_error)
+    if search_error != ok {
+        mem.reset(a, call_mark)
+        ret (zero, search_error)
+    }
+    let final_scan_mark = mem.mark(a)
+    let (after, after_error) = snapshot(a, ix.root)
+    mem.reset(a, final_scan_mark)
+    if after_error != ok || after != ix.trigrams {
+        mem.reset(a, call_mark)
+        ret (zero, Invalid)
+    }
+    ret (matches, ok)
 }
