@@ -11,6 +11,7 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.text.utf8
 use e.time
 
 type Level = enum u8 { Trace, Debug, Info, Warn, Error }
@@ -96,6 +97,7 @@ fn push_value(b: *str.Builder, value: Value, quoted: bool) -> err {
 }
 
 fn push_json_string(b: *str.Builder, text: str) -> err {
+    if !utf8.validate(text) { ret utf8.Invalid }
     try str.push(b, "\"")
     var at = 0usize
     while at < text.len {

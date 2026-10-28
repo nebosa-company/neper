@@ -11,6 +11,7 @@ use e.fs
 use e.time
 use e.debug
 use e.log
+use e.text.utf8
 
 type Capture = struct { count: u32, last_level: log.Level, last_message: str, last_fields: usize, fail: bool }
 
@@ -70,6 +71,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let line = buffer[..sink_state.off]
     if !str.starts_with(line, "{\"time\":\"") || line.len < 40usize || line[38] != 90u8 { os.exit(9) }
     if !str.ends_with(line, "\",\"level\":\"TRACE\",\"message\":\"line\\none\",\"fields\":{\"b\":true,\"i\":-1,\"u\":18446744073709551615,\"f\":0.5,\"s\":\"q\\\"uote\",\"e\":\"error\"},\"frames\":[]}\n") { os.exit(10) }
+    // JSONL refuses malformed UTF-8 before anything reaches the sink, whether it
+    // arrives as the message, a field name, or a field string value.
+    sink_state.off = 0usize
+    if log.write(&j, .Trace, "\xFF", zero) != utf8.Invalid || sink_state.off != 0usize { os.exit(21) }
+    var invalid_name: [1]log.Field = zero
+    invalid_name[0usize] = log.Field { name: "\xFF", value: log.Value{ String: "ok" } }
+    if log.write(&j, .Trace, "line", invalid_name[..]) != utf8.Invalid || sink_state.off != 0usize { os.exit(22) }
+    var invalid_value: [1]log.Field = zero
+    invalid_value[0usize] = log.Field { name: "value", value: log.Value{ String: "\xFF" } }
+    if log.write(&j, .Trace, "line", invalid_value[..]) != utf8.Invalid || sink_state.off != 0usize { os.exit(23) }
     // The console sink over a file.
     var flags: os.OpenFlags = zero
     flags.write = true
