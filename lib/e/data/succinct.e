@@ -136,6 +136,7 @@ fn louds_encode(first_child: []const u32, next_sibling: []const u32, n: usize, r
         head += 1usize
         var c = first_child[node]
         while c != NONE {
+            if usize(c) >= n { ret (zero, Invalid) }
             if tail >= n || at >= length { ret (zero, Invalid) }
             order[usize(c)] = tail
             queue[tail] = c
@@ -192,8 +193,10 @@ fn bp_encode(first_child: []const u32, next_sibling: []const u32, n: usize, root
     var node = root
     var descending = true
     while top > 0usize {
-        if descending && first_child[node] != NONE {
-            node = usize(first_child[node])
+        let child = first_child[node]
+        if descending && child != NONE {
+            if usize(child) >= n { ret (zero, Invalid) }
+            node = usize(child)
             if visited >= n || at >= length { ret (zero, Invalid) }
             order[node] = at
             set_bit(bits, at, true)
@@ -208,19 +211,23 @@ fn bp_encode(first_child: []const u32, next_sibling: []const u32, n: usize, root
             top -= 1usize
             if top == 0usize {
                 descending = false
-            } else if next_sibling[node] != NONE {
-                node = usize(next_sibling[node])
-                if visited >= n || at >= length { ret (zero, Invalid) }
-                order[node] = at
-                set_bit(bits, at, true)
-                at += 1usize
-                visited += 1usize
-                stack[top] = u32(node)
-                top += 1usize
-                descending = true
             } else {
-                node = usize(stack[top - 1usize])
-                descending = false
+                let sibling = next_sibling[node]
+                if sibling != NONE {
+                    if usize(sibling) >= n { ret (zero, Invalid) }
+                    node = usize(sibling)
+                    if visited >= n || at >= length { ret (zero, Invalid) }
+                    order[node] = at
+                    set_bit(bits, at, true)
+                    at += 1usize
+                    visited += 1usize
+                    stack[top] = u32(node)
+                    top += 1usize
+                    descending = true
+                } else {
+                    node = usize(stack[top - 1usize])
+                    descending = false
+                }
             }
         }
     }
