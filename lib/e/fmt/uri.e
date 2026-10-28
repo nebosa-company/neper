@@ -5,6 +5,7 @@
 // that is HTML forms' convention, not a URI's.
 
 use e.mem
+use e.text.utf8
 
 type Uri = struct { scheme: str, authority: str, userinfo: str, host: str, port: str, path: str, query: str, has_query: bool, fragment: str, has_fragment: bool }
 type EncodeSet = enum u8 { Path, PathSegment, Query, QueryComponent, Fragment, UserInfo }
@@ -508,7 +509,8 @@ fn query_get(query: str, name: str) -> (str, bool, err) {
 
 error TooSmall
 
-// One form-encoded component decoded: `+` is a space, `%XX` a byte.
+// One form-encoded component decoded: `+` is a space, `%XX` a byte. The
+// resulting component is UTF-8 text, so malformed percent-decoded bytes fail.
 fn form_decode(a: *mem.Arena, source: str) -> (str, err) {
     let (out, out_error) = mem.alloc[u8](a, source.len)
     if out_error != ok { ret ("", out_error) }
@@ -526,6 +528,7 @@ fn form_decode(a: *mem.Arena, source: str) -> (str, err) {
         }
         written += 1usize
     }
+    if !utf8.validate(out[..written]) { ret ("", Invalid) }
     ret (out[..written], ok)
 }
 

@@ -89,6 +89,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (replaced, replaced_error) = uri.resolve(a, base, empty_reference)
     let (shown_replaced, shown_replaced_error) = uri.format(a, replaced)
     if replaced_error != ok || shown_replaced_error != ok || !text_equal(shown_replaced, "http://a/b/c/d;p?") { os.exit(26) }
+    let (form, form_error) = uri.form_decode(a, "Caf%C3%A9+%E2%98%95")
+    if form_error != ok || !text_equal(form, "Café ☕") { os.exit(27) }
+    let (_, invalid_form) = uri.form_decode(a, "%FF")
+    let (_, overlong_form) = uri.form_decode(a, "%C0%AF")
+    var form_keys: [2]str = zero
+    var form_values: [2]str = zero
+    let (form_count, invalid_query) = uri.query_parse(a, "good=ok&%E2%82=bad", form_keys[..], form_values[..])
+    if invalid_form != uri.Invalid || overlong_form != uri.Invalid || invalid_query != uri.Invalid || form_count != 1usize || !text_equal(form_keys[0usize], "good") || !text_equal(form_values[0usize], "ok") { os.exit(28) }
     os.exit(0)
     ret ok
 }
