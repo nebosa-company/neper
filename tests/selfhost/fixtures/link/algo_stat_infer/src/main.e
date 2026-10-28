@@ -279,6 +279,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     failed += run_chunk(vectors_1())
     failed += run_chunk(vectors_2())
     if failed != 0u32 { os.exit(1i32) }
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    let (_, nan_t_error) = infer.sample_size_t(.OneSample, nan, 0.05f64, 0.8f64, true)
+    let (_, nan_z_error) = infer.sample_size_z(.OneSample, nan, 0.05f64, 0.8f64, true)
+    if nan_t_error != infer.Invalid || nan_z_error != infer.Invalid { os.exit(2i32) }
     try io.print("algo stat infer ok")
     ret ok
 }
