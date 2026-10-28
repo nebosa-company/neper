@@ -58,6 +58,12 @@ fn moves() {
     let two = simd.mask[Vec[i32, 4]](5u64)
     simd.store_masked[Vec[i32, 4]](tail[0..], 0usize, two, simd.splat[Vec[i32, 4]](-5i32))
     if tail[0] != -5i32 || tail[1] != 8i32 || tail[2] != -5i32 { os.exit(25) }
+    // Disabled lanes do not form an address, including at the end of a slice.
+    let none = simd.mask[Vec[i32, 4]](0u64)
+    let beyond = simd.load_masked[Vec[i32, 4]](tail[0..], tail.len, none)
+    if beyond.lanes[0] != 0i32 || beyond.lanes[3] != 0i32 { os.exit(114) }
+    simd.store_masked[Vec[i32, 4]](tail[0..], tail.len, none, simd.splat[Vec[i32, 4]](99i32))
+    if tail[0] != -5i32 || tail[1] != 8i32 || tail[2] != -5i32 { os.exit(115) }
     var table: [6]u16 = zero
     i = 0usize
     while i < 6usize {

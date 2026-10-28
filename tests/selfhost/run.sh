@@ -802,6 +802,29 @@ simd_lanes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$simd_lanes_written" = 'executable written' ]
 chmod +x "$test_build/simd-lanes-selfhost"
 "$test_build/simd-lanes-selfhost"
+# Masked SIMD lanes at an overflowing logical offset must retain the always-on bounds
+# check in both build modes. A disabled lane at that same offset is deliberately quiet.
+for simd_masked_build in debug release; do
+    simd_masked_path="$test_build/simd-masked-bounds-$simd_masked_build"
+    if [ "$simd_masked_build" = release ]; then
+        simd_masked_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_masked_bounds/src/main.e" "$repo" x64 linux "$simd_masked_path" --release)
+    else
+        simd_masked_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_masked_bounds/src/main.e" "$repo" x64 linux "$simd_masked_path")
+    fi
+    [ "$simd_masked_written" = 'executable written' ]
+    chmod +x "$simd_masked_path"
+    for simd_masked_case in load store; do
+        simd_masked_status=0
+        simd_masked_output=$("$simd_masked_path" "$simd_masked_case" 2>&1) || simd_masked_status=$?
+        [ "$simd_masked_status" -eq 134 ]
+        case "$simd_masked_output" in
+            *'trap[bounds]'*) ;;
+            *) printf '%s\n' "the masked SIMD $simd_masked_case case did not trap ($simd_masked_build): $simd_masked_output" >&2; exit 1 ;;
+        esac
+    done
+    simd_masked_quiet=$("$simd_masked_path" quiet 2>&1)
+    [ "$simd_masked_quiet" = '' ]
+done
 # The same fixture under --cpu x64-v3 (D765): one AVX2 instruction per thirty-two-byte vector, debug and release.
 for avx_mode in "debug" "release --release"; do
     set -- $avx_mode

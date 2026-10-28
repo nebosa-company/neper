@@ -51,6 +51,15 @@ fn store[V: type](s: []meta.element_type[V](), off: usize, v: V) {
     }
 }
 
+// An enabled masked lane is an ordinary slice access, but form its offset only after
+// proving that the addition cannot wrap. On failure return a guaranteed-out-of-range
+// index, leaving the slice operation to raise the required `bounds` trap in every mode.
+fn masked_offset(len: usize, off: usize, lane: usize) -> usize {
+    if off > len { ret off }
+    if lane >= len - off { ret len }
+    ret off + lane
+}
+
 fn load_aligned[V: type](s: []const meta.element_type[V](), off: usize) -> V {
     ret load[V](s, off)
 }
@@ -63,7 +72,10 @@ fn load_masked[V: type](s: []const meta.element_type[V](), off: usize, m: Mask[m
     var v: V = zero
     var i = 0usize
     while i < meta.array_len[V]() {
-        if m.lanes[i] { v.lanes[i] = s[off + i] }
+        if m.lanes[i] {
+            let at = masked_offset(s.len, off, i)
+            v.lanes[i] = s[at]
+        }
         i += 1usize
     }
     ret v
@@ -72,7 +84,10 @@ fn load_masked[V: type](s: []const meta.element_type[V](), off: usize, m: Mask[m
 fn store_masked[V: type](s: []meta.element_type[V](), off: usize, m: Mask[meta.element_type[V](), meta.array_len[V]()], v: V) {
     var i = 0usize
     while i < meta.array_len[V]() {
-        if m.lanes[i] { s[off + i] = v.lanes[i] }
+        if m.lanes[i] {
+            let at = masked_offset(s.len, off, i)
+            s[at] = v.lanes[i]
+        }
         i += 1usize
     }
 }

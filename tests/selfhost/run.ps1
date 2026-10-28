@@ -822,6 +822,19 @@ $simdLanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $simdLanesWritten -ne 'executable written') { throw 'simd_lanes emission failed' }
 & $simdLanesPath
 if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed: exit $LASTEXITCODE" }
+# Masked SIMD lanes at an overflowing logical offset must retain the always-on bounds
+# check in both build modes. A disabled lane at that same offset is deliberately quiet.
+foreach ($simdMaskedBuild in @(@('debug', @()), @('release', @('--release')))) {
+    $simdMaskedPath = Join-Path $testBuild "simd-masked-bounds-$($simdMaskedBuild[0]).exe"
+    $simdMaskedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_masked_bounds\src\main.e') $repo 'x64' 'windows' $simdMaskedPath @($simdMaskedBuild[1])
+    if ($LASTEXITCODE -ne 0 -or $simdMaskedWritten -ne 'executable written') { throw "simd_masked_bounds emission failed ($($simdMaskedBuild[0]))" }
+    foreach ($simdMaskedCase in @('load', 'store')) {
+        $simdMaskedOutput = & $simdMaskedPath $simdMaskedCase 2>&1
+        if ($LASTEXITCODE -ne 134 -or ($simdMaskedOutput -join "`n") -notmatch 'trap\[bounds\]') { throw "the masked SIMD $simdMaskedCase case did not trap ($($simdMaskedBuild[0])): exit $LASTEXITCODE, $($simdMaskedOutput -join "`n")" }
+    }
+    $simdMaskedQuiet = & $simdMaskedPath quiet 2>&1
+    if ($LASTEXITCODE -ne 0 -or ($simdMaskedQuiet -join "`n") -ne '') { throw "a disabled masked SIMD lane trapped ($($simdMaskedBuild[0])): exit $LASTEXITCODE, $($simdMaskedQuiet -join "`n")" }
+}
 # The same fixture under `--cpu x64-v3` (D765): every thirty-two-byte vector is one
 # AVX2 instruction over a ymm register, the VEX forms of the same selection, in debug
 # and in release; the suite's hosts have AVX2. The manifest names the level.
