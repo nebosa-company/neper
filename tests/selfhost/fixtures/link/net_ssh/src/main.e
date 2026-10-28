@@ -9,6 +9,7 @@
 // host key as 64 hex digits, and for the forward modes the target port.
 // Every stage has its own exit code.
 use e.io
+use e.crypto.hash as hash
 use e.mem
 use e.net
 use e.os
@@ -304,13 +305,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if shared_key.bytes[i] != raw_expected[i] { os.exit(93i32) }
         i += 1usize
     }
-    var encoded: [36]u8 = zero
-    var writer = ssh.Writer { buf: encoded[0usize..36usize], len: 0usize, over: false }
-    ssh.w_x25519_mpint(&writer, shared_key.bytes)
+    var key_test: ssh.Session = zero
+    key_test.kex_k = shared_key.bytes
+    var derived: [64]u8 = zero
+    ssh.derive_key(&key_test, 65u8, derived[..])
+    var big: [32]u8 = zero
+    i = 0usize
+    while i < 32usize {
+        big[i] = raw_expected[31usize - i]
+        i += 1usize
+    }
+    var encoded: [40]u8 = zero
+    var writer = ssh.Writer { buf: encoded[0usize..40usize], len: 0usize, over: false }
+    ssh.w_mpint(&writer, big[..])
     if writer.over || writer.len != 36usize || encoded[0usize] != 0u8 || encoded[1usize] != 0u8 || encoded[2usize] != 0u8 || encoded[3usize] != 32u8 { os.exit(94i32) }
     i = 0usize
     while i < 32usize {
         if encoded[4usize + i] != raw_expected[31usize - i] { os.exit(95i32) }
+        i += 1usize
+    }
+    var letter: [1]u8 = zero
+    letter[0usize] = 65u8
+    var first_hash = hash.sha256_init()
+    hash.sha256_update(&first_hash, encoded[0usize..writer.len])
+    hash.sha256_update(&first_hash, key_test.exchange_hash[0usize..32usize])
+    hash.sha256_update(&first_hash, letter[0usize..1usize])
+    hash.sha256_update(&first_hash, key_test.session_id[0usize..32usize])
+    let first_key = hash.sha256_done(&first_hash)
+    var second_hash = hash.sha256_init()
+    hash.sha256_update(&second_hash, encoded[0usize..writer.len])
+    hash.sha256_update(&second_hash, key_test.exchange_hash[0usize..32usize])
+    hash.sha256_update(&second_hash, first_key[0usize..32usize])
+    let second_key = hash.sha256_done(&second_hash)
+    i = 0usize
+    while i < 32usize {
+        if derived[i] != first_key[i] || derived[32usize + i] != second_key[i] { os.exit(95i32) }
         i += 1usize
     }
     let mode = args[1]

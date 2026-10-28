@@ -33722,9 +33722,9 @@ fn same_text(a: []const u8, b: str) -> bool
 fn in_list(list: []const u8, name: str) -> bool
 fn open(a: *mem.Arena, random: []const u8, user: str, password: str, cols: u32, rows: u32) -> (Session, err)
 fn use_key(s: *Session, seed: [32]u8)
-fn set_command(s: *Session, command: str)
-fn set_subsystem(s: *Session, name: str)
-fn set_forward(s: *Session, host: str, port: u32)
+fn set_command(s: *Session, command: str) -> err
+fn set_subsystem(s: *Session, name: str) -> err
+fn set_forward(s: *Session, host: str, port: u32) -> err
 fn fail(s: *Session, code: u32)
 fn chacha_nonce(seq: u32) -> [12]u8
 fn send_packet(s: *Session, payload: []const u8)
@@ -33760,7 +33760,7 @@ fn sent(s: *Session, n: usize)
 fn status(s: *Session) -> u32
 ```
 
-An SSH-2 client, sans-IO (C120): `open` makes a session for a user and password (or `use_key` an ed25519 seed), `outgoing` and `sent` move the bytes to send, `feed` takes the bytes received, `status` follows the connection (version, key exchange, host key pending, authentication, channel, ready, closed, failed). It speaks curve25519-sha256 with an ssh-ed25519 host key, chacha20-poly1305@openssh.com, password and public-key authentication, one session channel with a pty and a shell or an exec command, flow control and exit status. At `HOST_KEY_PENDING` the caller reads `host_key` and `host_fingerprint` and calls `trust`. Nothing else: one channel at a time, no other algorithms than curve25519, ed25519 and the three ciphers. Checked against a real server (asyncssh) on loopback: password and key login, a shell, resize, exit status, a wrong password and a wrong host key. (C155) `set_subsystem` (`sftp`, no pty; READY when the server accepts it) and `set_forward` (a `direct-tcpip` channel to a host and port as the server reaches it; READY once the server has connected, `FAIL_CHANNEL` when it refuses) make the one channel something other than a shell; `read` and `write` then carry the SFTP packets of `e.net.sftp` or the TCP stream. Checked against asyncssh's sftp server over a chroot (realpath, listing, read, write, stat, a missing file) and its forwarding to an echo server and to a closed port.
+An SSH-2 client, sans-IO (C120): `open` makes a session for a user and password (or `use_key` an ed25519 seed), `outgoing` and `sent` move the bytes to send, `feed` takes the bytes received, `status` follows the connection (version, key exchange, host key pending, authentication, channel, ready, closed, failed). It speaks curve25519-sha256 with an ssh-ed25519 host key, chacha20-poly1305@openssh.com, password and public-key authentication, one session channel with a pty and a shell or an exec command, flow control and exit status. `set_command`, `set_subsystem` and `set_forward` return `TooLong` without changing the selection when their command, subsystem name or host exceeds the 128-byte field. Password bytes are cleared after the user-authentication request is built. At `HOST_KEY_PENDING` the caller reads `host_key` and `host_fingerprint` and calls `trust`. Nothing else: one channel at a time, no other algorithms than curve25519, ed25519 and the three ciphers. Checked against a real server (asyncssh) on loopback: password and key login, a shell, resize, exit status, a wrong password and a wrong host key. (C155) `set_subsystem` (`sftp`, no pty; READY when the server accepts it) and `set_forward` (a `direct-tcpip` channel to a host and port as the server reaches it; READY once the server has connected, `FAIL_CHANNEL` when it refuses) make the one channel something other than a shell; `read` and `write` then carry the SFTP packets of `e.net.sftp` or the TCP stream. Checked against asyncssh's sftp server over a chroot (realpath, listing, read, write, stat, a missing file) and its forwarding to an echo server and to a closed port.
 
 
 ### `e.fmt.vcard`

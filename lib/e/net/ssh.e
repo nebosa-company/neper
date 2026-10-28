@@ -221,17 +221,6 @@ fn w_mpint(w: *Writer, data: []const u8) {
     }
 }
 
-// X25519 returns its 32-byte shared secret little-endian; SSH mpint uses a big-endian integer.
-fn w_x25519_mpint(w: *Writer, little: [32]u8) {
-    var big: [32]u8 = zero
-    var i = 0usize
-    while i < 32usize {
-        big[i] = little[31usize - i]
-        i += 1usize
-    }
-    w_mpint(w, big[0usize..32usize])
-}
-
 // A reader over `buf` from `pos`; `bad` once something ran past the end.
 type Reader = struct { buf: []const u8, pos: usize, bad: bool }
 
@@ -564,7 +553,13 @@ fn compute_exchange_hash(s: *Session) {
     hash.sha256_update(&h, s.server_public[0usize..32usize])
     var mp: [40]u8 = zero
     var w = Writer { buf: mp[0usize..40usize], len: 0usize, over: false }
-    w_x25519_mpint(&w, s.kex_k)
+    var big: [32]u8 = zero
+    var big_at = 0usize
+    while big_at < 32usize {
+        big[big_at] = s.kex_k[31usize - big_at]
+        big_at += 1usize
+    }
+    w_mpint(&w, big[0usize..32usize])
     hash.sha256_update(&h, mp[0usize..w.len])
     s.exchange_hash = hash.sha256_done(&h)
 }
@@ -573,7 +568,13 @@ fn compute_exchange_hash(s: *Session) {
 fn derive_key(s: *Session, letter: u8, out: []u8) {
     var mp: [40]u8 = zero
     var w = Writer { buf: mp[0usize..40usize], len: 0usize, over: false }
-    w_x25519_mpint(&w, s.kex_k)
+    var big: [32]u8 = zero
+    var big_at = 0usize
+    while big_at < 32usize {
+        big[big_at] = s.kex_k[31usize - big_at]
+        big_at += 1usize
+    }
+    w_mpint(&w, big[0usize..32usize])
     var h1 = hash.sha256_init()
     hash.sha256_update(&h1, mp[0usize..w.len])
     hash.sha256_update(&h1, s.exchange_hash[0usize..32usize])
@@ -889,17 +890,15 @@ fn start_auth(s: *Session) {
     s.status = AUTH
 }
 
-fn clear_password(s: *Session) {
-    var i = 0usize
-    while i < s.password.len {
-        s.password[i] = 0u8
-        i += 1usize
-    }
-    s.password_len = 0usize
-}
-
 fn send_userauth(s: *Session) {
-    defer clear_password(s)
+    defer {
+        var password_at = 0usize
+        while password_at < s.password.len {
+            s.password[password_at] = 0u8
+            password_at += 1usize
+        }
+        s.password_len = 0usize
+    }
     var msg: [512]u8 = zero
     var w = Writer { buf: msg[0usize..512usize], len: 0usize, over: false }
     w_byte(&w, 50u8)
