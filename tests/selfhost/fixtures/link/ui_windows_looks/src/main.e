@@ -9,6 +9,7 @@ use e.gfx.paint
 use e.gfx.scene as scene
 use e.ui.widget as widget
 use e.ui.looks as looks
+use e.ui.style as style
 use e.ui.winbutton as winbutton
 use e.ui.winchrome as winchrome
 use e.ui.winedit as winedit
@@ -81,6 +82,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if te != ok { os.exit(11) }
     let (n7, e7) = painted(a, t, 121.0, 21.0)
     if e7 != ok || n7 == 0usize { os.exit(12) }
+    // The native combo paints the trailing border row and column, so its layout
+    // box must contain that 122 x 22 extent when packed beside another control.
+    let (combo, combo_error) = winedit.native_combo(a, 0u32, 0u32, 121.0, 21.0)
+    if combo_error != ok { os.exit(26) }
+    let (combo_width, combo_width_ok) = style.px_of(combo.style.width)
+    let (combo_height, combo_height_ok) = style.px_of(combo.style.height)
+    if !combo_width_ok || !combo_height_ok || combo_width != 122.0 || combo_height != 22.0 { os.exit(27) }
+    let (combo_commands, combo_paint_error) = painted(a, combo, combo_width, combo_height)
+    if combo_paint_error != ok || combo_commands == 0usize { os.exit(28) }
 
     // winmark: a check mark
     let (m, me) = winmark.mark_node(a, 0u32, 0u32, 0.0, false)
