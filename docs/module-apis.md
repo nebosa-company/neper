@@ -29979,7 +29979,9 @@ fn tcc_cancel(t: *Tcc)
 
 `two_phase` and `three_phase` commit (`commit_begin`, `commit_step`, `commit_blocked`),
 sagas by choreography and orchestration (`saga_start`, `saga_step` with compensations
-in reverse) and try-confirm-cancel (`tcc_try/confirm/cancel/expire`).
+in reverse) and try-confirm-cancel (`tcc_try/confirm/cancel/expire`). 2PC/3PC use a
+64-bit acknowledgement mask: up to 64 participants are supported; `commit_begin`,
+`commit_step` and `send_all` answer `TooSmall` for a larger configuration.
 
 ### `e.dist.replica`
 
