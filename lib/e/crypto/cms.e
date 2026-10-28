@@ -393,14 +393,10 @@ fn attribute_value(encoded: []const u8, want: []const u8) -> ([]const u8, bool) 
     ret (zero, false)
 }
 
-// Verifies signer `index` against `content` (the attached content when `detached` is empty
-// and the SignedData has one). `a` is scratch for the RSA arithmetic.
-fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err {
+// Verifies signer `index` against already-selected `content`. `a` is scratch for the RSA arithmetic.
+fn verify_signer_content(a: *mem.Arena, sd: *const SignedData, index: usize, content: []const u8) -> err {
     if index >= sd.signers.len { ret Invalid }
     let signer = sd.signers[index]
-    var content = detached
-    if detached.len == 0usize && sd.has_content { content = sd.content }
-    if detached.len == 0usize && !sd.has_content { ret Invalid }
     let (cert, found) = find_certificate(sd, index)
     if !found { ret NoCertificate }
     let bits = hash_bits(signer.digest_oid)
@@ -471,12 +467,38 @@ fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: [
     ret Unsupported
 }
 
+// Verifies with attached content when no nonempty detached content is supplied. Use
+// `verify_signer_detached` when an empty detached content value is intentional.
+fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err {
+    if detached.len == 0usize {
+        if !sd.has_content { ret Invalid }
+        ret verify_signer_content(a, sd, index, sd.content)
+    }
+    ret verify_signer_content(a, sd, index, detached)
+}
+
+// Verifies signer `index` against supplied detached content, including a valid empty value.
+fn verify_signer_detached(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err {
+    ret verify_signer_content(a, sd, index, detached)
+}
+
 // Every signer must verify; at least one is required.
 fn verify(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err {
     if sd.signers.len == 0usize { ret Invalid }
     var i = 0usize
     while i < sd.signers.len {
         try verify_signer(a, sd, i, detached)
+        i += 1usize
+    }
+    ret ok
+}
+
+// Every signer must verify against explicitly supplied detached content, including an empty body.
+fn verify_detached(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err {
+    if sd.signers.len == 0usize { ret Invalid }
+    var i = 0usize
+    while i < sd.signers.len {
+        try verify_signer_detached(a, sd, i, detached)
         i += 1usize
     }
     ret ok

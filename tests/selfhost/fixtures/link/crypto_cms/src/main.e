@@ -387,6 +387,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if c_error != ok { os.exit(101i32) }
     let r = run_vectors()
     if r != 0u8 { os.exit(i32(r)) }
+    var empty_arena_storage: [131072]u8 = zero
+    var empty_arena = mem.arena_from(empty_arena_storage[..])
+    var empty_der: [4096]u8 = zero
+    let (empty_written, empty_sign_error) = cms.sign_ed25519(&empty_arena, "", test_cert(), test_secret(), false, 1767323045i64, empty_der[..])
+    if empty_sign_error != ok { os.exit(102i32) }
+    let (empty_signed, empty_parse_error) = cms.parse(&empty_arena, empty_der[..empty_written])
+    if empty_parse_error != ok || empty_signed.has_content { os.exit(103i32) }
+    if cms.verify_detached(&empty_arena, &empty_signed, "") != ok { os.exit(104i32) }
+    if cms.verify(&empty_arena, &empty_signed, "") != cms.Invalid { os.exit(105i32) }
     try io.print("crypto cms ok")
     ret ok
 }
