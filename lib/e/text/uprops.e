@@ -1304,8 +1304,7 @@ fn read3(t: str, at: usize) -> u32 {
 }
 
 // Whether code point `c` is in table `id`.
-fn contains(id: u32, c: u32) -> bool {
-    let t = table(id)
+fn contains_ranges(t: str, c: u32) -> bool {
     var low = 0usize
     var high = t.len / 6usize
     while low < high {
@@ -1316,3 +1315,9 @@ fn contains(id: u32, c: u32) -> bool {
     }
     ret false
 }
+
+// Whether code point `c` is in table `id`.
+fn contains(id: u32, c: u32) -> bool { ret contains_ranges(table(id), c) }
+
+// Unicode Default_Ignorable_Code_Point, kept alongside its generated property table.
+fn default_ignorable(c: u32) -> bool { ret contains_ranges(t16(), c) }
