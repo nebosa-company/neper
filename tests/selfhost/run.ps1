@@ -827,6 +827,19 @@ $simdLanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $simdLanesWritten -ne 'executable written') { throw 'simd_lanes emission failed' }
 & $simdLanesPath
 if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed: exit $LASTEXITCODE" }
+# `convert` is lane-wise rather than a resize. Both directions of an unequal-lane
+# call reach its explicit contract trap, while an equal-lane conversion remains valid.
+foreach ($simdConvertBuild in @(@('debug', @()), @('release', @('--release')))) {
+    $simdConvertPath = Join-Path $testBuild "simd-convert-lanes-$($simdConvertBuild[0]).exe"
+    $simdConvertWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_convert_lanes\src\main.e') $repo 'x64' 'windows' $simdConvertPath @($simdConvertBuild[1])
+    if ($LASTEXITCODE -ne 0 -or $simdConvertWritten -ne 'executable written') { throw "simd_convert_lanes emission failed ($($simdConvertBuild[0]))" }
+    foreach ($simdConvertCase in @('expand', 'narrow')) {
+        $simdConvertOutput = & $simdConvertPath $simdConvertCase 2>&1
+        if ($LASTEXITCODE -ne 134 -or ($simdConvertOutput -join "`n") -notmatch 'trap\[unreachable\]: simd\.convert requires equal lane counts') { throw "the SIMD conversion $simdConvertCase case did not reject unequal lanes ($($simdConvertBuild[0])): exit $LASTEXITCODE, $($simdConvertOutput -join "`n")" }
+    }
+    & $simdConvertPath same 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "an equal-lane SIMD conversion failed ($($simdConvertBuild[0])): exit $LASTEXITCODE" }
+}
 # Masked SIMD lanes at an overflowing logical offset must retain the always-on bounds
 # check in both build modes. A disabled lane at that same offset is deliberately quiet.
 foreach ($simdMaskedBuild in @(@('debug', @()), @('release', @('--release')))) {

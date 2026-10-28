@@ -300,8 +300,12 @@ fn reduce_max[V: type](v: V) -> meta.element_type[V]() {
 }
 
 // Lane-wise `T(x)` to `W`'s lane type, with section 4's Casts table: whatever the
-// scalar conversion does on a lane, this does on every lane.
+// scalar conversion does on a lane, this does on every lane. The vectors must have
+// the same lane count; otherwise no lane-wise correspondence exists.
 fn convert[V: type, W: type](v: V) -> W {
+    if meta.array_len[V]() != meta.array_len[W]() {
+        unreachable("simd.convert requires equal lane counts")
+    }
     var w: W = zero
     var i = 0usize
     while i < meta.array_len[V]() {

@@ -807,6 +807,28 @@ simd_lanes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$simd_lanes_written" = 'executable written' ]
 chmod +x "$test_build/simd-lanes-selfhost"
 "$test_build/simd-lanes-selfhost"
+# `convert` is lane-wise rather than a resize. Both directions of an unequal-lane
+# call reach its explicit contract trap, while an equal-lane conversion remains valid.
+for simd_convert_build in debug release; do
+    simd_convert_path="$test_build/simd-convert-lanes-$simd_convert_build"
+    if [ "$simd_convert_build" = release ]; then
+        simd_convert_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_convert_lanes/src/main.e" "$repo" x64 linux "$simd_convert_path" --release)
+    else
+        simd_convert_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_convert_lanes/src/main.e" "$repo" x64 linux "$simd_convert_path")
+    fi
+    [ "$simd_convert_written" = 'executable written' ]
+    chmod +x "$simd_convert_path"
+    for simd_convert_case in expand narrow; do
+        simd_convert_status=0
+        simd_convert_output=$("$simd_convert_path" "$simd_convert_case" 2>&1) || simd_convert_status=$?
+        [ "$simd_convert_status" -eq 134 ]
+        case "$simd_convert_output" in
+            *'trap[unreachable]: simd.convert requires equal lane counts'*) ;;
+            *) printf '%s\n' "the SIMD conversion $simd_convert_case case did not reject unequal lanes ($simd_convert_build): $simd_convert_output" >&2; exit 1 ;;
+        esac
+    done
+    "$simd_convert_path" same
+done
 # Masked SIMD lanes at an overflowing logical offset must retain the always-on bounds
 # check in both build modes. A disabled lane at that same offset is deliberately quiet.
 for simd_masked_build in debug release; do
