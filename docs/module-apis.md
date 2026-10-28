@@ -659,7 +659,8 @@ removes the terminator and does not synthesize a final empty line. Radices are i
 
 Paths are pure strings and always name the convention being applied; host behavior is
 never inferred inside this module. In particular, normalization preserves a Windows
-drive-relative path (`C:file`) rather than making it drive-rooted.
+drive-relative path (`C:file`) rather than making it drive-rooted, and such a later
+part starts a new `join` without being embedded under an earlier drive.
 
 ```neper
 type Style = enum u8 { Posix, Windows }
