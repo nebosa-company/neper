@@ -2633,15 +2633,21 @@ fn cocoa_scale_percent(window: usize) -> u32 {
     ret u32(scale * 100.0f64 + 0.5f64)
 }
 
-// The content area in pixels.
-fn cocoa_content_pixels(slot: usize) -> (u32, u32) {
+// The content area in pixels at a particular backing scale.
+fn cocoa_content_pixels_at_scale(slot: usize, scale_percent: u32) -> (u32, u32) {
     let view = msg0(cocoa_windows[slot], cocoa_sel("contentView\x00"))
     let bounds = cocoa_rect(view, "bounds")
-    let scale = f64(cocoa_scales[slot]) / 100.0f64
+    let scale = f64(scale_percent) / 100.0f64
     var width = 0u32
     var height = 0u32
     if bounds.w > 0.0f64 { width = u32(bounds.w * scale + 0.5f64) }
     if bounds.h > 0.0f64 { height = u32(bounds.h * scale + 0.5f64) }
+    ret (width, height)
+}
+
+// The content area in pixels at the scale last observed by the state poll.
+fn cocoa_content_pixels(slot: usize) -> (u32, u32) {
+    let (width, height) = cocoa_content_pixels_at_scale(slot, cocoa_scales[slot])
     ret (width, height)
 }
 
@@ -2825,16 +2831,20 @@ fn cocoa_translate(event: usize) -> bool {
     window.raw = cocoa_windows[slot]
     let flags = msg0(event, cocoa_sel("modifierFlags\x00"))
     let modifiers = cocoa_modifiers(flags)
-    let scale = f64(cocoa_scales[slot]) / 100.0f64
     let is_down = kind == 1usize || kind == 3usize || kind == 25usize
     let is_up = kind == 2usize || kind == 4usize || kind == 26usize
     let is_move = kind == 5usize || kind == 6usize || kind == 7usize || kind == 27usize
     if is_down || is_up || is_move || kind == 22usize {
+        // A resize or display transition can already be reflected in AppKit's event queue while cocoa_poll_state still
+        // owes its Resize event. Read the event window directly, without mutating that post-drain state cache.
+        let scale_percent = cocoa_scale_percent(cocoa_windows[slot])
+        let scale = f64(scale_percent) / 100.0f64
+        let (_, height) = cocoa_content_pixels_at_scale(slot, scale_percent)
         let at = msg_point_ret(event, cocoa_sel("locationInWindow\x00"))
         var pointer: WindowEvent = zero
         pointer.window = window
         pointer.x = i32(at.x * scale)
-        pointer.y = i32(f64(cocoa_heights[slot]) - at.y * scale)
+        pointer.y = i32(f64(height) - at.y * scale)
         pointer.modifiers = modifiers
         // The title bar is above the content: AppKit's, not the program's.
         if pointer.y < 0i32 || at.x < 0.0f64 { ret false }
