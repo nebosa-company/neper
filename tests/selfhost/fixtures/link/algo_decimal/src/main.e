@@ -66,6 +66,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (sci, e20) = dec.parse("1.5e3")
     let (sci2, e21) = dec.parse("15E-4")
     if e20 != ok || !text_equal(shown(a, sci), "1500") || e21 != ok || !text_equal(shown(a, sci2), "0.0015") { os.exit(17) }
+    // #1084/#1083: exact trailing decimal zeros can reduce a result to max scale.
+    let (reduced_parse, reduced_parse_error) = dec.parse("10e-39")
+    if reduced_parse_error != ok || reduced_parse.coefficient.low != 1u64 || reduced_parse.coefficient.high != 0i64 || reduced_parse.scale != 38u8 { os.exit(24) }
+    let at_max = dec.Decimal { coefficient: dec.Coefficient { low: 1u64, high: 0i64 }, scale: 38u8 }
+    let ten = dec.Decimal { coefficient: dec.Coefficient { low: 10u64, high: 0i64 }, scale: 1u8 }
+    let (reduced_product, reduced_product_error) = dec.mul(at_max, ten)
+    let two_at_max = dec.Decimal { coefficient: dec.Coefficient { low: 2u64, high: 0i64 }, scale: 38u8 }
+    let five = dec.Decimal { coefficient: dec.Coefficient { low: 5u64, high: 0i64 }, scale: 1u8 }
+    let (cross_factor_product, cross_factor_error) = dec.mul(two_at_max, five)
+    if reduced_product_error != ok || reduced_product.coefficient.low != 1u64 || reduced_product.coefficient.high != 0i64 || reduced_product.scale != 38u8 || cross_factor_error != ok || cross_factor_product.coefficient.low != 1u64 || cross_factor_product.coefficient.high != 0i64 || cross_factor_product.scale != 38u8 { os.exit(24) }
     let (_, bad1) = dec.parse("1.2.3")
     let (_, bad2) = dec.parse("abc")
     let (_, bad3) = dec.parse("")
@@ -73,6 +83,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 128-bit coefficients: 10^37 * 10 overflows the scale space; 2^127 - 1 parses.
     let (big, e22) = dec.parse("170141183460469231731687303715884105727")
     if e22 != ok || !text_equal(shown(a, big), "170141183460469231731687303715884105727") { os.exit(19) }
+    // The same maximum coefficient remains representable when multiplication
+    // can first remove a trailing factor of ten from the other operand.
+    var big_at_max_scale = big
+    big_at_max_scale.scale = 38u8
+    let (large_reduced_product, large_reduced_error) = dec.mul(big_at_max_scale, ten)
+    if large_reduced_error != ok || dec.compare(large_reduced_product, big_at_max_scale) != 0i32 { os.exit(25) }
     let (_, too_big) = dec.parse("170141183460469231731687303715884105728")
     if too_big != dec.Overflow { os.exit(20) }
     let (_, overflow) = dec.mul(big, dec_from("2"))
