@@ -53,6 +53,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ic_bad != safety.Invalid { os.exit(3i32) }
     let (_, chi_bad) = safety.chi_square_2x2(flat)
     if chi_bad != safety.Invalid { os.exit(3i32) }
+    let huge = safety.Table { a: 5000000000000000000u64, b: 5000000000000000000u64, c: 5000000000000000000u64, d: 5000000000000000000u64 }
+    let (huge_chi, huge_chi_error) = safety.chi_square_2x2(huge)
+    if huge_chi_error != ok || !near(huge_chi, 0.0f64, 0.000000001f64) { os.exit(3i32) }
 
     // 4: a quiet table signals nowhere.
     var calm = safety.Table { a: 2u64, b: 50u64, c: 10u64, d: 100u64 }

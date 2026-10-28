@@ -23,15 +23,15 @@ error Invalid
 // The Pearson chi-square of the 2x2 `t` (no continuity correction, the form
 // the Evans PRR criteria use); an empty or degenerate table is `Invalid`.
 fn chi_square_2x2(t: Table) -> (f64, err) {
-    let n = f64(t.a + t.b + t.c + t.d)
+    let cells = [4]f64 { f64(t.a), f64(t.b), f64(t.c), f64(t.d) }
+    let n = cells[0usize] + cells[1usize] + cells[2usize] + cells[3usize]
     if n == 0.0f64 { ret (0.0f64, Invalid) }
-    let row1 = f64(t.a + t.b)
-    let row2 = f64(t.c + t.d)
-    let col1 = f64(t.a + t.c)
-    let col2 = f64(t.b + t.d)
+    let row1 = cells[0usize] + cells[1usize]
+    let row2 = cells[2usize] + cells[3usize]
+    let col1 = cells[0usize] + cells[2usize]
+    let col2 = cells[1usize] + cells[3usize]
     if row1 == 0.0f64 || row2 == 0.0f64 || col1 == 0.0f64 || col2 == 0.0f64 { ret (0.0f64, Invalid) }
     var statistic = 0.0f64
-    let cells = [4]f64 { f64(t.a), f64(t.b), f64(t.c), f64(t.d) }
     let expected = [4]f64 { row1 * col1 / n, row1 * col2 / n, row2 * col1 / n, row2 * col2 / n }
     var i = 0usize
     while i < 4usize {
