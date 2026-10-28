@@ -816,7 +816,7 @@ fn attributes_piece(b: *Build, a: *mem.Arena, friendly: str, key_id: []const u8)
 // PBES2 AES-256-CBC / PBKDF2-HMAC-SHA256, an HMAC-SHA-256 MAC, `iterations` rounds. The
 // local key id is the SHA-1 of the leaf certificate, as OpenSSL does. Returns the length.
 fn encode(a: *mem.Arena, pkcs8: []const u8, chain: []const []const u8, friendly: str, password: str, p: Params, out: []u8) -> (usize, err) {
-    if chain.len == 0usize { ret (0usize, Invalid) }
+    if chain.len == 0usize || chain.len > 8usize { ret (0usize, Invalid) }
     let mark = mem.mark(a)
     // every wrapping layer copies what it wraps: key about 8 layers, a certificate about 12
     var total = 16384usize + pkcs8.len * 32usize
@@ -852,7 +852,6 @@ fn encode(a: *mem.Arena, pkcs8: []const u8, chain: []const []const u8, friendly:
     let x509 = oid_x509_cert()
     var bag_pieces: [8][]const u8 = zero
     var count = chain.len
-    if count > 8usize { count = 8usize }
     var c = 0usize
     while c < count {
         let der_octets = piece1(&b, 4u8, chain[c])

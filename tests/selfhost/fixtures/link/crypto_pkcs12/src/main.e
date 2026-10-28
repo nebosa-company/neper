@@ -114,6 +114,14 @@ fn check_line(a: *mem.Arena, line: str) -> u8 {
         }
         params.iterations = 2048u32
         var out: [12288]u8 = zero
+        var long_chain: [9][]const u8 = zero
+        i = 0usize
+        while i < long_chain.len {
+            long_chain[i] = c0[0usize..n0]
+            i += 1usize
+        }
+        let (_, long_chain_error) = pkcs12.encode(a, key_der[0usize..kn], long_chain[..], "neper test", "neper", params, out[0usize..12288usize])
+        if long_chain_error != pkcs12.Invalid { ret 7u8 }
         let (n, e) = pkcs12.encode(a, key_der[0usize..kn], chain[0usize..2usize], "neper test", "neper", params, out[0usize..12288usize])
         if e != ok { ret 1u8 }
         if !same_bytes(out[0usize..n], blob_buf[0usize..bn]) { ret 2u8 }
