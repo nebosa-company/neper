@@ -1815,7 +1815,11 @@ fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, 
     low -= pad
     high += pad
     spread_high *= 1.15f64
-    if !(high > low) || !(spread_high > 0.0f64) || high - high != 0.0f64 || spread_high - spread_high != 0.0f64 { ret (zero, Invalid) }
+    if !finite64(low) || !finite64(high) || !finite64(spread_high) || !(high > low) || !(spread_high > 0.0f64) { ret (zero, Invalid) }
+    let layout_low = f32(low)
+    let layout_high = f32(high)
+    let layout_spread_high = f32(spread_high)
+    if !finite(layout_low) || !finite(layout_high) || !finite(layout_spread_high) || !(layout_high > layout_low) || !(layout_spread_high > 0.0f32) { ret (zero, Invalid) }
     let mean_rect = panels[0usize]
     let spread_rect = panels[1usize]
     let bar_width = spread_rect.width / f32(n) * 0.65f32
@@ -1837,9 +1841,9 @@ fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, 
     work.guides[0usize] = Segment { from: Coord { x: mean_rect.x, y: lower_y }, to: Coord { x: mean_rect.x + mean_rect.width, y: lower_y } }
     work.guides[1usize] = Segment { from: Coord { x: mean_rect.x, y: upper_y }, to: Coord { x: mean_rect.x + mean_rect.width, y: upper_y } }
     work.guides[2usize] = Segment { from: Coord { x: spread_rect.x, y: within_y }, to: Coord { x: spread_rect.x + spread_rect.width, y: within_y } }
-    let means = Layout { kind: .PointLine, coords: work.mean_points[..n], segments: work.mean_lines[..n - 1usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: f32(low), y_max: f32(high) }
-    let spreads = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.spread_bars[..n], x_min: 1.0f32, x_max: f32(n), y_min: 0.0f32, y_max: f32(spread_high) }
-    let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: f32(low), y_max: f32(high) }
+    let means = Layout { kind: .PointLine, coords: work.mean_points[..n], segments: work.mean_lines[..n - 1usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: layout_low, y_max: layout_high }
+    let spreads = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.spread_bars[..n], x_min: 1.0f32, x_max: f32(n), y_min: 0.0f32, y_max: layout_spread_high }
+    let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: layout_low, y_max: layout_high }
     ret (BatchCapabilityLayout { means: means, spreads: spreads, guides: guides, summary: summary }, ok)
 }
 

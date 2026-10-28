@@ -58,6 +58,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let no_between = [6]f64{ 1.0f64, 3.0f64, 1.0f64, 3.0f64, 1.0f64, 3.0f64 }
     let (pooled, pooled_error) = stat.batch_capability(no_between[..], 2usize, 0.0f64, 4.0f64, batch_means[..], batch_spreads[..])
     if pooled_error != ok || pooled.between_sigma != 0.0f64 || !near(pooled.within_sigma, pooled.between_within_sigma, 0.000001f64) { ret chart.Invalid }
+    let extreme = [6]f64{ 0.0f64, 2.0f64, 4.0f64, 6.0f64, 8.0f64, 10.0f64 }
+    let (_, low_overflow_error) = chart.batch_capability(extreme[..], 2usize, -1.79e308f64, -1.70e308f64, panels[..], &work)
+    let (_, narrow_overflow_error) = chart.batch_capability(extreme[..], 2usize, -1.0e100f64, 1.0e100f64, panels[..], &work)
+    if low_overflow_error != chart.Invalid || narrow_overflow_error != chart.Invalid { ret chart.Invalid }
     try io.print("gfx chart capability batch ok\n")
     ret ok
 }
