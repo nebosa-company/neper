@@ -70,7 +70,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     all[5] = log.Field { name: "e", value: log.Value{ Error: io.End } }
     if log.write(&j, .Trace, "line\none", all[0..]) != ok { os.exit(8) }
     let line = buffer[..sink_state.off]
-    if !str.starts_with(line, "{\"time\":\"") || line.len < 40usize || line[38] != 90u8 { os.exit(9) }
+    if !str.starts_with(line, "{\"time\":\"") || line.len < 40usize || line[38] != 90u8 || line[39] != 34u8 { os.exit(9) }
     if !str.ends_with(line, "\",\"level\":\"TRACE\",\"message\":\"line\\none\",\"fields\":{\"b\":true,\"i\":-1,\"u\":18446744073709551615,\"f\":0.5,\"s\":\"q\\\"uote\",\"e\":\"error\"},\"frames\":[]}\n") { os.exit(10) }
     // JSONL refuses malformed UTF-8 before anything reaches the sink, whether it
     // arrives as the message, a field name, or a field string value.
