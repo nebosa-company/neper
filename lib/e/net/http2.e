@@ -41,7 +41,9 @@ const DEFAULT_WINDOW: u32 = 65535u32
 
 type Frame = struct { kind: u8, flags: u8, stream: u32, payload: []const u8 }
 type Setting = struct { id: u16, value: u32 }
-type Header = struct { name: str, value: str }
+// staged is decode-local bookkeeping for an incremental field while a block is
+// being decoded. It is always cleared before a successful decode_block returns.
+type Header = struct { name: str, value: str, staged: u8 }
 type Table = struct { data: []u8, lens: []u32, count: usize, used: usize, size: usize, max_size: usize, limit: usize, pending: bool, pending_size: usize, smallest: usize }
 
 fn preface() -> str { ret "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" }
@@ -230,6 +232,102 @@ fn lookup(t: *const Table, index: usize) -> (str, str, err) {
     let name: str = t.data[off..off + n]
     let value: str = t.data[off + n..off + n + v]
     ret (name, value, ok)
+}
+
+// A decoder block may use entries it indexed earlier in that same block. Keep
+// those entries in the output headers until the block has proved that all caller
+// storage is sufficient, rather than mutating the real table partway through.
+type StagedTable = struct { base_count: usize, count: usize, used: usize, size: usize, max_size: usize }
+
+fn staged_clear(s: *StagedTable, out: []Header) {
+    var i = 0usize
+    while i < out.len {
+        if out[i].staged == 1u8 { out[i].staged = 2u8 }
+        i += 1usize
+    }
+    s.base_count = 0usize
+    s.count = 0usize
+    s.used = 0usize
+    s.size = 0usize
+}
+
+fn staged_evict_oldest(t: *const Table, s: *StagedTable, out: []Header) {
+    if s.count == 0usize { ret }
+    if s.base_count > 0usize {
+        let last = s.base_count - 1usize
+        let name_len = usize(t.lens[last * 2usize])
+        let value_len = usize(t.lens[last * 2usize + 1usize])
+        s.base_count -= 1usize
+        s.count -= 1usize
+        s.used -= name_len + value_len
+        s.size -= entry_size(name_len, value_len)
+        ret
+    }
+    var i = 0usize
+    while i < out.len {
+        if out[i].staged == 1u8 {
+            let name_len = out[i].name.len
+            let value_len = out[i].value.len
+            out[i].staged = 2u8
+            s.count -= 1usize
+            s.used -= name_len + value_len
+            s.size -= entry_size(name_len, value_len)
+            ret
+        }
+        i += 1usize
+    }
+}
+
+fn staged_evict_to(t: *const Table, s: *StagedTable, out: []Header, limit: usize) {
+    while s.size > limit && s.count > 0usize { staged_evict_oldest(t, s, out) }
+}
+
+fn staged_resize(t: *const Table, s: *StagedTable, out: []Header, size: usize) -> err {
+    if size > t.limit { ret Compression }
+    s.max_size = size
+    staged_evict_to(t, s, out, size)
+    ret ok
+}
+
+fn staged_insert(t: *const Table, s: *StagedTable, out: []Header, field: usize) {
+    let name = out[field].name
+    let value = out[field].value
+    let need = entry_size(name.len, value.len)
+    if need > s.max_size {
+        staged_clear(s, out)
+        out[field].staged = 2u8
+        ret
+    }
+    staged_evict_to(t, s, out, s.max_size - need)
+    let bytes = name.len + value.len
+    if bytes > t.data.len - s.used || s.count >= t.lens.len / 2usize {
+        staged_clear(s, out)
+        if bytes > t.data.len || t.lens.len < 2usize {
+            out[field].staged = 2u8
+            ret
+        }
+    }
+    out[field].staged = 1u8
+    s.count += 1usize
+    s.used += bytes
+    s.size += need
+}
+
+fn staged_lookup(t: *const Table, s: *const StagedTable, out: []const Header, index: usize) -> (str, str, err) {
+    if index == 0usize { ret ("", "", Compression) }
+    if index <= 61usize { ret (static_name(index), static_value(index), ok) }
+    var dynamic = index - 62usize
+    var i = out.len
+    while i > 0usize {
+        i -= 1usize
+        if out[i].staged == 1u8 {
+            if dynamic == 0usize { ret (out[i].name, out[i].value, ok) }
+            dynamic -= 1usize
+        }
+    }
+    if dynamic >= s.base_count { ret ("", "", Compression) }
+    let (name, value, lookup_error) = lookup(t, dynamic + 62usize)
+    ret (name, value, lookup_error)
 }
 
 // --- Huffman -----------------------------------------------------------------------------------------------------
@@ -431,6 +529,58 @@ fn copy_scratch(scratch: []u8, used: *usize, s: str) -> (str, err) {
     ret (out, ok)
 }
 
+// Consume a string literal without decoding it. The first decode pass already
+// validated its representation; this is used only to replay successful table
+// updates after every caller-capacity check has passed.
+fn skip_string(b: []const u8, at: *usize) -> err {
+    if *at >= b.len { ret Compression }
+    let (length, length_error) = read_int(b, at, 7u8)
+    if length_error != ok { ret length_error }
+    if length > u64(b.len - *at) { ret Compression }
+    *at += usize(length)
+    ret ok
+}
+
+fn commit_block(t: *Table, block: []const u8, headers: []const Header) -> err {
+    var at = 0usize
+    var field = 0usize
+    while at < block.len {
+        let b = block[at]
+        if (b & 128u8) != 0u8 {
+            let (_, index_error) = read_int(block, &at, 7u8)
+            if index_error != ok { ret index_error }
+            field += 1usize
+        } else if (b & 224u8) == 32u8 {
+            let (size, size_error) = read_int(block, &at, 5u8)
+            if size_error != ok { ret size_error }
+            let resize_error = table_resize(t, usize(size))
+            if resize_error != ok { ret resize_error }
+        } else {
+            var prefix = 4u8
+            var index_it = false
+            if (b & 192u8) == 64u8 {
+                prefix = 6u8
+                index_it = true
+            }
+            let (name_index, name_index_error) = read_int(block, &at, prefix)
+            if name_index_error != ok { ret name_index_error }
+            if name_index == 0u64 {
+                let name_error = skip_string(block, &at)
+                if name_error != ok { ret name_error }
+            }
+            let value_error = skip_string(block, &at)
+            if value_error != ok { ret value_error }
+            if field >= headers.len { ret Compression }
+            if index_it && headers[field].staged != 0u8 {
+                insert(t, headers[field].name, headers[field].value)
+            }
+            field += 1usize
+        }
+    }
+    if field != headers.len { ret Compression }
+    ret ok
+}
+
 // A header block into `out`; the count. Names and values are copied into `scratch`. `Compression` for any HPACK
 // error, `TooSmall` when `out` or `scratch` cannot hold the result.
 fn decode_block(t: *Table, block: []const u8, out: []Header, scratch: []u8) -> (usize, err) {
@@ -438,20 +588,21 @@ fn decode_block(t: *Table, block: []const u8, out: []Header, scratch: []u8) -> (
     var count = 0usize
     var used = 0usize
     var fields_seen = false
+    var staged = StagedTable { base_count: t.count, count: t.count, used: t.used, size: t.size, max_size: t.max_size }
     while at < block.len {
         let b = block[at]
         if (b & 128u8) != 0u8 {
             // Indexed header field.
             let (index, index_error) = read_int(block, &at, 7u8)
             if index_error != ok { ret (0usize, index_error) }
-            let (name, value, lookup_error) = lookup(t, usize(index))
+            let (name, value, lookup_error) = staged_lookup(t, &staged, out[0usize..count], usize(index))
             if lookup_error != ok { ret (0usize, lookup_error) }
             if count >= out.len { ret (0usize, TooSmall) }
             let (n2, e1) = copy_scratch(scratch, &used, name)
             if e1 != ok { ret (0usize, e1) }
             let (v2, e2) = copy_scratch(scratch, &used, value)
             if e2 != ok { ret (0usize, e2) }
-            out[count] = Header { name: n2, value: v2 }
+            out[count] = Header { name: n2, value: v2, staged: 0u8 }
             count += 1usize
             fields_seen = true
         } else if (b & 224u8) == 32u8 {
@@ -459,7 +610,7 @@ fn decode_block(t: *Table, block: []const u8, out: []Header, scratch: []u8) -> (
             if fields_seen { ret (0usize, Compression) }
             let (size, size_error) = read_int(block, &at, 5u8)
             if size_error != ok { ret (0usize, size_error) }
-            let resize_error = table_resize(t, usize(size))
+            let resize_error = staged_resize(t, &staged, out[0usize..count], usize(size))
             if resize_error != ok { ret (0usize, resize_error) }
         } else {
             // Literal: incremental indexing (6-bit prefix), without indexing or never indexed (4-bit).
@@ -477,7 +628,7 @@ fn decode_block(t: *Table, block: []const u8, out: []Header, scratch: []u8) -> (
                 if name_error != ok { ret (0usize, name_error) }
                 name = n
             } else {
-                let (n, v, lookup_error) = lookup(t, usize(name_index))
+                let (n, v, lookup_error) = staged_lookup(t, &staged, out[0usize..count], usize(name_index))
                 if lookup_error != ok { ret (0usize, lookup_error) }
                 let (copied, copy_error) = copy_scratch(scratch, &used, n)
                 if copy_error != ok { ret (0usize, copy_error) }
@@ -486,11 +637,18 @@ fn decode_block(t: *Table, block: []const u8, out: []Header, scratch: []u8) -> (
             let (value, value_error) = read_string(block, &at, scratch, &used)
             if value_error != ok { ret (0usize, value_error) }
             if count >= out.len { ret (0usize, TooSmall) }
-            out[count] = Header { name: name, value: value }
-            count += 1usize
+            out[count] = Header { name: name, value: value, staged: 0u8 }
             fields_seen = true
-            if index_it { insert(t, name, value) }
+            if index_it { staged_insert(t, &staged, out[0usize..count + 1usize], count) }
+            count += 1usize
         }
+    }
+    let commit_error = commit_block(t, block, out[0usize..count])
+    if commit_error != ok { ret (0usize, commit_error) }
+    var i = 0usize
+    while i < count {
+        out[i].staged = 0u8
+        i += 1usize
     }
     ret (count, ok)
 }

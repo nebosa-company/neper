@@ -243,7 +243,7 @@ fn serve_due(sim: *Sim) {
             var meta: [1]h2.Header = zero
             var count = 0usize
             if b.has_pushback {
-                meta[0usize] = h2.Header { name: "grpc-retry-pushback-ms", value: b.pushback }
+                meta[0usize] = h2.Header { name: "grpc-retry-pushback-ms", value: b.pushback, staged: 0u8 }
                 count = 1usize
             }
             let (n2, e2) = gs.response_finish(&sim.srv, out[at..], id, b.code, "", meta[0usize..count])

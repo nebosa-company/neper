@@ -38,10 +38,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var blk: [256]u8 = zero
     let none_s: [1]str = zero
     frame(&server, h2.SETTINGS, 0u8, 0u32, "")
-    let interim = [1]h2.Header { h2.Header { name: ":status", value: "103" } }
+    let interim = [1]h2.Header { h2.Header { name: ":status", value: "103", staged: 0u8 } }
     let (n1, e1) = h2.encode_block(&enc, blk[0usize..256usize], interim[0usize..1usize], none_s[0usize..0usize], false)
     frame(&server, h2.HEADERS, h2.FLAG_END_HEADERS, 1u32, blk[0usize..n1])
-    let final = [2]h2.Header { h2.Header { name: ":status", value: "200" }, h2.Header { name: "content-type", value: "text/plain" } }
+    let final = [2]h2.Header { h2.Header { name: ":status", value: "200", staged: 0u8 }, h2.Header { name: "content-type", value: "text/plain", staged: 0u8 } }
     let (n2, e2) = h2.encode_block(&enc, blk[0usize..256usize], final[0usize..2usize], none_s[0usize..0usize], true)
     frame(&server, h2.HEADERS, h2.FLAG_END_HEADERS, 1u32, blk[0usize..n2])
     frame(&server, h2.DATA, 0u8, 1u32, "hel")

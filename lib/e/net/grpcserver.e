@@ -360,9 +360,9 @@ fn response_headers(s: *Server, dst: []u8, id: u32, metadata: []const h2.Header)
     if s.calls[j].local_headers || s.calls[j].local_closed { ret (0usize, grpc.Protocol) }
     var headers: [24]h2.Header = zero
     var n = 0usize
-    headers[n] = h2.Header { name: ":status", value: "200" }
+    headers[n] = h2.Header { name: ":status", value: "200", staged: 0u8 }
     n += 1usize
-    headers[n] = h2.Header { name: "content-type", value: "application/grpc" }
+    headers[n] = h2.Header { name: "content-type", value: "application/grpc", staged: 0u8 }
     n += 1usize
     var m = 0usize
     while m < metadata.len && n < headers.len {
@@ -468,9 +468,9 @@ fn response_finish(s: *Server, dst: []u8, id: u32, status: u32, message: str, me
     var headers: [28]h2.Header = zero
     var n = 0usize
     if !s.calls[j].local_headers {
-        headers[n] = h2.Header { name: ":status", value: "200" }
+        headers[n] = h2.Header { name: ":status", value: "200", staged: 0u8 }
         n += 1usize
-        headers[n] = h2.Header { name: "content-type", value: "application/grpc" }
+        headers[n] = h2.Header { name: "content-type", value: "application/grpc", staged: 0u8 }
         n += 1usize
     }
     var status_text: [12]u8 = zero
@@ -494,14 +494,14 @@ fn response_finish(s: *Server, dst: []u8, id: u32, status: u32, message: str, me
         di += 1usize
     }
     let status_value: str = status_text[0usize..sat]
-    headers[n] = h2.Header { name: "grpc-status", value: status_value }
+    headers[n] = h2.Header { name: "grpc-status", value: status_value, staged: 0u8 }
     n += 1usize
     var encoded: [512]u8 = zero
     if message.len > 0usize {
         let (len, encode_error) = grpc.message_percent_encode(encoded[0usize..], message)
         if encode_error != ok { ret (0usize, encode_error) }
         let value: str = encoded[0usize..len]
-        headers[n] = h2.Header { name: "grpc-message", value: value }
+        headers[n] = h2.Header { name: "grpc-message", value: value, staged: 0u8 }
         n += 1usize
     }
     var m = 0usize

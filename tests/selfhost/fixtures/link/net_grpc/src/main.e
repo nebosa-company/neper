@@ -197,7 +197,7 @@ fn parse_metadata(a: *mem.Arena, text: str, out: []h2.Header) -> usize {
         let (pair, found) = item_at(text, 44u8, i)
         let (name_hex, value_hex, eq) = str.split_once(pair, "=")
         if !found || !eq { os.exit(96i32) }
-        out[i] = h2.Header { name: unhex(a, name_hex), value: unhex(a, value_hex) }
+        out[i] = h2.Header { name: unhex(a, name_hex), value: unhex(a, value_hex), staged: 0u8 }
         i += 1usize
     }
     ret n

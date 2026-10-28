@@ -203,17 +203,17 @@ fn exchange(a: *mem.Arena, src: io.Reader, sink: io.Writer, method: str, authori
     var enc = h2.table_new(enc_data, enc_lens, 4096usize)
     let (hl, hle) = mem.alloc[h2.Header](a, headers.len + 8usize)
     if hle != ok { ret (out, hle) }
-    hl[0usize] = h2.Header { name: ":method", value: method }
-    hl[1usize] = h2.Header { name: ":scheme", value: "https" }
-    hl[2usize] = h2.Header { name: ":authority", value: authority }
-    hl[3usize] = h2.Header { name: ":path", value: path }
+    hl[0usize] = h2.Header { name: ":method", value: method, staged: 0u8 }
+    hl[1usize] = h2.Header { name: ":scheme", value: "https", staged: 0u8 }
+    hl[2usize] = h2.Header { name: ":authority", value: authority, staged: 0u8 }
+    hl[3usize] = h2.Header { name: ":path", value: path, staged: 0u8 }
     var hn = 4usize
     var i = 0usize
     while i < headers.len {
         if !skip_request_header(headers[i].name) {
             let (ln, lne) = lower(a, headers[i].name)
             if lne != ok { ret (out, lne) }
-            hl[hn] = h2.Header { name: ln, value: headers[i].value }
+            hl[hn] = h2.Header { name: ln, value: headers[i].value, staged: 0u8 }
             hn += 1usize
         }
         i += 1usize

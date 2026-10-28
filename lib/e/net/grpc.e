@@ -352,26 +352,26 @@ fn call_start(c: *Conn, dst: []u8, authority: str, path: str, timeout_nanos: u64
     if slot == c.streams.len { ret (0u32, 0usize, TooSmall) }
     var headers: [24]h2.Header = zero
     var n = 0usize
-    headers[n] = h2.Header { name: ":method", value: "POST" }
+    headers[n] = h2.Header { name: ":method", value: "POST", staged: 0u8 }
     n += 1usize
-    headers[n] = h2.Header { name: ":scheme", value: "http" }
+    headers[n] = h2.Header { name: ":scheme", value: "http", staged: 0u8 }
     n += 1usize
-    headers[n] = h2.Header { name: ":path", value: path }
+    headers[n] = h2.Header { name: ":path", value: path, staged: 0u8 }
     n += 1usize
-    headers[n] = h2.Header { name: ":authority", value: authority }
+    headers[n] = h2.Header { name: ":authority", value: authority, staged: 0u8 }
     n += 1usize
-    headers[n] = h2.Header { name: "content-type", value: "application/grpc" }
+    headers[n] = h2.Header { name: "content-type", value: "application/grpc", staged: 0u8 }
     n += 1usize
-    headers[n] = h2.Header { name: "user-agent", value: "grpc-neper/0.1" }
+    headers[n] = h2.Header { name: "user-agent", value: "grpc-neper/0.1", staged: 0u8 }
     n += 1usize
-    headers[n] = h2.Header { name: "te", value: "trailers" }
+    headers[n] = h2.Header { name: "te", value: "trailers", staged: 0u8 }
     n += 1usize
     var timeout_text: [16]u8 = zero
     if timeout_nanos > 0u64 {
         let (len, timeout_error) = timeout_encode(timeout_text[0usize..], timeout_nanos)
         if timeout_error != ok { ret (0u32, 0usize, timeout_error) }
         let value: str = timeout_text[0usize..len]
-        headers[n] = h2.Header { name: "grpc-timeout", value: value }
+        headers[n] = h2.Header { name: "grpc-timeout", value: value, staged: 0u8 }
         n += 1usize
     }
     var m = 0usize
