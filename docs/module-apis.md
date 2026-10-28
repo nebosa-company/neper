@@ -1589,7 +1589,7 @@ position, `reverse_range` by splitting the range out and tagging it, `collect`.
 ### `e.data.window`
 
 ```neper
-type MonotonicQueue = struct { values: []i64, positions: []u64, head: usize, tail: usize, width: usize, pushed: u64, minimum: bool }
+type MonotonicQueue = struct { values: []i64, positions: []u64, head: usize, tail: usize, count: usize, width: usize, pushed: u64, minimum: bool }
 type TwoStack[T: type] = struct { front: []T, front_folds: []T, back: []T, front_count: usize, back_count: usize, identity: T }
 type ExponentialHistogram = struct { sizes: []u64, stamps: []u64, count: usize, width: u64, k: usize, now: u64 }
 type Daba[T: type] = struct { values: []T, aggs: []T, head: usize, tail: usize, lp: usize, rp: usize, ap: usize, bp: usize, identity: T }
