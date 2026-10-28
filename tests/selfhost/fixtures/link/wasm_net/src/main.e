@@ -16,6 +16,120 @@ fn loopback() -> os.SocketAddress {
     ret address
 }
 
+fn loopback6() -> os.SocketAddress {
+    var address: os.SocketAddress = zero
+    address.family = .Ip6
+    address.bytes[15usize] = 1u8
+    ret address
+}
+
+fn wildcard4() -> os.SocketAddress {
+    var address: os.SocketAddress = zero
+    address.family = .Ip4
+    ret address
+}
+
+fn wildcard6() -> os.SocketAddress {
+    var address: os.SocketAddress = zero
+    address.family = .Ip6
+    ret address
+}
+
+fn is_wildcard(address: os.SocketAddress, count: usize) -> bool {
+    var at = 0usize
+    while at < count {
+        if address.bytes[at] != 0u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// A bind keeps `any` as `any`: only a connection may turn an unspecified remote address into the
+// local loopback address. Both families are checked because the host used to change both of them.
+fn wildcard_binds() -> i32 {
+    let (ip4, ip4_open_error) = os.socket_open(.Ip4, .Datagram)
+    if ip4_open_error != ok { ret 100i32 }
+    defer let _ = os.socket_close(ip4)
+    let any4 = wildcard4()
+    if os.socket_bind(ip4, any4) != ok { ret 101i32 }
+    let (ip4_local, ip4_local_error) = os.socket_local_address(ip4)
+    if ip4_local_error != ok || ip4_local.family != .Ip4 || ip4_local.port == 0u16 || !is_wildcard(ip4_local, 4usize) { ret 102i32 }
+
+    let (ip6, ip6_open_error) = os.socket_open(.Ip6, .Datagram)
+    if ip6_open_error != ok { ret 103i32 }
+    defer let _ = os.socket_close(ip6)
+    let any6 = wildcard6()
+    if os.socket_bind(ip6, any6) != ok { ret 104i32 }
+    let (ip6_local, ip6_local_error) = os.socket_local_address(ip6)
+    if ip6_local_error != ok || ip6_local.family != .Ip6 || ip6_local.port == 0u16 || !is_wildcard(ip6_local, 16usize) { ret 105i32 }
+    ret 0i32
+}
+
+// The address family belongs to the socket, not merely to a destination record. A mismatched bind
+// must fail before a stream retains the address, and a mismatched connect must not use that record
+// to make an IPv6 connection from an IPv4 socket.
+fn family_mismatches() -> i32 {
+    let (bound, bound_open_error) = os.socket_open(.Ip4, .Stream)
+    if bound_open_error != ok { ret 110i32 }
+    defer let _ = os.socket_close(bound)
+    let wrong = loopback6()
+    if os.socket_bind(bound, wrong) == ok { ret 111i32 }
+
+    let (listener, listener_open_error) = os.socket_open(.Ip6, .Stream)
+    if listener_open_error != ok { ret 112i32 }
+    defer let _ = os.socket_close(listener)
+    var endpoint = loopback6()
+    endpoint.port = 0u16
+    if os.socket_bind(listener, endpoint) != ok { ret 113i32 }
+    if os.socket_listen(listener, 1u32) != ok { ret 114i32 }
+    let (listener_local, listener_local_error) = os.socket_local_address(listener)
+    if listener_local_error != ok || listener_local.port == 0u16 { ret 115i32 }
+
+    let (client, client_open_error) = os.socket_open(.Ip4, .Stream)
+    if client_open_error != ok { ret 116i32 }
+    defer let _ = os.socket_close(client)
+    if os.socket_connect(client, listener_local) == ok { ret 117i32 }
+    ret 0i32
+}
+
+// Node implicitly binds a UDP socket on connect and send_to. The local endpoint must expose that
+// kernel-selected port, and the receiver's source port must agree with it.
+fn implicit_datagram() -> i32 {
+    let (receiver, receiver_open_error) = os.socket_open(.Ip4, .Datagram)
+    if receiver_open_error != ok { ret 120i32 }
+    defer let _ = os.socket_close(receiver)
+    var destination = loopback()
+    destination.port = 0u16
+    if os.socket_bind(receiver, destination) != ok { ret 121i32 }
+    let (receiver_local, receiver_local_error) = os.socket_local_address(receiver)
+    if receiver_local_error != ok || receiver_local.port == 0u16 { ret 122i32 }
+
+    let (connected, connected_open_error) = os.socket_open(.Ip4, .Datagram)
+    if connected_open_error != ok { ret 123i32 }
+    defer let _ = os.socket_close(connected)
+    if os.socket_connect(connected, receiver_local) != ok { ret 124i32 }
+    let (connected_local, connected_local_error) = os.socket_local_address(connected)
+    if connected_local_error != ok || connected_local.port == 0u16 { ret 125i32 }
+    var payload: [1]u8 = zero
+    payload[0usize] = 7u8
+    let (sent, send_error) = os.socket_send(connected, payload[..])
+    if send_error != ok || sent != 1usize { ret 126i32 }
+    var inbox: [4]u8 = zero
+    let (received, connected_from, receive_error) = os.socket_receive_from(receiver, inbox[..])
+    if receive_error != ok || received != 1usize || connected_from.port != connected_local.port { ret 127i32 }
+
+    let (unbound, unbound_open_error) = os.socket_open(.Ip4, .Datagram)
+    if unbound_open_error != ok { ret 128i32 }
+    defer let _ = os.socket_close(unbound)
+    let (posted, post_error) = os.socket_send_to(unbound, receiver_local, payload[..])
+    if post_error != ok || posted != 1usize { ret 129i32 }
+    let (unbound_local, unbound_local_error) = os.socket_local_address(unbound)
+    if unbound_local_error != ok || unbound_local.port == 0u16 { ret 130i32 }
+    let (posted_received, unbound_from, posted_receive_error) = os.socket_receive_from(receiver, inbox[..])
+    if posted_receive_error != ok || posted_received != 1usize || unbound_from.port != unbound_local.port { ret 131i32 }
+    ret 0i32
+}
+
 // A listener on an ephemeral loopback port, and the port.
 fn listening(port: *u16) -> (os.Socket, err) {
     var none: os.Socket = zero
@@ -268,6 +382,12 @@ fn main(a: *mem.Arena) -> err {
     // A refused connect never completes under the Windows build's poller (not looked into here), so
     // only the host that has the refusal as a number of its own is asked.
     when target.os == .Wasi {
+        let wildcard_code = wildcard_binds()
+        if wildcard_code != 0i32 { os.exit(wildcard_code) }
+        let mismatch_code = family_mismatches()
+        if mismatch_code != 0i32 { os.exit(mismatch_code) }
+        let implicit_code = implicit_datagram()
+        if implicit_code != 0i32 { os.exit(implicit_code) }
         let refused_code = refused()
         if refused_code != 0i32 { os.exit(refused_code) }
     }
