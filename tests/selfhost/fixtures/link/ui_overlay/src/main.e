@@ -75,6 +75,10 @@ fn ctrl_s() -> input.Event {
     ret input.Event { KeyDown: input.KeyEvent { window: window.Id { slot: 0u32, generation: 0u32 }, key: input.Key { physical: 83u32, logical: 83u32 }, modifiers: input.Modifiers { shift: false, control: true, alt: false, meta: false, caps_lock: false, num_lock: false }, repeat: false } }
 }
 
+fn plain_key(code: u32) -> input.Event {
+    ret input.Event { KeyDown: input.KeyEvent { window: window.Id { slot: 0u32, generation: 0u32 }, key: input.Key { physical: code, logical: code }, modifiers: zero, repeat: false } }
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.001 && d > -0.001
@@ -83,7 +87,7 @@ fn near(a: f32, b: f32) -> bool {
 // The tree: a plain box, a tap region, an overlay below the box holding a red tap
 // region, an overlay to the right of the box kept inside the window, and -- when
 // asked -- a modal overlay in the centre holding a green focusable region.
-fn build(a: *mem.Arena, ctx: *void, with_modal: bool) -> (widget.Node, err) {
+fn build(a: *mem.Arena, ctx: *void, with_modal: bool, modal_focusable: bool) -> (widget.Node, err) {
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
     if shortcuts_error != ok { ret (zero, shortcuts_error) }
     shortcuts[0usize] = widget.Shortcut { key: 83u32, modifiers: input.Modifiers { shift: false, control: true, alt: false, meta: false, caps_lock: false, num_lock: false }, action: widget.Submit { ctx: ctx, invoke: on_shortcut } }
@@ -95,7 +99,7 @@ fn build(a: *mem.Arena, ctx: *void, with_modal: bool) -> (widget.Node, err) {
     aside[0usize] = widget.box(9u64, sized(40.0, 5.0, 0.0, 0.0, 0.0), zero)
     let (dialog, dialog_error) = mem.alloc[widget.Node](a, 1usize)
     if dialog_error != ok { ret (zero, dialog_error) }
-    dialog[0usize] = widget.region(7u64, widget.Region { gesture: widget.GestureAction { ctx: ctx, invoke: on_7 }, gestures: 1u8, enabled: true, focusable: true }, sized(20.0, 20.0, 0.0, 1.0, 0.0), zero)
+    dialog[0usize] = widget.region(7u64, widget.Region { gesture: widget.GestureAction { ctx: ctx, invoke: on_7 }, gestures: 1u8, enabled: true, focusable: modal_focusable }, sized(20.0, 20.0, 0.0, 1.0, 0.0), zero)
     var count = 4usize
     if with_modal { count = 5usize }
     let (children, children_error) = mem.alloc[widget.Node](a, count)
@@ -135,7 +139,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if storage_error != ok { os.exit(7i32) }
     var frame = mem.arena_from(frame_storage)
     let limits = ui_layout.Constraints { min_width: 0.0, max_width: 64.0, min_height: 0.0, max_height: 64.0 }
-    let (root, build_error) = build(&frame, ctx, false)
+    let (root, build_error) = build(&frame, ctx, false, false)
     if build_error != ok { os.exit(8i32) }
     let (first_scene, first_error) = widget.reconcile(&runtime, &frame, root, limits)
     if first_error != ok { os.exit(9i32) }
@@ -164,7 +168,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (focus_1, has_focus_1) = widget.focused(&runtime)
     if !has_focus_1 || focus_1.slot != region_3.slot { os.exit(21i32) }
     // The modal appears centred and takes the focus from the region.
-    let (root_2, build_2_error) = build(&frame, ctx, true)
+    let (root_2, build_2_error) = build(&frame, ctx, true, true)
     if build_2_error != ok { os.exit(22i32) }
     let (second_scene, second_error) = widget.reconcile(&runtime, &frame, root_2, limits)
     if second_error != ok { os.exit(23i32) }
@@ -192,7 +196,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (focus_3, has_focus_3) = widget.focused(&runtime)
     if !has_focus_3 || focus_3.slot != region_7.slot { os.exit(35i32) }
     // The modal goes; the focus returns to the region that had it.
-    let (root_3, build_3_error) = build(&frame, ctx, false)
+    let (root_3, build_3_error) = build(&frame, ctx, false, false)
     if build_3_error != ok { os.exit(36i32) }
     let (third_scene, third_error) = widget.reconcile(&runtime, &frame, root_3, limits)
     if third_error != ok { os.exit(37i32) }
@@ -204,6 +208,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     press(&runtime, 10.0, 25.0, 40i32)
     if log.taps_5 != 2usize || log.dismissed != 1usize { os.exit(41i32) }
     if scene.render(&renderer, third_scene, canvas, geometry.Size { width: 64.0, height: 64.0 }) != ok { os.exit(42i32) }
+    // A modal with no focusable child preserves the background focus, but every
+    // key still stays inside the modal rather than activating that focused region.
+    let (root_4, build_4_error) = build(&frame, ctx, true, false)
+    if build_4_error != ok { os.exit(46i32) }
+    let (_, fourth_error) = widget.reconcile(&runtime, &frame, root_4, limits)
+    if fourth_error != ok { os.exit(47i32) }
+    let (focus_5, has_focus_5) = widget.focused(&runtime)
+    if !has_focus_5 || focus_5.slot != region_3.slot { os.exit(48i32) }
+    if widget.dispatch(&runtime, plain_key(13u32)) != ok || widget.dispatch(&runtime, plain_key(32u32)) != ok || widget.dispatch(&runtime, ctrl_s()) != ok { os.exit(49i32) }
+    if log.taps_3 != 1usize || log.shortcuts != 1usize { os.exit(50i32) }
+    if widget.dispatch(&runtime, plain_key(27u32)) != ok || log.dismissed != 2usize { os.exit(51i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(43i32) }
     try io.print("ui overlay ok\n")
     ret ok

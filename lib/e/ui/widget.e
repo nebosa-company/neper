@@ -5032,26 +5032,31 @@ fn has_scoped_shortcut(s: *State, from: usize, code: u32, held: input.Modifiers)
 // most-recently-used switch.
 fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
     let code = key_code(k.key.physical)
-    let (barred, bar_error) = menu_bar_key(s, code, k)
-    if barred || bar_error != ok { ret (true, bar_error) }
-    let (editor, has_editor) = focused_edit(s)
-    if has_editor {
-        let (edited, edit_error) = edit_key(s, editor, k)
-        if edited || edit_error != ok { ret (true, edit_error) }
-    }
-    if menu_key(s, code, k) { ret (true, ok) }
-    if collection_typeahead_key(s, code, k) { ret (true, ok) }
-    if s.has_focus && s.elements[usize(s.focus)].live && s.elements[usize(s.focus)].kind == SLIDER_TAG {
-        let (slid, slide_error) = slider_key(s, usize(s.focus), code)
-        if slid || slide_error != ok { ret (true, slide_error) }
+    let (modal, has_modal) = topmost_modal(s)
+    let focus_in_modal = has_modal && s.has_focus && descends_from(s, usize(s.focus), modal)
+    // Background focus cannot reach any of these focus-sensitive handlers while a
+    // modal is open. An inner modal scope is handled by the walk below instead.
+    if !has_modal || focus_in_modal {
+        let (barred, bar_error) = menu_bar_key(s, code, k)
+        if barred || bar_error != ok { ret (true, bar_error) }
+        let (editor, has_editor) = focused_edit(s)
+        if has_editor {
+            let (edited, edit_error) = edit_key(s, editor, k)
+            if edited || edit_error != ok { ret (true, edit_error) }
+        }
+        if menu_key(s, code, k) { ret (true, ok) }
+        if collection_typeahead_key(s, code, k) { ret (true, ok) }
+        if s.has_focus && s.elements[usize(s.focus)].live && s.elements[usize(s.focus)].kind == SLIDER_TAG {
+            let (slid, slide_error) = slider_key(s, usize(s.focus), code)
+            if slid || slide_error != ok { ret (true, slide_error) }
+        }
     }
     var at = usize(s.root)
     if s.has_focus { at = usize(s.focus) }
     // A modal overlay bounds the keyboard to itself: with nothing focused under it
     // (its content may not be focusable), or the focus left outside it, the walk
     // starts at the overlay or an inner scope. It never reaches a background scope.
-    let (modal, has_modal) = topmost_modal(s)
-    if has_modal && (!s.has_focus || !descends_from(s, usize(s.focus), modal)) {
+    if has_modal && !focus_in_modal {
         at = modal
         let (inner, has_inner) = scope_under(s, modal)
         if has_inner { at = inner }
@@ -5085,6 +5090,14 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
         if has_modal && at == modal { break }
         if !e.has_parent { break }
         at = usize(e.parent)
+    }
+    if has_modal {
+        if code == 27u32 { ret (true, fire_submit(s.elements[modal].dismiss)) }
+        if code == 9u32 && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta {
+            move_focus(s, k.modifiers.shift)
+            ret (true, reveal_focus(s))
+        }
+        if !focus_in_modal { ret (true, ok) }
     }
     if code == 9u32 && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta {
         move_focus(s, k.modifiers.shift)
@@ -5486,6 +5499,11 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         // Enter or Space on a focused tap region is a tap at its centre.
         let code = key_code(k.key.physical)
         hold_modifier(s, code, true)
+        let (modal, has_modal) = topmost_modal(s)
+        if has_modal && (!s.has_focus || !descends_from(s, usize(s.focus), modal)) {
+            let (_, modal_key_error) = dispatch_key(s, k)
+            ret modal_key_error
+        }
         if code == 27u32 && s.has_rich_tooltip {
             s.rich_dismissed_key = s.rich_anchor_key
             s.has_rich_dismissed = true
