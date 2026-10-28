@@ -4,8 +4,9 @@
 // each is drawn hanging from the top-left corner, read back before the swap, compared pixel
 // by pixel (the margin must be black), then swapped. Then (D5905) a box of each frame is
 // changed and drawn as the renderer reports it: only that box's bytes may go up, through the
-// presenter's unpack buffers, and the back buffer must again equal the whole new frame, and an
-// empty box must upload nothing. A host without a display or GL exits 0 having printed why.
+// presenter's tightly packed unpack buffers, and the back buffer must again equal the whole new
+// frame. A one-pixel-wide vertical change keeps its PBO just as narrow, and an empty box uploads
+// nothing. A host without a display or GL exits 0 having printed why.
 
 use e.gpu
 use e.io
@@ -79,10 +80,25 @@ fn check(a: *mem.Arena, index: usize, host: os.Window, width: u32, height: u32, 
     }
     let before = present.uploaded(index)
     if present.draw_changed(index, host, pixels, width, height, changed) != ok { os.exit(base + 5i32) }
-    if present.uploaded(index) - before != usize(changed.x1 - changed.x0) * usize(changed.y1 - changed.y0) * 4usize { os.exit(base + 6i32) }
+    let changed_bytes = usize(changed.x1 - changed.x0) * usize(changed.y1 - changed.y0) * 4usize
+    if present.uploaded(index) - before != changed_bytes { os.exit(base + 6i32) }
+    if present.unpack_bytes(index) != changed_bytes { os.exit(base + 7i32) }
     try compare(a, pixels, width, height, base + 3i32)
-    if present.present(index, host, pixels, width, height, window.Changed { x0: 0u32, y0: 0u32, x1: 0u32, y1: 0u32 }) != ok { os.exit(base + 7i32) }
-    if present.uploaded(index) - before != usize(changed.x1 - changed.x0) * usize(changed.y1 - changed.y0) * 4usize { os.exit(base + 8i32) }
+    // A thin full-height strip distinguishes a tightly packed PBO from full-width staging.
+    let thin = window.Changed { x0: width / 2u32, y0: 0u32, x1: width / 2u32 + 1u32, y1: height }
+    y = thin.y0
+    while y < thin.y1 {
+        pixels[usize(y) * usize(width) + usize(thin.x0)] = pixels[usize(y) * usize(width) + usize(thin.x0)] ^ 16777215u32
+        y += 1u32
+    }
+    let thin_before = present.uploaded(index)
+    if present.draw_changed(index, host, pixels, width, height, thin) != ok { os.exit(base + 8i32) }
+    let thin_bytes = usize(thin.x1 - thin.x0) * usize(thin.y1 - thin.y0) * 4usize
+    if present.uploaded(index) - thin_before != thin_bytes { os.exit(base + 9i32) }
+    if present.unpack_bytes(index) != thin_bytes { os.exit(base + 10i32) }
+    try compare(a, pixels, width, height, base + 9i32)
+    if present.present(index, host, pixels, width, height, window.Changed { x0: 0u32, y0: 0u32, x1: 0u32, y1: 0u32 }) != ok { os.exit(base + 11i32) }
+    if present.uploaded(index) - thin_before != thin_bytes { os.exit(base + 12i32) }
     ret ok
 }
 

@@ -5,10 +5,10 @@
 // window -- top-left anchored, no filtering, BGRA swizzled in the shader, alpha forced opaque.
 // A GL error drops the window back to `os.window_present` for the rest of the session.
 //
-// (D5905) After the first frame of a size only the box the renderer changed is uploaded: its
-// rows go into one of two pixel-unpack buffers in turn, so filling the next never waits on the
-// upload from the last, and `glTexSubImage2D` takes the box from there. A box that is empty
-// uploads nothing.
+// (D5905) After the first frame of a size only the box the renderer changed is uploaded: a
+// tightly packed copy goes into one of two pixel-unpack buffers in turn, so filling the next
+// never waits on the upload from the last, and `glTexSubImage2D` takes the box from there. A
+// box that is empty uploads nothing.
 
 use e.mem
 use e.os
@@ -172,19 +172,48 @@ fn draw_changed(index: usize, host: os.Window, pixels: []const u32, width: u32, 
         if x1 > width { x1 = width }
         if y1 > height { y1 = height }
         if changed.x0 < x1 && changed.y0 < y1 {
-            // The box's rows, whole, into the next unpack buffer; the texture takes the box's columns from them.
-            let first = usize(changed.y0) * usize(width)
-            let bytes = (usize(y1) - usize(changed.y0)) * usize(width) * 4usize
+            // Keep the PBO packed to the changed box. A full-width PBO plus UNPACK_ROW_LENGTH
+            // makes a narrow box look cheap in telemetry while still uploading every row's pixels.
+            let row_words = usize(x1 - changed.x0)
+            let row_count = usize(y1 - changed.y0)
+            let bytes = row_words * row_count * 4usize
             gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, p.unpack[p.next_unpack])
-            gl.buffer_data(gl.PIXEL_UNPACK_BUFFER, isize(bytes), context.as_pointer(mem.address_of(&pixels[first])), gl.STREAM_DRAW)
+            gl.buffer_data(gl.PIXEL_UNPACK_BUFFER, isize(bytes), nil, gl.STREAM_DRAW)
+            let mapped = gl.map_buffer_range(gl.PIXEL_UNPACK_BUFFER, 0isize, isize(bytes), gl.MAP_WRITE_BIT | gl.MAP_INVALIDATE_BUFFER_BIT)
+            let mapped_address = mem.address_of(mapped)
+            if mapped_address == 0usize || gl.get_error() != gl.NO_ERROR {
+                gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, 0u32)
+                ret Failed
+            }
+            var staging: mem.Arena = zero
+            staging.base = context.as_bytes(mapped_address)
+            staging.cap = bytes
+            let (packed, packed_error) = mem.alloc[u32](&staging, row_words * row_count)
+            if packed_error != ok {
+                let unmapped = gl.unmap_buffer(gl.PIXEL_UNPACK_BUFFER)
+                gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, 0u32)
+                ret Failed
+            }
+            var row = 0usize
+            while row < row_count {
+                let source = (usize(changed.y0) + row) * usize(width) + usize(changed.x0)
+                let destination = row * row_words
+                mem.copy[u32](packed[destination..destination + row_words], pixels[source..source + row_words])
+                row += 1usize
+            }
+            let unmapped = gl.unmap_buffer(gl.PIXEL_UNPACK_BUFFER)
+            if unmapped == 0u8 || gl.get_error() != gl.NO_ERROR {
+                gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, 0u32)
+                ret Failed
+            }
             p.next_unpack = 1usize - p.next_unpack
-            gl.pixel_storei(gl.UNPACK_ROW_LENGTH, i32(width))
-            gl.pixel_storei(gl.UNPACK_SKIP_PIXELS, i32(changed.x0))
-            gl.tex_sub_image_2d(gl.TEXTURE_2D, 0i32, i32(changed.x0), i32(changed.y0), i32(x1 - changed.x0), i32(y1 - changed.y0), gl.RGBA, gl.UNSIGNED_BYTE, nil)
+            gl.pixel_storei(gl.UNPACK_ALIGNMENT, 4i32)
             gl.pixel_storei(gl.UNPACK_ROW_LENGTH, 0i32)
             gl.pixel_storei(gl.UNPACK_SKIP_PIXELS, 0i32)
+            gl.pixel_storei(gl.UNPACK_SKIP_ROWS, 0i32)
+            gl.tex_sub_image_2d(gl.TEXTURE_2D, 0i32, i32(changed.x0), i32(changed.y0), i32(x1 - changed.x0), i32(y1 - changed.y0), gl.RGBA, gl.UNSIGNED_BYTE, nil)
             gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, 0u32)
-            p.uploaded_bytes += usize(x1 - changed.x0) * usize(y1 - changed.y0) * 4usize
+            p.uploaded_bytes += bytes
         }
     }
     // The frame hangs from the window's top edge, as the software blit draws it.
@@ -213,10 +242,25 @@ fn present(index: usize, host: os.Window, pixels: []const u32, width: u32, heigh
     ret context.swap(&presents[index].c)
 }
 
-// The texel bytes uploaded so far, for a test that checks only the changed box went up.
+// The pixel bytes staged for texture uploads so far, for a test that checks only the changed box went up.
 fn uploaded(index: usize) -> usize {
     if index >= MAX_PRESENTS || !presents[index].live { ret 0usize }
     ret presents[index].uploaded_bytes
+}
+
+// The last pixel-unpack buffer's exact allocation, for a regression test that must distinguish
+// a tightly packed box from a full-width row upload. `draw_changed` leaves its context current.
+fn unpack_bytes(index: usize) -> usize {
+    if index >= MAX_PRESENTS || !presents[index].live { ret 0usize }
+    let p = &presents[index]
+    let last_unpack = 1usize - p.next_unpack
+    if p.unpack[last_unpack] == 0u32 { ret 0usize }
+    gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, p.unpack[last_unpack])
+    var bytes = 0i32
+    gl.get_buffer_parameteriv(gl.PIXEL_UNPACK_BUFFER, gl.BUFFER_SIZE, &bytes)
+    gl.bind_buffer(gl.PIXEL_UNPACK_BUFFER, 0u32)
+    if bytes <= 0i32 { ret 0usize }
+    ret usize(bytes)
 }
 
 // Shows `w`'s frames through GL from its next `request_frame` on.
