@@ -2478,7 +2478,7 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
-    if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) { ret (zero, Invalid) }
+    if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) || !finite(s.bounds.x + s.bounds.width) || !finite(s.bounds.y + s.bounds.height) { ret (zero, Invalid) }
     let (x0, x1, x_error) = extent(s.x)
     if x_error != ok { ret (zero, x_error) }
     let (raw_y0, raw_y1, y_error) = extent(s.y)
@@ -2633,6 +2633,23 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
             bars[bar_count] = geometry.rect(cx - width / 2.0, top, width, bottom - top)
             bar_count += 1usize
         }
+    }
+    var checked = 0usize
+    while checked < coord_count {
+        if !finite(coords[checked].x) || !finite(coords[checked].y) { ret (zero, Invalid) }
+        checked += 1usize
+    }
+    checked = 0usize
+    while checked < segment_count {
+        let segment = segments[checked]
+        if !finite(segment.from.x) || !finite(segment.from.y) || !finite(segment.to.x) || !finite(segment.to.y) { ret (zero, Invalid) }
+        checked += 1usize
+    }
+    checked = 0usize
+    while checked < bar_count {
+        let bar = bars[checked]
+        if !finite(bar.x) || !finite(bar.y) || !finite(bar.width) || !finite(bar.height) || !finite(bar.x + bar.width) || !finite(bar.y + bar.height) || bar.width < 0.0 || bar.height < 0.0 { ret (zero, Invalid) }
+        checked += 1usize
     }
     ret (Layout { kind: s.kind, coords: coords[..coord_count], segments: segments[..segment_count], bars: bars[..bar_count], x_min: xmin, x_max: xmax, y_min: y0, y_max: y1 }, ok)
 }
