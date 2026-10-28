@@ -7,8 +7,8 @@
 // matching runs right to left from the candidate, so the rightmost compound is tested before
 // any ancestor is walked. Tags compare ASCII case-insensitively, everything else exactly.
 //
-// `specificity` packs (ids, classes+attributes+pseudo-classes, types) as `a << 16 | b << 8 |
-// c`, the largest member of a list. `cascade` orders declarations lowest precedence first:
+// `specificity` retains independent counts for ids, classes+attributes+pseudo-classes and types;
+// a selector list takes the lexicographically largest tuple. `cascade` orders declarations lowest precedence first:
 // normal user-agent < user < author, then `!important` with the origins reversed above them
 // all, then specificity, then source `order`.
 
@@ -18,7 +18,8 @@ type Element = struct { tag: str, id: str, class_lo: u32, class_hi: u32, attr_lo
 type Attribute = struct { name: str, value: str }
 type Dom = struct { elements: []const Element, classes: []const str, attributes: []const Attribute }
 type Origin = enum u8 { UserAgent, User, Author }
-type Decl = struct { origin: Origin, important: bool, specificity: u32, order: u32 }
+type Specificity = struct { ids: usize, classes: usize, types: usize }
+type Decl = struct { origin: Origin, important: bool, specificity: Specificity, order: u32 }
 error Invalid
 error TooSmall
 
@@ -354,53 +355,67 @@ fn select(d: *const Dom, selector: str, out: []u32) -> (usize, err) {
     ret (n, ok)
 }
 
-fn specificity_one(sel: str) -> (u32, err) {
+fn zero_specificity() -> Specificity {
+    ret Specificity { ids: 0usize, classes: 0usize, types: 0usize }
+}
+
+// Compare selector specificity as the CSS (ids, classes, types) tuple.
+fn specificity_compare(x: Specificity, y: Specificity) -> i32 {
+    if x.ids < y.ids { ret -1i32 }
+    if x.ids > y.ids { ret 1i32 }
+    if x.classes < y.classes { ret -1i32 }
+    if x.classes > y.classes { ret 1i32 }
+    if x.types < y.types { ret -1i32 }
+    if x.types > y.types { ret 1i32 }
+    ret 0i32
+}
+
+fn specificity_one(sel: str) -> (Specificity, err) {
     let s = str.trim(sel)
-    if s.len == 0usize { ret (0u32, Invalid) }
-    var a = 0u32
-    var b = 0u32
-    var c = 0u32
+    if s.len == 0usize { ret (zero_specificity(), Invalid) }
+    var ids = 0usize
+    var classes = 0usize
+    var types = 0usize
     var i = 0usize
     while i < s.len {
         let byte = s[i]
         if byte == 35u8 || byte == 46u8 || byte == 58u8 {
             let end = ident_end(s, i + 1usize)
-            if end == i + 1usize { ret (0u32, Invalid) }
-            if byte == 35u8 { a += 1u32 } else { b += 1u32 }
+            if end == i + 1usize { ret (zero_specificity(), Invalid) }
+            if byte == 35u8 { ids += 1usize } else { classes += 1usize }
             i = end
             if byte == 58u8 && i < s.len && s[i] == 40u8 {
                 let (close, found, e) = find_top(s, i + 1usize, 41u8)
-                if e != ok || !found { ret (0u32, Invalid) }
+                if e != ok || !found { ret (zero_specificity(), Invalid) }
                 i = close + 1usize
             }
         } else if byte == 91u8 {
             let (close, found, e) = find_top(s, i + 1usize, 93u8)
-            if e != ok || !found { ret (0u32, Invalid) }
-            b += 1u32
+            if e != ok || !found { ret (zero_specificity(), Invalid) }
+            classes += 1usize
             i = close + 1usize
         } else if is_ident(byte) {
-            c += 1u32
+            types += 1usize
             i = ident_end(s, i)
         } else if byte == 42u8 || byte == 32u8 || is_combinator(byte) {
             i += 1usize
         } else {
-            ret (0u32, Invalid)
+            ret (zero_specificity(), Invalid)
         }
     }
-    ret ((a << 16u32) | (b << 8u32) | c, ok)
+    ret (Specificity { ids: ids, classes: classes, types: types }, ok)
 }
 
-// (ids, classes+attributes+pseudo-classes, types) packed as `a << 16 | b << 8 | c`; for a
-// list, the largest.
-fn specificity(selector: str) -> (u32, err) {
-    var best = 0u32
+// The lexicographically largest (ids, classes+attributes+pseudo-classes, types) tuple in a list.
+fn specificity(selector: str) -> (Specificity, err) {
+    var best = zero_specificity()
     var from = 0usize
     while from <= selector.len {
         let (comma, found, e) = find_top(selector, from, 44u8)
-        if e != ok { ret (0u32, e) }
+        if e != ok { ret (zero_specificity(), e) }
         let (one, e1) = specificity_one(selector[from..comma])
-        if e1 != ok { ret (0u32, e1) }
-        if one > best { best = one }
+        if e1 != ok { ret (zero_specificity(), e1) }
+        if specificity_compare(one, best) > 0i32 { best = one }
         if !found { break }
         from = comma + 1usize
     }
@@ -419,7 +434,8 @@ fn precedes(x: Decl, y: Decl) -> bool {
     let rx = rank(x)
     let ry = rank(y)
     if rx != ry { ret rx < ry }
-    if x.specificity != y.specificity { ret x.specificity < y.specificity }
+    let specificity_order = specificity_compare(x.specificity, y.specificity)
+    if specificity_order != 0i32 { ret specificity_order < 0i32 }
     ret x.order < y.order
 }
 
