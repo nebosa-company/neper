@@ -6,7 +6,7 @@
 // changed and drawn as the renderer reports it: only that box's bytes may go up, through the
 // presenter's tightly packed unpack buffers, and the back buffer must again equal the whole new
 // frame. A one-pixel-wide vertical change keeps its PBO just as narrow, and an empty box uploads
-// nothing. A host without a display or GL exits 0 having printed why.
+// nothing. A host explicitly without a display or GL capability exits 0 having printed why.
 
 use e.gpu
 use e.io
@@ -161,30 +161,44 @@ fn pump() {
     var spins = 0usize
     while spins < 64usize {
         let (event, any, poll_error) = os.window_poll(0i64)
-        if poll_error != ok || !any { ret }
+        if poll_error != ok { os.exit(6i32) }
+        if !any { ret }
         spins += 1usize
     }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (gl_window, gl_window_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos_gl_present", width: WINDOW_W, height: WINDOW_H, resizable: false, visible: true, mode: .Windowed })
-    if gl_window_error != ok {
+    if gl_window_error == os.Unsupported {
         let printed = io.print("no window on this host; nothing checked\n")
         ret ok
     }
+    if gl_window_error != ok { os.exit(1i32) }
     pump()
     let gl_label = io.print("OpenGL 3.3 core present: ")
     let gl_error = run(a, gl_window, context.Options { api: .Gl, major: 3u32, minor: 3u32 }, 10i32)
-    if gl_error != ok { let skipped = io.print("unsupported\n") }
+    if gl_error == present.Unsupported {
+        let skipped = io.print("unsupported\n")
+    } else if gl_error != ok {
+        os.exit(6i32)
+    }
     if os.window_close(gl_window) != ok { os.exit(2i32) }
     // A fresh window for ES: on Windows a window's pixel format belongs to WGL once set.
     let (es_window, es_window_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos_gl_present es", width: WINDOW_W, height: WINDOW_H, resizable: false, visible: true, mode: .Windowed })
-    if es_window_error != ok { os.exit(3i32) }
-    pump()
-    let es_label = io.print("OpenGL ES 3.0 present: ")
-    let es_error = run(a, es_window, context.Options { api: .Gles, major: 3u32, minor: 0u32 }, 50i32)
-    if es_error != ok { let es_skipped = io.print("unsupported\n") }
-    if os.window_close(es_window) != ok { os.exit(4i32) }
+    if es_window_error == os.Unsupported {
+        let skipped = io.print("no second window on this host; OpenGL ES present not checked\n")
+    } else {
+        if es_window_error != ok { os.exit(3i32) }
+        pump()
+        let es_label = io.print("OpenGL ES 3.0 present: ")
+        let es_error = run(a, es_window, context.Options { api: .Gles, major: 3u32, minor: 0u32 }, 50i32)
+        if es_error == present.Unsupported {
+            let es_skipped = io.print("unsupported\n")
+        } else if es_error != ok {
+            os.exit(7i32)
+        }
+        if os.window_close(es_window) != ok { os.exit(4i32) }
+    }
     let lifecycle_label = io.print("OpenGL presenter lifecycle: ")
     let lifecycle_error = cycle_presenters(a)
     if lifecycle_error == present.Unsupported {

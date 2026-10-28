@@ -2379,10 +2379,11 @@ chmod +x "$test_build/css-paint-selfhost"
 ui_html_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_html_view/src/main.e" "$repo" x64 linux "$test_build/ui-html-view-selfhost")
 [ "$ui_html_view_written" = 'executable written' ]
 chmod +x "$test_build/ui-html-view-selfhost"
-# `e.fmt.url`: the WHATWG URL parser on the Standard's cases -- relative resolution, default ports, IPv4 and IPv6 hosts, UTS #46 domains, opaque paths, origin and the setters; the whole WPT corpus (896 + 278 cases) runs in tests/browser/url/run.sh (tracker 1.5).
+# `e.fmt.url`: the WHATWG URL parser on the Standard's cases -- relative resolution, default ports, IPv4 and IPv6 hosts, UTS #46 domains, opaque paths, origin and the setters. Run the whole compiler-only WPT corpus (896 + 278 cases) with the self-hosted compiler too (tracker 1.5).
 fmt_url_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_url/src/main.e" "$repo" x64 linux "$test_build/fmt-url-selfhost")
 [ "$fmt_url_written" = 'executable written' ]
 chmod +x "$test_build/fmt-url-selfhost"
+NEPER_COMPILER="$test_build/neper-self" NEPER_URL_WPT_EXE="$test_build/url-wpt-selfhost" "$repo/tests/browser/url/run.sh" --all
 # `e.text.charset`, `e.text.charset_cjk`, `e.fmt.html.encoding`: Encoding Standard labels, single-byte and multi-byte decoders (windows-1252, ISO-8859-2, KOI8-R, Shift_JIS, EUC-JP, Big5, GBK, GB18030, EUC-KR, ISO-2022-JP), BOM override and the HTML meta prescan (tracker 1.4).
 text_encoding_std_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_encoding_std/src/main.e" "$repo" x64 linux "$test_build/text-encoding-std-selfhost")
 [ "$text_encoding_std_written" = 'executable written' ]

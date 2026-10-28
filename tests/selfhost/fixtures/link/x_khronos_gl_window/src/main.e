@@ -1,7 +1,7 @@
 // A GL context on an `os` window (L174, L175): x.khronos.context.for_window on a 96x64
 // window, then make_current, swap_interval(1), a clear of the default framebuffer read back
 // before the swap, a scissored clear that leaves the rest alone, and five swaps with the
-// window's events pumped between them. A host with no display or no GL exits 0 having printed
+// window's events pumped between them. A host explicitly reporting no display or GL exits 0 having printed
 // why; a host that opens the context and then answers wrongly fails with the check's number.
 
 use e.io
@@ -22,7 +22,8 @@ fn pump() {
     var spins = 0usize
     while spins < 64usize {
         let (event, any, poll_error) = os.window_poll(0i64)
-        if poll_error != ok || !any { ret }
+        if poll_error != ok { os.exit(99i32) }
+        if !any { ret }
         spins += 1usize
     }
 }
@@ -31,24 +32,30 @@ fn pump() {
 fn main(a: *mem.Arena, args: []str) -> err {
     let first = on_window(a, context.Options { api: .Gl, major: 3u32, minor: 3u32 }, "OpenGL 3.3 core", 0i32)
     if first == os.Unsupported { ret ok }
+    if first != ok { os.exit(12i32) }
     let second = on_window(a, context.Options { api: .Gl, major: 4u32, minor: 3u32 }, "OpenGL 4.3 core", 20i32)
+    if second == os.Unsupported { ret ok }
+    if second != ok { os.exit(32i32) }
     let third = on_window(a, context.Options { api: .Gles, major: 3u32, minor: 1u32 }, "OpenGL ES 3.1", 40i32)
+    if third == os.Unsupported { ret ok }
+    if third != ok { os.exit(52i32) }
     ret ok
 }
 
 // One context on a fresh window; the exit codes are offset by `base`. `os.Unsupported` when the host has no windows.
 fn on_window(a: *mem.Arena, options: context.Options, label: str, base: i32) -> err {
     let (w, open_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos_gl_window", width: u32(WIDTH), height: u32(HEIGHT), resizable: false, visible: true, mode: .Windowed })
-    if open_error != ok {
+    if open_error == os.Unsupported {
         let printed = io.print("no window on this host; nothing checked\n")
         ret os.Unsupported
     }
+    if open_error != ok { ret open_error }
     pump()
     let (c, context_error) = context.for_window(a, w, options)
     if context_error == context.Unsupported {
         let printed = io.print(label)
         let skipped = io.print(" on a window: unsupported on this host\n")
-        let closed = os.window_close(w)
+        if os.window_close(w) != ok { os.exit(base + 1i32) }
         ret ok
     }
     if context_error != ok { os.exit(base + 2i32) }

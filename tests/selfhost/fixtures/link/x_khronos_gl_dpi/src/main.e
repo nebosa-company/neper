@@ -2,7 +2,7 @@
 // large again, as Windows sends it when the window crosses onto a monitor of another scale. A per-monitor-aware window
 // takes that rectangle itself; the client area must then have grown by the same share (less the frame), os.window_metrics
 // must report it, and a frame cleared at the new size must reach its far corner. Windows only: elsewhere, and on a host
-// without a window or GL, it exits 0 having said so.
+// without the explicit window or GL capability, it exits 0 having said so.
 
 use e.io
 use e.mem
@@ -18,7 +18,8 @@ fn pump() {
     var spins = 0usize
     while spins < 64usize {
         let (event, any, poll_error) = os.window_poll(0i64)
-        if poll_error != ok || !any { ret }
+        if poll_error != ok { os.exit(1i32) }
+        if !any { ret }
         spins += 1usize
     }
 }
@@ -29,17 +30,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     let (w, open_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos_gl_dpi", width: 200u32, height: 150u32, resizable: true, visible: true, mode: .Windowed })
-    if open_error != ok {
+    if open_error == os.Unsupported {
         let printed = io.print("no window on this host; nothing checked\n")
         ret ok
     }
+    if open_error != ok { os.exit(1i32) }
     pump()
     let options = context.Options { api: .Gl, major: 3u32, minor: 3u32 }
     let (c, context_error) = context.for_window(a, w, options)
-    if context_error != ok {
+    if context_error == context.Unsupported {
         let printed = io.print("no OpenGL context for a window on this host; nothing checked\n")
+        if os.window_close(w) != ok { os.exit(13i32) }
         ret ok
     }
+    if context_error != ok { os.exit(1i32) }
     var live = c
     if context.load(a, &live, options) != ok { os.exit(2i32) }
     let (user32, user32_error) = os.dlopen(a, "user32.dll")
@@ -77,8 +81,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if gl.get_error() != gl.NO_ERROR || corner[0usize] != 0u8 || corner[1usize] != 255u8 { os.exit(11i32) }
     if context.swap(&live) != ok { os.exit(12i32) }
     let printed = io.printf["WM_DPICHANGED: client {}x{} -> {}x{}, scale {}%, drawn to the far corner on {}\n"](before.width, before.height, after.width, after.height, after.scale_percent, gl.c_text(gl.get_string(gl.RENDERER)))
-    let closed = os.dlclose(user32)
-    let dropped = context.close(&live)
-    let gone = os.window_close(w)
-    ret ok
+    if os.dlclose(user32) != ok { os.exit(13i32) }
+    if context.close(&live) != ok { os.exit(14i32) }
+    ret os.window_close(w)
 }

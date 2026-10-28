@@ -80,3 +80,4 @@ for file in "$dir"/*; do
   rm -rf "$scratch"
 done
 echo "TOTAL pass=$pass fail=$fail info=$info skip=$skipped"
+if [ "$fail" -ne 0 ]; then exit 1; fi

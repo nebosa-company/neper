@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build every link fixture for wasm32-wasi and for the host, run both, and compare exit status,
 # standard output and standard error (D5213, D5668). Each fixture is one of
-#   pass             the same exit status, the same stdout and the same stderr
+#   pass             both runs exited 0 with the same stdout and the same stderr
 #   stderr-differs   the same status and stdout, a different stderr (the first difference follows).
 #                    Native frame lines (`  at f (file:line)`), which WebAssembly cannot walk, and
 #                    carriage returns are left out of the comparison
@@ -101,7 +101,9 @@ one() {
         wasm_status=$?
         if [ "$wasm_status" -eq 125 ]; then
             verdict=$(printf '%s\tinvalid\t%s' "$name" "$(head -c 300 "$out/$name.wasm.err" | tr '\n' ' ')")
-        elif [ "$wasm_status" -eq "$host_status" ] && cmp -s "$out/$name.host.out" "$out/$name.wasm.out"; then
+        # Matching failures are not passes: a declared platform limit belongs in sweep-expected.tsv,
+        # whose exact host/wasm statuses are the intentional-result allowlist.
+        elif [ "$host_status" -eq 0 ] && [ "$wasm_status" -eq 0 ] && cmp -s "$out/$name.host.out" "$out/$name.wasm.out"; then
             plain "$out/$name.host.err" > "$out/$name.host.plain"
             plain "$out/$name.wasm.err" > "$out/$name.wasm.plain"
             if cmp -s "$out/$name.host.plain" "$out/$name.wasm.plain"; then

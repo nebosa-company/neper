@@ -2,7 +2,7 @@
 // Windows, XResizeWindow through a second Xlib connection on Linux); after each, once os.window_metrics reports the new
 // size, the frame is cleared to that step's colour at the new size, a 4x4 marker is scissored into its top-right corner,
 // and the back buffer is read before the swap. The far corners must hold the step's colour and the marker its own: a
-// back buffer still at the old size, or last step's pixels, fails. A host without a window or GL exits 0 having said so.
+// back buffer still at the old size, or last step's pixels, fails. A host explicitly without a window or GL capability exits 0 having said so.
 
 use e.io
 use e.mem
@@ -75,7 +75,8 @@ fn pump() {
     var spins = 0usize
     while spins < 64usize {
         let (event, any, poll_error) = os.window_poll(0i64)
-        if poll_error != ok || !any { ret }
+        if poll_error != ok { os.exit(1i32) }
+        if !any { ret }
         spins += 1usize
     }
 }
@@ -87,25 +88,30 @@ fn pixel(pixels: []const u8, width: u32, x: u32, y: u32) -> u32 {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (w, open_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos_gl_resize", width: 120u32, height: 90u32, resizable: true, visible: true, mode: .Windowed })
-    if open_error != ok {
+    if open_error == os.Unsupported {
         let printed = io.print("no window on this host; nothing checked\n")
         ret ok
     }
+    if open_error != ok { os.exit(1i32) }
     pump()
     let options = context.Options { api: .Gl, major: 3u32, minor: 3u32 }
     let (c, context_error) = context.for_window(a, w, options)
-    if context_error != ok {
+    if context_error == context.Unsupported {
         let printed = io.print("no OpenGL context for a window on this host; nothing checked\n")
-        let closed = os.window_close(w)
+        if os.window_close(w) != ok { os.exit(12i32) }
         ret ok
     }
+    if context_error != ok { os.exit(1i32) }
     var live = c
     if context.load(a, &live, options) != ok { os.exit(2i32) }
     let (r_value, resizer_error) = resizer(a)
-    if resizer_error != ok {
+    if resizer_error == os.Unsupported {
         let printed = io.print("no way to resize a window from outside on this host; nothing checked\n")
+        if context.close(&live) != ok { os.exit(12i32) }
+        if os.window_close(w) != ok { os.exit(13i32) }
         ret ok
     }
+    if resizer_error != ok { os.exit(12i32) }
     var r = r_value
     let (native, extra, native_error) = os.window_native(w)
     if native_error != ok { os.exit(3i32) }
@@ -192,8 +198,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             let printed = io.print("the window manager did not give the size asked for (asked, got): ")
             let numbers = io.print(shown[0usize..at])
-            let ended = io.print("; nothing more checked\n")
-            ret ok
+            let ended = io.print("; failing\n")
+            os.exit(12i32)
         }
         if context.make_current(&live) != ok { os.exit(6i32) }
         let shade = f32(step * 20usize + 15usize) / 255.0f32
@@ -220,6 +226,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let printed = io.print("twelve resizes, each frame drawn and read back at its new size on ")
     let named = io.print(gl.c_text(gl.get_string(gl.RENDERER)))
     let ended = io.print("\n")
-    let closed = context.close(&live)
+    if context.close(&live) != ok { os.exit(12i32) }
     ret os.window_close(w)
 }
