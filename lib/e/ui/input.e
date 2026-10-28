@@ -37,14 +37,163 @@ type Queue = struct { state: *void }
 error Closed
 error TooLarge
 
-type State = struct { capacity: usize, buttons: u32, text: [4]u8, closed: bool, pending: Event, has_pending: bool }
+// A routed record stays raw until its owning queue polls it, so button and text
+// state remain private to that queue.  `sequence` lets legacy unscoped `poll`
+// take the oldest record when it shares a process with scoped App queues.
+type Routed = struct { id: window.Id, host: os.WindowEvent, sequence: u64 }
+
+type State = struct {
+    buttons: u32,
+    text: [4]u8,
+    closed: bool,
+    pending: Event,
+    has_pending: bool,
+    bound: bool,
+    owner: window.Id,
+    queued: []Routed,
+    queue_head: usize,
+    queue_count: usize,
+}
+
+// These are window slots, not an event broker.  Each bound queue owns storage
+// sized by App.Options.event_capacity.  Before reading the one shared host
+// stream, scoped polling pauses when any owner queue is full; its next host
+// event therefore remains upstream until the owner drains space instead of
+// being silently dropped by a second fixed-capacity queue.
+const OWNER_SLOTS: usize = 16usize
+var owners: [16]*State = zero
+var next_sequence: u64 = 0u64
+
+fn same_window(left: window.Id, right: window.Id) -> bool {
+    ret left.slot == right.slot && left.generation == right.generation
+}
 
 fn queue(a: *mem.Arena, capacity: usize) -> (Queue, err) {
     if capacity == 0usize { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[State](a, 1usize)
     if states_error != ok { ret (zero, TooLarge) }
-    states[0usize] = State { capacity: capacity, buttons: 0u32, text: zero, closed: false, pending: zero, has_pending: false }
+    states[0usize] = State { buttons: 0u32, text: zero, closed: false, pending: zero, has_pending: false, bound: false, owner: zero, queued: zero, queue_head: 0usize, queue_count: 0usize }
     ret (Queue { state: mem.cast[*void](&states[0usize]) }, ok)
+}
+
+fn register_owner(s: *State, id: window.Id) -> err {
+    let slot = usize(id.slot)
+    if slot >= OWNER_SLOTS { ret TooLarge }
+    let (_, window_error) = window.state_by_id(id)
+    if window_error != ok { ret Closed }
+    let previous = owners[slot]
+    if mem.address_of(previous) != 0usize && previous.bound {
+        if same_window(previous.owner, id) { ret TooLarge }
+        let (_, previous_error) = window.state_by_id(previous.owner)
+        if previous_error == ok && !previous.closed { ret TooLarge }
+        previous.bound = false
+        previous.queue_head = 0usize
+        previous.queue_count = 0usize
+    }
+    s.owner = id
+    s.bound = true
+    owners[slot] = s
+    ret ok
+}
+
+// App uses the bound form; the original `queue` remains unscoped for direct
+// users of e.ui.input.  The allocation is the exact per-App raw-event budget.
+fn queue_for(a: *mem.Arena, id: window.Id, capacity: usize) -> (Queue, err) {
+    let (made, queue_error) = queue(a, capacity)
+    if queue_error != ok { ret (zero, queue_error) }
+    var result = made
+    let (s, state_error) = state_of(&result)
+    if state_error != ok { ret (zero, state_error) }
+    let (records, records_error) = mem.alloc[Routed](a, capacity)
+    if records_error != ok { ret (zero, TooLarge) }
+    s.queued = records
+    let registered = register_owner(s, id)
+    if registered != ok { ret (zero, registered) }
+    ret (result, ok)
+}
+
+// A closing App removes its generation before the slot can be reused.  Raw
+// records for that closed owner are intentionally no longer deliverable.
+fn forget(id: window.Id) {
+    let slot = usize(id.slot)
+    if slot >= OWNER_SLOTS { ret }
+    let s = owners[slot]
+    if mem.address_of(s) == 0usize || !same_window(s.owner, id) { ret }
+    s.bound = false
+    s.queue_head = 0usize
+    s.queue_count = 0usize
+    var none: *State = zero
+    owners[slot] = none
+}
+
+fn owner_for(id: window.Id) -> *State {
+    var none: *State = zero
+    let slot = usize(id.slot)
+    if slot >= OWNER_SLOTS { ret none }
+    let s = owners[slot]
+    if mem.address_of(s) == 0usize || !s.bound || s.closed || !same_window(s.owner, id) { ret none }
+    ret s
+}
+
+fn remember(s: *State, value: Routed) {
+    var at = s.queue_head + s.queue_count
+    if at >= s.queued.len { at -= s.queued.len }
+    s.queued[at] = value
+    s.queue_count += 1usize
+}
+
+fn take(s: *State) -> (Routed, bool) {
+    var none: Routed = zero
+    if s.queue_count == 0usize { ret (none, false) }
+    let value = s.queued[s.queue_head]
+    s.queue_head += 1usize
+    if s.queue_head == s.queued.len { s.queue_head = 0usize }
+    s.queue_count -= 1usize
+    if s.queue_count == 0usize { s.queue_head = 0usize }
+    ret (value, true)
+}
+
+// This is checked before os.window_poll.  A queue_for allocation is non-empty,
+// so a successful check guarantees `remember` cannot overflow.
+fn owner_is_full() -> bool {
+    var slot = 0usize
+    while slot < OWNER_SLOTS {
+        let s = owners[slot]
+        if mem.address_of(s) != 0usize && s.bound && !s.closed && s.queue_count >= s.queued.len { ret true }
+        slot += 1usize
+    }
+    ret false
+}
+
+// Unscoped poll is still the old process-wide stream.  A scoped poll may have
+// already removed records from the host stream, so take the globally oldest
+// routed record rather than making it invisible to an unscoped caller.
+fn take_any() -> (Routed, bool) {
+    var result: Routed = zero
+    var found = false
+    var chosen: *State = zero
+    var slot = 0usize
+    while slot < OWNER_SLOTS {
+        let s = owners[slot]
+        if mem.address_of(s) != 0usize && s.bound && !s.closed && s.queue_count != 0usize {
+            let candidate = s.queued[s.queue_head]
+            if !found || candidate.sequence < result.sequence {
+                result = candidate
+                found = true
+                chosen = s
+            }
+        }
+        slot += 1usize
+    }
+    if !found { ret (result, false) }
+    let (taken, has_taken) = take(chosen)
+    ret (taken, has_taken)
+}
+
+fn routed(id: window.Id, host: os.WindowEvent) -> Routed {
+    let value = Routed { id: id, host: host, sequence: next_sequence }
+    next_sequence += 1u64
+    ret value
 }
 
 fn state_of(q: *Queue) -> (*State, err) {
@@ -110,6 +259,54 @@ fn encode(s: *State, codepoint: u32) -> str {
     ret s.text[0usize..4usize]
 }
 
+fn event_of(s: *State, id: window.Id, host: os.WindowEvent) -> (Event, bool) {
+    var none: Event = zero
+    if host.kind == .Close { ret (Event { Close: id }, true) }
+    if host.kind == .Focus {
+        s.pending = Event { Lifecycle: LifecycleEvent { window: id, state: .Active } }
+        s.has_pending = true
+        ret (Event { Focus: id }, true)
+    }
+    if host.kind == .Blur {
+        s.pending = Event { Lifecycle: LifecycleEvent { window: id, state: .Inactive } }
+        s.has_pending = true
+        ret (Event { Blur: id }, true)
+    }
+    if host.kind == .Paint { ret (Event { Frame: id }, true) }
+    if host.kind == .Resize {
+        let (state, window_error) = window.state_by_id(id)
+        if window_error != ok { ret (none, false) }
+        var metrics: window.Metrics = zero
+        var scale: f32 = 1.0
+        let (host_metrics, metrics_error) = os.window_metrics(state.handle)
+        if metrics_error == ok && host_metrics.scale_percent != 0u32 { scale = f32(host_metrics.scale_percent) / 100.0 }
+        metrics = window.Metrics { logical_size: geometry.Size { width: f32(host.width) / scale, height: f32(host.height) / scale }, framebuffer_width: host.width, framebuffer_height: host.height, scale: scale, focused: host_metrics.focused, visible: host_metrics.visible }
+        ret (Event { Resize: metrics }, true)
+    }
+    if host.kind == .PointerMove { ret (Event { PointerMove: pointer_of(s, id, host) }, true) }
+    if host.kind == .PointerDown {
+        s.buttons = s.buttons | button_bit(button_of(host.button))
+        ret (Event { PointerDown: pointer_of(s, id, host) }, true)
+    }
+    if host.kind == .PointerUp {
+        s.buttons = s.buttons & (4294967295u32 ^ button_bit(button_of(host.button)))
+        ret (Event { PointerUp: pointer_of(s, id, host) }, true)
+    }
+    if host.kind == .Scroll {
+        var scroll = pointer_of(s, id, host)
+        // The notch count rides in `device`, signed as its bits: the fence's
+        // Pointer has no delta field, and a widget reads the sign and count.
+        scroll.device = mem.bitcast[u32](host.delta)
+        ret (Event { Scroll: scroll }, true)
+    }
+    if host.kind == .KeyDown { ret (Event { KeyDown: KeyEvent { window: id, key: Key { physical: host.key, logical: host.key }, modifiers: modifiers_of(host.modifiers), repeat: host.repeat } }, true) }
+    if host.kind == .KeyUp { ret (Event { KeyUp: KeyEvent { window: id, key: Key { physical: host.key, logical: host.key }, modifiers: modifiers_of(host.modifiers), repeat: false } }, true) }
+    if host.kind == .Text { ret (Event { Text: TextEvent { window: id, text: encode(s, host.codepoint) } }, true) }
+    ret (none, false)
+}
+
+// The original queue remains a process-wide stream.  It sees any raw records a
+// scoped App already took from the host, in their original host order.
 fn poll(q: *Queue, timeout: time.Duration) -> (Event, bool, err) {
     var none: Event = zero
     let (s, state_error) = state_of(q)
@@ -124,6 +321,12 @@ fn poll(q: *Queue, timeout: time.Duration) -> (Event, bool, err) {
     var remaining = time.as_nanos(timeout)
     if remaining < 0i64 { remaining = 0i64 }
     while true {
+        let (saved, has_saved) = take_any()
+        if has_saved {
+            let (event, delivered) = event_of(s, saved.id, saved.host)
+            if delivered { ret (event, true, ok) }
+            continue
+        }
         let (host, any, poll_error) = os.window_poll(remaining)
         if poll_error == os.Unsupported { ret (none, false, ok) }
         if poll_error != ok { ret (none, false, Closed) }
@@ -131,50 +334,61 @@ fn poll(q: *Queue, timeout: time.Duration) -> (Event, bool, err) {
         // A window this module never opened, or one already closed, is passed over.
         let (id, known) = window.id_of(host.window)
         if known {
-            if host.kind == .Close { ret (Event { Close: id }, true, ok) }
-            if host.kind == .Focus {
-                s.pending = Event { Lifecycle: LifecycleEvent { window: id, state: .Active } }
-                s.has_pending = true
-                ret (Event { Focus: id }, true, ok)
-            }
-            if host.kind == .Blur {
-                s.pending = Event { Lifecycle: LifecycleEvent { window: id, state: .Inactive } }
-                s.has_pending = true
-                ret (Event { Blur: id }, true, ok)
-            }
-            if host.kind == .Paint { ret (Event { Frame: id }, true, ok) }
-            if host.kind == .Resize {
-                let (state, window_error) = window.state_by_id(id)
-                if window_error == ok {
-                    var metrics: window.Metrics = zero
-                    var scale: f32 = 1.0
-                    let (host_metrics, metrics_error) = os.window_metrics(state.handle)
-                    if metrics_error == ok && host_metrics.scale_percent != 0u32 { scale = f32(host_metrics.scale_percent) / 100.0 }
-                    metrics = window.Metrics { logical_size: geometry.Size { width: f32(host.width) / scale, height: f32(host.height) / scale }, framebuffer_width: host.width, framebuffer_height: host.height, scale: scale, focused: host_metrics.focused, visible: host_metrics.visible }
-                    ret (Event { Resize: metrics }, true, ok)
-                }
-            }
-            if host.kind == .PointerMove { ret (Event { PointerMove: pointer_of(s, id, host) }, true, ok) }
-            if host.kind == .PointerDown {
-                s.buttons = s.buttons | button_bit(button_of(host.button))
-                ret (Event { PointerDown: pointer_of(s, id, host) }, true, ok)
-            }
-            if host.kind == .PointerUp {
-                s.buttons = s.buttons & (4294967295u32 ^ button_bit(button_of(host.button)))
-                ret (Event { PointerUp: pointer_of(s, id, host) }, true, ok)
-            }
-            if host.kind == .Scroll {
-                var scroll = pointer_of(s, id, host)
-                // The notch count rides in `device`, signed as its bits: the fence's
-                // Pointer has no delta field, and a widget reads the sign and count.
-                scroll.device = mem.bitcast[u32](host.delta)
-                ret (Event { Scroll: scroll }, true, ok)
-            }
-            if host.kind == .KeyDown { ret (Event { KeyDown: KeyEvent { window: id, key: Key { physical: host.key, logical: host.key }, modifiers: modifiers_of(host.modifiers), repeat: host.repeat } }, true, ok) }
-            if host.kind == .KeyUp { ret (Event { KeyUp: KeyEvent { window: id, key: Key { physical: host.key, logical: host.key }, modifiers: modifiers_of(host.modifiers), repeat: false } }, true, ok) }
-            if host.kind == .Text { ret (Event { Text: TextEvent { window: id, text: encode(s, host.codepoint) } }, true, ok) }
+            let (event, delivered) = event_of(s, id, host)
+            if delivered { ret (event, true, ok) }
         }
         // Whatever was waited for has arrived; anything more is polled without waiting.
+        remaining = 0i64
+    }
+    ret (none, false, ok)
+}
+
+// App-facing polling is scoped to its bound window.  Records for another bound
+// App stay raw in that App's queue, so its button bitmap and borrowed text slot
+// are never mutated by the caller that happened to poll the host first.
+fn poll_for(q: *Queue, id: window.Id, timeout: time.Duration) -> (Event, bool, err) {
+    var none: Event = zero
+    let (s, state_error) = state_of(q)
+    if state_error != ok { ret (none, false, state_error) }
+    if !s.bound || !same_window(s.owner, id) { ret (none, false, Closed) }
+    let owner = owner_for(id)
+    if mem.address_of(owner) == 0usize || mem.address_of(owner) != mem.address_of(s) { ret (none, false, Closed) }
+    if window.take_frame_request_for(id) { ret (Event { Frame: id }, true, ok) }
+    // The lifecycle change a focus event implied follows it.
+    if s.has_pending {
+        s.has_pending = false
+        ret (s.pending, true, ok)
+    }
+    var remaining = time.as_nanos(timeout)
+    if remaining < 0i64 { remaining = 0i64 }
+    while true {
+        let (saved, has_saved) = take(s)
+        if has_saved {
+            let (event, delivered) = event_of(s, saved.id, saved.host)
+            if delivered { ret (event, true, ok) }
+            continue
+        }
+        // Do not take a host record unless every bound owner has one of its
+        // configured slots free.  That makes the capacity a backpressure limit,
+        // rather than a best-effort global broker that can lose another App's input.
+        if owner_is_full() { ret (none, false, ok) }
+        let (host, any, poll_error) = os.window_poll(remaining)
+        if poll_error == os.Unsupported { ret (none, false, ok) }
+        if poll_error != ok { ret (none, false, Closed) }
+        if !any { ret (none, false, ok) }
+        let (received, known) = window.id_of(host.window)
+        if known {
+            let recipient = owner_for(received)
+            if mem.address_of(recipient) != 0usize {
+                remember(recipient, routed(received, host))
+                remaining = 0i64
+                continue
+            }
+            // A direct window queue has no App owner, so keep the historical
+            // unscoped behaviour for it rather than discarding its event.
+            let (event, delivered) = event_of(s, received, host)
+            if delivered { ret (event, true, ok) }
+        }
         remaining = 0i64
     }
     ret (none, false, ok)
@@ -209,6 +423,7 @@ fn composition_rect(q: *Queue, window_value: window.Id, rect: geometry.Rect) -> 
 fn close(q: *Queue) -> err {
     let (s, state_error) = state_of(q)
     if state_error != ok { ret state_error }
+    if s.bound { forget(s.owner) }
     s.closed = true
     ret ok
 }

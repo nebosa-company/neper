@@ -195,6 +195,15 @@ fn take_frame_request() -> (Id, bool) {
     ret (zero, false)
 }
 
+// The App-facing input path must not consume another live window's frame
+// request merely because it is the next caller on the shared host thread.
+fn take_frame_request_for(id: Id) -> bool {
+    let (s, state_error) = state_by_id(id)
+    if state_error != ok || !s.frame_requested { ret false }
+    s.frame_requested = false
+    ret true
+}
+
 fn metrics(window: *const Window) -> (Metrics, err) {
     var none: Metrics = zero
     let (s, state_error) = state_of(window)
