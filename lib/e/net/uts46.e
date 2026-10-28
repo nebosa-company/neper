@@ -68,7 +68,7 @@ fn nfc_points(a: *mem.Arena, points: []const u32) -> (bool, err) {
         used += usize(w)
         i += 1usize
     }
-    let (yes, ce) = normalize.is_normalized(text[0usize..used], .Nfc)
+    let (yes, ce) = normalize.is_normalized(a, text[0usize..used], .Nfc)
     if ce != ok { ret (false, ce) }
     ret (yes, ok)
 }

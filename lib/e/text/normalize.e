@@ -8,10 +8,8 @@
 // table (a pair is listed only if NFC actually recomposes it). Hangul is algorithmic in
 // both directions and never touches a table.
 //
-// `is_normalized` has no arena, so it works segment by segment in a stack window. A
-// segment is cut before a starter that neither decomposes nor can be the second of a
-// composition -- ASCII, most letters -- because nothing normalization does can cross such
-// a scalar. Most segments are one scalar and a few marks.
+// `is_normalized` uses caller-owned arena storage transiently so it can normalize every
+// valid segment without imposing a fixed scalar limit on long combining sequences.
 
 use e.mem
 use e.text.utf8
@@ -221,62 +219,21 @@ fn normalize(a: *mem.Arena, s: str, form: Form) -> (str, err) {
     ret (out[..at], ok)
 }
 
-// A starter that neither decomposes under this form nor can be the second of a
-// composition: nothing normalization does crosses it, so a segment may end before it.
-fn is_cut(scalar: u32, form: Form) -> bool {
-    if unicode.combining_class(scalar) != 0u8 { ret false }
-    if scalar >= S_BASE && scalar < S_BASE + S_COUNT { ret false }
-    let (offset, count, found) = lookup(scalar, wants_compat(form))
-    if found { ret false }
-    let table = starter_seconds_table()
+fn is_normalized(a: *mem.Arena, s: str, form: Form) -> (bool, err) {
+    let check_mark = mem.mark(a)
+    let (normalized, normalized_error) = normalize(a, s, form)
+    if normalized_error != ok {
+        mem.reset(a, check_mark)
+        ret (false, normalized_error)
+    }
+    var equal = normalized.len == s.len
     var at = 0usize
-    while at < table.len {
-        if unicode.scalar_at(table, at) == scalar { ret false }
-        at += 3usize
+    while equal && at < s.len {
+        if normalized[at] != s[at] { equal = false }
+        at += 1usize
     }
-    ret true
-}
-
-// Whether the bytes of `segment` are exactly the encoding of `scalars`.
-fn same(segment: str, scalars: []const u32) -> bool {
-    var at = 0usize
-    var i = 0usize
-    var piece: [4]u8 = zero
-    while i < scalars.len {
-        let (width, width_error) = utf8.encode(scalars[i], piece[..])
-        if width_error != ok { ret false }
-        var k = 0usize
-        while k < usize(width) {
-            if at >= segment.len || segment[at] != piece[k] { ret false }
-            at += 1usize
-            k += 1usize
-        }
-        i += 1usize
-    }
-    ret at == segment.len
-}
-
-// ponytail: a segment longer than the window after decomposition answers Invalid;
-// raise it, or thread an arena, if real text ever hits it.
-fn is_normalized(s: str, form: Form) -> (bool, err) {
-    var window: [512]u32 = zero
-    var start = 0usize
-    while start < s.len {
-        var end = start
-        var first = true
-        while end < s.len {
-            let (d, d_error) = utf8.decode(s, end)
-            if d_error != ok { ret (false, Invalid) }
-            if !first && is_cut(d.scalar, form) { break }
-            first = false
-            end += usize(d.width)
-        }
-        let (used, used_error) = normalize_into(s[start..end], window[..], form)
-        if used_error != ok { ret (false, used_error) }
-        if !same(s[start..end], window[..used]) { ret (false, ok) }
-        start = end
-    }
-    ret (true, ok)
+    mem.reset(a, check_mark)
+    ret (equal, ok)
 }
 
 // --- Generated tables (tests/selfhost/fixtures/link/text_normalize/reference.py):
