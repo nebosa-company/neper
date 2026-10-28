@@ -88,15 +88,15 @@ fn find_property(best: *const list.List[Declared], property: str) -> i64 {
 }
 
 // The declaration that wins each property, in the order the properties first appeared.
-fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner {
+fn rank(a: *mem.Arena, declared: []const Declared) -> ([]const Winner, err) {
     let (made, e) = list.init[Declared](a, declared.len + 1usize)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, e) }
     var best = made
     var at = 0usize
     while at < declared.len {
         let found = find_property(&best, declared[at].declaration.property)
         if found < 0i64 {
-            let pushed = list.push[Declared](&best, declared[at])
+            try list.push[Declared](&best, declared[at])
         } else if beats(declared[at], best.items[usize(found)]) {
             best.items[usize(found)] = declared[at]
         }
@@ -106,14 +106,14 @@ fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner {
     drop_outranked_longhands(&best, "text-decoration", "text-decoration-line", "")
     drop_outranked_longhands(&best, "font", "font-size", "font-family")
     let (wmade, we) = list.init[Winner](a, best.len + 1usize)
-    if we != ok { ret zero }
+    if we != ok { ret (zero, we) }
     var out = wmade
     var i = 0usize
     while i < best.len {
-        let pushed = list.push[Winner](&out, Winner { property: best.items[i].declaration.property, value: best.items[i].declaration.value })
+        try list.push[Winner](&out, Winner { property: best.items[i].declaration.property, value: best.items[i].declaration.value })
         i += 1usize
     }
-    ret list.slice_const[Winner](&out)
+    ret (list.slice_const[Winner](&out), ok)
 }
 
 // A winning shorthand that outranks a longhand drops it, so the reader re-derives the longhand from the shorthand.
@@ -130,23 +130,26 @@ fn drop_outranked_longhands(best: *list.List[Declared], shorthand: str, first: s
 
 // --- the rule index --------------------------------------------------------------------------------------------------
 
-fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize) {
+fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize) -> err {
     let (slot, found) = map.get[str, usize](m, key)
     if found {
         idx.next[idx.tail[slot]] = at
         idx.tail[slot] = at
+        ret ok
     } else {
         let s = idx.slots
+        let (replaced, put_error) = map.put[str, usize](m, key, s)
+        if put_error != ok { ret put_error }
         idx.slots += 1usize
         idx.head[s] = at
         idx.tail[s] = at
-        let (replaced, put_error) = map.put[str, usize](m, key, s)
     }
+    ret ok
 }
 
 // `pseudo` selects the rules that style a pseudo-element (the others are left out), so an element's own pass and each pseudo-element
 // pass visit only their rules.
-fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index {
+fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> (Index, err) {
     var idx: Index = zero
     idx.rules = rules
     idx.universal_head = END
@@ -157,7 +160,12 @@ fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index {
     let (head, e4) = mem.alloc[usize](a, rules.len + 1usize)
     let (tail, e5) = mem.alloc[usize](a, rules.len + 1usize)
     let (next, e6) = mem.alloc[usize](a, rules.len + 1usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret idx }
+    if e1 != ok { ret (idx, e1) }
+    if e2 != ok { ret (idx, e2) }
+    if e3 != ok { ret (idx, e3) }
+    if e4 != ok { ret (idx, e4) }
+    if e5 != ok { ret (idx, e5) }
+    if e6 != ok { ret (idx, e6) }
     idx.ids = ids
     idx.classes = classes
     idx.tags = tags
@@ -209,23 +217,30 @@ fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index {
                 key = tag_name
             }
         }
-        if kind == 1u8 { chain_add(&idx.ids, &idx, key, at) } else if kind == 2u8 { chain_add(&idx.classes, &idx, key, at) } else if kind == 3u8 { chain_add(&idx.tags, &idx, key, at) } else {
+        if kind == 1u8 {
+            try chain_add(&idx.ids, &idx, key, at)
+        } else if kind == 2u8 {
+            try chain_add(&idx.classes, &idx, key, at)
+        } else if kind == 3u8 {
+            try chain_add(&idx.tags, &idx, key, at)
+        } else {
             if idx.universal_head == END { idx.universal_head = at } else { idx.next[idx.universal_tail] = at }
             idx.universal_tail = at
         }
         at += 1usize
     }
-    ret idx
+    ret (idx, ok)
 }
 
-fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str) {
+fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str) -> err {
     let (slot, found) = map.get[str, usize](m, key)
-    if !found { ret }
+    if !found { ret ok }
     var at = idx.head[slot]
     while at != END {
-        let pushed = list.push[usize](out, at)
+        try list.push[usize](out, at)
         at = idx.next[at]
     }
+    ret ok
 }
 
 fn is_blank_byte(c: u8) -> bool { ret c == 32u8 || (c >= 9u8 && c <= 13u8) }
@@ -244,12 +259,12 @@ fn class_seen(classes: str, end: usize, name: str) -> bool {
     ret false
 }
 // The indices of the rules an element could match, in the order the resolver visits them.
-fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []const usize {
+fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> ([]const usize, err) {
     let (made, e) = list.init[usize](m.a, 8usize)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, e) }
     var out = made
     let element_id = match.element_id(m, el)
-    if element_id.len > 0usize { push_chain(&out, idx, &idx.ids, element_id) }
+    if element_id.len > 0usize { try push_chain(&out, idx, &idx.ids, element_id) }
     let (classes, have_classes) = match.attr(m, el, "class")
     if have_classes {
         var start = 0usize
@@ -259,7 +274,7 @@ fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []
                 if i > start {
                     let name = classes[start..i]
                     let seen = class_seen(classes, start, name)
-                    if !seen { push_chain(&out, idx, &idx.classes, name) }
+                    if !seen { try push_chain(&out, idx, &idx.classes, name) }
                 }
                 start = i + 1usize
             }
@@ -267,13 +282,13 @@ fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []
         }
     }
     let tag = match.local_name(m, el)
-    if tag.len > 0usize { push_chain(&out, idx, &idx.tags, tag) }
+    if tag.len > 0usize { try push_chain(&out, idx, &idx.tags, tag) }
     var u = idx.universal_head
     while u != END {
-        let pushed = list.push[usize](&out, u)
+        try list.push[usize](&out, u)
         u = idx.next[u]
     }
-    ret list.slice_const[usize](&out)
+    ret (list.slice_const[usize](&out), ok)
 }
 
 // --- @container ------------------------------------------------------------------------------------------------------
@@ -656,9 +671,11 @@ fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration {
     ret list.slice_const[Declaration](&out)
 }
 
-fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox) {
-    let idx = build_index(m.a, rules, false)
-    let visit = candidates(m, &idx, el)
+fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox) -> err {
+    let (idx, index_error) = build_index(m.a, rules, false)
+    if index_error != ok { ret index_error }
+    let (visit, candidate_error) = candidates(m, &idx, el)
+    if candidate_error != ok { ret candidate_error }
     var v = 0usize
     while v < visit.len {
         let rule = rules[visit[v]]
@@ -676,29 +693,32 @@ fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Ru
         var d = 0usize
         while d < rule.declarations.len {
             let pushed = list.push[Declared](out, Declared { declaration: rule.declarations[d], author: author, hint: false, specificity: spec, source: rule.source, has_layer: rule.has_layer, layer: rule.layer, proximity: proximity })
+            if pushed != ok { ret pushed }
             d += 1usize
         }
     }
+    ret ok
 }
 
 // The winning declaration of every property for `el`: hints, user-agent rules, author rules, then `inline` (the parsed
 // `style` attribute, which outranks any selector and ranks by position).
-fn resolve(m: *const match.Matcher, ua: []const Rule, author: []const Rule, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> []const Winner {
+fn resolve(m: *const match.Matcher, ua: []const Rule, author: []const Rule, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> ([]const Winner, err) {
     let (made, e) = list.init[Declared](m.a, 16usize)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, e) }
     var declared = made
     let hints = presentational_hints(m, el)
     var h = 0usize
     while h < hints.len {
-        let pushed = list.push[Declared](&declared, Declared { declaration: hints[h], author: false, hint: true, specificity: 0i64, source: -1i64, has_layer: false, layer: 0i64, proximity: UNSCOPED })
+        try list.push[Declared](&declared, Declared { declaration: hints[h], author: false, hint: true, specificity: 0i64, source: -1i64, has_layer: false, layer: 0i64, proximity: UNSCOPED })
         h += 1usize
     }
-    collect(m, &declared, ua, false, el, stack)
-    collect(m, &declared, author, true, el, stack)
+    try collect(m, &declared, ua, false, el, stack)
+    try collect(m, &declared, author, true, el, stack)
     var i = 0usize
     while i < inline.len {
-        let pushed = list.push[Declared](&declared, Declared { declaration: inline[i], author: true, hint: false, specificity: INLINE_SPECIFICITY, source: i64(i), has_layer: false, layer: 0i64, proximity: UNSCOPED })
+        try list.push[Declared](&declared, Declared { declaration: inline[i], author: true, hint: false, specificity: INLINE_SPECIFICITY, source: i64(i), has_layer: false, layer: 0i64, proximity: UNSCOPED })
         i += 1usize
     }
-    ret rank(m.a, list.slice_const[Declared](&declared))
+    let (winners, rank_error) = rank(m.a, list.slice_const[Declared](&declared))
+    ret (winners, rank_error)
 }

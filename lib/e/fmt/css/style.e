@@ -1288,20 +1288,25 @@ fn builder_done(t: *Text) -> str {
 // `pseudo_kinds` has bit k set when some rule styles pseudo-element k.
 type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, pindex: cascade.Index, author: bool, pseudo_kinds: u32 }
 
-fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet {
+fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> (Sheet, err) {
     var kinds = 0u32
     var i = 0usize
     while i < rules.len {
         if rules[i].pseudo >= 0i64 { kinds |= 1u32 << u32(rules[i].pseudo) }
         i += 1usize
     }
-    ret Sheet { rules: rules, index: cascade.build_index(a, rules, false), pindex: cascade.build_index(a, rules, true), author: author, pseudo_kinds: kinds }
+    let (index, index_error) = cascade.build_index(a, rules, false)
+    if index_error != ok { ret (zero, index_error) }
+    let (pindex, pindex_error) = cascade.build_index(a, rules, true)
+    if pindex_error != ok { ret (zero, pindex_error) }
+    ret (Sheet { rules: rules, index: index, pindex: pindex, author: author, pseudo_kinds: kinds }, ok)
 }
 
-fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64) {
+fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64) -> err {
     var which = &rs.index
     if want >= 0i64 { which = &rs.pindex }
-    let visit = cascade.candidates(m, which, el)
+    let (visit, candidate_error) = cascade.candidates(m, which, el)
+    if candidate_error != ok { ret candidate_error }
     var v = 0usize
     while v < visit.len {
         let rule = rs.rules[visit[v]]
@@ -1320,9 +1325,11 @@ fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const 
         var d = 0usize
         while d < rule.declarations.len {
             let pushed = list.push[cascade.Declared](out, cascade.Declared { declaration: rule.declarations[d], author: rs.author, hint: false, specificity: spec, source: rule.source, has_layer: rule.has_layer, layer: rule.layer, proximity: proximity })
+            if pushed != ok { ret pushed }
             d += 1usize
         }
     }
+    ret ok
 }
 
 fn consider(best: *list.List[cascade.Declared], entry: cascade.Declared) {
@@ -1480,8 +1487,8 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
         let pushed = list.push[cascade.Declared](&declared, cascade.Declared { declaration: hints[h], author: false, hint: true, specificity: 0i64, source: -1i64, has_layer: false, layer: 0i64, proximity: cascade.UNSCOPED })
         h += 1usize
     }
-    gather(m, &declared, ua, el, stack, want)
-    gather(m, &declared, author, el, stack, want)
+    try gather(m, &declared, ua, el, stack, want)
+    try gather(m, &declared, author, el, stack, want)
     let (style_text, has_style) = html.attribute(&m.doc.nodes[usize(el)], "style")
     if has_style && want < 0i64 {
         let inline = cascade.inline_declarations(a, style_text)
@@ -1646,8 +1653,10 @@ fn compute_tree(c: *Context, d: *const dom.Dom, ua: []const cascade.Rule, author
     }
     let doc = dom.view(d)
     let m = cssm.new_matcher(c.a, &doc, cssm.no_state())
-    let ua_sheet = new_sheet(c.a, ua, false)
-    let author_sheet = new_sheet(c.a, author, true)
+    let (ua_sheet, ua_error) = new_sheet(c.a, ua, false)
+    if ua_error != ok { ret ua_error }
+    let (author_sheet, author_error) = new_sheet(c.a, author, true)
+    if author_error != ok { ret author_error }
     let root_style = initial_style()
     try compute_below(c, &m, d, &ua_sheet, &author_sheet, d.root, &root_style, out)
     // The principal writing mode of the page comes from `<body>` when the root has one.

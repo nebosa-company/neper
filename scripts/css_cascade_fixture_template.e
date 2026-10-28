@@ -251,7 +251,8 @@ fn check_element(a: *mem.Arena, m: *const match.Matcher, ua: []const cascade.Rul
     var inline: []const cascade.Declaration = zero
     let (style, have_style) = match.attr(m, el, "style")
     if have_style { inline = cascade.inline_declarations(a, style) }
-    let winners = cascade.resolve(m, ua, author, el, stack, inline)
+    let (winners, winner_error) = cascade.resolve(m, ua, author, el, stack, inline)
+    if winner_error != ok { ret false }
     let (expected, is_object) = ir.members_of(ir.value_of(want, "w"))
     if !is_object || expected.len != winners.len {
         let shown = io.print("winner count differs; got:")
@@ -303,13 +304,19 @@ fn check_element(a: *mem.Arena, m: *const match.Matcher, ua: []const cascade.Rul
         }
         h += 1usize
     }
-    let author_index = cascade.build_index(a, author)
-    let ua_index = cascade.build_index(a, ua)
-    if !same_indices(cascade.candidates(m, &author_index, el), ir.value_of(want, "a")) {
+    let (author_index, author_index_error) = cascade.build_index(a, author, false)
+    if author_index_error != ok { ret false }
+    let (ua_index, ua_index_error) = cascade.build_index(a, ua, false)
+    if ua_index_error != ok { ret false }
+    let (author_candidates, author_candidate_error) = cascade.candidates(m, &author_index, el)
+    if author_candidate_error != ok { ret false }
+    if !same_indices(author_candidates, ir.value_of(want, "a")) {
         let shown = io.print("author candidates differ")
         ret false
     }
-    if !same_indices(cascade.candidates(m, &ua_index, el), ir.value_of(want, "u")) {
+    let (ua_candidates, ua_candidate_error) = cascade.candidates(m, &ua_index, el)
+    if ua_candidate_error != ok { ret false }
+    if !same_indices(ua_candidates, ir.value_of(want, "u")) {
         let shown = io.print("ua candidates differ")
         ret false
     }
@@ -376,8 +383,50 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// #1184: resolver allocation failures must escape to the caller instead of
+// silently producing no candidates or no winning declarations.
+fn resolver_exhaustion() -> bool {
+    var rule_storage: [16384]u8 = zero
+    var rule_arena = mem.arena_from(rule_storage[..])
+    let selected = parse_selector(&rule_arena, "div")
+    var declarations: [1]cascade.Declaration = zero
+    declarations[0usize] = cascade.Declaration { property: "color", value: "blue", important: false }
+    var rules: [1]cascade.Rule = zero
+    rules[0usize] = cascade.Rule { selector: selected, declarations: declarations[..], source: 0i64, has_layer: false, layer: 0i64, containers: zero, scopes: zero, pseudo: -1i64 }
+    var document_storage: [16384]u8 = zero
+    var document_arena = mem.arena_from(document_storage[..])
+    let options = html.Options { max_bytes: 4096usize, max_nodes: 64usize, max_attributes: 8usize, max_depth: 8u16, preserve_comments: false }
+    let (doc, document_error) = html.parse(&document_arena, "<div></div>", options)
+    if document_error != ok { ret false }
+    let (made, made_error) = list.init[html.NodeId](&document_arena, 4usize)
+    if made_error != ok { ret false }
+    var elements = made
+    collect(&doc, doc.root, &elements)
+    if elements.len == 0usize { ret false }
+    let element = elements.items[elements.len - 1usize]
+    var full_storage: [65536]u8 = zero
+    var full = mem.arena_from(full_storage[..])
+    let full_match = match.new_matcher(&full, &doc, match.no_state())
+    let (_, full_error) = cascade.resolve(&full_match, rules[..], zero, element, zero, zero)
+    if full_error != ok { ret false }
+    let used = mem.mark(&full)
+    if used == 0usize || used >= full_storage.len { ret false }
+    var tight_storage: [65536]u8 = zero
+    var tight = mem.arena_from(tight_storage[0usize..used - 1usize])
+    let tight_match = match.new_matcher(&tight, &doc, match.no_state())
+    let (_, tight_error) = cascade.resolve(&tight_match, rules[..], zero, element, zero, zero)
+    ret tight_error == mem.Exhausted
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
+    // #1183: important declarations reverse normal author/non-author origin
+    // precedence. The non-author (UA/user) declaration must win this tie.
+    let ua_important = cascade.Declared { declaration: cascade.Declaration { property: "color", value: "ua", important: true }, author: false, hint: false, specificity: 0i64, source: 0i64, has_layer: false, layer: 0i64, proximity: 0i64 }
+    let author_important = cascade.Declared { declaration: cascade.Declaration { property: "color", value: "author", important: true }, author: true, hint: false, specificity: 0i64, source: 0i64, has_layer: false, layer: 0i64, proximity: 0i64 }
+    if !cascade.beats(ua_important, author_important) { os.exit(27i32) }
+    if cascade.beats(author_important, ua_important) { os.exit(28i32) }
+    if !resolver_exhaustion() { os.exit(29i32) }
     try io.print("css cascade ok")
     ret ok
 }
