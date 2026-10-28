@@ -15,6 +15,21 @@ use e.algo.rand
 error TooSmall
 error Invalid
 
+// Whether `len` can hold an `a` by `b` rectangle without computing a product
+// that could wrap on wasm32. All matrix-backed algorithms use this before an
+// index expression such as `row * width + column` is reachable.
+fn has_product(len: usize, a: usize, b: usize) -> bool {
+    if a == 0usize || b == 0usize { ret true }
+    ret a <= len / b
+}
+
+// Whether `len` can hold `factor * count + extra`, again without forming the
+// potentially overflowing required length first.
+fn has_scaled(len: usize, count: usize, factor: usize, extra: usize) -> bool {
+    if len < extra { ret false }
+    ret has_product(len - extra, count, factor)
+}
+
 fn at(d: []const f64, n: usize, i: usize, j: usize) -> f64 { ret d[i * n + j] }
 
 fn tour_length(d: []const f64, n: usize, tour: []const usize) -> f64 {
@@ -29,7 +44,7 @@ fn tour_length(d: []const f64, n: usize, tour: []const usize) -> f64 {
 
 // A tour from `start`, always to the nearest unvisited city; `visited.len >= n`.
 fn tsp_nearest_neighbor(d: []const f64, n: usize, start: usize, tour: []usize, visited: []u8) -> (f64, err) {
-    if d.len < n * n || tour.len < n || visited.len < n { ret (0.0f64, TooSmall) }
+    if !has_product(d.len, n, n) || tour.len < n || visited.len < n { ret (0.0f64, TooSmall) }
     if n == 0usize || start >= n { ret (0.0f64, Invalid) }
     var i = 0usize
     while i < n {
@@ -69,7 +84,7 @@ fn reverse(tour: []usize, i: usize, j: usize) {
 // 2-opt: reverse the segment `i + 1 ..= j` while that shortens the tour;
 // answers the length and the improving moves made.
 fn tsp_two_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err) {
-    if d.len < n * n || tour.len < n { ret (0.0f64, 0usize, TooSmall) }
+    if !has_product(d.len, n, n) || tour.len < n { ret (0.0f64, 0usize, TooSmall) }
     if n < 4usize { ret (tour_length(d, n, tour), 0usize, ok) }
     var moves = 0usize
     var improved = true
@@ -100,7 +115,7 @@ fn tsp_two_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err) {
 // Or-opt: move a segment of one to three consecutive cities elsewhere
 // (either orientation) while that shortens the tour; `scratch.len >= n`.
 fn tsp_or_opt(d: []const f64, n: usize, tour: []usize, scratch: []usize) -> (f64, usize, err) {
-    if d.len < n * n || tour.len < n || scratch.len < n { ret (0.0f64, 0usize, TooSmall) }
+    if !has_product(d.len, n, n) || tour.len < n || scratch.len < n { ret (0.0f64, 0usize, TooSmall) }
     if n < 5usize { ret (tour_length(d, n, tour), 0usize, ok) }
     var moves = 0usize
     var improved = true
@@ -181,7 +196,7 @@ fn tsp_or_opt(d: []const f64, n: usize, tour: []usize, scratch: []usize) -> (f64
 fn tsp_held_karp(d: []const f64, n: usize, tour: []usize, table: []f64, parent: []usize) -> (f64, err) {
     if n < 2usize || n > 16usize { ret (0.0f64, Invalid) }
     let subsets = 1usize << u32(n)
-    if d.len < n * n || tour.len < n || table.len < subsets * n || parent.len < subsets * n { ret (0.0f64, TooSmall) }
+    if !has_product(d.len, n, n) || tour.len < n || !has_product(table.len, subsets, n) || !has_product(parent.len, subsets, n) { ret (0.0f64, TooSmall) }
     let none = 1.0e300f64
     var s = 0usize
     while s < subsets * n {
@@ -240,7 +255,7 @@ fn tsp_held_karp(d: []const f64, n: usize, tour: []usize, table: []f64, parent: 
 // Chvátal: `membership` is `sets × universe` bytes; the chosen set indices
 // go to `chosen` until every element with any cover is covered; `covered.len >= universe`.
 fn set_cover_greedy(membership: []const u8, sets: usize, universe: usize, chosen: []usize, covered: []u8) -> (usize, err) {
-    if membership.len < sets * universe || chosen.len < sets || covered.len < universe { ret (0usize, TooSmall) }
+    if !has_product(membership.len, sets, universe) || chosen.len < sets || covered.len < universe { ret (0usize, TooSmall) }
     var i = 0usize
     while i < universe {
         covered[i] = 0u8
@@ -327,7 +342,7 @@ fn bin_pack_ffd(sizes: []const f64, capacity: f64, bins: []usize, loads: []f64, 
 // `load.len >= n` the route loads; `savings.len >= n * n` and
 // `order.len >= n * n` sort the pairs. Answers the route count.
 fn vrp_savings(d: []const f64, n: usize, demand: []const f64, capacity: f64, route: []usize, next: []usize, previous: []usize, load: []f64, savings: []f64, order: []usize) -> (usize, err) {
-    if d.len < n * n || demand.len < n || route.len < n || next.len < n || previous.len < n || load.len < n || savings.len < n * n || order.len < n * n { ret (0usize, TooSmall) }
+    if !has_product(d.len, n, n) || demand.len < n || route.len < n || next.len < n || previous.len < n || load.len < n || !has_product(savings.len, n, n) || !has_product(order.len, n, n) { ret (0usize, TooSmall) }
     if n < 2usize { ret (0usize, Invalid) }
     var i = 1usize
     while i < n {
@@ -542,7 +557,7 @@ fn large_neighborhood_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, iterations: u
 // ponytail: the matching is greedy nearest-unmatched, not minimum weight, so
 // the 3/2 bound is not guaranteed; a weighted blossom matching is the upgrade.
 fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, flags: []u8) -> (f64, err) {
-    if d.len < n * n || tour.len < n || scratch.len < 10usize * n + 4usize || flags.len < 3usize * n { ret (0.0f64, TooSmall) }
+    if !has_product(d.len, n, n) || tour.len < n || !has_scaled(scratch.len, n, 10usize, 4usize) || !has_product(flags.len, n, 3usize) { ret (0.0f64, TooSmall) }
     if n < 3usize { ret (0.0f64, Invalid) }
     let parent = scratch[..n]
     let degree = scratch[n..2usize * n]
@@ -671,7 +686,7 @@ fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, f
 // length and the moves made.
 // ponytail: every triple is scanned, O(n^3) per pass; neighbour lists are the upgrade.
 fn tsp_three_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err) {
-    if d.len < n * n || tour.len < n { ret (0.0f64, 0usize, TooSmall) }
+    if !has_product(d.len, n, n) || tour.len < n { ret (0.0f64, 0usize, TooSmall) }
     if n < 4usize { ret (tour_length(d, n, tour), 0usize, ok) }
     var moves = 0usize
     var improved = true
@@ -799,7 +814,7 @@ fn lk_chain(d: []const f64, n: usize, work: []usize, pos: []usize, t1: usize, fi
 // greedy; the best closing tour of a round is kept while rounds improve.
 // `scratch.len >= 4 * n`. Answers the length and the rounds that improved.
 fn tsp_lin_kernighan(d: []const f64, n: usize, tour: []usize, scratch: []usize, depth: usize, breadth: usize) -> (f64, usize, err) {
-    if d.len < n * n || tour.len < n || scratch.len < 4usize * n { ret (0.0f64, 0usize, TooSmall) }
+    if !has_product(d.len, n, n) || tour.len < n || !has_product(scratch.len, n, 4usize) { ret (0.0f64, 0usize, TooSmall) }
     if n < 4usize || depth == 0usize || breadth == 0usize { ret (tour_length(d, n, tour), 0usize, ok) }
     let view = scratch[..n]
     let work = scratch[n..2usize * n]
