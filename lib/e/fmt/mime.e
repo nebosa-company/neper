@@ -286,6 +286,12 @@ fn parse_headers(a: *mem.Arena, source: io.Reader, byte_limit: usize, count_limi
             }
             var value_start = colon + 1usize
             while value_start < line.len && (line[value_start] == 32u8 || line[value_start] == 9u8) { value_start += 1usize }
+            var value_at = value_start
+            while value_at < line.len {
+                let byte = line[value_at]
+                if (byte < 32u8 && byte != 9u8) || byte == 127u8 { ret (zero, Invalid) }
+                value_at += 1usize
+            }
             var value_end = line.len
             while value_end > value_start && (line[value_end - 1usize] == 32u8 || line[value_end - 1usize] == 9u8) { value_end -= 1usize }
             headers[index].name = line[..colon]

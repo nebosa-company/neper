@@ -58,6 +58,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     lf_state.data = "A: 1\nB: 2\n\nrest"
     let (lf_headers, e5) = mime.parse_headers(a, io.slice_reader(&lf_state), 256usize, 8usize)
     if e5 != ok || lf_headers.len != 2usize || !text_equal(lf_headers[1].value, "2") { os.exit(12) }
+    var bare_cr_state: io.SliceReader = zero
+    bare_cr_state.data = "X: ok\rInjected: yes\n\n"
+    let (_, bare_cr) = mime.parse_headers(a, io.slice_reader(&bare_cr_state), 64usize, 8usize)
+    var nul_state: io.SliceReader = zero
+    nul_state.data = "X: a\0b\n\n"
+    let (_, nul_value) = mime.parse_headers(a, io.slice_reader(&nul_state), 64usize, 8usize)
+    var del_state: io.SliceReader = zero
+    del_state.data = "X: a\x7fb\n\n"
+    let (_, del_value) = mime.parse_headers(a, io.slice_reader(&del_state), 64usize, 8usize)
+    var tab_state: io.SliceReader = zero
+    tab_state.data = "X: \tallowed\t\n\n"
+    let (tab_headers, tab_error) = mime.parse_headers(a, io.slice_reader(&tab_state), 64usize, 8usize)
+    if bare_cr != mime.Invalid || nul_value != mime.Invalid || del_value != mime.Invalid || tab_error != ok || tab_headers.len != 1usize || !text_equal(tab_headers[0usize].value, "allowed") { os.exit(13) }
     os.exit(0)
     ret ok
 }
