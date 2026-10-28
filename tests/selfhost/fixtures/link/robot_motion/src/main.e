@@ -158,6 +158,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(out[0usize], 0.0f64 - 0.9986858969178134f64, 1.0e-9f64) || !near(out[1usize], 0.051249188261511924f64, 1.0e-9f64) { os.exit(8i32) }
     if motion.orca(agents[..], 0usize, 2.0f64, 0.1f64, out[..], scratch[..31usize]) != motion.TooSmall { os.exit(8i32) }
     if motion.orca(agents[..], 4usize, 2.0f64, 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    var coincident: [2]motion.Agent = zero
+    coincident[0usize] = motion.agent(0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.5f64, 0.0f64, 0.0f64, 1.0f64)
+    coincident[1usize] = motion.agent(0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.5f64, 0.0f64, 0.0f64, 1.0f64)
+    if motion.orca(coincident[..], 0usize, 2.0f64, 0.1f64, out[..], scratch[..]) != ok || out[0usize] != out[0usize] || out[1usize] != out[1usize] || out[0usize] <= 0.0f64 { os.exit(8i32) }
+    if motion.orca(coincident[..], 1usize, 2.0f64, 0.1f64, out[..], scratch[..]) != ok || out[0usize] != out[0usize] || out[1usize] != out[1usize] || out[0usize] >= 0.0f64 { os.exit(8i32) }
 
     // 9: potential field and the elastic band.
     let (fx, fy) = motion.potential_field(0.5f64, 0.3f64, 3.0f64, 2.0f64, obstacles[..], 0.8f64, 0.2f64, 1.2f64)

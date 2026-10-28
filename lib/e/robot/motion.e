@@ -581,8 +581,16 @@ fn orca(agents: []const Agent, i: usize, tau: f64, time_step: f64, out: []f64, s
             let wx = vx - inv_step * rx
             let wy = vy - inv_step * ry
             let w_len = math.sqrt[f64](wx * wx + wy * wy)
-            let unit_x = wx / w_len
-            let unit_y = wy / w_len
+            var unit_x = 1.0f64
+            var unit_y = 0.0f64
+            if w_len > 0.0f64 {
+                unit_x = wx / w_len
+                unit_y = wy / w_len
+            } else if i > j {
+                // Coincident agents with equal velocities have no geometric
+                // direction; index order gives the pair opposite directions.
+                unit_x = 0.0f64 - 1.0f64
+            }
             dx = unit_y
             dy = 0.0f64 - unit_x
             ux = (radius * inv_step - w_len) * unit_x
