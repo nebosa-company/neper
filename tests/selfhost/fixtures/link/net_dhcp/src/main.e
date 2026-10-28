@@ -56,5 +56,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var small: [100]u8 = zero
     let (sm, sme) = dhcp.encode(&m, small[0..])
     if sme != dhcp.TooSmall { os.exit(19) }
+    var maxed = dhcp.request(mac, 3405705229u32, [4]u8{ 192u8, 168u8, 7u8, 42u8 }, [4]u8{ 192u8, 168u8, 7u8, 1u8 })
+    maxed.client_id_len = 17usize
+    maxed.hostname_len = 64usize
+    maxed.has_lease = true
+    maxed.has_subnet = true
+    maxed.has_router = true
+    maxed.dns_count = 4usize
+    var limit: [300]u8 = zero
+    limit[0usize] = 170u8
+    limit[299usize] = 187u8
+    let (cap_n, cap_e) = dhcp.encode(&maxed, limit[0..])
+    if cap_n != 0usize || cap_e != dhcp.TooSmall || limit[0usize] != 170u8 || limit[299usize] != 187u8 { os.exit(20) }
+    var large: [400]u8 = zero
+    let (max_n, max_e) = dhcp.encode(&maxed, large[0..])
+    if max_e != ok || max_n != 377usize || large[376usize] != 255u8 { os.exit(21) }
+    maxed.hostname_len = 65usize
+    limit[0usize] = 201u8
+    limit[299usize] = 202u8
+    let (host_n, host_e) = dhcp.encode(&maxed, limit[0..])
+    if host_n != 0usize || host_e != dhcp.BadOption || limit[0usize] != 201u8 || limit[299usize] != 202u8 { os.exit(22) }
+    maxed.hostname_len = 64usize
+    maxed.client_id_len = 18usize
+    let (client_n, client_e) = dhcp.encode(&maxed, limit[0..])
+    if client_n != 0usize || client_e != dhcp.BadOption || limit[0usize] != 201u8 || limit[299usize] != 202u8 { os.exit(23) }
+    maxed.client_id_len = 17usize
+    maxed.dns_count = 5usize
+    let (dns_n, dns_e) = dhcp.encode(&maxed, limit[0..])
+    if dns_n != 0usize || dns_e != dhcp.BadOption || limit[0usize] != 201u8 || limit[299usize] != 202u8 { os.exit(24) }
     ret ok
 }
