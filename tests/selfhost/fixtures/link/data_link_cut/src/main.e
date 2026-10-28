@@ -61,6 +61,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var eparent: [169]u32 = zero
     var edge_u: [64]u32 = zero
     var edge_v: [64]u32 = zero
+    edge_v[0usize] = 7u32
     var adj: [1681]bool = zero
     var state = 12345u64
     var i = 1usize
@@ -83,7 +84,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if lc.access(&t, 0u32) != lc.Invalid || lc.link(&t, 41u32, 1u32) != lc.Invalid || lc.link(&t, 3u32, 3u32) != lc.Invalid { os.exit(2i32) }
     let (_, apart) = lc.path_sum(&t, 1u32, 2u32)
     if apart != lc.Invalid || lc.cut(&t, 1u32, 1u32) != lc.Invalid { os.exit(2i32) }
-    if lc.ett_link(&e, 0u32, 1u32) != lc.Invalid || lc.ett_link(&e, 5u32, 5u32) != lc.Invalid || lc.ett_connected(&e, 0u32, 1u32) { os.exit(2i32) }
+    if e.edge_v[0usize] != 0u32 || lc.ett_link(&e, 0u32, 1u32) != lc.Invalid || lc.ett_link(&e, 5u32, 5u32) != lc.Invalid || lc.ett_cut(&e, 0u32, 0u32) != lc.Invalid || lc.ett_cut(&e, 0u32, 7u32) != lc.Invalid || lc.ett_cut(&e, 41u32, 1u32) != lc.Invalid || lc.ett_connected(&e, 0u32, 1u32) { os.exit(2i32) }
+    if lc.ett_link(&e, 1u32, 2u32) != ok || lc.ett_cut(&e, 1u32, 2u32) != ok || e.edge_u[0usize] != 0u32 || e.edge_v[0usize] != 0u32 { os.exit(2i32) }
     let (own, _) = lc.path_sum(&t, 7u32, 7u32)
     if own != value[7usize] || !lc.connected(&t, 7u32, 7u32) || !lc.ett_connected(&e, 7u32, 7u32) { os.exit(2i32) }
 
