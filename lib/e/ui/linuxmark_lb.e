@@ -76,6 +76,11 @@ fn sample(mask: [196]u8, x: f32, y: f32) -> f32 {
     ret total / 255.0
 }
 
+fn mark_level(mask: [196]u8, alpha: f32, scale: f32, x: i32, y: i32) -> u8 {
+    let sampled = sample(mask, (f32(x) + 0.5) / scale - 0.5, (f32(y) + 0.5) / scale - 0.5)
+    ret u8(sampled * alpha * 255.0 + 0.5)
+}
+
 // At 100 % the mask's pixels as they are; at another scale the same mask filtered bilinearly (GTK would pick the @2 asset).
 fn paint_mark(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let mark = mem.cast[*Mark](ctx)
@@ -87,25 +92,20 @@ fn paint_mark(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let side = i32(14.0 * scale + 0.5)
     var y: i32 = 0
     while y < side {
-        var levels: [32]u8 = zero
         var x: i32 = 0
-        while x < side && x < 32 {
-            let m = sample(mask, (f32(x) + 0.5) / scale - 0.5, (f32(y) + 0.5) / scale - 0.5)
-            levels[usize(x)] = u8(m * mark.color.alpha * 255.0 + 0.5)
-            x += 1
-        }
-        var at: usize = 0usize
-        let n = usize(side)
-        while at < n && at < 32usize {
-            let level = levels[at]
+        while x < side {
+            let level = mark_level(mask, mark.color.alpha, scale, x, y)
             if level == 0u8 {
-                at += 1usize
+                x += 1
                 continue
             }
-            var run: usize = 1usize
-            while at + run < n && at + run < 32usize && levels[at + run] == level { run += 1usize }
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: ox + f32(at) / scale, y: oy + f32(y) / scale, width: f32(run) / scale, height: 1.0 / scale }, brush: paint.Brush { Solid: paint.Color { red: mark.color.red, green: mark.color.green, blue: mark.color.blue, alpha: f32(level) / 255.0 } } } })
-            at += run
+            var run: i32 = 1
+            while x + run < side {
+                if mark_level(mask, mark.color.alpha, scale, x + run, y) != level { break }
+                run += 1
+            }
+            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: ox + f32(x) / scale, y: oy + f32(y) / scale, width: f32(run) / scale, height: 1.0 / scale }, brush: paint.Brush { Solid: paint.Color { red: mark.color.red, green: mark.color.green, blue: mark.color.blue, alpha: f32(level) / 255.0 } } } })
+            x += run
         }
         y += 1
     }
