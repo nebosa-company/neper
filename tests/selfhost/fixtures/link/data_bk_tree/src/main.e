@@ -16,10 +16,17 @@ fn edits(h: *Hits, a: str, b: str) -> u32 {
     ret u32(d)
 }
 
+fn wide_distance(h: *Hits, a: u32, b: u32) -> u32 {
+    if a >= b { ret a - b }
+    ret b - a
+}
+
 fn note(h: *Hits, item: str, d: u32) {
     if h.count < h.found.len { h.found[h.count] = item }
     h.count += 1usize
 }
+
+fn note_wide(h: *Hits, item: u32, d: u32) { h.count += 1usize }
 
 fn same(a: str, b: str) -> bool {
     if a.len != b.len { ret false }
@@ -97,6 +104,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     hits.count = 0usize
     let (_, stack_room) = bk_tree.search[str, Hits](&t, "book", 10u32, &hits, edits, note, stack[..2usize])
     if stack_room != bk_tree.TooSmall { os.exit(3i32) }
+
+    // 4: the admissible child interval uses a subtraction-safe distance at
+    // the end of the u32 metric domain.
+    var wide_items: [2]u32 = zero
+    var wide_first: [2]u32 = zero
+    var wide_sibling: [2]u32 = zero
+    var wide_edge: [2]u32 = zero
+    var wide = bk_tree.bk_tree[u32](wide_items[..], wide_first[..], wide_sibling[..], wide_edge[..])
+    if bk_tree.insert[u32, Hits](&wide, 0u32, &hits, wide_distance) != ok { os.exit(4i32) }
+    if bk_tree.insert[u32, Hits](&wide, 4294967295u32, &hits, wide_distance) != ok { os.exit(4i32) }
+    hits.count = 0usize
+    let (wide_hits, wide_error) = bk_tree.search[u32, Hits](&wide, 4294967295u32, 4294967295u32, &hits, wide_distance, note_wide, stack[..])
+    if wide_error != ok || wide_hits != 2usize || hits.count != 2usize { os.exit(4i32) }
 
     try io.print("data bk tree ok\n")
     ret ok
