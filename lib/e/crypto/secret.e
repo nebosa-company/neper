@@ -37,8 +37,12 @@ fn gf_inv(a: u8) -> u8 {
     ret r
 }
 
-// Bytes `shares` needs for `n` shares of a `len`-byte secret.
-fn share_size(len: usize, n: u8) -> usize { ret len * usize(n) }
+// Bytes `shares` needs for `n` shares of a `len`-byte secret. On overflow it
+// saturates at usize maximum instead of returning a wrapped, smaller byte count.
+fn share_size(len: usize, n: u8) -> usize {
+    if n != 0u8 && len > 18446744073709551615usize / usize(n) { ret 18446744073709551615usize }
+    ret len * usize(n)
+}
 
 // `coefficients` holds (k-1) * secret.len bytes: for secret byte j the
 // coefficients of x^1 .. x^(k-1) sit at j*(k-1) .. (j+1)*(k-1). `shares`
@@ -46,8 +50,13 @@ fn share_size(len: usize, n: u8) -> usize { ret len * usize(n) }
 fn split(secret: []const u8, n: u8, k: u8, coefficients: []const u8, shares: []u8) -> err {
     if k < 2u8 || k > n { ret Invalid }
     let degree = usize(k) - 1usize
-    if coefficients.len != degree * secret.len { ret Invalid }
-    if shares.len < share_size(secret.len, n) { ret TooSmall }
+    if secret.len > 18446744073709551615usize / degree { ret Invalid }
+    let coefficient_bytes = degree * secret.len
+    if coefficients.len != coefficient_bytes { ret Invalid }
+    let share_width = usize(n)
+    if share_width != 0usize && secret.len > 18446744073709551615usize / share_width { ret Invalid }
+    let share_bytes = secret.len * share_width
+    if shares.len < share_bytes { ret TooSmall }
     var i = 0usize
     while i < usize(n) {
         let x = u8(i + 1usize)
@@ -73,7 +82,10 @@ fn split(secret: []const u8, n: u8, k: u8, coefficients: []const u8, shares: []u
 fn split_random(secret: []const u8, n: u8, k: u8, shares: []u8) -> err {
     if k < 2u8 || k > n { ret Invalid }
     let degree = usize(k) - 1usize
-    if shares.len < share_size(secret.len, n) { ret TooSmall }
+    let share_width = usize(n)
+    if share_width != 0usize && secret.len > 18446744073709551615usize / share_width { ret Invalid }
+    let share_bytes = secret.len * share_width
+    if shares.len < share_bytes { ret TooSmall }
     var terms: [254]u8 = zero
     var j = 0usize
     while j < secret.len {
@@ -101,7 +113,10 @@ fn split_random(secret: []const u8, n: u8, k: u8, shares: []u8) -> err {
 fn split_random_seeded(secret: []const u8, n: u8, k: u8, rng: *rand.Pcg64, shares: []u8) -> err {
     if k < 2u8 || k > n { ret Invalid }
     let degree = usize(k) - 1usize
-    if shares.len < share_size(secret.len, n) { ret TooSmall }
+    let share_width = usize(n)
+    if share_width != 0usize && secret.len > 18446744073709551615usize / share_width { ret Invalid }
+    let share_bytes = secret.len * share_width
+    if shares.len < share_bytes { ret TooSmall }
     var terms: [254]u8 = zero
     var j = 0usize
     while j < secret.len {
@@ -132,11 +147,13 @@ fn split_random_seeded(secret: []const u8, n: u8, k: u8, rng: *rand.Pcg64, share
 // zero x is `Invalid`.
 fn combine(xs: []const u8, shares: []const u8, len: usize, out: []u8) -> err {
     let k = xs.len
-    if k < 1usize || shares.len != k * len { ret Invalid }
+    if k < 1usize || k > 255usize { ret Invalid }
+    if len != 0usize && k > 18446744073709551615usize / len { ret Invalid }
+    let share_bytes = k * len
+    if shares.len != share_bytes { ret Invalid }
     if out.len < len { ret TooSmall }
     // Lagrange basis at 0: l_i = prod_{m != i} x_m / (x_i ^ x_m).
     var basis: [255]u8 = zero
-    if k > 255usize { ret Invalid }
     var i = 0usize
     while i < k {
         if xs[i] == 0u8 { ret Invalid }

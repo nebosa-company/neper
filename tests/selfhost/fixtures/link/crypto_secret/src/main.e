@@ -146,6 +146,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if secret.combine(xs[..3usize], picked[..], 15usize, out[..]) != secret.Invalid { os.exit(8i32) }
     if secret.combine(xs[..3usize], picked[..], 16usize, out[..15usize]) != secret.TooSmall { os.exit(8i32) }
 
+    // 9: byte counts saturate safely; internal operations reject overflow before mutation.
+    let max_size = 18446744073709551615usize
+    let half_size = max_size / 2usize
+    if secret.share_size(half_size, 2u8) != max_size - 1usize { os.exit(9i32) }
+    if secret.share_size(half_size + 1usize, 2u8) != max_size { os.exit(9i32) }
+    var overflow_xs: [2]u8 = [2]u8{ 1u8, 2u8 }
+    var guarded_out: [4]u8 = [4]u8{ 165u8, 165u8, 165u8, 165u8 }
+    if secret.combine(overflow_xs[..], shares[..0usize], half_size + 1usize, guarded_out[..]) != secret.Invalid { os.exit(9i32) }
+    i = 0usize
+    while i < guarded_out.len {
+        if guarded_out[i] != 165u8 { os.exit(9i32) }
+        i += 1usize
+    }
+    // On a 32-bit target, a modest secret crosses the byte-count limits; no output buffer is allocated.
+    if max_size <= 4294967295usize {
+        let overflow_len = max_size / 254usize + 1usize
+        let (large_secret, allocation_error) = mem.alloc[u8](a, overflow_len)
+        if allocation_error != ok { os.exit(10i32) }
+        var wrapped_coefficients: [254]u8 = zero
+        let degree = 254usize
+        let wrapped_coefficient_len = degree - (max_size % degree) - 1usize
+        if secret.split(large_secret[..], 255u8, 255u8, wrapped_coefficients[..wrapped_coefficient_len], shares[..0usize]) != secret.Invalid { os.exit(10i32) }
+        if secret.split(large_secret[..], 255u8, 2u8, large_secret[..], shares[..0usize]) != secret.Invalid { os.exit(10i32) }
+        if secret.split_random(large_secret[..], 255u8, 2u8, shares[..0usize]) != secret.Invalid { os.exit(10i32) }
+        if secret.split_random_seeded(large_secret[..], 255u8, 2u8, &rng, shares[..0usize]) != secret.Invalid { os.exit(10i32) }
+    }
+
     try io.print("crypto secret ok\n")
     ret ok
 }
