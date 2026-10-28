@@ -45,7 +45,53 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, cleared) = linked.node[i32](&l, b)
     if has_first || cleared != linked.InvalidNode || linked.len[i32](&l) != 0usize { os.exit(9) }
     let (nb, _) = linked.push_back[i32](&l, 9i32)
-    if nb != 0u32 { os.exit(10) }
+    let (_, stale_after_clear) = linked.node[i32](&l, b)
+    if nb != 5u32 || stale_after_clear != linked.InvalidNode { os.exit(10) }
+
+    // 11: an iterator skips a node removed after it was created.
+    let (iter0, iter_init_error) = linked.init[i32](a, 1usize)
+    if iter_init_error != ok { os.exit(11) }
+    var iter_list = iter0
+    let (iter_id, iter_push_error) = linked.push_back[i32](&iter_list, 7i32)
+    if iter_push_error != ok { os.exit(11) }
+    var stale = linked.iter[i32](&iter_list)
+    let (_, iter_remove_error) = linked.remove[i32](&iter_list, iter_id)
+    let (_, stale_has) = linked.iter_next[i32](&stale)
+    if iter_remove_error != ok || stale_has { os.exit(11) }
+
+    // 12: a cross-list splice that cannot reserve every destination id leaves
+    // both lists intact and the source identifiers live.
+    let (source0, source_init_error) = linked.init[i32](a, 2usize)
+    if source_init_error != ok { os.exit(12) }
+    var source = source0
+    let (source_first, source_first_error) = linked.push_back[i32](&source, 10i32)
+    let (source_last, source_last_error) = linked.push_back[i32](&source, 20i32)
+    if source_first_error != ok || source_last_error != ok { os.exit(12) }
+    var splice_bytes: [48]u8 = zero
+    var splice_arena = mem.arena_from(splice_bytes[..])
+    let (destination0, destination_init_error) = linked.init[i32](&splice_arena, 1usize)
+    if destination_init_error != ok { os.exit(12) }
+    var destination = destination0
+    let (destination_id, destination_push_error) = linked.push_back[i32](&destination, 99i32)
+    if destination_push_error != ok { os.exit(12) }
+    let splice_error = linked.splice[i32](&destination, linked.NONE, &source, source_first, source_last)
+    let (source_first_node, source_first_node_error) = linked.node[i32](&source, source_first)
+    let (source_last_node, source_last_node_error) = linked.node[i32](&source, source_last)
+    let (destination_node, destination_node_error) = linked.node[i32](&destination, destination_id)
+    let (destination_first, has_destination_first) = linked.first[i32](&destination)
+    let (destination_last, has_destination_last) = linked.last[i32](&destination)
+    if splice_error != mem.Exhausted || linked.len[i32](&source) != 2usize || linked.len[i32](&destination) != 1usize { os.exit(12) }
+    if source_first_node_error != ok || source_last_node_error != ok || destination_node_error != ok || source_first_node.value != 10i32 || source_last_node.value != 20i32 || destination_node.value != 99i32 { os.exit(12) }
+    if !has_destination_first || !has_destination_last || destination_first != destination_id || destination_last != destination_id { os.exit(12) }
+    var source_iter = linked.iter[i32](&source)
+    let (first_value, first_has) = linked.iter_next[i32](&source_iter)
+    let (last_value, last_has) = linked.iter_next[i32](&source_iter)
+    let (_, source_done) = linked.iter_next[i32](&source_iter)
+    if !first_has || !last_has || source_done || first_value != 10i32 || last_value != 20i32 { os.exit(12) }
+    var destination_iter = linked.iter[i32](&destination)
+    let (destination_value, destination_has) = linked.iter_next[i32](&destination_iter)
+    let (_, destination_done) = linked.iter_next[i32](&destination_iter)
+    if !destination_has || destination_done || destination_value != 99i32 { os.exit(12) }
     os.exit(0)
     ret ok
 }

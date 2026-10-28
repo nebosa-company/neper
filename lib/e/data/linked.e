@@ -123,9 +123,14 @@ fn remove[T: type](l: *List[T], id: NodeId) -> (T, err) {
     ret (removed.value, ok)
 }
 
-// Every identifier issued so far is invalid afterwards; the storage is kept.
+// Every identifier issued so far is invalid afterwards; their slots stay issued so a
+// later append cannot make an old identifier alias a new node.
 fn clear[T: type](l: *List[T]) {
-    list.clear[Node[T]](&l.nodes)
+    var id = 0usize
+    while id < l.nodes.len {
+        l.nodes.items[id].live = false
+        id += 1usize
+    }
     l.first = NONE
     l.last = NONE
     l.len = 0usize
@@ -136,10 +141,12 @@ fn iter[T: type](l: *const List[T]) -> Iter[T] {
 }
 
 fn iter_next[T: type](it: *Iter[T]) -> (T, bool) {
-    if it.next == NONE { ret (zero, false) }
-    let current = it.list.nodes.items[usize(it.next)]
-    it.next = current.next
-    ret (current.value, true)
+    while it.next != NONE {
+        let current = it.list.nodes.items[usize(it.next)]
+        it.next = current.next
+        if current.live { ret (current.value, true) }
+    }
+    ret (zero, false)
 }
 
 // Whether `to` follows `from` in the chain (`from == to` counts), and whether
@@ -166,6 +173,17 @@ fn splice[T: type](dst: *List[T], before: NodeId, src: *List[T], from: NodeId, t
     let (reaches, hits_before) = spans[T](src, from, to, before)
     if !reaches { ret InvalidNode }
     if dst != src {
+        // Across lists every source node needs a fresh destination id. Reserve all
+        // of them before invalidating any source id so an arena failure is atomic.
+        var moved = 1usize
+        var end = from
+        while end != to {
+            end = src.nodes.items[usize(end)].next
+            moved += 1usize
+        }
+        if dst.nodes.len >= usize(NONE) || moved > usize(NONE) - dst.nodes.len { ret TooLarge }
+        let reserve_error = list.reserve[Node[T]](&dst.nodes, dst.nodes.len + moved)
+        if reserve_error != ok { ret reserve_error }
         var cursor = from
         var moving = true
         while moving {
