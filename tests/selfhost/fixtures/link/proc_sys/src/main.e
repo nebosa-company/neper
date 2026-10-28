@@ -148,6 +148,15 @@ fn vectors_4() -> str {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // CPU ticks must retain millisecond precision for frequencies that do not divide
+    // 1000, including frequencies above 1000 Hz where the old integer scale was zero.
+    let cpu_src = "cpu 6 3 4 5 6 7 8\n"
+    let (at_300, e_300) = format.parse_cpu_times(cpu_src, 300u64)
+    if e_300 != ok || at_300.user_ms != 30u64 || at_300.system_ms != 63u64 || at_300.idle_ms != 16u64 || at_300.iowait_ms != 20u64 { os.exit(114i32) }
+    let (at_1024, e_1024) = format.parse_cpu_times(cpu_src, 1024u64)
+    if e_1024 != ok || at_1024.user_ms != 8u64 || at_1024.system_ms != 18u64 || at_1024.idle_ms != 4u64 || at_1024.iowait_ms != 5u64 { os.exit(115i32) }
+    let (_, zero_hz) = format.parse_cpu_times(cpu_src, 0u64)
+    if zero_hz == ok { os.exit(116i32) }
     if run_chunk(a, vectors_0()) != 0u32 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u32 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u32 { os.exit(3i32) }

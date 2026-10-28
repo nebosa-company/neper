@@ -11,6 +11,40 @@ error Malformed
 
 fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
 
+// Convert ticks at `hz` to milliseconds without first multiplying the full tick count.
+// The quotient keeps the large part bounded; the binary remainder loop computes
+// `remainder * 1000 / hz` without overflowing when `hz` is itself large.
+fn ticks_to_ms(ticks: u64, hz: u64) -> (u64, bool) {
+    let seconds = ticks / hz
+    if seconds > 18446744073709551615u64 / 1000u64 { ret (0u64, false) }
+    let whole = seconds * 1000u64
+    let base = ticks % hz
+    var remainder = 0u64
+    var fraction = 0u64
+    var bit = 512u64
+    while bit != 0u64 {
+        var carry = 0u64
+        if remainder >= hz - remainder {
+            remainder -= hz - remainder
+            carry = 1u64
+        } else {
+            remainder += remainder
+        }
+        if (1000u64 & bit) != 0u64 {
+            if remainder >= hz - base {
+                remainder -= hz - base
+                carry += 1u64
+            } else {
+                remainder += base
+            }
+        }
+        fraction = fraction * 2u64 + carry
+        bit >>= 1u64
+    }
+    if fraction > 18446744073709551615u64 - whole { ret (0u64, false) }
+    ret (whole + fraction, true)
+}
+
 // A decimal at `at` (leading blanks skipped): the value, the index after it, and whether
 // there was one.
 fn read_number(src: str, at: usize) -> (u64, usize, bool) {
@@ -87,11 +121,19 @@ fn parse_cpu_times(src: str, hz: u64) -> (CpuTimes, err) {
                 k += 1usize
             }
             if k < 4usize { ret (t, Malformed) }
-            let scale = 1000u64 / hz
-            t.user_ms = (f[0] + f[1]) * scale
-            t.system_ms = (f[2] + f[5] + f[6]) * scale
-            t.idle_ms = f[3] * scale
-            t.iowait_ms = f[4] * scale
+            if f[0] > 18446744073709551615u64 - f[1] || f[2] > 18446744073709551615u64 - f[5] { ret (t, Malformed) }
+            let user_ticks = f[0] + f[1]
+            let system_ticks = f[2] + f[5]
+            if system_ticks > 18446744073709551615u64 - f[6] { ret (t, Malformed) }
+            let (user_ms, user_ok) = ticks_to_ms(user_ticks, hz)
+            let (system_ms, system_ok) = ticks_to_ms(system_ticks + f[6], hz)
+            let (idle_ms, idle_ok) = ticks_to_ms(f[3], hz)
+            let (iowait_ms, iowait_ok) = ticks_to_ms(f[4], hz)
+            if !user_ok || !system_ok || !idle_ok || !iowait_ok { ret (t, Malformed) }
+            t.user_ms = user_ms
+            t.system_ms = system_ms
+            t.idle_ms = idle_ms
+            t.iowait_ms = iowait_ms
             ret (t, ok)
         }
         at = end + 1usize
