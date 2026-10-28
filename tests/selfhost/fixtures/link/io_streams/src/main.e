@@ -114,6 +114,25 @@ fn main(a: *mem.Arena) -> err {
     if !str.eq(left_buffer[0usize..5usize], "twice") { ret Failed }
     if !str.eq(right_buffer[0usize..5usize], "twice") { ret Failed }
 
+    // Flushing a tee flushes both wrapped sinks in the same left-before-right order.
+    var tee_flush_left_bytes: [4]u8 = zero
+    var tee_flush_right_bytes: [4]u8 = zero
+    var tee_flush_left_state = io.SliceWriter { data: tee_flush_left_bytes[..], off: 0usize }
+    var tee_flush_right_state = io.SliceWriter { data: tee_flush_right_bytes[..], off: 0usize }
+    let (tee_flush_left_handle, tee_flush_left_error) = io.buffered_writer(a, io.slice_writer(&tee_flush_left_state), 4usize)
+    if tee_flush_left_error != ok { ret tee_flush_left_error }
+    let (tee_flush_right_handle, tee_flush_right_error) = io.buffered_writer(a, io.slice_writer(&tee_flush_right_state), 4usize)
+    if tee_flush_right_error != ok { ret tee_flush_right_error }
+    var tee_flush_left = tee_flush_left_handle
+    var tee_flush_right = tee_flush_right_handle
+    var tee_flush_state: io.TeeWriter = zero
+    var tee_flush_writer = io.tee_writer(&tee_flush_state, io.buffered_sink(&tee_flush_left), io.buffered_sink(&tee_flush_right))
+    if io.write_all(&tee_flush_writer, "x") != ok { ret Failed }
+    if tee_flush_left_state.off != 0usize || tee_flush_right_state.off != 0usize { ret Failed }
+    if io.flush(&tee_flush_writer) != ok { ret Failed }
+    if tee_flush_left_state.off != 1usize || tee_flush_right_state.off != 1usize { ret Failed }
+    if !str.eq(tee_flush_left_bytes[0usize..1usize], "x") || !str.eq(tee_flush_right_bytes[0usize..1usize], "x") { ret Failed }
+
     // `copy` moves a whole stream through a scratch buffer smaller than it.
     var copy_source = io.SliceReader { data: "0123456789", off: 0usize }
     var copy_from = io.slice_reader(&copy_source)
