@@ -143,8 +143,11 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
                     matches[used] = Match { path: entry.path, line: line, column: u32(offset - line_start + 1usize), text: bytes[line_start..line_end] }
                     used += 1usize
                 }
-                if bytes[offset] == 10u8 {
+                if bytes[offset] == 13u8 {
                     line += 1u32
+                    line_start = offset + 1usize
+                } else if bytes[offset] == 10u8 {
+                    if offset == 0usize || bytes[offset - 1usize] != 13u8 { line += 1u32 }
                     line_start = offset + 1usize
                 }
                 offset += 1usize

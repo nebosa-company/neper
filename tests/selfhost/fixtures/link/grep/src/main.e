@@ -33,6 +33,21 @@ fn main(a: *mem.Arena) -> err {
     if fs.write_file(a, "grep-d603/a.txt", "needle") != ok { os.exit(9i32) }
     let (stale, stale_error) = grep.search_index(a, index, "needle")
     if stale_error != grep.Invalid || stale.len != 0usize { os.exit(10i32) }
-    if fs.remove_file(a, "grep-d603/a.txt") != ok || fs.remove_file(a, "grep-d603/b.txt") != ok || fs.remove_dir(a, directory) != ok { os.exit(11i32) }
+    let cr_directory = "grep-cr-d1168"
+    if fs.make_dirs(a, cr_directory) != ok { os.exit(11i32) }
+    if fs.write_file(a, "grep-cr-d1168/cr.txt", "first\rneedle one\rneedle two\r") != ok { os.exit(12i32) }
+    let (cr_matches, cr_error) = grep.search(a, cr_directory, "needle")
+    if cr_error != ok || cr_matches.len != 2usize { os.exit(13i32) }
+    if cr_matches[0usize].line != 2u32 || cr_matches[0usize].column != 1u32 || !str.eq(cr_matches[0usize].text, "needle one") { os.exit(14i32) }
+    if cr_matches[1usize].line != 3u32 || cr_matches[1usize].column != 1u32 || !str.eq(cr_matches[1usize].text, "needle two") { os.exit(15i32) }
+    let crlf_directory = "grep-crlf-d1168"
+    if fs.make_dirs(a, crlf_directory) != ok { os.exit(16i32) }
+    if fs.write_file(a, "grep-crlf-d1168/crlf.txt", "first\r\nneedle line") != ok { os.exit(17i32) }
+    let (crlf_matches, crlf_error) = grep.search(a, crlf_directory, "needle")
+    if crlf_error != ok || crlf_matches.len != 1usize { os.exit(18i32) }
+    if crlf_matches[0usize].line != 2u32 || crlf_matches[0usize].column != 1u32 || !str.eq(crlf_matches[0usize].text, "needle line") { os.exit(19i32) }
+    if fs.remove_file(a, "grep-d603/a.txt") != ok || fs.remove_file(a, "grep-d603/b.txt") != ok || fs.remove_dir(a, directory) != ok { os.exit(20i32) }
+    if fs.remove_file(a, "grep-cr-d1168/cr.txt") != ok || fs.remove_dir(a, cr_directory) != ok { os.exit(21i32) }
+    if fs.remove_file(a, "grep-crlf-d1168/crlf.txt") != ok || fs.remove_dir(a, crlf_directory) != ok { os.exit(22i32) }
     ret ok
 }
