@@ -244,6 +244,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if empty_error != bar.Invalid { os.exit(230) }
     let (ctl, ctl_error) = bar.code128(a, "a\x01b")
     if ctl_error != bar.Invalid { os.exit(231) }
+    var code_text_99: [99]u8 = zero
+    var code_text_100: [100]u8 = zero
+    var code_digits_198: [198]u8 = zero
+    var code_digits_200: [200]u8 = zero
+    var code_at = 0usize
+    while code_at < code_text_100.len {
+        if code_at < code_text_99.len { code_text_99[code_at] = 65u8 }
+        code_text_100[code_at] = 65u8
+        code_at += 1usize
+    }
+    code_at = 0usize
+    while code_at < code_digits_200.len {
+        if code_at < code_digits_198.len { code_digits_198[code_at] = 49u8 }
+        code_digits_200[code_at] = 49u8
+        code_at += 1usize
+    }
+    let (_, code_text_99_error) = bar.code128(a, code_text_99[..])
+    if code_text_99_error != ok { os.exit(235) }
+    let (_, code_text_100_error) = bar.code128(a, code_text_100[..])
+    if code_text_100_error != bar.TooLong { os.exit(236) }
+    let (_, code_digits_198_error) = bar.code128(a, code_digits_198[..])
+    if code_digits_198_error != ok { os.exit(237) }
+    let (_, code_digits_200_error) = bar.code128(a, code_digits_200[..])
+    if code_digits_200_error != bar.TooLong { os.exit(238) }
     let (wrong, wrong_error) = bar.ean13(a, "5901234123458")
     if wrong_error != bar.Invalid { os.exit(232) }
     let (alpha, alpha_error) = bar.ean13(a, "59012341234x")

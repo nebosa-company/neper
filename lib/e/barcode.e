@@ -1019,6 +1019,11 @@ fn code128(a: *mem.Arena, text_in: str) -> ([]u8, err) {
         i += 1usize
     }
     if text_in.len == 0usize { ret (none, Invalid) }
+    if digits {
+        if text_in.len / 2usize > 99usize { ret (none, TooLong) }
+    } else {
+        if text_in.len > 99usize { ret (none, TooLong) }
+    }
     var codes: [128]usize = zero
     var count = 0usize
     var checksum = 0usize
@@ -1041,7 +1046,6 @@ fn code128(a: *mem.Arena, text_in: str) -> ([]u8, err) {
             i += 1usize
         }
     }
-    if count > 100usize { ret (none, TooLong) }
     checksum = codes[0usize]
     i = 1usize
     while i < count {
