@@ -150,6 +150,7 @@ fn s_curve_at(p: SCurve, t: f64) -> (f64, f64, f64) {
 
 // Minimum-jerk point-to-point motion: (position, velocity, acceleration) at `t`.
 fn min_jerk(start: f64, end: f64, duration: f64, t: f64) -> (f64, f64, f64) {
+    if duration <= 0.0f64 { ret (start, 0.0f64, 0.0f64) }
     let tau = math.min[f64](math.max[f64](t / duration, 0.0f64), 1.0f64)
     let span = end - start
     let t2 = tau * tau

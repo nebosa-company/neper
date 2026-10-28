@@ -102,6 +102,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (mj_end, _, _) = motion.min_jerk(1.0f64, 3.0f64, 2.0f64, 5.0f64)
     if mj_end != 3.0f64 { os.exit(3i32) }
 
+    let (mj_zero_pos, mj_zero_vel, mj_zero_acc) = motion.min_jerk(1.0f64, 3.0f64, 0.0f64, 0.0f64)
+    if !finite_number(mj_zero_pos) || !finite_number(mj_zero_vel) || !finite_number(mj_zero_acc) || mj_zero_pos != 1.0f64 || mj_zero_vel != 0.0f64 || mj_zero_acc != 0.0f64 { os.exit(13i32) }
+    let (mj_zero_later_pos, mj_zero_later_vel, mj_zero_later_acc) = motion.min_jerk(1.0f64, 3.0f64, 0.0f64, 1.0f64)
+    if !finite_number(mj_zero_later_pos) || !finite_number(mj_zero_later_vel) || !finite_number(mj_zero_later_acc) || mj_zero_later_pos != 1.0f64 || mj_zero_later_vel != 0.0f64 || mj_zero_later_acc != 0.0f64 { os.exit(13i32) }
+    let (mj_negative_pos, mj_negative_vel, mj_negative_acc) = motion.min_jerk(1.0f64, 3.0f64, 0.0f64 - 2.0f64, 1.0f64)
+    if !finite_number(mj_negative_pos) || !finite_number(mj_negative_vel) || !finite_number(mj_negative_acc) || mj_negative_pos != 1.0f64 || mj_negative_vel != 0.0f64 || mj_negative_acc != 0.0f64 { os.exit(13i32) }
+    let (mj_still_pos, mj_still_vel, mj_still_acc) = motion.min_jerk(2.0f64, 2.0f64, 2.0f64, 1.0f64)
+    if !finite_number(mj_still_pos) || !finite_number(mj_still_vel) || !finite_number(mj_still_acc) || mj_still_pos != 2.0f64 || mj_still_vel != 0.0f64 || mj_still_acc != 0.0f64 { os.exit(13i32) }
+
     // 4: natural cubic spline against scipy.
     let times: [5]f64 = [5]f64{ 0.0, 1.0, 2.5, 3.0, 4.5 }
     let waypoints: [10]f64 = [10]f64{ 0.0, 1.0, 1.0, 0.5, 2.0, 2.0, 1.5, 3.0, 3.0, 2.5 }
