@@ -5928,6 +5928,12 @@ $floatSpirv = Join-Path $testBuild 'float.spv'
 $floatSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\float.e') $repo 'spv' 'none' $floatSpirv
 if ($LASTEXITCODE -ne 0 -or $floatSpirvWritten -ne 'spir-v written') { throw 'float SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $floatSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\float.spv')).Hash) { throw 'the float SPIR-V module differs from the conformance corpus' }
+# (#1311) f16 and bf16 remain distinct raw u16 formats in SPIR-V. The
+# corpus covers scalar arithmetic, comparisons, casts and vector simd.fma lanes.
+$narrowSpirv = Join-Path $testBuild 'narrow.spv'
+$narrowSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\narrow.e') $repo 'spv' 'none' $narrowSpirv
+if ($LASTEXITCODE -ne 0 -or $narrowSpirvWritten -ne 'spir-v written') { throw 'narrow-float SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $narrowSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\narrow.spv')).Hash) { throw 'the narrow-float SPIR-V module differs from the conformance corpus' }
 $gpuVulkanFloatPath = Join-Path $testBuild 'gpu-vulkan-float-selfhost.exe'
 $gpuVulkanFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_float\src\main.e') $repo 'x64' 'windows' $gpuVulkanFloatPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanFloatWritten -ne 'executable written') { throw 'gpu_vulkan_float emission failed' }

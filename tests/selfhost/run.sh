@@ -5419,6 +5419,11 @@ if [ -n "$previous_gpu_cache" ]; then export NEPER_GPU_CACHE=$previous_gpu_cache
 float_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float.e" "$repo" spv none "$test_build/float.spv")
 [ "$float_spirv_written" = 'spir-v written' ]
 cmp "$test_build/float.spv" "$repo/tests/conformance/spirv/float.spv"
+# (#1311) f16 and bf16 remain distinct raw u16 formats in SPIR-V. The
+# corpus covers scalar arithmetic, comparisons, casts and vector simd.fma lanes.
+narrow_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/narrow.e" "$repo" spv none "$test_build/narrow.spv")
+[ "$narrow_spirv_written" = 'spir-v written' ]
+cmp "$test_build/narrow.spv" "$repo/tests/conformance/spirv/narrow.spv"
 gpu_vulkan_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_float/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-float-selfhost" --gpu glsl)
 [ "$gpu_vulkan_float_written" = 'executable written' ]
 chmod +x "$test_build/gpu-vulkan-float-selfhost"
