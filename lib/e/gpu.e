@@ -2598,14 +2598,18 @@ fn sort_step(ctx: *void, frame: *u8, workgroup: *u8) {
     mark_done(frame)
 }
 
-const MAX_SORT: usize = 16777216usize
+// A one-dimensional launch has at most 65,535 workgroups of 256 invocations.
+const MAX_LAUNCH_INVOCATIONS: usize = 16776960usize
+// Bitonic sort rounds its input up to a power of two. The next size after this
+// limit is 16,777,216, which would need 65,536 workgroups.
+const MAX_SORT: usize = 8388608usize
 
 // The first `n` keys of `buffer` sorted ascending by a bitonic network: for every
 // stage `k` (2, 4, ..., p) and pass `j` (k/2, ..., 1) one launch of `p` invocations,
 // each one compare-exchange. `p` is `n` rounded up to a power of two; a shorter
 // `n` is sorted through a padded device copy whose tail is `0xFFFFFFFF`, the
 // largest key, and written back over the first `n`. `n` past the buffer's length,
-// or past MAX_SORT (65535 workgroups of 256), is `TooLarge`.
+// or past MAX_SORT (the largest power-of-two launch that fits the grid), is `TooLarge`.
 fn sort_bitonic(device: *Device, q: *Queue, buffer: Buf[u32], n: usize) -> err {
     let (owner, owner_error) = state_of(device)
     if owner_error != ok { ret owner_error }
@@ -2744,7 +2748,7 @@ fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], v
     defer unlock_state(state.device)
     if owner_id != state.device.owner { ret (0usize, WrongDevice) }
     if query.owner != owner_id || key.owner != owner_id || value.owner != owner_id || out.owner != owner_id { ret (0usize, WrongDevice) }
-    if d == 0usize || d > MAX_HEAD || tile == 0usize || tile > MAX_HEAD || n > MAX_SORT { ret (0usize, TooLarge) }
+    if d == 0usize || d > MAX_HEAD || tile == 0usize || tile > MAX_HEAD || n > MAX_LAUNCH_INVOCATIONS { ret (0usize, TooLarge) }
     let total = n * d
     if query.len < total || key.len < total || value.len < total || out.len < total { ret (0usize, TooLarge) }
     let tiles = (n + tile - 1usize) / tile

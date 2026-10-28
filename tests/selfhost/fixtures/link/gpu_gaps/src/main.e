@@ -97,6 +97,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if gpu.sort_bitonic(device, q, ds, 1usize) != ok { os.exit(21i32) }
     let (after_one, _) = gpu.token(q)
     if after_one.serial != before_one.serial { os.exit(22i32) }
+    // These forged lengths avoid allocating huge buffers: the public guards must
+    // reject before accessing backing storage or rounding a sort to an invalid grid.
+    var past_sort_grid = ds
+    past_sort_grid.len = 8388609usize
+    if gpu.sort_bitonic(device, q, past_sort_grid, 8388609usize) != gpu.TooLarge { os.exit(43i32) }
 
     // The network on the host through `bitonic_step`, every invocation in turn.
     var eight: [8]u32 = [8]u32{ 5u32, 1u32, 7u32, 3u32, 8u32, 2u32, 6u32, 4u32 }
@@ -178,6 +183,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if small_error != ok { os.exit(41i32) }
     let (_, short_out) = gpu.attention_flash(device, q, dq, dkeys, dv, small, 64usize, 8usize, 16usize, scale)
     if short_out != gpu.TooLarge { os.exit(42i32) }
+    var past_attention_grid = dq
+    past_attention_grid.len = 16776961usize
+    let (_, attention_grid_error) = gpu.attention_flash(device, q, past_attention_grid, past_attention_grid, past_attention_grid, past_attention_grid, 16776961usize, 1usize, 1usize, scale)
+    if attention_grid_error != gpu.TooLarge { os.exit(43i32) }
     try io.print("gpu gaps ok\n")
     ret ok
 }
