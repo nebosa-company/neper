@@ -390,7 +390,13 @@ fn skip_depth(d: *Decoder, depth: u16) -> err {
             ret ok
         }
         var count = item.value
-        if item.major == MAJOR_MAP { count = count * 2u64 }
+        if item.major == MAJOR_MAP {
+            // Every pair contains at least two item heads. Bound before doubling so a
+            // hostile pair count cannot overflow and turn an incomplete map into an
+            // apparently empty one in release builds.
+            if count > u64(remaining(d) / 2usize) { ret Truncated }
+            count = count * 2u64
+        }
         var at = 0u64
         while at < count {
             try skip_depth(d, depth - 1u16)

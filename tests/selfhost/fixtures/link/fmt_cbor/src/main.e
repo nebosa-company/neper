@@ -330,6 +330,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var bad_simple = cbor.decoder(raw[..bad_simple_len])
     let (bad_item, bad_simple_error) = cbor.decode_head(&bad_simple)
     if bad_simple_error != cbor.Invalid { os.exit(55i32) }
+    let huge_map_len = unhex("bb8000000000000000f6", raw[..])
+    var huge_map = cbor.decoder(raw[..huge_map_len])
+    if cbor.skip(&huge_map) != cbor.Truncated { os.exit(57i32) }
 
     try io.print("fmt cbor ok\n")
     ret ok
