@@ -187,18 +187,44 @@ fn main(a: *mem.Arena) -> err {
     let (u0, u_error) = pop3.connect(a, io.slice_reader(&three.reader), io.slice_writer(&three.writer))
     var u = u0
     if u_error != ok || pop3.noop(&u) != pop3.Protocol { ret fail(20i32) }
+
+    // A 512-byte command payload needs two bytes reserved for CRLF.
+    var long_scene: Scene = zero
+    long_scene.writer = io.SliceWriter { data: long_scene.sent[0..], off: 0usize }
+    long_scene.reader = io.SliceReader { data: "+OK hi\r\n", off: 0usize }
+    let (long0, long_error) = pop3.connect(a, io.slice_reader(&long_scene.reader), io.slice_writer(&long_scene.writer))
+    if long_error != ok { ret fail(21i32) }
+    var long_session = long0
+    var long_user: [507]u8 = zero
+    var long_at = 0usize
+    while long_at < long_user.len {
+        long_user[long_at] = 120u8
+        long_at += 1usize
+    }
+    if pop3.login(&long_session, long_user[..], "x") != pop3.TooLarge || long_scene.writer.off != 0usize { ret fail(22i32) }
+
+    // Decimal values must be rejected before multiplication can wrap around.
+    var overflow_scene: Scene = zero
+    overflow_scene.writer = io.SliceWriter { data: overflow_scene.sent[0..], off: 0usize }
+    overflow_scene.reader = io.SliceReader { data: "+OK hi\r\n+OK 25000000000000000000 1\r\n", off: 0usize }
+    let (overflow0, overflow_error) = pop3.connect(a, io.slice_reader(&overflow_scene.reader), io.slice_writer(&overflow_scene.writer))
+    if overflow_error != ok { ret fail(23i32) }
+    var overflow_session = overflow0
+    let (_, overflow_stat_error) = pop3.stat(&overflow_session)
+    if overflow_stat_error != pop3.Protocol { ret fail(24i32) }
+
     var four: Scene = zero
     four.writer = io.SliceWriter { data: four.sent[0..], off: 0usize }
     four.reader = io.SliceReader { data: "-ERR mailbox locked\r\n", off: 0usize }
     let (_, locked_error) = pop3.connect(a, io.slice_reader(&four.reader), io.slice_writer(&four.writer))
-    if locked_error != pop3.Rejected { ret fail(21i32) }
+    if locked_error != pop3.Rejected { ret fail(25i32) }
     var five: Scene = zero
     five.writer = io.SliceWriter { data: five.sent[0..], off: 0usize }
     five.reader = io.SliceReader { data: "+OK hi\r\n+OK\r\nline\r\n", off: 0usize }
     let (v0, v_error) = pop3.connect(a, io.slice_reader(&five.reader), io.slice_writer(&five.writer))
     var v = v0
     let (_, cut_error) = pop3.retr(&v, 1usize, 4096usize)
-    if v_error != ok || cut_error != pop3.Closed { ret fail(22i32) }
+    if v_error != ok || cut_error != pop3.Closed { ret fail(26i32) }
 
     // ---- STLS against a live server thread ----
     let mid_der = "0\x82\x01\x130\x81\xc6\xa0\x03\x02\x01\x02\x02\x01\x020\x05\x06\x03+ep0%1\x130\x11\x06\x03U\x04\x03\x0c\x0aNeper Root1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0*0\x05\x06\x03+ep\x03!\x00\x819w\x0e\xa8}\x17_V\xa3Tf\xc3L~\xcc\xcb\x8d\x8a\x91\xb4\xee7\xa2]\xf6\x0f[\x8f\xc9\xb3\x94\xa3\x130\x110\x0f\x06\x03U\x1d\x13\x01\x01\xff\x04\x050\x03\x01\x01\xff0\x05\x06\x03+ep\x03A\x00R^\x187\xb39[\xa4N\xc4\x83\x10\xde\xfc\x7f\xa0\xbfF[\xa8^\x04S\xa1\xb2\xf8\xbcM\xc7\xfb\xf1t\x89\xa0\x0e\x07\xcc\xbf\x8f6R\x16\x15\xab\x99\x0e\xdd\xc1,\x8d\x8f*\xd4\xaf\x97\xaae\x8b\xab\xe5\x0d\x8e'\x08"

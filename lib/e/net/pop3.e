@@ -177,6 +177,7 @@ fn put_decimal(buf: []u8, at: *usize, value: u64) -> err {
 }
 
 fn send_line(s: *Session, n: usize) -> err {
+    if n > s.cmd.len || s.cmd.len - n < 2usize { ret TooLarge }
     s.cmd[n] = 13u8
     s.cmd[n + 1usize] = 10u8
     try io.write_all(&s.sink, s.cmd[..n + 2usize])
@@ -186,19 +187,21 @@ fn send_line(s: *Session, n: usize) -> err {
 // Write `verb [argument [second]]` and read the status line.
 fn command(s: *Session, verb: str, argument: str, second: u64, has_second: bool) -> (str, err) {
     if !clean(argument) { ret ("", Invalid) }
+    if s.cmd.len < 2usize { ret ("", TooLarge) }
+    let payload = s.cmd[..s.cmd.len - 2usize]
     var n = 0usize
-    let verb_error = put(s.cmd, &n, verb)
+    let verb_error = put(payload, &n, verb)
     if verb_error != ok { ret ("", verb_error) }
     if argument.len > 0usize {
-        let space_error = put(s.cmd, &n, " ")
+        let space_error = put(payload, &n, " ")
         if space_error != ok { ret ("", space_error) }
-        let argument_error = put(s.cmd, &n, argument)
+        let argument_error = put(payload, &n, argument)
         if argument_error != ok { ret ("", argument_error) }
     }
     if has_second {
-        let space_error = put(s.cmd, &n, " ")
+        let space_error = put(payload, &n, " ")
         if space_error != ok { ret ("", space_error) }
-        let number_error = put_decimal(s.cmd, &n, second)
+        let number_error = put_decimal(payload, &n, second)
         if number_error != ok { ret ("", number_error) }
     }
     let write_error = send_line(s, n)
@@ -276,9 +279,9 @@ fn parse_number(text: str, at: *usize) -> (u64, bool) {
     var value = 0u64
     var any = false
     while *at < text.len && text[*at] >= 48u8 && text[*at] <= 57u8 {
-        let next = value * 10u64 + u64(text[*at] - 48u8)
-        if next < value { ret (0u64, false) }
-        value = next
+        let digit = u64(text[*at] - 48u8)
+        if value > (18446744073709551615u64 - digit) / 10u64 { ret (0u64, false) }
+        value = value * 10u64 + digit
         any = true
         *at = *at + 1usize
     }
