@@ -164,6 +164,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if cache.slru_evict(&sl) != 2u32 { os.exit(5i32) }
     cache.slru_insert(&sl, 2u32)
     if cache.slru_evict(&sl) != 3u32 { os.exit(5i32) }
+    let (_, slru_zero_cap) = cache.slru_init(sprev[..], snext[..], protected[..], 4usize, 0usize)
+    if slru_zero_cap != cache.Invalid { os.exit(5i32) }
     let (_, slru_invalid) = cache.slru_init(sprev[..], snext[..], protected[..], 4usize, 4usize)
     if slru_invalid != cache.Invalid { os.exit(5i32) }
 
@@ -197,6 +199,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     slot_keys[1usize] = 99u64
     cache.two_queue_insert(&q, 1u32, 99u64)
     if cache.two_queue_in_main(&q, 1u32) { os.exit(6i32) }
+
+    // A zero-filled ghost ring does not remember key zero until that key was evicted.
+    var zero_prev: [1]u32 = zero
+    var zero_next: [1]u32 = zero
+    var zero_main: [1]u8 = zero
+    var zero_ghosts: [1]u64 = zero
+    var zero_keys: [1]u64 = zero
+    let (zero_two, zero_two_error) = cache.two_queue_init(zero_prev[..], zero_next[..], zero_main[..], zero_ghosts[..], 1usize, 1usize)
+    if zero_two_error != ok { os.exit(6i32) }
+    var zero_queue = zero_two
+    let first_zero_slot = cache.two_queue_evict(&zero_queue, zero_keys[..])
+    zero_keys[usize(first_zero_slot)] = 0u64
+    cache.two_queue_insert(&zero_queue, first_zero_slot, 0u64)
+    if cache.two_queue_in_main(&zero_queue, first_zero_slot) { os.exit(6i32) }
+    let second_zero_slot = cache.two_queue_evict(&zero_queue, zero_keys[..])
+    zero_keys[usize(second_zero_slot)] = 0u64
+    cache.two_queue_insert(&zero_queue, second_zero_slot, 0u64)
+    if !cache.two_queue_in_main(&zero_queue, second_zero_slot) { os.exit(6i32) }
 
     try io.print("data cache ok\n")
     ret ok

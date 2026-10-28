@@ -25,7 +25,7 @@ type Fifo = struct { order: []u32, head: usize, len: usize }
 type Clock = struct { referenced: []u8, filled: []u8, hand: usize }
 type Lfu = struct { hits: []u64, filled: []u8 }
 type Slru = struct { prev: []u32, next: []u32, protected: []u8, probation_head: u32, probation_tail: u32, protected_head: u32, protected_tail: u32, protected_len: usize, protected_cap: usize }
-type TwoQueue = struct { prev: []u32, next: []u32, main: []u8, ghosts: []u64, ghost_at: usize, in_head: u32, in_tail: u32, in_len: usize, in_cap: usize, main_head: u32, main_tail: u32 }
+type TwoQueue = struct { prev: []u32, next: []u32, main: []u8, ghosts: []u64, ghost_at: usize, ghost_len: usize, in_head: u32, in_tail: u32, in_len: usize, in_cap: usize, main_head: u32, main_tail: u32 }
 type Arc = struct { keys: []u64, prev: []u32, next: []u32, list: []u8, t1: usize, t2: usize, b1: usize, b2: usize, p: usize, free: u32 }
 error TooSmall
 error Invalid
@@ -270,7 +270,7 @@ fn lfu_evict(l: *const Lfu) -> u32 {
 // Segmented LRU: a probation list and a protected list of at most
 // `protected_cap` slots; `prev`, `next`, `protected` need `capacity` entries.
 fn slru_init(prev: []u32, next: []u32, protected: []u8, capacity: usize, protected_cap: usize) -> (Slru, err) {
-    if capacity == 0usize || protected_cap >= capacity { ret (zero, Invalid) }
+    if capacity == 0usize || protected_cap == 0usize || protected_cap >= capacity { ret (zero, Invalid) }
     if prev.len < capacity || next.len < capacity || protected.len < capacity { ret (zero, TooSmall) }
     var i = 0usize
     while i < capacity {
@@ -361,7 +361,7 @@ fn slru_is_protected(s: *const Slru, slot: u32) -> bool { ret s.protected[usize(
 
 // 2Q: new slots enter a FIFO of `in_cap` slots; a key whose eviction is still
 // remembered in `ghosts` is admitted to the main LRU. `prev`, `next`, `main`
-// need `capacity` entries; `ghosts` any length (its length is the memory).
+// need `capacity` entries; `ghosts` is the fixed ghost-memory ring.
 fn two_queue_init(prev: []u32, next: []u32, main: []u8, ghosts: []u64, capacity: usize, in_cap: usize) -> (TwoQueue, err) {
     if capacity == 0usize || in_cap == 0usize || in_cap > capacity { ret (zero, Invalid) }
     if prev.len < capacity || next.len < capacity || main.len < capacity { ret (zero, TooSmall) }
@@ -375,12 +375,12 @@ fn two_queue_init(prev: []u32, next: []u32, main: []u8, ghosts: []u64, capacity:
         ghosts[i] = 0u64
         i += 1usize
     }
-    ret (TwoQueue { prev: prev[..capacity], next: next[..capacity], main: main[..capacity], ghosts: ghosts, ghost_at: 0usize, in_head: NONE, in_tail: NONE, in_len: 0usize, in_cap: in_cap, main_head: NONE, main_tail: NONE }, ok)
+    ret (TwoQueue { prev: prev[..capacity], next: next[..capacity], main: main[..capacity], ghosts: ghosts, ghost_at: 0usize, ghost_len: 0usize, in_head: NONE, in_tail: NONE, in_len: 0usize, in_cap: in_cap, main_head: NONE, main_tail: NONE }, ok)
 }
 
 fn two_queue_remembers(q: *const TwoQueue, key: u64) -> bool {
     var i = 0usize
-    while i < q.ghosts.len {
+    while i < q.ghost_len {
         if q.ghosts[i] == key { ret true }
         i += 1usize
     }
@@ -450,6 +450,7 @@ fn two_queue_evict(q: *TwoQueue, keys: []const u64) -> u32 {
     q.main[usize(victim)] = 2u8
     if q.ghosts.len > 0usize && usize(victim) < keys.len {
         q.ghosts[q.ghost_at] = keys[usize(victim)]
+        if q.ghost_len < q.ghosts.len { q.ghost_len += 1usize }
         q.ghost_at = (q.ghost_at + 1usize) % q.ghosts.len
     }
     ret victim
