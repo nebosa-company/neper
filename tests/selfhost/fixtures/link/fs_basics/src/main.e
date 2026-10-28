@@ -32,6 +32,11 @@ fn same(left: str, right: str) -> bool {
     ret true
 }
 
+fn blocked_component_subject(subject: str) -> bool {
+    if os.NATIVE_SEPARATOR == 92u8 { ret same(subject, "np-fs\\one.txt") }
+    ret same(subject, "np-fs/one.txt")
+}
+
 // A previous failing run leaves its scratch behind, and `Exists` from that would fail
 // the next run for a reason that is not the one being tested.
 fn clear(a: *mem.Arena) {
@@ -172,6 +177,16 @@ fn main(a: *mem.Arena) -> err {
     if detail.native_code == 0i32 { os.exit(15i32) }
     if detail.kind != .NotFound { os.exit(16i32) }
 
+    // Local path allocation failures stay `mem.Exhausted`, rather than being mistaken
+    // for an OS I/O error by the filesystem error mapper.
+    var tiny_make_dirs_storage: [1]u8 = zero
+    var tiny_make_dirs_arena = mem.arena_from(tiny_make_dirs_storage[..])
+    if fs.make_dirs(&tiny_make_dirs_arena, "x") != mem.Exhausted { os.exit(270i32) }
+    var tiny_make_dirs_detail_storage: [1]u8 = zero
+    var tiny_make_dirs_detail_arena = mem.arena_from(tiny_make_dirs_detail_storage[..])
+    var tiny_make_dirs_detail: os.ErrorDetail = zero
+    if fs.make_dirs_detail(&tiny_make_dirs_detail_arena, "x", &tiny_make_dirs_detail) != mem.Exhausted { os.exit(271i32) }
+
     // `make_dirs` makes every missing component, so one call covers two levels.
     if fs.make_dirs(a, "np-fs/deep") != ok { os.exit(20i32) }
     let (outer, outer_error) = fs.stat(a, "np-fs")
@@ -214,6 +229,42 @@ fn main(a: *mem.Arena) -> err {
     if written_error != ok { os.exit(34i32) }
     if written_entry.kind != .File { os.exit(35i32) }
     if written_entry.size != 11u64 { os.exit(36i32) }
+
+    // A component that is already a file names that component in the detailed error.
+    // The subsequent allocation proves the detail does not borrow storage reset by the
+    // failed call.
+    var blocked_component_detail: os.ErrorDetail = zero
+    let blocked_component_error = fs.make_dirs_detail(a, "np-fs/one.txt/child", &blocked_component_detail)
+    if blocked_component_error != fs.Exists { os.exit(272i32) }
+    if !same(blocked_component_detail.operation, "mkdir") { os.exit(273i32) }
+    if !blocked_component_subject(blocked_component_detail.subject) { os.exit(274i32) }
+    if blocked_component_detail.native_code != 0i32 { os.exit(275i32) }
+    let (detail_noise, detail_noise_error) = mem.alloc[u8](a, blocked_component_detail.subject.len)
+    if detail_noise_error != ok { os.exit(276i32) }
+    var detail_noise_at = 0usize
+    while detail_noise_at < detail_noise.len {
+        detail_noise[detail_noise_at] = 88u8
+        detail_noise_at += 1usize
+    }
+    if !blocked_component_subject(blocked_component_detail.subject) { os.exit(277i32) }
+
+    // Once a walk has listed its root, exhausting its arena makes joining the next
+    // entry fail locally; it must surface `mem.Exhausted`, not `fs.Io`.
+    var tight_walk_storage: [32768]u8 = zero
+    var tight_walk_arena = mem.arena_from(tight_walk_storage[..])
+    var tight_walk_options: fs.WalkOptions = zero
+    let (tight_walk_value, tight_walk_start_error) = fs.walk(&tight_walk_arena, "np-fs", tight_walk_options)
+    if tight_walk_start_error != ok { os.exit(278i32) }
+    var tight_walk = tight_walk_value
+    let tight_walk_stats = mem.stats(&tight_walk_arena)
+    let tight_walk_remaining = tight_walk_stats.capacity - tight_walk_stats.used
+    if tight_walk_remaining > 0usize {
+        let (_, tight_walk_drain_error) = mem.alloc[u8](&tight_walk_arena, tight_walk_remaining)
+        if tight_walk_drain_error != ok { os.exit(279i32) }
+    }
+    let (_, tight_walk_more, tight_walk_error) = fs.walk_next_err(&tight_walk)
+    if tight_walk_more || tight_walk_error != mem.Exhausted { os.exit(280i32) }
+    if fs.walk_close(&tight_walk) != ok { os.exit(281i32) }
 
     // `metadata` is everything the host records about one path, and `follow_symlinks`
     // picks which path that is. With no link in the way the two agree, which is what
