@@ -1701,6 +1701,73 @@ fn valid_name(text: str) -> bool {
     ret true
 }
 
+// Bundle identifiers and launch-agent labels become identifiers in the plist;
+// they are deliberately narrower than a file name.  URL schemes have the URI
+// grammar rather than accepting arbitrary printable text.
+fn valid_identifier(text: str) -> bool {
+    if text.len == 0usize { ret false }
+    let first = text[0usize]
+    if !((first >= 65u8 && first <= 90u8) || (first >= 97u8 && first <= 122u8) || (first >= 48u8 && first <= 57u8)) { ret false }
+    let last = text[text.len - 1usize]
+    if !((last >= 65u8 && last <= 90u8) || (last >= 97u8 && last <= 122u8) || (last >= 48u8 && last <= 57u8)) { ret false }
+    var at = 0usize
+    while at < text.len {
+        let c = text[at]
+        let letter = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+        let digit = c >= 48u8 && c <= 57u8
+        if !letter && !digit && c != 46u8 && c != 45u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn valid_scheme(text: str) -> bool {
+    if text.len == 0usize || text.len > 64usize { ret false }
+    let first = text[0usize]
+    if !((first >= 65u8 && first <= 90u8) || (first >= 97u8 && first <= 122u8)) { ret false }
+    var at = 1usize
+    while at < text.len {
+        let c = text[at]
+        let letter = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+        let digit = c >= 48u8 && c <= 57u8
+        if !letter && !digit && c != 43u8 && c != 45u8 && c != 46u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Every caller-supplied plist value is text-node content.  Quotes need no
+// treatment there, but XML's three markup characters always do.
+fn plist_escape(a: *mem.Arena, text: str) -> (str, err) {
+    let (made, make_error) = str.builder(a, text.len)
+    if make_error != ok { ret ("", make_error) }
+    var out = made
+    var at = 0usize
+    var from = 0usize
+    while at < text.len {
+        let c = text[at]
+        var replacement = ""
+        if c == 38u8 {
+            replacement = "&amp;"
+        } else if c == 60u8 {
+            replacement = "&lt;"
+        } else if c == 62u8 {
+            replacement = "&gt;"
+        }
+        if replacement.len != 0usize {
+            let prefix_error = str.push(&out, text[from..at])
+            if prefix_error != ok { ret ("", prefix_error) }
+            let replacement_error = str.push(&out, replacement)
+            if replacement_error != ok { ret ("", replacement_error) }
+            from = at + 1usize
+        }
+        at += 1usize
+    }
+    let tail_error = str.push(&out, text[from..text.len])
+    if tail_error != ok { ret ("", tail_error) }
+    ret (str.done(&out), ok)
+}
+
 // File types and URL schemes (D5217). A Mac sends "open this file" and "open this URL" as Apple events to an application
 // bundle that declares the type, so registering one writes a small bundle under `~/Library/Application Support/Neper/
 // Associations`: an Info.plist naming the extension (or the scheme) and, as its executable, a copy of this program, so the
@@ -1736,7 +1803,6 @@ fn act_push(kind: ActivationKind, string: usize) {
     act_kinds[act_tail] = kind
     act_used += length
     act_tail = next
-    if act_head == act_tail { act_used = 0usize }
 }
 
 @cc(c)
@@ -1821,27 +1887,37 @@ fn bundle_make(a: *mem.Arena, name: str, bundle_id: str, label: str, extension: 
     if scratch_error != ok { ret ("", scratch_error) }
     try fs.copy_file(a, exe, link, scratch)
     let moded = os.set_mode(a, link, 493u32)
+    let (plist_label, label_error) = plist_escape(a, label)
+    if label_error != ok { ret ("", label_error) }
     var declared = ""
     if extension.len != 0usize {
-        let (opened, opened_error) = join3(a, "<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>", label, "</string><key>CFBundleTypeRole</key><string>Viewer</string><key>CFBundleTypeExtensions</key><array><string>")
+        let (plist_extension, extension_error) = plist_escape(a, extension)
+        if extension_error != ok { ret ("", extension_error) }
+        let (opened, opened_error) = join3(a, "<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>", plist_label, "</string><key>CFBundleTypeRole</key><string>Viewer</string><key>CFBundleTypeExtensions</key><array><string>")
         if opened_error != ok { ret ("", opened_error) }
-        let (middle, middle_error) = str.concat(a, opened, extension)
+        let (middle, middle_error) = str.concat(a, opened, plist_extension)
         if middle_error != ok { ret ("", middle_error) }
         let (closed, closed_error) = str.concat(a, middle, "</string></array></dict></array>")
         if closed_error != ok { ret ("", closed_error) }
         declared = closed
     } else {
-        let (opened, opened_error) = join3(a, "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>", label, "</string><key>CFBundleURLSchemes</key><array><string>")
+        let (plist_scheme, scheme_error) = plist_escape(a, scheme)
+        if scheme_error != ok { ret ("", scheme_error) }
+        let (opened, opened_error) = join3(a, "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>", plist_label, "</string><key>CFBundleURLSchemes</key><array><string>")
         if opened_error != ok { ret ("", opened_error) }
-        let (middle, middle_error) = str.concat(a, opened, scheme)
+        let (middle, middle_error) = str.concat(a, opened, plist_scheme)
         if middle_error != ok { ret ("", middle_error) }
         let (closed, closed_error) = str.concat(a, middle, "</string></array></dict></array>")
         if closed_error != ok { ret ("", closed_error) }
         declared = closed
     }
-    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>", bundle_id, "</string><key>CFBundleName</key><string>")
+    let (plist_bundle_id, bundle_id_error) = plist_escape(a, bundle_id)
+    if bundle_id_error != ok { ret ("", bundle_id_error) }
+    let (plist_name, name_error) = plist_escape(a, name)
+    if name_error != ok { ret ("", name_error) }
+    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>", plist_bundle_id, "</string><key>CFBundleName</key><string>")
     if head_error != ok { ret ("", head_error) }
-    let (named, named_error) = join3(a, head, name, "</string><key>CFBundleExecutable</key><string>neper-app</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>")
+    let (named, named_error) = join3(a, head, plist_name, "</string><key>CFBundleExecutable</key><string>neper-app</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>")
     if named_error != ok { ret ("", named_error) }
     let (plist, plist_error) = join3(a, named, declared, "</dict></plist>\n")
     if plist_error != ok { ret ("", plist_error) }
@@ -1876,7 +1952,7 @@ fn bundle_remove(a: *mem.Arena, name: str) -> err {
 }
 
 fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: str) -> err {
-    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
+    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_identifier(program_id) { ret Invalid }
     let started = os.cocoa_start()
     if started != ok { ret started }
     let (bundle_id, id_error) = str.concat(a, "com.neper.assoc.", program_id)
@@ -1901,12 +1977,12 @@ fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: s
 }
 
 fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err {
-    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
+    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_identifier(program_id) { ret Invalid }
     ret bundle_remove(a, program_id)
 }
 
 fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
-    if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
+    if !valid_scheme(scheme) { ret Invalid }
     let started = os.cocoa_start()
     if started != ok { ret started }
     let (name, name_error) = str.concat(a, "protocol-", scheme)
@@ -1928,7 +2004,7 @@ fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
 }
 
 fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
-    if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
+    if !valid_scheme(scheme) { ret Invalid }
     let (name, name_error) = str.concat(a, "protocol-", scheme)
     if name_error != ok { ret name_error }
     ret bundle_remove(a, name)
@@ -1946,7 +2022,7 @@ fn autostart_path(a: *mem.Arena, id: str) -> (str, err) {
 }
 
 fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
-    if !valid_name(id) { ret Invalid }
+    if !valid_identifier(id) { ret Invalid }
     let (path, path_error) = autostart_path(a, id)
     if path_error != ok { ret path_error }
     if !enabled {
@@ -1957,15 +2033,19 @@ fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
     let (exe, exe_error) = fs.executable_path(a)
     if exe_error != ok { ret exe_error }
     try fs.make_dirs(a, parent_of(path))
-    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>Label</key><string>", id, "</string><key>ProgramArguments</key><array><string>")
+    let (plist_id, id_error) = plist_escape(a, id)
+    if id_error != ok { ret id_error }
+    let (plist_exe, plist_exe_error) = plist_escape(a, exe)
+    if plist_exe_error != ok { ret plist_exe_error }
+    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>Label</key><string>", plist_id, "</string><key>ProgramArguments</key><array><string>")
     if head_error != ok { ret head_error }
-    let (content, content_error) = join3(a, head, exe, "</string></array><key>RunAtLoad</key><true/></dict></plist>\n")
+    let (content, content_error) = join3(a, head, plist_exe, "</string></array><key>RunAtLoad</key><true/></dict></plist>\n")
     if content_error != ok { ret content_error }
     ret fs.write_file(a, path, content)
 }
 
 fn startup_enabled(a: *mem.Arena, id: str) -> (bool, err) {
-    if !valid_name(id) { ret (false, Invalid) }
+    if !valid_identifier(id) { ret (false, Invalid) }
     let (path, path_error) = autostart_path(a, id)
     if path_error != ok { ret (false, path_error) }
     let (present, exists_error) = fs.exists(a, path)
@@ -2021,21 +2101,33 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
         instance_storage = storage
         ret (true, ok)
     }
-    // Taken: hand the command line to whoever has it.
+    // Taken: hand the complete command line to whoever has it.  Each argument
+    // is length-prefixed so embedded line feeds survive, and a command that
+    // cannot fit in one datagram is refused rather than silently shortened.
+    if args.len == 0usize || args.len > 65535usize {
+        let closed = os.socket_close(opened)
+        ret (false, Invalid)
+    }
     var packet: [4096]u8 = zero
-    var used = 0usize
+    var used = 2usize
+    packet[0usize] = u8(args.len % 256usize)
+    packet[1usize] = u8(args.len / 256usize)
     var arg = 0usize
     while arg < args.len {
-        if arg != 0usize && used < 4096usize {
-            packet[used] = 10u8
-            used += 1usize
+        let length = args[arg].len
+        if length > 65535usize || used > 4094usize || length > 4096usize - used - 2usize {
+            let closed = os.socket_close(opened)
+            ret (false, Invalid)
         }
+        packet[used] = u8(length % 256usize)
+        packet[used + 1usize] = u8(length / 256usize)
+        used += 2usize
         var byte = 0usize
-        while byte < args[arg].len && used < 4096usize {
-            packet[used] = args[arg][byte]
-            used += 1usize
+        while byte < length {
+            packet[used + byte] = args[arg][byte]
             byte += 1usize
         }
+        used += length
         arg += 1usize
     }
     let (sent, send_error) = os.socket_send_to(opened, address, packet[0usize..used])
@@ -2058,6 +2150,9 @@ fn activation_poll() -> (Activation, bool) {
         delivered.payload = act_payloads[slot]
         delivered.args = act_strs[2usize * slot..2usize * slot + 2usize]
         act_head = (act_head + 1usize) % ACTIVATIONS
+        // Once the queue is drained no live slot points into the shared text
+        // buffer, so the next delegate event can reuse its full capacity.
+        if act_head == act_tail { act_used = 0usize }
         ret (delivered, true)
     }
     if !instance_held { ret (none, false) }
@@ -2066,34 +2161,41 @@ fn activation_poll() -> (Activation, bool) {
     if wait_error != ok || ready == 0usize { ret (none, false) }
     var packet: [4096]u8 = zero
     let (got, from, receive_error) = os.socket_receive_from(instance_socket, packet[..])
-    if receive_error != ok || got == 0usize { ret (none, false) }
-    var lines = 1usize
-    var at = 0usize
-    while at < got {
-        if packet[at] == 10u8 { lines += 1usize }
-        at += 1usize
+    if receive_error != ok || got < 2usize { ret (none, false) }
+    let count = usize(packet[0usize]) + usize(packet[1usize]) * 256usize
+    if count == 0usize { ret (none, false) }
+    var at = 2usize
+    var arg = 0usize
+    while arg < count {
+        if at > got || got - at < 2usize { ret (none, false) }
+        let length = usize(packet[at]) + usize(packet[at + 1usize]) * 256usize
+        at += 2usize
+        if length > got - at { ret (none, false) }
+        at += length
+        arg += 1usize
     }
+    if at != got { ret (none, false) }
     let (text, text_error) = mem.alloc[u8](instance_storage, got)
     if text_error != ok { ret (none, false) }
-    at = 0usize
-    while at < got {
-        text[at] = packet[at]
-        at += 1usize
-    }
-    let (list, list_error) = mem.alloc[str](instance_storage, lines)
+    let (list, list_error) = mem.alloc[str](instance_storage, count)
     if list_error != ok { ret (none, false) }
-    var start = 0usize
-    var line = 0usize
-    at = 0usize
-    while at <= got {
-        if at == got || text[at] == 10u8 {
-            list[line] = text[start..at]
-            line += 1usize
-            start = at + 1usize
+    at = 2usize
+    arg = 0usize
+    var copied = 0usize
+    while arg < count {
+        let length = usize(packet[at]) + usize(packet[at + 1usize]) * 256usize
+        at += 2usize
+        list[arg] = text[copied..copied + length]
+        var byte = 0usize
+        while byte < length {
+            text[copied + byte] = packet[at + byte]
+            byte += 1usize
         }
-        at += 1usize
+        copied += length
+        at += length
+        arg += 1usize
     }
-    ret (activation_of(instance_storage, list[0usize..lines]), true)
+    ret (activation_of(instance_storage, list[0usize..count]), true)
 }
 // ------------------------------------------------- lifecycle and global input
 //
