@@ -33,6 +33,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e1c != quic.Malformed { os.exit(1i32) }
     let (_, e1d) = quic.header_decode(initial[..10usize], 0usize)
     if e1d != quic.TooSmall { os.exit(1i32) }
+    // An attacker-controlled Initial token length must be compared as u64
+    // before it is narrowed for the slice.
+    let huge_token: [15]u8 = [15]u8{ 192, 0, 0, 0, 1, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255 }
+    let (_, e1e) = quic.header_decode(huge_token[0..], 0usize)
+    if e1e != quic.TooSmall { os.exit(1i32) }
 
     // 2: a short header round trip.
     let dcid: [8]u8 = [8]u8{ 17, 34, 51, 68, 85, 102, 119, 136 }
@@ -117,6 +122,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4k != ok || used_x != 7usize || fx.kind != quic.FRAME_CONNECTION_CLOSE || fx.error_code != 10u64 || fx.frame_type != 24u64 || !quic.bytes_equal(fx.reason, "bye") { os.exit(4i32) }
     let (n4d, e4l) = quic.frame_encode_connection_close(buf[0..], quic.FRAME_CONNECTION_CLOSE, 10u64, 24u64, "bye")
     if e4l != ok || n4d != 7usize || !quic.bytes_equal(buf[..7usize], close[0..]) { os.exit(4i32) }
+    let huge_reason: [11]u8 = [11]u8{ 28, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255 }
+    let (_, _, e4m0) = quic.frame_decode(huge_reason[0..])
+    if e4m0 != quic.TooSmall { os.exit(4i32) }
     let run: [6]u8 = [6]u8{ 0, 0, 0, 0, 0, 1 }
     let (fp, used_p, e4m) = quic.frame_decode(run[0..])
     if e4m != ok || fp.kind != quic.FRAME_PADDING || used_p != 5usize { os.exit(4i32) }
@@ -175,6 +183,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !found0 || unused0 != 1usize { os.exit(5i32) }
     let challenge: [8]u8 = [8]u8{ 90, 1, 2, 3, 4, 5, 6, 165 }
     var probe: [1200]u8 = zero
+    // A server must defer a probe until the candidate path has enough received
+    // bytes for the short header and PATH_CHALLENGE.
+    quic.path_received(&conn, 1usize, 4u64)
+    let (_, e5e0) = quic.migrate(&conn, addr_b, 100u64, challenge, probe[0..])
+    if e5e0 != quic.AmplificationLimited || conn.path_count != 1usize || peer_active[1] != quic.CID_UNUSED { os.exit(5i32) }
+    quic.path_received(&conn, 1usize, 396u64)
     let (probe_len, e5e) = quic.migrate(&conn, addr_b, 100u64, challenge, probe[0..])
     if e5e != ok || probe_len != 1200usize { os.exit(5i32) }
     let probe_head: [18]u8 = [18]u8{ 64, 176, 177, 178, 179, 180, 181, 182, 183, 26, 90, 1, 2, 3, 4, 5, 6, 165 }
@@ -184,10 +198,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if probe[i] != 0u8 { os.exit(5i32) }
         i += 1usize
     }
-    if conn.active_path != 0u32 || conn.path_count != 2usize || conn.paths[1].state != .Validating || conn.paths[1].dcid_index != 1u32 || conn.paths[1].bytes_sent != 1200u64 { os.exit(5i32) }
+    if conn.active_path != 0u32 || conn.path_count != 2usize || conn.paths[1].state != .Validating || conn.paths[1].dcid_index != 1u32 || conn.paths[1].bytes_sent != 1200u64 || conn.paths[1].bytes_received != 400u64 { os.exit(5i32) }
     if !quic.address_equal(conn.paths[1].remote, addr_b) || !quic.address_equal(conn.paths[1].local, conn.paths[0].local) { os.exit(5i32) }
     let (unused1, found1) = quic.cids_pick_unused(&conn.peer_cids)
     if !found1 || unused1 != 2usize { os.exit(5i32) }
+    quic.path_received(&conn, 2usize, 400u64)
     let (_, e5f) = quic.migrate(&conn, addr_b, 100u64, challenge, probe[..100usize])
     if e5f != quic.TooSmall { os.exit(5i32) }
     var stray: [8]u8 = zero
@@ -214,6 +229,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A fourth CID lets one more path open; a fifth path has no slot.
     var cid_d: [4]u8 = [4]u8{ 1, 2, 3, 4 }
     if quic.cids_insert(&conn.peer_cids, 3u64, 0u64, cid_d[0..], zero_token[0..]) != ok { os.exit(5i32) }
+    quic.path_received(&conn, 3usize, 400u64)
     let (_, e5n) = quic.migrate(&conn, addr_d, 300u64, challenge2, probe[0..])
     if e5n != ok || conn.path_count != 4usize { os.exit(5i32) }
     if quic.cids_insert(&conn.peer_cids, 4u64, 0u64, cid_d[..3usize], zero_token[0..]) != quic.Full { os.exit(5i32) }
@@ -226,11 +242,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (sweep0, _) = quic.cid_set(sweep_seq[0..], sweep_cid[0..], sweep_len[0..], sweep_token[0..], sweep_active[0..])
     var sweep = sweep0
     if quic.cids_insert(&sweep, 0u64, 0u64, cid_a[0..], zero_token[0..]) != ok || quic.cids_insert(&sweep, 1u64, 0u64, fb.cid, fb.token) != ok { os.exit(5i32) }
+    if quic.cids_insert(&sweep, 2u64, 0u64, fc.cid, fc.token) != ok { os.exit(5i32) }
+    // A duplicate NEW_CONNECTION_ID can still advance retire_prior_to.
     if quic.cids_insert(&sweep, 2u64, 2u64, fc.cid, fc.token) != ok || quic.cids_active_count(&sweep) != 1usize || sweep.retire_prior_to != 2u64 { os.exit(5i32) }
     if quic.cids_insert(&sweep, 1u64, 0u64, cid_d[0..], zero_token[0..]) != quic.Invalid { os.exit(5i32) }
     if quic.cids_retire(&sweep, 0u64) || !quic.cids_retire(&sweep, 2u64) || quic.cids_active_count(&sweep) != 0usize { os.exit(5i32) }
 
     // 6: the amplification limit and PATH_RESPONSE answers.
+    // This subcase starts with an independent receive accounting sample.
+    conn.paths[2].bytes_received = 0u64
     var server_path: quic.Path = zero
     server_path.state = .Unvalidated
     server_path.bytes_received = 100u64
