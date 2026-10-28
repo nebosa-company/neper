@@ -8,7 +8,8 @@ The NTP/SNTP codec of e.time.sync against Python's struct and datetime:
   * timestamp conversions against datetime arithmetic from the era bases (1900-01-01 for era 0 and
     1900-01-01 + 2^32 s for era 1) for 300 seeded Unix instants and 300 seeded NTP words, the era and range
     edges, and the round trip unix -> ntp -> unix, which is exact because 2^-32 s is under a nanosecond;
-  * 16.16 short values, offset_delay with halving toward zero, the request builder, every reply verdict,
+  * signed root-delay and unsigned root-dispersion 16.16 values, offset_delay with halving toward zero,
+    the request builder, every reply verdict,
     and the refusals.
 A mismatch prints its table and index and exits 1.
 """
@@ -85,9 +86,15 @@ for i in range(150):
     packets.append((leap, version, mode, stratum, poll, precision, rd, rdisp, rid, ts, raw))
 n = len(packets)
 names = ['leap', 'version', 'mode', 'stratum', 'poll', 'precision', 'rdelay', 'rdisp', 'refid']
-kinds = ['u8', 'u8', 'u8', 'u8', 'i32', 'i32', 'u32', 'u32', 'u32']
+kinds = ['u8', 'u8', 'u8', 'u8', 'i32', 'i32', 'i32', 'u32', 'u32']
 for k, (nm, kd) in enumerate(zip(names, kinds)):
-    lines.append('    let pk_%s = [%d]%s{ %s }' % (nm, n, kd, ', '.join('%d%s' % (p[k], kd) for p in packets)))
+    values = []
+    for p in packets:
+        value = p[k]
+        if nm == 'rdelay' and value >= 2 ** 31:
+            value -= 2 ** 32
+        values.append('%d%s' % (value, kd))
+    lines.append('    let pk_%s = [%d]%s{ %s }' % (nm, n, kd, ', '.join(values)))
 for k, nm in enumerate(['ref', 'orig', 'recv', 'xmit']):
     lines.append('    let pk_%s = [%d]u64{ %s }' % (nm, n, ', '.join('%du64' % p[9][k] for p in packets)))
 flat = [b for p in packets for b in p[10]]
@@ -116,6 +123,13 @@ lines.append('        }')
 lines.append('        if !same_bytes { try report("encode-bytes", pk_i) }')
 lines.append('        pk_i += 1usize')
 lines.append('    }')
+lines.append('    var signed_delay_bytes: [48]u8 = zero')
+lines.append('    signed_delay_bytes[4usize] = 255u8')
+lines.append('    signed_delay_bytes[5usize] = 255u8')
+lines.append('    let (signed_delay_packet, signed_delay_error) = sync.ntp_decode(signed_delay_bytes[..])')
+lines.append('    if signed_delay_error != ok || signed_delay_packet.root_delay != -65536i32 || sync.ntp_signed_short_to_nanos(signed_delay_packet.root_delay) != -1000000000i64 { try report("signed-delay-decode", 0usize) }')
+lines.append('    var signed_delay_out: [48]u8 = zero')
+lines.append('    if sync.ntp_encode(signed_delay_packet, signed_delay_out[..]) != ok || signed_delay_out[4usize] != 255u8 || signed_delay_out[5usize] != 255u8 || signed_delay_out[6usize] != 0u8 || signed_delay_out[7usize] != 0u8 { try report("signed-delay-encode", 0usize) }')
 # trailing bytes ignored; 47 bytes refused; encode refusals
 lines.append('    var longer: [68]u8 = zero')
 lines.append('    var copy = 0usize')
@@ -207,6 +221,7 @@ lines.append('        let (sh_back, sh_error) = sync.nanos_to_ntp_short(sh_want[
 lines.append('        if sh_error != ok || sh_back != sh_in[sh_i] { try report("short-round-trip", sh_i) }')
 lines.append('        sh_i += 1usize')
 lines.append('    }')
+lines.append('    if sync.ntp_signed_short_to_nanos(-65536i32) != -1000000000i64 || sync.ntp_signed_short_to_nanos(-1i32) != -15259i64 { try report("signed-short-to-nanos", 0usize) }')
 nan_in = [0, 1, 999999999, NS, 65535 * NS + 999999999, 65535 * NS + 999992370, 12 * NS + 345678901, 1500000, 20000000, 123456789012]
 nan_want = []
 for v in nan_in:
