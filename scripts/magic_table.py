@@ -80,7 +80,7 @@ TABLE = [
     (0, '774F4646', 'font/woff', 'woff', 'WOFF font'),
     (0, '774F4632', 'font/woff2', 'woff2', 'WOFF2 font'),
     (0, '4F54544F', 'font/otf', 'otf', 'OpenType font'),
-    (0, '0001000000', 'font/ttf', 'ttf', 'TrueType font'),
+    (0, '00010000', 'font/ttf', 'ttf', 'TrueType font'),
     # network and misc
     (0, 'D4C3B2A1', 'application/vnd.tcpdump.pcap', 'pcap', 'pcap capture (little endian)'),
     (0, 'A1B2C3D4', 'application/vnd.tcpdump.pcap', 'pcap', 'pcap capture (big endian)'),
