@@ -439,6 +439,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 80. :lang() matches the language of the element or its nearest ancestor with one, by prefix.
     let (p80, ok80) = build(a, "<div lang=\"en-US\"><p id=a>x</p></div><p id=b>y</p>", "p:lang(en) { width: 50px; }")
     if !ok80 || !near(rect_of(p80, "a").w, 50.0f64) || near(rect_of(p80, "b").w, 50.0f64) { os.exit(117) }
+    // 80a. :lang() uses RFC 4647 extended filtering, including escaped wildcards and the untagged-language range.
+    let (p80x, ok80x) = build(a, "<div lang=\"DE-lAtN-de\"><p id=a>x</p></div><p lang=\"de-CH\" id=b>x</p><p lang=\"fr-CH\" id=c>x</p><p id=d>x</p><p lang=\"\" id=e>x</p>", "p:lang(de-DE) { width: 51px; } p:lang(\\*-CH) { width: 52px; } p:lang(\"\") { width: 53px; } p:lang(de--DE) { height: 99px; }")
+    if !ok80x || !near(rect_of(p80x, "a").w, 51.0f64) || !near(rect_of(p80x, "b").w, 52.0f64) || !near(rect_of(p80x, "c").w, 52.0f64) || !near(rect_of(p80x, "d").w, 53.0f64) || !near(rect_of(p80x, "e").w, 53.0f64) || near(rect_of(p80x, "a").h, 99.0f64) { os.exit(151) }
     // 81. An absolute box with auto left and right in a right-to-left container ends at the static right edge.
     let (p81, ok81) = build(a, "<div style=\"direction:rtl;position:relative;width:200px;height:50px\"><div id=a style=\"position:absolute;width:30px;height:10px\"></div></div>", "")
     if !ok81 || !near(rect_of(p81, "a").x, 170.0f64) { os.exit(118) }
