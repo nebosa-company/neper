@@ -29,6 +29,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if h != 7376273696988961072u64 { os.exit(1i32) }
     if ids[0usize] != 1152921504606846977u64 || ids[12usize] != 5221366101706051497u64 || ids[15usize] != 5764607523034234880u64 { os.exit(1i32) }
     if geo.s2_cell_leaf(51.5074f64, -0.1278f64) != ids[12usize] { os.exit(1i32) }
+    let (checked_london, checked_error) = geo.s2_cell_checked(51.5074f64, -0.1278f64, 30u32)
+    let (bad_lat, bad_lat_error) = geo.s2_cell_checked(100.0f64, 0.0f64, 30u32)
+    let (bad_lng, bad_lng_error) = geo.s2_cell_checked(0.0f64, 181.0f64, 30u32)
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    let (bad_nan, bad_nan_error) = geo.s2_cell_checked(nan, 0.0f64, 30u32)
+    if checked_error != ok || checked_london != ids[12usize] || bad_lat != 0u64 || bad_lng != 0u64 || bad_nan != 0u64 || bad_lat_error != geo.Invalid || bad_lng_error != geo.Invalid || bad_nan_error != geo.Invalid || geo.s2_cell(100.0f64, 0.0f64, 30u32) != 0u64 { os.exit(1i32) }
 
     // 2: level, face, parent, children, contains, range of London at level 10.
     let london = ids[14usize]

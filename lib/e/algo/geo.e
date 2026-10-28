@@ -143,13 +143,22 @@ fn xyz_to_face_uv(x: f64, y: f64, z: f64) -> (u32, f64, f64) {
     ret (2u32, (0.0f64 - x) / z, (0.0f64 - y) / z)
 }
 
-// The cell containing (lat, lng) degrees at `level` (0..30).
-fn s2_cell(lat_deg: f64, lng_deg: f64, level: u32) -> u64 {
+// The checked cell containing (lat, lng) degrees at `level` (0..30).
+fn s2_cell_checked(lat_deg: f64, lng_deg: f64, level: u32) -> (u64, err) {
+    if !map_finite(lat_deg) || !map_finite(lng_deg) || lat_deg < -90.0f64 || lat_deg > 90.0f64 || lng_deg < -180.0f64 || lng_deg > 180.0f64 || level > max_level() { ret (0u64, Invalid) }
     let phi = radians(lat_deg)
     let theta = radians(lng_deg)
     let cosphi = math.cos[f64](phi)
     let (face, u, v) = xyz_to_face_uv(math.cos[f64](theta) * cosphi, math.sin[f64](theta) * cosphi, math.sin[f64](phi))
-    ret s2_parent(from_face_ij(face, st_to_ij(uv_to_st(u)), st_to_ij(uv_to_st(v))), level)
+    ret (s2_parent(from_face_ij(face, st_to_ij(uv_to_st(u)), st_to_ij(uv_to_st(v))), level), ok)
+}
+
+// The unchecked-compatible wrapper: invalid coordinates or levels answer the
+// sentinel zero cell rather than entering the trigonometric/indexing path.
+fn s2_cell(lat_deg: f64, lng_deg: f64, level: u32) -> u64 {
+    let (cell, cell_error) = s2_cell_checked(lat_deg, lng_deg, level)
+    if cell_error != ok { ret 0u64 }
+    ret cell
 }
 
 fn s2_cell_leaf(lat_deg: f64, lng_deg: f64) -> u64 { ret s2_cell(lat_deg, lng_deg, max_level()) }
