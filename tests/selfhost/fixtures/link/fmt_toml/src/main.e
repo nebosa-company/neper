@@ -248,6 +248,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 27: the top-level statement after a container must still end its line.
     if outcome("a = [1] b = 2\n") != toml.Invalid { os.exit(27i32) }
 
+    // 28-32: invalid UTF-8 is rejected by the first parse, before a raw string or an
+    // otherwise-valid prefix can be exposed to the caller.
+    let (_, raw_basic_error) = only_value("a = \"\xFF\"\n", room[..])
+    if raw_basic_error != toml.Invalid { os.exit(28i32) }
+    let (_, raw_literal_error) = only_value("a = '\xFF'\n", room[..])
+    if raw_literal_error != toml.Invalid { os.exit(29i32) }
+    let (_, raw_multi_basic_error) = only_value("a = \"\"\"\xFF\"\"\"\n", room[..])
+    if raw_multi_basic_error != toml.Invalid { os.exit(30i32) }
+    let (_, raw_multi_literal_error) = only_value("a = '''\xFF'''\n", room[..])
+    if raw_multi_literal_error != toml.Invalid { os.exit(31i32) }
+    let (_, comment_error) = only_value("a = 1 # \xFF\n", room[..])
+    if comment_error != toml.Invalid { os.exit(32i32) }
+
+    // 33: valid raw UTF-8 still passes; the full-document comparison above retains escaped
+    // Unicode coverage.
+    let (raw_utf8, raw_utf8_error) = only_value("a = \"é😀\"\n", room[..])
+    if raw_utf8_error != ok || !str.eq(raw_utf8.text, "é😀") { os.exit(33i32) }
+
     try io.print("fmt toml ok\n")
     ret ok
 }

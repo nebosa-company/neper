@@ -21242,6 +21242,8 @@ A pull parser: `parser` over the source with caller key slots and a decode scrat
 `parse` yielding table, array-table, key and value events (dotted, basic and literal
 keys; every string form and escape; integers with `_` and radix prefixes; floats with
 `inf`/`nan`; datetimes as text; nested arrays and inline tables as start/end events).
+The source must be well-formed UTF-8; otherwise the first `parse` returns `Invalid`
+without yielding an event.
 
 ### `e.fmt.markdown`
 
