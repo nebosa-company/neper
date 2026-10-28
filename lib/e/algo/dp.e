@@ -448,15 +448,36 @@ fn previous_smaller(values: []const i64, out: []usize, stack: []usize) -> err {
     ret ok
 }
 
+// The storage count for a Li Chao domain. Split a range crossing zero before
+// converting its pieces to unsigned, then reject it before converting to
+// `usize` or multiplying the four tree slots per domain point.
+fn li_chao_storage(low: i64, high: i64) -> (usize, err) {
+    if high < low { ret (0usize, Invalid) }
+    let max = 0usize -% 1usize
+    var distance = 0u64
+    if low >= 0i64 || high < 0i64 {
+        distance = u64(high - low)
+    } else {
+        // `-(low + 1) + 1` is the magnitude of low even at i64::MIN.
+        let below_zero = u64(0i64 - (low + 1i64)) + 1u64
+        distance = u64(high) + below_zero
+    }
+    if distance >= u64(max) { ret (0usize, TooSmall) }
+    let span = usize(distance + 1u64)
+    if span > max / 4usize { ret (0usize, TooSmall) }
+    ret (span * 4usize, ok)
+}
+
 // A Li Chao tree over the integer domain `low..=high` holding lines; queries
 // answer the minimum over inserted lines at a point. `lines.len` and
-// `filled.len` must be at least `4 * (high - low + 1)`.
+// `filled.len` must be at least `4 * (high - low + 1)`. Domains whose required
+// tree cannot fit in `usize` answer `TooSmall` before any arithmetic wraps.
 fn li_chao_init(lines: []Line, filled: []u8, low: i64, high: i64) -> (LiChao, err) {
-    if high < low { ret (zero, Invalid) }
-    let span = usize(high - low + 1i64)
-    if lines.len < 4usize * span || filled.len < 4usize * span { ret (zero, TooSmall) }
+    let (needed, storage_error) = li_chao_storage(low, high)
+    if storage_error != ok { ret (zero, storage_error) }
+    if lines.len < needed || filled.len < needed { ret (zero, TooSmall) }
     var i = 0usize
-    while i < 4usize * span {
+    while i < needed {
         filled[i] = 0u8
         i += 1usize
     }

@@ -240,6 +240,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if outside { os.exit(8i32) }
     let (_, init_error) = dp.li_chao_init(tree_lines[..], tree_filled[..], 0i64, 100i64)
     if init_error != dp.TooSmall { os.exit(8i32) }
+    let smallest = 0i64 - 9223372036854775807i64 - 1i64
+    let largest = 9223372036854775807i64
+    let (_, huge_init) = dp.li_chao_init(tree_lines[..], tree_filled[..], smallest, largest)
+    if huge_init != dp.TooSmall { os.exit(8i32) }
+    var extreme_slopes: [1]i64 = zero
+    var extreme_intercepts: [1]i64 = zero
+    var extreme_queries: [2]i64 = zero
+    extreme_queries[0usize] = smallest
+    extreme_queries[1usize] = largest
+    var extreme_out: [2]i64 = zero
+    if dp.li_chao_tree(extreme_slopes[..], extreme_intercepts[..], extreme_queries[..], extreme_out[..], tree_lines[..], tree_filled[..]) != dp.TooSmall { os.exit(8i32) }
     let (_, hull_full) = dp.hull_add(hull[..count], count, dp.Line { slope: 0i64 - 100i64, intercept: 1000000i64 })
     if hull_full != dp.TooSmall { os.exit(8i32) }
 
