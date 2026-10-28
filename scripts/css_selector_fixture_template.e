@@ -150,6 +150,26 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// #1180: selector-list allocation failures must escape as errors, not as an
+// empty or partial list that a stylesheet can treat as successfully parsed.
+fn selector_list_exhaustion() -> bool {
+    let source = "a,b,c,d,e"
+    var token_storage: [8192]u8 = zero
+    var token_arena = mem.arena_from(token_storage[..])
+    let (tokens, token_error) = syntax.tokenize(&token_arena, source)
+    if token_error != ok { ret false }
+    var full_storage: [8192]u8 = zero
+    var full = mem.arena_from(full_storage[..])
+    let (_, full_error) = selector.parse_selector_list_for_rule(&full, source, tokens)
+    if full_error != ok { ret false }
+    let used = mem.mark(&full)
+    if used == 0usize || used >= full_storage.len { ret false }
+    var tight_storage: [8192]u8 = zero
+    var tight = mem.arena_from(tight_storage[0usize..used - 1usize])
+    let (_, tight_error) = selector.parse_selector_list_for_rule(&tight, source, tokens)
+    ret tight_error == mem.Exhausted
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
     // #1182: a style-rule selector list is not forgiving; a malformed arm
@@ -158,6 +178,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if mixed_token_error != ok { os.exit(36i32) }
     let (mixed, mixed_parse_error) = selector.parse_selector_list_for_rule(a, "h1, h2::unsupported", mixed_tokens)
     if mixed_parse_error != ok || mixed.len != 0usize { os.exit(37i32) }
+    if !selector_list_exhaustion() { os.exit(38i32) }
     try io.print("css selector ok")
     ret ok
 }
