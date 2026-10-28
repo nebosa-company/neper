@@ -73,7 +73,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, qc_signal_room) = chart.levey_jennings(qc_values[..], 100.0, 2.0, bounds, qc_points[..], qc_trace[..], qc_limits[..], qc_signals[..43usize], qc_flags[..])
     let (_, qc_flag_room) = chart.levey_jennings(qc_values[..], 100.0, 2.0, bounds, qc_points[..], qc_trace[..], qc_limits[..], qc_signals[..], qc_flags[..43usize])
     let (_, qc_bounds) = chart.levey_jennings(qc_values[..], 100.0, 2.0, geometry.Rect { x: 0.0, y: 0.0, width: 0.0, height: 5.0 }, qc_points[..], qc_trace[..], qc_limits[..], qc_signals[..], qc_flags[..])
-    if qc_one != chart.Invalid || qc_none != chart.Empty || qc_sd_zero != chart.Invalid || qc_sd_nan != chart.Invalid || qc_value_nan != chart.Invalid || qc_bounds != chart.Invalid { os.exit(22) }
+    let huge_values = [2]f64{ 1.0e300f64, 1.1e300f64 }
+    var huge_points: [2]chart.Coord = zero
+    var huge_trace: [1]chart.Segment = zero
+    var huge_limits: [7]chart.Segment = zero
+    var huge_signals: [2]chart.Coord = zero
+    var huge_flags: [2]u8 = zero
+    let (_, qc_huge_domain) = chart.levey_jennings(huge_values[..], 1.0e300f64, 1.0e299f64, bounds, huge_points[..], huge_trace[..], huge_limits[..], huge_signals[..], huge_flags[..])
+    if qc_one != chart.Invalid || qc_none != chart.Empty || qc_sd_zero != chart.Invalid || qc_sd_nan != chart.Invalid || qc_value_nan != chart.Invalid || qc_bounds != chart.Invalid || qc_huge_domain != chart.Invalid { os.exit(22) }
     if qc_points_room != chart.TooLarge || qc_trace_room != chart.TooLarge || qc_limit_room != chart.TooLarge || qc_signal_room != chart.TooLarge || qc_flag_room != chart.TooLarge { os.exit(23) }
     let cc_x = [30]f64{ 14.037f64, 24.962f64, 40.508f64, 37.649f64, 20.861f64, 52.552f64, 48.012f64, 58.313f64, 32.06f64, 46.098f64, 15.183f64, 9.613f64, 30.556f64, 43.324f64, 57.528f64, 37.441f64, 28.084f64, 50.824f64, 29.458f64, 48.426f64, 43.621f64, 40.412f64, 25.95f64, 25.01f64, 34.901f64, 36.848f64, 50.003f64, 33.404f64, 14.464f64, 13.68f64 }
     let cc_y = [30]f64{ 22.344f64, 30.041f64, 50.938f64, 45.741f64, 22.696f64, 56.882f64, 52.4f64, 63.296f64, 30.508f64, 50.24f64, 19.555f64, 10.37f64, 36.92f64, 50.749f64, 65.485f64, 48.087f64, 28.329f64, 59.197f64, 41.122f64, 55.402f64, 50.975f64, 53.083f64, 35.733f64, 26.795f64, 45.183f64, 43.818f64, 53.498f64, 35.875f64, 19.759f64, 18.949f64 }

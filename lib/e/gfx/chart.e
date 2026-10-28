@@ -4587,6 +4587,7 @@ fn levey_jennings(values: []const f64, mean: f64, sd: f64, bounds: geometry.Rect
     while i < n {
         if !finite64(values[i]) { ret (zero, Invalid) }
         var z = (values[i] - mean) / sd
+        if !finite64(z) { ret (zero, Invalid) }
         if z < 0.0f64 { z = 0.0f64 - z }
         if z > reach { reach = z }
         i += 1usize
@@ -4594,6 +4595,12 @@ fn levey_jennings(values: []const f64, mean: f64, sd: f64, bounds: geometry.Rect
     let bottom = bounds.y + bounds.height
     let low = mean - reach * sd
     let span = 2.0f64 * reach * sd
+    let high = low + span
+    if !finite64(low) || !finite64(span) || !finite64(high) || !(span > 0.0f64) { ret (zero, Invalid) }
+    let layout_low = f32(low)
+    let layout_high = f32(high)
+    let layout_reach = f32(reach)
+    if !finite(layout_low) || !finite(layout_high) || !finite(layout_reach) || !(layout_high > layout_low) { ret (zero, Invalid) }
     i = 0usize
     while i < n {
         points[i] = Coord { x: bounds.x + bounds.width * f32(i) / f32(n - 1usize), y: bottom - bounds.height * f32((values[i] - low) / span) }
@@ -4649,10 +4656,10 @@ fn levey_jennings(values: []const f64, mean: f64, sd: f64, bounds: geometry.Rect
         }
         i += 1usize
     }
-    let trace = Layout { kind: .Line, coords: points[..n], segments: trace_segments[..n - 1usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
-    let limits = Layout { kind: .Rug, coords: zero, segments: limit_segments[..7usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
-    let marks = Layout { kind: .Scatter, coords: signals[..flagged], segments: zero, bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
-    ret (LeveyJennings { trace: trace, limits: limits, signals: marks, flagged: flagged, y_limit: f32(reach) }, ok)
+    let trace = Layout { kind: .Line, coords: points[..n], segments: trace_segments[..n - 1usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: layout_low, y_max: layout_high }
+    let limits = Layout { kind: .Rug, coords: zero, segments: limit_segments[..7usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: layout_low, y_max: layout_high }
+    let marks = Layout { kind: .Scatter, coords: signals[..flagged], segments: zero, bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: layout_low, y_max: layout_high }
+    ret (LeveyJennings { trace: trace, limits: limits, signals: marks, flagged: flagged, y_limit: layout_reach }, ok)
 }
 
 // Method-agreement scatter for Lin's concordance: both methods share one square domain
