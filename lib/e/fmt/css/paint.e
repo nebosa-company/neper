@@ -968,7 +968,7 @@ fn paint_inline_decor(p: *Painter, ob: u32, fr: layout.Frag, cx: f64, cy: f64) {
 
 // A text fragment of a line that ends with an ellipsis (text-overflow or a clamped line): the text is cut at a character where
 // the ellipsis still fits in the box's content width, the ellipsis follows it, later fragments are dropped.
-fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64) {
+fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64, last_content: bool) {
     // The ellipsis is set in the font of the block container, not of the text it replaces.
     let ts = layout.st(p.l, bb.style)
     let env = p.env
@@ -981,8 +981,9 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
     let dl = env.text(env.ctx, ts, dots)
     var ew = 0.0f64
     if mem.address_of(dl) != 0usize { ew = p.l.measure.width(p.l.measure.ctx, ts, dots) }
-    // Fragments after the one that reaches the end are not drawn.
-    let is_last = fr.x + fr.w >= ln.x + ln.w - 0.01f64
+    // Decoration segments may follow the last text run. `paint_lines` tells us
+    // which text/atomic fragment is actually the last content on this line.
+    let is_last = last_content
     if fr.x >= content_w - ew && !is_last { ret }
     if !is_last && fr.x + fr.w + ew <= content_w + 0.01f64 {
         paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
@@ -1012,6 +1013,25 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
     paint_text_run(p, owner, dots, cx + fr.x, dots_y, ew)
 }
 
+// An atomic inline cannot be cut like text. When it is the final content on a
+// clamped line, keep it and put the block ellipsis after it (or at the content
+// edge when the atomic itself reaches that edge).
+fn paint_atomic_ellipsis(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64) {
+    let ts = layout.st(p.l, bb.style)
+    var dots: str = "\xe2\x80\xa6"
+    let (custom_dots, has_custom) = geom.extra_of(ts, "x-text-overflow-string")
+    if has_custom { dots = custom_dots }
+    let dl = p.env.text(p.env.ctx, ts, dots)
+    var ew = 0.0f64
+    if mem.address_of(dl) != 0usize { ew = p.l.measure.width(p.l.measure.ctx, ts, dots) }
+    let content_w = bb.w - bb.border[1usize] - bb.border[3usize] - bb.padding[1usize] - bb.padding[3usize]
+    var dots_x = fr.x + fr.w
+    if dots_x + ew > content_w { dots_x = content_w - ew }
+    if dots_x < 0.0f64 { dots_x = 0.0f64 }
+    let dots_y = cy + ln.baseline - font_metrics_of(p, ts).ascent
+    paint_text_run(p, owner, dots, cx + dots_x, dots_y, ew)
+}
+
 // The lines of block container `b`, whose border box is at (ax, ay).
 fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64) {
     let bb = &p.l.boxes.items[usize(b)]
@@ -1030,13 +1050,24 @@ fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64) {
             let fr = p.l.frags.items[usize(ln.frag_first) + fi]
             if fr.kind == .Segment { paint_inline_decor(p, fr.box, fr, cx, cy) }
         }
+        // A line can end with a Segment for inline padding or borders. Find
+        // the actual final text/atomic content before choosing where to add
+        // its ellipsis.
+        var last_content = usize(ln.frag_count)
+        var ci = 0usize
+        while ci < usize(ln.frag_count) {
+            let cfr = p.l.frags.items[usize(ln.frag_first) + ci]
+            if cfr.kind == .Text || cfr.kind == .Atomic { last_content = ci }
+            ci += 1usize
+        }
         fi = 0usize
         while fi < usize(ln.frag_count) {
             let fr = p.l.frags.items[usize(ln.frag_first) + fi]
+            let is_last_content = fi == last_content
             fi += 1usize
             if fr.kind == .Text {
                 if ln.overflow_ellipsis {
-                    paint_ellipsized(p, b, bb, ln, fr, cx, cy)
+                    paint_ellipsized(p, b, bb, ln, fr, cx, cy, is_last_content)
                 } else {
                     paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
                 }
@@ -1045,6 +1076,7 @@ fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64) {
             } else if fr.kind == .Atomic {
                 let ab = &p.l.boxes.items[usize(fr.box)]
                 paint_atomic(p, fr.box, ax + ab.x, ay + ab.y)
+                if ln.overflow_ellipsis && is_last_content { paint_atomic_ellipsis(p, b, bb, ln, fr, cx, cy) }
             }
         }
     }
