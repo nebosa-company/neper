@@ -1279,7 +1279,7 @@ fn float_top_floor(l: *const Layout, base: usize, floor: f64) -> f64 {
 
 // --- Text: pieces of an inline formatting context.
 
-type PieceKind = enum u8 { Text, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
+type PieceKind = enum u8 { Text, Tab, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
 
 // `w` is the advance of the piece without its trailing collapsible space, `trail` that space's advance. `soft` says a
 // line may end after the piece. Text pieces point into the processed text of their box.
@@ -1310,6 +1310,16 @@ fn spacing_extra(s: *const style.Style, text: str) -> f64 {
 fn text_advance(l: *const Layout, s: *const style.Style, text: str) -> f64 {
     if text.len == 0usize { ret 0.0f64 }
     ret l.measure.width(l.measure.ctx, s, text) + spacing_extra(s, text)
+}
+
+// A preserved tab advances from its current inline position to the next tab
+// stop. `tab-size` is measured in the advance of a space for the current font.
+fn tab_advance(l: *const Layout, s: *const style.Style, x: f64) -> f64 {
+    let space = text_advance(l, s, " ")
+    let step = space * maxf(1.0f64, s.tab_size)
+    if step <= 0.0f64 { ret space }
+    let prior = usize(x / step)
+    ret f64(prior + 1usize) * step - x
 }
 
 fn apply_transform(l: *const Layout, s: *const style.Style, text: str) -> str {
@@ -1349,15 +1359,9 @@ fn apply_transform(l: *const Layout, s: *const style.Style, text: str) -> str {
 fn process_text(l: *const Layout, b: u32, ends_space: *Flag) -> str {
     let s = bstyle(l, b)
     let raw = apply_transform(l, s, l.boxes.items[usize(b)].text)
-    // Each tab may expand to `tab-size` spaces.
-    var tabs = 0usize
-    var tk = 0usize
-    while tk < raw.len {
-        if raw[tk] == 9u8 { tabs += 1usize }
-        tk += 1usize
-    }
-    let tab_cells = usize(maxf(1.0f64, s.tab_size))
-    let (out, e) = mem.alloc[u8](l.a, raw.len * 2usize + 8usize + tabs * tab_cells)
+    // Keep preserved tabs for the inline formatter, where their position is
+    // known. Replacing them here would lose the distance to the next stop.
+    let (out, e) = mem.alloc[u8](l.a, raw.len * 2usize + 8usize)
     if e != ok { ret "" }
     var n = 0usize
     var i = 0usize
@@ -1370,13 +1374,9 @@ fn process_text(l: *const Layout, b: u32, ends_space: *Flag) -> str {
                 continue
             }
             if c == 9u8 {
-                var t = 0usize
-                let stops = usize(maxf(1.0f64, s.tab_size))
-                while t < stops {
-                    out[n] = 32u8
-                    n += 1usize
-                    t += 1usize
-                }
+                out[n] = c
+                n += 1usize
+                ends_space.v = false
                 i += 1usize
                 continue
             }
@@ -1492,6 +1492,28 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
     let (lbv, has_lbv) = extra_text(s, "line-break")
     let lb_anywhere = has_lbv && str.eq(cv.lower(l.a, cv.trim_ws(lbv)), "anywhere")
     while k <= n {
+        // Keep a tab as its own piece. Its advance depends on where the line
+        // formatter places it, so it cannot be measured with the surrounding
+        // text run yet.
+        if scal[k - 1usize] == 9u32 {
+            if seg < k - 1usize {
+                let seg_text = text[offs[seg]..offs[k - 1usize]]
+                var content_end = seg_text.len
+                if !preserve || s.white_space == .PreWrap {
+                    while content_end > 0usize && seg_text[content_end - 1usize] == 32u8 { content_end -= 1usize }
+                }
+                let content = seg_text[..content_end]
+                let trail_text = seg_text[content_end..]
+                var w = text_advance(l, s, content)
+                if content.len >= 2usize && content[content.len - 2usize] == 194u8 && content[content.len - 1usize] == 173u8 { w += text_advance(l, s, "-") }
+                let tr = text_advance(l, s, trail_text)
+                push_piece(bd, Piece { kind: .Text, box: b, text: seg_text, w: w, trail: tr, soft: false, ink: content_end > 0usize || preserve, start: offs[seg], clen: content_end })
+            }
+            push_piece(bd, Piece { kind: .Tab, box: b, text: "", w: 0.0f64, trail: 0.0f64, soft: wrap, ink: true, start: offs[k - 1usize], clen: 0usize })
+            seg = k
+            k += 1usize
+            continue
+        }
         // break-all adds a break between any two letters, never before a space.
         // break-spaces: every preserved space can end a line.
         // `anywhere` and `word-break: break-word` count in the intrinsic (min-content) sizes too; `break-word` only when needed.
@@ -1958,6 +1980,8 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         var needed = p.w
         if p.kind == .Marker {
             needed = text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
+        } else if p.kind == .Tab {
+            needed = tab_advance(l, bstyle(l, p.box), pos)
         }
         // Preserved spaces at the end of a pre-wrap line hang: they never make the line overflow.
         var hangs = false
@@ -1990,7 +2014,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         } else if pos + needed > out.avail + 0.01f64 && !has_content && p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord) {
             if split_piece(x, j, out.avail) { continue }
         }
-        has_content = has_content || p.ink || p.kind == .Atomic || p.kind == .Marker
+        has_content = has_content || p.ink || p.kind == .Atomic || p.kind == .Marker || p.kind == .Tab
         if hangs { pos += p.w } else { pos += needed }
         if p.soft { last_soft = u32(j) }
         pos += p.trail
@@ -2137,8 +2161,10 @@ fn line_clamp_count(s: *const style.Style) -> usize {
 
 // Vertical metrics and fragments of the line made of pieces[scan.lead..end). Returns the line height, or -1 for a line
 // that held nothing to draw (only floats, absolutes or empty inline boxes).
-// Visual order of the words of a line of plain text (UAX #9 at the granularity of a piece): the levels come from the
-// characters of the whole line, then the pieces are reversed run by run. A line with boxes or atomics in it is left alone.
+// Visual order of the words of a line (UAX #9 at the granularity of a piece):
+// levels come from the characters of the whole line, then pieces reverse run
+// by run. Inline-box edges inherit the level of their contents so a span stays
+// paired while its text participates in the paragraph's bidi resolution.
 fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
     let l = x.l
     let n = tail - lead
@@ -2147,8 +2173,8 @@ fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
     var j = lead
     while j < tail {
         let p = x.bd.pieces.items[j]
-        if p.kind != .Text && p.kind != .Atomic { ret false }
-        if p.text.len > 0usize { bytes += p.text.len } else { bytes += 1usize }
+        if p.kind != .Text && p.kind != .Atomic && p.kind != .Open && p.kind != .Close { ret false }
+        if p.kind == .Atomic { bytes += 1usize } else if p.kind == .Text { bytes += p.text.len }
         j += 1usize
     }
     if bytes == 0usize { ret false }
@@ -2160,13 +2186,15 @@ fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
     j = 0usize
     while j < n {
         let t = x.bd.pieces.items[lead + j].text
-        first[j] = total
+        first[j] = bytes
         var at = 0usize
         if x.bd.pieces.items[lead + j].kind == .Atomic {
+            first[j] = total
             // An atomic inline is an object replacement character to the algorithm.
             text32[total] = 65532u32
             total += 1usize
         }
+        if x.bd.pieces.items[lead + j].kind == .Text && t.len > 0usize { first[j] = total }
         while at < t.len {
             let (cp, w) = unicode.read_utf8(t, at)
             text32[total] = cp
@@ -2193,7 +2221,19 @@ fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool {
     if le != ok { ret false }
     j = 0usize
     while j < n {
-        plv[j] = levels[first[j]]
+        if first[j] < total {
+            plv[j] = levels[first[j]]
+        } else if x.bd.pieces.items[lead + j].kind == .Open {
+            var next = j + 1usize
+            while next < n && first[next] >= total { next += 1usize }
+            plv[j] = para
+            if next < n { plv[j] = levels[first[next]] }
+        } else {
+            var prev = j
+            while prev > 0usize && first[prev - 1usize] >= total { prev -= 1usize }
+            plv[j] = para
+            if prev > 0usize { plv[j] = levels[first[prev - 1usize]] }
+        }
         j += 1usize
     }
     let oe = bidi.reorder(plv[..n], 0usize, n, order)
@@ -2276,7 +2316,7 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
             }
         } else if p.kind == .Close {
             if sim > 0usize { sim -= 1usize }
-        } else if (p.kind == .Text && k < trim_end) || p.kind == .Marker {
+        } else if (p.kind == .Text && k < trim_end) || p.kind == .Marker || p.kind == .Tab {
             if p.ink { any_content = true }
             let (ta, td) = font_ad(l, bstyle(l, p.box))
             var sh = 0.0f64
@@ -2335,6 +2375,8 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
         let p = x.bd.pieces.items[k]
         if p.kind == .Marker {
             used_w += text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
+        } else if p.kind == .Tab {
+            used_w += tab_advance(l, bstyle(l, p.box), used_w)
         } else {
             used_w += p.w
             if k + 1usize < trim_end || (tail_keep && p.trail > 0.0f64) { used_w -= shy_hyphen_w(l, p) }
@@ -2363,8 +2405,12 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
                 ab.x = nx
             }
         } else if k < trim_end {
-            abs_off += ap.w
-            if k + 1usize < trim_end || (tail_keep && ap.trail > 0.0f64) { abs_off += ap.trail }
+            if ap.kind == .Tab {
+                abs_off += tab_advance(l, bstyle(l, ap.box), abs_off)
+            } else {
+                abs_off += ap.w
+                if k + 1usize < trim_end || (tail_keep && ap.trail > 0.0f64) { abs_off += ap.trail }
+            }
         }
         k += 1usize
     }
@@ -2432,6 +2478,10 @@ fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64 {
                 tf_shift = cur_shift
             }
             cx += this_w
+        } else if p.kind == .Tab {
+            if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
+            tf_box = NONE
+            cx += tab_advance(l, bstyle(l, p.box), cx - ax)
         } else if p.kind == .Marker {
             if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
             tf_box = NONE
@@ -2679,6 +2729,10 @@ fn inline_widths(l: *Layout, cont: u32) -> (f64, f64) {
         if p.kind == .Float || p.kind == .Abs { continue }
         var w = p.w
         var minw = p.w
+        if p.kind == .Tab {
+            w = tab_advance(l, bstyle(l, p.box), line)
+            minw = w
+        }
         if p.kind == .Atomic { minw = p.trail }
         line += w + (if_trail(p))
         if p.kind == .Text { tail_trail = p.trail } else if p.kind == .Atomic { tail_trail = 0.0f64 }

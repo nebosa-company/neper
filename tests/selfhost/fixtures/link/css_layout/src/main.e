@@ -187,6 +187,60 @@ fn css_issue_regressions(a: *mem.Arena) {
     if !ok1197_clear || !near(rect_of(p1197_clear, "c").y, 20.0f64) { os.exit(160) }
     let (p1197_vertical, ok1197_vertical) = build(a, "<div style=\"writing-mode:vertical-rl;direction:rtl;width:100px;height:100px\"><div id=f style=\"float:inline-start;width:20px;height:20px\"></div></div>", "")
     if !ok1197_vertical || !near(rect_of(p1197_vertical, "f").y, 80.0f64) { os.exit(161) }
+
+    // #1198: an inline span keeps its segment ownership while its surrounding
+    // RTL line is put into visual rather than source order.
+    let (p1198, ok1198) = build(a, "<p dir=rtl style=\"font-size:10px\">\xd7\x90\xd7\x91\xd7\x92 <span id=s>123</span> \xd7\x93\xd7\x94\xd7\x95</p>", "")
+    if !ok1198 { os.exit(166) }
+    let span1198 = box_of(p1198, "s")
+    var first1198 = 0.0f64
+    var middle1198 = 0.0f64
+    var last1198 = 0.0f64
+    var got_first1198 = false
+    var got_middle1198 = false
+    var got_last1198 = false
+    var got_segment1198 = false
+    var fi1198 = 0usize
+    while fi1198 < p1198.lay.frags.len {
+        let f = p1198.lay.frags.items[fi1198]
+        if f.kind == layout.FragKind.Text && str.eq(f.text, "\xd7\x90\xd7\x91\xd7\x92 ") {
+            first1198 = f.x
+            got_first1198 = true
+        }
+        if f.kind == layout.FragKind.Text && str.eq(f.text, "123") {
+            middle1198 = f.x
+            got_middle1198 = true
+        }
+        if f.kind == layout.FragKind.Text && str.eq(f.text, "\xd7\x93\xd7\x94\xd7\x95") {
+            last1198 = f.x
+            got_last1198 = true
+        }
+        if f.kind == layout.FragKind.Segment && f.box == span1198 { got_segment1198 = true }
+        fi1198 += 1usize
+    }
+    if !got_first1198 || !got_middle1198 || !got_last1198 || !got_segment1198 || !(last1198 < middle1198 && middle1198 < first1198) { os.exit(167) }
+
+    // #1199: a tab reaches the next stop, so its width depends on the current
+    // inline advance rather than always adding four spaces.
+    let (p1199, ok1199) = build(a, "<div style=\"white-space:pre;tab-size:4;font-size:10px\">a\tb</div><div style=\"white-space:pre;tab-size:4;font-size:10px\">aaaa\tb</div>", "")
+    if !ok1199 { os.exit(168) }
+    var tabs1199 = 0usize
+    var first_tab1199 = 0.0f64
+    var second_tab1199 = 0.0f64
+    var fi1199 = 0usize
+    while fi1199 < p1199.lay.frags.len {
+        let f = p1199.lay.frags.items[fi1199]
+        if f.kind == layout.FragKind.Text && str.eq(f.text, "b") {
+            if tabs1199 == 0usize {
+                first_tab1199 = f.x
+            } else if tabs1199 == 1usize {
+                second_tab1199 = f.x
+            }
+            tabs1199 += 1usize
+        }
+        fi1199 += 1usize
+    }
+    if tabs1199 != 2usize || !near(first_tab1199, 40.0f64) || !near(second_tab1199, 80.0f64) { os.exit(169) }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
