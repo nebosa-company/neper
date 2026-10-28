@@ -249,7 +249,7 @@ fn skip_ws(toks: []const syntax.Token, from: usize) -> usize {
 fn is_delim(t: syntax.Token, value: str) -> bool { ret t.kind == .Delim && str.eq(t.value, value) }
 
 // Split on top-level commas (depth counted over parentheses, brackets and function openers), dropping a trailing `Eof`.
-fn split_top_level_comma(p: *const Parser, tokens: []const syntax.Token) -> []const []const syntax.Token {
+fn split_top_level_comma_with(p: *const Parser, tokens: []const syntax.Token) -> []const []const syntax.Token {
     var toks = tokens
     if toks.len > 0usize && toks[toks.len - 1usize].kind == .Eof { toks = toks[0usize..toks.len - 1usize] }
     let (made, e) = list.init[[]const syntax.Token](p.a, 4usize)
@@ -283,6 +283,14 @@ fn split_top_level_comma(p: *const Parser, tokens: []const syntax.Token) -> []co
         ret zero
     }
     ret list.slice_const[[]const syntax.Token](&out)
+}
+
+// A public utility for callers that only need a best-effort token split. Rule
+// parsing uses the fallible `_with` form above so allocation failures propagate.
+fn split_top_level_comma(a: *mem.Arena, tokens: []const syntax.Token) -> []const []const syntax.Token {
+    var failure: err = ok
+    let p = Parser { a: a, src: "", failure: &failure }
+    ret split_top_level_comma_with(&p, tokens)
 }
 
 fn rejected_complex() -> Complex {
@@ -570,7 +578,7 @@ fn plain_list(p: *const Parser, tokens: []const syntax.Token) -> []const Selecto
         ret zero
     }
     var out = made
-    let segs = split_top_level_comma(p, tokens)
+    let segs = split_top_level_comma_with(p, tokens)
     if parser_error(p) != ok { ret zero }
     var s = 0usize
     while s < segs.len {
@@ -592,7 +600,7 @@ fn relative_list(p: *const Parser, tokens: []const syntax.Token) -> []const Sele
         ret zero
     }
     var out = made
-    let segs = split_top_level_comma(p, tokens)
+    let segs = split_top_level_comma_with(p, tokens)
     if parser_error(p) != ok { ret zero }
     var s = 0usize
     while s < segs.len {
@@ -706,7 +714,7 @@ fn parse_selector_list(a: *mem.Arena, source: str, tokens: []const syntax.Token,
     let (made, e) = list.init[RuleSelector](a, 4usize)
     if e != ok { ret (zero, e) }
     var out = made
-    let segs = split_top_level_comma(&p, tokens)
+    let segs = split_top_level_comma_with(&p, tokens)
     if failure != ok { ret (zero, failure) }
     var s = 0usize
     while s < segs.len {
