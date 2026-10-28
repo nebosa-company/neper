@@ -30424,7 +30424,9 @@ over an in-memory node set).
 type Instance = struct { up: bool, skew: i64, latency: u64, holder: u64, expires: u64 }
 type Lease = struct { holder: u64, granted: u64, expires: u64 }
 
+fn time_add(start: u64, span: u64) -> (u64, bool)
 fn instance(skew: i64, latency: u64) -> Instance
+fn local_time_checked(inst: *const Instance, now: u64) -> (u64, bool)
 fn local_time(inst: *const Instance, now: u64) -> u64
 fn instance_free(inst: *const Instance, now: u64) -> bool
 fn redlock_acquire(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) -> (bool, u64)
@@ -30434,13 +30436,16 @@ fn lease() -> Lease
 fn lease_expired(l: *const Lease, now: u64) -> bool
 fn lease_acquire(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool
 fn lease_renew(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool
+fn fraction_less(left_num: u64, left_den: u64, right_num: u64, right_den: u64) -> bool
 fn lease_due(l: *const Lease, now: u64, num: u64, den: u64) -> bool
 fn redlock(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) -> (bool, u64)
 ```
 
 Redlock over simulated instances with skew and latency (`redlock_acquire` needing a
 majority inside the validity window, `redlock_release`, `redlock_held`) and leases
-(`lease_acquire`, `lease_renew`, `lease_expired`, `lease_due`).
+(`lease_acquire`, `lease_renew`, `lease_expired`, `lease_due`). Overflowing time
+calculations fail an acquisition or renewal without granting it; `local_time` saturates
+for read-only callers, and `lease_due` compares its two fractions exactly.
 
 ### `e.dist.mutex`
 
