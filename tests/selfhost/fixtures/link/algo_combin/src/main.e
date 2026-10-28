@@ -191,6 +191,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         m += 1usize
     }
     if combin.subset_sums(values[..], 3u32) != combin.Invalid { os.exit(6i32) }
+    var narrow: [1]i64 = zero
+    if combin.subset_sums(narrow[..], 32u32) != combin.Invalid || combin.subset_sums_inverse(narrow[..], 32u32) != combin.Invalid || combin.superset_sums(narrow[..], 32u32) != combin.Invalid { os.exit(6i32) }
 
     try io.print("algo combin ok\n")
     ret ok
