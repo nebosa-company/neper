@@ -323,17 +323,18 @@ fn match_complex(d: *const Dom, index: usize, sel: str) -> (bool, err) {
 // Does element `index` match the selector list `selector`?
 fn matches(d: *const Dom, index: usize, selector: str) -> (bool, err) {
     if index >= d.elements.len { ret (false, Invalid) }
+    var any_match = false
     var from = 0usize
     while from <= selector.len {
         let (comma, found, e) = find_top(selector, from, 44u8)
         if e != ok { ret (false, e) }
         let (matched, e1) = match_complex(d, index, selector[from..comma])
         if e1 != ok { ret (false, e1) }
-        if matched { ret (true, ok) }
+        if matched { any_match = true }
         if !found { break }
         from = comma + 1usize
     }
-    ret (false, ok)
+    ret (any_match, ok)
 }
 
 // The indices of every element matching `selector`, in document order, into `out`.
