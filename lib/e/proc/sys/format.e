@@ -197,6 +197,7 @@ fn parse_stat(src: str) -> (ProcessInfo, err) {
     var p: ProcessInfo = zero
     let (pid, after_pid, found) = read_number(src, 0usize)
     if !found { ret (p, Malformed) }
+    if pid > 4294967295u64 { ret (p, Malformed) }
     var open = after_pid
     while open < src.len && src[open] != 40u8 { open += 1usize }
     var close = src.len
@@ -212,6 +213,7 @@ fn parse_stat(src: str) -> (ProcessInfo, err) {
     i += 1usize
     let (ppid, next, has_ppid) = read_number(src, i)
     if !has_ppid { ret (p, Malformed) }
+    if ppid > 4294967295u64 { ret (p, Malformed) }
     p.parent = u32(ppid)
     i = next
     // pgrp .. nice are fields 5..19; num_threads is the 20th.
@@ -228,7 +230,10 @@ fn parse_stat(src: str) -> (ProcessInfo, err) {
             while step < src.len && is_digit(src[step]) { step += 1usize }
         }
         if step == i { ret (p, Malformed) }
-        if field == 20usize { p.threads = u32(v) }
+        if field == 20usize {
+            if !got || v > 4294967295u64 { ret (p, Malformed) }
+            p.threads = u32(v)
+        }
         i = step
         field += 1usize
     }

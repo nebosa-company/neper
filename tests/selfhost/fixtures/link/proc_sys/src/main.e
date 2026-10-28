@@ -174,6 +174,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if stat_valid != ok { os.exit(123i32) }
     let (_, stat_overflow) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 18446744073709551616\n")
     if stat_overflow != format.Malformed { os.exit(124i32) }
+    let (_, stat_pid_u32_overflow) = format.parse_stat("4294967296 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17\n")
+    if stat_pid_u32_overflow != format.Malformed { os.exit(125i32) }
+    let (_, stat_parent_u32_overflow) = format.parse_stat("1 (x) R 4294967296 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17\n")
+    if stat_parent_u32_overflow != format.Malformed { os.exit(126i32) }
+    let (_, stat_threads_u32_overflow) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 4294967296\n")
+    if stat_threads_u32_overflow != format.Malformed { os.exit(127i32) }
+    let (_, stat_negative_threads) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 -1\n")
+    if stat_negative_threads != format.Malformed { os.exit(128i32) }
     if run_chunk(a, vectors_0()) != 0u32 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u32 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u32 { os.exit(3i32) }
