@@ -19,6 +19,7 @@ use e.ui.window
 // hosts without GL: the seventeenth sequential attachment only fits if every prior close ran it.
 const FAKE_MAX_PRESENTERS: usize = 16usize
 const PRESENTER_CYCLES: usize = 17usize
+type PostMessage = fn(usize, u32, usize, isize) -> i32
 
 var fake_slots: [16]bool = zero
 var fake_releases: usize = 0usize
@@ -121,6 +122,61 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if hidden_error != ok || hidden.visible { os.exit(21i32) }
     if input.capture(&events, win.id, 0u32) != ok || input.release_capture(&events, win.id, 0u32) != ok { os.exit(22i32) }
     if input.composition_rect(&events, win.id, geometry.rect(0.0, 0.0, 1.0, 1.0)) != input.TooLarge { os.exit(23i32) }
+    // Pointer buttons belong to their window's input queue. A held button in the
+    // second window must not become a held button on a move in the first (#1216).
+    let (other_opened, other_open_error) = window.open(a, device, options)
+    if other_open_error != ok { os.exit(61i32) }
+    var other = other_opened
+    let (first_queue, first_queue_error) = input.queue_for(a, win.id, 8usize)
+    if first_queue_error != ok { os.exit(62i32) }
+    var first_events = first_queue
+    let (second_queue, second_queue_error) = input.queue_for(a, other.id, 8usize)
+    if second_queue_error != ok { os.exit(63i32) }
+    var second_events = second_queue
+    let (user32, user32_error) = os.dlopen(a, "user32.dll")
+    if user32_error == ok {
+        let (post, post_error) = os.dlsym[PostMessage](a, user32, "PostMessageW")
+        if post_error != ok { os.exit(64i32) }
+        let (first_host, first_host_error) = window.host_window(&win)
+        let (second_host, second_host_error) = window.host_window(&other)
+        if first_host_error != ok || second_host_error != ok { os.exit(65i32) }
+        let (first_native, _, first_native_error) = os.window_native(first_host)
+        let (second_native, _, second_native_error) = os.window_native(second_host)
+        if first_native_error != ok || second_native_error != ok { os.exit(66i32) }
+        if post(second_native, 513u32, 1usize, isize(10usize | (10usize << 16usize))) == 0i32 { os.exit(67i32) }
+        var saw_down = false
+        var route_round = 0usize
+        while route_round < 8usize && !saw_down {
+            let (first_event, first_any, first_poll_error) = input.poll_for(&first_events, win.id, time.millis(5i64))
+            if first_poll_error != ok { os.exit(68i32) }
+            if first_any && first_event.tag == .PointerDown { os.exit(69i32) }
+            let (second_event, second_any, second_poll_error) = input.poll_for(&second_events, other.id, time.millis(5i64))
+            if second_poll_error != ok { os.exit(70i32) }
+            if second_any && second_event.tag == .PointerDown {
+                if second_event.PointerDown.buttons != 1u32 { os.exit(71i32) }
+                saw_down = true
+            }
+            route_round += 1usize
+        }
+        if !saw_down { os.exit(72i32) }
+        if post(first_native, 512u32, 0usize, isize(12usize | (12usize << 16usize))) == 0i32 { os.exit(73i32) }
+        var saw_move = false
+        route_round = 0usize
+        while route_round < 8usize && !saw_move {
+            let (first_event, first_any, first_poll_error) = input.poll_for(&first_events, win.id, time.millis(5i64))
+            if first_poll_error != ok { os.exit(74i32) }
+            if first_any && first_event.tag == .PointerMove {
+                if first_event.PointerMove.buttons != 0u32 { os.exit(75i32) }
+                saw_move = true
+            }
+            route_round += 1usize
+        }
+        if !saw_move { os.exit(76i32) }
+        if post(second_native, 514u32, 0usize, isize(10usize | (10usize << 16usize))) == 0i32 { os.exit(77i32) }
+        let _ = os.dlclose(user32)
+    }
+    if input.close(&first_events) != ok || input.close(&second_events) != ok { os.exit(78i32) }
+    if window.close(&other) != ok { os.exit(79i32) }
     // The clipboard is the desktop's; a session without one answers, and that is fine.
     let (_, clip_error) = window.clipboard_get(a, &win)
     if clip_error != ok && clip_error != window.Invalid && clip_error != window.Unsupported { os.exit(24i32) }
