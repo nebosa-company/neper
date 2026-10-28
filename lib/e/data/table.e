@@ -68,6 +68,9 @@ error Full
 error BadKind
 
 const ALL_BITS: u64 = 18446744073709551615u64
+// `Str` offsets and lengths, dictionary entry offsets and lengths, and the
+// nonzero dictionary hash markers are all `u32`.
+const MAX_U32: usize = 4294967295usize
 
 // ---- bit helpers -----------------------------------------------------------------
 
@@ -113,8 +116,17 @@ fn next_power_of_two(n: usize) -> usize {
     ret p
 }
 
+// A dictionary with `MAX_U32` entries is still representable: its last id is
+// `MAX_U32 - 1` and its nonzero hash marker is `MAX_U32`.
+fn spec_fits_storage(spec: Spec) -> bool {
+    if spec.kind == Kind.Str { ret spec.heap_bytes <= MAX_U32 }
+    if spec.kind == Kind.Dict { ret spec.heap_bytes <= MAX_U32 && spec.dict_cap <= MAX_U32 }
+    ret true
+}
+
 fn make_column(a: *mem.Arena, spec: Spec, rows: usize, tally: *Tally) -> (Column, err) {
     var c: Column = zero
+    if !spec_fits_storage(spec) { ret (c, Full) }
     c.name = spec.name
     c.kind = spec.kind
     let (nulls, nulls_error) = take[u64](a, words_for(rows), tally)
@@ -172,6 +184,13 @@ fn make_column(a: *mem.Arena, spec: Spec, rows: usize, tally: *Tally) -> (Column
 // A table of `row_capacity` rows over the given columns.
 fn create(a: *mem.Arena, specs: []const Spec, row_capacity: usize) -> (Table, err) {
     var t: Table = zero
+    // Refuse every unrepresentable string or dictionary spec before this table
+    // takes any arena storage, so a bad configuration is never reported as OOM.
+    var spec_at = 0usize
+    while spec_at < specs.len {
+        if !spec_fits_storage(specs[spec_at]) { ret (t, Full) }
+        spec_at += 1usize
+    }
     var tally = Tally { bytes: 0usize }
     t.capacity_rows = row_capacity
     let (columns, columns_error) = take[Column](a, specs.len, &tally)
@@ -393,6 +412,13 @@ fn fill_f64(t: *Table, col: usize, values: []const f64) {
 
 // ---- strings ---------------------------------------------------------------------
 
+// Keep the narrowing below safe even if a Column was made without `create`.
+fn heap_append_fits(c: *const Column, s: str) -> bool {
+    if c.heap_len > c.heap.len || c.heap_len > MAX_U32 || s.len > MAX_U32 { ret false }
+    if s.len > c.heap.len - c.heap_len || s.len > MAX_U32 - c.heap_len { ret false }
+    ret true
+}
+
 fn hash_bytes(s: str) -> u32 {
     var h = 2166136261u32
     var at = 0usize
@@ -422,7 +448,7 @@ fn entry_text(c: *const Column, id: u32) -> str {
 fn set_str(t: *Table, col: usize, row: usize, s: str) -> err {
     let c = &t.columns[col]
     if c.kind == Kind.Str {
-        if c.heap_len + s.len > c.heap.len { ret Full }
+        if !heap_append_fits(c, s) { ret Full }
         var at = 0usize
         while at < s.len {
             c.heap[c.heap_len + at] = s[at]
@@ -459,7 +485,7 @@ fn intern(c: *Column, s: str) -> (u32, err) {
     let hash = hash_bytes(s)
     let (found, present) = find_entry(c, s, hash)
     if present { ret (found, ok) }
-    if c.entry_count >= c.entry_starts.len || c.heap_len + s.len > c.heap.len { ret (0u32, Full) }
+    if c.entry_count >= c.entry_starts.len || c.entry_count >= MAX_U32 || !heap_append_fits(c, s) { ret (0u32, Full) }
     var at = 0usize
     while at < s.len {
         c.heap[c.heap_len + at] = s[at]

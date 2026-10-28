@@ -8,6 +8,8 @@ use e.mem
 use e.data.table as table
 
 const ROWS: usize = 150000usize
+const U32_LIMIT: usize = 4294967295usize
+const U32_FIRST_OVERFLOW: usize = 4294967296usize
 
 // column positions
 const C_ID: usize = 0usize
@@ -413,6 +415,44 @@ fn limits(a: *mem.Arena) {
     table.end_load(&t)
 }
 
+// The tiny arena distinguishes a representable boundary (it reaches allocation
+// and answers Exhausted) from the next value (Full before an allocation). No
+// multi-gigabyte heap or dictionary is allocated by this regression.
+fn u32_bounds() {
+    var storage: [1024]u8 = zero
+    var probe = mem.arena_from(storage[..])
+    let probe_mark = mem.mark(&probe)
+    var spec: [1]table.Spec = zero
+
+    spec[0usize] = table.Spec { name: "str_limit", kind: table.Kind.Str, heap_bytes: U32_LIMIT, dict_cap: 0usize }
+    let (_, str_limit_error) = table.create(&probe, spec[..], 0usize)
+    if str_limit_error != mem.Exhausted { os.exit(172) }
+    mem.reset(&probe, probe_mark)
+
+    spec[0usize] = table.Spec { name: "dict_heap_limit", kind: table.Kind.Dict, heap_bytes: U32_LIMIT, dict_cap: 0usize }
+    let (_, dict_heap_limit_error) = table.create(&probe, spec[..], 0usize)
+    if dict_heap_limit_error != mem.Exhausted { os.exit(173) }
+    mem.reset(&probe, probe_mark)
+
+    // At this count the final id is U32_LIMIT - 1 and its id + 1 marker is U32_LIMIT.
+    spec[0usize] = table.Spec { name: "dict_id_limit", kind: table.Kind.Dict, heap_bytes: 0usize, dict_cap: U32_LIMIT }
+    let (_, dict_id_limit_error) = table.create(&probe, spec[..], 0usize)
+    if dict_id_limit_error != mem.Exhausted { os.exit(174) }
+    mem.reset(&probe, probe_mark)
+
+    spec[0usize] = table.Spec { name: "str_overflow", kind: table.Kind.Str, heap_bytes: U32_FIRST_OVERFLOW, dict_cap: 0usize }
+    let (_, str_overflow_error) = table.create(&probe, spec[..], 0usize)
+    if str_overflow_error != table.Full { os.exit(175) }
+
+    spec[0usize] = table.Spec { name: "dict_heap_overflow", kind: table.Kind.Dict, heap_bytes: U32_FIRST_OVERFLOW, dict_cap: 0usize }
+    let (_, dict_heap_overflow_error) = table.create(&probe, spec[..], 0usize)
+    if dict_heap_overflow_error != table.Full { os.exit(176) }
+
+    spec[0usize] = table.Spec { name: "dict_id_overflow", kind: table.Kind.Dict, heap_bytes: 0usize, dict_cap: U32_FIRST_OVERFLOW }
+    let (_, dict_id_overflow_error) = table.create(&probe, spec[..], 0usize)
+    if dict_id_overflow_error != table.Full { os.exit(177) }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var spec: [24]table.Spec = zero
     specs(spec[0..])
@@ -430,6 +470,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     editing(&t)
     mem.reset(a, scratch_mark)
     limits(a)
+    u32_bounds()
     os.exit(0)
     ret ok
 }
