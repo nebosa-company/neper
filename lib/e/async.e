@@ -18,11 +18,18 @@ error Invalid
 type State = struct { poller: os.Poller, open: bool }
 
 fn init(a: *mem.Arena) -> (Loop, err) {
+    let start = mem.mark(a)
     let (storage, storage_error) = mem.alloc[State](a, 1usize)
-    if storage_error != ok { ret (zero, storage_error) }
+    if storage_error != ok {
+        mem.reset(a, start)
+        ret (zero, storage_error)
+    }
     let (poller, open_error) = os.poller_open(a)
-    if open_error == os.Unsupported { ret (zero, Unsupported) }
-    if open_error != ok { ret (zero, open_error) }
+    if open_error != ok {
+        mem.reset(a, start)
+        if open_error == os.Unsupported { ret (zero, Unsupported) }
+        ret (zero, open_error)
+    }
     storage[0].poller = poller
     storage[0].open = true
     var l: Loop = zero

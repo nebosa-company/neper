@@ -1631,6 +1631,12 @@ $fmtGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $fmtGraphWritten -ne 'executable written') { throw 'fmt_graph emission failed' }
 & $fmtGraphPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_graph check failed: exit $LASTEXITCODE" }
+# `e.async.init`: a failed poller setup returns the caller's tiny arena to its entry mark.
+$asyncInitPath = Join-Path $testBuild 'async-init-selfhost.exe'
+$asyncInitWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\async_init\src\main.e') $repo 'x64' 'windows' $asyncInitPath
+if ($LASTEXITCODE -ne 0 -or $asyncInitWritten -ne 'executable written') { throw 'async_init emission failed' }
+& $asyncInitPath
+if ($LASTEXITCODE -ne 0) { throw "a async_init check failed: exit $LASTEXITCODE" }
 # `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
 $asyncPath = Join-Path $testBuild 'async-selfhost.exe'
 $asyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\async\src\main.e') $repo 'x64' 'windows' $asyncPath

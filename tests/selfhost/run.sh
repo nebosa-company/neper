@@ -1484,6 +1484,11 @@ fmt_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$fmt_graph_written" = 'executable written' ]
 chmod +x "$test_build/fmt-graph-selfhost"
 "$test_build/fmt-graph-selfhost"
+# `e.async.init`: a failed poller setup returns the caller's tiny arena to its entry mark.
+async_init_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/async_init/src/main.e" "$repo" x64 linux "$test_build/async-init-selfhost")
+[ "$async_init_written" = 'executable written' ]
+chmod +x "$test_build/async-init-selfhost"
+"$test_build/async-init-selfhost"
 # `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
 async_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/async/src/main.e" "$repo" x64 linux "$test_build/async-selfhost")
 [ "$async_written" = 'executable written' ]
