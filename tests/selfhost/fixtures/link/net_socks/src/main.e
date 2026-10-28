@@ -145,6 +145,7 @@ fn refusals() -> bool {
     if f2 != socks.Invalid || written.off != 0usize || r2.code != 0u8 { ret false }
     if socks.negotiate(&source, &sink, long_name(256usize), "x") != socks.Invalid || written.off != 0usize { ret false }
     if socks.negotiate(&source, &sink, "x", long_name(256usize)) != socks.Invalid || written.off != 0usize { ret false }
+    if socks.negotiate(&source, &sink, "x", "") != socks.Invalid || written.off != 0usize { ret false }
     var small: [6]u8 = zero
     let (n1, e1) = socks.udp_encode_domain(small[0..], "example.com", 53u16, "x")
     if e1 != socks.TooSmall || n1 != 0usize { ret false }
@@ -152,6 +153,16 @@ fn refusals() -> bool {
     if e2 != socks.Invalid || n2 != 0usize { ret false }
     let (n3, e3) = socks.udp_encode(small[0..], address_of("\x01\x02\x03\x04"), 53u16, "xyz")
     if e3 != socks.TooSmall || n3 != 0usize { ret false }
+    ret true
+}
+
+fn consumed_failure_reply() -> bool {
+    var scripted = io.SliceReader { data: "\x05\x05\x00\x03\x03bad\x1f\x90\x05\x00\x00\x01\x0a\x00\x00\x01\x00\x50", off: 0usize }
+    var source = io.slice_reader(&scripted)
+    let (failed_reply, failed_error) = socks.read_reply(&source)
+    if failed_error != socks.Rejected || failed_reply.code != 5u8 || failed_reply.port != 8080u16 { ret false }
+    let (next_reply, next_error) = socks.read_reply(&source)
+    if next_error != ok || next_reply.code != 0u8 || next_reply.port != 80u16 { ret false }
     ret true
 }
 
@@ -502,6 +513,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !(udp_decode_refused("\x00")) { os.exit(68i32) }
     if !(udp_decode_refused("\x01\x00\x00\x01\x01\x02\x03\x04\x005")) { os.exit(69i32) }
     if !(udp_decode_refused("\x00\x00\x00\x03\x09ab")) { os.exit(70i32) }
+    if !(scenario(0u8, "", "", "example.com", 80u16, "", "\x05\x00\x01\x01\x0a\x00\x00\x01\x00P", "\x05\x01\x00\x05\x01\x00\x03\x0bexample.com\x00P", 4u8, 0u8, 0u8, "", 0u16)) { os.exit(71i32) }
+    if !consumed_failure_reply() { os.exit(72i32) }
     if !refusals() { os.exit(200i32) }
     var code = live(0u8, "", "")
     if code != 0i32 { os.exit(code) }
