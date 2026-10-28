@@ -77,6 +77,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if c.rules[1usize].containers.len != 1usize || c.rules[1usize].containers[0usize].has_name || c.rules[1usize].containers[0usize].condition.op != container.Op.Gt { os.exit(20) }
     if c.rules[2usize].scopes.len != 1usize || c.rules[2usize].scopes[0usize].starts.len != 1usize || c.rules[2usize].scopes[0usize].limits.len != 1usize { os.exit(21) }
 
+    // Every grouping kind can nest, and the rule keeps the accumulated context.
+    let nested = "@media (min-width: 1px){@supports (display: grid){@container (width > 10px){@scope (.card){@layer nested{a{--nested:1}}}}}}"
+    let (nested_sheet, nested_error) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), nested)
+    if nested_error != ok || nested_sheet.rules.len != 1usize { os.exit(40) }
+    if !nested_sheet.rules[0usize].has_layer || nested_sheet.rules[0usize].containers.len != 1usize || nested_sheet.rules[0usize].scopes.len != 1usize || count_with(nested_sheet.rules, "--nested") != 1usize { os.exit(41) }
+
+    // The loader refuses a 17th grouping level instead of recursing without bound.
+    var deep_bytes: [4096]u8 = zero
+    var deep_arena = mem.arena_from(deep_bytes[..])
+    let (deep_builder, deep_build_error) = str.builder(&deep_arena, 4096usize)
+    if deep_build_error != ok { os.exit(42) }
+    var deep_out = deep_builder
+    var deep_levels = 0usize
+    while deep_levels < 17usize {
+        let open_error = str.push(&deep_out, "@layer x{")
+        if open_error != ok { os.exit(43) }
+        deep_levels += 1usize
+    }
+    let body_error = str.push(&deep_out, "a{--too-deep:1}")
+    if body_error != ok { os.exit(44) }
+    deep_levels = 0usize
+    while deep_levels < 17usize {
+        let close_error = str.push(&deep_out, "}")
+        if close_error != ok { os.exit(45) }
+        deep_levels += 1usize
+    }
+    let deep_source = str.done(&deep_out)
+    let (_deep_sheet, deep_error) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), deep_source)
+    if deep_error != sheet.TooDeep { os.exit(46) }
+
     // Fonts, keyframes, @property, @import.
     let misc = "@import url(\"a.css\"); @import 'b.css' print; @import \"c.css\" screen; @font-face{font-family:'Foo';src:url(a.eot) format('embedded-opentype'), url(a.woff) format('woff'), url(a.woff2) format('woff2');font-weight:700;font-display:swap} @font-face{font-family:Bar;src:url(b.woff2) format(\"woff2\"), url(b.ttf)} @keyframes spin{to{transform:rotate(360deg)} from{transform:rotate(0)} 50%{opacity:.5}} @property --x{syntax:'<length>';inherits:false;initial-value:0px}"
     let (x, xe) = sheet.parse_sheet(a, sheet.media_env(800.0f64, 600.0f64), misc)

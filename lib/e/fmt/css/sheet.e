@@ -25,6 +25,11 @@ use e.gfx.cssvalue as cv
 use e.mem
 use e.str
 
+// Grouping at-rules recurse through their bodies. More than MAX_GROUPING_DEPTH levels
+// returns `TooDeep` instead of growing the native or WebAssembly call stack without bound.
+error TooDeep
+const MAX_GROUPING_DEPTH: usize = 16usize
+
 // What `@media` is evaluated against.
 type MediaEnv = struct { width: f64, height: f64, dark: bool, reduced_motion: bool, high_contrast: bool, print: bool, dppx: f64, hover: bool, fine_pointer: bool, scripting: bool }
 
@@ -818,7 +823,7 @@ fn select_font_src(a: *mem.Arena, value: str) -> str {
 
 // --- The loader
 
-type Ctx = struct { has_layer: bool, layer: i64, path: str, containers: []const cascade.ContainerQuery, scopes: []const cascade.Scope }
+type Ctx = struct { has_layer: bool, layer: i64, path: str, containers: []const cascade.ContainerQuery, scopes: []const cascade.Scope, nesting: usize }
 
 type Loader = struct {
     a: *mem.Arena, env: MediaEnv,
@@ -1050,12 +1055,12 @@ fn layer_names(l: *Loader, ctx: Ctx, prelude: str) -> []const str {
     ret list.slice_const[str](&out)
 }
 
-fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
+fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err {
     let name = one.name
     let prelude = syntax.raw_text(src, one.prelude)
     if str.eq(name, "import") {
         add_import(l, src, one)
-        ret
+        ret ok
     }
     if str.eq(name, "layer") {
         let names = layer_names(l, ctx, prelude)
@@ -1064,7 +1069,7 @@ fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
             let idx = layer_index(l, names[i])
             i += 1usize
         }
-        if !one.has_block { ret }
+        if !one.has_block { ret ok }
         var path = ""
         if names.len > 0usize {
             path = names[names.len - 1usize]
@@ -1081,39 +1086,38 @@ fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
         next.has_layer = true
         next.layer = layer_index(l, path)
         next.path = path
-        walk_block(l, src, one, next)
-        ret
+        ret walk_block(l, src, one, next)
     }
-    if !one.has_block { ret }
+    if !one.has_block { ret ok }
     if str.eq(name, "media") {
-        if media_matches(&l.env, l.a, prelude) { walk_block(l, src, one, ctx) }
-        ret
+        if media_matches(&l.env, l.a, prelude) { ret walk_block(l, src, one, ctx) }
+        ret ok
     }
     if str.eq(name, "supports") {
-        if supports_true(l.a, src, prelude) { walk_block(l, src, one, ctx) }
-        ret
+        if supports_true(l.a, src, prelude) { ret walk_block(l, src, one, ctx) }
+        ret ok
     }
     if str.eq(name, "container") {
         let (q, good) = container_query(l.a, prelude)
-        if good { walk_block(l, src, one, with_container(l, ctx, q)) } else { walk_block(l, src, one, ctx) }
-        ret
+        if good { ret walk_block(l, src, one, with_container(l, ctx, q)) }
+        ret walk_block(l, src, one, ctx)
     }
     if str.eq(name, "scope") {
-        walk_block(l, src, one, with_scope(l, ctx, scope_rule(l.a, prelude)))
-        ret
+        ret walk_block(l, src, one, with_scope(l, ctx, scope_rule(l.a, prelude)))
     }
     if str.eq(name, "font-face") {
         add_font_face(l, src, one.block.inner)
-        ret
+        ret ok
     }
     if str.eq(name, "keyframes") || str.eq(name, "-webkit-keyframes") {
         add_keyframes(l, src, one)
-        ret
+        ret ok
     }
     if str.eq(name, "property") {
         add_property(l, src, one)
-        ret
+        ret ok
     }
+    ret ok
 }
 
 fn cat3(a: *mem.Arena, x: str, y: str, z: str) -> str {
@@ -1152,23 +1156,28 @@ fn text_done(t: *Text) -> str {
     ret str.done(&t.b)
 }
 
-fn walk_block(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
+fn walk_block(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err {
+    if ctx.nesting >= MAX_GROUPING_DEPTH { ret TooDeep }
     let (inner, e) = syntax.parse_rules(&l.scratch, one.block.inner, false)
-    if e != ok { ret }
-    walk(l, src, inner, ctx)
+    if e != ok { ret ok }
+    var next = ctx
+    next.nesting += 1usize
+    ret walk(l, src, inner, next)
 }
 
-fn walk(l: *Loader, src: str, rules: []const syntax.Rule, ctx: Ctx) {
+fn walk(l: *Loader, src: str, rules: []const syntax.Rule, ctx: Ctx) -> err {
     var i = 0usize
     while i < rules.len {
         let one = rules[i]
         i += 1usize
         if one.at {
-            at_rule(l, src, one, ctx)
+            let e = at_rule(l, src, one, ctx)
+            if e != ok { ret e }
         } else if one.has_block {
             style_rule(l, src, one, ctx)
         }
     }
+    ret ok
 }
 
 // Appends the rules of `source` (rule order continues across sheets; the sheet's `@import`s are listed, not fetched).
@@ -1193,10 +1202,10 @@ fn load(l: *Loader, source: str) -> err {
     let mark = mem.mark(sa)
     let tokens = try syntax.tokenize_with(sa, l.a, text)
     let rules = try syntax.parse_rules(sa, tokens, true)
-    let ctx = Ctx { has_layer: false, layer: 0i64, path: "", containers: zero, scopes: zero }
-    walk(l, text, rules, ctx)
+    let ctx = Ctx { has_layer: false, layer: 0i64, path: "", containers: zero, scopes: zero, nesting: 0usize }
+    let walk_error = walk(l, text, rules, ctx)
     mem.reset(sa, mark)
-    ret ok
+    ret walk_error
 }
 
 fn finish(l: *Loader) -> Loaded {
