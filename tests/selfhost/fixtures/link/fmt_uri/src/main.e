@@ -73,6 +73,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e7 != ok || !text_equal(ip.host, "[::1]") || !text_equal(ip.port, "80") { os.exit(19) }
     let (rel, e8) = uri.parse("a/b?c")
     if e8 != ok || rel.scheme.len != 0usize || !text_equal(rel.path, "a/b") || !text_equal(rel.query, "c") { os.exit(20) }
+    // Empty delimiters are components in their own right: formatting preserves
+    // them, and an empty query reference replaces the base query rather than
+    // inheriting it.
+    let (empty_query, empty_query_error) = uri.parse("http://h/p?")
+    if empty_query_error != ok || !empty_query.has_query || empty_query.query.len != 0usize { os.exit(21) }
+    let (shown_query, shown_query_error) = uri.format(a, empty_query)
+    if shown_query_error != ok || !text_equal(shown_query, "http://h/p?") { os.exit(22) }
+    let (empty_fragment, empty_fragment_error) = uri.parse("http://h/p#")
+    if empty_fragment_error != ok || !empty_fragment.has_fragment || empty_fragment.fragment.len != 0usize { os.exit(23) }
+    let (shown_fragment, shown_fragment_error) = uri.format(a, empty_fragment)
+    if shown_fragment_error != ok || !text_equal(shown_fragment, "http://h/p#") { os.exit(24) }
+    let (empty_reference, empty_reference_error) = uri.parse("?")
+    if empty_reference_error != ok { os.exit(25) }
+    let (replaced, replaced_error) = uri.resolve(a, base, empty_reference)
+    let (shown_replaced, shown_replaced_error) = uri.format(a, replaced)
+    if replaced_error != ok || shown_replaced_error != ok || !text_equal(shown_replaced, "http://a/b/c/d;p?") { os.exit(26) }
     os.exit(0)
     ret ok
 }

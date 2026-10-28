@@ -6,7 +6,7 @@
 
 use e.mem
 
-type Uri = struct { scheme: str, authority: str, userinfo: str, host: str, port: str, path: str, query: str, fragment: str }
+type Uri = struct { scheme: str, authority: str, userinfo: str, host: str, port: str, path: str, query: str, has_query: bool, fragment: str, has_fragment: bool }
 type EncodeSet = enum u8 { Path, PathSegment, Query, QueryComponent, Fragment, UserInfo }
 error Invalid
 
@@ -70,12 +70,16 @@ fn parse(source: str) -> (Uri, err) {
     while at < source.len && source[at] != 63u8 && source[at] != 35u8 { at += 1usize }
     u.path = source[path_start..at]
     if at < source.len && source[at] == 63u8 {
+        u.has_query = true
         at += 1usize
         let query_start = at
         while at < source.len && source[at] != 35u8 { at += 1usize }
         u.query = source[query_start..at]
     }
-    if at < source.len && source[at] == 35u8 { u.fragment = source[at + 1usize..] }
+    if at < source.len && source[at] == 35u8 {
+        u.has_fragment = true
+        u.fragment = source[at + 1usize..]
+    }
     // A percent must start two hex digits, everywhere.
     at = 0usize
     while at < source.len {
@@ -203,6 +207,11 @@ fn cleaned_path(a: *mem.Arena, path: str) -> (str, err) {
     ret (out[..used], ok)
 }
 
+// A nonempty public component has always meant that its delimiter is present. The
+// flags additionally preserve an explicitly empty delimiter parsed from source.
+fn query_present(value: Uri) -> bool { ret value.has_query || value.query.len > 0usize }
+fn fragment_present(value: Uri) -> bool { ret value.has_fragment || value.fragment.len > 0usize }
+
 // RFC 3986 5.2.2: the reference's components take over from the first one it has.
 fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err) {
     var result: Uri = zero
@@ -223,7 +232,9 @@ fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err) {
         if path_error != ok { ret (zero, path_error) }
         result.path = path
         result.query = reference.query
+        result.has_query = query_present(reference)
         result.fragment = reference.fragment
+        result.has_fragment = fragment_present(reference)
         ret (result, ok)
     }
     result.authority = base.authority
@@ -233,7 +244,11 @@ fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err) {
     if reference.path.len == 0usize {
         result.path = base.path
         result.query = base.query
-        if reference.query.len > 0usize { result.query = reference.query }
+        result.has_query = query_present(base)
+        if query_present(reference) {
+            result.query = reference.query
+            result.has_query = true
+        }
     } else {
         if reference.path[0] == 47u8 {
             let (path, path_error) = cleaned_path(a, reference.path)
@@ -247,8 +262,10 @@ fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err) {
             result.path = path
         }
         result.query = reference.query
+        result.has_query = query_present(reference)
     }
     result.fragment = reference.fragment
+    result.has_fragment = fragment_present(reference)
     ret (result, ok)
 }
 
@@ -381,12 +398,12 @@ fn format(a: *mem.Arena, value: Uri) -> (str, err) {
         written = append(out, written, shown)
     }
     written = append(out, written, value.path)
-    if value.query.len > 0usize {
+    if query_present(value) {
         out[written] = 63u8
         written += 1usize
         written = append(out, written, value.query)
     }
-    if value.fragment.len > 0usize {
+    if fragment_present(value) {
         out[written] = 35u8
         written += 1usize
         written = append(out, written, value.fragment)
