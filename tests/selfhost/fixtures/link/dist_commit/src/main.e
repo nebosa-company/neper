@@ -281,6 +281,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bad_vote = commit.Message { from: 64u32, to: 64u32, kind: .VoteYes, step: 0u32 }
     if commit.commit_step(&malformed, 64usize, 0u64, &bad_vote, &mask_net) != commit.Invalid { os.exit(6i32) }
 
+    // 7: an empty saga is already complete and sends no work to a nonexistent step.
+    var no_steps: []u8 = zero
+    saga = commit.saga_choreography(no_steps, 4294967295u32)
+    var no_message: commit.Message = zero
+    if saga.state != .Completed || commit.saga_start(&saga, &net) != ok || net.len != 0usize || commit.saga_step(&saga, 0usize, &no_message, &net) != commit.Invalid { os.exit(7i32) }
+    saga = commit.saga_orchestrate(no_steps, 4294967295u32)
+    if saga.state != .Completed || commit.saga_start(&saga, &net) != ok || net.len != 0usize || commit.saga_step(&saga, 0usize, &no_message, &net) != commit.Invalid { os.exit(7i32) }
+
     try io.print("dist commit ok\n")
     ret ok
 }

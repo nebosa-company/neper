@@ -29904,6 +29904,7 @@ fn pool(items: []Message) -> Pool
 fn pool_push(p: *Pool, m: Message) -> err
 fn pool_take(p: *Pool, at: usize) -> Message
 fn pool_pop(p: *Pool) -> Message
+fn mask_bit(i: u32) -> u64
 fn has_bit(mask: u64, i: u32) -> bool
 fn majority(mask: u64, cfg: u64) -> bool
 fn has_majority(n: *const Node, mask: u64) -> bool
@@ -29955,7 +29956,9 @@ Simulated consensus over caller message pools (node ids as mask bits): Raft
 (`raft_election_step`, `raft_replicate_step`, `raft_propose`, `raft_snapshot` and
 `raft_snapshot_step`, `membership_change` by joint consensus, `raft_step`), single-decree
 `paxos` (`paxos_propose`, `paxos_step`), `multi_paxos` with a stable leader and
-viewstamped replication (`vr_request`, `vr_primary_dead`, `vr_step`).
+viewstamped replication (`vr_request`, `vr_primary_dead`, `vr_step`). These protocols
+represent node identities in `u64` masks: a 64-node configuration is valid, and a
+larger one is refused with `TooSmall` before it dispatches or forms a membership bit.
 
 ### `e.dist.commit`
 
@@ -30002,7 +30005,8 @@ fn tcc_cancel(t: *Tcc)
 
 `two_phase` and `three_phase` commit (`commit_begin`, `commit_step`, `commit_blocked`),
 sagas by choreography and orchestration (`saga_start`, `saga_step` with compensations
-in reverse) and try-confirm-cancel (`tcc_try/confirm/cancel/expire`). 2PC/3PC use a
+in reverse) and try-confirm-cancel (`tcc_try/confirm/cancel/expire`). An empty saga is
+immediately `Completed` and does not dispatch a step. 2PC/3PC use a
 64-bit acknowledgement mask: up to 64 participants are supported; `commit_begin`,
 `commit_step` and `send_all` answer `TooSmall` for a larger configuration.
 

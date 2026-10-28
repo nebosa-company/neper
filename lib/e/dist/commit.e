@@ -182,22 +182,34 @@ fn commit_blocked(t: *const Commit, node: usize, now: u64) -> bool {
 // for none). Choreography: each service's StepDone triggers the next
 // service, a failure walks Compensated back to service 0.
 fn saga_choreography(done: []u8, fail_at: u32) -> Saga {
+    if done.len == 0usize { ret Saga { orchestrated: false, state: .Completed, done: done, fail_at: fail_at } }
     ret Saga { orchestrated: false, state: .Running, done: done, fail_at: fail_at }
 }
 
 // Orchestration: node `steps` is the coordinator sequencing Execute and
 // Compensate.
 fn saga_orchestrate(done: []u8, fail_at: u32) -> Saga {
+    if done.len == 0usize { ret Saga { orchestrated: true, state: .Completed, done: done, fail_at: fail_at } }
     ret Saga { orchestrated: true, state: .Running, done: done, fail_at: fail_at }
 }
 
 fn saga_start(s: *Saga, out: *Pool) -> err {
+    if s.done.len == 0usize {
+        s.state = .Completed
+        ret ok
+    }
     var from = NONE
     if s.orchestrated { from = u32(s.done.len) }
     ret send(out, from, 0u32, .Execute, 0u32)
 }
 
 fn saga_step(s: *Saga, node: usize, msg: *const Message, out: *Pool) -> err {
+    if s.done.len == 0usize {
+        s.state = .Completed
+        ret Invalid
+    }
+    if !s.orchestrated && node >= s.done.len { ret Invalid }
+    if s.orchestrated && node > s.done.len { ret Invalid }
     let last = u32(s.done.len) - 1u32
     let coord = u32(s.done.len)
     if s.orchestrated && node == s.done.len {

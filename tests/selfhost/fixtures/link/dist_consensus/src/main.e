@@ -341,6 +341,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if vr.nodes[0usize].state != 18i64 { os.exit(7i32) }
 
+    // 8: mask-backed protocols accept only the 64 representable identities.
+    if consensus.has_bit(1u64, 64u32) { os.exit(8i32) }
+    var too_many: [65]consensus.Node = zero
+    var oversized = consensus.raft_cluster(too_many[..], 1u64, 1u64, 1u64, 1u64)
+    let (_, _, oversized_error) = consensus.raft_election(&oversized, 0usize, 0u64, 0u64, &net)
+    if oversized_error != consensus.TooSmall { os.exit(8i32) }
+
     try io.print("dist consensus ok\n")
     ret ok
 }

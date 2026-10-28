@@ -75,7 +75,14 @@ fn pool_pop(p: *Pool) -> Message {
     ret m
 }
 
-fn has_bit(mask: u64, i: u32) -> bool { ret ((mask >> i) & 1u64) == 1u64 }
+// Masks describe no more than 64 identities. Out-of-range ids are absent,
+// never a shift by the machine word width.
+fn mask_bit(i: u32) -> u64 {
+    if i >= 64u32 { ret 0u64 }
+    ret 1u64 << i
+}
+
+fn has_bit(mask: u64, i: u32) -> bool { ret (mask & mask_bit(i)) != 0u64 }
 
 fn majority(mask: u64, cfg: u64) -> bool { ret usize(bytes.count_ones[u64](mask & cfg)) * 2usize > usize(bytes.count_ones[u64](cfg)) }
 
@@ -221,6 +228,9 @@ fn send_appends(c: *Cluster, n: *Node, now: u64, out: *Pool) -> err {
 // log is at least as complete; a majority (of both configurations while
 // joint) makes a leader. `msg.kind == .None` is a clock tick.
 fn raft_election_step(c: *Cluster, node: usize, now: u64, msg: *const Message, out: *Pool) -> err {
+    if c.nodes.len > 64usize { ret TooSmall }
+    if node >= c.nodes.len { ret Invalid }
+    if msg.kind != .None && usize(msg.from) >= c.nodes.len { ret Invalid }
     let n = &c.nodes[node]
     if msg.kind == .None {
         // ponytail: a node outside its own configuration never starts an election
@@ -228,7 +238,7 @@ fn raft_election_step(c: *Cluster, node: usize, now: u64, msg: *const Message, o
             n.role = .Candidate
             n.term += 1u64
             n.voted_for = n.id
-            n.votes = 1u64 << n.id
+            n.votes = mask_bit(n.id)
             n.leader = NONE
             reset_timeout(c, n, now)
             var m: Message = zero
@@ -264,7 +274,7 @@ fn raft_election_step(c: *Cluster, node: usize, now: u64, msg: *const Message, o
     }
     if msg.kind == .VoteResponse {
         if n.role == .Candidate && msg.term == n.term && msg.flag {
-            n.votes |= 1u64 << msg.from
+            n.votes |= mask_bit(msg.from)
             if has_majority(n, n.votes) { try become_leader(c, n, now, out) }
         }
         ret ok
@@ -280,7 +290,7 @@ fn advance_commit(c: *Cluster, n: *Node) -> err {
             var mask = 0u64
             var p = 0usize
             while p < c.nodes.len {
-                if n.match_index[p] >= candidate { mask |= 1u64 << u32(p) }
+                if n.match_index[p] >= candidate { mask |= mask_bit(u32(p)) }
                 p += 1usize
             }
             if has_majority(n, mask) {
@@ -297,6 +307,9 @@ fn advance_commit(c: *Cluster, n: *Node) -> err {
 // truncation of a conflicting follower suffix, and the leader's commit
 // index from match indexes. A tick sends heartbeats from a leader.
 fn raft_replicate_step(c: *Cluster, node: usize, now: u64, msg: *const Message, out: *Pool) -> err {
+    if c.nodes.len > 64usize { ret TooSmall }
+    if node >= c.nodes.len { ret Invalid }
+    if msg.kind != .None && usize(msg.from) >= c.nodes.len { ret Invalid }
     let n = &c.nodes[node]
     if msg.kind == .None {
         if n.role == .Leader && now >= n.heartbeat_at { ret send_appends(c, n, now, out) }
@@ -364,6 +377,8 @@ fn raft_replicate_step(c: *Cluster, node: usize, now: u64, msg: *const Message, 
 
 // Append a value at the leader; answers its index.
 fn raft_propose(c: *Cluster, node: usize, value: i64) -> (u64, err) {
+    if c.nodes.len > 64usize { ret (0u64, TooSmall) }
+    if node >= c.nodes.len { ret (0u64, Invalid) }
     let n = &c.nodes[node]
     if n.role != .Leader { ret (0u64, NotLeader) }
     let append_error = append_entry(n, Entry { term: n.term, value: value, cfg_old: 0u64, cfg_new: 0u64 })
@@ -376,6 +391,8 @@ fn raft_propose(c: *Cluster, node: usize, value: i64) -> (u64, err) {
 // Joint consensus: the leader appends C_old,new (majorities of both count
 // until it commits), then C_new on its own once that is applied.
 fn membership_change(c: *Cluster, node: usize, new_config: u64) -> err {
+    if c.nodes.len > 64usize { ret TooSmall }
+    if node >= c.nodes.len { ret Invalid }
     let n = &c.nodes[node]
     if n.role != .Leader { ret NotLeader }
     if n.cfg_old != n.cfg_new || new_config == 0u64 { ret Invalid }
@@ -386,6 +403,8 @@ fn membership_change(c: *Cluster, node: usize, new_config: u64) -> err {
 
 // Compact the applied prefix of a node's log into its snapshot record.
 fn raft_snapshot(c: *Cluster, node: usize) -> err {
+    if c.nodes.len > 64usize { ret TooSmall }
+    if node >= c.nodes.len { ret Invalid }
     let n = &c.nodes[node]
     if n.applied <= n.snap_index { ret ok }
     let count = usize(n.applied - n.snap_index)
@@ -403,6 +422,9 @@ fn raft_snapshot(c: *Cluster, node: usize) -> err {
 
 // InstallSnapshot at a lagging follower and the leader's bookkeeping.
 fn raft_snapshot_step(c: *Cluster, node: usize, now: u64, msg: *const Message, out: *Pool) -> err {
+    if c.nodes.len > 64usize { ret TooSmall }
+    if node >= c.nodes.len { ret Invalid }
+    if msg.kind != .None && usize(msg.from) >= c.nodes.len { ret Invalid }
     let n = &c.nodes[node]
     if msg.term > n.term { step_down(n, msg.term) }
     if msg.kind == .InstallSnapshot {
@@ -458,6 +480,8 @@ fn raft_snapshot_step(c: *Cluster, node: usize, now: u64, msg: *const Message, o
 
 // Deliver one message (or a tick with `.None`) to `node`.
 fn raft_step(c: *Cluster, node: usize, now: u64, msg: *const Message, out: *Pool) -> err {
+    if c.nodes.len > 64usize { ret TooSmall }
+    if node >= c.nodes.len { ret Invalid }
     if msg.kind == .None {
         try raft_election_step(c, node, now, msg, out)
         ret raft_replicate_step(c, node, now, msg, out)
@@ -477,6 +501,7 @@ fn paxos(acceptors: []Acceptor, proposers: []Proposer) -> Paxos { ret Paxos { ac
 fn simple_majority(mask: u64, count: usize) -> bool { ret usize(bytes.count_ones[u64](mask)) * 2usize > count }
 
 fn to_all(count: usize, out: *Pool, m: Message) -> err {
+    if count > 64usize { ret TooSmall }
     var i = 0usize
     while i < count {
         var copy = m
@@ -489,6 +514,8 @@ fn to_all(count: usize, out: *Pool, m: Message) -> err {
 
 // Start (or retry with a higher number) a proposal of `value` from `node`.
 fn paxos_propose(p: *Paxos, node: usize, value: i64, out: *Pool) -> err {
+    if p.acceptors.len > 64usize || p.proposers.len > 64usize { ret TooSmall }
+    if node >= p.proposers.len { ret Invalid }
     let pr = &p.proposers[node]
     pr.round += 1u64
     pr.n = pr.round * u64(p.proposers.len) + u64(node)
@@ -504,7 +531,9 @@ fn paxos_propose(p: *Paxos, node: usize, value: i64, out: *Pool) -> err {
 }
 
 fn paxos_step(p: *Paxos, node: usize, msg: *const Message, out: *Pool) -> err {
+    if p.acceptors.len > 64usize || p.proposers.len > 64usize { ret TooSmall }
     if msg.kind == .Prepare {
+        if node >= p.acceptors.len || usize(msg.from) >= p.proposers.len { ret Invalid }
         let a = &p.acceptors[node]
         if msg.term <= a.promised { ret ok }
         a.promised = msg.term
@@ -518,9 +547,10 @@ fn paxos_step(p: *Paxos, node: usize, msg: *const Message, out: *Pool) -> err {
         ret pool_push(out, r)
     }
     if msg.kind == .Promise {
+        if node >= p.proposers.len || usize(msg.from) >= p.acceptors.len { ret Invalid }
         let pr = &p.proposers[node]
         if pr.phase != 1u8 || msg.term != pr.n { ret ok }
-        pr.promises |= 1u64 << msg.from
+        pr.promises |= mask_bit(msg.from)
         if msg.index > pr.best_n {
             pr.best_n = msg.index
             pr.best_value = msg.value
@@ -536,6 +566,7 @@ fn paxos_step(p: *Paxos, node: usize, msg: *const Message, out: *Pool) -> err {
         ret to_all(p.acceptors.len, out, m)
     }
     if msg.kind == .Accept {
+        if node >= p.acceptors.len || usize(msg.from) >= p.proposers.len { ret Invalid }
         let a = &p.acceptors[node]
         if msg.term < a.promised { ret ok }
         a.promised = msg.term
@@ -549,13 +580,14 @@ fn paxos_step(p: *Paxos, node: usize, msg: *const Message, out: *Pool) -> err {
         ret to_all(p.proposers.len, out, m)
     }
     if msg.kind == .Accepted {
+        if node >= p.proposers.len || usize(msg.from) >= p.acceptors.len { ret Invalid }
         let l = &p.proposers[node]
         if msg.term > l.learned_n {
             l.learned_n = msg.term
             l.learned_mask = 0u64
         }
         if msg.term == l.learned_n {
-            l.learned_mask |= 1u64 << msg.from
+            l.learned_mask |= mask_bit(msg.from)
             if simple_majority(l.learned_mask, p.acceptors.len) && !l.decided {
                 l.decided = true
                 l.decided_value = msg.value
@@ -576,6 +608,8 @@ fn mp_node(slot_n: []u64, slot_value: []i64, proposed: []i64, accept_mask: []u64
 
 // One Prepare for every slot at once: a ballot unique to `node`.
 fn multi_paxos_lead(m: *MultiPaxos, node: usize, out: *Pool) -> err {
+    if m.nodes.len == 0usize || m.nodes.len > 64usize { ret TooSmall }
+    if node >= m.nodes.len { ret Invalid }
     let n = &m.nodes[node]
     let count = u64(m.nodes.len)
     n.ballot = (n.ballot / count + 1u64) * count + u64(node)
@@ -590,6 +624,8 @@ fn multi_paxos_lead(m: *MultiPaxos, node: usize, out: *Pool) -> err {
 
 // A stable leader skips Prepare: Accept straight into the next slot.
 fn multi_paxos_propose(m: *MultiPaxos, node: usize, value: i64, out: *Pool) -> (u64, err) {
+    if m.nodes.len == 0usize || m.nodes.len > 64usize { ret (0u64, TooSmall) }
+    if node >= m.nodes.len { ret (0u64, Invalid) }
     let n = &m.nodes[node]
     if !n.leading { ret (0u64, NotLeader) }
     let slot = n.next_slot
@@ -609,6 +645,8 @@ fn multi_paxos_propose(m: *MultiPaxos, node: usize, value: i64, out: *Pool) -> (
 }
 
 fn multi_paxos_step(m: *MultiPaxos, node: usize, msg: *const Message, out: *Pool) -> err {
+    if m.nodes.len == 0usize || m.nodes.len > 64usize { ret TooSmall }
+    if node >= m.nodes.len || usize(msg.from) >= m.nodes.len { ret Invalid }
     let n = &m.nodes[node]
     if msg.kind == .Prepare {
         if msg.term <= n.promised { ret ok }
@@ -631,7 +669,7 @@ fn multi_paxos_step(m: *MultiPaxos, node: usize, msg: *const Message, out: *Pool
     }
     if msg.kind == .Promise {
         if n.leading || msg.term != n.ballot { ret ok }
-        n.promises |= 1u64 << msg.from
+        n.promises |= mask_bit(msg.from)
         if msg.index > n.next_slot { n.next_slot = msg.index }
         if simple_majority(n.promises, m.nodes.len) { n.leading = true }
         ret ok
@@ -653,7 +691,7 @@ fn multi_paxos_step(m: *MultiPaxos, node: usize, msg: *const Message, out: *Pool
     if msg.kind == .Accepted {
         if !n.leading || msg.term != n.ballot || msg.index >= n.next_slot { ret ok }
         let slot = usize(msg.index)
-        n.accept_mask[slot] |= 1u64 << msg.from
+        n.accept_mask[slot] |= mask_bit(msg.from)
         if simple_majority(n.accept_mask[slot], m.nodes.len) { n.decided[slot] = true }
         ret ok
     }
@@ -668,7 +706,10 @@ fn vr_node(id: u32, log: []i64, prepare_ok: []u64) -> VrNode {
     ret VrNode { id: id, view: 0u64, status: .Normal, last_normal: 0u64, op: 0u64, commit: 0u64, state: 0i64, log: log, prepare_ok: prepare_ok, svc_mask: 0u64, dvc_sent: false, dvc_mask: 0u64, best_from: NONE, best_view: 0u64, best_op: 0u64, best_commit: 0u64 }
 }
 
-fn vr_primary(v: *const Vr, view: u64) -> u32 { ret u32(view % u64(v.nodes.len)) }
+fn vr_primary(v: *const Vr, view: u64) -> u32 {
+    if v.nodes.len == 0usize { ret NONE }
+    ret u32(view % u64(v.nodes.len))
+}
 
 fn vr_execute(n: *VrNode, up_to: u64) {
     var limit = up_to
@@ -694,11 +735,13 @@ fn vr_others(v: *const Vr, node: usize, out: *Pool, m: Message) -> err {
 
 // A client request at the primary: the next op number, Prepare to backups.
 fn vr_request(v: *Vr, node: usize, value: i64, out: *Pool) -> err {
+    if v.nodes.len == 0usize || v.nodes.len > 64usize { ret TooSmall }
+    if node >= v.nodes.len { ret Invalid }
     let n = &v.nodes[node]
     if n.status != .Normal || vr_primary(v, n.view) != n.id { ret NotLeader }
     if usize(n.op) >= n.log.len { ret TooSmall }
     n.log[usize(n.op)] = value
-    n.prepare_ok[usize(n.op)] = 1u64 << n.id
+    n.prepare_ok[usize(n.op)] = mask_bit(n.id)
     n.op += 1u64
     var m: Message = zero
     m.from = n.id
@@ -712,11 +755,13 @@ fn vr_request(v: *Vr, node: usize, value: i64, out: *Pool) -> err {
 
 // A backup that suspects the primary: it starts the next view.
 fn vr_primary_dead(v: *Vr, node: usize, out: *Pool) -> err {
+    if v.nodes.len == 0usize || v.nodes.len > 64usize { ret TooSmall }
+    if node >= v.nodes.len { ret Invalid }
     let n = &v.nodes[node]
     if n.status == .Normal { n.last_normal = n.view }
     n.view += 1u64
     n.status = .ViewChange
-    n.svc_mask = 1u64 << n.id
+    n.svc_mask = mask_bit(n.id)
     n.dvc_sent = false
     n.dvc_mask = 0u64
     n.best_from = NONE
@@ -736,6 +781,8 @@ fn vr_copy_log(v: *Vr, node: usize, from: u32, count: u64) {
 }
 
 fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
+    if v.nodes.len == 0usize || v.nodes.len > 64usize { ret TooSmall }
+    if node >= v.nodes.len || usize(msg.from) >= v.nodes.len { ret Invalid }
     let n = &v.nodes[node]
     if msg.kind == .VrPrepare {
         // ponytail: an out-of-order Prepare is dropped (no buffering, no state transfer)
@@ -754,7 +801,7 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
     }
     if msg.kind == .VrPrepareOk {
         if msg.term != n.view || n.status != .Normal || msg.index > n.op || msg.index == 0u64 { ret ok }
-        n.prepare_ok[usize(msg.index - 1u64)] |= 1u64 << msg.from
+        n.prepare_ok[usize(msg.index - 1u64)] |= mask_bit(msg.from)
         let before = n.commit
         while n.commit < n.op && simple_majority(n.prepare_ok[usize(n.commit)], v.nodes.len) { vr_execute(n, n.commit + 1u64) }
         if n.commit == before { ret ok }
@@ -774,7 +821,7 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
             if n.status == .Normal { n.last_normal = n.view }
             n.view = msg.term
             n.status = .ViewChange
-            n.svc_mask = (1u64 << n.id) | (1u64 << msg.from)
+            n.svc_mask = mask_bit(n.id) | mask_bit(msg.from)
             n.dvc_sent = false
             n.dvc_mask = 0u64
             n.best_from = NONE
@@ -784,7 +831,7 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
             m.term = n.view
             try vr_others(v, node, out, m)
         } else if msg.term == n.view && n.status == .ViewChange {
-            n.svc_mask |= 1u64 << msg.from
+            n.svc_mask |= mask_bit(msg.from)
         } else {
             ret ok
         }
@@ -802,7 +849,7 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
     }
     if msg.kind == .DoViewChange {
         if msg.term != n.view || n.status != .ViewChange || vr_primary(v, n.view) != n.id { ret ok }
-        n.dvc_mask |= 1u64 << msg.from
+        n.dvc_mask |= mask_bit(msg.from)
         if n.best_from == NONE || msg.term2 > n.best_view || (msg.term2 == n.best_view && msg.index > n.best_op) {
             n.best_from = msg.from
             n.best_view = msg.term2
@@ -817,7 +864,7 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
         n.last_normal = n.view
         var i = n.commit
         while i < n.op {
-            n.prepare_ok[usize(i)] = 1u64 << n.id
+            n.prepare_ok[usize(i)] = mask_bit(n.id)
             i += 1u64
         }
         vr_execute(n, n.best_commit)
@@ -858,6 +905,7 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
 // Deliver every pooled message in sending order until the pool is empty;
 // a message to or from a node outside the `up` mask is dropped.
 fn pump(c: *Cluster, now: u64, up: u64, out: *Pool) -> err {
+    if c.nodes.len > 64usize { ret TooSmall }
     while out.len > 0usize {
         var m = pool_pop(out)
         if has_bit(up, m.from) && has_bit(up, m.to) { try raft_step(c, usize(m.to), now, &m, out) }
@@ -871,6 +919,7 @@ fn pump(c: *Cluster, now: u64, up: u64, out: *Pool) -> err {
 // leader and its first heartbeats go out. Answers the role and term it ends
 // with; a node that already leads keeps both.
 fn raft_election(c: *Cluster, node: usize, now: u64, up: u64, out: *Pool) -> (Role, u64, err) {
+    if c.nodes.len > 64usize { ret (.Follower, 0u64, TooSmall) }
     if node >= c.nodes.len { ret (.Follower, 0u64, Invalid) }
     if c.nodes[node].role != .Leader { c.nodes[node].timeout_at = now }
     var tick: Message = zero
@@ -885,6 +934,7 @@ fn raft_election(c: *Cluster, node: usize, now: u64, up: u64, out: *Pool) -> (Ro
 // and sends a second heartbeat so the followers learn the commit and apply.
 // Answers the commit index of the leader; NotLeader when `node` does not lead.
 fn raft_replicate(c: *Cluster, node: usize, now: u64, value: i64, up: u64, out: *Pool) -> (u64, err) {
+    if c.nodes.len > 64usize { ret (0u64, TooSmall) }
     if node >= c.nodes.len { ret (0u64, Invalid) }
     let (_, e0) = raft_propose(c, node, value)
     if e0 != ok { ret (0u64, e0) }
