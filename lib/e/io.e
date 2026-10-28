@@ -626,9 +626,9 @@ fn copy(dst: *Writer, src: *Reader, scratch: []u8) -> (u64, err) {
     while true {
         let (count, read_error) = read(src, scratch)
         if count > 0usize {
-            let write_error = write_all(dst, scratch[0usize..count])
+            let (written, write_error) = write_all_progress(dst, scratch[0usize..count])
+            moved += u64(written)
             if write_error != ok { ret (moved, write_error) }
-            moved += u64(count)
         }
         if read_error == End { ret (moved, ok) }
         if read_error != ok { ret (moved, read_error) }

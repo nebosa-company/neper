@@ -145,6 +145,17 @@ fn main(a: *mem.Arena) -> err {
     if moved != 10u64 { ret Failed }
     if !str.eq(copy_buffer[0usize..10usize], "0123456789") { ret Failed }
 
+    // A partial write followed by an error has already reached the destination,
+    // so copy must include it in the reported byte count.
+    let partial_copy_steps: [1]support.WriteStep = [1]support.WriteStep{ support.WriteStep { max_bytes: 2usize, failure: Failed } }
+    var (partial_copy_script, partial_copy_script_error) = support.scripted_writer(a, partial_copy_steps[..], 8usize)
+    if partial_copy_script_error != ok { ret partial_copy_script_error }
+    var partial_copy_source_state = io.SliceReader { data: "abc", off: 0usize }
+    var partial_copy_source = io.slice_reader(&partial_copy_source_state)
+    var partial_copy_sink = support.writer(&partial_copy_script)
+    let (partial_copy_moved, partial_copy_error) = io.copy(&partial_copy_sink, &partial_copy_source, scratch[..])
+    if partial_copy_error != Failed || partial_copy_moved != 2u64 || !str.eq(support.captured(&partial_copy_script), "ab") { ret Failed }
+
     // `read_all` grows its own claim; `limit` is a hard maximum and keeps no partial
     // result when it is crossed.
     var all_source = io.SliceReader { data: "the whole thing", off: 0usize }
