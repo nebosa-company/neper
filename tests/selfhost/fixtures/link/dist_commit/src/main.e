@@ -266,8 +266,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if commit.commit_begin(&protocol63, 0u64, &mask_net) != ok || drive(&protocol63, &mask_net) != ok || protocol63.state != .Committed || !all_parts(&protocol63, .Committed) { os.exit(6i32) }
     var parts64: [64]commit.Participant = zero
     vote_yes(parts64[..])
-    var protocol64 = commit.three_phase(parts64[..], 10u64)
+    var protocol64 = commit.two_phase(parts64[..], 10u64)
     if commit.commit_begin(&protocol64, 0u64, &mask_net) != ok || drive(&protocol64, &mask_net) != ok || protocol64.state != .Committed || !all_parts(&protocol64, .Committed) { os.exit(6i32) }
+    var acks64: [64]commit.Participant = zero
+    vote_yes(acks64[..])
+    var protocol64_ack = commit.three_phase(acks64[..], 10u64)
+    if commit.commit_begin(&protocol64_ack, 0u64, &mask_net) != ok || drive(&protocol64_ack, &mask_net) != ok || protocol64_ack.state != .Committed || !all_parts(&protocol64_ack, .Committed) { os.exit(6i32) }
     var parts65: [65]commit.Participant = zero
     vote_yes(parts65[..])
     var protocol65 = commit.two_phase(parts65[..], 10u64)
