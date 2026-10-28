@@ -18,6 +18,13 @@ error Invalid
 const SPARE: usize = 4096usize
 const LIMIT: usize = 268435456usize
 
+// Appends one transformed table length without allowing either a usize wrap or
+// a total beyond the decoder's allocation limit.
+fn transformed_length_add(total: usize, length: usize) -> (usize, bool) {
+    if total > LIMIT || length > LIMIT - total { ret (0usize, false) }
+    ret (total + length, true)
+}
+
 // A big-endian reading cursor; a read past `end` sets `bad` and answers zero.
 type Buf = struct { data: []const u8, pos: usize, end: usize, bad: bool }
 
@@ -691,8 +698,12 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
     let sfnt_size = get32(&file)
     let compressed_size = usize(get32(&file))
     skip(&file, 4usize)
-    skip(&file, 20usize)
-    if file.bad { ret (zero, Invalid) }
+    let metadata_offset = usize(get32(&file))
+    let metadata_length = usize(get32(&file))
+    let metadata_original_length = usize(get32(&file))
+    let private_offset = usize(get32(&file))
+    let private_length = usize(get32(&file))
+    if file.bad || usize(whole_length) != bytes.len { ret (zero, Invalid) }
     let (tables, te) = mem.alloc[Table](a, count)
     if te != ok { ret (zero, te) }
     var src_offset = 0usize
@@ -720,12 +731,39 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
             if tag == 0x6C6F6361u32 && xform_len != 0usize { ret (zero, Invalid) }
         }
         if file.bad { ret (zero, Invalid) }
+        let (next_offset, length_fits) = transformed_length_add(src_offset, xform_len)
+        if !length_fits { ret (zero, Invalid) }
         tables[i] = Table { tag: tag, flags: flags, dst_len: dst_len, xform_len: xform_len, src_off: src_offset, content: bytes[0..0] }
-        src_offset += xform_len
+        src_offset = next_offset
         i += 1usize
     }
+    if compressed_size > file.end - file.pos { ret (zero, Invalid) }
     let packed = take(&file, compressed_size)
-    if file.bad || src_offset > LIMIT { ret (zero, Invalid) }
+    if file.bad { ret (zero, Invalid) }
+    let compressed_end = file.pos
+    var tail = compressed_end
+    if metadata_offset == 0usize {
+        if metadata_length != 0usize || metadata_original_length != 0usize { ret (zero, Invalid) }
+    } else {
+        if metadata_offset > file.end || metadata_length > file.end - metadata_offset { ret (zero, Invalid) }
+        if (metadata_offset & 3usize) != 0usize || metadata_offset < tail || metadata_offset - tail > 3usize { ret (zero, Invalid) }
+        while tail < metadata_offset {
+            if bytes[tail] != 0u8 { ret (zero, Invalid) }
+            tail += 1usize
+        }
+        tail = metadata_offset + metadata_length
+    }
+    if private_offset == 0usize {
+        if private_length != 0usize || tail != file.end { ret (zero, Invalid) }
+    } else {
+        if private_offset > file.end || private_length > file.end - private_offset { ret (zero, Invalid) }
+        if (private_offset & 3usize) != 0usize || private_offset < tail || private_offset - tail > 3usize { ret (zero, Invalid) }
+        while tail < private_offset {
+            if bytes[tail] != 0u8 { ret (zero, Invalid) }
+            tail += 1usize
+        }
+        if private_offset + private_length != file.end { ret (zero, Invalid) }
+    }
     let (scratch, se) = mem.alloc[u8](a, brotli.decode_scratch_required())
     if se != ok { ret (zero, se) }
     let (transformed_buf, de) = mem.alloc[u8](a, src_offset + SPARE)
@@ -735,7 +773,7 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
     if src_offset > got { ret (zero, Invalid) }
     i = 0usize
     while i < count {
-        if tables[i].src_off + tables[i].xform_len > got { ret (zero, Invalid) }
+        if tables[i].src_off > got || tables[i].xform_len > got - tables[i].src_off { ret (zero, Invalid) }
         tables[i].content = transformed_buf[tables[i].src_off..tables[i].src_off + tables[i].xform_len]
         i += 1usize
     }
