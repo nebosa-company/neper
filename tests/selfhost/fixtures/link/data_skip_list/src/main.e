@@ -97,6 +97,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if skip_list.insert[i64](&tiny, 1i64, &r) != ok || skip_list.insert[i64](&tiny, 2i64, &r) != ok || skip_list.insert[i64](&tiny, 3i64, &r) != skip_list.TooSmall { os.exit(3i32) }
     if !skip_list.remove[i64](&tiny, 1i64) || skip_list.insert[i64](&tiny, 3i64, &r) != ok || !skip_list.contains[i64](&tiny, 3i64) || skip_list.contains[i64](&tiny, 1i64) { os.exit(3i32) }
 
+    // 4: capacity arithmetic and the u32 node-ID boundary. These views only
+    // carry large lengths; their first elements live in the small local arrays.
+    // With a 32-bit `usize`, the old multiplication wrapped this product to zero.
+    var capacity_cells: [2]u64 = zero
+    var capacity_window = mem.Arena { base: mem.cast[*u8](&capacity_cells[0usize]), cap: 2147483648usize, off: 0usize }
+    let capacity_keys = mem.view(&capacity_window, 0usize, 2147483648usize)
+    let capacity_height = mem.view(&capacity_window, 0usize, 2147483648usize)
+    var one_forward: [1]u32 = zero
+    let (_, capacity_error) = skip_list.skip_list[u8](capacity_keys, one_forward[..], capacity_height, 2usize)
+    if capacity_error != skip_list.TooSmall { os.exit(4i32) }
+
+    // The predicate checks both exact endpoints without allocating either pool.
+    if !skip_list.pool_fits_ids(4294967295u64) || skip_list.pool_fits_ids(4294967296u64) { os.exit(4i32) }
+
+    // A wasm32 `usize` cannot express the first rejected length. Native x64
+    // also sends that fabricated length through the constructor, before it can
+    // inspect the deliberately short forward and height slices.
+    if mem.size_of[usize]() == 8usize {
+        let first_rejected = usize(skip_list.NONE) + 1usize
+        var id_cells: [1]u64 = zero
+        var rejected_window = mem.Arena { base: mem.cast[*u8](&id_cells[0usize]), cap: first_rejected, off: 0usize }
+        let rejected_keys = mem.view(&rejected_window, 0usize, first_rejected)
+        var rejected_forward: [1]u32 = zero
+        var rejected_height: [1]u8 = zero
+        let (_, rejected_error) = skip_list.skip_list[u8](rejected_keys, rejected_forward[..], rejected_height[..], 1usize)
+        if rejected_error != skip_list.Invalid { os.exit(4i32) }
+    }
+
     try io.print("data skip list ok\n")
     ret ok
 }

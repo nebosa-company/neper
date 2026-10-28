@@ -11,11 +11,17 @@ error Invalid
 
 const NONE: u32 = 4294967295u32
 
+// `NONE` is reserved, so a pool may contain IDs 0 through `NONE - 1`.
+fn pool_fits_ids(pool_len: u64) -> bool { ret pool_len <= u64(NONE) }
+
 // A list of at most `keys.len` nodes over `levels` levels;
 // `forward.len >= keys.len * levels`, `height.len >= keys.len`.
 fn skip_list[K: type](keys: []K, forward: []u32, height: []u8, levels: usize) -> (SkipList[K], err) {
     if levels == 0usize || levels > 64usize { ret (zero, Invalid) }
-    if keys.len < 1usize || forward.len < keys.len * levels || height.len < keys.len { ret (zero, TooSmall) }
+    if !pool_fits_ids(u64(keys.len)) { ret (zero, Invalid) }
+    // Dividing first keeps this capacity check valid when `keys.len * levels`
+    // would overflow `usize`.
+    if keys.len < 1usize || keys.len > forward.len / levels || height.len < keys.len { ret (zero, TooSmall) }
     var l = 0usize
     while l < levels {
         forward[l] = NONE
