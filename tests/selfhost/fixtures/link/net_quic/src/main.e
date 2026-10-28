@@ -267,6 +267,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, e6c) = quic.on_path_challenge(&conn, peer_challenge, 7usize, probe[0..])
     if e6c != quic.Invalid { os.exit(6i32) }
 
+    // A small but sufficient receipt emits a bounded (not padded-to-1200)
+    // probe and consumes exactly the server's per-path allowance.
+    var limited_paths: [2]quic.Path = zero
+    var limited_seq: [2]u64 = zero
+    var limited_cid: [40]u8 = zero
+    var limited_len: [2]u8 = zero
+    var limited_token: [32]u8 = zero
+    var limited_active: [2]u8 = zero
+    let (limited_peer0, e7a) = quic.cid_set(limited_seq[0..], limited_cid[0..], limited_len[0..], limited_token[0..], limited_active[0..])
+    if e7a != ok { os.exit(7i32) }
+    var limited_peer = limited_peer0
+    if quic.cids_insert(&limited_peer, 0u64, 0u64, cid_a[0..], zero_token[0..]) != ok || quic.cids_insert(&limited_peer, 1u64, 0u64, fb.cid, fb.token) != ok { os.exit(7i32) }
+    let (limited_conn0, e7b) = quic.connection(limited_paths[0..], own, limited_peer, quic.ipv4(192u8, 168u8, 0u8, 8u8, 4001u16), addr_a, 0usize)
+    if e7b != ok { os.exit(7i32) }
+    var limited_conn = limited_conn0
+    let (limited_probe, e7c) = quic.migrate(&limited_conn, addr_b, 400u64, challenge, 10u64, probe[0..])
+    if e7c != ok || limited_probe != 30usize || limited_conn.path_count != 2usize { os.exit(7i32) }
+    if limited_conn.paths[1].bytes_received != 10u64 || limited_conn.paths[1].bytes_sent != 30u64 || quic.amplification_allowance(&limited_conn.paths[1]) != 0u64 || quic.can_send(&limited_conn.paths[1], 1u64) { os.exit(7i32) }
+    if probe[18] != 0u8 || probe[29] != 0u8 { os.exit(7i32) }
+
     try io.print("net quic ok\n")
     ret ok
 }
