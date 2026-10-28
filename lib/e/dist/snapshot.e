@@ -19,9 +19,11 @@ error Invalid
 
 fn sent(out: []Message) -> Sent { ret Sent { out: out, count: 0usize } }
 
-fn push(s: *Sent, from: usize, to: usize, marker: bool, amount: u64) {
-    if s.count < s.out.len { s.out[s.count] = Message { from: u32(from), to: u32(to), marker: marker, amount: amount } }
+fn push(s: *Sent, from: usize, to: usize, marker: bool, amount: u64) -> err {
+    if s.count >= s.out.len { ret TooSmall }
+    s.out[s.count] = Message { from: u32(from), to: u32(to), marker: marker, amount: amount }
     s.count += 1usize
+    ret ok
 }
 
 // `initial[i]` is process i's starting quantity; `channels` holds n*n records.
@@ -47,52 +49,62 @@ fn snapshot(procs: []Proc, channels: []Channel, initial: []const u64) -> (Snapsh
 fn snapshot_send(s: *Snapshot, from: usize, to: usize, amount: u64, out: *Sent) -> err {
     let n = s.procs.len
     if from >= n || to >= n || from == to || s.procs[from].state < amount { ret Invalid }
+    let send_error = push(out, from, to, false, amount)
+    if send_error != ok { ret send_error }
     s.procs[from].state -= amount
-    push(out, from, to, false, amount)
     ret ok
 }
 
 // Record `i`'s state, record every incoming channel but `except` (n means
 // none excepted), and send markers on every outgoing channel.
-fn record(s: *Snapshot, i: usize, except: usize, out: *Sent) {
+fn record(s: *Snapshot, i: usize, except: usize, out: *Sent) -> err {
     let n = s.procs.len
+    if out.count > out.out.len { ret TooSmall }
+    if n - 1usize > out.out.len - out.count { ret TooSmall }
     s.procs[i].recorded = true
     s.procs[i].snapshot = s.procs[i].state
     var j = 0usize
     while j < n {
         if j != i {
             if j != except { s.channels[j * n + i].recording = true }
-            push(out, i, j, true, 0u64)
+            let push_error = push(out, i, j, true, 0u64)
+            if push_error != ok { ret push_error }
         }
         j += 1usize
     }
+    ret ok
 }
 
 // Process `i` starts the snapshot; Invalid when one is already under way there.
 fn snapshot_initiate(s: *Snapshot, i: usize, out: *Sent) -> err {
     if i >= s.procs.len || s.procs[i].recorded { ret Invalid }
-    record(s, i, s.procs.len, out)
+    let record_error = record(s, i, s.procs.len, out)
+    if record_error != ok { ret record_error }
     ret ok
 }
 
-// Deliver `m` to its `to` process; answers whether it was a marker.
-fn snapshot_step(s: *Snapshot, m: Message, out: *Sent) -> bool {
+// Deliver a message; TooSmall when a first marker cannot be recorded in the output pool.
+fn snapshot_step(s: *Snapshot, m: Message, out: *Sent) -> (bool, err) {
     let n = s.procs.len
     let i = usize(m.to)
     let j = usize(m.from)
+    if i >= n || j >= n { ret (false, Invalid) }
     let c = j * n + i
     if m.marker {
+        if !s.procs[i].recorded {
+            let record_error = record(s, i, j, out)
+            if record_error != ok { ret (true, record_error) }
+        }
         s.procs[i].markers += 1usize
-        if !s.procs[i].recorded { record(s, i, j, out) }
         s.channels[c].recording = false
-        ret true
+        ret (true, ok)
     }
     s.procs[i].state += m.amount
     if s.channels[c].recording {
         s.channels[c].count += 1usize
         s.channels[c].total += m.amount
     }
-    ret false
+    ret (false, ok)
 }
 
 // Every process recorded and no channel still recording.
@@ -169,7 +181,8 @@ fn chandy_lamport(procs: []Proc, channels: []Channel, initial: []const u64, scri
         } else {
             if head >= out.count { ret (0u64, false, Invalid) }
             if head >= out.out.len { ret (0u64, false, TooSmall) }
-            let _ = snapshot_step(&s, out.out[head], out)
+            let (_, step_error) = snapshot_step(&s, out.out[head], out)
+            if step_error != ok { ret (0u64, false, step_error) }
             head += 1usize
         }
         i += 1usize
