@@ -70,7 +70,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if cap_n != 0usize || cap_e != dhcp.TooSmall || limit[0usize] != 170u8 || limit[299usize] != 187u8 { os.exit(20) }
     var large: [400]u8 = zero
     let (max_n, max_e) = dhcp.encode(&maxed, large[0..])
-    if max_e != ok || max_n != 377usize || large[376usize] != 255u8 { os.exit(21) }
+    if max_e != ok || max_n != 383usize || large[382usize] != 255u8 { os.exit(21) }
     maxed.hostname_len = 65usize
     limit[0usize] = 201u8
     limit[299usize] = 202u8
