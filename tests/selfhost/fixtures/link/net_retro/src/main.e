@@ -73,6 +73,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if me3 != ok || m3.kind != 105u8 || m3.selector.len != 0usize || m3.host.len != 0usize || m3.port != 0usize { os.exit(31) }
     let (m4, me4) = retro.gopher_item("1noTabs")
     if me4 != retro.BadItem { os.exit(32) }
+    let (_, me5) = retro.gopher_item("1bad\t/x\th.example\t70garbage")
+    if me5 != retro.BadItem { os.exit(42) }
+    let (_, me6) = retro.gopher_item("1empty\t/x\th.example\t")
+    if me6 != retro.BadItem { os.exit(43) }
+    let (_, me7) = retro.gopher_item("1too high\t/x\th.example\t65536")
+    if me7 != retro.BadItem { os.exit(44) }
+    let (m8, me8) = retro.gopher_item("1max\t/x\th.example\t65535")
+    if me8 != ok || m8.port != 65535usize { os.exit(45) }
     if !retro.gopher_is_end(".") || retro.gopher_is_end("..") || retro.gopher_is_end("") { os.exit(33) }
     // Finger.
     let (f1, fe1) = retro.finger_request(buf[0..], "alice", false)

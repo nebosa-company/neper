@@ -145,10 +145,15 @@ fn gopher_item(line: str) -> (GopherItem, err) {
     item.host = line[tabs[1usize] + 1usize..tabs[2usize]]
     var port = 0usize
     var p = tabs[2usize] + 1usize
-    while p < port_end && line[p] >= 48u8 && line[p] <= 57u8 && port < 100000usize {
-        port = port * 10usize + usize(line[p] - 48u8)
+    if p >= port_end { ret (item, BadItem) }
+    while p < port_end {
+        if line[p] < 48u8 || line[p] > 57u8 { ret (item, BadItem) }
+        let digit = usize(line[p] - 48u8)
+        if port > 6553usize || (port == 6553usize && digit > 5usize) { ret (item, BadItem) }
+        port = port * 10usize + digit
         p += 1usize
     }
+    if port == 0usize { ret (item, BadItem) }
     item.port = port
     ret (item, ok)
 }
