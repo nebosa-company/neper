@@ -217,6 +217,7 @@ fn decode_connack(src: []const u8) -> (bool, u8, err) {
     let (b, _, e) = body(src, CONNACK)
     if e != ok { ret (false, 0u8, e) }
     if b.len != 2usize || (b[0] & 254u8) != 0u8 { ret (false, 0u8, Malformed) }
+    if b[1] > 5u8 || (b[1] != 0u8 && (b[0] & 1u8) != 0u8) { ret (false, 0u8, Malformed) }
     ret ((b[0] & 1u8) == 1u8, b[1], ok)
 }
 

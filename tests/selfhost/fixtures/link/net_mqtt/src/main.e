@@ -85,6 +85,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if re != ok || rl != 12usize || hb != 2usize { os.exit(2i32) }
     let (present, code, ce) = mqtt.decode_connack("\x20\x02\x01\x00")
     if ce != ok || !present || code != 0u8 { os.exit(2i32) }
+    let (_, _, connack_reserved) = mqtt.decode_connack("\x20\x02\x00\x06")
+    if connack_reserved != mqtt.Malformed { os.exit(2i32) }
+    let (_, _, connack_present_refusal) = mqtt.decode_connack("\x20\x02\x01\x01")
+    if connack_present_refusal != mqtt.Malformed { os.exit(2i32) }
     let (_, _, connack_tail) = mqtt.decode_connack("\x20\x02\x01\x00\xff")
     if connack_tail != mqtt.Malformed { os.exit(2i32) }
     buf[n3] = 255u8
