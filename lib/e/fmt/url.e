@@ -1258,15 +1258,14 @@ fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Par
                 put_scalar(&buffer, c)
             }
         } else if state == .Fragment {
-            if c != EOF {
-                let (fb0, fragment_buffer_error) = buf_new(a, p.fragment.len + 16usize)
-                if fragment_buffer_error != ok { ret fragment_buffer_error }
-                var fb = fb0
-                buf_str(&fb, p.fragment)
-                put_encoded(&fb, c, .Fragment)
-                let (fragment, fragment_error) = buf_take(a, &fb)
-                if fragment_error != ok { ret fragment_error }
-                p.fragment = fragment
+            if c == EOF {
+                if buffer.len > 0usize {
+                    let (fragment, fragment_error) = buf_take(a, &buffer)
+                    if fragment_error != ok { ret fragment_error }
+                    p.fragment = fragment
+                }
+            } else {
+                put_encoded(&buffer, c, .Fragment)
             }
         }
         if pointer >= count { break }

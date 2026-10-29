@@ -69,5 +69,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var setter_tight_arena = mem.arena_from(setter_tight_storage[0usize..setter_used - 1usize])
     let retained = url.set_pathname(&setter_tight_arena, &u, "/replacement")
     if !str.eq(retained.path, u.path) { os.exit(23i32) }
+
+    // Fragment parsing must retain linear, not quadratic, arena storage.
+    var fragment_input: [267]u8 = zero
+    mem.copy[u8](fragment_input[..], "https://x/#")
+    var fragment_at = 11usize
+    while fragment_at < fragment_input.len {
+        fragment_input[fragment_at] = 120u8
+        fragment_at += 1usize
+    }
+    var fragment_storage: [16384]u8 = zero
+    var fragment_arena = mem.arena_from(fragment_storage[..])
+    let (fragment_url, fragment_error) = url.parse(&fragment_arena, fragment_input[..], zero, false)
+    if fragment_error != ok || fragment_url.fragment.len != 256usize || fragment_url.fragment[0usize] != 120u8 || fragment_url.fragment[255usize] != 120u8 { os.exit(24i32) }
     ret ok
 }
