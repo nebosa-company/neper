@@ -43,6 +43,7 @@ type Api = struct {
     free_memory: fn(usize, usize, usize),
     bind_buffer_memory: fn(usize, usize, usize, u64) -> i32,
     map_memory: fn(usize, usize, u64, u64, u32, **u8) -> i32,
+    unmap_memory: fn(usize, usize),
     get_buffer_device_address: fn(usize, *u8) -> u64,
     device_wait_idle: fn(usize) -> i32,
     create_shader_module: fn(usize, *u8, usize, *usize) -> i32,
@@ -114,6 +115,7 @@ type Buffer = struct {
     memory: usize,
     address: u64,
     bytes: []u8,
+    mapped: bool,
 }
 
 var api: Api = zero
@@ -197,8 +199,9 @@ fn load(a: *mem.Arena) -> err {
     let (p15, e15) = os.dlsym[fn(usize, usize, usize)](a, library, "vkFreeMemory")
     let (p16, e16) = os.dlsym[fn(usize, usize, usize, u64) -> i32](a, library, "vkBindBufferMemory")
     let (p17, e17) = os.dlsym[fn(usize, usize, u64, u64, u32, **u8) -> i32](a, library, "vkMapMemory")
-    let (p18, e18) = os.dlsym[fn(usize, *u8) -> u64](a, library, "vkGetBufferDeviceAddress")
-    let (p19, e19) = os.dlsym[fn(usize) -> i32](a, library, "vkDeviceWaitIdle")
+    let (p18, e18) = os.dlsym[fn(usize, usize)](a, library, "vkUnmapMemory")
+    let (p19, e19) = os.dlsym[fn(usize, *u8) -> u64](a, library, "vkGetBufferDeviceAddress")
+    let (p20, e20) = os.dlsym[fn(usize) -> i32](a, library, "vkDeviceWaitIdle")
     let dispatch_error = load_dispatch(a, library)
     if dispatch_error != ok {
         let closed = os.dlclose(library)
@@ -211,8 +214,8 @@ fn load(a: *mem.Arena) -> err {
     }
     loader = library
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret NoLoader }
-    if e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok { ret NoLoader }
-    api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, get_buffer_device_address: p18, device_wait_idle: p19, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_pipeline_cache: api.create_pipeline_cache, get_pipeline_cache_data: api.get_pipeline_cache_data, destroy_pipeline_cache: api.destroy_pipeline_cache, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle }
+    if e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok || e20 != ok { ret NoLoader }
+    api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, unmap_memory: p18, get_buffer_device_address: p19, device_wait_idle: p20, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_pipeline_cache: api.create_pipeline_cache, get_pipeline_cache_data: api.get_pipeline_cache_data, destroy_pipeline_cache: api.destroy_pipeline_cache, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle }
     // One instance for the process: the application record, then the instance's.
     let (application, application_error) = record(a, 48usize)
     if application_error != ok { ret application_error }
@@ -735,6 +738,7 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
     if api.map_memory(context.device, memory, 0u64, u64(bytes_size), 0u32, &mapped) != 0i32 {
         ret (rollback_buffer(context, made), Failed)
     }
+    made.mapped = true
     var region: mem.Arena = zero
     region.base = mapped
     region.cap = bytes_size
@@ -749,12 +753,13 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
 }
 
 fn free(context: Context, made: Buffer) {
+    if made.memory != 0usize && made.mapped { api.unmap_memory(context.device, made.memory) }
     if made.handle != 0usize { api.destroy_buffer(context.device, made.handle, 0usize) }
     if made.memory != 0usize { api.free_memory(context.device, made.memory, 0usize) }
 }
 
-// An unsuccessful constructor owns no Vulkan handles.  `vkFreeMemory` also releases a
-// mapping, so destroying the buffer before freeing its memory rolls back every stage.
+// An unsuccessful constructor owns no Vulkan handles. A successfully mapped allocation
+// is unmapped before its buffer and memory are released.
 fn rollback_buffer(context: Context, made: Buffer) -> Buffer {
     free(context, made)
     ret zero
@@ -769,6 +774,16 @@ fn buffer_test_create(device: usize, create: *u8, allocator: usize, out: *usize)
 
 fn buffer_test_destroy(device: usize, handle: usize, allocator: usize) {
     if handle == 41usize { buffer_test_destroyed += 1usize }
+}
+
+var buffer_test_release_step: usize = zero
+
+fn buffer_test_unmap(device: usize, memory: usize) {
+    if memory == 43usize && buffer_test_release_step == 0usize { buffer_test_release_step = 1usize }
+}
+
+fn buffer_test_free(device: usize, memory: usize, allocator: usize) {
+    if memory == 43usize && buffer_test_release_step == 1usize { buffer_test_release_step = 2usize }
 }
 
 // The first record after `vkCreateBuffer` must tear the handle down when its arena is full.
@@ -790,5 +805,26 @@ fn buffer_rolls_back_after_record_exhaustion(a: *mem.Arena) -> err {
     if made_error != mem.Exhausted { ret Failed }
     if made.handle != 0usize || made.memory != 0usize || made.address != 0u64 || made.bytes.len != 0usize { ret Failed }
     if buffer_test_destroyed != 1usize { ret Failed }
+    ret ok
+}
+
+// A mapped allocation must reach vkUnmapMemory before vkFreeMemory. Keep this
+// executable with a fake dispatch so hosts without a Vulkan driver cover it.
+@test
+fn buffer_unmaps_before_memory_free(a: *mem.Arena) -> err {
+    let saved_api = api
+    defer { api = saved_api }
+    var fake: Api = zero
+    fake.unmap_memory = buffer_test_unmap
+    fake.free_memory = buffer_test_free
+    api = fake
+    buffer_test_release_step = 0usize
+    var made: Buffer = zero
+    made.memory = 43usize
+    made.mapped = true
+    var context: Context = zero
+    context.device = 1usize
+    free(context, made)
+    if buffer_test_release_step != 2usize { ret Failed }
     ret ok
 }

@@ -9659,7 +9659,7 @@ if ($LASTEXITCODE -ne 0 -or ($windowHelpersTest -join "`n") -notmatch '"passed":
 # The Vulkan constructor fakes its creation/destruction edge, so this rollback check needs
 # neither a loader nor a physical device.
 $vulkanBufferTest = & $compiler test-file (Join-Path $repo 'lib\e\gpu\vulkan.e') $repo 'x64' 'windows' $testBuild --json
-if ($LASTEXITCODE -ne 0 -or ($vulkanBufferTest -join "`n") -notmatch '"passed":1,"failed":0') { throw 'Vulkan buffer rollback regression test failed' }
+if ($LASTEXITCODE -ne 0 -or ($vulkanBufferTest -join "`n") -notmatch '"passed":2,"failed":0') { throw 'Vulkan buffer rollback regression test failed' }
 $testActual = Join-Path $testBuild 'conformance-tools-test.jsonl'
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test.e')`" `"$repo`" x64 windows `"$($testBuild.Replace('\', '/'))`" --json > `"$testActual`""
 if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" }
