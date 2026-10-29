@@ -3476,7 +3476,16 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
     if pixels.len < count { ret Failed }
     let pool = objc_pool_push()
     let data = cf_data_create(0usize, mem.address_of(&pixels[0usize]), count * 4usize)
+    if data == 0usize {
+        objc_pool_pop(pool)
+        ret OutOfMemory
+    }
     let provider = cg_provider_with_data(data)
+    if provider == 0usize {
+        cf_release(data)
+        objc_pool_pop(pool)
+        ret OutOfMemory
+    }
     // 8194: little-endian 32-bit, alpha first and premultiplied, which is Bgra8 in a u32.
     let image = cg_image_create(usize(width), usize(height), 8usize, 32usize, usize(width) * 4usize, cocoa_space, 8194u32, provider, 0usize, 0i32, 0i32)
     var result = ok
