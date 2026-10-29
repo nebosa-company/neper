@@ -32,7 +32,7 @@ type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, T
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 // The same shapes the other os variants expose, so e.fs's `os.FileInfo`/`os.Dir`/`os.ResolvePolicy`
 // compile unchanged.
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 
 
 // BSD system call numbers (xnu's syscalls.master), reached through `syscall`.
@@ -285,6 +285,7 @@ fn stat_with(a: *mem.Arena, path: str, number: usize) -> (FileInfo, err) {
     info.created_ns = buffer.born * NANOSECONDS_PER_SECOND + buffer.born_ns
     info.mode = mode & PERMISSION_MASK
     info.file_id = buffer.inode
+    info.file_volume = u64(buffer.device)
     info.link_count = u64(buffer.link_count)
     ret (info, ok)
 }
@@ -817,6 +818,7 @@ fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
     info.created_ns = buffer.born * NANOSECONDS_PER_SECOND + buffer.born_ns
     info.mode = mode & PERMISSION_MASK
     info.file_id = buffer.inode
+    info.file_volume = u64(buffer.device)
     info.link_count = u64(buffer.link_count)
     ret (info, ok)
 }

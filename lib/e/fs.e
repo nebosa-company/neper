@@ -70,6 +70,16 @@ fn host_style() -> path.Style {
     ret .Posix
 }
 
+fn same_path(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn kind_from_os(source: os.EntryKind) -> EntryKind {
     if source == .File { ret .File }
     if source == .Dir { ret .Directory }
@@ -629,6 +639,14 @@ fn write_file(a: *mem.Arena, path_text: str, data: []const u8) -> err {
 // looping.
 fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err {
     if scratch.len == 0usize { ret Invalid }
+    // `truncate` applies to the file its path resolves to. Check both parts of the
+    // host identity first so an alias (including a hard link) cannot truncate the
+    // source before its reads. A host with no identity leaves `file_id` zero.
+    let (source_info, source_info_error) = os.stat(a, src)
+    if source_info_error != ok { ret from_os(source_info_error) }
+    if same_path(src, dst) { ret Invalid }
+    let (destination_info, destination_info_error) = os.stat(a, dst)
+    if destination_info_error == ok && source_info.file_id != 0u64 && source_info.file_id == destination_info.file_id && source_info.file_volume == destination_info.file_volume { ret Invalid }
     var read_flags: os.OpenFlags = zero
     read_flags.read = true
     let (source, source_error) = os.open(a, src, read_flags)

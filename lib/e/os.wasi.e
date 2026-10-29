@@ -39,8 +39,8 @@ type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const 
 type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 // The same shapes the other os variants expose, so e.fs's `os.FileInfo`/`os.Dir`/`os.ResolvePolicy`
-// compile unchanged. NeperOS fills only what its server reports (kind and size).
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+// compile unchanged. WASI `filestat` supplies the device and inode identity fields.
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 type Dir = resource(dir_close) struct { raw: usize }
 type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
@@ -1253,6 +1253,7 @@ fn stat_path(path: str, follow: bool) -> (FileInfo, err) {
     info.modified_ns = i64(raw[6usize])
     info.created_ns = -1i64
     info.file_id = raw[1usize]
+    info.file_volume = raw[0usize]
     info.link_count = raw[3usize]
     info.mode = 420u32
     if info.kind == EntryKind.Dir { info.mode = 493u32 }

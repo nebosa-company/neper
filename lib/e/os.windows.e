@@ -37,9 +37,10 @@ type Handle = struct { raw: usize }
 type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const Handle }
 
 // `mode` is POSIX permission bits, which this host does not have: what it has is one
-// read-only flag, so the bits are synthesised from it. `file_id` is the file index,
-// unique within its volume. Unlike Linux, this host does record a creation time.
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+// read-only flag, so the bits are synthesised from it. `file_id` is the file index and
+// `file_volume` is the volume serial; together they identify one Windows file. Unlike
+// Linux, this host does record a creation time.
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 
 // `BY_HANDLE_FILE_INFORMATION`: thirteen `DWORD`s. Every `FILETIME` is two of them in
 // the header, so the whole struct is four-byte aligned with no padding anywhere --
@@ -1402,6 +1403,7 @@ fn info_from_handle(handle: usize) -> (FileInfo, u32, err) {
     info.created_ns = time_from_filetime(data.created_high, data.created_low)
     info.mode = mode_from_attributes(data.attributes)
     info.file_id = pair_to_u64(data.index_high, data.index_low)
+    info.file_volume = u64(data.volume_serial)
     info.link_count = u64(data.link_count)
     ret (info, data.attributes, ok)
 }

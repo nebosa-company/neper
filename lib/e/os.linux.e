@@ -35,11 +35,11 @@ type DirEntry = struct { name: str, kind: EntryKind }
 type OpenFlags = struct { read: bool, write: bool, create: bool, truncate: bool, append: bool }
 type Handle = struct { raw: usize }
 type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const Handle }
-// `mode` is the POSIX permission bits as the kernel keeps them, and `file_id` is the
-// inode: unique with the device, which is what an `e.fs` caller compares two paths by.
+// `mode` is the POSIX permission bits as the kernel keeps them. `file_id` is the
+// inode and `file_volume` is st_dev; together they identify a file across mounts.
 // `created_ns` is `-1` here -- `struct stat` has no creation time, and reading one needs
 // `statx`, which is a primitive of its own rather than a field of this one.
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 
 // The kernel's `struct stat` for x86-64, field for field. `newfstatat` writes 144
 // bytes at the address it is given, so this layout is the ABI rather than a choice --
@@ -572,6 +572,7 @@ fn stat_with_flags(a: *mem.Arena, path: str, flags: usize) -> (FileInfo, err) {
     info.created_ns = -1i64
     info.mode = buffer.mode & PERMISSION_MASK
     info.file_id = buffer.inode
+    info.file_volume = buffer.device
     info.link_count = buffer.link_count
     ret (info, ok)
 }
@@ -2632,6 +2633,7 @@ fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
     info.created_ns = -1i64
     info.mode = buffer.mode & PERMISSION_MASK
     info.file_id = buffer.inode
+    info.file_volume = buffer.device
     info.link_count = buffer.link_count
     ret (info, ok)
 }

@@ -44,6 +44,7 @@ fn clear(a: *mem.Arena) {
     let one = fs.remove_file(a, "np-fs/one.txt")
     let two = fs.remove_file(a, "np-fs/two.txt")
     let copy = fs.remove_file(a, "np-fs/copy.txt")
+    let copy_alias = fs.remove_file(a, "np-fs/copy-alias.txt")
     let link = fs.remove_file(a, "np-fs/link.txt")
     let from_file = fs.remove_file(a, "np-fs/from.txt")
     let landed_file = fs.remove_file(a, "np-fs/landed.txt")
@@ -515,6 +516,13 @@ fn main(a: *mem.Arena) -> err {
         if cross_exists_error != ok { os.exit(146i32) }
         if cross_destination_exists { os.exit(147i32) }
         if fs.remove_file(a, "np-fs/cross-source.txt") != ok { os.exit(148i32) }
+        // A copy may cross a volume. Its file index need not be globally unique, so
+        // identity comparison also includes the host's device or volume component.
+        var cross_copy_scratch: [4]u8 = zero
+        if fs.copy_file(a, "np-fs/one.txt", cross_destination, cross_copy_scratch[..]) != ok { os.exit(290i32) }
+        let (cross_copy, cross_copy_error) = fs.stat(a, cross_destination)
+        if cross_copy_error != ok || cross_copy.size != 11u64 { os.exit(291i32) }
+        if fs.remove_file(a, cross_destination) != ok { os.exit(292i32) }
     } else {
         if cross_dir_error != os.NotFound { os.exit(149i32) }
     }
@@ -743,6 +751,30 @@ fn main(a: *mem.Arena) -> err {
     while at < 11usize {
         if copied[at] != payload[at] { os.exit(48i32) }
         at += 1usize
+    }
+    // A truncating destination may be another spelling of the source. Both the
+    // identical name and a symlink alias must leave the bytes intact and fail.
+    if fs.copy_file(a, "np-fs/one.txt", "np-fs/one.txt", scratch[..]) != fs.Invalid { os.exit(282i32) }
+    let (self_copy, self_copy_error) = fs.read_file(a, "np-fs/one.txt", 0usize)
+    if self_copy_error != ok || self_copy.len != payload.len { os.exit(283i32) }
+    at = 0usize
+    while at < payload.len {
+        if self_copy[at] != payload[at] { os.exit(284i32) }
+        at += 1usize
+    }
+    let copy_alias_error = fs.symlink(a, "one.txt", "np-fs/copy-alias.txt")
+    if copy_alias_error == ok {
+        if fs.copy_file(a, "np-fs/one.txt", "np-fs/copy-alias.txt", scratch[..]) != fs.Invalid { os.exit(285i32) }
+        let (alias_copy, alias_copy_error) = fs.read_file(a, "np-fs/one.txt", 0usize)
+        if alias_copy_error != ok || alias_copy.len != payload.len { os.exit(286i32) }
+        at = 0usize
+        while at < payload.len {
+            if alias_copy[at] != payload[at] { os.exit(287i32) }
+            at += 1usize
+        }
+        if fs.remove_file(a, "np-fs/copy-alias.txt") != ok { os.exit(288i32) }
+    } else if copy_alias_error != fs.Denied {
+        os.exit(289i32)
     }
     // A buffer with no room would make no progress, so it is an error and not a hang.
     var empty: []u8 = zero
