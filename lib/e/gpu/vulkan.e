@@ -708,36 +708,32 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
     if api.create_buffer(context.device, &create[0usize], 0usize, &handle) != 0i32 { ret (made, OutOfMemory) }
     made.handle = handle
     let (requirements, requirements_error) = record(a, 24usize)
-    if requirements_error != ok { ret (made, requirements_error) }
+    if requirements_error != ok { ret (rollback_buffer(context, made), requirements_error) }
     api.get_buffer_memory_requirements(context.device, handle, &requirements[0usize])
     if (get32(requirements, 16usize) & (1usize << usize(context.memory_type))) == 0usize {
-        api.destroy_buffer(context.device, handle, 0usize)
-        ret (made, Unsupported)
+        ret (rollback_buffer(context, made), Unsupported)
     }
     let (flags, flags_error) = record(a, 24usize)
-    if flags_error != ok { ret (made, flags_error) }
+    if flags_error != ok { ret (rollback_buffer(context, made), flags_error) }
     put32(flags, 0usize, 1000060000usize)
     put32(flags, 16usize, 2usize)
     let (allocate, allocate_error) = record(a, 32usize)
-    if allocate_error != ok { ret (made, allocate_error) }
+    if allocate_error != ok { ret (rollback_buffer(context, made), allocate_error) }
     put32(allocate, 0usize, 5usize)
     put_pointer(allocate, 8usize, flags)
     put64(allocate, 16usize, get64(requirements, 0usize))
     put32(allocate, 24usize, usize(context.memory_type))
     var memory = 0usize
     if api.allocate_memory(context.device, &allocate[0usize], 0usize, &memory) != 0i32 {
-        api.destroy_buffer(context.device, handle, 0usize)
-        ret (made, OutOfMemory)
+        ret (rollback_buffer(context, made), OutOfMemory)
     }
     made.memory = memory
     if api.bind_buffer_memory(context.device, handle, memory, 0u64) != 0i32 {
-        free(context, made)
-        ret (made, Failed)
+        ret (rollback_buffer(context, made), Failed)
     }
     var mapped: *u8 = zero
     if api.map_memory(context.device, memory, 0u64, u64(bytes_size), 0u32, &mapped) != 0i32 {
-        free(context, made)
-        ret (made, Failed)
+        ret (rollback_buffer(context, made), Failed)
     }
     var region: mem.Arena = zero
     region.base = mapped
@@ -745,7 +741,7 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
     region.off = 0usize
     made.bytes = mem.view(&region, 0usize, size)
     let (address_info, address_error) = record(a, 24usize)
-    if address_error != ok { ret (made, address_error) }
+    if address_error != ok { ret (rollback_buffer(context, made), address_error) }
     put32(address_info, 0usize, 1000244001usize)
     put64(address_info, 16usize, handle)
     made.address = api.get_buffer_device_address(context.device, &address_info[0usize])
@@ -755,4 +751,44 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
 fn free(context: Context, made: Buffer) {
     if made.handle != 0usize { api.destroy_buffer(context.device, made.handle, 0usize) }
     if made.memory != 0usize { api.free_memory(context.device, made.memory, 0usize) }
+}
+
+// An unsuccessful constructor owns no Vulkan handles.  `vkFreeMemory` also releases a
+// mapping, so destroying the buffer before freeing its memory rolls back every stage.
+fn rollback_buffer(context: Context, made: Buffer) -> Buffer {
+    free(context, made)
+    ret zero
+}
+
+var buffer_test_destroyed: usize = zero
+
+fn buffer_test_create(device: usize, create: *u8, allocator: usize, out: *usize) -> i32 {
+    *out = 41usize
+    ret 0i32
+}
+
+fn buffer_test_destroy(device: usize, handle: usize, allocator: usize) {
+    if handle == 41usize { buffer_test_destroyed += 1usize }
+}
+
+// The first record after `vkCreateBuffer` must tear the handle down when its arena is full.
+// This fake API makes the ownership boundary executable on hosts without a Vulkan loader.
+@test
+fn buffer_rolls_back_after_record_exhaustion(a: *mem.Arena) -> err {
+    let saved_api = api
+    defer { api = saved_api }
+    var fake: Api = zero
+    fake.create_buffer = buffer_test_create
+    fake.destroy_buffer = buffer_test_destroy
+    api = fake
+    buffer_test_destroyed = 0usize
+    var storage: [56]u8 = zero
+    var limited = mem.arena_from(storage[..])
+    var context: Context = zero
+    context.device = 1usize
+    let (made, made_error) = buffer(&limited, context, 32usize)
+    if made_error != mem.Exhausted { ret Failed }
+    if made.handle != 0usize || made.memory != 0usize || made.address != 0u64 || made.bytes.len != 0usize { ret Failed }
+    if buffer_test_destroyed != 1usize { ret Failed }
+    ret ok
 }

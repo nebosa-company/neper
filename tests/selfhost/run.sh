@@ -8974,6 +8974,12 @@ window_helpers_status=0
 $test_build/neper-self test-file "$repo/lib/e/os/window_helpers.e" "$repo" x64 linux "$test_build" --json > "$test_build/window-helpers-test.jsonl" || window_helpers_status=$?
 [ "$window_helpers_status" -eq 0 ]
 grep -q '"passed":2,"failed":0' "$test_build/window-helpers-test.jsonl"
+# The Vulkan constructor fakes its creation/destruction edge, so this rollback check needs
+# neither a loader nor a physical device.
+vulkan_buffer_status=0
+$test_build/neper-self test-file "$repo/lib/e/gpu/vulkan.e" "$repo" x64 linux "$test_build" --json > "$test_build/vulkan-buffer-test.jsonl" || vulkan_buffer_status=$?
+[ "$vulkan_buffer_status" -eq 0 ]
+grep -q '"passed":1,"failed":0' "$test_build/vulkan-buffer-test.jsonl"
 test_actual="$test_build/conformance-tools-test.jsonl"
 test_status=0
 $test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 linux "$test_build" --json > "$test_actual" || test_status=$?

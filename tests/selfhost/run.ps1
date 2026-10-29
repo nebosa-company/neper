@@ -9656,6 +9656,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestUnsafeActual).Hash -ne
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
 $windowHelpersTest = & $compiler test-file (Join-Path $repo 'lib\e\os\window_helpers.e') $repo 'x64' 'windows' $testBuild --json
 if ($LASTEXITCODE -ne 0 -or ($windowHelpersTest -join "`n") -notmatch '"passed":2,"failed":0') { throw 'portable Cocoa window helper regression tests failed' }
+# The Vulkan constructor fakes its creation/destruction edge, so this rollback check needs
+# neither a loader nor a physical device.
+$vulkanBufferTest = & $compiler test-file (Join-Path $repo 'lib\e\gpu\vulkan.e') $repo 'x64' 'windows' $testBuild --json
+if ($LASTEXITCODE -ne 0 -or ($vulkanBufferTest -join "`n") -notmatch '"passed":1,"failed":0') { throw 'Vulkan buffer rollback regression test failed' }
 $testActual = Join-Path $testBuild 'conformance-tools-test.jsonl'
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test.e')`" `"$repo`" x64 windows `"$($testBuild.Replace('\', '/'))`" --json > `"$testActual`""
 if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" }
