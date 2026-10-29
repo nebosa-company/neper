@@ -1410,10 +1410,13 @@ fn environment_vector(a: *mem.Arena, additions: []const str) -> (usize, err) {
     if vector_error != ok { ret (0usize, OutOfMemory) }
     var count = 0usize
     var at = 0usize
-    while at < block.len && count + additions.len + 1usize < SPAWN_LIST_MAX {
+    while at < block.len {
         var end = at
         while end < block.len && block[end] != 0u8 { end = end + 1usize }
         if end > at && !overridden(block[at..end], additions) {
+            // Leave one pointer for the terminator. Refusing a too-large inherited
+            // environment is safer than silently dropping its trailing variables.
+            if count + additions.len + 1usize >= SPAWN_LIST_MAX { ret (0usize, Failed) }
             vector[count] = mem.address_of(&block[at])
             count += 1usize
         }

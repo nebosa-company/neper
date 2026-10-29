@@ -168,6 +168,27 @@ fn main(a: *mem.Arena) -> err {
     }
     if !same(said[0usize..said_len], "said") { os.exit(54i32) }
     if os.close(said_read) != ok { os.exit(55i32) }
+    // The macOS spawn vector has room for at most 1023 names plus its null
+    // terminator. An inherited name beyond that capacity must be rejected rather
+    // than silently removed from the child environment.
+    when target.os == .Macos {
+        var inherited_additions: [1023]str = zero
+        var addition_at = 0usize
+        while addition_at < inherited_additions.len {
+            inherited_additions[addition_at] = "__NEPER_SPAWN_ENV_CAP=1"
+            addition_at += 1usize
+        }
+        var crowded: os.SpawnOptions = zero
+        crowded.argv = said_argv[..]
+        crowded.env = inherited_additions[..]
+        crowded.inherit_env = true
+        let (crowded_child, crowded_error) = os.spawn_with_options(a, crowded)
+        if crowded_error == ok {
+            let (ignored_status, ignored_wait_error) = os.wait(crowded_child)
+            os.exit(61i32)
+        }
+        if crowded_error != os.Failed { os.exit(62i32) }
+    }
     // --- `wait_usage` is `wait` with the child's peak beside the code (D311), and
     // `peak_memory` is this process's own. The child's peak is not checked: Linux counts
     // resident pages lazily and a process as small as `np-say` can read as zero. This one
