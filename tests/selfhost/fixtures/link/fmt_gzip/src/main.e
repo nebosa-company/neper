@@ -6,6 +6,7 @@
 use e.os
 use e.mem
 use e.io
+use e.algo.hash as hash
 use e.fmt.gzip as gzip
 
 fn same(a: []const u8, b: []const u8) -> bool {
@@ -94,6 +95,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     reserved[3] = reserved[3] | 32u8
     let (n4b, e6b) = inflate(storage, reserved[0..], out, 1000000u64)
     if e6b != gzip.Invalid { os.exit(19) }
+    // FHCRC covers the complete header, excluding the field itself. A bad header
+    // checksum must be rejected before compressed data is accepted.
+    let (fhcrc, fhcrc_error) = mem.alloc[u8](a, framed.len + 2usize)
+    if fhcrc_error != ok { os.exit(20) }
+    mem.copy[u8](fhcrc[..19usize], framed[..19usize])
+    fhcrc[3usize] = fhcrc[3usize] | 2u8
+    let header_crc = hash.crc32(fhcrc[..19usize]) & 65535u32
+    fhcrc[19usize] = u8(header_crc & 255u32)
+    fhcrc[20usize] = u8(header_crc >> 8u32)
+    mem.copy[u8](fhcrc[21usize..], framed[19usize..])
+    let (_, good_fhcrc) = inflate(storage, fhcrc, out, 1000000u64)
+    if good_fhcrc != ok { os.exit(21) }
+    fhcrc[19usize] = fhcrc[19usize] ^ 1u8
+    let (_, bad_fhcrc) = inflate(storage, fhcrc, out, 1000000u64)
+    if bad_fhcrc != gzip.Checksum { os.exit(22) }
     let (n5, e7) = inflate(storage, framed[0..], out, 2000u64)
     if e7 == ok || e7 == gzip.Checksum || e7 == gzip.Invalid { os.exit(15) }
     let (n6, e8) = inflate(storage[..100], framed[0..], out, 1000000u64)

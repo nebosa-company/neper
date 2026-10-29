@@ -1,6 +1,6 @@
 // gzip framing (RFC 1952) around `e.algo.deflate`: a pull reader that validates the
-// header -- magic, method 8, and the FEXTRA, FNAME, FCOMMENT and FHCRC fields skipped
-// as they come -- inflates through a 4 KiB input buffer and a 32 KiB window, and
+// header -- magic, method 8, FEXTRA, FNAME, FCOMMENT and FHCRC -- as it comes,
+// inflates through a 4 KiB input buffer and a 32 KiB window, and
 // compares the CRC-32 and ISIZE trailer before answering `io.End`; a writer that puts
 // a minimal header first (no name, unknown OS, zero mtime), deflates through a 4 KiB
 // staging buffer and writes the trailer on `finish`. Output past `output_limit` is
@@ -100,6 +100,16 @@ fn next_byte(s: *ReaderState) -> (u8, err) {
     ret (byte, ok)
 }
 
+// Reads one optional-header byte and includes it in the FHCRC calculation.
+fn header_byte(s: *ReaderState, header_crc: *hash.Crc32) -> (u8, err) {
+    let (byte, byte_error) = next_byte(s)
+    if byte_error != ok { ret (0u8, byte_error) }
+    var one: [1]u8 = zero
+    one[0usize] = byte
+    hash.crc32_update(header_crc, one[..])
+    ret (byte, ok)
+}
+
 fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
     let s = mem.cast[*ReaderState](source_reader.state)
     if s.stage == 0u32 {
@@ -114,14 +124,16 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
         if header[0] != 31u8 || header[1] != 139u8 || header[2] != 8u8 { ret (0usize, Invalid) }
         let flags = header[3]
         if flags & 224u8 != 0u8 { ret (0usize, Invalid) }
+        var header_crc = hash.crc32_init()
+        hash.crc32_update(&header_crc, header[..])
         if flags & 4u8 != 0u8 {
-            let (low, low_error) = next_byte(s)
+            let (low, low_error) = header_byte(s, &header_crc)
             if low_error != ok { ret (0usize, low_error) }
-            let (high, high_error) = next_byte(s)
+            let (high, high_error) = header_byte(s, &header_crc)
             if high_error != ok { ret (0usize, high_error) }
             var extra = usize(low) | (usize(high) << 8u32)
             while extra > 0usize {
-                let (skipped, skip_error) = next_byte(s)
+                let (skipped, skip_error) = header_byte(s, &header_crc)
                 if skip_error != ok { ret (0usize, skip_error) }
                 extra -= 1usize
             }
@@ -130,7 +142,7 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
         while field <= 16u8 {
             if flags & field != 0u8 {
                 while true {
-                    let (byte, byte_error) = next_byte(s)
+                    let (byte, byte_error) = header_byte(s, &header_crc)
                     if byte_error != ok { ret (0usize, byte_error) }
                     if byte == 0u8 { break }
                 }
@@ -142,6 +154,8 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
             if c0_error != ok { ret (0usize, c0_error) }
             let (c1, c1_error) = next_byte(s)
             if c1_error != ok { ret (0usize, c1_error) }
+            let expected_header_crc = u32(c0) | (u32(c1) << 8u32)
+            if expected_header_crc != (hash.crc32_done(&header_crc) & 65535u32) { ret (0usize, Checksum) }
         }
         s.stage = 1u32
     }
