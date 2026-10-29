@@ -37,10 +37,13 @@ fn pow(a: u8, exponent: u32, polynomial: u8) -> u8 {
     ret result
 }
 
-// The multiplicative inverse; zero answers `Invalid`.
+// The multiplicative inverse; zero or a candidate that fails to invert answers
+// `Invalid`.
 fn inverse(a: u8, polynomial: u8) -> (u8, err) {
     if a == 0u8 { ret (0u8, Invalid) }
-    ret (pow(a, 254u32, polynomial), ok)
+    let result = pow(a, 254u32, polynomial)
+    if mul(a, result, polynomial) != 1u8 { ret (0u8, Invalid) }
+    ret (result, ok)
 }
 
 // Exponent and logarithm tables over `generator` (a primitive element such

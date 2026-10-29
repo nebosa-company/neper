@@ -16,6 +16,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if inverse_error != ok || inverse != 0xcau8 || gf.mul(0x53u8, inverse, 0x1bu8) != 1u8 { os.exit(1i32) }
     let (_, zero_error) = gf.inverse(0u8, 0x1bu8)
     if zero_error != gf.Invalid { os.exit(1i32) }
+    let (reducible_inverse, reducible_error) = gf.inverse(2u8, 0u8)
+    if reducible_inverse != 0u8 || reducible_error != gf.Invalid { os.exit(1i32) }
     if gf.pow(3u8, 10u32, 0x1bu8) != 0x72u8 || gf.pow(2u8, 200u32, 0x1du8) != 0x1cu8 || gf.pow(9u8, 0u32, 0x1bu8) != 1u8 { os.exit(1i32) }
 
     // 2: tables over primitive generators, and a short-order one refused.
