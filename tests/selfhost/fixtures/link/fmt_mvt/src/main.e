@@ -69,5 +69,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let beyond_negative: [6]u32 = [6]u32{ 9u32, 1u32, 0u32, 10u32, 4294967295u32, 0u32 }
     let (_, _, negative_error) = mvt.decode_geometry(a, mvt.KIND_LINE, beyond_negative[..])
     if negative_error != mvt.Invalid { os.exit(42) }
+    // Packed MVT geometry and tag values are uint32; a larger protobuf varint
+    // must not silently become zero through narrowing.
+    let too_wide: [5]u8 = [5]u8{ 128u8, 128u8, 128u8, 128u8, 16u8 }
+    let (_, wide_error) = mvt.packed(a, too_wide[..])
+    if wide_error != mvt.Invalid { os.exit(43) }
+    // ClosePath belongs to polygon rings and its command count is exactly one.
+    let wrong_close: [1]u32 = [1]u32{ 15u32 }
+    let (_, _, close_error) = mvt.decode_geometry(a, mvt.KIND_LINE, wrong_close[..])
+    if close_error != mvt.Invalid { os.exit(44) }
     ret ok
 }

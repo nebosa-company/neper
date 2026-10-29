@@ -42,6 +42,7 @@ fn packed(a: *mem.Arena, payload: []const u8) -> ([]u32, err) {
     while bytes.remaining_reader(&r.input) > 0usize {
         let (v, e) = pb.read_u64(&r)
         if e != ok { ret (zero, Invalid) }
+        if v > 4294967295u64 { ret (zero, Invalid) }
         count += 1usize
     }
     let (out, out_error) = mem.alloc[u32](a, count + 1usize)
@@ -51,7 +52,7 @@ fn packed(a: *mem.Arena, payload: []const u8) -> ([]u32, err) {
     while i < count {
         let (v, e) = pb.read_u64(&r2)
         if e != ok { ret (zero, Invalid) }
-        out[i] = u32(v & 4294967295u64)
+        out[i] = u32(v)
         i += 1usize
     }
     ret (out[0usize..count], ok)
@@ -79,7 +80,9 @@ fn decode_geometry(a: *mem.Arena, kind: u8, commands: []const u32) -> ([]Point, 
             if command == 1u32 && kind != KIND_POINT { part_total += count }
             i += count * 2usize
         } else if command == 7u32 {
-            // ClosePath takes no parameters.
+            // ClosePath is a single marker for a polygon ring, never a line
+            // or point command and never a repeated run.
+            if kind != KIND_POLYGON || count != 1usize { ret (zero, zero, Invalid) }
         } else {
             ret (zero, zero, Invalid)
         }

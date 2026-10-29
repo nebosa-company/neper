@@ -84,7 +84,7 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
         let offset = usize(be32(bytes, p + 4usize))
         let comp = usize(be32(bytes, p + 8usize))
         let orig = usize(be32(bytes, p + 12usize))
-        if offset + comp > bytes.len { ret (zero, Invalid) }
+        if comp > orig || offset > bytes.len || comp > bytes.len - offset { ret (zero, Invalid) }
         let raw = bytes[offset..offset + comp]
         var data: []const u8 = raw
         if comp < orig {

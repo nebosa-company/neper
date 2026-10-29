@@ -163,6 +163,7 @@ fn copy_text(a: *mem.Arena, s: str) -> (str, err) {
 // CSV text with a header row as a list of objects (string values).
 fn csv_decode(a: *mem.Arena, text: str) -> (json.Value, err) {
     var none: json.Value = zero
+    if !utf8.validate(text) { ret (none, Invalid) }
     var cursor = io.SliceReader { data: text, off: 0usize }
     let (reader, reader_error) = csv.reader(a, io.slice_reader(&cursor), csv.csv(), 0usize, 0usize)
     if reader_error != ok { ret (none, reader_error) }
