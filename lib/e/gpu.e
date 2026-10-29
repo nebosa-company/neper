@@ -1724,11 +1724,21 @@ fn resize(t: *Target, width: u32, height: u32) -> err {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret state_error }
     defer unlock_state(state.queue.device)
+    // Build the replacement independently so an invalid extent or allocation
+    // failure cannot invalidate the target's currently acquired frame/images.
+    var replacement: TargetState = zero
+    replacement.queue = state.queue
+    replacement.format = state.format
+    let images_error = target_images(&replacement, width, height)
+    if images_error != ok { ret images_error }
     var handle = Queue { state: mem.cast[*void](state.queue) }
     try release_image(&handle, state.images[0usize])
     try release_image(&handle, state.images[1usize])
+    state.images = replacement.images
+    state.width = replacement.width
+    state.height = replacement.height
     state.acquired = false
-    ret target_images(state, width, height)
+    ret ok
 }
 
 // The back image, to draw the next frame into; one frame in flight, so a second

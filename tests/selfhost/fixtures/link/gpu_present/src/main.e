@@ -109,6 +109,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if next_shown_error != ok { os.exit(22i32) }
     let (second, second_error) = gpu.presented(t)
     if second_error != ok || second.data.slot != next.image.data.slot { os.exit(23i32) }
+    // An invalid replacement must leave both the target and its acquired frame live.
+    let (failed_resize_frame, failed_resize_frame_error) = gpu.acquire(t)
+    if failed_resize_frame_error != ok || failed_resize_frame.serial != 2u64 { os.exit(41i32) }
+    if gpu.resize(t, 0u32, 4u32) != gpu.TooLarge { os.exit(42i32) }
+    let (failed_resize_width, failed_resize_height) = gpu.extent(t)
+    if failed_resize_width != 16u32 || failed_resize_height != 8u32 { os.exit(43i32) }
+    let (_, failed_resize_present_error) = gpu.present(q, t, failed_resize_frame)
+    if failed_resize_present_error != ok { os.exit(44i32) }
     // Resize remakes the pair; the old images are stale.
     if gpu.resize(t, 4u32, 4u32) != ok { os.exit(24i32) }
     let (rw, rh) = gpu.extent(t)
