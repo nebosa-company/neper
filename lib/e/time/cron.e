@@ -99,9 +99,12 @@ fn parse(a: *mem.Arena, expr: str, offset_minutes: i32) -> (Schedule, err) {
 }
 
 fn floor_div(value: i64, divisor: i64) -> i64 {
-    var adjusted = value
-    if value < 0i64 { adjusted = value - (divisor - 1i64) }
-    ret adjusted / divisor
+    var quotient = value / divisor
+    // The remainder test avoids subtracting from i64::MIN before division.
+    // With the positive divisors used here, a nonzero negative remainder means
+    // truncation rounded toward zero and the floor is one lower.
+    if value < 0i64 && value % divisor != 0i64 { quotient -= 1i64 }
+    ret quotient
 }
 
 fn matches(s: Schedule, t: time.Timestamp) -> bool {
@@ -123,7 +126,15 @@ fn matches(s: Schedule, t: time.Timestamp) -> bool {
 
 fn next(s: Schedule, after: time.Timestamp) -> (time.Timestamp, err) {
     if after.nanos > MAX_I64 - SECOND { ret (zero, Invalid) }
-    let first = floor_div(after.nanos, SECOND) * SECOND + SECOND
+    // The next second after i64::MIN is the truncating quotient times SECOND.
+    // Forming floor(after / SECOND) * SECOND first would be below i64::MIN.
+    let remainder = after.nanos % SECOND
+    var first = 0i64
+    if remainder < 0i64 {
+        first = (after.nanos / SECOND) * SECOND
+    } else {
+        first = after.nanos - remainder + SECOND
+    }
     let offset = i64(s.offset_minutes) * MINUTE
     if (offset > 0i64 && first > MAX_I64 - offset) || (offset < 0i64 && first < MIN_I64 - offset) { ret (zero, Invalid) }
     let first_day = floor_div(first + offset, DAY)

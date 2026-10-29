@@ -26,5 +26,10 @@ fn main(a: *mem.Arena) -> err {
     let (_, bad_second_error) = cron.parse(a, "60 * * * * *", 0i32)
     let (_, bad_step_error) = cron.parse(a, "*/0 * * * * *", 0i32)
     if bad_second_error != cron.Invalid || bad_step_error != cron.Invalid { os.exit(5i32) }
+    // The minimum representable timestamp is valid input to both cron paths.
+    let (every, every_error) = cron.parse(a, "* * * * * *", 0i32)
+    let minimum = time.Timestamp { nanos: -9223372036854775807i64 - 1i64 }
+    let (after_minimum, after_minimum_error) = cron.next(every, minimum)
+    if every_error != ok || !cron.matches(every, minimum) || after_minimum_error != ok || after_minimum.nanos <= minimum.nanos { os.exit(6i32) }
     ret ok
 }
