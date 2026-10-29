@@ -173,6 +173,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var o8 = avro.sink(buffer[..])
     var d12 = avro.decoder(null_written[0..])
     if avro.decode_resolved(&u, 0u32, &v, 1u32, &d12, &o8) != avro.Mismatch { os.exit(24i32) }
+    // `skip` has to apply the same Boolean and enum-domain validation as decode.
+    wk[1usize] = .Boolean
+    let invalid_boolean: [1]u8 = [1]u8{ 2 }
+    var d13 = avro.decoder(invalid_boolean[0..])
+    if avro.skip(&w, 1u32, &d13) != avro.Malformed { os.exit(25i32) }
+    let invalid_enum: [1]u8 = [1]u8{ 6 }
+    var d14 = avro.decoder(invalid_enum[0..])
+    if avro.skip(&w, 6u32, &d14) != avro.Malformed { os.exit(26i32) }
     try io.print("fmt avro ok\n")
     ret ok
 }

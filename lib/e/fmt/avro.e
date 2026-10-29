@@ -195,8 +195,15 @@ fn read_index(d: *Decoder, s: *const Schema, node: u32) -> (usize, err) {
 fn skip(s: *const Schema, node: u32, d: *Decoder) -> err {
     let k = s.kind[usize(node)]
     if k == .Null { ret ok }
-    if k == .Boolean { ret skip_raw(d, 1usize) }
-    if k == .Int || k == .Long || k == .Enum {
+    if k == .Boolean {
+        let (_, boolean_error) = read_boolean(d)
+        ret boolean_error
+    }
+    if k == .Enum {
+        let (_, index_error) = read_index(d, s, node)
+        ret index_error
+    }
+    if k == .Int || k == .Long {
         let (v, v_error) = read_varint(d)
         ret v_error
     }
