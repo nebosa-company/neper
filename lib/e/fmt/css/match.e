@@ -355,7 +355,7 @@ fn matches_part(m: *const Matcher, part: selector.Simple, el: html.NodeId) -> bo
     case .OnlyOfType:
         ret child_index_of_type(m, el) == 1i64 && is_last_of_type(m, el)
     case .Empty:
-        ret m.doc.nodes[usize(el)].first_child == html.NONE
+        ret is_empty(m, el)
     case .Root:
         ret parent_element(m, el) == html.NONE
     case .Scope:
@@ -453,6 +453,19 @@ fn is_last_of_type(m: *const Matcher, el: html.NodeId) -> bool {
     while sib != html.NONE {
         if str.eq(local_name(m, sib), local_name(m, el)) { ret false }
         sib = next_sibling_element(m, sib)
+    }
+    ret true
+}
+
+// Comments do not make an element non-empty for CSS selector purposes. Text only has
+// content when it holds bytes; an element child always counts as content.
+fn is_empty(m: *const Matcher, el: html.NodeId) -> bool {
+    var child = m.doc.nodes[usize(el)].first_child
+    while child != html.NONE {
+        let node = &m.doc.nodes[usize(child)]
+        if node.kind == .Element { ret false }
+        if node.kind == .Text && node.value.len != 0usize { ret false }
+        child = node.next_sibling
     }
     ret true
 }
