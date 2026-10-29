@@ -236,6 +236,29 @@ fn main(a: *mem.Arena) -> err {
     let (_, bad_finish) = bytes.base64_decoder_finish(&bad, back[..])
     if bad_finish != bytes.Invalid { os.exit(85i32) }
 
+    // Once a padded quantum has completed, no later quantum is legal.
+    var padded = bytes.base64_decoder(.Standard)
+    let (padded_bytes, padded_error) = bytes.base64_decoder_update(&padded, back[..], "TQ==")
+    if padded_error != ok || padded_bytes != 1usize || back[0usize] != 77u8 { os.exit(171i32) }
+    let (_, post_padding_error) = bytes.base64_decoder_update(&padded, back[..], "AAAA")
+    if post_padding_error != bytes.Invalid { os.exit(172i32) }
+    var split_padded = bytes.base64_decoder(.Standard)
+    let (split_head, split_head_error) = bytes.base64_decoder_update(&split_padded, back[..], "TQ")
+    if split_head_error != ok || split_head != 0usize { os.exit(173i32) }
+    let (_, split_tail_error) = bytes.base64_decoder_update(&split_padded, back[..], "==AAAA")
+    if split_tail_error != bytes.Invalid { os.exit(174i32) }
+
+    // Length overflow is about the encoded result, not an arbitrarily small input bound.
+    let base64_large = 18446744073709551615usize / 4usize + 1usize
+    let (base64_large_len, base64_large_error) = bytes.base64_encoded_len(base64_large, true)
+    if base64_large_error != ok || base64_large_len != (base64_large / 3usize) * 4usize + 4usize { os.exit(175i32) }
+    let base32_large = 18446744073709551615usize / 8usize + 1usize
+    let (base32_large_len, base32_large_error) = bytes.base32_encoded_len(base32_large, true)
+    if base32_large_error != ok || base32_large_len != (base32_large / 5usize) * 8usize + 8usize { os.exit(176i32) }
+    let base85_large = 18446744073709551615usize / 5usize + 1usize
+    let (base85_large_len, base85_large_error) = bytes.base85_encoded_len(base85_large, .Ascii85)
+    if base85_large_error != ok || base85_large_len != (base85_large / 4usize) * 5usize { os.exit(177i32) }
+
     // --- copy: every source and destination offset from 0 to 19 and every length up to 40,
     // within one buffer so the ranges overlap at every distance, against a forward byte loop
     // on a second buffer. The word loop is taken from 16 bytes on, and must leave the same
