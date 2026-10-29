@@ -92,6 +92,17 @@ fn family_mismatches() -> i32 {
     ret 0i32
 }
 
+// A loopback datagram must arrive promptly. A nonblocking receiver plus a bounded poll keeps a
+// missing host delivery from wedging the whole wasm32 fixture forever.
+fn receive_datagram_before(poller: os.Poller, receiver: os.Socket, inbox: []u8, source_port: u16, code: i32) -> i32 {
+    var events: [1]os.PollEvent = zero
+    let (ready, ready_error) = os.poller_wait(poller, events[..], 2000000000i64)
+    if ready_error != ok || ready != 1usize || events[0usize].token != 17usize { ret code }
+    let (received, from, receive_error) = os.socket_receive_from(receiver, inbox)
+    if receive_error != ok || received != 1usize || inbox[0usize] != 7u8 || from.port != source_port { ret code + 1i32 }
+    ret 0i32
+}
+
 // Node implicitly binds a UDP socket on connect and send_to. The local endpoint must expose that
 // kernel-selected port, and the receiver's source port must agree with it.
 fn implicit_datagram() -> i32 {
@@ -103,6 +114,15 @@ fn implicit_datagram() -> i32 {
     if os.socket_bind(receiver, destination) != ok { ret 121i32 }
     let (receiver_local, receiver_local_error) = os.socket_local_address(receiver)
     if receiver_local_error != ok || receiver_local.port == 0u16 { ret 122i32 }
+    if os.socket_set_nonblocking(receiver, true) != ok { ret 132i32 }
+    var storage: [1024]u8 = zero
+    var arena = mem.arena_from(storage[0..])
+    let (poller, poller_error) = os.poller_open(&arena)
+    if poller_error != ok { ret 133i32 }
+    defer let _ = os.poller_close(poller)
+    var readable: os.PollInterest = zero
+    readable.readable = true
+    if os.poller_register(poller, os.socket_handle(receiver), 17usize, readable) != ok { ret 134i32 }
 
     let (connected, connected_open_error) = os.socket_open(.Ip4, .Datagram)
     if connected_open_error != ok { ret 123i32 }
@@ -115,8 +135,8 @@ fn implicit_datagram() -> i32 {
     let (sent, send_error) = os.socket_send(connected, payload[..])
     if send_error != ok || sent != 1usize { ret 126i32 }
     var inbox: [4]u8 = zero
-    let (received, connected_from, receive_error) = os.socket_receive_from(receiver, inbox[..])
-    if receive_error != ok || received != 1usize || connected_from.port != connected_local.port { ret 127i32 }
+    let connected_code = receive_datagram_before(poller, receiver, inbox[..], connected_local.port, 127i32)
+    if connected_code != 0i32 { ret connected_code }
 
     let (unbound, unbound_open_error) = os.socket_open(.Ip4, .Datagram)
     if unbound_open_error != ok { ret 128i32 }
@@ -125,8 +145,8 @@ fn implicit_datagram() -> i32 {
     if post_error != ok || posted != 1usize { ret 129i32 }
     let (unbound_local, unbound_local_error) = os.socket_local_address(unbound)
     if unbound_local_error != ok || unbound_local.port == 0u16 { ret 130i32 }
-    let (posted_received, unbound_from, posted_receive_error) = os.socket_receive_from(receiver, inbox[..])
-    if posted_receive_error != ok || posted_received != 1usize || unbound_from.port != unbound_local.port { ret 131i32 }
+    let posted_code = receive_datagram_before(poller, receiver, inbox[..], unbound_local.port, 131i32)
+    if posted_code != 0i32 { ret posted_code }
     ret 0i32
 }
 
