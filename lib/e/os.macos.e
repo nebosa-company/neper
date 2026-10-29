@@ -3417,6 +3417,7 @@ fn window_close(w: Window) -> err {
     if slot >= COCOA_TABLE { ret NotFound }
     let pool = objc_pool_push()
     let window = cocoa_windows[slot]
+    ax_forget(slot)
     cocoa_shown[slot] = false
     let closed = msg0(window, cocoa_sel("close\x00"))
     let released = msg0(window, cocoa_sel("release\x00"))
@@ -3682,27 +3683,49 @@ fn set_clipboard_text(value: str) -> err {
 const AX_NODES: usize = 256usize
 const AX_QUEUE: usize = 16usize
 type AxShould = union { function: fn(usize, usize) -> usize, bits: usize }
+// An element method receives only its Objective-C object. Keep every window's published tree and request queue apart,
+// then ax_push finds the element's owner instead of routing actions to whichever window published most recently.
+type AxStore = struct { elements: [256]usize, ids: [256]u32, generations: [256]u32, count: usize, requests: [16]AccessibleRequest, head: usize, tail: usize }
 @import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
 extern fn msg_frame(receiver: usize, selector: usize, rect: CgRect) -> usize
 
 var ax_class: usize = zero
-var ax_view: usize = zero
-var ax_elements: [256]usize = zero
-var ax_ids: [256]u32 = zero
-var ax_generations: [256]u32 = zero
-var ax_count: usize = zero
-var ax_requests: [16]AccessibleRequest = zero
-var ax_head: usize = zero
-var ax_tail: usize = zero
+var ax_stores: [16]AxStore = zero
+
+fn ax_release(slot: usize) {
+    let store = &ax_stores[slot]
+    var at = 0usize
+    while at < store.count {
+        let dropped = msg0(store.elements[at], cocoa_sel("release\x00"))
+        store.elements[at] = 0usize
+        at += 1usize
+    }
+    store.count = 0usize
+}
+
+// Closing a window must also drop actions that belonged to its former tree before the Cocoa slot is reused.
+fn ax_forget(slot: usize) {
+    ax_release(slot)
+    let store = &ax_stores[slot]
+    store.head = 0usize
+    store.tail = 0usize
+}
 
 fn ax_push(element: usize, action: u8) {
-    var at = 0usize
-    while at < ax_count && ax_elements[at] != element { at += 1usize }
-    if at == ax_count { ret }
-    let next = (ax_tail + 1usize) % AX_QUEUE
-    if next == ax_head { ret }
-    ax_requests[ax_tail] = AccessibleRequest { id: ax_ids[at], generation: ax_generations[at], action: action, value: "" }
-    ax_tail = next
+    var slot = 0usize
+    while slot < COCOA_TABLE {
+        let store = &ax_stores[slot]
+        var at = 0usize
+        while at < store.count && store.elements[at] != element { at += 1usize }
+        if at < store.count {
+            let next = (store.tail + 1usize) % AX_QUEUE
+            if next == store.head { ret }
+            store.requests[store.tail] = AccessibleRequest { id: store.ids[at], generation: store.generations[at], action: action, value: "" }
+            store.tail = next
+            ret
+        }
+        slot += 1usize
+    }
 }
 
 @cc(c)
@@ -3795,21 +3818,17 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
     let window = cocoa_windows[slot]
     let view = msg0(window, cocoa_sel("contentView\x00"))
     // The last tree is let go of; the new one is built whole.
-    var at = 0usize
-    while at < ax_count {
-        let dropped = msg0(ax_elements[at], cocoa_sel("release\x00"))
-        at += 1usize
-    }
-    ax_count = 0usize
+    ax_release(slot)
+    let store = &ax_stores[slot]
     let frame = cocoa_rect(window, "frame")
     let content = cocoa_rect(view, "frame")
     var count = 0usize
     while count < nodes.len && count < AX_NODES {
         let node = nodes[count]
         let element = msg0(msg0(class, cocoa_sel("alloc\x00")), cocoa_sel("init\x00"))
-        ax_elements[count] = element
-        ax_ids[count] = node.id
-        ax_generations[count] = node.generation
+        store.elements[count] = element
+        store.ids[count] = node.id
+        store.generations[count] = node.generation
         let role = ax_text(ax_role(node.role))
         let set_role = msg1(element, cocoa_sel("setAccessibilityRole:\x00"), role)
         cf_release(role)
@@ -3838,7 +3857,7 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
         let set_frame = msg_frame(element, cocoa_sel("setAccessibilityFrame:\x00"), area)
         count += 1usize
     }
-    ax_count = count
+    store.count = count
     // Parents and children: a node whose parent is published hangs from it, any other from the view.
     var index = 0usize
     while index < count {
@@ -3851,9 +3870,9 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
             }
         }
         if found {
-            let set_parent = msg1(ax_elements[index], cocoa_sel("setAccessibilityParent:\x00"), ax_elements[parent_at])
+            let set_parent = msg1(store.elements[index], cocoa_sel("setAccessibilityParent:\x00"), store.elements[parent_at])
         } else {
-            let set_parent = msg1(ax_elements[index], cocoa_sel("setAccessibilityParent:\x00"), view)
+            let set_parent = msg1(store.elements[index], cocoa_sel("setAccessibilityParent:\x00"), view)
         }
         index += 1usize
     }
@@ -3865,14 +3884,14 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
         var scan = 0usize
         while scan < count {
             if nodes[scan].has_parent && nodes[scan].parent == nodes[index].id && nodes[scan].parent_generation == nodes[index].generation {
-                kids[kid_count] = ax_elements[scan]
+                kids[kid_count] = store.elements[scan]
                 kid_count += 1usize
             }
             scan += 1usize
         }
         if kid_count != 0usize {
             let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&kids[0usize]), kid_count)
-            let set_children = msg1(ax_elements[index], cocoa_sel("setAccessibilityChildren:\x00"), list)
+            let set_children = msg1(store.elements[index], cocoa_sel("setAccessibilityChildren:\x00"), list)
         }
         index += 1usize
     }
@@ -3889,25 +3908,25 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
             }
         }
         if !has_parent_published {
-            tops[top_count] = ax_elements[index]
+            tops[top_count] = store.elements[index]
             top_count += 1usize
         }
         index += 1usize
     }
-    if top_count != 0usize {
-        let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&tops[0usize]), top_count)
-        let set_children = msg1(view, cocoa_sel("setAccessibilityChildren:\x00"), list)
-    }
-    ax_view = view
+    let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&tops[0usize]), top_count)
+    let set_children = msg1(view, cocoa_sel("setAccessibilityChildren:\x00"), list)
     objc_pool_pop(pool)
     ret ok
 }
 
 fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
     var request: AccessibleRequest = zero
-    if ax_count != 0usize { cocoa_pump(0i64) }
-    if ax_head == ax_tail { ret (request, false) }
-    request = ax_requests[ax_head]
-    ax_head = (ax_head + 1usize) % AX_QUEUE
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret (request, false) }
+    let store = &ax_stores[slot]
+    if store.count != 0usize { cocoa_pump(0i64) }
+    if store.head == store.tail { ret (request, false) }
+    request = store.requests[store.head]
+    store.head = (store.head + 1usize) % AX_QUEUE
     ret (request, true)
 }
