@@ -112,6 +112,10 @@ fn main(a: *mem.Arena) -> err {
     if leaked { os.exit(17i32) }
     let (second_request, second_any) = os.accessibility_take(second)
     if !second_any || second_request.id != 20u32 || second_request.action != 1u8 { os.exit(18i32) }
+    // An empty replacement must clear the view's old top-level children instead of retaining this tree.
+    if os.accessibility_publish(second, second_nodes[..0usize]) != ok { os.exit(19i32) }
+    let empty_top = os.msg0(second_view, os.cocoa_sel("accessibilityChildren\x00"))
+    if empty_top == 0usize || os.msg0(empty_top, os.cocoa_sel("count\x00")) != 0usize { os.exit(20i32) }
     say("press ok\n")
     say("accessibility ok\n")
     ret ok
