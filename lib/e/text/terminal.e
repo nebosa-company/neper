@@ -37,6 +37,7 @@ type Terminal = struct {
     private: bool,
     utf8_left: usize,
     utf8_value: u32,
+    utf8_floor: u32,
     scrollback: []Cell,
     scroll_cap: usize,
     scroll_count: usize,
@@ -77,7 +78,7 @@ fn open(a: *mem.Arena, cols: usize, rows: usize, scrollback: usize) -> (Terminal
         alt_cells[i] = blank_cell()
         i += 1usize
     }
-    var t = Terminal { cols: cols, rows: rows, main_cells: main_cells, alt_cells: alt_cells, alt: false, cx: 0usize, cy: 0usize, pen: blank_cell(), saved_x: 0usize, saved_y: 0usize, saved_pen: blank_cell(), top: 0usize, bottom: rows - 1usize, cursor_visible: true, autowrap: true, state: GROUND, params: zero, param_count: 0usize, private: false, utf8_left: 0usize, utf8_value: 0u32, scrollback: history, scroll_cap: scrollback, scroll_count: 0usize, scroll_start: 0usize }
+    var t = Terminal { cols: cols, rows: rows, main_cells: main_cells, alt_cells: alt_cells, alt: false, cx: 0usize, cy: 0usize, pen: blank_cell(), saved_x: 0usize, saved_y: 0usize, saved_pen: blank_cell(), top: 0usize, bottom: rows - 1usize, cursor_visible: true, autowrap: true, state: GROUND, params: zero, param_count: 0usize, private: false, utf8_left: 0usize, utf8_value: 0u32, utf8_floor: 0u32, scrollback: history, scroll_cap: scrollback, scroll_count: 0usize, scroll_start: 0usize }
     ret (t, ok)
 }
 
@@ -447,6 +448,9 @@ fn reset(t: *Terminal) {
     t.bottom = t.rows - 1usize
     t.cursor_visible = true
     t.autowrap = true
+    t.utf8_left = 0usize
+    t.utf8_value = 0u32
+    t.utf8_floor = 0u32
 }
 
 fn dispatch_csi(t: *Terminal, final: u8) {
@@ -552,29 +556,58 @@ fn control(t: *Terminal, byte: u8) {
 
 fn feed_byte(t: *Terminal, byte: u8) {
     if t.state == GROUND {
+        // Keep an unfinished scalar across feeds, but recover strictly when the
+        // next byte cannot extend it. Reprocess that byte as a control, ASCII or
+        // a fresh UTF-8 lead after writing one replacement character.
+        if t.utf8_left > 0usize {
+            if (byte & 192u8) == 128u8 {
+                t.utf8_value = (t.utf8_value << 6u32) | u32(byte & 63u8)
+                t.utf8_left -= 1usize
+                if t.utf8_left == 0usize {
+                    let scalar = t.utf8_value
+                    let floor = t.utf8_floor
+                    t.utf8_value = 0u32
+                    t.utf8_floor = 0u32
+                    if scalar < floor || scalar > 1114111u32 || (scalar >= 55296u32 && scalar <= 57343u32) {
+                        put_char(t, 65533u32)
+                    } else {
+                        put_char(t, scalar)
+                    }
+                }
+                ret
+            }
+            t.utf8_left = 0usize
+            t.utf8_value = 0u32
+            t.utf8_floor = 0u32
+            put_char(t, 65533u32)
+            feed_byte(t, byte)
+            ret
+        }
         if byte == 27u8 {
             t.state = ESCAPE
             t.utf8_left = 0usize
+            t.utf8_value = 0u32
+            t.utf8_floor = 0u32
         } else if byte < 32u8 || byte == 127u8 {
             control(t, byte)
         } else if byte < 128u8 {
-            t.utf8_left = 0usize
             put_char(t, u32(byte))
-        } else if t.utf8_left > 0usize && (byte & 192u8) == 128u8 {
-            t.utf8_value = (t.utf8_value << 6u32) | u32(byte & 63u8)
-            t.utf8_left -= 1usize
-            if t.utf8_left == 0usize { put_char(t, t.utf8_value) }
-        } else if (byte & 224u8) == 192u8 {
+        } else if byte >= 194u8 && byte <= 223u8 {
             t.utf8_value = u32(byte & 31u8)
             t.utf8_left = 1usize
-        } else if (byte & 240u8) == 224u8 {
+            t.utf8_floor = 128u32
+        } else if byte >= 224u8 && byte <= 239u8 {
             t.utf8_value = u32(byte & 15u8)
             t.utf8_left = 2usize
-        } else if (byte & 248u8) == 240u8 {
+            t.utf8_floor = 2048u32
+        } else if byte >= 240u8 && byte <= 244u8 {
             t.utf8_value = u32(byte & 7u8)
             t.utf8_left = 3usize
+            t.utf8_floor = 65536u32
         } else {
             t.utf8_left = 0usize
+            t.utf8_value = 0u32
+            t.utf8_floor = 0u32
             put_char(t, 65533u32)
         }
     } else if t.state == ESCAPE {
