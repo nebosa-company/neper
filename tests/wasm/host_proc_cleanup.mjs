@@ -1,6 +1,7 @@
 // Direct NetHost boundary checks: invalid sockets allocate nothing, a listener keeps
-// the requested backlog, a drained pipe wakes a backpressured writer, and process/group
-// aliases retain exactly the needed host record.
+// the requested backlog, a drained pipe wakes a backpressured writer, long poll waits keep
+// their deadline through bounded Node timers, and process/group aliases retain exactly the
+// needed host record.
 import assert from 'node:assert/strict'
 import net from 'node:net'
 import { BASE, FUNCTIONS, NetHost, context } from '../../lib/wasm/run-wasm-host.mjs'
@@ -12,6 +13,9 @@ const wait = FUNCTIONS.findIndex(([name]) => name === 'proc_wait')
 const groupClose = FUNCTIONS.findIndex(([name]) => name === 'proc_group_close')
 const open = FUNCTIONS.findIndex(([name]) => name === 'sock_open')
 const listen = FUNCTIONS.findIndex(([name]) => name === 'sock_listen')
+const pollOpen = FUNCTIONS.findIndex(([name]) => name === 'poll_open')
+const pollWait = FUNCTIONS.findIndex(([name]) => name === 'poll_wait')
+const pollWake = FUNCTIONS.findIndex(([name]) => name === 'poll_wake')
 const pipe = FUNCTIONS.findIndex(([name]) => name === 'pipe')
 const handleRead = FUNCTIONS.findIndex(([name]) => name === 'handle_read')
 const handleWrite = FUNCTIONS.findIndex(([name]) => name === 'handle_write')
@@ -40,6 +44,44 @@ try {
     assert.equal(options.backlog, 1, 'the listener receives the guest backlog')
   } finally {
     net.createServer = originalCreateServer
+  }
+  assert.equal(await host.call(pollOpen, []), 0, 'a host poller opens')
+  const poller = host.view.getUint32(64, true)
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+  const timers = []
+  let waiting
+  let finished = false
+  globalThis.setTimeout = (callback, milliseconds) => {
+    const timer = { callback, milliseconds }
+    timers.push(timer)
+    return timer
+  }
+  globalThis.clearTimeout = (timer) => { timer.cleared = true }
+  try {
+    // A delay above Node's signed-32-bit timer maximum must be split rather than
+    // clamped to one millisecond. Trigger the synthetic first slice, not a real day.
+    const longTimeout = (2n * 2147483647n + 1n) * 1000000n
+    waiting = host.call(pollWait, [poller, 0, 1, longTimeout, 0]).then((status) => {
+      finished = true
+      return status
+    })
+    assert.equal(timers.length, 1, 'the long poll schedules its first timer')
+    assert.equal(timers[0].milliseconds, 2147483647, 'the first timer stays within Node\'s limit')
+    timers[0].callback()
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(finished, false, 'one bounded timer does not exhaust the long deadline')
+    assert.equal(timers.length, 2, 'the remaining deadline schedules another bounded timer')
+    assert.equal(timers[1].milliseconds, 2147483647, 'the recomputed timer stays within Node\'s limit')
+    assert.equal(await host.call(pollWake, [poller]), 0, 'a poll wake interrupts the bounded wait')
+    assert.equal(await waiting, 0, 'the long poll returns after its wake')
+  } finally {
+    if (waiting && !finished) {
+      await host.call(pollWake, [poller])
+      await waiting
+    }
+    globalThis.setTimeout = originalSetTimeout
+    globalThis.clearTimeout = originalClearTimeout
   }
   assert.equal(await host.call(pipe, []), 0, 'a host pipe opens')
   const reader = host.view.getUint32(64, true)
