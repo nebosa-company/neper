@@ -4859,7 +4859,7 @@ fn part19(b: *str.Builder) -> err {
     try str.push(b, "    get() {\n")
     try str.push(b, "      const s = slotOf(this);\n")
     try str.push(b, "      if (!s || !s.isRadioList) illegal();\n")
-    try str.push(b, "      for (const el of s.collect()) if (htmlLocal(el) === 'input' && inputTypeOf(el) === 'radio' && inputState(el).checked) return getAttributeValue(el, 'value') === null ? 'on' : getAttributeValue(el, 'value');\n")
+    try str.push(b, "      for (const el of s.collect()) if (htmlLocal(el) === 'input' && inputTypeOf(el) === 'radio' && isCheckedInput(el)) return getAttributeValue(el, 'value') === null ? 'on' : getAttributeValue(el, 'value');\n")
     try str.push(b, "      return '';\n")
     try str.push(b, "    },\n")
     try str.push(b, "    set(v) {\n")
