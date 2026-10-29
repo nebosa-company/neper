@@ -462,6 +462,20 @@ fn contracts() -> i32 {
     if !g12 || e12 != 1usize { ret 42i32 }
     let (e13, g13) = comb.separated1(&cz, 1usize, p_b, raw_comma)
     if g13 || e13 != 1usize { ret 43i32 }
+    // A successful separator/item pair must make progress; zero-width pairs
+    // finish as the first item rather than looping or recursing forever.
+    var zero_list = comb.context("", events[0..])
+    let (zero_list_end, zero_list_good) = comb.separated0(&zero_list, 0usize, comb.eof, comb.eof)
+    if !zero_list_good || zero_list_end != 0usize || zero_list.count != 0usize { ret 53i32 }
+    var zero_left = comb.context("", events[0..])
+    let (zero_left_end, zero_left_good) = comb.chainl1(&zero_left, 0usize, comb.eof, comb.eof, 0u32)
+    if !zero_left_good || zero_left_end != 0usize || zero_left.count != 0usize { ret 54i32 }
+    var zero_right = comb.context("", events[0..])
+    let (zero_right_end, zero_right_good) = comb.chainr1(&zero_right, 0usize, comb.eof, comb.eof, 0u32)
+    if !zero_right_good || zero_right_end != 0usize || zero_right.count != 0usize { ret 55i32 }
+    let max_offset = 0usize -% 1usize
+    let (offset_end, offset_good) = comb.lit(&zero_right, max_offset, "a")
+    if offset_good || offset_end != max_offset { ret 56i32 }
     // label: names a failure at the start.
     var cl = comb.context("x", events[0..])
     let (e14, g14) = p_a_labelled(&cl, 0usize)

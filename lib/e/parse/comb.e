@@ -65,7 +65,7 @@ fn line_col(src: str, off: usize) -> (usize, usize) {
 
 // The literal bytes `s`.
 fn lit(cx: *Cx, off: usize, s: str) -> (usize, bool) {
-    if off + s.len > cx.src.len {
+    if off > cx.src.len || s.len > cx.src.len - off {
         note(cx, off, s)
         ret (off, false)
     }
@@ -293,6 +293,10 @@ fn separated0(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: f
             cx.count = loop_mark
             break
         }
+        if after_item == cur {
+            cx.count = loop_mark
+            break
+        }
         cur = after_item
     }
     ret (cur, true)
@@ -399,6 +403,10 @@ fn chainl1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn
             cx.count = loop_mark
             break
         }
+        if after_rhs == cur {
+            cx.count = loop_mark
+            break
+        }
         if cx.count >= cx.events.len {
             cx.overflow = true
             cx.count = mark
@@ -423,6 +431,10 @@ fn chainr1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn
     let after_first = cx.count
     let (after_op, good_op) = op(cx, first)
     if !good_op {
+        cx.count = after_first
+        ret (first, true)
+    }
+    if after_op == off {
         cx.count = after_first
         ret (first, true)
     }

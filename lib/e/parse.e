@@ -70,7 +70,7 @@ fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
 fn is_punct(c: u8) -> bool { ret (c >= 33u8 && c <= 47u8) || (c >= 58u8 && c <= 64u8) || (c >= 91u8 && c <= 96u8) || (c >= 123u8 && c <= 126u8) }
 
 fn starts_at(text: str, at_pos: usize, s: str) -> bool {
-    if at_pos + s.len > text.len { ret false }
+    if at_pos > text.len || s.len > text.len - at_pos { ret false }
     var i = 0usize
     while i < s.len {
         if text[at_pos + i] != s[i] { ret false }

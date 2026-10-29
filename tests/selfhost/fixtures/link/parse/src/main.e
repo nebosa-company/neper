@@ -68,6 +68,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if unterminated != parse.Invalid { os.exit(1i32) }
     let (_, room) = parse.lex(program, operators[..], tokens[..3usize])
     if room != parse.TooSmall { os.exit(1i32) }
+    let max_offset = 0usize -% 1usize
+    if parse.starts_at("a", max_offset, "a") { os.exit(1i32) }
 
     // 2: the off-side rule.
     let indent_text = "a\n  b\n\n    c\n    d\n  e\n      f\ng\n  h"
