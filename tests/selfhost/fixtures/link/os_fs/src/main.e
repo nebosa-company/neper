@@ -202,6 +202,17 @@ fn main(a: *mem.Arena) -> err {
     if freed_error != ok { os.exit(85i32) }
     if freed.mode & 128u32 == 0u32 { os.exit(86i32) }
 
+    // Resolving a name only needs traversal permission. On macOS `canonical` uses an
+    // event-only descriptor for F_GETPATH, so it must not require data-read permission.
+    when target.os == .Macos {
+        if os.set_mode(a, "np-os-fs-dir/note.txt", 128u32) != ok { os.exit(300i32) }
+        let (write_only, write_only_error) = os.stat(a, "np-os-fs-dir/note.txt")
+        if write_only_error != ok || write_only.mode & 256u32 != 0u32 || write_only.mode & 128u32 == 0u32 { os.exit(301i32) }
+        let (write_only_path, write_only_path_error) = os.canonical(a, "np-os-fs-dir/note.txt")
+        if write_only_path_error != ok || !rooted_path(write_only_path) { os.exit(302i32) }
+        if os.set_mode(a, "np-os-fs-dir/note.txt", 438u32) != ok { os.exit(303i32) }
+    }
+
     // Neither call succeeds quietly on a path that is not there.
     if os.set_times(a, "np-os-fs-absent", STAMP_ACCESSED, STAMP_MODIFIED) != os.NotFound { os.exit(87i32) }
     if os.set_mode(a, "np-os-fs-absent", 438u32) != os.NotFound { os.exit(88i32) }

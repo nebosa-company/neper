@@ -458,7 +458,8 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
 }
 
 // A file's path from its descriptor, which is how the kernel names a directory: F_GETPATH on
-// an open `.` is getcwd, and on any path is realpath.
+// an event-only open `.` is getcwd, and on any path is realpath. The descriptor does not need
+// permission to read the object's bytes.
 fn path_of(a: *mem.Arena, path: str) -> (str, err) {
     let checkpoint = mem.mark(a)
     let (path_address, path_error) = c_string(a, path)
@@ -466,7 +467,7 @@ fn path_of(a: *mem.Arena, path: str) -> (str, err) {
         mem.reset(a, checkpoint)
         ret ("", path_error)
     }
-    let descriptor = syscall(SYS_OPEN, path_address, O_RDONLY | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    let descriptor = syscall(SYS_OPEN, path_address, O_EVTONLY | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
     if descriptor < 0isize {
         let open_error = from_errno(descriptor)
         mem.reset(a, checkpoint)
