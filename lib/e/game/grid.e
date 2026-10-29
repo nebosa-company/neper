@@ -23,6 +23,10 @@ type Shape = enum u8 { Square, IsoDiamond, HexPointy, HexFlat }
 type Coord = struct { q: i32, r: i32 }
 
 error Bounds
+error Invalid
+
+// Ring and area walk signed coordinate deltas.
+const MAX_RADIUS: u32 = 2147483647u32
 
 fn coord(q: i32, r: i32) -> Coord {
     ret Coord { q: q, r: r }
@@ -209,6 +213,7 @@ fn line(s: Shape, a: Coord, b: Coord, out: []Coord) -> (usize, err) {
 
 // Exactly `radius` away, under whichever distance the shape uses.
 fn ring(s: Shape, centre: Coord, radius: u32, out: []Coord) -> (usize, err) {
+    if radius > MAX_RADIUS { ret (0usize, Invalid) }
     if radius == 0u32 {
         if out.len < 1usize { ret (0usize, Bounds) }
         out[0usize] = centre
@@ -264,6 +269,7 @@ fn ring(s: Shape, centre: Coord, radius: u32, out: []Coord) -> (usize, err) {
 
 // Everything within `radius`, centre included, in a stable order.
 fn area(s: Shape, centre: Coord, radius: u32, out: []Coord) -> (usize, err) {
+    if radius > MAX_RADIUS { ret (0usize, Invalid) }
     var count = 0usize
     let reach = i32(radius)
     var dq = 0i32 - reach
