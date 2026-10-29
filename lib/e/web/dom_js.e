@@ -486,7 +486,7 @@ fn part1(b: *str.Builder) -> err {
     try str.push(b, "  for (; i >= 0; i--) { if (s.path[i].shadowAdjustedTarget !== null) { s.target = s.path[i].shadowAdjustedTarget; break; } }\n")
     try str.push(b, "  s.relatedTarget = struct.relatedTarget;\n")
     try str.push(b, "  s.touchTargets = struct.touchTargets;\n")
-    try str.push(b, "  if (s.stopProp) return;\n")
+    try str.push(b, "  if (s.stopImmediate || (s.stopProp && s.currentTarget !== struct.invocationTarget)) return;\n")
     try str.push(b, "  s.currentTarget = struct.invocationTarget;\n")
     try str.push(b, "  const ts = struct.invocationTarget === global ? targetSlot(global) : slotOf(struct.invocationTarget);\n")
     try str.push(b, "  const listeners = apply(arraySlice, ts.listeners, []);\n")
