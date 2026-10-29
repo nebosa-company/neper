@@ -55,7 +55,11 @@ fn scan(s: *Scan, text: str) {
             // Inside a script or style element: only its end tag leaves.
             var closer = "</script"
             if s.in_raw == 2u8 { closer = "</style" }
-            if i + closer.len <= text.len && str.compare_ascii_fold(text[i..i + closer.len], closer) == 0 {
+            let closer_end = i + closer.len
+            // A raw-text end tag is only an end tag when its name is followed by
+            // HTML's tag-name boundary. For example, `</scriptx>` is script data,
+            // not the end of a script element.
+            if closer_end < text.len && str.compare_ascii_fold(text[i..closer_end], closer) == 0 && (is_space(text[closer_end]) || text[closer_end] == 47u8 || text[closer_end] == 62u8) {
                 s.in_raw = 0u8
                 s.in_tag = true
                 s.element = ""
