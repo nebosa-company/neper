@@ -12,6 +12,7 @@
 // e.thread) lands in later C107 increments.
 
 use e.mem
+use e.path as path_api
 
 // The separator this target's paths are written with (e.path asks the host nothing, so a portable
 // module learns the convention only from the per-target os file). NeperOS uses '/'.
@@ -322,8 +323,37 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
 fn rename(a: *mem.Arena, src: str, dst: str) -> err { ret Unsupported }
 fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err { ret Unsupported }
 fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err { ret Unsupported }
-fn canonical(a: *mem.Arena, path: str) -> (str, err) { ret (path, ok) }
-fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) { ret (path, ok) }
+// NeperOS has one root and no links. Resolve relative names from that root,
+// normalize their lexical components, then ask the file server whether the
+// resulting object exists before claiming it is canonical.
+fn canonical(a: *mem.Arena, path_text: str) -> (str, err) {
+    if path_text.len == 0usize { ret ("", NotFound) }
+    let checkpoint = mem.mark(a)
+    var parts: [2]str = zero
+    parts[0usize] = "/"
+    parts[1usize] = path_text
+    let (joined, join_error) = path_api.join(a, parts[..], .Posix)
+    if join_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", join_error)
+    }
+    let (normalized, normalize_error) = path_api.normalize(a, joined, .Posix)
+    if normalize_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", normalize_error)
+    }
+    let (_, stat_error) = stat(a, normalized)
+    if stat_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", stat_error)
+    }
+    ret (normalized, ok)
+}
+fn canonical_detail(a: *mem.Arena, path_text: str, detail: *ErrorDetail) -> (str, err) {
+    let (resolved, canonical_error) = canonical(a, path_text)
+    if canonical_error != ok { *detail = last_error_detail("canonical", path_text) }
+    ret (resolved, canonical_error)
+}
 fn read_link(a: *mem.Arena, path: str) -> (str, err) { ret ("", Unsupported) }
 fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) { ret ("", Unsupported) }
 fn symlink(a: *mem.Arena, target_path: str, link: str) -> err { ret Unsupported }

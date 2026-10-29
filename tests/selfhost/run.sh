@@ -11175,7 +11175,7 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     dd if=/dev/zero of="$fs_disk" bs=1M count=1 status=none
     neperos_fswrite=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_archive" -append "fsserver fswrite" -drive "file=$fs_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_fswrite" in
-        *'fs server formatted'*'fs client mkdir /docs ok'*'fs client write /docs/greeting ok'*'fs client open /docs/greeting size 17'*'fs client close /docs/greeting ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *'fs server formatted'*'fs client mkdir /docs ok'*'fs client write /docs/greeting ok'*'fs client open /docs/greeting size 17'*'fs client close /docs/greeting ok'*'fs client canonical /docs/greeting ok'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS filesystem write boot wrong: $neperos_fswrite" >&2; exit 1 ;;
     esac
     case "$neperos_fswrite" in *'fs denied'*) ;; *) printf '%s\n' "the capability gate did not refuse the uncapped client: $neperos_fswrite" >&2; exit 1 ;; esac

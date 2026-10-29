@@ -11493,7 +11493,7 @@ if ($neperosQemu) {
     $fsServerStream = [IO.File]::Create($fsServerDisk); $fsServerStream.SetLength(1MB); $fsServerStream.Close()
     $fsBlk = @('-drive', "file=$fsServerDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
     $fsWriteBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsArchive, '-append', '"fsserver fswrite"') + $fsBlk)
-    foreach ($fsMark in @('fs server formatted', 'fs denied', 'fs client mkdir /docs ok', 'fs client write /docs/greeting ok', 'fs client open /docs/greeting size 17', 'fs client close /docs/greeting ok', 'neperos: exit 0x0000000000000000')) {
+    foreach ($fsMark in @('fs server formatted', 'fs denied', 'fs client mkdir /docs ok', 'fs client write /docs/greeting ok', 'fs client open /docs/greeting size 17', 'fs client close /docs/greeting ok', 'fs client canonical /docs/greeting ok', 'neperos: exit 0x0000000000000000')) {
         if ($fsWriteBoot -notmatch [regex]::Escape($fsMark)) { throw "NeperOS filesystem write boot missing (${fsMark}): $fsWriteBoot" }
     }
     if ($fsWriteBoot -notmatch "fs client list /docs:\s*greeting") { throw "the filesystem server did not list the written file: $fsWriteBoot" }
