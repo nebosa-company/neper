@@ -288,6 +288,7 @@ fn dct2(x: []const f64, out: []f64) -> err {
 // `x[n] = X[0] / 2 + sum_{k >= 1} X[k] cos(pi k (n + 1/2) / N)`.
 fn dct3(x: []const f64, out: []f64) -> err {
     let n = x.len
+    if n == 0usize { ret ok }
     if out.len < n { ret TooSmall }
     var i = 0usize
     while i < n {

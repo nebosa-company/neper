@@ -125,6 +125,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if fft.dct2(re[..], coefficients[..4usize]) != fft.TooSmall { os.exit(5i32) }
+    var empty_dct: [0]f64 = zero
+    var untouched: [1]f64 = zero
+    untouched[0usize] = 17.0f64
+    if fft.dct3(empty_dct[..], untouched[..]) != ok || untouched[0usize] != 17.0f64 { os.exit(5i32) }
 
     try io.print("math fft ok\n")
     ret ok
