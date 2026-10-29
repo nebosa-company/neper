@@ -10956,7 +10956,7 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "  if (new.target === undefined) throw new TypeError(\"Failed to construct 'XMLHttpRequest': Please use the 'new' operator\");\n")
     try str.push(b, "  const upload = create(XMLHttpRequestUpload.prototype);\n")
     try str.push(b, "  setSlot(upload, { listeners: [], isTarget: true });\n")
-    try str.push(b, "  setSlot(this, { listeners: [], isTarget: true, isXHR: true, state: 0, upload, timeout: 0, withCredentials: false, responseType: '', method: 'GET', url: '', async: true, requestHeaders: [], sendFlag: false, status: 0, statusText: '', responseHeaders: [], responseBytes: '', mimeOverride: null, errorFlag: false, token: 0, handlers: {} });\n")
+    try str.push(b, "  setSlot(this, { listeners: [], isTarget: true, isXHR: true, state: 0, upload, timeout: 0, timeoutTimer: null, timeoutStarted: 0, withCredentials: false, responseType: '', method: 'GET', url: '', async: true, requestHeaders: [], sendFlag: false, status: 0, statusText: '', responseHeaders: [], responseBytes: '', mimeOverride: null, errorFlag: false, token: 0, handlers: {} });\n")
     try str.push(b, "}\n")
     try str.push(b, "iface('XMLHttpRequest', XMLHttpRequest, XMLHttpRequestEventTarget);\n")
     try str.push(b, "constants(XMLHttpRequest, { UNSENT: 0, OPENED: 1, HEADERS_RECEIVED: 2, LOADING: 3, DONE: 4 });\n")
@@ -10978,6 +10978,26 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "  return s.mimeOverride || h || '';\n")
     try str.push(b, "}\n")
     try str.push(b, "function xhrResponseText(s) { return N.utf8Decode(s.responseBytes); }\n")
+    try str.push(b, "function xhrClearTimeout(s) {\n")
+    try str.push(b, "  if (s.timeoutTimer !== null) { clearTimer(s.timeoutTimer); s.timeoutTimer = null; }\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function xhrDeadlinePassed(s) { return s.timeout !== 0 && N.now() - s.timeoutStarted >= s.timeout; }\n")
+    try str.push(b, "function xhrTimeout(xhr, token) {\n")
+    try str.push(b, "  const s = slotOf(xhr);\n")
+    try str.push(b, "  if (s.token !== token || !s.sendFlag) return false;\n")
+    try str.push(b, "  xhrClearTimeout(s);\n")
+    try str.push(b, "  s.token++; s.sendFlag = false; s.errorFlag = true;\n")
+    try str.push(b, "  s.status = 0; s.statusText = ''; s.responseHeaders = []; s.responseBytes = ''; s.responseUrl = '';\n")
+    try str.push(b, "  xhrReadyState(xhr, 4);\n")
+    try str.push(b, "  xhrFire(xhr, xhr, 'timeout', 0, 0); xhrFire(xhr, xhr, 'loadend', 0, 0);\n")
+    try str.push(b, "  return true;\n")
+    try str.push(b, "}\n")
+    try str.push(b, "function xhrStartTimeout(xhr, token) {\n")
+    try str.push(b, "  const s = slotOf(xhr);\n")
+    try str.push(b, "  xhrClearTimeout(s);\n")
+    try str.push(b, "  s.timeoutStarted = N.now();\n")
+    try str.push(b, "  if (s.timeout !== 0) s.timeoutTimer = scheduleTimer(() => xhrTimeout(xhr, token), s.timeout, false, []);\n")
+    try str.push(b, "}\n")
     try str.push(b, "function xhrRun(xhr, body) {\n")
     try str.push(b, "  const s = slotOf(xhr);\n")
     try str.push(b, "  let raw = null;\n")
@@ -10986,6 +11006,7 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "function xhrComplete(xhr, raw, sync) {\n")
     try str.push(b, "  const s = slotOf(xhr);\n")
+    try str.push(b, "  xhrClearTimeout(s);\n")
     try str.push(b, "  if (raw === null) {\n")
     try str.push(b, "    s.errorFlag = true; s.state = 4; s.sendFlag = false; s.status = 0; s.statusText = ''; s.responseBytes = '';\n")
     try str.push(b, "    if (!sync) {\n")
@@ -11020,6 +11041,7 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "    s.method = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'].indexOf(up) >= 0 ? up : m;\n")
     try str.push(b, "    s.url = parsed[0]; s.async = async === undefined ? true : !!async;\n")
     try str.push(b, "    if (!s.async && s.timeout !== 0) throw domError('InvalidAccessError', 'Synchronous requests must not set a timeout.');\n")
+    try str.push(b, "    xhrClearTimeout(s);\n")
     try str.push(b, "    s.requestHeaders = []; s.sendFlag = false; s.errorFlag = false; s.responseBytes = ''; s.status = 0; s.statusText = ''; s.responseHeaders = [];\n")
     try str.push(b, "    s.token++;\n")
     try str.push(b, "    if (s.state !== 1) { s.state = 1; const ev = new Event('readystatechange'); slotOf(ev).isTrusted = true; dispatch(ev, this); }\n")
@@ -11058,15 +11080,19 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "      return;\n")
     try str.push(b, "    }\n")
     try str.push(b, "    xhrFire(this, this, 'loadstart', 0, 0);\n")
+    try str.push(b, "    xhrStartTimeout(this, token);\n")
     try str.push(b, "    scheduleTimer(() => {\n")
     try str.push(b, "      if (s.token !== token || !s.sendFlag) return;\n")
+    try str.push(b, "      if (xhrDeadlinePassed(s)) { xhrTimeout(this, token); return; }\n")
     try str.push(b, "      const raw = xhrRun(this, bytes);\n")
     try str.push(b, "      if (s.token !== token || !s.sendFlag) return;\n")
+    try str.push(b, "      if (xhrDeadlinePassed(s)) { xhrTimeout(this, token); return; }\n")
     try str.push(b, "      xhrComplete(this, raw, false);\n")
     try str.push(b, "    }, 0, false, []);\n")
     try str.push(b, "  },\n")
     try str.push(b, "  abort() {\n")
     try str.push(b, "    const s = xhrSlot(this);\n")
+    try str.push(b, "    xhrClearTimeout(s);\n")
     try str.push(b, "    s.token++;\n")
     try str.push(b, "    if (s.sendFlag || s.state === 2 || s.state === 3) {\n")
     try str.push(b, "      s.sendFlag = false; s.errorFlag = true;\n")
@@ -11092,7 +11118,7 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "});\n")
     try str.push(b, "attributes(XMLHttpRequest.prototype, {\n")
     try str.push(b, "  readyState: { get() { return xhrSlot(this).state; } },\n")
-    try str.push(b, "  timeout: { get() { return xhrSlot(this).timeout; }, set(v) { const s = xhrSlot(this); if (!s.async && s.state !== 0) throw domError('InvalidAccessError', 'Synchronous requests must not set a timeout.'); s.timeout = toUnsignedLong(v); } },\n")
+    try str.push(b, "  timeout: { get() { return xhrSlot(this).timeout; }, set(v) { const s = xhrSlot(this); if (!s.async && s.state !== 0) throw domError('InvalidAccessError', 'Synchronous requests must not set a timeout.'); s.timeout = toUnsignedLong(v); if (s.async && s.sendFlag) xhrStartTimeout(this, s.token); } },\n")
     try str.push(b, "  withCredentials: { get() { return xhrSlot(this).withCredentials; }, set(v) { const s = xhrSlot(this); if (s.state !== 0 && s.state !== 1) throw domError('InvalidStateError', 'The object is in an invalid state.'); s.withCredentials = !!v; } },\n")
     try str.push(b, "  upload: { get() { return xhrSlot(this).upload; } },\n")
     try str.push(b, "  responseType: {\n")
@@ -11150,6 +11176,10 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "  const state = { isStorage: true, map: new Map(), area: areaName };\n")
     try str.push(b, "  const sto = legacyObject(Storage.prototype, {\n")
     try str.push(b, "    length: () => state.map.size,\n")
+    ret ok
+}
+
+fn part44(b: *str.Builder) -> err {
     try str.push(b, "    item: i => null,\n")
     try str.push(b, "    indexed: false,\n")
     try str.push(b, "    named: name => (state.map.has(name) ? state.map.get(name) : undefined),\n")
@@ -11176,10 +11206,6 @@ fn part43(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "function storageRemove(st, key) {\n")
     try str.push(b, "  const s = slotOf(st);\n")
-    ret ok
-}
-
-fn part44(b: *str.Builder) -> err {
     try str.push(b, "  if (!s.map.has(key)) return;\n")
     try str.push(b, "  const old = s.map.get(key);\n")
     try str.push(b, "  s.map.delete(key);\n")
@@ -11404,6 +11430,10 @@ fn part44(b: *str.Builder) -> err {
     try str.push(b, "    if (['text/html', 'text/xml', 'application/xml', 'application/xhtml+xml', 'image/svg+xml'].indexOf(t) < 0) throw new TypeError(\"Failed to execute 'parseFromString' on 'DOMParser': The provided value '\" + t + \"' is not a valid enum value of type SupportedType.\");\n")
     try str.push(b, "    if (t === 'text/html') {\n")
     try str.push(b, "      const doc = newDocument(false);\n")
+    ret ok
+}
+
+fn part45(b: *str.Builder) -> err {
     try str.push(b, "      setPrototypeOf(doc, Document.prototype);\n")
     try str.push(b, "      slotOf(doc).url = slotOf(mainDocument).url;\n")
     try str.push(b, "      slotOf(doc).browsingContext = false;\n")
@@ -11430,10 +11460,6 @@ fn part44(b: *str.Builder) -> err {
     try str.push(b, "}\n")
     try str.push(b, "iface('XMLSerializer', XMLSerializer, null);\n")
     try str.push(b, "function escapeXMLText(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\n")
-    ret ok
-}
-
-fn part45(b: *str.Builder) -> err {
     try str.push(b, "function escapeXMLAttr(s) { return s.replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\\t/g, '&#9;').replace(/\\n/g, '&#10;').replace(/\\r/g, '&#13;'); }\n")
     try str.push(b, "const voidHTML = ['area', 'base', 'basefont', 'bgsound', 'br', 'col', 'embed', 'frame', 'hr', 'img', 'input', 'keygen', 'link', 'menuitem', 'meta', 'param', 'source', 'track', 'wbr'];\n")
     try str.push(b, "function xmlPrefixes(map, ns) { return map.get(ns) || []; }\n")
@@ -11658,6 +11684,10 @@ fn part45(b: *str.Builder) -> err {
     try str.push(b, "  },\n")
     try str.push(b, "  close() { const s = slotOf(this); if (!s || !s.isBC) illegal(); s.closed = true; }\n")
     try str.push(b, "});\n")
+    ret ok
+}
+
+fn part46(b: *str.Builder) -> err {
     try str.push(b, "const layoutObservers = new Set();\n")
     try str.push(b, "function watchLayoutObserver(observer) { layoutObservers.add(observer); }\n")
     try str.push(b, "function pruneLayoutObserver(observer) {\n")
@@ -11684,10 +11714,6 @@ fn part45(b: *str.Builder) -> err {
     try str.push(b, "iface('ResizeObserver', ResizeObserver, null);\n")
     try str.push(b, "operations(ResizeObserver.prototype, {\n")
     try str.push(b, "  observe(target) {\n")
-    ret ok
-}
-
-fn part46(b: *str.Builder) -> err {
     try str.push(b, "    const s = slotOf(this);\n")
     try str.push(b, "    if (!s || !s.isRO) illegal();\n")
     try str.push(b, "    required(arguments, 1, 'observe');\n")
@@ -11867,7 +11893,7 @@ fn part46(b: *str.Builder) -> err {
 }
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 644359)
+    var b = try str.builder(a, 645548)
     try part0(&b)
     try part1(&b)
     try part2(&b)

@@ -16,5 +16,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     script.pump(context, 0.0f64)
     let check = "if (!window.done || window.failure !== null) throw new Error('stream body promise chain did not complete'); if (window.responseText !== 'rs' || window.responseCloneText !== 'rs') throw new Error('Response clone did not preserve a stream body'); if (window.requestText !== 'rq' || window.requestCloneText !== 'rq') throw new Error('Request clone did not preserve independent stream bodies'); if (window.lockedCloneName !== 'TypeError') throw new Error('locked Request body could be cloned'); if (window.sourceUsedAfterTransfer !== true || window.transferredText !== 'mv') throw new Error('Request constructor did not transfer the input body'); if (window.usedConstructorName !== 'TypeError' || window.overrideText !== 'override') throw new Error('Request construction did not handle used or overridden bodies');"
     if !script.run_script(context, check, "request-clone-body-check.js") { os.exit(4i32) }
+    let timeout_setup = "const timed = new XMLHttpRequest(); window.timeoutEvents = []; for (const type of ['loadstart', 'timeout', 'error', 'load', 'loadend']) timed.addEventListener(type, () => window.timeoutEvents.push(type)); timed.open('GET', 'https://timeout.test/slow'); timed.timeout = 5; timed.send(); window.timed = timed;"
+    if !script.run_script(context, timeout_setup, "xhr-timeout-setup.js") { os.exit(5i32) }
+    script.advance(context, 5.0f64)
+    script.pump(context, 0.0f64)
+    let timeout_check = "if (window.timeoutEvents.join(',') !== 'loadstart,timeout,loadend' || window.timed.readyState !== XMLHttpRequest.DONE || window.timed.status !== 0 || window.timed.responseText !== '' || window.timed.responseURL !== '') throw new Error('XMLHttpRequest did not time out before a delayed request started');"
+    if !script.run_script(context, timeout_check, "xhr-timeout-check.js") { os.exit(6i32) }
+    let complete_setup = "const completed = new XMLHttpRequest(); window.completeEvents = []; for (const type of ['loadstart', 'timeout', 'error', 'load', 'loadend']) completed.addEventListener(type, () => window.completeEvents.push(type)); completed.open('GET', 'data:text/plain,ok'); completed.timeout = 5; completed.send(); window.completed = completed;"
+    if !script.run_script(context, complete_setup, "xhr-timeout-complete-setup.js") { os.exit(7i32) }
+    script.pump(context, 0.0f64)
+    script.advance(context, 5.0f64)
+    script.pump(context, 0.0f64)
+    let complete_check = "if (window.completeEvents.join(',') !== 'loadstart,load,loadend' || window.completed.readyState !== XMLHttpRequest.DONE || window.completed.status !== 200 || window.completed.responseText !== 'ok') throw new Error('completed XMLHttpRequest fired a stale timeout');"
+    if !script.run_script(context, complete_check, "xhr-timeout-complete-check.js") { os.exit(8i32) }
     ret ok
 }
