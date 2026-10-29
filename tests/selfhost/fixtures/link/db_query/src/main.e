@@ -226,6 +226,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n9, e9v) = query.vectorized(plan[..6usize], 5u32, tables[..], 16usize, state[..], buf[..], out[..])
     if e9v != ok || n9 != 372usize || fold(out[..], 6usize, n9) != 4669635235118204824u64 { os.exit(9i32) }
 
+    // 9b: a zero-column Project has no Table representation for its source
+    // cardinality, so validation must reject it before a CTE can lose rows.
+    var no_cols: [0]u32 = zero
+    var zero_project: [2]query.Op = zero
+    zero_project[0usize] = query.scan(0u32)
+    zero_project[1usize] = query.project(0u32, no_cols[..])
+    if query.validate(zero_project[..], tables[..3usize], state[..]) != query.Invalid { os.exit(13i32) }
+    let (_, zero_cursor_error) = query.iterator(zero_project[..], 1u32, tables[..3usize], state[..], buf[..])
+    if zero_cursor_error != query.Invalid { os.exit(13i32) }
+    let (_, zero_cte_error) = query.materialize_cte(zero_project[..], 1u32, tables[..3usize], state[..], buf[..], cte_cells[..])
+    if zero_cte_error != query.Invalid { os.exit(13i32) }
+
     // 10: TooSmall from the joins, the cursor and the DP tables.
     let (_, e10a) = query.join_nested_loop(tables[0usize], 1usize, tables[1usize], 0usize, out[..10usize])
     if e10a != query.TooSmall { os.exit(10i32) }

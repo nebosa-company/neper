@@ -143,6 +143,9 @@ fn validate_columns(plan: []const Op, tables: []const Table, node: u32) -> err {
     if op.kind == FILTER && usize(op.column) >= w { ret Invalid }
     if op.kind == JOIN && (usize(op.column) >= w || usize(op.column_b) >= output_columns(plan, tables, op.input_b)) { ret Invalid }
     if op.kind == PROJECT {
+        // A Table stores cardinality only through its fixed-width cells; without
+        // a column there is no representation for the rows a Project produces.
+        if op.cols.len == 0usize { ret Invalid }
         var i = 0usize
         while i < op.cols.len {
             if usize(op.cols[i]) >= w { ret Invalid }
