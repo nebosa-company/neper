@@ -29,6 +29,31 @@ type Job = struct { queue: *gpu.Queue, factor: u32, result: []u32, failed: bool 
 type SlotRace = struct { gate: sync.Semaphore, ready: sync.Semaphore, release: sync.Semaphore, abort: Atomic[u32], slots: [2]Atomic[u32] }
 type SlotClaim = struct { race: *SlotRace, index: usize }
 
+// Two live slots can differ in every context-specific fact. This stays
+// deterministic without a GL driver while the rest of this fixture exercises a
+// real context when one is present.
+fn check_context_state() -> bool {
+    var desktop: compute.Slot = zero
+    desktop.live = true
+    desktop.denormal_caps = 128usize
+    desktop.int64_caps = 4usize
+    desktop.float64_caps = 16usize
+    desktop.is_es = false
+    desktop.es_profile = 0u8
+    desktop.storage_ext = 0usize
+    var es: compute.Slot = zero
+    es.live = true
+    es.denormal_caps = 256usize
+    es.subgroup_caps = 64usize
+    es.is_es = true
+    es.es_profile = 2u8
+    es.storage_ext = 8192usize
+    if compute.slot_capabilities(&desktop) != 159usize || compute.slot_capabilities(&es) != 331usize { ret false }
+    if !mem.eq[u8](compute.shader_header(&desktop), "#version 430\n") { ret false }
+    if !mem.eq[u8](compute.shader_header(&es), "#version 310 es\n#extension GL_OES_gpu_shader5 : require\nprecision highp float;\nprecision highp int;\n") { ret false }
+    ret compute.storage_extension(&desktop) == 0usize && compute.storage_extension(&es) == 8192usize
+}
+
 fn claim_slot(c: *SlotClaim) {
     sync.semaphore_wait(&c.race.gate)
     if atomic.load(&c.race.abort, .Acquire) != 0u32 { ret }
@@ -82,7 +107,7 @@ fn launch_and_read(job: *Job) {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     compute.install()
-    if check_worker_slots() != ok { os.exit(1i32) }
+    if !check_context_state() || check_worker_slots() != ok { os.exit(1i32) }
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
     if found_error == gpu.Unsupported {
         let printed = io.print("no OpenGL compute device; nothing checked\n")
@@ -97,6 +122,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if open_error != ok { os.exit(2i32) }
     let (queue, queue_error) = gpu.queue(device)
     if queue_error != ok { os.exit(3i32) }
+    // Keep an ES context live while the desktop device first allocates and
+    // compiles below. Hosts without ES still exercise the deterministic slot
+    // test above; hosts with it catch an accidental process-global profile,
+    // capability, or buffer-storage extension.
+    compute.install_es()
+    let (es_context, es_open_error) = compute.open(a)
+    let has_es_context = es_open_error == ok
     let (first, first_error) = mem.alloc[u32](a, N)
     let (second, second_error) = mem.alloc[u32](a, N)
     if first_error != ok || second_error != ok { os.exit(4i32) }
@@ -117,6 +149,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         k += 1usize
     }
     if gpu.close(device) != ok { os.exit(11i32) }
+    if has_es_context { compute.close(es_context) }
     let named = io.print("launches from another thread and from the opening one answer on ")
     let device_name = io.print(found[0usize].name)
     let ended = io.print("\n")

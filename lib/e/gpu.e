@@ -130,8 +130,8 @@ type HeapDriver = struct {
     destroy: fn(mtl.Pipeline),
     dispatch_begin: fn(mtl.Context, mtl.Pipeline, []const mtl.Buffer, mtl.Size, mtl.Size, usize) -> (usize, err),
     dispatch_wait: fn(usize) -> err,
-    // `Cap` bits, asked after `open`: a driver may learn some of them from the device.
-    capabilities: fn() -> usize,
+    // `Cap` bits for this open context: a driver may learn them from its device.
+    capabilities: fn(mtl.Context) -> usize,
 }
 
 var gl_driver: HeapDriver = zero
@@ -144,7 +144,7 @@ fn install_gl(driver: HeapDriver) {
 
 fn heap_backend(backend: Backend) -> bool { ret backend == .Metal || backend == .Gl }
 
-fn metal_capabilities() -> usize { ret METAL_CAPABILITIES }
+fn metal_capabilities(context: mtl.Context) -> usize { ret METAL_CAPABILITIES }
 
 fn metal_driver() -> HeapDriver {
     ret HeapDriver { available: mtl.available, name: mtl.name, open: mtl.open, close: mtl.close, buffer: mtl.buffer, free: mtl.free, compile: mtl.compile, destroy: mtl.destroy, dispatch_begin: mtl.dispatch_begin, dispatch_wait: mtl.dispatch_wait, capabilities: metal_capabilities }
@@ -592,8 +592,9 @@ fn metal_info(a: *mem.Arena, backend: Backend) -> (DeviceInfo, err) {
         ret (record, text_error)
     }
     let length = driver.name(context, text)
+    let capability_bits = driver.capabilities(context)
     driver.close(context)
-    let (caps, caps_error) = capability_list(a, driver.capabilities())
+    let (caps, caps_error) = capability_list(a, capability_bits)
     if caps_error != ok { ret (record, caps_error) }
     record.key.backend = backend
     record.key_valid = false
@@ -1264,7 +1265,7 @@ fn has(device: *Device, capability: Cap) -> bool {
     if state.backend == .Vulkan { available = state.physical.caps }
     if heap_backend(state.backend) {
         let driver = driver_of(state.backend)
-        available = driver.capabilities()
+        available = driver.capabilities(state.metal)
     }
     ret (available & capability_bit(capability)) != 0usize
 }
@@ -2430,7 +2431,7 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     if state.device.backend == .Vulkan { available = state.device.physical.caps }
     if heap_backend(state.device.backend) {
         let driver = driver_of(state.device.backend)
-        available = driver.capabilities()
+        available = driver.capabilities(state.device.metal)
     }
     if (requirements & available) != requirements { ret Unsupported }
     if state.device.backend == .Vulkan || heap_backend(state.device.backend) { ret launch_device(state, grid, x, y, z, shared_bytes, ctx, module, entry, layout) }

@@ -29,11 +29,11 @@ const MAX_DEVICES: usize = 4usize
 // The smallest positive f32 denormal, doubled: 2 where denormals are kept, 0 where they are flushed.
 fn denormal_probe() -> str { ret "//entry:probe\n#version 430\nlayout(local_size_x = 1) in;\nlayout(std430, binding = 1) buffer Heap { uint heap[]; };\nvoid main() { precise float d = uintBitsToFloat(heap[0]); precise float twice = d * 2.0; heap[1] = floatBitsToUint(twice); }\n" }
 
-fn capabilities() -> usize { ret CAPABILITIES | denormal_caps | int64_caps | float64_caps | subgroup_caps }
-
 // Runs the probe on the device just opened and records its answer.
 fn probe_denormals(handle: mtl.Context) {
-    denormal_caps = 0usize
+    let at = slot_of(handle)
+    if at == MAX_DEVICES { ret }
+    slots[at].denormal_caps = 0usize
     let (heap, heap_error) = buffer_here(handle, 16usize)
     if heap_error != ok { ret }
     let (args, args_error) = buffer_here(handle, 16usize)
@@ -59,8 +59,8 @@ fn probe_denormals(handle: mtl.Context) {
         let (command, begin_error) = dispatch_begin_here(handle, pipeline, pair[0usize..2usize], mtl.Size { width: 1usize, height: 1usize, depth: 1usize }, mtl.Size { width: 1usize, height: 1usize, depth: 1usize }, 0usize)
         if begin_error == ok && dispatch_wait_here(command) == ok {
             let high = heap.bytes[5usize] | heap.bytes[6usize] | heap.bytes[7usize]
-            if heap.bytes[4usize] == 2u8 && high == 0u8 { denormal_caps = CAP_DENORM_PRESERVE }
-            if heap.bytes[4usize] == 0u8 && high == 0u8 { denormal_caps = CAP_FTZ }
+            if heap.bytes[4usize] == 2u8 && high == 0u8 { slots[at].denormal_caps = CAP_DENORM_PRESERVE }
+            if heap.bytes[4usize] == 0u8 && high == 0u8 { slots[at].denormal_caps = CAP_FTZ }
         }
         destroy_here(pipeline)
     }
@@ -68,35 +68,41 @@ fn probe_denormals(handle: mtl.Context) {
     free_here(heap)
 }
 
-type Slot = struct { c: context.Context, live: bool, arena: *mem.Arena }
+// Everything that differs across live contexts belongs to its slot. The backend
+// can hold a desktop and an ES context concurrently, each on its own worker.
+type Slot = struct { c: context.Context, live: bool, arena: *mem.Arena, denormal_caps: usize, int64_caps: usize, float64_caps: usize, subgroup_caps: usize, is_es: bool, es_profile: u8, storage_ext: usize }
 
 @cc(c)
 type BufferStorageExt = extern fn(u32, isize, *void, u32)
 type BufferStoragePun = union { function: BufferStorageExt, bits: usize }
 
 var slots: [4]Slot = zero
-// The denormal answer of the last device opened; every device in a process is the same driver.
-var denormal_caps: usize = 0usize
-// Int64 (`Cap` bit 4) where the desktop driver has GL_ARB_gpu_shader_int64, which the emitter's 64-bit values need.
-var int64_caps: usize = 0usize
-// (D5903) Float64 (`Cap` bit 16) on desktop GL, where `double` is core; OpenGL ES has none.
-var float64_caps: usize = 0usize
-// (D5902) Subgroup (`Cap` bit 64) where GL_KHR_shader_subgroup offers compute shaders the basic, vote, ballot, shuffle and
-// arithmetic operations the emitter writes.
-var subgroup_caps: usize = 0usize
-// (C218) Devices are OpenGL ES 3.2 contexts rather than GL 4.3 core ones; ES 3.2 is the first with `precise`.
-var use_es: bool = false
-// (D5904) Which header an ES device's shaders take: 0 3.2's own, 1 or 2 3.1's with the EXT or OES extension that gives it
-// `precise`.
-var es_profile: u8 = 0u8
+// This selects future opens only; `open` snapshots it into its request so a
+// later install switch cannot change an already-live device.
+var opening_es: bool = false
 
-fn es_header() -> str {
-    if es_profile == 1u8 { ret "#version 310 es\n#extension GL_EXT_gpu_shader5 : require\nprecision highp float;\nprecision highp int;\n" }
-    if es_profile == 2u8 { ret "#version 310 es\n#extension GL_OES_gpu_shader5 : require\nprecision highp float;\nprecision highp int;\n" }
+fn slot_capabilities(s: *const Slot) -> usize { ret CAPABILITIES | s.denormal_caps | s.int64_caps | s.float64_caps | s.subgroup_caps }
+
+fn capabilities(handle: mtl.Context) -> usize {
+    let at = slot_of(handle)
+    if at == MAX_DEVICES || !slots[at].live { ret CAPABILITIES }
+    ret slot_capabilities(&slots[at])
+}
+
+// (D5904) Which header an ES device's shaders take: 0 is 3.2's own, 1 or 2
+// is 3.1 plus the extension that gives it `precise`.
+fn es_header(s: *const Slot) -> str {
+    if s.es_profile == 1u8 { ret "#version 310 es\n#extension GL_EXT_gpu_shader5 : require\nprecision highp float;\nprecision highp int;\n" }
+    if s.es_profile == 2u8 { ret "#version 310 es\n#extension GL_OES_gpu_shader5 : require\nprecision highp float;\nprecision highp int;\n" }
     ret "#version 320 es\nprecision highp float;\nprecision highp int;\n"
 }
-// `glBufferStorageEXT` where the context has only the extension (OpenGL ES), else 0.
-var storage_ext: usize = 0usize
+
+fn shader_header(s: *const Slot) -> str {
+    if s.is_es { ret es_header(s) }
+    ret "#version 430\n"
+}
+
+fn storage_extension(s: *const Slot) -> usize { ret s.storage_ext }
 var cache_hit_count: usize = 0usize
 
 fn available() -> bool { ret true }
@@ -121,6 +127,7 @@ type Request = struct {
     kind: u8,
     arena: *mem.Arena,
     at: usize,
+    is_es: bool,
     handle: mtl.Context,
     size: usize,
     out: []u8,
@@ -180,7 +187,7 @@ fn serve(w: *Worker) {
         while !w.pending { sync.condition_wait(&w.posted, &w.lock) }
         let r = &w.request
         if r.kind == DO_OPEN {
-            let (opened, open_error) = open_here(r.arena, r.at)
+            let (opened, open_error) = open_here(r.arena, r.at, r.is_es)
             r.opened = opened
             r.outcome = outcome_of(open_error)
             if open_error != ok { running = false }
@@ -253,6 +260,7 @@ fn open(a: *mem.Arena) -> (mtl.Context, err) {
     request.kind = DO_OPEN
     request.arena = a
     request.at = at
+    request.is_es = opening_es
     let answered = post(at, request)
     if answered.outcome != 0u8 {
         retire(at)
@@ -368,29 +376,27 @@ fn slot_of(handle: mtl.Context) -> usize {
     ret handle.device - 1usize
 }
 
-fn open_here(a: *mem.Arena, at: usize) -> (mtl.Context, err) {
+fn open_here(a: *mem.Arena, at: usize, is_es: bool) -> (mtl.Context, err) {
     var none: mtl.Context = zero
     var options = context.Options { api: .Gl, major: 4u32, minor: 3u32 }
-    if use_es { options = context.Options { api: .Gles, major: 3u32, minor: 1u32 } }
+    if is_es { options = context.Options { api: .Gles, major: 3u32, minor: 1u32 } }
     let (c, c_error) = context.headless(a, options)
     if c_error != ok { ret (none, Unsupported) }
-    slots[at] = Slot { c: c, live: true, arena: a }
-    storage_ext = 0usize
+    slots[at] = Slot { c: c, live: true, arena: a, denormal_caps: 0usize, int64_caps: 0usize, float64_caps: 0usize, subgroup_caps: 0usize, is_es: is_es, es_profile: 0u8, storage_ext: 0usize }
     var loaded = context.load(a, &slots[at].c, options)
     if loaded == ok && !gl.present(gl.BUFFER_STORAGE_ENTRY) {
-        storage_ext = context.resolve(a, context.resolver_context(&slots[at].c), "glBufferStorageEXT")
-        if storage_ext == 0usize { loaded = Unsupported }
+        slots[at].storage_ext = context.resolve(a, context.resolver_context(&slots[at].c), "glBufferStorageEXT")
+        if slots[at].storage_ext == 0usize { loaded = Unsupported }
     }
     if loaded == ok {
         let (major, minor, es, version_error) = gl.version()
-        if version_error != ok || es != use_es || major < options.major || (major == options.major && minor < options.minor) { loaded = Unsupported }
+        if version_error != ok || es != is_es || major < options.major || (major == options.major && minor < options.minor) { loaded = Unsupported }
         // ES 3.1 has no `precise` of its own; GL_EXT_gpu_shader5 (or the OES one) gives it, and without either no multiply-add
         // is safe from fusing, so the device is refused.
-        es_profile = 0u8
-        if loaded == ok && use_es && major == 3u32 && minor == 1u32 {
-            if gl.has_extension("GL_EXT_gpu_shader5") { es_profile = 1u8 }
-            if gl.has_extension("GL_OES_gpu_shader5") { es_profile = 2u8 }
-            if es_profile == 0u8 { loaded = Unsupported }
+        if loaded == ok && is_es && major == 3u32 && minor == 1u32 {
+            if gl.has_extension("GL_EXT_gpu_shader5") { slots[at].es_profile = 1u8 }
+            if gl.has_extension("GL_OES_gpu_shader5") { slots[at].es_profile = 2u8 }
+            if slots[at].es_profile == 0u8 { loaded = Unsupported }
         }
     }
     if loaded != ok {
@@ -399,17 +405,14 @@ fn open_here(a: *mem.Arena, at: usize) -> (mtl.Context, err) {
     }
     let opened = mtl.Context { device: at + 1usize, queue: 0usize }
     probe_denormals(opened)
-    int64_caps = 0usize
-    if !use_es && gl.has_extension("GL_ARB_gpu_shader_int64") { int64_caps = 4usize }
-    float64_caps = 0usize
-    if !use_es { float64_caps = 16usize }
-    subgroup_caps = 0usize
+    if !is_es && gl.has_extension("GL_ARB_gpu_shader_int64") { slots[at].int64_caps = 4usize }
+    if !is_es { slots[at].float64_caps = 16usize }
     if gl.has_extension("GL_KHR_shader_subgroup") {
         var stages = 0i32
         var features = 0i32
         gl.get_integerv(gl.SUBGROUP_SUPPORTED_STAGES_KHR, &stages)
         gl.get_integerv(gl.SUBGROUP_SUPPORTED_FEATURES_KHR, &features)
-        if (stages & 32i32) != 0i32 && (features & 31i32) == 31i32 { subgroup_caps = 64usize }
+        if (stages & 32i32) != 0i32 && (features & 31i32) == 31i32 { slots[at].subgroup_caps = 64usize }
     }
     ret (opened, ok)
 }
@@ -438,7 +441,8 @@ fn name_here(handle: mtl.Context, out: []u8) -> usize {
 // e.gpu carves from the length the mapping has.
 fn buffer_here(handle: mtl.Context, requested: usize) -> (mtl.Buffer, err) {
     var none: mtl.Buffer = zero
-    if slot_of(handle) == MAX_DEVICES { ret (none, Unsupported) }
+    let at = slot_of(handle)
+    if at == MAX_DEVICES || !slots[at].live { ret (none, Unsupported) }
     var bytes = requested
     var largest = 0i32
     gl.get_integerv(gl.MAX_SHADER_STORAGE_BLOCK_SIZE, &largest)
@@ -447,9 +451,10 @@ fn buffer_here(handle: mtl.Context, requested: usize) -> (mtl.Buffer, err) {
     gl.gen_buffers(1i32, &name_value)
     gl.bind_buffer(gl.SHADER_STORAGE_BUFFER, name_value)
     let flags = gl.MAP_READ_BIT | gl.MAP_WRITE_BIT | gl.MAP_PERSISTENT_BIT | gl.MAP_COHERENT_BIT
-    if storage_ext != 0usize {
+    let extension = storage_extension(&slots[at])
+    if extension != 0usize {
         var pun: BufferStoragePun = zero
-        pun.bits = storage_ext
+        pun.bits = extension
         pun.function(gl.SHADER_STORAGE_BUFFER, isize(bytes), nil, flags)
     } else {
         gl.buffer_storage(gl.SHADER_STORAGE_BUFFER, isize(bytes), nil, flags)
@@ -501,7 +506,8 @@ fn declared(text: str, key: str) -> usize {
 
 fn compile_here(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, err) {
     var none: mtl.Pipeline = zero
-    if slot_of(handle) == MAX_DEVICES { ret (none, Unsupported) }
+    let device_slot = slot_of(handle)
+    if device_slot == MAX_DEVICES || !slots[device_slot].live { ret (none, Unsupported) }
     var start = source.len
     var at = 0usize
     while at < source.len {
@@ -518,16 +524,16 @@ fn compile_here(handle: mtl.Context, source: str, entry: str) -> (mtl.Pipeline, 
         end += 1usize
     }
     var text = source[start..end]
-    // On OpenGL ES the emitter's `#version 430` line gives way to ES 3.2's, with every precision high.
+    // The per-slot header replaces the emitter's desktop version line. It is the
+    // same line for desktop GL and the ES profile's precise-capability header for ES.
     var header = ""
     let desktop = "#version 430\n"
-    if use_es && text.len > desktop.len && mem.eq[u8](text[0usize..desktop.len], desktop) {
-        header = es_header()
+    if text.len > desktop.len && mem.eq[u8](text[0usize..desktop.len], desktop) {
+        header = shader_header(&slots[device_slot])
         text = text[desktop.len..text.len]
     }
     var most = 0i32
     gl.get_integerv(gl.MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &most)
-    let device_slot = slot_of(handle)
     // (L181, D5903) A workgroup longer than the device allows along an axis, or shared memory past its size, would fail in
     // the driver's compiler as `Unsupported`; it is `TooLarge`, which a pipeline of no threads makes the launch answer.
     var axis = 0u32
@@ -707,13 +713,13 @@ fn dispatch_wait_here(command: usize) -> err {
 // ANGLE's `libEGL.dll` on Windows.
 // The emitted shaders are the same; ES needs `GL_EXT_buffer_storage` for the mapped heap.
 fn install_es() {
-    use_es = true
+    opening_es = true
     register()
 }
 
 // Makes `.Gl` an `e.gpu` backend for this program.
 fn install() {
-    use_es = false
+    opening_es = false
     register()
 }
 
