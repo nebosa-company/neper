@@ -99,6 +99,7 @@ fn body(src: []const u8, expect_type: u8) -> ([]const u8, u8, err) {
     if e != ok { ret (src[..0usize], 0u8, e) }
     if src[0] >> 4u32 != expect_type { ret (src[..0usize], 0u8, Invalid) }
     if head + n > src.len { ret (src[..0usize], 0u8, TooSmall) }
+    if head + n != src.len { ret (src[..0usize], 0u8, Malformed) }
     ret (src[head..head + n], src[0], ok)
 }
 

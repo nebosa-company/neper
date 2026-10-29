@@ -77,10 +77,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if re != ok || rl != 12usize || hb != 2usize { os.exit(2i32) }
     let (present, code, ce) = mqtt.decode_connack("\x20\x02\x01\x00")
     if ce != ok || !present || code != 0u8 { os.exit(2i32) }
+    let (_, _, connack_tail) = mqtt.decode_connack("\x20\x02\x01\x00\xff")
+    if connack_tail != mqtt.Malformed { os.exit(2i32) }
+    buf[n3] = 255u8
+    let (_, publish_tail) = mqtt.decode_publish(buf[..n3 + 1usize])
+    if publish_tail != mqtt.Malformed { os.exit(2i32) }
     let (_, truncated) = mqtt.decode_publish(buf[..n3 - 1usize])
     if truncated != mqtt.TooSmall { os.exit(2i32) }
     let (kind, id, ae) = mqtt.decode_ack("\x62\x02\x00\x05")
     if ae != ok || kind != 6u8 || id != 5u16 { os.exit(2i32) }
+    let (_, _, ack_tail) = mqtt.decode_ack("\x62\x02\x00\x05\xff")
+    if ack_tail != mqtt.Malformed { os.exit(2i32) }
+    var sub_codes: [1]u8 = zero
+    let (_, sub_count, sub_tail) = mqtt.decode_suback("\x90\x03\x00\x01\x00\xff", sub_codes[..])
+    if sub_count != 0usize || sub_tail != mqtt.Malformed { os.exit(2i32) }
 
     // 3: topic filters from section 4.7.
     if !mqtt.topic_matches("sport/tennis/player1/#", "sport/tennis/player1") { os.exit(3i32) }
