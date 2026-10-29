@@ -1,5 +1,6 @@
 // Direct NetHost boundary checks: invalid sockets allocate nothing, a listener keeps
-// the requested backlog, and process/group aliases retain exactly the needed host record.
+// the requested backlog, a drained pipe wakes a backpressured writer, and process/group
+// aliases retain exactly the needed host record.
 import assert from 'node:assert/strict'
 import net from 'node:net'
 import { BASE, FUNCTIONS, NetHost, context } from '../../lib/wasm/run-wasm-host.mjs'
@@ -11,6 +12,10 @@ const wait = FUNCTIONS.findIndex(([name]) => name === 'proc_wait')
 const groupClose = FUNCTIONS.findIndex(([name]) => name === 'proc_group_close')
 const open = FUNCTIONS.findIndex(([name]) => name === 'sock_open')
 const listen = FUNCTIONS.findIndex(([name]) => name === 'sock_listen')
+const pipe = FUNCTIONS.findIndex(([name]) => name === 'pipe')
+const handleRead = FUNCTIONS.findIndex(([name]) => name === 'handle_read')
+const handleWrite = FUNCTIONS.findIndex(([name]) => name === 'handle_write')
+const pipeChunk = data.length - 128
 const argv = Buffer.from(`${process.execPath}\0-e\0\0`)
 const linger = Buffer.from(`${process.execPath}\0-e\0setTimeout(() => {}, 20)\0`)
 
@@ -36,6 +41,27 @@ try {
   } finally {
     net.createServer = originalCreateServer
   }
+  assert.equal(await host.call(pipe, []), 0, 'a host pipe opens')
+  const reader = host.view.getUint32(64, true)
+  const writer = host.view.getUint32(68, true)
+  data.fill(65, 128)
+  // Sixteen mailbox-sized writes stay just below the 1 MiB backpressure mark;
+  // the seventeenth crosses it, so the next write must wait for this read.
+  for (let turn = 0; turn < 17; turn++) {
+    assert.equal(await host.call(handleWrite, [writer, 0, pipeChunk, 0]), 0, `pipe fill ${turn} succeeds`)
+  }
+  let resumed = false
+  const queued = host.call(handleWrite, [writer, 0, 1, 0]).then((status) => {
+    resumed = status === 0
+    return status
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(resumed, false, 'the full pipe backpressures its next writer')
+  assert.equal(await host.call(handleRead, [reader, 0, pipeChunk, 0, 0]), 0, 'the reader drains a mailbox-sized chunk')
+  assert.equal(data[128], 65, 'the read copied queued pipe data')
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(resumed, true, 'draining the pipe wakes the queued writer')
+  assert.equal(await queued, 0, 'the queued writer completes')
   for (let turn = 0; turn < 16; turn++) {
     data.fill(0)
     data.set(argv, 128)
