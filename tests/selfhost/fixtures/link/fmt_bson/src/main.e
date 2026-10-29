@@ -146,5 +146,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let too_wide_float: [21]u8 = [21]u8{ 21u8, 0u8, 0u8, 0u8, 1u8, 110u8, 117u8, 109u8, 98u8, 101u8, 114u8, 0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 239u8, 127u8, 0u8 }
     let (_, too_wide_float_error) = bson.decode[NarrowFloat](a, too_wide_float[..], 4u16)
     if too_wide_float_error != bson.Invalid { os.exit(39) }
+    let invalid_string: [14]u8 = [14]u8{ 14u8, 0u8, 0u8, 0u8, 2u8, 120u8, 0u8, 2u8, 0u8, 0u8, 0u8, 128u8, 0u8, 0u8 }
+    let (_, invalid_string_error) = bson.parse(a, invalid_string[..], 4u16)
+    if invalid_string_error != bson.Invalid { os.exit(40) }
+    let invalid_key: [8]u8 = [8]u8{ 8u8, 0u8, 0u8, 0u8, 10u8, 128u8, 0u8, 0u8 }
+    let (_, invalid_key_error) = bson.parse(a, invalid_key[..], 4u16)
+    if invalid_key_error != bson.Invalid { os.exit(41) }
+    let invalid_text = bson.Value { String: "\x80" }
+    let (_, invalid_text_size_error) = bson.size(&invalid_text)
+    if invalid_text_size_error != bson.Invalid { os.exit(42) }
+    var invalid_text_state = io.SliceWriter { data: out_buffer[..], off: 0usize }
+    var invalid_text_writer = io.slice_writer(&invalid_text_state)
+    if bson.write(&invalid_text_writer, &invalid_text) != bson.Invalid { os.exit(43) }
+    let old_binary: [22]u8 = [22]u8{ 22u8, 0u8, 0u8, 0u8, 5u8, 111u8, 108u8, 100u8, 0u8, 7u8, 0u8, 0u8, 0u8, 2u8, 3u8, 0u8, 0u8, 0u8, 1u8, 2u8, 3u8, 0u8 }
+    let (old_root, old_binary_error) = bson.parse(a, old_binary[..], 4u16)
+    if old_binary_error != ok { os.exit(44) }
+    let (old_size, old_size_error) = bson.size(&old_root)
+    if old_size_error != ok || old_size != old_binary.len { os.exit(45) }
+    var old_state = io.SliceWriter { data: out_buffer[..], off: 0usize }
+    var old_writer = io.slice_writer(&old_state)
+    if bson.write(&old_writer, &old_root) != ok || !same(out_buffer[..old_state.off], old_binary[..]) { os.exit(46) }
+    var bad_old_binary = old_binary
+    bad_old_binary[14usize] = 2u8
+    let (_, bad_old_binary_error) = bson.parse(a, bad_old_binary[..], 4u16)
+    if bad_old_binary_error != bson.Invalid { os.exit(47) }
     ret ok
 }

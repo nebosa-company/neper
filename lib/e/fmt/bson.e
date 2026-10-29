@@ -9,6 +9,7 @@
 use e.io
 use e.mem
 use e.meta
+use e.text.utf8
 
 type Element = struct { key: str, value: Value }
 type Binary = struct { subtype: u8, data: []const u8 }
@@ -44,6 +45,7 @@ fn cstring_end(source: []const u8, at: usize, limit: usize) -> (usize, err) {
 // BSON element names are C strings in the wire format, so a NUL would end the
 // encoded name before the bytes the caller supplied.
 fn valid_key(key: str) -> bool {
+    if !utf8.validate(key) { ret false }
     var at = 0usize
     while at < key.len {
         if key[at] == 0u8 { ret false }
@@ -62,6 +64,7 @@ fn parse_document(a: *mem.Arena, source: []const u8, at: usize, length: usize, d
     while cursor < limit {
         let (key_end, key_error) = cstring_end(source, cursor + 1usize, limit)
         if key_error != ok { ret (zero, key_error) }
+        if !valid_key(source[cursor + 1usize..key_end]) { ret (zero, Invalid) }
         let (span, span_error) = value_span(source, source[cursor], key_end + 1usize, limit)
         if span_error != ok { ret (zero, span_error) }
         cursor = key_end + 1usize + span
@@ -76,6 +79,7 @@ fn parse_document(a: *mem.Arena, source: []const u8, at: usize, length: usize, d
         let tag = source[cursor]
         let (key_end, key_error) = cstring_end(source, cursor + 1usize, limit)
         if key_error != ok { ret (zero, key_error) }
+        if !valid_key(source[cursor + 1usize..key_end]) { ret (zero, Invalid) }
         elements[index].key = source[cursor + 1usize..key_end]
         let (value, span, value_error) = parse_value(a, source, tag, key_end + 1usize, limit, depth, max_depth)
         if value_error != ok { ret (zero, value_error) }
@@ -133,11 +137,22 @@ fn parse_value(a: *mem.Arena, source: []const u8, tag: u8, at: usize, limit: usi
     if tag == 16u8 { ret (Value{ I32: mem.bitcast[i32](read_le32(source, at)) }, span, ok) }
     if tag == 8u8 { ret (Value{ Bool: source[at] == 1u8 }, span, ok) }
     if tag == 10u8 { ret (none, span, ok) }
-    if tag == 2u8 { ret (Value{ String: source[at + 4usize..at + span - 1usize] }, span, ok) }
+    if tag == 2u8 {
+        let text = source[at + 4usize..at + span - 1usize]
+        if !utf8.validate(text) { ret (none, 0usize, Invalid) }
+        ret (Value{ String: text }, span, ok)
+    }
     if tag == 5u8 {
         var binary: Binary = zero
         binary.subtype = source[at + 4usize]
-        binary.data = source[at + 5usize..at + span]
+        if binary.subtype == 2u8 {
+            if span < 9usize { ret (none, 0usize, Invalid) }
+            let embedded_length = usize(read_le32(source, at + 5usize))
+            if embedded_length != span - 9usize { ret (none, 0usize, Invalid) }
+            binary.data = source[at + 9usize..at + span]
+        } else {
+            binary.data = source[at + 5usize..at + span]
+        }
         ret (Value{ Binary: binary }, span, ok)
     }
     let (elements, elements_error) = parse_document(a, source, at, span, depth + 1u16, max_depth)
@@ -212,9 +227,14 @@ fn size(value: *const Value) -> (usize, err) {
     case .Null:
         ret (0usize, ok)
     case .String as text:
+        if !utf8.validate(text) { ret (0usize, Invalid) }
         if text.len > 2147483646usize { ret (0usize, TooLarge) }
         ret (5usize + text.len, ok)
     case .Binary as binary:
+        if binary.subtype == 2u8 {
+            if binary.data.len > 2147483643usize { ret (0usize, TooLarge) }
+            ret (9usize + binary.data.len, ok)
+        }
         if binary.data.len > 2147483647usize { ret (0usize, TooLarge) }
         ret (5usize + binary.data.len, ok)
     case .Document as elements:
@@ -295,11 +315,19 @@ fn write(writer: *io.Writer, value: *const Value) -> err {
     case .Null:
         ret ok
     case .String as text:
+        if !utf8.validate(text) { ret Invalid }
         if text.len > 2147483646usize { ret TooLarge }
         try write_le(writer, u64(text.len + 1usize), 4usize)
         try io.write_all(writer, text)
         ret write_byte(writer, 0u8)
     case .Binary as binary:
+        if binary.subtype == 2u8 {
+            if binary.data.len > 2147483643usize { ret TooLarge }
+            try write_le(writer, u64(binary.data.len + 4usize), 4usize)
+            try write_byte(writer, binary.subtype)
+            try write_le(writer, u64(binary.data.len), 4usize)
+            ret io.write_all(writer, binary.data)
+        }
         if binary.data.len > 2147483647usize { ret TooLarge }
         try write_le(writer, u64(binary.data.len), 4usize)
         try write_byte(writer, binary.subtype)
