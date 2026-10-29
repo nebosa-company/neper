@@ -269,18 +269,18 @@ fn first_branch(w: *const Schema, wn: u32, r: *const Schema, rn: u32) -> (usize,
 }
 
 // `Mismatch` unless every value of the writer type resolves to the reader type
-// (a union is fine when any branch does, an enum when every symbol is known or a
-// default stands, a record when every reader field is written or defaulted).
+// (every writer-union branch must resolve, an enum when every symbol is known or
+// a default stands, a record when every reader field is written or defaulted).
 fn resolve(w: *const Schema, wn: u32, r: *const Schema, rn: u32) -> err {
     let wk = w.kind[usize(wn)]
     let rk = r.kind[usize(rn)]
     if wk == .Union {
         var i = 0usize
         while i < w.child_count[usize(wn)] {
-            if resolve(w, child(w, wn, i), r, rn) == ok { ret ok }
+            if resolve(w, child(w, wn, i), r, rn) != ok { ret Mismatch }
             i += 1usize
         }
-        ret Mismatch
+        ret ok
     }
     if rk == .Union {
         let (branch, found) = first_branch(w, wn, r, rn)

@@ -166,6 +166,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var o7 = avro.sink(buffer[..8])
     var d11 = avro.decoder(written[0..])
     if avro.decode_resolved(&w, 0u32, &r, 0u32, &d11, &o7) != avro.TooSmall { os.exit(22i32) }
+    // A writer union is compatible only when every branch can decode. The null
+    // branch cannot resolve to the string-only reader.
+    let null_written: [1]u8 = [1]u8{ 0 }
+    if avro.resolve(&u, 0u32, &v, 1u32) != avro.Mismatch { os.exit(23i32) }
+    var o8 = avro.sink(buffer[..])
+    var d12 = avro.decoder(null_written[0..])
+    if avro.decode_resolved(&u, 0u32, &v, 1u32, &d12, &o8) != avro.Mismatch { os.exit(24i32) }
     try io.print("fmt avro ok\n")
     ret ok
 }
