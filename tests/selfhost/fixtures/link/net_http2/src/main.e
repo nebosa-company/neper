@@ -401,6 +401,46 @@ fn retry_after_too_small(a: *mem.Arena, exhaust_out: bool) -> bool {
     ret dependent_error == ok && dependent_count == 1usize && dependent_headers[0usize].staged == 0u8 && str.eq(dependent_headers[0usize].name, "old") && str.eq(dependent_headers[0usize].value, "one")
 }
 
+// An encoder TooSmall after the first literal must not commit that literal to
+// the dynamic table: retrying must produce the same block as a fresh encoder.
+fn encode_retry_after_too_small(a: *mem.Arena) -> bool {
+    let headers = [2]h2.Header { h2.Header { name: "alpha", value: "one", staged: 0u8 }, h2.Header { name: "beta", value: "two", staged: 0u8 } }
+    let repeated = [2]h2.Header { h2.Header { name: "x", value: "y", staged: 0u8 }, h2.Header { name: "x", value: "y", staged: 0u8 } }
+    let sensitive: [1]str = zero
+    var exact_table = new_table(a, 4096usize)
+    var exact: [6]u8 = zero
+    let (exact_len, exact_error) = h2.encode_block(&exact_table, exact[0usize..], repeated[0usize..2usize], sensitive[0usize..0usize], false)
+    if exact_error != ok || exact_len != 6usize || exact[0usize] != 64u8 || exact[1usize] != 1u8 || exact[2usize] != 120u8 || exact[3usize] != 1u8 || exact[4usize] != 121u8 || exact[5usize] != 190u8 { ret false }
+
+    var table = new_table(a, 4096usize)
+    var short: [11]u8 = zero
+    let (_, short_error) = h2.encode_block(&table, short[0usize..], headers[0usize..2usize], sensitive[0usize..0usize], false)
+    if short_error != h2.TooSmall { ret false }
+
+    var retry: [64]u8 = zero
+    let (retry_len, retry_error) = h2.encode_block(&table, retry[0usize..], headers[0usize..2usize], sensitive[0usize..0usize], false)
+    if retry_error != ok { ret false }
+
+    var fresh_table = new_table(a, 4096usize)
+    var fresh: [64]u8 = zero
+    let (fresh_len, fresh_error) = h2.encode_block(&fresh_table, fresh[0usize..], headers[0usize..2usize], sensitive[0usize..0usize], false)
+    if fresh_error != ok || retry_len != fresh_len || !mem.eq[u8](retry[0usize..retry_len], fresh[0usize..fresh_len]) { ret false }
+
+    // The same retry rule applies to a pending dynamic-table size update.
+    var pending_table = new_table(a, 4096usize)
+    h2.table_announce(&pending_table, 1024usize)
+    var pending_short: [1]u8 = zero
+    let (_, pending_short_error) = h2.encode_block(&pending_table, pending_short[0usize..], headers[0usize..1usize], sensitive[0usize..0usize], false)
+    if pending_short_error != h2.TooSmall { ret false }
+    var pending_retry: [64]u8 = zero
+    let (pending_retry_len, pending_retry_error) = h2.encode_block(&pending_table, pending_retry[0usize..], headers[0usize..1usize], sensitive[0usize..0usize], false)
+    var pending_fresh_table = new_table(a, 4096usize)
+    h2.table_announce(&pending_fresh_table, 1024usize)
+    var pending_fresh: [64]u8 = zero
+    let (pending_fresh_len, pending_fresh_error) = h2.encode_block(&pending_fresh_table, pending_fresh[0usize..], headers[0usize..1usize], sensitive[0usize..0usize], false)
+    ret pending_retry_error == ok && pending_fresh_error == ok && pending_retry_len == pending_fresh_len && mem.eq[u8](pending_retry[0usize..pending_retry_len], pending_fresh[0usize..pending_fresh_len])
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(100i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(101i32) }
@@ -413,6 +453,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_8()) != 0u8 { os.exit(108i32) }
     if !retry_after_too_small(a, true) { os.exit(109i32) }
     if !retry_after_too_small(a, false) { os.exit(110i32) }
+    if !encode_retry_after_too_small(a) { os.exit(111i32) }
     try io.print("net http2 ok")
     ret ok
 }

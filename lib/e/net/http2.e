@@ -719,10 +719,194 @@ fn same_name(names: []const str, name: str) -> bool {
     ret false
 }
 
+// The number of bytes needed by RFC 7541's prefixed integer encoding.  The
+// encoder uses this before touching the dynamic table so TooSmall cannot leave
+// a partially committed block behind.
+fn encoded_int_len(value: u64, prefix: u8) -> usize {
+    let mask = u64((1u32 << u32(prefix)) - 1u32)
+    if value < mask { ret 1usize }
+    var n = 2usize
+    var rest = value - mask
+    while rest >= 128u64 {
+        n += 1usize
+        rest = rest >> 7u64
+    }
+    ret n
+}
+
+type EncodeStage = struct { base_count: usize, count: usize, used: usize, size: usize, max_size: usize }
+
+fn encode_stage_evict_oldest(t: *const Table, s: *EncodeStage, headers: []const Header, marks: []u8) {
+    if s.count == 0usize { ret }
+    if s.base_count > 0usize {
+        let last = s.base_count - 1usize
+        let name_len = usize(t.lens[last * 2usize])
+        let value_len = usize(t.lens[last * 2usize + 1usize])
+        s.base_count -= 1usize
+        s.count -= 1usize
+        s.used -= name_len + value_len
+        s.size -= entry_size(name_len, value_len)
+        ret
+    }
+    var i = 0usize
+    while i < headers.len {
+        if marks[i] == 1u8 {
+            let name_len = headers[i].name.len
+            let value_len = headers[i].value.len
+            marks[i] = 2u8
+            s.count -= 1usize
+            s.used -= name_len + value_len
+            s.size -= entry_size(name_len, value_len)
+            ret
+        }
+        i += 1usize
+    }
+}
+
+fn encode_stage_evict_to(t: *const Table, s: *EncodeStage, headers: []const Header, marks: []u8, limit: usize) {
+    while s.size > limit && s.count > 0usize { encode_stage_evict_oldest(t, s, headers, marks) }
+}
+
+fn encode_stage_resize(t: *const Table, s: *EncodeStage, headers: []const Header, marks: []u8, size: usize) -> err {
+    if size > t.limit { ret Compression }
+    s.max_size = size
+    encode_stage_evict_to(t, s, headers, marks, size)
+    ret ok
+}
+
+fn encode_stage_insert(t: *const Table, s: *EncodeStage, headers: []const Header, marks: []u8, field: usize) {
+    let name = headers[field].name
+    let value = headers[field].value
+    let need = entry_size(name.len, value.len)
+    if need > s.max_size {
+        encode_stage_evict_to(t, s, headers, marks, 0usize)
+        marks[field] = 2u8
+        ret
+    }
+    encode_stage_evict_to(t, s, headers, marks, s.max_size - need)
+    let bytes = name.len + value.len
+    if bytes > t.data.len - s.used || s.count >= t.lens.len / 2usize {
+        encode_stage_evict_to(t, s, headers, marks, 0usize)
+        if bytes > t.data.len || t.lens.len < 2usize {
+            marks[field] = 2u8
+            ret
+        }
+    }
+    marks[field] = 1u8
+    s.count += 1usize
+    s.used += bytes
+    s.size += need
+}
+
+fn encode_stage_lookup(t: *const Table, s: *const EncodeStage, headers: []const Header, marks: []const u8, index: usize) -> (str, str, err) {
+    if index <= 61usize { ret (static_name(index), static_value(index), ok) }
+    var dynamic = index - 62usize
+    var i = headers.len
+    while i > 0usize {
+        i -= 1usize
+        if marks[i] == 1u8 {
+            if dynamic == 0usize { ret (headers[i].name, headers[i].value, ok) }
+            dynamic -= 1usize
+        }
+    }
+    if dynamic >= s.base_count { ret ("", "", Compression) }
+    let (name, value, e) = lookup(t, dynamic + 62usize)
+    ret (name, value, e)
+}
+
+fn encode_stage_find_field(t: *const Table, s: *const EncodeStage, headers: []const Header, marks: []const u8, name: str, value: str) -> (usize, usize) {
+    var name_index = 0usize
+    var full = 0usize
+    var i = 1usize
+    while i <= 61usize {
+        if str.eq(static_name(i), name) {
+            if name_index == 0usize { name_index = i }
+            if str.eq(static_value(i), value) {
+                full = i
+                break
+            }
+        }
+        i += 1usize
+    }
+    if full == 0usize {
+        var d = 0usize
+        while d < s.count {
+            let (entry_name, entry_value, e) = encode_stage_lookup(t, s, headers, marks, d + 62usize)
+            if e != ok { break }
+            if str.eq(entry_name, name) {
+                if name_index == 0usize { name_index = 62usize + d }
+                if str.eq(entry_value, value) {
+                    full = 62usize + d
+                    break
+                }
+            }
+            d += 1usize
+        }
+    }
+    ret (name_index, full)
+}
+
+fn encoded_string_len(s: str, huffman: bool) -> usize {
+    if huffman {
+        let n = huffman_len(s)
+        if n < s.len { ret encoded_int_len(u64(n), 7u8) + n }
+    }
+    ret encoded_int_len(u64(s.len), 7u8) + s.len
+}
+
+fn encode_capacity(t: *const Table, dst: []u8, headers: []const Header, sensitive: []const str, huffman: bool) -> (usize, err) {
+    // The destination doubles as a byte-per-field transaction log.  Every
+    // encoded field needs at least one byte, so a shorter destination is
+    // necessarily TooSmall and needs no simulation.
+    if dst.len < headers.len { ret (headers.len, TooSmall) }
+    var marks = dst[0usize..headers.len]
+    var i = 0usize
+    while i < marks.len {
+        marks[i] = 0u8
+        i += 1usize
+    }
+    var s = EncodeStage { base_count: t.count, count: t.count, used: t.used, size: t.size, max_size: t.max_size }
+    var need = 0usize
+    if t.pending {
+        if t.smallest < t.pending_size {
+            need += encoded_int_len(u64(t.smallest), 5u8)
+            let e = encode_stage_resize(t, &s, headers, marks, t.smallest)
+            if e != ok { ret (need, e) }
+        }
+        need += encoded_int_len(u64(t.pending_size), 5u8)
+        let e2 = encode_stage_resize(t, &s, headers, marks, t.pending_size)
+        if e2 != ok { ret (need, e2) }
+    }
+    i = 0usize
+    while i < headers.len {
+        let h = headers[i]
+        let (name_index, full) = encode_stage_find_field(t, &s, headers, marks, h.name, h.value)
+        let never = same_name(sensitive, h.name)
+        if full != 0usize && !never {
+            need += encoded_int_len(u64(full), 7u8)
+        } else {
+            var prefix = 6u8
+            if never { prefix = 4u8 }
+            need += encoded_int_len(u64(name_index), prefix)
+            if name_index == 0usize { need += encoded_string_len(h.name, huffman) }
+            need += encoded_string_len(h.value, huffman)
+            if !never { encode_stage_insert(t, &s, headers, marks, i) }
+        }
+        i += 1usize
+    }
+    ret (need, ok)
+}
+
 // A header block for `headers`: a pending size update first, then each field as an indexed reference when the
 // table has it whole, else a literal with incremental indexing (a name reference when the name is known); names in
 // `sensitive` are written never-indexed. `huffman` codes a string when that is shorter. The bytes written.
 fn encode_block(t: *Table, dst: []u8, headers: []const Header, sensitive: []const str, huffman: bool) -> (usize, err) {
+    // Do this before writing bytes or applying a size update/insertion.  The
+    // staging pass mirrors the dynamic table, so a successful encode cannot
+    // discover TooSmall after mutating the table.
+    let (capacity, capacity_error) = encode_capacity(t, dst, headers, sensitive, huffman)
+    if capacity_error != ok { ret (0usize, capacity_error) }
+    if dst.len < capacity { ret (0usize, TooSmall) }
     var at = 0usize
     if t.pending {
         // The smallest size seen since the last block, then the current one, as RFC 7541 4.2 requires.
