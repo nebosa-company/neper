@@ -881,6 +881,13 @@ fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path:
     if answer == ok && durable {
         let flushed = syscall(SYS_FSYNC, dst_parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
         if flushed < 0isize { answer = from_errno(flushed) }
+        // A cross-directory rename removes an entry from the source parent as
+        // well as adding one to the destination parent. Both changes must be
+        // persisted before reporting a durable success.
+        if answer == ok && src_parent.raw != dst_parent.raw {
+            let source_flushed = syscall(SYS_FSYNC, src_parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+            if source_flushed < 0isize { answer = from_errno(source_flushed) }
+        }
     }
     mem.reset(a, checkpoint)
     release_parent(src_parent, src_dir)
