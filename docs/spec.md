@@ -1013,8 +1013,10 @@ declaration — and `@cc(CONV)` — legal on an `extern` declaration, on a plain
 that is to be C-callable — such a `fn` stays an ordinary neper function at every
 neper call site, called there under the named convention — or on a `type`
 declaration whose right side is an
-`extern fn(...) -> R` type (External functions, below). `@nocheck` is a statement-level block (§11) and is the
-one attribute that does not take a line of its own.
+`extern fn(...) -> R` type (External functions, below). `@export("SYM")` is legal on
+a non-generic `@cc` function in an `emit-shared-library` build (External functions,
+below). `@nocheck` is a statement-level block (§11) and is the one attribute that
+does not take a line of its own.
 
 `@borrows("name")` is legal only on a non-extern function with a pointer-bearing
 result. It names exactly one non-`own`, pointer-bearing parameter and declares that
@@ -1232,11 +1234,13 @@ extern fn c_printf(fmt: *const u8, ...) -> i32
   function, which is how `os.thread_create[Ctx]` (below) builds one trampoline per
   `Ctx` without a cast. The signature rule below — every type crosses, no `err`, no
   multiple return — applies to a `@cc fn` exactly as to an `extern`.
-  `@cc` changes call ABI but does not export a stable native symbol: its address is
-  handed to foreign code as a callback, and its linker name remains neper's canonical
-  module/instance name. Exporting a neper function by external symbol name is not in
-  v1; a C-facing shared library therefore needs a future `@export` proposal rather
-  than relying on decoration.
+  `@cc` changes call ABI but does not by itself export a stable native symbol: its
+  address is handed to foreign code as a callback, and its linker name remains
+  neper's canonical module/instance name. An `emit-shared-library FILE ROOT ARCH OS
+  OUT` build for `linux` or `android` may mark a non-generic `@cc` function with
+  `@export("SYM")`; that name is placed in the shared object's dynamic symbol table.
+  A library needs one through 64 distinct export names. Ordinary executable output
+  and generic `@cc` functions do not receive this facility.
 - An `extern` cannot take comptime parameters (`[...]`).
 - **Banned inside `@gpu`** (§10): the device has no OS and no import table. **Not
   evaluable at compile time** (§9): a `const` initialiser whose evaluation reaches
@@ -1772,7 +1776,9 @@ Both branches must parse and type-check, so dead configurations cannot rot.
 (§2). `target.arch` is a `target.Arch`, an enum with members `.X64`, `.Aarch64`,
 `.X86`, `.Spv`, `.Ptx`, `.Wasm32` (D5622); `target.os` is a `target.Os` with members `.Windows`,
 `.Linux`, `.Macos`, `.Neperos` (the NeperOS microkernel, `os.neperos.e`, D4704), `.Wasi` (WebAssembly System Interface, `os.wasi.e`, D5622), and `.None` on the GPU targets — one member per `e.os`
-target (§5), so an Android host is deferred with its `os.android.e` (§17).
+source target (§5). Android is a distinct output ABI, but source selection deliberately
+uses `.Linux`, `e.os`'s Linux variant and `.linux.e` variants; there is no `.Android`
+member or `os.android.e`.
 
 `when` is a **statement**, legal only inside a function body. It cannot wrap a
 module-scope declaration, so invariants 2 and 7 of §14 hold without exception.
@@ -5121,9 +5127,7 @@ NUMA-aware thread pinning (§15), auto-vectorisation (§4), static-archive linki
 (§13), cross-target test execution (§13), golden-file comparison in `e.test`
 (§13), a native Metal backend (§10, scheduled as
 M5), an argument-pack API for user code (§9), spreading a CPU-backend launch over
-several host threads (§10), a PDB type stream (§13), and an Android host — an
-`.Android` member of `target.Os` with its `os.android.e` (§5, §6), which the
-Vulkan backend would then reach (§10).
+several host threads (§10), and a PDB type stream (§13).
 
 Not targeted at all, so that nobody reads their absence as an oversight: RISC-V,
 WebAssembly, 32-bit ARM, any big-endian ISA, iOS, DirectX, WebGPU, graphics
