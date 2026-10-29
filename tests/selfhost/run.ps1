@@ -11726,6 +11726,20 @@ if ($neperosQemu) {
     foreach ($efsLeak in @('fs write_file failed', 'fs read_file failed')) {
         if ($efsBoot -match [regex]::Escape($efsLeak)) { throw "NeperOS e.fs failed (${efsLeak}): $efsBoot" }
     }
+    # A buffered `e.os` write reaches the server on close. Its missing parent makes that flush
+    # fail after the local write succeeded, so close must return Failed rather than hide the reply.
+    $fsCloseErrorTest = Join-Path $testBuild 'fs_close_error_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_close_error_test.e') $repo aarch64 neperos $fsCloseErrorTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS close-error program did not build' }
+    $fsCloseErrorArchive = Join-Path $testBuild 'fs-close-error-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $fsCloseErrorArchive $fsServer $fsCloseErrorTest $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS close-error archive did not assemble' }
+    $fsCloseErrorDisk = Join-Path $testBuild 'fs-close-error-disk.img'
+    $fsCloseErrorStream = [IO.File]::Create($fsCloseErrorDisk); $fsCloseErrorStream.SetLength(1MB); $fsCloseErrorStream.Close()
+    $fsCloseErrorBlk = @('-drive', "file=$fsCloseErrorDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $fsCloseErrorBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsCloseErrorArchive, '-append', 'fsserver fswrite') + $fsCloseErrorBlk)
+    if ($fsCloseErrorBoot -notmatch '(?s)fs close error propagated.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS close discarded a filesystem write error: $fsCloseErrorBoot" }
+    if ($fsCloseErrorBoot -match 'fs close error discarded') { throw "NeperOS close hid a filesystem write error: $fsCloseErrorBoot" }
     # (D2248) A driver server's aux page must not alias its image: aux_test, padded with 0xA5 to 300,000 bytes
     # (past the old 262,080-byte aux location), checks that the padding there is untouched and the page filled.
     $auxTest = Join-Path $testBuild 'aux_test.img'

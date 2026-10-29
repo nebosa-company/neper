@@ -211,6 +211,9 @@ fn close(f: File) -> err {
         fs_send_str(fs_name_str(slot))
         fs_send_handle_data(slot, fs_handles[slot].size)
         let result = fs_recv_word()
+        fs_handles[slot].used = false
+        if result != FS_RESULT_OK { ret Failed }
+        ret ok
     }
     fs_handles[slot].used = false
     ret ok
