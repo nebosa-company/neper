@@ -79,9 +79,11 @@ fn write_ext(dst: []u8, p: usize, v: usize) -> usize {
 }
 
 // Append option `number` with `value` after `*used` bytes of `buf`; numbers
-// must not decrease (`Invalid`), `TooSmall` when `buf` cannot hold it.
+// must not decrease (`Invalid`), `TooSmall` when `buf` cannot hold it or
+// `*used` lies outside it.
 fn options_add(buf: []u8, used: *usize, last_number: *u16, number: u16, value: []const u8) -> err {
     if number < *last_number || value.len > 65804usize { ret Invalid }
+    if *used > buf.len { ret TooSmall }
     let delta = usize(number - *last_number)
     let (dn, de) = ext_nibble(delta)
     let (ln, le) = ext_nibble(value.len)
@@ -139,6 +141,7 @@ fn read_ext(src: []const u8, nibble: u8, p: usize) -> (usize, usize, err) {
 
 // The option at `p`: (delta, value start, value length, err).
 fn parse_option(src: []const u8, p: usize) -> (usize, usize, usize, err) {
+    if p >= src.len { ret (0usize, 0usize, 0usize, Malformed) }
     let (delta, p1, de) = read_ext(src, src[p] >> 4u32, p + 1usize)
     if de != ok { ret (0usize, 0usize, 0usize, de) }
     let (len, p2, le) = read_ext(src, src[p] & 15u8, p1)
