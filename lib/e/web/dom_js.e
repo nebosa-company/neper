@@ -4689,7 +4689,7 @@ fn part18(b: *str.Builder) -> err {
     try str.push(b, "      if (htmlLocal(el) === 'input') {\n")
     try str.push(b, "        const t = inputTypeOf(el);\n")
     try str.push(b, "        if (['submit', 'image', 'reset', 'button'].indexOf(t) >= 0 && el !== submitter) continue;\n")
-    try str.push(b, "        if ((t === 'checkbox' || t === 'radio') && !inputState(el).checked) continue;\n")
+    try str.push(b, "        if ((t === 'checkbox' || t === 'radio') && !isCheckedInput(el)) continue;\n")
     try str.push(b, "      }\n")
     try str.push(b, "      if (htmlLocal(el) === 'object') continue;\n")
     try str.push(b, "      const name = getAttributeValue(el, 'name');\n")
