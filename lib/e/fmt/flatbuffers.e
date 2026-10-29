@@ -64,16 +64,23 @@ fn field_offset(buf: []const u8, table_pos: usize, field_index: usize) -> (usize
         if usize(soffset) > table_pos { ret (0usize, Invalid) }
         vt = table_pos - usize(soffset)
     } else {
-        vt = table_pos + usize(0i32 - soffset)
+        // Widen before negating: i32::MIN has no positive i32 counterpart. Bound the
+        // forward distance before adding too, so a malformed table cannot wrap `vt`.
+        let distance = usize(0i64 - i64(soffset))
+        if distance > buf.len - table_pos { ret (0usize, Invalid) }
+        vt = table_pos + distance
     }
     let (vsize, vsize_error) = load[u16](buf, vt)
     if vsize_error != ok { ret (0usize, vsize_error) }
-    if usize(vsize) < 4usize || vt + usize(vsize) > buf.len { ret (0usize, Invalid) }
+    if usize(vsize) < 4usize || usize(vsize) > buf.len - vt { ret (0usize, Invalid) }
+    // Validate the caller-supplied index before computing its two-byte vtable slot.
+    let slots = (usize(vsize) - 4usize) / 2usize
+    if field_index >= slots { ret (0usize, ok) }
     let slot_at = 4usize + 2usize * field_index
-    if slot_at + 2usize > usize(vsize) { ret (0usize, ok) }
     let (off, off_error) = load[u16](buf, vt + slot_at)
     if off_error != ok { ret (0usize, off_error) }
     if off == 0u16 { ret (0usize, ok) }
+    if usize(off) > buf.len - table_pos { ret (0usize, Invalid) }
     let pos = table_pos + usize(off)
     if pos >= buf.len { ret (0usize, Invalid) }
     ret (pos, ok)

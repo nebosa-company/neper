@@ -163,6 +163,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if short_root_error != fb.Invalid { os.exit(4i32) }
     let (_, bad_table_error) = fb.field_offset(buf, 2usize, 0usize)
     if bad_table_error != fb.Invalid { os.exit(4i32) }
+    // The i32::MIN soffset cannot be negated in i32. It is malformed input, not a trap.
+    var min_soffset: [8]u8 = zero
+    min_soffset[3usize] = 128u8
+    let (_, min_soffset_error) = fb.field_offset(min_soffset[..], 0usize, 0usize)
+    if min_soffset_error != fb.Invalid { os.exit(4i32) }
+    // A caller can request any field number; a huge one is simply absent and must not overflow
+    // while computing its two-byte vtable slot.
+    let (huge_field, huge_field_error) = fb.field_offset(buf, root, 18446744073709551615usize)
+    if huge_field_error != ok || huge_field != 0usize { os.exit(4i32) }
 
     // 5: a vector index out of range answers Invalid.
     let (weapons, weapons_error) = fb.get_vector(buf, root, 7usize)
