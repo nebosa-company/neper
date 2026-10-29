@@ -156,7 +156,7 @@ fn image_info(data: []const u8) -> (u32, u32, bool, bool) {
             let length = (usize(data[at + 2usize]) << 8usize) | usize(data[at + 3usize])
             let sof = marker >= 192u8 && marker <= 207u8 && marker != 196u8 && marker != 200u8 && marker != 204u8
             if sof {
-                if at + 9usize > data.len { ret (0u32, 0u32, true, false) }
+                if length < 8usize || at + 2usize + length > data.len { ret (0u32, 0u32, true, false) }
                 let h = (u32(data[at + 5usize]) << 8u32) | u32(data[at + 6usize])
                 let w = (u32(data[at + 7usize]) << 8u32) | u32(data[at + 8usize])
                 ret (w, h, true, w > 0u32 && h > 0u32)
