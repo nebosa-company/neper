@@ -11261,7 +11261,7 @@ if ($wasmNode) {
     $wasmRun = Invoke-Wasm $wasmOpsPlain @()
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 0`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0") { throw "the plain module's thread instructions answered: $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmOpsThreads @()
-    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nspawn null -6`nspawn unaligned -6`nspawn past end -6`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nspawn null -6`nspawn unaligned -6`nspawn past end -6`npoll valid 0`npoll subscription 21`npoll event 21`npoll taken 21`npoll count 21`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
     # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
     # inotify watch hands events over differently).
     $wasmWatch = Join-Path $wasmBuild 'os_watch_modify.wasm'
@@ -11339,7 +11339,7 @@ if ($wasmNode) {
     # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'
     if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
-    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath) (Join-Path $repo 'tests\wasm\host.mjs')
+    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath, $wasmOpsThreads) (Join-Path $repo 'tests\wasm\host.mjs')
     if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
     $wasmProcCleanup = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs') @() (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs')
     if ($wasmProcCleanup.Status -ne 0) { throw "the WASM process-host cleanup check failed: $($wasmProcCleanup.Output)" }

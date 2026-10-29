@@ -10936,7 +10936,7 @@ if command -v node >/dev/null 2>&1; then
     wasm_plain_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/thread_ops.wasm")
     [ "$wasm_plain_output" = "$(printf 'threads 0\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0')" ] || { printf '%s\n' "the plain module's thread instructions answered: $wasm_plain_output" >&2; exit 1; }
     wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/thread_ops.threads.wasm")
-    [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nspawn null -6\nspawn unaligned -6\nspawn past end -6\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
+    [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nspawn null -6\nspawn unaligned -6\nspawn past end -6\npoll valid 0\npoll subscription 21\npoll event 21\npoll taken 21\npoll count 21\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
     # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
     # inotify watch hands events over differently).
     "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/wasm/os_watch_modify/src/main.e" "$repo" wasm32 wasi "$wasm_build/os_watch_modify.wasm" > /dev/null
@@ -11024,7 +11024,7 @@ if command -v node >/dev/null 2>&1; then
     [ "$(wc -c < "$wasm_build/release.wasm")" -lt "$(wc -c < "$wasm_build/release-debug.wasm")" ]
     # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/host_files/src/main.e" "$repo" wasm32 wasi "$wasm_build/host_files.wasm")" = 'executable written' ]
-    (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm" "$wasm_build/wasm_threads.threads.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm" "$wasm_build/wasm_threads.threads.wasm" "$wasm_build/thread_ops.threads.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_proc_cleanup.mjs) || { printf '%s\n' 'the WASM process-host cleanup check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_preopen_symlink.mjs) || { printf '%s\n' 'the WASM preopen symlink boundary check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_sys_disk_precision.mjs) || { printf '%s\n' 'the WASM sys_disk precision check failed' >&2; exit 1; }

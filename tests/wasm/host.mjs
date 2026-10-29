@@ -1,7 +1,7 @@
 // The API of lib/wasm/neper-host.js under Node (C206, D5678):
-//   node --no-warnings tests/wasm/host.mjs FILES.wasm DEBUG.wasm RELEASE.wasm [THREADS.wasm]
+//   node --no-warnings tests/wasm/host.mjs FILES.wasm DEBUG.wasm RELEASE.wasm [THREADS.wasm THREAD_OPS.wasm]
 // FILES is tests/wasm/browser/host_files, DEBUG and RELEASE are wasm_release built without and with --release.
-// THREADS is link/wasm_threads built with --threads (C207, D5679).
+// THREADS is link/wasm_threads and THREAD_OPS is wasm_thread_ops, both built with --threads (C207, D5679).
 // The sweep (scripts/wasm-sweep.sh --host neper-host) covers WASI itself; this covers what a page passes in and gets back.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url'
 import { run } from '../../lib/wasm/neper-host.js'
 import { addLines } from '../../lib/wasm/source-map.js'
 
-const [filesPath, debugPath, releasePath, threadsPath] = process.argv.slice(2)
+const [filesPath, debugPath, releasePath, threadsPath, threadOpsPath] = process.argv.slice(2)
 const text = (bytes) => new TextDecoder().decode(bytes)
 const capture = () => {
   const got = { stdout: '', stderr: '' }
@@ -94,6 +94,16 @@ if (threadsPath) {
   assert.equal(one.stdout, expected)
   assert.equal(two.stdout, expected)
   await assert.rejects(run(await WebAssembly.compile(threaded), { stdout() {}, stderr() {} }), /URL, a Response or bytes/)
+  if (threadOpsPath) {
+    const expectedOps = 'threads 1\nthread.id 0\nspawn null -6\nspawn unaligned -6\nspawn past end -6\npoll valid 0\npoll subscription 21\npoll event 21\npoll taken 21\npoll count 21\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2\n'
+    const threadOps = new Uint8Array(await readFile(threadOpsPath))
+    for (const extra of [{}, { messages: true }]) {
+      const c = capture()
+      const { exitCode } = await run(threadOps, { ...extra, stdout: c.stdout, stderr: c.stderr })
+      assert.equal(exitCode, 0, `threaded poll ranges: ${c.got.stderr}`)
+      assert.equal(c.got.stdout, expectedOps, 'threaded poll ranges')
+    }
+  }
 }
 
 console.log('neper-host api ok')

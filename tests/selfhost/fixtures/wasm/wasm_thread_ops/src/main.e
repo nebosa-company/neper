@@ -1,7 +1,9 @@
 // The seven instructions the pseudo-library "wasm" gains for threads (D5672, C201), run on one
 // thread: `threads` and `thread.id` differ between a plain and a `--threads` module, a spawn
 // is refused by a plain module (-1), and a threaded host refuses null, unaligned and past-end
-// records (-6) without starting a worker. The atomics on a word work in both shapes.
+// records (-6) without starting a worker. Its poll fast path accepts a zeroed relative-clock
+// subscription and refuses invalid subscription and output ranges with EFAULT. The atomics on a
+// word work in both shapes.
 // `wait32` runs only where `threads` says the memory is shared. This fixture is wasm-only, so it
 // is outside link/ and the sweep; the wasm block of run.sh builds it both ways and compares.
 use e.mem
@@ -18,6 +20,9 @@ extern fn wasm_thread_spawn(record: u32) -> i32
 
 @import("wasm", "memory.size")
 extern fn wasm_memory_size() -> u32
+
+@import("wasi_snapshot_preview1", "poll_oneoff")
+extern fn wasi_poll_oneoff(subscriptions: u32, events: u32, count: u32, taken: u32) -> u32
 
 @import("wasm", "memory.atomic.wait32")
 extern fn wasm_wait32(address: u32, expected: u32, timeout_ns: i64) -> u32
@@ -71,6 +76,11 @@ fn main() -> err {
         number("spawn null", i64(wasm_thread_spawn(0u32)))
         number("spawn unaligned", i64(wasm_thread_spawn(4u32)))
         number("spawn past end", i64(wasm_thread_spawn(bytes - 40u32)))
+        number("poll valid", i64(wasi_poll_oneoff(0u32, 64u32, 1u32, 128u32)))
+        number("poll subscription", i64(wasi_poll_oneoff(bytes - 47u32, 64u32, 1u32, 128u32)))
+        number("poll event", i64(wasi_poll_oneoff(0u32, bytes - 31u32, 1u32, 128u32)))
+        number("poll taken", i64(wasi_poll_oneoff(0u32, 64u32, 1u32, bytes - 3u32)))
+        number("poll count", i64(wasi_poll_oneoff(0u32, 64u32, 4294967295u32, 128u32)))
     }
     wasm_store32(address, 7u32)
     number("load", i64(wasm_load32(address)))
