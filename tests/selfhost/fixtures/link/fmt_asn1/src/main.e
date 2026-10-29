@@ -41,6 +41,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e6 != asn1.Invalid { os.exit(8) }
     let (no_depth, e7) = asn1.children(root, 0u16)
     if e7 != asn1.TooDeep { os.exit(9) }
+    // A child reader carries the nesting depth forward instead of resetting it at every descent.
+    let nested_der: [6]u8 = [6]u8{ 48u8, 4u8, 48u8, 2u8, 48u8, 0u8 }
+    var nested_reader = asn1.reader(nested_der[..], 1u16)
+    let (nested_root, nested_root_present, nested_root_error) = asn1.reader_next_err(&nested_reader)
+    if nested_root_error != ok || !nested_root_present { os.exit(40) }
+    let (nested_children0, nested_children_error) = asn1.children(nested_root, 1u16)
+    if nested_children_error != ok { os.exit(41) }
+    var nested_children = nested_children0
+    let (nested_value, nested_value_present, nested_value_error) = asn1.reader_next_err(&nested_children)
+    if nested_value_error != ok || !nested_value_present { os.exit(42) }
+    let (too_deep_reader, too_deep_error) = asn1.children(nested_value, 1u16)
+    if too_deep_error != asn1.TooDeep { os.exit(43) }
     // Typed decode and encode.
     let (record, e8) = asn1.decode[Record](a, der[0..], 4u16)
     if e8 != ok { os.exit(10) }

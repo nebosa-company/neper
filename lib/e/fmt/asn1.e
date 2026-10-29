@@ -11,7 +11,7 @@ use e.meta
 
 type Class = enum u8 { Universal, Application, Context, Private }
 type Tag = struct { class: Class, number: u32, constructed: bool }
-type Value = struct { tag: Tag, content: []const u8, encoded: []const u8 }
+type Value = struct { tag: Tag, content: []const u8, encoded: []const u8, depth: u16 }
 type Reader = struct { data: []const u8, off: usize, depth: u16, max_depth: u16 }
 error Invalid
 error NonCanonical
@@ -100,14 +100,15 @@ fn reader_next_err(source_reader: *Reader) -> (Value, bool, err) {
     value.tag = tag
     value.content = data[at..at + length]
     value.encoded = data[start..at + length]
+    value.depth = r.depth
     r.off = at + length
     ret (value, true, ok)
 }
 
 fn children(value: Value, max_depth: u16) -> (Reader, err) {
     if !value.tag.constructed { ret (zero, Invalid) }
-    if max_depth == 0u16 { ret (zero, TooDeep) }
-    ret (Reader { data: value.content, off: 0usize, depth: 1u16, max_depth: max_depth }, ok)
+    if value.depth >= max_depth { ret (zero, TooDeep) }
+    ret (Reader { data: value.content, off: 0usize, depth: value.depth + 1u16, max_depth: max_depth }, ok)
 }
 
 fn is_universal(value: Value, number: u32, constructed: bool) -> bool {

@@ -21734,7 +21734,7 @@ flat column across dictionary and data pages, uncompressed or Snappy.
 ```neper
 type Class = enum u8 { Universal, Application, Context, Private }
 type Tag = struct { class: Class, number: u32, constructed: bool }
-type Value = struct { tag: Tag, content: []const u8, encoded: []const u8 }
+type Value = struct { tag: Tag, content: []const u8, encoded: []const u8, depth: u16 }
 type Reader = struct { data: []const u8, off: usize, depth: u16, max_depth: u16 }
 type BitString = struct { unused: u8, data: []const u8 }
 type Context = struct { number: u32, items: []const Item }
