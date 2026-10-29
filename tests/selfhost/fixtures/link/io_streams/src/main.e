@@ -10,6 +10,19 @@ use e.test.support
 
 error Failed
 
+type FinalDetailEndReader = struct { data: []const u8, off: usize }
+
+fn final_detail_end_read(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err) {
+    let state = mem.cast[*FinalDetailEndReader](ctx)
+    if state.off >= state.data.len { ret (0usize, io.End) }
+    var count = state.data.len - state.off
+    if count > dst.len { count = dst.len }
+    mem.copy[u8](dst[..count], state.data[state.off..state.off + count])
+    state.off += count
+    if state.off == state.data.len { ret (count, io.End) }
+    ret (count, ok)
+}
+
 fn main(a: *mem.Arena) -> err {
     var source = "hello world"
     var reader_state = io.SliceReader { data: source, off: 0usize }
@@ -27,6 +40,22 @@ fn main(a: *mem.Arena) -> err {
     let exact_error = io.read_exact(&r, rest[..])
     if exact_error != ok { ret exact_error }
     if !str.eq(rest[0usize..6usize], " world") { ret Failed }
+
+    // A final callback may fill an exact request while reporting End.
+    let final_exact_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "edge", failure: io.End } }
+    var (final_exact_script, final_exact_script_error) = support.scripted_reader(a, final_exact_steps[..])
+    if final_exact_script_error != ok { ret final_exact_script_error }
+    var final_exact = support.reader(&final_exact_script)
+    var final_exact_bytes: [4]u8 = zero
+    if io.read_exact(&final_exact, final_exact_bytes[..]) != ok || !str.eq(final_exact_bytes[..], "edge") { ret Failed }
+
+    // Detail readers have the same exact-read rule.
+    var final_exact_detail_state = FinalDetailEndReader { data: "detail", off: 0usize }
+    var final_exact_detail = io.detail_reader(mem.cast[*void](&final_exact_detail_state), final_detail_end_read)
+    var final_exact_detail_bytes: [6]u8 = zero
+    var final_exact_detail_info: os.ErrorDetail = zero
+    let (final_exact_detail_count, final_exact_detail_error) = io.read_exact_detail(&final_exact_detail, final_exact_detail_bytes[..], &final_exact_detail_info)
+    if final_exact_detail_count != 6usize || final_exact_detail_error != ok || !str.eq(final_exact_detail_bytes[..], "detail") { ret Failed }
 
     // Past the end is `End`, not a zero-length success -- a callback that made no
     // progress and did not say why would spin a caller forever.
@@ -90,6 +119,19 @@ fn main(a: *mem.Arena) -> err {
     if !str.eq(three[0usize..3usize], "abc") { ret Failed }
     let (over, over_error) = io.read(&limited, three[..])
     if over_error != io.End { ret Failed }
+
+    // A limited reader accounts for final bytes before returning the source End.
+    let final_limit_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end", failure: io.End } }
+    var (final_limit_script, final_limit_script_error) = support.scripted_reader(a, final_limit_steps[..])
+    if final_limit_script_error != ok { ret final_limit_script_error }
+    var final_limit_source = support.reader(&final_limit_script)
+    var final_limit_state: io.LimitedReader = zero
+    var final_limit = io.limited_reader(&final_limit_state, final_limit_source, 3u64)
+    var final_limit_bytes: [4]u8 = zero
+    let (final_limit_count, final_limit_error) = io.read(&final_limit, final_limit_bytes[..])
+    if final_limit_count != 3usize || final_limit_error != io.End || final_limit_state.remaining != 0u64 || !str.eq(final_limit_bytes[..3usize], "end") { ret Failed }
+    let (after_final_limit_count, after_final_limit_error) = io.read(&final_limit, final_limit_bytes[..])
+    if after_final_limit_count != 0usize || after_final_limit_error != io.End { ret Failed }
 
     // `counting_writer` passes bytes through and counts them.
     var sink_buffer: [16]u8 = zero

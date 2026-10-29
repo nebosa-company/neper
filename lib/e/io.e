@@ -267,9 +267,8 @@ fn limited_read(ctx: *void, dst: []u8) -> (usize, err) {
     var take = dst.len
     if u64(take) > state.remaining { take = usize(state.remaining) }
     let (count, read_error) = read(&state.source, dst[0usize..take])
-    if read_error != ok { ret (count, read_error) }
     state.remaining -= u64(count)
-    ret (count, ok)
+    ret (count, read_error)
 }
 
 fn limited_reader(state: *LimitedReader, source: Reader, limit: u64) -> Reader {
@@ -402,7 +401,10 @@ fn read_exact_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (u
     while filled < dst.len {
         let (count, read_error) = read_detail(r, dst[filled..], detail)
         filled += count
-        if read_error != ok { ret (filled, read_error) }
+        if read_error != ok {
+            if read_error == End && filled == dst.len { ret (filled, ok) }
+            ret (filled, read_error)
+        }
     }
     ret (filled, ok)
 }
@@ -411,8 +413,11 @@ fn read_exact(r: *Reader, dst: []u8) -> err {
     var filled = 0usize
     while filled < dst.len {
         let (count, read_error) = read(r, dst[filled..])
-        if read_error != ok { ret read_error }
         filled += count
+        if read_error != ok {
+            if read_error == End && filled == dst.len { ret ok }
+            ret read_error
+        }
     }
     ret ok
 }
