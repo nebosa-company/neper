@@ -11,6 +11,8 @@ use e.mem
 use e.os
 use e.time
 
+const MINIMUM_I64: i64 = 0i64 - 9223372036854775807i64 - 1i64
+
 type PartialWriter = struct { token: *cancel.Token, calls: usize }
 
 fn partial_write(ctx: *void, src: []const u8) -> (usize, err) {
@@ -145,6 +147,37 @@ fn cross_loop_refusals(a: *mem.Arena, submitted: *async.Loop, control: cancel.Co
     ret 0i32
 }
 
+// Submission that cannot produce an Op must release its private record. Repeat each
+// closed-loop path from the same mark: otherwise a first failed registration can hide
+// an arena leak until the next submission exhausts the caller's storage.
+fn closed_registration_rolls_back(a: *mem.Arena, listener: os.Socket, address: os.SocketAddress, control: cancel.Control) -> i32 {
+    let (closed0, closed_init_error) = async.init(a)
+    if closed_init_error != ok { ret 51i32 }
+    var closed = closed0
+    if async.close(&closed) != ok { ret 52i32 }
+
+    var storage: [1024]u8 = zero
+    var tiny = mem.arena_from(storage[..])
+    let entry = mem.mark(&tiny)
+    let (_, first_accept_error) = aio.accept(&tiny, &closed, listener, control)
+    if first_accept_error != aio.Closed || mem.mark(&tiny) != entry { ret 53i32 }
+    let (_, second_accept_error) = aio.accept(&tiny, &closed, listener, control)
+    if second_accept_error != aio.Closed || mem.mark(&tiny) != entry { ret 54i32 }
+
+    let (first_client, first_client_error) = os.socket_open(.Ip4, .Stream)
+    if first_client_error != ok { ret 55i32 }
+    let (_, first_connect_error) = aio.connect(&tiny, &closed, first_client, address, control)
+    let first_close_error = os.socket_close(first_client)
+    if first_close_error != ok || first_connect_error != aio.Closed || mem.mark(&tiny) != entry { ret 56i32 }
+
+    let (second_client, second_client_error) = os.socket_open(.Ip4, .Stream)
+    if second_client_error != ok { ret 57i32 }
+    let (_, second_connect_error) = aio.connect(&tiny, &closed, second_client, address, control)
+    let second_close_error = os.socket_close(second_client)
+    if second_close_error != ok || second_connect_error != aio.Closed || mem.mark(&tiny) != entry { ret 58i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena) -> err {
     let (loop0, loop_error) = async.init(a)
     if loop_error == async.Unsupported { ret ok }
@@ -198,18 +231,32 @@ fn main(a: *mem.Arena) -> err {
     if exchange_code != 0i32 { os.exit(exchange_code) }
     let (now, now_error) = time.monotonic()
     if now_error != ok { os.exit(31i32) }
+
+    // A minimum-valued deadline is already expired. Poll-limit calculation must not
+    // subtract it from the current monotonic instant before reporting the timeout.
+    let earliest = cancel.Control { token: &token, deadline: time.Instant { nanos: MINIMUM_I64 }, has_deadline: true }
+    let (earliest_accept, earliest_error) = aio.accept(a, &loop, listener, earliest)
+    if earliest_error != ok { os.exit(60i32) }
+    var earliest_op = earliest_accept
+    let (_, earliest_wait_error) = aio.wait[os.Socket](&loop, &earliest_op)
+    if earliest_wait_error != aio.Timeout || aio.state[os.Socket](&earliest_op) != .TimedOut { os.exit(61i32) }
+
     let expired = cancel.Control { token: &token, deadline: now, has_deadline: true }
     let (late_accept, late_error) = aio.accept(a, &loop, listener, expired)
     if late_error != ok { os.exit(32i32) }
     var late_op = late_accept
-    // An unbounded wait still stops at an operation's own deadline.
+    // Every negative duration is unbounded, including the i64 minimum, but still
+    // stops at an operation's own deadline.
     var late_items: [1]aio.AnyOp = [1]aio.AnyOp{ aio.erase[os.Socket](&late_op) }
-    let (late_index, late_ready, late_wait_error) = aio.wait_any(&loop, late_items[..], time.Duration { nanos: -1i64 })
+    let (late_index, late_ready, late_wait_error) = aio.wait_any(&loop, late_items[..], time.nanos(MINIMUM_I64))
     if late_wait_error != ok || !late_ready || late_index != 0usize || aio.state[os.Socket](&late_op) != .TimedOut { os.exit(33i32) }
     let (_, timed_out) = aio.take[os.Socket](&late_op)
     if timed_out != aio.Timeout { os.exit(33i32) }
     let (_, second_take) = aio.take[os.Socket](&late_op)
     if second_take != aio.Closed { os.exit(34i32) }
+
+    let closed_rollback_code = closed_registration_rolls_back(a, listener, local, free)
+    if closed_rollback_code != 0i32 { os.exit(closed_rollback_code) }
 
     if os.socket_close(server) != ok || os.socket_close(client) != ok || os.socket_close(listener) != ok { os.exit(35i32) }
     if async.close(&loop) != ok { os.exit(36i32) }
