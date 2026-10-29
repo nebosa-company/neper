@@ -66,6 +66,7 @@ fn parse_header(data: []const u8) -> (Header, err) {
     if data[5] != 1u8 && data[5] != 2u8 { ret (h, Invalid) }
     h.little = data[5] == 1u8
     h.version = data[6]
+    if h.version != 1u8 { ret (h, Invalid) }
     h.osabi = data[7]
     h.abi_version = data[8]
     var size = 52usize
@@ -73,6 +74,7 @@ fn parse_header(data: []const u8) -> (Header, err) {
     if data.len < size { ret (h, Truncated) }
     h.kind = rd16(data, 16usize, h.little)
     h.machine = rd16(data, 18usize, h.little)
+    if rd32(data, 20usize, h.little) != 1u32 { ret (h, Invalid) }
     if h.class == 2u8 {
         h.entry = rd64(data, 24usize, h.little)
         h.phoff = rd64(data, 32usize, h.little)

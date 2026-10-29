@@ -461,6 +461,31 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // Both ELF version fields must be EV_CURRENT, not merely recorded.
+    var header: [64]u8 = zero
+    header[0usize] = 127u8
+    header[1usize] = 69u8
+    header[2usize] = 76u8
+    header[3usize] = 70u8
+    header[4usize] = 2u8
+    header[5usize] = 1u8
+    header[6usize] = 1u8
+    header[20usize] = 1u8
+    let (_, valid_header_error) = elf.parse_header(header[..])
+    if valid_header_error != ok { os.exit(18i32) }
+    header[6usize] = 0u8
+    let (_, ident_zero_error) = elf.parse_header(header[..])
+    if ident_zero_error != elf.Invalid { os.exit(19i32) }
+    header[6usize] = 2u8
+    let (_, ident_unknown_error) = elf.parse_header(header[..])
+    if ident_unknown_error != elf.Invalid { os.exit(20i32) }
+    header[6usize] = 1u8
+    header[20usize] = 0u8
+    let (_, header_zero_error) = elf.parse_header(header[..])
+    if header_zero_error != elf.Invalid { os.exit(21i32) }
+    header[20usize] = 2u8
+    let (_, header_unknown_error) = elf.parse_header(header[..])
+    if header_unknown_error != elf.Invalid { os.exit(22i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
