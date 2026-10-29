@@ -46,9 +46,10 @@ fn antithetic[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, r: *rand.Pcg64, cou
 
 // A control variate `g` with known mean `g_mean`: the estimate is the mean of
 // `f(z) - beta (g(z) - g_mean)` with `beta = cov(f, g) / var(g)` from the
-// sample; `samples.len >= 2 * count` holds the paired draws meanwhile.
+// sample; `samples.len >= 2 * count` holds the paired draws meanwhile. The
+// capacity check divides by two so a large count cannot overflow first.
 fn control_variate[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, g: fn(*Ctx, f64) -> f64, g_mean: f64, r: *rand.Pcg64, count: usize, samples: []f64) -> (Estimate, err) {
-    if count < 2usize || samples.len < 2usize * count { ret (zero, Invalid) }
+    if count < 2usize || count > samples.len / 2usize { ret (zero, Invalid) }
     var f_sum = 0.0f64
     var g_sum = 0.0f64
     var i = 0usize
