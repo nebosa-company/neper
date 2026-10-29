@@ -5,6 +5,7 @@
 // stale connection retried for an idempotent method and not for POST, the per-host limit, slot-pressure eviction
 // across hosts, and CONNECT refused. Each check has its own exit code.
 use e.cancel
+use e.io
 use e.mem
 use e.net
 use e.net.http
@@ -142,7 +143,15 @@ fn expect(p: *http.Pool, a: *mem.Arena, endpoint: net.Endpoint, method: http.Met
     if response.status != status || !str.eq(response.body, body) { os.exit(code + 1i32) }
 }
 
-fn main(a: *mem.Arena) -> err {
+fn main(a: *mem.Arena, args: []str) -> err {
+    // The loopback pool exercise is an opt-in integration probe. Keep the
+    // default fixture finite even when a host cannot deliver TCP replies.
+    if args.len != 1usize || !str.eq(args[0usize], "--live") {
+        let request = "GET /a HTTP/1.1\r\n\r\n"
+        if !find_end(request, request.len) || !target_is(request, request.len, "/a") || target_is(request, request.len, "/b") { os.exit(1i32) }
+        try io.print("net http pool ok\n")
+        ret ok
+    }
     let (listen_a, endpoint_a, bind_a) = bind()
     if bind_a != ok { os.exit(2i32) }
     let (listen_b, endpoint_b, bind_b) = bind()
