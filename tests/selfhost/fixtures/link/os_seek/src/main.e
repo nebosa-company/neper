@@ -44,6 +44,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (back, back_error) = os.seek(f, 0i64 - 5i64, os.SeekWhence.Current)
     if back_error != ok { ret back_error }
     if back != 6u64 { ret Failed }
+    let (_, before_current_error) = os.seek(f, 0i64 - 7i64, os.SeekWhence.Current)
+    if before_current_error == ok { ret Failed }
+    let (still_back, still_back_error) = os.seek(f, 0i64, os.SeekWhence.Current)
+    if still_back_error != ok || still_back != 6u64 { ret Failed }
 
     // From the end, forwards and backwards.
     let (ending, ending_error) = os.seek(f, 0i64, os.SeekWhence.End)
@@ -52,6 +56,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (before_end, before_end_error) = os.seek(f, 0i64 - 4i64, os.SeekWhence.End)
     if before_end_error != ok { ret before_end_error }
     if before_end != 7u64 { ret Failed }
+    let (_, before_file_error) = os.seek(f, 0i64 - 12i64, os.SeekWhence.End)
+    if before_file_error == ok { ret Failed }
 
     // Seeking past the end is legal and does not extend the file.
     let (beyond, beyond_error) = os.seek(f, 100i64, os.SeekWhence.End)

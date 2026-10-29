@@ -11414,6 +11414,20 @@ greeting"
         *) printf '%s\n' "NeperOS e.fs did not read back what it wrote through the server: $neperos_efs" >&2; exit 1 ;;
     esac
     case "$neperos_efs" in *'fs write_file failed'*|*'fs read_file failed'*) printf '%s\n' "NeperOS e.fs failed: $neperos_efs" >&2; exit 1 ;; esac
+    # A NeperOS file cursor is bounded by its 512-byte client-side buffer. Negative seeks from
+    # every origin, over-capacity seeks and both signed extremes must fail without moving it.
+    fs_seek_test_img="$test_build/fs_seek_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_seek_test.e" "$repo" aarch64 neperos "$fs_seek_test_img")" = 'executable written' ]
+    fs_seek_archive="$test_build/fs-seek-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$fs_seek_archive" "$fs_server_img" "$fs_seek_test_img" "$fs_denied_img"
+    fs_seek_disk="$test_build/fs-seek-disk.img"
+    dd if=/dev/zero of="$fs_seek_disk" bs=1M count=1 status=none
+    neperos_fs_seek=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_seek_archive" -append "fsserver fswrite" -drive "file=$fs_seek_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_fs_seek" in
+        *'fs seek bounds ok'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS seek did not reject invalid client cursors: $neperos_fs_seek" >&2; exit 1 ;;
+    esac
+    case "$neperos_fs_seek" in *'fs seek bounds failed'*) printf '%s\n' "NeperOS seek accepted an invalid client cursor: $neperos_fs_seek" >&2; exit 1 ;; esac
     # A buffered e.os write reaches the server on close. Its missing parent makes that flush fail
     # after the local write succeeded, so close must return Failed rather than hide the reply.
     fs_close_error_test_img="$test_build/fs_close_error_test.img"

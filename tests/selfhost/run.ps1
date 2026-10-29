@@ -11726,6 +11726,20 @@ if ($neperosQemu) {
     foreach ($efsLeak in @('fs write_file failed', 'fs read_file failed')) {
         if ($efsBoot -match [regex]::Escape($efsLeak)) { throw "NeperOS e.fs failed (${efsLeak}): $efsBoot" }
     }
+    # A NeperOS file cursor is bounded by its 512-byte client-side buffer. Negative seeks from
+    # every origin, over-capacity seeks and both signed extremes must fail without moving it.
+    $fsSeekTest = Join-Path $testBuild 'fs_seek_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_seek_test.e') $repo aarch64 neperos $fsSeekTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS seek-bounds program did not build' }
+    $fsSeekArchive = Join-Path $testBuild 'fs-seek-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $fsSeekArchive $fsServer $fsSeekTest $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS seek-bounds archive did not assemble' }
+    $fsSeekDisk = Join-Path $testBuild 'fs-seek-disk.img'
+    $fsSeekStream = [IO.File]::Create($fsSeekDisk); $fsSeekStream.SetLength(1MB); $fsSeekStream.Close()
+    $fsSeekBlk = @('-drive', "file=$fsSeekDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $fsSeekBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsSeekArchive, '-append', 'fsserver fswrite') + $fsSeekBlk)
+    if ($fsSeekBoot -notmatch '(?s)fs seek bounds ok.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS seek did not reject invalid client cursors: $fsSeekBoot" }
+    if ($fsSeekBoot -match 'fs seek bounds failed') { throw "NeperOS seek accepted an invalid client cursor: $fsSeekBoot" }
     # A buffered `e.os` write reaches the server on close. Its missing parent makes that flush
     # fail after the local write succeeded, so close must return Failed rather than hide the reply.
     $fsCloseErrorTest = Join-Path $testBuild 'fs_close_error_test.img'

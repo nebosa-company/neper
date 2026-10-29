@@ -223,11 +223,22 @@ fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err) {
     if f.raw < FILE_BASE { ret (0u64, Unsupported) }
     let slot = f.raw - FILE_BASE
     if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0u64, Unsupported) }
-    var pos = fs_handles[slot].offset
-    if whence == SeekWhence.Start {
-        pos = usize(off)
+    var pos = 0usize
+    if whence == SeekWhence.Current {
+        pos = fs_handles[slot].offset
+    } else if whence == SeekWhence.End {
+        pos = fs_handles[slot].size
+    }
+    // The client-side file buffer is fixed-size. Validate the signed offset before
+    // converting it to usize or adding it to the cursor.
+    if pos > FS_BLOCK { ret (0u64, Failed) }
+    if off < 0i64 {
+        // Compare before negating so i64::MIN is refused without overflowing.
+        if off < 0i64 - i64(pos) { ret (0u64, Failed) }
+        pos = pos - usize(0i64 - off)
     } else {
-        if whence == SeekWhence.Current { pos = fs_handles[slot].offset + usize(off) } else { pos = fs_handles[slot].size + usize(off) }
+        if off > i64(FS_BLOCK - pos) { ret (0u64, Failed) }
+        pos = pos + usize(off)
     }
     fs_handles[slot].offset = pos
     ret (u64(pos), ok)
