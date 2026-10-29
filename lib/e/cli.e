@@ -223,6 +223,7 @@ fn parse(a: *mem.Arena, command: *const Command, args: []const str) -> (Result, 
         let o = current.options[i]
         if counts[i] == 0usize && o.required && o.env.len > 0usize {
             let (from_env, env_error) = os.env(a, o.env)
+            if env_error != ok && env_error != os.NotFound { ret (zero, env_error) }
             if env_error == ok {
                 let (value, value_error) = parse_value(o.kind, from_env)
                 if value_error != ok { ret (zero, value_error) }

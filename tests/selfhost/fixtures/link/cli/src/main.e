@@ -127,6 +127,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let optional_env = cli.Command { name: "env", help: "", options: optional_env_options[..], subcommands: zero }
     let (optional_env_result, optional_env_error) = cli.parse(a, &optional_env, zero)
     if optional_env_error != ok || optional_env_result.options.len != 0usize { os.exit(36) }
+    // The parse scratch fits, but a process-environment lookup does not. A real
+    // lookup failure must not be mistaken for a missing required option.
+    var required_env_options: [1]cli.Option = zero
+    required_env_options[0usize] = cli.Option { long: "from-path", short: 0u8, kind: .String, required: true, repeated: false, env: "PATH", help: "" }
+    let required_env = cli.Command { name: "env", help: "", options: required_env_options[..], subcommands: zero }
+    var env_backing: [65536]u8 = zero
+    var env_arena = mem.arena_from(env_backing[..])
+    env_arena.cap = 256usize * mem.size_of[usize]() + 2048usize * mem.size_of[cli.Value]() + 64usize
+    let (_, required_env_error) = cli.parse(&env_arena, &required_env, zero)
+    if required_env_error != os.OutOfMemory { os.exit(39) }
     // Help.
     let (text, e9) = cli.help(a, &root, 60u16)
     if e9 != ok { os.exit(24) }
