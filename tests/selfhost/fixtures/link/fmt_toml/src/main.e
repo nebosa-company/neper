@@ -277,6 +277,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if outcome("a = -0_1\n") != toml.Invalid { os.exit(38i32) }
     if outcome("a = +0_1.0\n") != toml.Invalid { os.exit(39i32) }
 
+    // 40-44: quoted TOML strings must not carry raw control bytes other than the
+    // line breaks allowed by the multi-line forms and tab.
+    let (_, basic_control) = only_value("a = \"\x00\"\n", room[..])
+    if basic_control != toml.Invalid { os.exit(40i32) }
+    let (_, literal_control) = only_value("a = '\x01'\n", room[..])
+    if literal_control != toml.Invalid { os.exit(41i32) }
+    let (_, multi_basic_control) = only_value("a = \"\"\"\x0B\"\"\"\n", room[..])
+    if multi_basic_control != toml.Invalid { os.exit(42i32) }
+    let (_, multi_literal_control) = only_value("a = '''\x7F'''\n", room[..])
+    if multi_literal_control != toml.Invalid { os.exit(43i32) }
+    let (raw_tab, raw_tab_error) = only_value("a = \"\t\"\n", room[..])
+    if raw_tab_error != ok || raw_tab.text.len != 1usize || raw_tab.text[0usize] != 9u8 { os.exit(44i32) }
+
     try io.print("fmt toml ok\n")
     ret ok
 }

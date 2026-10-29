@@ -66,6 +66,12 @@ fn peek_at(p: *Parser, ahead: usize) -> u8 {
     ret p.source[p.at + ahead]
 }
 
+// TOML permits raw tabs, and newlines only in the multi-line string forms. Other C0
+// controls and DEL must be represented with a basic-string escape.
+fn forbidden_raw_string_control(c: u8) -> bool {
+    ret (c < SPACE && c != TAB && c != LF && c != CR) || c == 127u8
+}
+
 fn skip_space(p: *Parser) {
     while p.at < p.source.len && (p.source[p.at] == SPACE || p.source[p.at] == TAB) { p.at += 1usize }
 }
@@ -191,6 +197,7 @@ fn basic(p: *Parser) -> (str, err) {
         p.at += 1usize
         if c == DQUOTE { break }
         if c == LF || c == CR { ret ("", Invalid) }
+        if forbidden_raw_string_control(c) { ret ("", Invalid) }
         if c == BACKSLASH {
             let escape_error = escape(p, false)
             if escape_error != ok { ret ("", escape_error) }
@@ -221,6 +228,7 @@ fn multi_basic(p: *Parser) -> (str, err) {
             }
             break
         }
+        if forbidden_raw_string_control(c) { ret ("", Invalid) }
         p.at += 1usize
         if c == BACKSLASH {
             let escape_error = escape(p, true)
@@ -241,6 +249,7 @@ fn literal(p: *Parser) -> (str, err) {
         let c = p.source[p.at]
         if c == SQUOTE { break }
         if c == LF || c == CR { ret ("", Invalid) }
+        if forbidden_raw_string_control(c) { ret ("", Invalid) }
         p.at += 1usize
     }
     let stop = p.at
@@ -253,13 +262,15 @@ fn multi_literal(p: *Parser) -> (str, err) {
     let start = p.at
     while true {
         if p.at >= p.source.len { ret ("", Invalid) }
-        if p.source[p.at] == SQUOTE && peek_at(p, 1usize) == SQUOTE && peek_at(p, 2usize) == SQUOTE {
+        let c = p.source[p.at]
+        if c == SQUOTE && peek_at(p, 1usize) == SQUOTE && peek_at(p, 2usize) == SQUOTE {
             var stop = p.at + 3usize
             while stop - p.at < 5usize && stop < p.source.len && p.source[stop] == SQUOTE { stop += 1usize }
             let text = p.source[start..stop - 3usize]
             p.at = stop
             ret (text, ok)
         }
+        if forbidden_raw_string_control(c) { ret ("", Invalid) }
         p.at += 1usize
     }
     ret ("", Invalid)
