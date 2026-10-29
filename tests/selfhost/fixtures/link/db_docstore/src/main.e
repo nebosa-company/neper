@@ -399,6 +399,14 @@ fn capacity(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
+// The on-disk strings and frame payloads use u32 lengths. This boundary stays
+// testable without allocating a four-gibibyte fixture arena.
+fn frame_length_limit() -> i32 {
+    if !ds.length_fits_u32(4294967295u64) { ret 801i32 }
+    if ds.length_fits_u32(4294967296u64) { ret 802i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena) -> err {
     var code = image_and_state(a)
     if code == 0i32 { code = concurrency(a) }
@@ -407,6 +415,7 @@ fn main(a: *mem.Arena) -> err {
     if code == 0i32 { code = subscriptions(a) }
     if code == 0i32 { code = compaction(a) }
     if code == 0i32 { code = capacity(a) }
+    if code == 0i32 { code = frame_length_limit() }
     if code != 0i32 {
         // a status of 256, 512, ... would read as success on Linux, where it is taken mod 256
         var shown = code

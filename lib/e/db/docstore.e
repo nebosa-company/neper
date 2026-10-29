@@ -60,6 +60,10 @@ error Corrupt
 
 fn magic() -> str { ret "NDS1" }
 
+// Frame and string lengths are encoded as u32 on disk. Keep the boundary separate
+// so callers and the fixture can verify it without allocating a multi-gibibyte slice.
+fn length_fits_u32(length: u64) -> bool { ret length <= 4294967295u64 }
+
 // ---- construction and recovery ----------------------------------------------------------
 
 fn create(a: *mem.Arena, lim: Limits) -> (Db, err) {
@@ -307,6 +311,7 @@ fn w_u64(db: *Db, v: u64) -> bool {
 }
 
 fn w_str(db: *Db, s: str) -> bool {
+    if !length_fits_u32(u64(s.len)) { ret false }
     if !w_u32(db, u32(s.len)) { ret false }
     var i = 0usize
     while i < s.len {
@@ -328,6 +333,10 @@ fn begin(db: *Db) -> (usize, bool) {
 // tables refuse is taken back out of the log.
 fn seal(db: *Db, start: usize) -> err {
     let n = db.used - start - 8usize
+    if !length_fits_u32(u64(n)) {
+        db.used = start
+        ret Full
+    }
     let payload = db.log[start + 8usize..db.used]
     let crc = hash.crc32(payload)
     var i = 0usize
