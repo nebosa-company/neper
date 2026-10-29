@@ -86,6 +86,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if truncated != mqtt.TooSmall { os.exit(2i32) }
     let (kind, id, ae) = mqtt.decode_ack("\x62\x02\x00\x05")
     if ae != ok || kind != 6u8 || id != 5u16 { os.exit(2i32) }
+    var ack_kinds: [5]u8 = [5]u8{ 4u8, 5u8, 6u8, 7u8, 11u8 }
+    var zero_packets: [5]str = [5]str{ "\x40\x02\x00\x00", "\x50\x02\x00\x00", "\x62\x02\x00\x00", "\x70\x02\x00\x00", "\xb0\x02\x00\x00" }
+    var ack_i = 0usize
+    while ack_i < ack_kinds.len {
+        let (_, encode_zero) = mqtt.encode_ack(buf[..], ack_kinds[ack_i], 0u16)
+        if encode_zero != mqtt.Invalid { os.exit(2i32) }
+        let (_, _, decode_zero) = mqtt.decode_ack(zero_packets[ack_i])
+        if decode_zero != mqtt.Malformed { os.exit(2i32) }
+        ack_i += 1usize
+    }
     let (_, _, ack_tail) = mqtt.decode_ack("\x62\x02\x00\x05\xff")
     if ack_tail != mqtt.Malformed { os.exit(2i32) }
     var sub_codes: [1]u8 = zero

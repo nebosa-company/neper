@@ -277,6 +277,7 @@ fn decode_publish(src: []const u8) -> (Publish, err) {
 
 // A two-byte-body ack: PUBACK, PUBREC, PUBREL (flags 2), PUBCOMP, UNSUBACK.
 fn encode_ack(dst: []u8, kind: u8, packet_id: u16) -> (usize, err) {
+    if packet_id == 0u16 { ret (0usize, Invalid) }
     if dst.len < 4usize { ret (0usize, TooSmall) }
     dst[0] = kind << 4u32
     if kind == PUBREL { dst[0] = dst[0] | 2u8 }
@@ -322,6 +323,7 @@ fn decode_ack(src: []const u8) -> (u8, u16, err) {
     if t == PUBREL { want_flags = 2u8 }
     if b.len != 2usize || (first & 15u8) != want_flags { ret (0u8, 0u16, Malformed) }
     let (id, _) = get_u16(b, 0usize)
+    if id == 0u16 { ret (0u8, 0u16, Malformed) }
     ret (t, id, ok)
 }
 
