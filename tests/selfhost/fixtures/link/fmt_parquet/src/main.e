@@ -58,6 +58,13 @@ fn check_table(file: []const u8, code: i32) {
     var v = parquet.Values { ints: ints[..], floats: floats[..], offsets: offsets[..], data: data[..], valid: valid[..], count: 0usize, data_len: 0usize }
     let all_valid: [9]u8 = [9]u8{ 1, 1, 1, 1, 1, 1, 1, 1, 1 }
 
+    // Parsed metadata must not send page decoding past the source buffer.
+    let saved_offset = m.columns[0usize].data_page_offset
+    m.columns[0usize].data_page_offset = i64(file.len) + 1i64
+    let (_, offset_error) = parquet.decode(file, &m, 0usize, &v, scratch[..])
+    if offset_error != parquet.Malformed { os.exit(code) }
+    m.columns[0usize].data_page_offset = saved_offset
+
     // +1: int32 with nulls, PLAIN.
     let (n0, e0) = parquet.decode(file, &m, 0usize, &v, scratch[..])
     if e0 != ok || n0 != 9usize || v.count != 9usize { os.exit(code + 1i32) }

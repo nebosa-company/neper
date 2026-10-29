@@ -1026,10 +1026,16 @@ fn decode(file: []const u8, m: *const FileMetaData, chunk_index: usize, v: *Valu
     if (kind == 4i32 || kind == 5i32) && rows > v.floats.len { ret (0usize, TooSmall) }
     if kind == 6i32 && rows >= v.offsets.len { ret (0usize, TooSmall) }
     if c.data_page_offset < 0i64 || c.dictionary_page_offset < 0i64 || c.total_compressed_size < 0i64 { ret (0usize, Malformed) }
-    var pos = usize(c.data_page_offset)
-    if c.dictionary_page_offset > 0i64 && usize(c.dictionary_page_offset) < pos { pos = usize(c.dictionary_page_offset) }
-    if usize(c.total_compressed_size) > file.len - pos { ret (0usize, Malformed) }
-    let end = pos + usize(c.total_compressed_size)
+    let file_size = u64(file.len)
+    let data_page_offset = u64(c.data_page_offset)
+    let dictionary_page_offset = u64(c.dictionary_page_offset)
+    let compressed_size = u64(c.total_compressed_size)
+    if data_page_offset > file_size || dictionary_page_offset > file_size || compressed_size > file_size { ret (0usize, Malformed) }
+    var pos = usize(data_page_offset)
+    if dictionary_page_offset > 0u64 && dictionary_page_offset < data_page_offset { pos = usize(dictionary_page_offset) }
+    let total = usize(compressed_size)
+    if total > file.len - pos { ret (0usize, Malformed) }
+    let end = pos + total
     v.count = 0usize
     v.data_len = 0usize
     if kind == 6i32 { v.offsets[0] = 0u32 }
