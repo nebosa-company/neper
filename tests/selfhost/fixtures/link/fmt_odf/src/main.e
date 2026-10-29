@@ -9,6 +9,7 @@ use e.str
 use e.fmt.odf as odf
 use e.fmt.ooxml as ooxml
 use e.fmt.xml as xml
+use e.fmt.zip.write as zipw
 
 fn odf_element(name: str, attributes: []const xml.Attribute, parent: u32) -> xml.Node {
     ret xml.Node { kind: .Element, name: name, value: "", attributes: attributes, parent: parent, first_child: 4294967295u32, last_child: 4294967295u32, next_sibling: 4294967295u32 }
@@ -59,6 +60,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ods_notes_error != ok || ods_notes.rows != 1usize || ods_notes.columns != 1usize || !str.eq(ods_notes.cells[0usize], "first second") { os.exit(29) }
     let (ods_none, ods_none_error) = odf.sheet_grid(a, ods_sheet[0..], 3usize)
     if ods_none_error != odf.NoContent { os.exit(30) }
+    // A table in a cell is part of its parent sheet, never a separately numbered sheet.
+    let nested_sheets_xml = "<office:document-content xmlns:office=\"urn:office\" xmlns:table=\"urn:table\"><office:body><office:spreadsheet><table:table table:name=\"First\"><table:table-row><table:table-cell office:value=\"outer\"><table:table table:name=\"Nested\"><table:table-row><table:table-cell office:value=\"inner\"/></table:table-row></table:table></table:table-cell></table:table-row></table:table><table:table table:name=\"Second\"><table:table-row><table:table-cell office:value=\"second\"/></table:table-row></table:table></office:spreadsheet></office:body></office:document-content>"
+    let nested_sheets_part = [1]zipw.Part{ zipw.Part { name: "content.xml", data: nested_sheets_xml } }
+    let (nested_sheets_package, nested_sheets_package_error) = zipw.store(a, nested_sheets_part[0usize..])
+    if nested_sheets_package_error != ok { os.exit(39) }
+    let (nested_sheets_names, nested_sheets_names_error) = odf.sheet_names(a, nested_sheets_package)
+    if nested_sheets_names_error != ok || nested_sheets_names.len != 2usize || !str.eq(nested_sheets_names[0usize], "First") || !str.eq(nested_sheets_names[1usize], "Second") { os.exit(40) }
+    let (nested_first_grid, nested_first_grid_error) = odf.sheet_grid(a, nested_sheets_package, 1usize)
+    if nested_first_grid_error != ok || nested_first_grid.rows != 1usize || nested_first_grid.columns != 1usize || !str.eq(nested_first_grid.cells[0usize], "outer") { os.exit(41) }
+    let (nested_second_grid, nested_second_grid_error) = odf.sheet_grid(a, nested_sheets_package, 2usize)
+    if nested_second_grid_error != ok || nested_second_grid.rows != 1usize || nested_second_grid.columns != 1usize || !str.eq(nested_second_grid.cells[0usize], "second") { os.exit(42) }
     // A nested table is part of its outer cell; it must not start a new row in
     // the outer sheet's grid.
     let nested_source = "<table><table-row><table-cell office:value=\"outer\"><table><table-row><table-cell office:value=\"inner\"/></table-row></table></table-cell><table-cell office:value=\"right\"/></table-row></table>"

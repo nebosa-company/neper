@@ -315,6 +315,15 @@ fn table_owner(nodes: []const xml.Node, n: usize) -> usize {
     ret NO_OWNER
 }
 
+// A sheet is a direct table child of office:spreadsheet. Tables nested in a
+// cell are values within that sheet, not independently selectable sheets.
+fn sheet_table(nodes: []const xml.Node, n: usize) -> bool {
+    if n >= nodes.len || nodes[n].kind != .Element || !str.eq(odf_local(nodes[n].name), "table") { ret false }
+    let parent = parent_of(nodes, n)
+    if parent == NO_OWNER || nodes[parent].kind != .Element { ret false }
+    ret str.eq(odf_local(nodes[parent].name), "spreadsheet")
+}
+
 // Record a finished cell: its text into `cells` (when filling) over the repeats of its column and row, and the extent.
 fn emit_cell(fill: bool, cells: []str, columns: usize, row: usize, column: usize, cell_repeat: usize, row_repeat: usize, text: str, max_rows: *usize, max_columns: *usize) {
     if text.len == 0usize { ret }
@@ -428,7 +437,7 @@ fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (ooxml.Grid, er
     var table = NO_OWNER
     var i = 0usize
     while i < nodes.len && table == NO_OWNER {
-        if nodes[i].kind == .Element && str.eq(odf_local(nodes[i].name), "table") {
+        if sheet_table(nodes, i) {
             seen += 1usize
             if seen == number { table = i }
         }
@@ -462,7 +471,7 @@ fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err) {
     var count = 0usize
     var i = 0usize
     while i < nodes.len {
-        if nodes[i].kind == .Element && str.eq(odf_local(nodes[i].name), "table") { count += 1usize }
+        if sheet_table(nodes, i) { count += 1usize }
         i += 1usize
     }
     let (names, names_error) = mem.alloc[str](a, count + 1usize)
@@ -470,7 +479,7 @@ fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err) {
     var n = 0usize
     i = 0usize
     while i < nodes.len {
-        if nodes[i].kind == .Element && str.eq(odf_local(nodes[i].name), "table") {
+        if sheet_table(nodes, i) {
             let (title, has_title) = xml.attribute(&nodes[i], "table:name")
             names[n] = ""
             if has_title { names[n] = title }
