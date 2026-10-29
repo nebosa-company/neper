@@ -195,6 +195,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if grid_error != ok || near != 2usize { os.exit(5i32) }
     let (_, bad_error) = spatial.hash_grid(0.0f64, 0.0f64, 0.0f64, 10usize, 10usize, head[..], gnext[..], gxs[..], gys[..])
     if bad_error != spatial.Invalid { os.exit(5i32) }
+    let max_usize = 0usize -% 1usize
+    let overflow_columns = max_usize / 2usize + 1usize
+    let (_, overflow_grid_error) = spatial.hash_grid(0.0f64, 0.0f64, 1.0f64, overflow_columns, 2usize, head[0usize..0usize], gnext[..], gxs[..], gys[..])
+    if overflow_grid_error != spatial.TooSmall { os.exit(5i32) }
 
     // 6: R-tree by insertion and by Hilbert packing against brute force.
     var rects: [800]f64 = zero
@@ -213,6 +217,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (r0, r_error) = spatial.rtree(rects[..], 4usize, rbox[..], rchild[..], rcount[..], rleaf[..])
     if r_error != ok { os.exit(6i32) }
     var r = r0
+    if spatial.rtree_insert(&r, max_usize) != spatial.Invalid { os.exit(6i32) }
     i = 0usize
     while i < 200usize {
         if spatial.rtree_insert(&r, i) != ok { os.exit(6i32) }

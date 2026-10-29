@@ -436,10 +436,11 @@ fn interval_overlap_node(t: *const IntervalTree, node: usize, lo: f64, hi: f64, 
 
 // A grid of `columns × rows` cells of side `cell` from (x0, y0); `head.len >= columns * rows`.
 fn hash_grid(x0: f64, y0: f64, cell: f64, columns: usize, rows: usize, head: []u32, next: []u32, xs: []f64, ys: []f64) -> (HashGrid, err) {
-    if head.len < columns * rows { ret (zero, TooSmall) }
     if cell <= 0.0f64 || columns == 0usize || rows == 0usize { ret (zero, Invalid) }
+    if columns > head.len / rows { ret (zero, TooSmall) }
+    let grid_cells = columns * rows
     var i = 0usize
-    while i < columns * rows {
+    while i < grid_cells {
         head[i] = NONE
         i += 1usize
     }
@@ -702,11 +703,12 @@ fn rtree_split(t: *RTree, node: usize, extra: u32) -> (usize, err) {
 
 // Insert item `item` (its rectangle in `items`).
 fn rtree_insert(t: *RTree, item: usize) -> err {
-    if (item + 1usize) * 4usize > t.items.len { ret Invalid }
+    if item >= t.items.len / 4usize { ret Invalid }
     var path: [64]usize = zero
     var depth = 0usize
     var node = t.root
-    let b = t.items[item * 4usize..item * 4usize + 4usize]
+    let item_offset = item * 4usize
+    let b = t.items[item_offset..item_offset + 4usize]
     while t.leaf[node] == 0u8 {
         if depth >= 64usize { ret TooSmall }
         path[depth] = node
