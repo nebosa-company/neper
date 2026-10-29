@@ -285,6 +285,7 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
             }
             extra_at += 4usize + field_len
         }
+        if extra_at != extra_end { ret (zero, Invalid) }
         if entry.size > limits.entry_bytes { ret (zero, TooLarge) }
         if entry.size > limits.total_bytes || total > limits.total_bytes - entry.size { ret (zero, TooLarge) }
         total += entry.size

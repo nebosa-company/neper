@@ -228,6 +228,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var legacy_name_source = Source { data: malformed, off: 0usize }
     let (_, e17) = open_over(a, &legacy_name_source, limits)
     if e17 != zip.Invalid { os.exit(26) }
+    // A central-directory extra area is a sequence of complete 4-byte headers and
+    // payloads. A trailing byte must not be silently ignored.
+    var extra_parts: [1]zipwrite.Part = zero
+    extra_parts[0usize] = zipwrite.Part { name: "x", data: no_data[..] }
+    let (extra_zip, extra_zip_error) = zipwrite.store(a, extra_parts[..])
+    if extra_zip_error != ok { os.exit(41) }
+    let extra_eocd = extra_zip.len - 22usize
+    let extra_directory = 30usize + extra_parts[0usize].name.len
+    let (trailing_extra, trailing_extra_error) = mem.alloc[u8](a, extra_zip.len + 1usize)
+    if trailing_extra_error != ok { os.exit(42) }
+    mem.copy[u8](trailing_extra[..extra_eocd], extra_zip[..extra_eocd])
+    trailing_extra[extra_eocd] = 0u8
+    mem.copy[u8](trailing_extra[extra_eocd + 1usize..], extra_zip[extra_eocd..])
+    write16(trailing_extra, extra_directory + 30usize, 1u32)
+    write32(trailing_extra, extra_eocd + 1usize + 12usize, u32(46usize + extra_parts[0usize].name.len + 1usize))
+    var trailing_extra_source = Source { data: trailing_extra, off: 0usize }
+    let (_, trailing_open_error) = open_over(a, &trailing_extra_source, limits)
+    if trailing_open_error != zip.Invalid { os.exit(43) }
     // The reader has one source, so a classic multi-disk end record is unsupported.
     var disk_parts: [1]zipwrite.Part = zero
     disk_parts[0usize] = zipwrite.Part { name: "disk.txt", data: no_data[..] }
