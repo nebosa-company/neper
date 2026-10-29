@@ -103,7 +103,7 @@ fn message_limits(start: usize, headers: usize, count: usize, body: usize) -> ht
     ret http.Limits { start_line: start, header_bytes: headers, header_count: count, body_bytes: body }
 }
 
-fn main(a: *mem.Arena) -> err {
+fn main(a: *mem.Arena, args: []str) -> err {
     // Pipelined requests prove the reader preserves bytes fetched past the first body.
     var request_source: OneByte = zero
     let request_input = "POST /one HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\nX-Mode: one\r\n\r\nabcGET /two HTTP/1.0\r\n\r\n"
@@ -220,6 +220,11 @@ fn main(a: *mem.Arena) -> err {
     if response_write_error != ok || !str.eq(io.memory_bytes(&response_capture), "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n") { ret Failed }
     if !str.eq(http.reason(503u16), "Service Unavailable") || http.reason(799u16).len != 0usize { ret Failed }
 
+    // The plain-client exchange needs a host loopback socket, and a failed host
+    // exchange can otherwise leave its worker blocked in accept. Keep it as an
+    // explicit integration probe; the default fixture remains finite and covers the
+    // parser and in-memory transport cases above.
+    if args.len == 1usize && str.eq(args[0usize], "--live") {
     // The plain client owns one real loopback connection per request. A HEAD response
     // retains its advertised length without trying to consume a body the server omits.
     let (loopback, loopback_error) = net.parse_ip("127.0.0.1")
@@ -228,12 +233,17 @@ fn main(a: *mem.Arena) -> err {
     let (listener, listen_error) = net.tcp_listen(endpoint, 2u32)
     if listen_error != ok { ret listen_error }
     var server = LiveServer { listener: listener, failed: false }
-    defer let _ = net.close(server.listener)
     let (bound, bound_error) = os.socket_local_address(server.listener)
-    if bound_error != ok || bound.port == 0u16 { ret Failed }
+    if bound_error != ok || bound.port == 0u16 {
+        let _ = net.close(server.listener)
+        ret Failed
+    }
     endpoint.port = bound.port
     let (worker, spawn_error) = thread.spawn[LiveServer](serve_live, &server, 0usize)
-    if spawn_error != ok { ret spawn_error }
+    if spawn_error != ok {
+        let _ = net.close(server.listener)
+        ret spawn_error
+    }
 
     var live_headers: [1]http.Header = zero
     live_headers[0usize] = http.Header { name: "Host", value: "local" }
@@ -291,8 +301,9 @@ fn main(a: *mem.Arena) -> err {
 
     live_request.method = .Connect
     let (tunnel_response, tunnel_error) = http.request(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize))
+    let listener_close_error = net.close(server.listener)
     let joined = thread.join(worker)
-    if joined != ok || server.failed || stream_failed || cancel_failed { ret Failed }
+    if listener_close_error != ok || joined != ok || server.failed || stream_failed || cancel_failed { ret Failed }
     if live_error != ok || live_response.status != 201u16 || !str.eq(live_response.body, "hello") { ret Failed }
     let (live_value, live_found) = http.header(live_response.headers, "x-live")
     if !live_found || !str.eq(live_value, "yes") { ret Failed }
@@ -300,6 +311,7 @@ fn main(a: *mem.Arena) -> err {
     let (head_length, head_length_found) = http.header(head_response.headers, "content-length")
     if !head_length_found || !str.eq(head_length, "5") { ret Failed }
     if tunnel_error != http.Unsupported { ret Failed }
+    }
 
     // BOM, comment, all three line endings, repeated data and retained id/retry state.
     var first_source: OneByte = zero
