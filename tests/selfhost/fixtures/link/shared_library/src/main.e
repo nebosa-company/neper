@@ -4,6 +4,14 @@
 
 var calls: u64 = zero
 
+// This is data, not an attribute. `collect_exports` must only consider parsed
+// top-level attribute nodes, never text embedded in a raw string.
+fn ignored_export_marker() -> str {
+    ret r#"
+@export("neper_raw_string")
+"#
+}
+
 @export("neper_sum")
 @cc(c)
 fn sum(n: u64) -> u64 {

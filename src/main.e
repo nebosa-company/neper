@@ -5978,9 +5978,78 @@ fn stderr_text(text: str) -> err {
     ret write_all(&sink, text)
 }
 
-// (D5908) `emit-shared-library`: every `@export("Name")` written at the start of a line in a module, and the `fn` it
-// marks, checked to be a non-generic `@cc` function and found among the linked functions. Anything else is the
-// program's error, reported and fatal.
+// A parsed `@export("Name")` attribute: one ordinary string literal is its name.
+// The tree never mistakes raw-string contents for a declaration attribute.
+fn parsed_export_symbol(text: str, tokens: []const lex.Token, tree: *parse.Tree, node: syntax.Node) -> (str, bool, bool) {
+    if node.kind != .Attribute { ret ("", false, false) }
+    var name = ""
+    var token_at = usize(node.token_start)
+    while token_at < usize(node.token_end) && token_at < tokens.len {
+        if tokens[token_at].kind == .Identifier {
+            name = lex.token_text(text, tokens[token_at])
+            break
+        }
+        token_at += 1usize
+    }
+    if !same(name, "export") { ret ("", false, true) }
+    var symbol = ""
+    var arguments = 0usize
+    let child_end = usize(node.first_child) + usize(node.child_count)
+    var child_at = usize(node.first_child)
+    while child_at < child_end {
+        if parse.child_is_node_at(tree, child_at) {
+            arguments += 1usize
+            let expression = tree.nodes[parse.child_index_at(tree, child_at)]
+            if expression.kind != .LiteralExpr || usize(expression.token_end) != usize(expression.token_start) + 1usize || usize(expression.token_start) >= tokens.len { ret ("", true, false) }
+            let literal = tokens[usize(expression.token_start)]
+            if literal.kind != .String { ret ("", true, false) }
+            let spelling = lex.token_text(text, literal)
+            if spelling.len < 2usize || spelling[0usize] != 34u8 || spelling[spelling.len - 1usize] != 34u8 { ret ("", true, false) }
+            symbol = spelling[1usize..spelling.len - 1usize]
+        }
+        child_at += 1usize
+    }
+    ret (symbol, true, arguments == 1usize && symbol.len != 0usize)
+}
+
+// The next top-level declaration after an attribute run. Attributes are parsed as
+// their own nodes, so this establishes ownership without inspecting source bytes.
+fn declaration_after_attribute(tree: *parse.Tree, attribute_index: usize) -> (syntax.Node, bool) {
+    var node_at = attribute_index + 1usize
+    while node_at < tree.count {
+        let node = tree.nodes[node_at]
+        if node.top_level && node.kind != .Attribute { ret (node, true) }
+        node_at += 1usize
+    }
+    ret (zero, false)
+}
+
+fn parsed_function_name(text: str, tokens: []const lex.Token, node: syntax.Node) -> (str, bool) {
+    var saw_fn = false
+    var token_at = usize(node.token_start)
+    while token_at < usize(node.token_end) && token_at < tokens.len {
+        let token = tokens[token_at]
+        if token.kind == .KwFn {
+            saw_fn = true
+        } else if saw_fn && token.kind == .Identifier {
+            ret (lex.token_text(text, token), true)
+        }
+        token_at += 1usize
+    }
+    ret ("", false)
+}
+
+fn shared_export_error(symbol: str) -> err {
+    try stderr_text("error: `@export(\"")
+    try stderr_text(symbol)
+    try stderr_text("\")` must mark a `@cc fn` that is not generic\n")
+    os.exit(1i32)
+    ret ok
+}
+
+// (D5908) `emit-shared-library`: parsed `@export("Name")` attributes only, each
+// directly above a non-generic `@cc` function found in the linked image. Anything
+// else is the program's error, reported and fatal.
 fn collect_exports(loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, args: []str) -> err {
     if !same(args[5usize], "linux") && !same(args[5usize], "android") {
         try stderr_text("error: a shared library is written for linux and android only\n")
@@ -5988,55 +6057,50 @@ fn collect_exports(loaded: *graph.Graph, checker: *check.Checker, builder: *nir.
     }
     builder.exports.shared_library = true
     builder.exports.count = 0usize
-    let marker = "@export(\""
     var module_at = 0usize
     while module_at < loaded.count {
+        let (parsed_module, parse_error) = check.interp_module(checker, loaded, module_at)
+        if parse_error != ok { ret parse_error }
         let text = loaded.modules[module_at].text
-        var at = 0usize
-        while at + marker.len <= text.len {
-            var line_start = at
-            while line_start > 0usize && (text[line_start - 1usize] == 32u8 || text[line_start - 1usize] == 9u8) { line_start = line_start - 1usize }
-            if (line_start == 0usize || text[line_start - 1usize] == 10u8) && same(text[at..at + marker.len], marker) {
-                var close = at + marker.len
-                while close < text.len && text[close] != 34u8 && text[close] != 10u8 { close += 1usize }
-                let symbol = text[at + marker.len..close]
-                var fn_at = close
-                while fn_at + 3usize <= text.len && !(same(text[fn_at..fn_at + 3usize], "fn ") && (text[fn_at - 1usize] == 32u8 || text[fn_at - 1usize] == 10u8)) { fn_at += 1usize }
-                var name_end = fn_at + 3usize
-                while name_end < text.len && (text[name_end] == 95u8 || (text[name_end] >= 48u8 && text[name_end] <= 57u8) || (text[name_end] >= 65u8 && text[name_end] <= 90u8) || (text[name_end] >= 97u8 && text[name_end] <= 122u8)) { name_end += 1usize }
-                let name = text[fn_at + 3usize..name_end]
-                let (index, found) = check.find_function(checker, module_at, name)
-                if symbol.len == 0usize || !found || !checker.functions[index].callback || checker.functions[index].generic {
-                    try stderr_text("error: `@export(\"")
-                    try stderr_text(symbol)
-                    try stderr_text("\")` must mark a `@cc fn` that is not generic\n")
-                    os.exit(1i32)
+        let tokens = checker.interp_tokens[parsed_module]
+        let tree = &checker.interp_trees[parsed_module]
+        var node_at = 1usize
+        while node_at < tree.count {
+            let attribute = tree.nodes[node_at]
+            if attribute.top_level && attribute.kind == .Attribute {
+                let (_, exported, valid) = parsed_export_symbol(text, tokens, tree, attribute)
+                if exported {
+                    let (declaration, has_declaration) = declaration_after_attribute(tree, node_at)
+                    let (name, has_name) = parsed_function_name(text, tokens, declaration)
+                    let (symbol, _, _) = parsed_export_symbol(text, tokens, tree, attribute)
+                    if !valid || !has_declaration || declaration.kind != .FnDecl || !has_name { try shared_export_error(symbol) }
+                    let (index, found) = check.find_function(checker, module_at, name)
+                    if !found || !checker.functions[index].callback || checker.functions[index].generic { try shared_export_error(symbol) }
+                    var placed = 0usize
+                    while placed < builder.function_count {
+                        let function = builder.functions[placed]
+                        let same_module = (function.module_name.len != 0usize && same(function.module_name, loaded.modules[module_at].name)) || (function.module_name.len == 0usize && function.module_index == module_at)
+                        if same_module && same(function.name, name) { break }
+                        placed += 1usize
+                    }
+                    var duplicate = false
+                    var earlier = 0usize
+                    while earlier < builder.exports.count {
+                        if same(builder.exports.symbols[earlier], symbol) { duplicate = true }
+                        earlier += 1usize
+                    }
+                    if placed == builder.function_count || duplicate || builder.exports.count == 64usize {
+                        try stderr_text("error: `@export(\"")
+                        try stderr_text(symbol)
+                        try stderr_text("\")` names a symbol already exported, or a function not in the image, or one past the 64 a library exports\n")
+                        os.exit(1i32)
+                    }
+                    builder.exports.functions[builder.exports.count] = placed
+                    builder.exports.symbols[builder.exports.count] = symbol
+                    builder.exports.count += 1usize
                 }
-                var placed = 0usize
-                while placed < builder.function_count {
-                    let function = builder.functions[placed]
-                    let same_module = (function.module_name.len != 0usize && same(function.module_name, loaded.modules[module_at].name)) || (function.module_name.len == 0usize && function.module_index == module_at)
-                    if same_module && same(function.name, name) { break }
-                    placed += 1usize
-                }
-                var duplicate = false
-                var earlier = 0usize
-                while earlier < builder.exports.count {
-                    if same(builder.exports.symbols[earlier], symbol) { duplicate = true }
-                    earlier += 1usize
-                }
-                if placed == builder.function_count || duplicate || builder.exports.count == 64usize {
-                    try stderr_text("error: `@export(\"")
-                    try stderr_text(symbol)
-                    try stderr_text("\")` names a symbol already exported, or a function not in the image, or one past the 64 a library exports\n")
-                    os.exit(1i32)
-                }
-                builder.exports.functions[builder.exports.count] = placed
-                builder.exports.symbols[builder.exports.count] = symbol
-                builder.exports.count += 1usize
-                at = close
             }
-            at += 1usize
+            node_at += 1usize
         }
         module_at += 1usize
     }
