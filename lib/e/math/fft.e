@@ -12,6 +12,7 @@
 // hundred samples wants and what a longer signal should not use.
 
 use e.math
+use e.mem
 
 error Invalid
 error TooSmall
@@ -20,6 +21,15 @@ const MODULUS: u64 = 998244353u64
 const ROOT: u64 = 3u64
 
 fn is_power_of_two(n: usize) -> bool { ret n != 0usize && (n & (n - 1usize)) == 0usize }
+
+// A multi-level wavelet transform needs a representable 2^levels divisor.
+// Check the shift width before deriving that divisor from the input length.
+fn wavelet_levels_valid(n: usize, levels: usize) -> bool {
+    if levels == 0usize || n == 0usize { ret false }
+    let width = mem.size_of[usize]() * 8usize
+    if levels >= width { ret false }
+    ret (n >> u32(levels)) << u32(levels) == n
+}
 
 // Permutes both slices into bit-reversed order.
 fn bit_reverse(re: []f64, im: []f64) {
@@ -491,7 +501,7 @@ fn idwt(approx: []const f64, detail: []const f64, wavelet: Wavelet, out: []f64) 
 // `scratch.len >= x.len`.
 fn wavedec(x: []const f64, wavelet: Wavelet, levels: usize, out: []f64, scratch: []f64) -> err {
     let n = x.len
-    if levels == 0usize || n == 0usize || (n >> u32(levels)) << u32(levels) != n { ret Invalid }
+    if !wavelet_levels_valid(n, levels) { ret Invalid }
     if out.len < n || scratch.len < n { ret TooSmall }
     var i = 0usize
     while i < n {
@@ -518,7 +528,7 @@ fn wavedec(x: []const f64, wavelet: Wavelet, levels: usize, out: []f64, scratch:
 // The inverse of `wavedec` from the same layout; `scratch.len >= coefficients.len`.
 fn waverec(coefficients: []const f64, wavelet: Wavelet, levels: usize, out: []f64, scratch: []f64) -> err {
     let n = coefficients.len
-    if levels == 0usize || n == 0usize || (n >> u32(levels)) << u32(levels) != n { ret Invalid }
+    if !wavelet_levels_valid(n, levels) { ret Invalid }
     if out.len < n || scratch.len < n { ret TooSmall }
     var length = n >> u32(levels)
     var i = 0usize
