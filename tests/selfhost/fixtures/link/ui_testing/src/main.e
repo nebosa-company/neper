@@ -101,9 +101,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let positive_infinity = mem.bitcast[f32](2139095040u32)
     let negative_infinity = mem.bitcast[f32](4286578688u32)
     let nan = mem.bitcast[f32](2143289344u32)
-    let (infinite_h, infinite_error) = testing.harness(a, &runtime, 40u32, 30u32, positive_infinity)
-    if infinite_error != ok { os.exit(34i32) }
-    var infinite_harness = infinite_h
+    let (_, infinite_error) = testing.harness(a, &runtime, 40u32, 30u32, positive_infinity)
+    if infinite_error != testing.NotFound { os.exit(34i32) }
     let (_, negative_infinite_error) = testing.harness(a, &runtime, 40u32, 30u32, negative_infinity)
     if negative_infinite_error != testing.NotFound { os.exit(35i32) }
     let (_, nan_error) = testing.harness(a, &runtime, 40u32, 30u32, nan)
@@ -151,8 +150,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (golden_view, golden_view_error) = image.make_const(golden, shot.width, shot.height, shot.stride, shot.format, shot.alpha)
     if golden_view_error != ok { os.exit(25i32) }
     if testing.compare(view, golden_view, 8u8) != testing.GoldenMismatch || testing.compare(view, golden_view, 9u8) != ok { os.exit(26i32) }
-    if testing.pump(&infinite_harness, root, start) != ok || testing.visible(&infinite_harness, found.element) { os.exit(37i32) }
-    if testing.close(&infinite_harness) != ok { os.exit(38i32) }
     if testing.close(&harness) != ok || testing.close(&harness) != testing.NotFound { os.exit(27i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(28i32) }
     try io.print("ui testing ok\n")

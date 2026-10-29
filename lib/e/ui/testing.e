@@ -33,8 +33,12 @@ type State = struct { runtime: *widget.Runtime, frames: *gpu.Target, drawable: s
 const FRAME_BYTES: usize = 16777216usize
 const TREE_BYTES: usize = 524288usize
 
+fn finite(value: f32) -> bool {
+    ret value == value && value - value == 0.0
+}
+
 fn harness(a: *mem.Arena, runtime: *widget.Runtime, width: u32, height: u32, scale: f32) -> (Harness, err) {
-    if width == 0u32 || height == 0u32 || !(scale > 0.0) { ret (zero, NotFound) }
+    if width == 0u32 || height == 0u32 || !finite(scale) || !(scale > 0.0) { ret (zero, NotFound) }
     let queue = widget.queue_of(runtime)
     if mem.address_of(queue) == 0usize { ret (zero, NotFound) }
     let (frames, frames_error) = gpu.open_target(queue, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, width, height, .Rgba8)
@@ -71,7 +75,6 @@ fn pump(h: *Harness, root: widget.Node, now: time.Instant) -> err {
     let logical_height = f32(s.height) / s.scale
     let (compiled, reconcile_error) = widget.reconcile(s.runtime, &frame, root, ui_layout.Constraints { min_width: 0.0, max_width: logical_width, min_height: 0.0, max_height: logical_height })
     if reconcile_error != ok { ret reconcile_error }
-    if logical_width == 0.0 || logical_height == 0.0 { ret ok }
     ret scene.render_scaled(widget.renderer_of(s.runtime), compiled, s.drawable, geometry.Size { width: logical_width, height: logical_height }, s.scale)
 }
 
