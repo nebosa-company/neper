@@ -1403,6 +1403,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ink_w != 27.0 || ink_h != 32.0 { os.exit(451) }
     if ink.x0 > 0.1 || ink.x1 < 26.3 || ink.x1 > 26.5 { os.exit(452) }
     if ink.y0 < 5.8 || ink.y0 > 5.95 || ink.y1 < 26.0 || ink.y1 > 26.2 { os.exit(453) }
+    // An exponent that used to make num_at multiply in a loop hundreds of millions
+    // of times is rejected before it can become a fitted SVG mark.
+    let hostile_svg = "<svg viewBox=\"0 0 1 1\"><path d=\"M1e200000000 0\"/></svg>"
+    let (hostile_ink, hostile_w, hostile_h) = gl.svg_ink(hostile_svg)
+    if hostile_ink.any || hostile_w != 1.0 || hostile_h != 1.0 { os.exit(454) }
+    mem.reset(&f, 0usize)
+    let (hostile_mark, hostile_error) = gl.svg_fit_mark(&f, hostile_svg, paint.rgba(1.0, 1.0, 1.0, 1.0), 64.0, 64.0)
+    if hostile_error != ok || hostile_mark.key != 0u64 { os.exit(455) }
     // 22. the v3 trace of a sort: the current card stays current and the view moves the least that
     // shows it (docs/grid-parity/traces.json S2)
     if rebuild(app, 5usize, false) != ok { os.exit(460) }
