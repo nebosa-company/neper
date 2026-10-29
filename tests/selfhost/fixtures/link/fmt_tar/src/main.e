@@ -7,6 +7,7 @@ use e.os
 use e.mem
 use e.io
 use e.fmt.tar as tar
+use e.test.support
 
 fn text_equal(a: str, b: str) -> bool {
     if a.len != b.len { ret false }
@@ -23,9 +24,9 @@ fn read_content(r: *tar.Reader, dst: []u8) -> (usize, err) {
     var total = 0usize
     while total < dst.len {
         let (count, read_error) = io.read(&source, dst[total..])
+        total += count
         if read_error == io.End { break }
         if read_error != ok { ret (total, read_error) }
-        total += count
     }
     ret (total, ok)
 }
@@ -101,6 +102,66 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tar.name_allowed("/absolute") || tar.name_allowed("\\absolute") { os.exit(18) }
     if tar.name_allowed("C:\\escape") || tar.name_allowed("dir/C:\\escape") { os.exit(19) }
     if !tar.name_allowed("dir/file") || !tar.name_allowed("dir\\file") { os.exit(20) }
+    // A full terminal header must not be mistaken for an empty archive.
+    let ended_header_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: archive[1024usize..1536usize], failure: io.End } }
+    var (ended_header_script, ended_header_script_error) = support.scripted_reader(a, ended_header_steps[..])
+    if ended_header_script_error != ok { os.exit(21) }
+    let (ended_header_reader0, ended_header_reader_error) = tar.reader(a, support.reader(&ended_header_script), 16usize, 1048576u64)
+    if ended_header_reader_error != ok { os.exit(22) }
+    var ended_header_reader = ended_header_reader0
+    let (ended_header, has_ended_header, ended_header_error) = tar.next(&ended_header_reader)
+    if ended_header_error != ok || !has_ended_header || !text_equal(ended_header.name, "dir/") || ended_header.size != 0u64 { os.exit(23) }
+    // A partial header that ends with bytes remains invalid rather than a clean EOF.
+    let partial_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: archive[..511usize], failure: io.End } }
+    var (partial_script, partial_script_error) = support.scripted_reader(a, partial_steps[..])
+    if partial_script_error != ok { os.exit(24) }
+    let (partial_reader0, partial_reader_error) = tar.reader(a, support.reader(&partial_script), 16usize, 1048576u64)
+    if partial_reader_error != ok { os.exit(25) }
+    var partial_reader = partial_reader0
+    let (_, _, partial_error) = tar.next(&partial_reader)
+    if partial_error != tar.Invalid { os.exit(26) }
+    // The last full content block may arrive with End and still advances archive state.
+    var ended_entry: [1024]u8 = zero
+    mem.copy[u8](ended_entry[..512usize], archive[..512usize])
+    var size_at = 124usize
+    while size_at < 135usize {
+        ended_entry[size_at] = 48u8
+        size_at += 1usize
+    }
+    ended_entry[131usize] = 49u8
+    ended_entry[135usize] = 0u8
+    var checksum_at = 148usize
+    while checksum_at < 156usize {
+        ended_entry[checksum_at] = 32u8
+        checksum_at += 1usize
+    }
+    var header_sum = 0u64
+    var header_at = 0usize
+    while header_at < 512usize {
+        header_sum += u64(ended_entry[header_at])
+        header_at += 1usize
+    }
+    var checksum_digits = header_sum
+    var digit_at = 155usize
+    while digit_at > 148usize {
+        digit_at -= 1usize
+        ended_entry[digit_at] = u8(48u64 + checksum_digits % 8u64)
+        checksum_digits = checksum_digits / 8u64
+    }
+    ended_entry[155usize] = 32u8
+    let ended_content_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: ended_entry[..], failure: io.End } }
+    var (ended_content_script, ended_content_script_error) = support.scripted_reader(a, ended_content_steps[..])
+    if ended_content_script_error != ok { os.exit(27) }
+    let (ended_content_reader0, ended_content_reader_error) = tar.reader(a, support.reader(&ended_content_script), 16usize, 1048576u64)
+    if ended_content_reader_error != ok { os.exit(28) }
+    var ended_content_reader = ended_content_reader0
+    let (ended_file, has_ended_file, ended_file_error) = tar.next(&ended_content_reader)
+    if ended_file_error != ok || !has_ended_file || ended_file.size != 512u64 || !text_equal(ended_file.name, "hello.txt") { os.exit(29) }
+    var ended_content: [512]u8 = zero
+    let (ended_content_count, ended_content_error) = read_content(&ended_content_reader, ended_content[..])
+    if ended_content_error != ok || ended_content_count != 512usize { os.exit(30) }
+    let (_, has_ended_more, ended_more_error) = tar.next(&ended_content_reader)
+    if ended_more_error != ok || has_ended_more { os.exit(31) }
     os.exit(0)
     ret ok
 }

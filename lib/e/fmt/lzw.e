@@ -101,9 +101,12 @@ fn read_code(s: *ReaderState) -> (u32, bool, err) {
     while s.bit_count < s.width {
         var byte: [1]u8 = zero
         let (count, read_error) = io.read(&s.source, byte[0..])
-        if read_error == io.End { ret (0u32, false, ok) }
-        if read_error != ok { ret (0u32, false, read_error) }
-        if count == 0usize { ret (0u32, false, Invalid) }
+        if count == 0usize {
+            if read_error == io.End { ret (0u32, false, ok) }
+            if read_error != ok { ret (0u32, false, read_error) }
+            ret (0u32, false, Invalid)
+        }
+        if read_error != ok && read_error != io.End { ret (0u32, false, read_error) }
         if s.order == .LeastSignificant {
             s.bits = s.bits | (u64(byte[0]) << s.bit_count)
         } else {
@@ -383,9 +386,9 @@ fn decode(a: *mem.Arena, src: []const u8, order: Order, literal_width: u8, outpu
             capacity = capacity * 2usize
         }
         let (count, read_error) = read(&r, out[filled..])
+        filled += count
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
-        filled += count
     }
     ret (out[..filled], ok)
 }

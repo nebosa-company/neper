@@ -13,6 +13,8 @@ use e.fmt.zip.write as zipwrite
 
 type Source = struct { data: []const u8, off: usize }
 
+type EndedSource = struct { data: []const u8, off: usize, end_at: usize }
+
 fn source_read(ctx: *void, dst: []u8) -> (usize, err) {
     var s = mem.cast[*Source](ctx)
     if s.off >= s.data.len { ret (0usize, io.End) }
@@ -23,8 +25,30 @@ fn source_read(ctx: *void, dst: []u8) -> (usize, err) {
     ret (take, ok)
 }
 
+fn ended_source_read(ctx: *void, dst: []u8) -> (usize, err) {
+    var s = mem.cast[*EndedSource](ctx)
+    if s.off >= s.end_at { ret (0usize, io.End) }
+    var take = dst.len
+    if s.end_at - s.off < take { take = s.end_at - s.off }
+    mem.copy[u8](dst[..take], s.data[s.off..s.off + take])
+    s.off += take
+    if s.off == s.end_at { ret (take, io.End) }
+    ret (take, ok)
+}
+
 fn source_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err) {
     var s = mem.cast[*Source](ctx)
+    var base = 0i64
+    if whence == .Current { base = i64(s.off) }
+    if whence == .End { base = i64(s.data.len) }
+    let target_at = base + off
+    if target_at < 0i64 || target_at > i64(s.data.len) { ret (0u64, io.End) }
+    s.off = usize(target_at)
+    ret (u64(target_at), ok)
+}
+
+fn ended_source_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err) {
+    var s = mem.cast[*EndedSource](ctx)
     var base = 0i64
     if whence == .Current { base = i64(s.off) }
     if whence == .End { base = i64(s.data.len) }
@@ -47,6 +71,13 @@ fn same(a: []const u8, b: []const u8) -> bool {
 fn open_over(a: *mem.Arena, s: *Source, limits: zip.Limits) -> (zip.Archive, err) {
     let reader = io.Reader { ctx: mem.cast[*void](s), read: source_read }
     let seeker = io.Seeker { ctx: mem.cast[*void](s), seek: source_seek }
+    let (archive, open_error) = zip.open(a, reader, seeker, limits)
+    ret (archive, open_error)
+}
+
+fn open_ended_over(a: *mem.Arena, s: *EndedSource, limits: zip.Limits) -> (zip.Archive, err) {
+    let reader = io.Reader { ctx: mem.cast[*void](s), read: ended_source_read }
+    let seeker = io.Seeker { ctx: mem.cast[*void](s), seek: ended_source_seek }
     let (archive, open_error) = zip.open(a, reader, seeker, limits)
     ret (archive, open_error)
 }
@@ -142,9 +173,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var end = filled + 700usize
         if end > out.len { end = out.len }
         let (count, read_error) = io.read(&r, out[filled..end])
+        filled += count
         if read_error == io.End { break }
         if read_error != ok { os.exit(8) }
-        filled += count
     }
     if !same(out[..filled], pattern[0..]) { os.exit(9) }
     // The stored entry and the directory through extract.
@@ -182,6 +213,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var trailing_deflate_archive = trailing_deflate_archive0
     let (_, trailing_deflate_extract_error) = zip.extract(a, &trailing_deflate_archive, 2usize)
     if trailing_deflate_extract_error != zip.Invalid { os.exit(47) }
+    // A seekable source may report End with the final stored or deflated member bytes.
+    var ended_stored_source = EndedSource { data: archive, off: 0usize, end_at: archive.len }
+    let (ended_stored_archive0, ended_stored_open_error) = open_ended_over(a, &ended_stored_source, limits)
+    if ended_stored_open_error != ok { os.exit(48) }
+    var ended_stored_archive = ended_stored_archive0
+    ended_stored_source.end_at = 35usize + text.len
+    let (ended_stored, ended_stored_error) = zip.extract(a, &ended_stored_archive, 0usize)
+    if ended_stored_error != ok || !same(ended_stored, text) { os.exit(49) }
+    var ended_deflate_source = EndedSource { data: archive, off: 0usize, end_at: archive.len }
+    let (ended_deflate_archive0, ended_deflate_open_error) = open_ended_over(a, &ended_deflate_source, limits)
+    if ended_deflate_open_error != ok { os.exit(50) }
+    var ended_deflate_archive = ended_deflate_archive0
+    ended_deflate_source.end_at = deflate_data + deflate_size
+    let (ended_deflated, ended_deflated_error) = zip.extract(a, &ended_deflate_archive, 2usize)
+    if ended_deflated_error != ok || !same(ended_deflated, pattern[..]) { os.exit(51) }
     // ZIP64.
     var source64 = Source { data: zip64, off: 0usize }
     let (big0, e6) = open_over(a, &source64, limits)

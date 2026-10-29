@@ -390,11 +390,18 @@ fn fill(e: *EntryState) -> err {
     var want = e.input.len
     if u64(want) > e.compressed_left { want = usize(e.compressed_left) }
     let (count, read_error) = io.read(&e.source, e.input[..want])
-    if read_error == io.End || (read_error == ok && count == 0usize) { ret Invalid }
-    if read_error != ok { ret read_error }
+    if count == 0usize {
+        if read_error == io.End || read_error == ok { ret Invalid }
+        ret read_error
+    }
+    if read_error != ok && read_error != io.End { ret read_error }
     e.in_at = 0usize
     e.in_len = count
     e.compressed_left -= u64(count)
+    if read_error == io.End {
+        if e.compressed_left != 0u64 { ret Invalid }
+        e.source_ended = true
+    }
     ret ok
 }
 
@@ -414,11 +421,15 @@ fn entry_read(ctx: *void, dst: []u8) -> (usize, err) {
         var want = dst.len
         if u64(want) > e.compressed_left { want = usize(e.compressed_left) }
         let (count, read_error) = io.read(&e.source, dst[..want])
-        if read_error == io.End || (read_error == ok && count == 0usize) { ret (0usize, Invalid) }
-        if read_error != ok { ret (0usize, read_error) }
+        if count == 0usize {
+            if read_error == io.End || read_error == ok { ret (0usize, Invalid) }
+            ret (0usize, read_error)
+        }
+        if read_error != ok && read_error != io.End { ret (0usize, read_error) }
         e.compressed_left -= u64(count)
         e.produced += u64(count)
         hash.crc32_update(&e.crc, dst[..count])
+        if read_error == io.End && e.compressed_left != 0u64 { ret (count, Invalid) }
         ret (count, ok)
     }
     while true {
@@ -476,15 +487,15 @@ fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err) {
             // Only the end may follow.
             var none: [1]u8 = zero
             let (extra, end_error) = io.read(&r, none[0..])
+            if extra > 0usize { ret (zero, Checksum) }
             if end_error == io.End { break }
             if end_error != ok { ret (zero, end_error) }
-            if extra > 0usize { ret (zero, Checksum) }
             continue
         }
         let (count, read_error) = io.read(&r, out[filled..])
+        filled += count
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
-        filled += count
     }
     if filled != out.len { ret (zero, Checksum) }
     ret (out, ok)

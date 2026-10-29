@@ -212,11 +212,11 @@ fn next(r: *Reader) -> (Entry, bool, err) {
     var header: [512]u8 = zero
     while true {
         let (first, first_error) = io.read(&s.source, header[0..])
-        if first_error == io.End {
+        if first == 0usize && first_error == io.End {
             s.finished = true
             ret (zero, false, ok)
         }
-        if first_error != ok { ret (zero, false, first_error) }
+        if first_error != ok && first_error != io.End { ret (zero, false, first_error) }
         if first < 512usize {
             let rest_error = io.read_exact(&s.source, header[first..])
             if rest_error != ok { ret (zero, false, Invalid) }
@@ -324,8 +324,8 @@ fn content_read(ctx: *void, dst: []u8) -> (usize, err) {
     var take = dst.len
     if u64(take) > s.remaining { take = usize(s.remaining) }
     let (count, read_error) = io.read(&s.source, dst[..take])
-    if read_error != ok { ret (count, read_error) }
     s.remaining -= u64(count)
+    if read_error != ok { ret (count, read_error) }
     ret (count, ok)
 }
 

@@ -8,6 +8,7 @@ use e.mem
 use e.io
 use e.fmt.lzw as lzw
 use e.algo.hash as hash
+use e.test.support
 
 fn bytes_equal(a: []const u8, b: []const u8) -> bool {
     if a.len != b.len { ret false }
@@ -46,9 +47,9 @@ fn roundtrip(a: *mem.Arena, order: lzw.Order, width: u8, text: []const u8, code:
     var total = 0usize
     while true {
         let (count, read_error) = lzw.read(&r, decoded[total..])
+        total += count
         if read_error == io.End { break }
         if read_error != ok { os.exit(code + 4i32) }
-        total += count
         if total > text.len { os.exit(code + 5i32) }
     }
     if !bytes_equal(decoded[..total], text) { os.exit(code + 6i32) }
@@ -59,6 +60,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let text = "TOBEORNOTTOBEORTOBEORNOT#TOBEORNOTTOBEORTOBEORNOT"
     roundtrip(a, .LeastSignificant, 8u8, text, 10i32, 32usize, 10312578086233058210u64)
     roundtrip(a, .MostSignificant, 8u8, text, 20i32, 32usize, 16459588534279055608u64)
+    // A clean source end can accompany the last byte that completes a data code.
+    let ended_text = "ABCDEFG"
+    let (ended_needed, ended_needed_error) = lzw.storage_required(8u8)
+    if ended_needed_error != ok { os.exit(90i32) }
+    let (ended_writer_storage, ended_writer_storage_error) = mem.alloc[u8](a, ended_needed)
+    let (ended_reader_storage, ended_reader_storage_error) = mem.alloc[u8](a, ended_needed)
+    let (ended_encoded, ended_encoded_error) = mem.alloc[u8](a, ended_text.len * 2usize + 64usize)
+    if ended_writer_storage_error != ok || ended_reader_storage_error != ok || ended_encoded_error != ok { os.exit(91i32) }
+    var ended_sink: io.SliceWriter = zero
+    ended_sink.data = ended_encoded
+    let (ended_writer0, ended_writer_error) = lzw.writer(ended_writer_storage, io.slice_writer(&ended_sink), .LeastSignificant, 8u8)
+    if ended_writer_error != ok { os.exit(92i32) }
+    var ended_writer = ended_writer0
+    let (ended_consumed, ended_write_error) = lzw.write(&ended_writer, ended_text)
+    if ended_write_error != ok || ended_consumed != ended_text.len || lzw.finish(&ended_writer) != ok { os.exit(93i32) }
+    if ended_sink.off < 2usize { os.exit(94i32) }
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: ended_encoded[..ended_sink.off - 2usize], failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { os.exit(95i32) }
+    let (ended_reader0, ended_reader_error) = lzw.reader(ended_reader_storage, support.reader(&ended_script), .LeastSignificant, 8u8, 1048576u64)
+    if ended_reader_error != ok { os.exit(96i32) }
+    var ended_reader = ended_reader0
+    var ended_decoded: [16]u8 = zero
+    var ended_total = 0usize
+    while true {
+        let (ended_count, ended_read_error) = lzw.read(&ended_reader, ended_decoded[ended_total..])
+        ended_total += ended_count
+        if ended_read_error == io.End { break }
+        if ended_read_error != ok || ended_total > ended_text.len { os.exit(97i32) }
+    }
+    if !bytes_equal(ended_decoded[..ended_total], ended_text) { os.exit(98i32) }
     // GIF-style 2-bit literals: pixels 0..3.
     var pixels: [400]u8 = zero
     var i = 0usize
