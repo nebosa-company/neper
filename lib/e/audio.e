@@ -53,11 +53,22 @@ fn write_u32(bytes: []u8, at: usize, value: u32) {
     bytes[at + 3usize] = u8(value >> 24u32)
 }
 
-fn sample_i32(fr: Frames, frame: usize, channel: u8) -> (i32, err) {
-    if frame >= fr.count || channel >= fr.format.channels { ret (0i32, Truncated) }
+// The byte offset of a sample, checking the composed frame/channel index before
+// any multiplication. `Frames` is public, so callers can supply an inconsistent
+// count that does not describe the backing byte slice.
+fn sample_offset(fr: Frames, frame: usize, channel: u8) -> (usize, err) {
+    if frame >= fr.count || channel >= fr.format.channels { ret (0usize, Truncated) }
     let width = sample_bytes(fr.format.sample)
-    let offset = (frame * usize(fr.format.channels) + usize(channel)) * width
-    if offset + width > fr.bytes.len { ret (0i32, Truncated) }
+    let channels = usize(fr.format.channels)
+    let lane = usize(channel)
+    let samples = fr.bytes.len / width
+    if samples <= lane || frame > (samples - lane - 1usize) / channels { ret (0usize, Truncated) }
+    ret ((frame * channels + lane) * width, ok)
+}
+
+fn sample_i32(fr: Frames, frame: usize, channel: u8) -> (i32, err) {
+    let (offset, offset_error) = sample_offset(fr, frame, channel)
+    if offset_error != ok { ret (0i32, offset_error) }
     if fr.format.sample == .I16 {
         ret (i32(mem.bitcast[i16](read_u16(fr.bytes, offset))) * 65536i32, ok)
     }
@@ -72,10 +83,8 @@ fn sample_i32(fr: Frames, frame: usize, channel: u8) -> (i32, err) {
 }
 
 fn set_sample_i32(fr: *Frames, frame: usize, channel: u8, value: i32) -> err {
-    if frame >= fr.count || channel >= fr.format.channels { ret Truncated }
-    let width = sample_bytes(fr.format.sample)
-    let offset = (frame * usize(fr.format.channels) + usize(channel)) * width
-    if offset + width > fr.bytes.len { ret Truncated }
+    let (offset, offset_error) = sample_offset(*fr, frame, channel)
+    if offset_error != ok { ret offset_error }
     if fr.format.sample == .I16 {
         var narrow = value / 65536i32
         if narrow < -32768i32 { narrow = -32768i32 }
