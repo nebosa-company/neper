@@ -190,7 +190,11 @@ fn floor_div(value: i64, divisor: i64) -> i64 {
 }
 
 fn floor_mod(value: i64, divisor: i64) -> i64 {
-    ret value - floor_div(value, divisor) * divisor
+    // Normalize the remainder directly: reconstructing it from the quotient
+    // can underflow when `value` is i64.min even though the result fits.
+    let remainder = value % divisor
+    if remainder < 0i64 { ret remainder + divisor }
+    ret remainder
 }
 
 fn is_leap(year: i64) -> bool {

@@ -164,6 +164,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     check(auckland, 1829692800i64, 46800i32, true, "NZDT", "2027-12-25 13:00:00", 42)
     let sao_paulo = zone_of(&db, "America/Sao_Paulo", 9)
     check(sao_paulo, 1767225600i64, -10800i32, false, "-03", "2025-12-31 21:00:00", 44)
+    // Offset application saturates at Timestamp's endpoints instead of trapping
+    // in debug builds or wrapping into the opposite side of the calendar.
+    let max_instant = time.Timestamp { nanos: 9223372036854775807i64 }
+    let max_local = tz.to_local(auckland, max_instant)
+    let max_date = time.to_date(max_instant)
+    let max_time = time.to_time(max_instant)
+    if max_local.date.year != max_date.year || max_local.date.month != max_date.month || max_local.date.day != max_date.day || max_local.time.hour != max_time.hour || max_local.time.minute != max_time.minute || max_local.time.second != max_time.second || max_local.time.nanos != max_time.nanos { os.exit(46) }
+    let min_instant = time.Timestamp { nanos: -9223372036854775807i64 - 1i64 }
+    let min_local = tz.to_local(sao_paulo, min_instant)
+    let min_date = time.to_date(min_instant)
+    let min_time = time.to_time(min_instant)
+    if min_local.date.year != min_date.year || min_local.date.month != min_date.month || min_local.date.day != min_date.day || min_local.time.hour != min_time.hour || min_local.time.minute != min_time.minute || min_local.time.second != min_time.second || min_local.time.nanos != min_time.nanos { os.exit(47) }
     // Resolve.
     let ambiguous = tz.Local { date: time.Date { year: 2024, month: 10u8, day: 27u8 }, time: time.Time { hour: 3u8, minute: 30u8, second: 0u8, nanos: 0u32 } }
     let (r1, e2) = tz.resolve(sofia, ambiguous)

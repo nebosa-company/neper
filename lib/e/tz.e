@@ -387,9 +387,12 @@ fn offset_at(selected_zone: Zone, instant: time.Timestamp) -> Offset {
     ret offset_at_seconds(z, floor_div(instant.nanos, NANOS))
 }
 
+// Applying an offset beyond Timestamp's signed nanosecond range saturates at
+// that endpoint; the returned Local reflects the endpoint instead of wrapping.
 fn to_local(selected_zone: Zone, instant: time.Timestamp) -> Local {
     let offset = offset_at(selected_zone, instant)
-    let shifted = time.Timestamp { nanos: instant.nanos + i64(offset.seconds) * NANOS }
+    let shift = time.Duration { nanos: i64(offset.seconds) * NANOS }
+    let shifted = time.timestamp_add(instant, shift)
     ret Local { date: time.to_date(shifted), time: time.to_time(shifted) }
 }
 

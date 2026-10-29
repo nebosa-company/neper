@@ -73,18 +73,15 @@ fn generate(r: *rand.Pcg64, g: Gen, bytes: []u8, ints: []i64) -> Value {
 
 // The smallest-magnitude integer reachable from the failing `x` that still
 // fails: binary search between the nearest known passing value and `x`,
-// then single steps toward zero.
+// then single steps toward zero. The interval checks and midpoint avoid
+// subtracting endpoints, so i64.min and i64.max are valid starting values.
 fn shrink[Ctx: type](ctx: *Ctx, fails: fn(*Ctx, i64) -> bool, x: i64) -> i64 {
     if x == 0i64 || fails(ctx, 0i64) { ret 0i64 }
     var passing = 0i64
     var current = x
-    var gap = current - passing
-    if gap < 0i64 { gap = 0i64 - gap }
-    while gap > 1i64 {
-        let mid = passing + (current - passing) / 2i64
+    while (current < passing && current + 1i64 < passing) || (passing < current && passing + 1i64 < current) {
+        let mid = passing / 2i64 + current / 2i64 + (passing % 2i64 + current % 2i64) / 2i64
         if fails(ctx, mid) { current = mid } else { passing = mid }
-        gap = current - passing
-        if gap < 0i64 { gap = 0i64 - gap }
     }
     var step = 1i64
     if current > 0i64 { step = -1i64 }
