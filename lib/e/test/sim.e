@@ -45,18 +45,22 @@ fn enqueue(s: *Sim, m: Message) -> err {
 // Queue `kind`/`value` from `from` to `to`; a dropped message answers `ok` and counts.
 fn send(s: *Sim, from: u32, to: u32, kind: u32, value: i64) -> err {
     if usize(from) >= s.actors || usize(to) >= s.actors { ret Invalid }
+    // The inclusive random bound needs one extra representable value.
+    if s.max_delay == 0u64 -% 1u64 { ret Invalid }
     let delay = rand.pcg64_bounded(&s.rng, s.max_delay + 1u64)
     let lottery = rand.pcg64_bounded(&s.rng, 1000u64)
     if lottery < s.drop_per_mille {
         s.dropped += 1u64
         ret ok
     }
+    if delay >= (0u64 -% 1u64) - s.clock { ret Invalid }
     ret enqueue(s, Message { from: from, to: to, kind: kind, value: value, due: s.clock + 1u64 + delay })
 }
 
 // A message from `actor` to itself exactly `delay` ticks ahead.
 fn timer(s: *Sim, actor: u32, delay: u64, kind: u32, value: i64) -> err {
     if usize(actor) >= s.actors { ret Invalid }
+    if delay > (0u64 -% 1u64) - s.clock { ret Invalid }
     ret enqueue(s, Message { from: actor, to: actor, kind: kind, value: value, due: s.clock + delay })
 }
 
