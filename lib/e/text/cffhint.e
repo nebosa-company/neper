@@ -32,6 +32,7 @@ const ONE: i64 = 65536i64
 // A parsed font: where its CFF pieces are (offsets into `data`).
 type Cff = struct {
     data: []const u8,
+    end: usize,
     upem: i64,
     glyph_count: usize,
     char_at: usize,
@@ -143,23 +144,34 @@ fn fx_frac(x: i64) -> i64 { ret x - fx_floor(x) }
 
 // ---- reading the font
 
+fn available(d: []const u8, at: usize, n: usize) -> bool {
+    if at > d.len { ret false }
+    ret n <= d.len - at
+}
+
 fn be16(d: []const u8, at: usize) -> i64 {
-    if at + 2usize > d.len { ret 0i64 }
+    if !available(d, at, 2usize) { ret 0i64 }
     ret i64(d[at]) * 256i64 + i64(d[at + 1usize])
 }
 
 fn be32(d: []const u8, at: usize) -> i64 {
-    if at + 4usize > d.len { ret 0i64 }
+    if !available(d, at, 4usize) { ret 0i64 }
     ret ((i64(d[at]) * 256i64 + i64(d[at + 1usize])) * 256i64 + i64(d[at + 2usize])) * 256i64 + i64(d[at + 3usize])
 }
 
 // The table `tag` of the font (offset and length), or 0.
 fn table(d: []const u8, tag: i64) -> (usize, usize) {
     let count = usize(be16(d, 4usize))
+    if !available(d, 0usize, 12usize) || count > (d.len - 12usize) / 16usize { ret (0usize, 0usize) }
     var i = 0usize
     while i < count {
         let record = 12usize + 16usize * i
-        if be32(d, record) == tag { ret (usize(be32(d, record + 8usize)), usize(be32(d, record + 12usize))) }
+        if be32(d, record) == tag {
+            let at = usize(be32(d, record + 8usize))
+            let len = usize(be32(d, record + 12usize))
+            if at > d.len || len > d.len - at { ret (0usize, 0usize) }
+            ret (at, len)
+        }
         i += 1usize
     }
     ret (0usize, 0usize)
@@ -168,23 +180,35 @@ fn table(d: []const u8, tag: i64) -> (usize, usize) {
 // An INDEX at `at`: its object count.
 fn index_count(d: []const u8, at: usize) -> usize { ret usize(be16(d, at)) }
 
-fn index_size(d: []const u8, at: usize) -> usize {
+fn index_size(d: []const u8, at: usize, limit: usize) -> (usize, bool) {
+    if limit > d.len || at > limit || limit - at < 2usize || !available(d, at, 2usize) { ret (0usize, false) }
     let count = index_count(d, at)
-    if count == 0usize { ret 2usize }
+    if count == 0usize { ret (2usize, true) }
+    if limit - at < 3usize || !available(d, at, 3usize) { ret (0usize, false) }
     let off_size = usize(d[at + 2usize])
+    if off_size == 0usize || off_size > 4usize { ret (0usize, false) }
+    if count + 1usize > (limit - at - 3usize) / off_size { ret (0usize, false) }
+    let offsets = (count + 1usize) * off_size
+    if !available(d, at + 3usize, offsets) { ret (0usize, false) }
     var last: i64 = 0i64
     var k = 0usize
     while k < off_size {
         last = last * 256i64 + i64(d[at + 3usize + count * off_size + k])
         k += 1usize
     }
-    ret 3usize + (count + 1usize) * off_size + usize(last) - 1usize
+    let data_at = at + 3usize + offsets
+    if last < 1i64 || last - 1i64 > i64(limit - data_at) { ret (0usize, false) }
+    ret (3usize + offsets + usize(last) - 1usize, true)
 }
 
 // Object `i` of the INDEX at `at`: its start and end offsets.
-fn index_range(d: []const u8, at: usize, i: usize) -> (usize, usize) {
+fn index_range(d: []const u8, at: usize, i: usize, limit: usize) -> (usize, usize, bool) {
+    if limit > d.len || at > limit || limit - at < 3usize || !available(d, at, 3usize) { ret (0usize, 0usize, false) }
     let off_size = usize(d[at + 2usize])
     let count = index_count(d, at)
+    if off_size == 0usize || off_size > 4usize || i >= count { ret (0usize, 0usize, false) }
+    let offsets = (count + 1usize) * off_size
+    if !available(d, at + 3usize, offsets) { ret (0usize, 0usize, false) }
     let base = at + 3usize + (count + 1usize) * off_size - 1usize
     var first: i64 = 0i64
     var second: i64 = 0i64
@@ -194,21 +218,33 @@ fn index_range(d: []const u8, at: usize, i: usize) -> (usize, usize) {
         second = second * 256i64 + i64(d[at + 3usize + (i + 1usize) * off_size + k])
         k += 1usize
     }
-    ret (base + usize(first), base + usize(second))
+    if first < 1i64 || second < first { ret (0usize, 0usize, false) }
+    let data_at = at + 3usize + offsets
+    if first - 1i64 > i64(limit - data_at) || second - 1i64 > i64(limit - data_at) { ret (0usize, 0usize, false) }
+    ret (base + usize(first), base + usize(second), true)
 }
 
 // One DICT operand at `at`: its value (a real as value * 65536) and its length; `kind` 0 integer, 1 real.
-fn dict_operand(d: []const u8, at: usize) -> (i64, usize, bool) {
+fn dict_operand(d: []const u8, at: usize, limit: usize) -> (i64, usize, bool) {
+    if limit > d.len || at > limit || !available(d, at, 1usize) || limit - at < 1usize { ret (0i64, 0usize, false) }
     let b0 = i64(d[at])
     if b0 >= 32i64 && b0 <= 246i64 { ret (b0 - 139i64, 1usize, false) }
-    if b0 >= 247i64 && b0 <= 250i64 { ret ((b0 - 247i64) * 256i64 + i64(d[at + 1usize]) + 108i64, 2usize, false) }
-    if b0 >= 251i64 && b0 <= 254i64 { ret (0i64 - (b0 - 251i64) * 256i64 - i64(d[at + 1usize]) - 108i64, 2usize, false) }
+    if b0 >= 247i64 && b0 <= 250i64 {
+        if limit - at < 2usize || !available(d, at, 2usize) { ret (0i64, 0usize, false) }
+        ret ((b0 - 247i64) * 256i64 + i64(d[at + 1usize]) + 108i64, 2usize, false)
+    }
+    if b0 >= 251i64 && b0 <= 254i64 {
+        if limit - at < 2usize || !available(d, at, 2usize) { ret (0i64, 0usize, false) }
+        ret (0i64 - (b0 - 251i64) * 256i64 - i64(d[at + 1usize]) - 108i64, 2usize, false)
+    }
     if b0 == 28i64 {
+        if limit - at < 3usize || !available(d, at, 3usize) { ret (0i64, 0usize, false) }
         var v = be16(d, at + 1usize)
         if v >= 32768i64 { v = v - 65536i64 }
         ret (v, 3usize, false)
     }
     if b0 == 29i64 {
+        if limit - at < 5usize || !available(d, at, 5usize) { ret (0i64, 0usize, false) }
         var v = be32(d, at + 1usize)
         if v >= 2147483648i64 { v = v - 4294967296i64 }
         ret (v, 5usize, false)
@@ -224,14 +260,16 @@ fn dict_operand(d: []const u8, at: usize) -> (i64, usize, bool) {
         var in_exponent = false
         var pos = at + 1usize
         var done = false
-        while !done && pos < d.len {
+        while !done && pos < limit {
             var half = 0usize
             while half < 2usize {
                 var nibble = i64(d[pos])
                 if half == 0usize { nibble = nibble >> 4u32 } else { nibble = nibble & 15i64 }
                 if nibble <= 9i64 {
                     if in_exponent {
+                        if exponent > 1000i64 { ret (0i64, 0usize, false) }
                         exponent = exponent * 10i64 + nibble
+                        if exponent > 1000i64 { ret (0i64, 0usize, false) }
                     } else if seen_point {
                         scale = scale / 10.0
                         mantissa = mantissa + f64(nibble) * scale
@@ -256,12 +294,14 @@ fn dict_operand(d: []const u8, at: usize) -> (i64, usize, bool) {
             }
             pos += 1usize
         }
+        if !done { ret (0i64, 0usize, false) }
         var rest = exponent
         while rest > 0i64 {
             if negative_exponent { mantissa = mantissa / 10.0 } else { mantissa = mantissa * 10.0 }
             rest -= 1i64
         }
         if negative { mantissa = 0.0 - mantissa }
+        if mantissa != mantissa || mantissa - mantissa != 0.0f64 || mantissa > 140737488355327.0f64 || mantissa < -140737488355327.0f64 { ret (0i64, 0usize, false) }
         ret (i64(mantissa * 65536.0 + 0.5), pos - at, true)
     }
     ret (0i64, 1usize, false)
@@ -281,7 +321,9 @@ fn read_blues(d: []const u8, ops: []const i64, n: usize, out: []i64) -> usize {
 // Parses the CFF table of an OpenType font; false when the font has none or it is not one this port reads (CID-keyed, CFF2).
 fn open(c: *Cff, d: []const u8) -> bool {
     let (cff_at, cff_len) = table(d, 1128678944i64)
-    if cff_at == 0usize || cff_len < 4usize { ret false }
+    if cff_at == 0usize || cff_len < 4usize || !available(d, cff_at, cff_len) { ret false }
+    let cff_end = cff_at + cff_len
+    if !available(d, cff_at, 4usize) { ret false }
     if d[cff_at] != 1u8 { ret false }
     let (head_at, head_len) = table(d, 1751474532i64)
     let (maxp_at, maxp_len) = table(d, 1835104368i64)
@@ -291,12 +333,23 @@ fn open(c: *Cff, d: []const u8) -> bool {
     c.glyph_count = usize(be16(d, maxp_at + 4usize))
     if c.upem <= 0i64 { ret false }
     let header_size = usize(d[cff_at + 2usize])
+    if header_size < 4usize || header_size > cff_len { ret false }
     let names = cff_at + header_size
-    let tops = names + index_size(d, names)
-    let strings = tops + index_size(d, tops)
-    c.gsubr_at = strings + index_size(d, strings)
+    let (names_size, names_ok) = index_size(d, names, cff_end)
+    if !names_ok { ret false }
+    let tops = names + names_size
+    let (tops_size, tops_ok) = index_size(d, tops, cff_end)
+    if !tops_ok { ret false }
+    let strings = tops + tops_size
+    let (strings_size, strings_ok) = index_size(d, strings, cff_end)
+    if !strings_ok { ret false }
+    c.gsubr_at = strings + strings_size
+    let (gsubr_size, gsubr_ok) = index_size(d, c.gsubr_at, cff_end)
+    if !gsubr_ok { ret false }
     if index_count(d, tops) < 1usize { ret false }
-    let (top_start, top_end) = index_range(d, tops, 0usize)
+    let (top_start, top_end, top_ok) = index_range(d, tops, 0usize, cff_end)
+    if !top_ok { ret false }
+    c.end = cff_end
     var private_size: usize = 0usize
     var private_at: usize = 0usize
     c.char_at = 0usize
@@ -310,18 +363,28 @@ fn open(c: *Cff, d: []const u8) -> bool {
             var op = b0
             pos += 1usize
             if b0 == 12i64 {
+                if pos >= top_end { ret false }
                 op = 1200i64 + i64(d[pos])
                 pos += 1usize
             }
-            if op == 17i64 && n >= 1usize { c.char_at = cff_at + usize(ops[0usize] >> 16u32) }
+            if op == 17i64 && n >= 1usize {
+                let char_offset = ops[0usize] >> 16u32
+                if char_offset <= 0i64 || char_offset > i64(cff_len) { ret false }
+                c.char_at = cff_at + usize(char_offset)
+            }
             if op == 18i64 && n >= 2usize {
-                private_size = usize(ops[0usize] >> 16u32)
-                private_at = cff_at + usize(ops[1usize] >> 16u32)
+                let private_len = ops[0usize] >> 16u32
+                let private_offset = ops[1usize] >> 16u32
+                if private_len <= 0i64 || private_offset <= 0i64 || private_offset > i64(cff_len) { ret false }
+                if private_len > i64(cff_len - usize(private_offset)) { ret false }
+                private_size = usize(private_len)
+                private_at = cff_at + usize(private_offset)
             }
             if op == 1230i64 { ret false }
             n = 0usize
         } else {
-            let (v, used, is_real) = dict_operand(d, pos)
+            let (v, used, is_real) = dict_operand(d, pos, top_end)
+            if used == 0usize || used > top_end - pos { ret false }
             if n < 48usize {
                 if is_real { ops[n] = v } else { ops[n] = v << 16u32 }
                 n += 1usize
@@ -342,12 +405,14 @@ fn open(c: *Cff, d: []const u8) -> bool {
     var vals: [48]i64 = zero
     n = 0usize
     pos = private_at
+    if private_at > cff_end || private_size > cff_end - private_at { ret false }
     while pos < private_at + private_size {
         let b0 = i64(d[pos])
         if b0 <= 21i64 {
             var op = b0
             pos += 1usize
             if b0 == 12i64 {
+                if pos >= private_at + private_size { ret false }
                 op = 1200i64 + i64(d[pos])
                 pos += 1usize
             }
@@ -358,10 +423,15 @@ fn open(c: *Cff, d: []const u8) -> bool {
             if op == 1209i64 && n >= 1usize { c.blue_scale = vals[0usize] }
             if op == 1210i64 && n >= 1usize { c.blue_shift = vals[0usize] }
             if op == 1211i64 && n >= 1usize { c.blue_fuzz = vals[0usize] }
-            if op == 19i64 && n >= 1usize { c.lsubr_at = private_at + usize(vals[0usize]) }
+            if op == 19i64 && n >= 1usize {
+                let subr_offset = vals[0usize]
+                if subr_offset <= 0i64 || subr_offset > i64(cff_end - private_at) { ret false }
+                c.lsubr_at = private_at + usize(subr_offset)
+            }
             n = 0usize
         } else {
-            let (v, used, is_real) = dict_operand(d, pos)
+            let (v, used, is_real) = dict_operand(d, pos, private_at + private_size)
+            if used == 0usize || used > private_at + private_size - pos { ret false }
             if n < 48usize {
                 // blue values are integers; BlueScale is kept as a real in 16.16
                 if is_real { vals[n] = v } else { vals[n] = v }
@@ -1026,7 +1096,8 @@ fn run(e: *Engine, gid: usize) -> bool {
     var sp = 0usize
     var frames: [14]Frame = zero
     var depth = 0usize
-    let (start, finish) = index_range(d, c.char_at, gid)
+    let (start, finish, range_ok) = index_range(d, c.char_at, gid, c.end)
+    if !range_ok { ret false }
     frames[0usize] = Frame { pos: start, end: finish }
     var steps = 0usize
     while steps < 200000usize {
@@ -1045,19 +1116,23 @@ fn run(e: *Engine, gid: usize) -> bool {
             if op >= 32i64 && op <= 246i64 {
                 v = (op - 139i64) << 16u32
             } else if op >= 247i64 && op <= 250i64 {
+                if frames[depth].pos >= frames[depth].end { ret false }
                 let b1 = i64(d[frames[depth].pos])
                 frames[depth].pos += 1usize
                 v = ((op - 247i64) * 256i64 + b1 + 108i64) << 16u32
             } else if op >= 251i64 && op <= 254i64 {
+                if frames[depth].pos >= frames[depth].end { ret false }
                 let b1 = i64(d[frames[depth].pos])
                 frames[depth].pos += 1usize
                 v = (0i64 - (op - 251i64) * 256i64 - b1 - 108i64) << 16u32
             } else if op == 28i64 {
+                if frames[depth].end - frames[depth].pos < 2usize { ret false }
                 var w = be16(d, frames[depth].pos)
                 frames[depth].pos += 2usize
                 if w >= 32768i64 { w = w - 65536i64 }
                 v = w << 16u32
             } else {
+                if frames[depth].end - frames[depth].pos < 4usize { ret false }
                 var w = be32(d, frames[depth].pos)
                 frames[depth].pos += 4usize
                 if w >= 2147483648i64 { w = w - 4294967296i64 }
@@ -1084,6 +1159,7 @@ fn run(e: *Engine, gid: usize) -> bool {
                 let total = e.hn + e.vn
                 let bytes = (total + 7usize) / 8usize
                 let at_mask = frames[depth].pos
+                if bytes > frames[depth].end - at_mask { ret false }
                 frames[depth].pos += bytes
                 var bits: [96]bool = zero
                 var k = 0usize
@@ -1247,10 +1323,12 @@ fn run(e: *Engine, gid: usize) -> bool {
             var at_subr = c.lsubr_at
             if op == 29i64 { at_subr = c.gsubr_at }
             if at_subr == 0usize { ret false }
+            if at_subr > c.end || c.end - at_subr < 2usize { ret false }
             let count = index_count(d, at_subr)
             let want = n + i64(bias_of(count))
             if want < 0i64 || usize(want) >= count { ret false }
-            let (s0, s1) = index_range(d, at_subr, usize(want))
+            let (s0, s1, subr_ok) = index_range(d, at_subr, usize(want), c.end)
+            if !subr_ok { ret false }
             depth += 1usize
             frames[depth] = Frame { pos: s0, end: s1 }
         } else if op == 11i64 {
@@ -1260,6 +1338,7 @@ fn run(e: *Engine, gid: usize) -> bool {
             path_close(e)
             ret !e.failed
         } else if op == 12i64 {
+            if frames[depth].pos >= frames[depth].end { ret false }
             let sub = i64(d[frames[depth].pos])
             frames[depth].pos += 1usize
             if sub == 34i64 || sub == 35i64 || sub == 36i64 || sub == 37i64 {
