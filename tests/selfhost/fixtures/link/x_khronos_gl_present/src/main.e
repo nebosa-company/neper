@@ -186,7 +186,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A fresh window for ES: on Windows a window's pixel format belongs to WGL once set.
     let (es_window, es_window_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos_gl_present es", width: WINDOW_W, height: WINDOW_H, resizable: false, visible: true, mode: .Windowed })
     if es_window_error == os.Unsupported {
-        let skipped = io.print("no second window on this host; OpenGL ES present not checked\n")
+        os.exit(3i32)
     } else {
         if es_window_error != ok { os.exit(3i32) }
         pump()

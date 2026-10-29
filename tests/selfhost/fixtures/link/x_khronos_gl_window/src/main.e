@@ -34,10 +34,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if first == os.Unsupported { ret ok }
     if first != ok { os.exit(12i32) }
     let second = on_window(a, context.Options { api: .Gl, major: 4u32, minor: 3u32 }, "OpenGL 4.3 core", 20i32)
-    if second == os.Unsupported { ret ok }
     if second != ok { os.exit(32i32) }
     let third = on_window(a, context.Options { api: .Gles, major: 3u32, minor: 1u32 }, "OpenGL ES 3.1", 40i32)
-    if third == os.Unsupported { ret ok }
     if third != ok { os.exit(52i32) }
     ret ok
 }
