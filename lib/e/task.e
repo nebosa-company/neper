@@ -21,9 +21,10 @@
 //
 // `parallel_for` cuts `[begin, end)` into ranges of `grain` (the last one shorter),
 // submits them and waits; when its settled ranges hold every record it reclaims them,
-// and when the ring is still full the calling thread runs the range itself. The loop
-// always completes and never needs more records than the ring has. Scheduling order
-// is not observable; shared state is the caller's to guard.
+// and when the ring is still full the calling thread runs the range itself. While it
+// waits, it can run one of its own queued ranges, so it is safe from a task on the
+// same pool. The loop always completes and never needs more records than the ring
+// has. Scheduling order is not observable; shared state is the caller's to guard.
 
 use e.atomic
 use e.cancel
@@ -139,6 +140,59 @@ fn worker_main(w: *Worker) {
         sync.mutex_unlock(&p.lock)
         sync.condition_broadcast(&p.finished)
     }
+}
+
+// Takes and runs one pending range whose stamp belongs to one `parallel_for` call.
+// It removes that record from the bounded FIFO without changing any other record's
+// order, so a worker executing a nested loop cannot block behind unrelated work.
+fn run_stamped(p: *PoolState, wanted_stamp: usize) -> bool {
+    sync.mutex_lock(&p.lock)
+    var offset = 0usize
+    var found = false
+    var index = 0usize
+    while offset < p.count {
+        let ring_at = (p.head + offset) % p.ring.len
+        let candidate = p.ring[ring_at]
+        let r = &p.records[candidate]
+        if r.status == 0u32 && r.stamp == wanted_stamp {
+            index = candidate
+            found = true
+            var moved = offset
+            while moved + 1usize < p.count {
+                let into = (p.head + moved) % p.ring.len
+                let from = (p.head + moved + 1usize) % p.ring.len
+                p.ring[into] = p.ring[from]
+                moved += 1usize
+            }
+            p.count -= 1usize
+            break
+        }
+        offset += 1usize
+    }
+    if !found {
+        sync.mutex_unlock(&p.lock)
+        ret false
+    }
+    let r = &p.records[index]
+    var skip = false
+    if cancel.requested(r.token) {
+        r.status = 4u32
+        r.failure = Cancelled
+        skip = true
+    } else {
+        r.status = 1u32
+    }
+    sync.mutex_unlock(&p.lock)
+    if skip {
+        sync.condition_broadcast(&p.finished)
+        ret true
+    }
+    let outcome = r.entry(mem.cast[*void](&r.job[0usize]), r.token)
+    sync.mutex_lock(&p.lock)
+    finish(r, outcome)
+    sync.mutex_unlock(&p.lock)
+    sync.condition_broadcast(&p.finished)
+    ret true
 }
 
 fn pool(a: *mem.Arena, options: Options) -> (Pool, err) {
@@ -436,7 +490,12 @@ fn parallel_for[Ctx: type](p: *Pool, cancel_token: *Cancel, begin: usize, end: u
     while i < state.records.len {
         let r = &state.records[i]
         if r.status != FREE && r.stamp == stamp {
-            while !settled(r.status) { sync.condition_wait(&state.finished, &state.lock) }
+            while !settled(r.status) {
+                sync.mutex_unlock(&state.lock)
+                let helped = run_stamped(state, stamp)
+                sync.mutex_lock(&state.lock)
+                if !helped && !settled(r.status) { sync.condition_wait(&state.finished, &state.lock) }
+            }
             if r.failure != ok && first == ok { first = r.failure }
             r.status = FREE
         }
