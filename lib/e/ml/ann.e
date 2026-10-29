@@ -332,6 +332,12 @@ fn ivf_pq_search(index: *const IvfPq, query: []const f64, probes: usize, k: usiz
     let sub = d / index.subspaces
     if query.len < d || ids.len < k || dists.len < k || scratch.len < index.subspaces * index.codebook_size + index.cells { ret (0usize, TooSmall) }
     if probes == 0usize || probes > index.cells || k == 0usize { ret (0usize, Invalid) }
+    var q = 0usize
+    while q < d {
+        let value = query[q]
+        if value != value || value - value != 0.0f64 { ret (0usize, Invalid) }
+        q += 1usize
+    }
     var table = scratch[..index.subspaces * index.codebook_size]
     var cell_dist = scratch[index.subspaces * index.codebook_size..index.subspaces * index.codebook_size + index.cells]
     var c = 0usize
@@ -349,6 +355,7 @@ fn ivf_pq_search(index: *const IvfPq, query: []const f64, probes: usize, k: usiz
             if cell_dist[c] >= 0.0f64 && (cell == index.cells || cell_dist[c] < cell_dist[cell]) { cell = c }
             c += 1usize
         }
+        if cell == index.cells { ret (0usize, Invalid) }
         cell_dist[cell] = 0.0f64 - 1.0f64 - cell_dist[cell]
         // Distance table: residual of the query against every codeword per subspace.
         var s = 0usize
@@ -394,13 +401,20 @@ type Hnsw = struct { level: []u32, count: []u32, links: []u32, m: usize, levels:
 // An empty index with room for `room` points of `d` values, `m` links per
 // layer and layers `0..=max_level`, in the caller's arena.
 fn hnsw(a: *mem.Arena, room: usize, d: usize, m: usize, max_level: usize) -> (Hnsw, err) {
-    if room == 0usize || d == 0usize || m == 0usize || room > 4000000000usize { ret (zero, Invalid) }
+    let maximum = 18446744073709551615usize
+    if room == 0usize || d == 0usize || m == 0usize || room > 4000000000usize || max_level == maximum { ret (zero, Invalid) }
     let levels = max_level + 1usize
+    // Keep every product used by storage, row addressing, and insert scratch in range.
+    if room > maximum / d || room > maximum / levels || m > maximum / 4usize { ret (zero, Invalid) }
+    let slots = room * levels
+    let links_per_slot = 2usize * m
+    if slots > maximum / links_per_slot { ret (zero, Invalid) }
+    let link_slots = slots * links_per_slot
     let (level, level_error) = mem.alloc[u32](a, room)
     if level_error != ok { ret (zero, level_error) }
-    let (count, count_error) = mem.alloc[u32](a, room * levels)
+    let (count, count_error) = mem.alloc[u32](a, slots)
     if count_error != ok { ret (zero, count_error) }
-    let (links, links_error) = mem.alloc[u32](a, room * levels * 2usize * m)
+    let (links, links_error) = mem.alloc[u32](a, link_slots)
     if links_error != ok { ret (zero, links_error) }
     ret (Hnsw { level: level, count: count, links: links, m: m, levels: levels, d: d, room: room, entry: 0usize, n: 0usize }, ok)
 }

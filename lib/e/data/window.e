@@ -107,7 +107,12 @@ fn exponential_histogram(sizes: []u64, stamps: []u64, width: u64, k: usize) -> (
         w = w >> 1u32
         levels += 1usize
     }
-    if sizes.len < (k + 1usize) * levels || stamps.len < sizes.len { ret (zero, TooSmall) }
+    let maximum = 0usize -% 1usize
+    if k == maximum { ret (zero, TooSmall) }
+    let per_level = k + 1usize
+    if per_level > maximum / levels { ret (zero, TooSmall) }
+    let buckets = per_level * levels
+    if sizes.len < buckets || stamps.len < sizes.len { ret (zero, TooSmall) }
     ret (ExponentialHistogram { sizes: sizes, stamps: stamps, count: 0usize, width: width, k: k, now: 0u64 }, ok)
 }
 

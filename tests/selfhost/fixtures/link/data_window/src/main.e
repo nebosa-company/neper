@@ -154,6 +154,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_k != window.Invalid { os.exit(3i32) }
     let (_, few_buckets) = window.exponential_histogram(sizes[..10usize], stamps[..10usize], 100u64, 4usize)
     if few_buckets != window.TooSmall { os.exit(3i32) }
+    var no_sizes: [0]u64 = zero
+    var no_stamps: [0]u64 = zero
+    let (_, impossible_k) = window.exponential_histogram(no_sizes[..], no_stamps[..], 1u64, 0usize -% 1usize)
+    if impossible_k != window.TooSmall { os.exit(3i32) }
+    let (_, impossible_product) = window.exponential_histogram(no_sizes[..], no_stamps[..], 1u64, (0usize -% 1usize) / 2usize)
+    if impossible_product != window.TooSmall { os.exit(3i32) }
 
     try io.print("data window ok\n")
     ret ok

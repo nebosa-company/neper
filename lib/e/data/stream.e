@@ -90,7 +90,8 @@ fn sliding_windows(event_time: u64, size: u64, slide: u64, out: []u64) -> (usize
     if size == 0u64 || slide == 0u64 { ret (0usize, Invalid) }
     var start = event_time - event_time % slide
     var n = 0usize
-    while start +% size > event_time {
+    // A window end may wrap, so membership is elapsed time modulo u64.
+    while event_time -% start < size {
         if n >= out.len { ret (n, TooSmall) }
         out[n] = start
         n += 1usize
@@ -113,7 +114,7 @@ fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err {
     // Count every new open window before updating one: a full caller pool must
     // leave the buffer retryable instead of keeping an arbitrary prefix.
     var needed = 0usize
-    while start +% b.size > event_time {
+    while event_time -% start < b.size {
         if start +% b.size > mark {
             var i = 0usize
             while i < b.used && b.windows[i].start != start { i += 1usize }
@@ -126,7 +127,7 @@ fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err {
 
     start = event_time - event_time % b.slide
     var late = false
-    while start +% b.size > event_time {
+    while event_time -% start < b.size {
         if start +% b.size <= mark {
             late = true
         } else {

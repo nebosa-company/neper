@@ -133,6 +133,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, cramped) = stream.sliding_windows(175u64, 100u64, 30u64, starts[..2usize])
     if cramped != stream.TooSmall { os.exit(4i32) }
     if stream.window_start(175u64, 100u64) != 100u64 { os.exit(4i32) }
+
+    // A window whose end rolls over still holds the maximum timestamp.
+    let (rollover_count, rollover_starts_error) = stream.sliding_windows(18446744073709551615u64, 10u64, 10u64, starts[..1usize])
+    if rollover_starts_error != ok || rollover_count != 1usize || starts[0usize] != 18446744073709551610u64 { os.exit(4i32) }
+    var rollover_slots: [1]stream.Window = zero
+    let (rollover0, rollover_buffer_error) = stream.window_buffer(10u64, 10u64, rollover_slots[..])
+    if rollover_buffer_error != ok { os.exit(4i32) }
+    var rollover = rollover0
+    if stream.window_add(&rollover, 18446744073709551615u64, 7u64, 0u64) != ok || rollover.used != 1usize || rollover.windows[0usize].start != 18446744073709551610u64 || rollover.windows[0usize].count != 1u64 || rollover.windows[0usize].sum != 7u64 { os.exit(4i32) }
+
     let (_, bad_buffer) = stream.window_buffer(50u64, 100u64, slots[..])
     if bad_buffer != stream.Invalid { os.exit(4i32) }
     var one: [1]stream.Window = zero
