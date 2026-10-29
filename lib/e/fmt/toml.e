@@ -492,7 +492,9 @@ fn number(p: *Parser, text: str) -> (Value, err) {
         if parse_error != ok { ret (out, Invalid) }
         out.kind = .Float
         out.float = parsed
-        if negative { out.float = 0.0f64 - parsed }
+        // Subtraction loses the sign of a zero mantissa. Set the IEEE sign bit
+        // directly so TOML's `-0.0` remains distinct from `+0.0`.
+        if negative { out.float = mem.bitcast[f64](mem.bitcast[u64](parsed) | 9223372036854775808u64) }
         ret (out, ok)
     }
     let (magnitude, magnitude_error) = str.parse_u64(digits)
