@@ -5,6 +5,10 @@ use e.os.shell
 
 fn main(a: *mem.Arena) -> err {
     var nowhere: os.Window = zero
+    // Valid large counters must retain their bounded percentage without multiplying them first.
+    if shell.dock_percent(0u64, 0u64) != 0u64 { os.exit(5i32) }
+    if shell.dock_percent(9223372036854775808u64, 9223372036854775808u64) != 100u64 { os.exit(5i32) }
+    if shell.dock_percent(18446744073709551614u64, 18446744073709551615u64) != 99u64 { os.exit(6i32) }
     if shell.taskbar_progress(a, nowhere, .Normal, 2u64, 5u64) != ok { os.exit(2i32) }
     var tasks: [1]shell.JumpTask = zero
     tasks[0usize] = shell.JumpTask { title: "Open the log", program: "/usr/bin/true", arguments: "", description: "" }

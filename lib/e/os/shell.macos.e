@@ -433,6 +433,23 @@ fn dock_badge(label: str) {
     }
 }
 
+// `completed * 100 / total` can overflow even though the bounded badge answer cannot.
+// Split `total` into hundreds, then choose the largest percent whose rounded-up threshold
+// is met; every product here has a factor at most 100 and stays within the original total.
+fn dock_percent(completed: u64, total: u64) -> u64 {
+    if total == 0u64 { ret 0u64 }
+    let hundreds = total / 100u64
+    let remainder = total % 100u64
+    var percent = 100u64
+    while percent > 0u64 {
+        let whole = percent * hundreds
+        let fractional = (percent * remainder + 99u64) / 100u64
+        if completed >= whole + fractional { ret percent }
+        percent -= 1u64
+    }
+    ret 0u64
+}
+
 fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed: u64, total: u64) -> err {
     if state == .Normal || state == .Paused || state == .Error {
         if total == 0u64 || completed > total { ret Invalid }
@@ -448,7 +465,7 @@ fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed
         dock_badge("!")
     } else {
         var digits: [4]u8 = zero
-        let percent = (completed * 100u64) / total
+        let percent = dock_percent(completed, total)
         var count = 0usize
         if percent >= 100u64 {
             digits[0usize] = 49u8
