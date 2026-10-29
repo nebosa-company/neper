@@ -145,6 +145,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var few = lr.collection(pool[..], set_start[..4usize], trans[..], nullable[..], first[..], follow[..])
     if lr.items(&g, 5u32, &few) != lr.TooSmall { os.exit(6i32) }
 
+    // LR entry points validate rule offsets before they reach the shared LL
+    // sets or reduce helpers. An empty offset slice used to underflow there.
+    let malformed_lhs = [1]u32 { 1u32 }
+    let malformed_rhs = [1]u32 { 0u32 }
+    let malformed_offsets = [1]usize { 0usize }
+    let malformed = base.grammar(malformed_lhs[..], malformed_rhs[..], malformed_offsets[0usize..0usize], 1u32)
+    var malformed_collection = lr.collection(pool[..], set_start[..], trans[..], nullable[..], first[..], follow[..])
+    if lr.items(&malformed, 1u32, &malformed_collection) != lr.Invalid { os.exit(7i32) }
+    if lr.items1(&malformed, 1u32, &malformed_collection) != lr.Invalid { os.exit(7i32) }
+    let (_, _, malformed_slr_error) = lr.slr_table(&malformed, 1u32, &malformed_collection, merged[..], action[..], gotos[..])
+    if malformed_slr_error != lr.Invalid { os.exit(7i32) }
+    let (_, _, malformed_lr1_error) = lr.canonical_table(&malformed, 1u32, &malformed_collection, merged[..], action[..], gotos[..])
+    if malformed_lr1_error != lr.Invalid { os.exit(7i32) }
+    let (_, _, malformed_lalr_error) = lr.lalr_table(&malformed, 1u32, &malformed_collection, merged[..], action[..], gotos[..])
+    if malformed_lalr_error != lr.Invalid { os.exit(7i32) }
+    let (_, malformed_parse_error) = lr.parse(&malformed, action[..], gotos[..], star[..], stack[..], rules[..])
+    if malformed_parse_error != lr.Invalid { os.exit(7i32) }
+
     try io.print("parse lr ok\n")
     ret ok
 }

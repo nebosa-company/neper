@@ -138,8 +138,63 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (loop_conflicts, loop_table_error) = ll.table(&loop_grammar, 1u32, loop_nullable[..], loop_first[..], loop_follow[..], loop_table[..])
     if loop_table_error != ok || loop_conflicts != 1usize { os.exit(6i32) }
     let loop_sentence = [1]u32 { 0u32 }
-    let (loop_count, loop_error) = ll.parse(&loop_grammar, 1u32, loop_table[..], loop_sentence[..], stack[..], rules[..])
-    if loop_count == 0usize || loop_error != ll.Invalid { os.exit(6i32) }
+    let (_, loop_error) = ll.parse(&loop_grammar, 1u32, loop_table[..], loop_sentence[..], stack[..], rules[..])
+    if loop_error != ll.Invalid { os.exit(6i32) }
+
+    // The same fallback can enter an indirect no-input cycle through an
+    // epsilon rule: A -> B C, B -> epsilon, C -> A | a.
+    let indirect_lhs = [4]u32 { 1u32, 2u32, 3u32, 3u32 }
+    let indirect_rhs = [4]u32 { 2u32, 3u32, 1u32, 0u32 }
+    let indirect_start = [5]usize { 0usize, 2usize, 2usize, 3usize, 4usize }
+    let indirect_grammar = base.grammar(indirect_lhs[..], indirect_rhs[..], indirect_start[..], 1u32)
+    var indirect_nullable: [4]bool = zero
+    var indirect_first: [4]u64 = zero
+    var indirect_follow: [4]u64 = zero
+    var indirect_table: [6]u32 = zero
+    let (indirect_conflicts, indirect_table_error) = ll.table(&indirect_grammar, 1u32, indirect_nullable[..], indirect_first[..], indirect_follow[..], indirect_table[..])
+    if indirect_table_error != ok || indirect_conflicts != 1usize { os.exit(7i32) }
+    let (indirect_count, indirect_error) = ll.parse(&indirect_grammar, 1u32, indirect_table[..], loop_sentence[..], stack[..], rules[..])
+    if indirect_error != ll.Invalid || indirect_count >= rules.len { os.exit(7i32) }
+
+    // A long acyclic chain remains valid; the cycle classifier must use its
+    // caller-provided scratch rather than recursively consuming host stack.
+    var deep_lhs: [256]u32 = zero
+    var deep_rhs: [256]u32 = zero
+    var deep_start: [257]usize = zero
+    var deep_i = 0usize
+    while deep_i < 256usize {
+        deep_lhs[deep_i] = u32(deep_i) + 1u32
+        deep_rhs[deep_i] = 0u32
+        if deep_i + 1usize < 256usize { deep_rhs[deep_i] = u32(deep_i) + 2u32 }
+        deep_start[deep_i] = deep_i
+        deep_i += 1usize
+    }
+    deep_start[256usize] = 256usize
+    let deep_grammar = base.grammar(deep_lhs[..], deep_rhs[..], deep_start[..], 1u32)
+    var deep_nullable: [257]bool = zero
+    var deep_first: [257]u64 = zero
+    var deep_follow: [257]u64 = zero
+    var deep_table: [512]u32 = zero
+    var deep_stack: [2]u32 = zero
+    var deep_applied: [256]u32 = zero
+    let (deep_conflicts, deep_table_error) = ll.table(&deep_grammar, 1u32, deep_nullable[..], deep_first[..], deep_follow[..], deep_table[..])
+    if deep_table_error != ok || deep_conflicts != 0usize { os.exit(8i32) }
+    let (deep_count, deep_parse_error) = ll.parse(&deep_grammar, 1u32, deep_table[..], loop_sentence[..], deep_stack[..], deep_applied[..])
+    if deep_parse_error != ok || deep_count != 256usize { os.exit(8i32) }
+
+    // Every LL entry point rejects malformed rule offsets before invoking a
+    // rule helper; the empty slice would otherwise underflow rule_count.
+    let malformed_lhs = [1]u32 { 1u32 }
+    let malformed_rhs = [1]u32 { 0u32 }
+    let malformed_offsets = [1]usize { 0usize }
+    let malformed = base.grammar(malformed_lhs[..], malformed_rhs[..], malformed_offsets[0usize..0usize], 1u32)
+    if ll.nullable(&malformed, nullable[..]) != ll.Invalid { os.exit(9i32) }
+    if ll.first(&malformed, nullable[..], first[..]) != ll.Invalid { os.exit(9i32) }
+    if ll.follow(&malformed, 1u32, nullable[..], first[..], follow[..]) != ll.Invalid { os.exit(9i32) }
+    let (_, malformed_table_error) = ll.table(&malformed, 1u32, nullable[..], first[..], follow[..], tbl[..])
+    if malformed_table_error != ll.Invalid { os.exit(9i32) }
+    let (_, malformed_parse_error) = ll.parse(&malformed, 1u32, loop_table[..], loop_sentence[..], stack[..], rules[..])
+    if malformed_parse_error != ll.Invalid { os.exit(9i32) }
 
     try io.print("parse ll ok\n")
     ret ok
