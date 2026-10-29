@@ -29,6 +29,8 @@ fn contains(haystack: str, needle: str) -> bool {
 fn main(a: *mem.Arena) -> err {
     let (escaped, escape_error) = shell.plist_escape(a, "&<>")
     if escape_error != ok || !same(escaped, "&amp;&lt;&gt;") { os.exit(2i32) }
+    if !shell.lsregister_succeeded(ok, 0i32) { os.exit(12i32) }
+    if shell.lsregister_succeeded(ok, 1i32) || shell.lsregister_succeeded(shell.Failed, 0i32) { os.exit(13i32) }
     if shell.associate_file(a, ".nxml", "neper&invalid", "bad") != shell.Invalid { os.exit(3i32) }
     if shell.associate_file(a, ".nxml", ".bad", "bad") != shell.Invalid { os.exit(4i32) }
     if shell.associate_protocol(a, "bad&scheme", "bad") != shell.Invalid { os.exit(5i32) }

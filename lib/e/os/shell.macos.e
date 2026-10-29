@@ -1853,6 +1853,13 @@ fn bundle_root(a: *mem.Arena, name: str) -> (str, err) {
     ret (bundle, bundle_error)
 }
 
+// A spawned helper only succeeded when wait itself succeeded and it returned zero.
+// Keeping this pure lets the macOS probe cover the nonzero-exit path without invoking
+// LaunchServices deliberately.
+fn lsregister_succeeded(wait_error: err, exit_code: i32) -> bool {
+    ret wait_error == ok && exit_code == 0i32
+}
+
 fn lsregister(a: *mem.Arena, flag: str, bundle: str) -> err {
     var argv: [3]str = zero
     argv[0usize] = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
@@ -1866,7 +1873,7 @@ fn lsregister(a: *mem.Arena, flag: str, bundle: str) -> err {
     let (child, spawn_error) = os.spawn_with_options(a, options)
     if spawn_error != ok { ret Failed }
     let (usage, wait_error) = os.wait_usage(child)
-    if wait_error != ok { ret Failed }
+    if !lsregister_succeeded(wait_error, usage.exit_code) { ret Failed }
     ret ok
 }
 
@@ -1934,6 +1941,7 @@ fn bundle_remove(a: *mem.Arena, name: str) -> err {
     if exists_error != ok { ret exists_error }
     if !present { ret NotFound }
     let unregistered = lsregister(a, "-u", root)
+    if unregistered != ok { ret unregistered }
     let (macos, macos_error) = str.concat(a, root, "/Contents/MacOS")
     if macos_error != ok { ret macos_error }
     let (link, link_error) = str.concat(a, macos, "/neper-app")
