@@ -76,6 +76,11 @@ fn h_veto(u: *User) -> err {
     ret Veto
 }
 
+fn h_assign_id(u: *User) -> err {
+    u.id = 99i64
+    ret ok
+}
+
 fn traced() -> orm.Hooks[User] {
     ret orm.Hooks[User] { before_save: h_before_save, after_save: h_after_save, before_create: h_before_create, after_create: h_after_create, before_update: h_before_update, after_update: h_after_update, before_delete: h_before_delete, after_delete: h_after_delete }
 }
@@ -204,6 +209,27 @@ fn checks_hooks(a: *mem.Arena) -> i32 {
     var rows: [4]User = zero
     let (n, select_error) = orm.select[User](&s, "users", "", "", zero, rows[0..])
     if select_error != ok || n != 0usize { ret 71i32 }
+    // Before hooks can select an explicit key instead of the database-generated one.
+    var assigned = quiet_user()
+    assigned.before_save = h_assign_id
+    var keyed = User { id: 0i64, name: "K", age: 3i32, score: 2.0f64, active: true }
+    if orm.insert[User](&s, "users", &keyed, &assigned) != ok || keyed.id != 99i64 { ret 73i32 }
+    var keyed_back: User = zero
+    let (found_keyed, keyed_error) = orm.find[User](&s, "users", 99i64, &keyed_back)
+    if keyed_error != ok || !found_keyed || !str.eq(keyed_back.name, "K") { ret 74i32 }
+    // Update and delete derive their WHERE key after their mutable before hook too.
+    var redirecting = quiet_user()
+    redirecting.before_update = h_assign_id
+    var updated = User { id: 0i64, name: "Updated", age: 4i32, score: 3.0f64, active: false }
+    if orm.update[User](&s, "users", &updated, &redirecting) != ok || updated.id != 99i64 { ret 75i32 }
+    let (found_updated, updated_error) = orm.find[User](&s, "users", 99i64, &keyed_back)
+    if updated_error != ok || !found_updated || !str.eq(keyed_back.name, "Updated") { ret 76i32 }
+    redirecting = quiet_user()
+    redirecting.before_delete = h_assign_id
+    var deleted = User { id: 0i64, name: "", age: 0i32, score: 0.0f64, active: false }
+    if orm.delete[User](&s, "users", &deleted, &redirecting) != ok || deleted.id != 99i64 { ret 77i32 }
+    let (found_deleted, deleted_error) = orm.find[User](&s, "users", 99i64, &keyed_back)
+    if deleted_error != ok || found_deleted { ret 78i32 }
     if db.close(&c) != ok { ret 72i32 }
     ret 0i32
 }

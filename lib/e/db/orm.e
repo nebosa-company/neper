@@ -10,7 +10,8 @@
 // frames each unit of work with `mem.mark`/`mem.reset` as it would any arena.
 //
 // `insert` with `id == 0` leaves the key to the database and writes the generated one
-// back into the row; `update` and `delete` act on the row's `id`. The eight `Hooks`
+// back into the row; `update` and `delete` act on the row's `id` after their before
+// hooks have run. The eight `Hooks`
 // run in gorm's order: create is before_save, before_create, INSERT, after_create,
 // after_save; update the same with update; delete is before_delete, DELETE,
 // after_delete. A hook that answers an error stops the operation (a before hook
@@ -317,10 +318,11 @@ fn last_id(s: *Session) -> (i64, err) {
 // as documented above.
 fn insert[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err {
     try check_key[T]()
-    let (key, key_error) = key_of[T](row)
-    if key_error != ok { ret key_error }
     try h.before_save(row)
     try h.before_create(row)
+    // Hooks receive a mutable row, including its primary key.
+    let (key, key_error) = key_of[T](row)
+    if key_error != ok { ret key_error }
     let auto = key == 0i64
     let (builder0, builder_error) = str.builder(s.a, 256usize)
     if builder_error != ok { ret builder_error }
@@ -379,10 +381,11 @@ fn insert[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err 
 
 // UPDATE every column but `id` of the row with that `id`; `NotFound` when no row has it.
 fn update[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err {
-    let (key, key_error) = key_of[T](row)
-    if key_error != ok { ret key_error }
     try h.before_save(row)
     try h.before_update(row)
+    // Use the key after the mutable hooks, consistently with insert and delete.
+    let (key, key_error) = key_of[T](row)
+    if key_error != ok { ret key_error }
     let (builder0, builder_error) = str.builder(s.a, 256usize)
     if builder_error != ok { ret builder_error }
     var b = builder0
@@ -430,9 +433,10 @@ fn update[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err 
 
 // DELETE the row with this `id`; `NotFound` when none has it.
 fn delete[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err {
+    try h.before_delete(row)
+    // A before-delete hook can redirect the row by changing its key.
     let (key, key_error) = key_of[T](row)
     if key_error != ok { ret key_error }
-    try h.before_delete(row)
     let (builder0, builder_error) = str.builder(s.a, 64usize)
     if builder_error != ok { ret builder_error }
     var b = builder0
