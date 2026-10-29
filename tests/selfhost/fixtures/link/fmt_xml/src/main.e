@@ -171,6 +171,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e23 != ok || c8 != 6usize { os.exit(55) }
     let (c9, e24) = count_events(a, "<a></a><b></b>", 8u16)
     if e24 != xml.Invalid { os.exit(56) }
+    let (c10, e25) = count_events(a, "<\xc3\xa9/>", 8u16)
+    if e25 != ok || c10 != 2usize { os.exit(62) }
+    let (_, e26) = count_events(a, "<1bad/>", 8u16)
+    if e26 != xml.Invalid { os.exit(63) }
+    let (_, e27) = count_events(a, "<a 1bad=\"x\"/>", 8u16)
+    if e27 != xml.Invalid { os.exit(64) }
+    let (_, e28) = count_events(a, "<\xc0\x80/>", 8u16)
+    if e28 != xml.Invalid { os.exit(70) }
+    var name_buffer: [64]u8 = zero
+    var name_state = io.SliceWriter { data: name_buffer[..], off: 0usize }
+    var name_writer = xml.writer(io.slice_writer(&name_state))
+    if xml.start(&name_writer, "1bad", zero) != xml.Invalid || name_state.off != 0usize { os.exit(65) }
+    var bad_attributes: [1]xml.Attribute = zero
+    bad_attributes[0] = xml.Attribute { name: "bad name", value: "x" }
+    if xml.start(&name_writer, "good", bad_attributes[..]) != xml.Invalid || name_state.off != 0usize { os.exit(66) }
+    if xml.start(&name_writer, "good", zero) != ok { os.exit(67) }
+    let opened = name_state.off
+    if xml.end(&name_writer, "1bad") != xml.Invalid || name_state.off != opened { os.exit(68) }
+    if xml.end(&name_writer, "good") != ok { os.exit(69) }
     let options = xml.Options { max_depth: 8u16, preserve_comments: true }
     var input = io.SliceReader { data: "<a/>", off: 0usize }
     let (_, exact_error) = xml.reader_with_limit(a, io.slice_reader(&input), options, 4usize)

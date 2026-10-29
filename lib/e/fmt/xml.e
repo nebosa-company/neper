@@ -10,6 +10,7 @@
 use e.io
 use e.mem
 use e.str
+use e.text.utf8
 
 type Attribute = struct { name: str, value: str }
 type Event = union enum u8 { Start: StartElement, End: str, Text: str, Comment: str, Processing: Processing }
@@ -62,15 +63,39 @@ fn reader_with_limit(a: *mem.Arena, source: io.Reader, options: Options, limit: 
 
 fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }
 
-fn is_name_byte(c: u8) -> bool {
-    ret str.is_ascii_alnum(c) || c == 95u8 || c == 45u8 || c == 46u8 || c == 58u8 || c >= 128u8
+// XML 1.0 (5th edition) NameStartChar and NameChar.
+fn is_name_start(scalar: u32) -> bool {
+    if scalar == 58u32 || (scalar >= 65u32 && scalar <= 90u32) || scalar == 95u32 || (scalar >= 97u32 && scalar <= 122u32) { ret true }
+    if (scalar >= 192u32 && scalar <= 214u32) || (scalar >= 216u32 && scalar <= 246u32) || (scalar >= 248u32 && scalar <= 767u32) { ret true }
+    if (scalar >= 880u32 && scalar <= 893u32) || (scalar >= 895u32 && scalar <= 8191u32) || scalar == 8204u32 || scalar == 8205u32 { ret true }
+    if (scalar >= 8304u32 && scalar <= 8591u32) || (scalar >= 11264u32 && scalar <= 12271u32) || (scalar >= 12289u32 && scalar <= 55295u32) { ret true }
+    if (scalar >= 63744u32 && scalar <= 64975u32) || (scalar >= 65008u32 && scalar <= 65533u32) { ret true }
+    ret scalar >= 65536u32 && scalar <= 983039u32
+}
+
+fn is_name_char(scalar: u32) -> bool {
+    if is_name_start(scalar) || scalar == 45u32 || scalar == 46u32 || (scalar >= 48u32 && scalar <= 57u32) || scalar == 183u32 { ret true }
+    ret (scalar >= 768u32 && scalar <= 879u32) || scalar == 8255u32 || scalar == 8256u32
 }
 
 fn name_end(source: []const u8, at: usize) -> usize {
     var stop = at
-    while stop < source.len && is_name_byte(source[stop]) { stop += 1usize }
+    var first = true
+    while stop < source.len {
+        let (decoded, decode_error) = utf8.decode(source, stop)
+        if decode_error != ok { break }
+        if first {
+            if !is_name_start(decoded.scalar) { break }
+        } else if !is_name_char(decoded.scalar) {
+            break
+        }
+        first = false
+        stop += usize(decoded.width)
+    }
     ret stop
 }
+
+fn is_name(name: str) -> bool { ret name.len > 0usize && name_end(name, 0usize) == name.len }
 
 fn skip_space(source: []const u8, at: usize) -> usize {
     var stop = at
@@ -328,10 +353,15 @@ fn write_escaped(sink: *io.Writer, value: str, in_attribute: bool) -> err {
 }
 
 fn start(w: *Writer, name: str, attributes: []const Attribute) -> err {
-    if name.len == 0usize { ret Invalid }
+    if !is_name(name) { ret Invalid }
+    var i = 0usize
+    while i < attributes.len {
+        if !is_name(attributes[i].name) { ret Invalid }
+        i += 1usize
+    }
     try io.write_all(&w.sink, "<")
     try io.write_all(&w.sink, name)
-    var i = 0usize
+    i = 0usize
     while i < attributes.len {
         try io.write_all(&w.sink, " ")
         try io.write_all(&w.sink, attributes[i].name)
@@ -358,7 +388,7 @@ fn comment(w: *Writer, value: str) -> err {
 }
 
 fn end(w: *Writer, name: str) -> err {
-    if w.depth == 0u16 { ret Invalid }
+    if w.depth == 0u16 || !is_name(name) { ret Invalid }
     try io.write_all(&w.sink, "</")
     try io.write_all(&w.sink, name)
     try io.write_all(&w.sink, ">")
