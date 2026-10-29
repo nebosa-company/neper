@@ -331,6 +331,90 @@ fn open_at(a: *mem.Arena, r: *const Root, relative_path: str, flags: os.OpenFlag
     ret (file, ok)
 }
 
+// Metadata relative to an opened root. The host refuses links while resolving parent
+// components and describes the final name itself, so this never follows a link out.
+fn stat_at(a: *mem.Arena, r: *const Root, relative_path: str) -> (Entry, err) {
+    var entry: Entry = zero
+    let (info, stat_error) = os.stat_at(a, r.dir, relative_path)
+    if stat_error != ok { ret (entry, from_os(stat_error)) }
+    entry.path = relative_path
+    entry.kind = kind_from_os(info.kind)
+    entry.size = info.size
+    ret (entry, ok)
+}
+
+// Create each parent relative to the already opened root. An existing component is left
+// for the final rooted open to validate; no path joined to the root is checked and reused.
+fn make_dirs_at(a: *mem.Arena, r: *const Root, relative_path: str) -> err {
+    var at = 0usize
+    while at <= relative_path.len {
+        if at == relative_path.len || relative_path[at] == 47u8 {
+            let step_error = os.mkdir_at(a, r.dir, relative_path[0usize..at])
+            if step_error != ok && step_error != os.Exists { ret from_os(step_error) }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// Read through the root handle. The host's stat and open both refuse symlinks, and the
+// actual read is from the opened file rather than a path that can be swapped afterward.
+fn read_file_at(a: *mem.Arena, r: *const Root, relative_path: str, limit: usize) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    let (info, stat_error) = os.stat_at(a, r.dir, relative_path)
+    if stat_error != ok { ret (nothing, from_os(stat_error)) }
+    if info.kind == .Dir { ret (nothing, Invalid) }
+    let size = usize(info.size)
+    if limit != 0usize && size > limit { ret (nothing, Invalid) }
+    var flags: os.OpenFlags = zero
+    flags.read = true
+    let (file, open_error) = os.open_at(a, r.dir, relative_path, flags, .NoSymlinks)
+    if open_error != ok { ret (nothing, from_os(open_error)) }
+    let (bytes, allocation_error) = mem.alloc[u8](a, size)
+    if allocation_error != ok {
+        let ignored = os.close(file)
+        ret (nothing, allocation_error)
+    }
+    var filled = 0usize
+    while filled < size {
+        let (read_count, read_error) = os.read(file, bytes[filled..size])
+        if read_error != ok {
+            let ignored = os.close(file)
+            ret (nothing, from_os(read_error))
+        }
+        if read_count == 0usize { break }
+        filled += read_count
+    }
+    let close_error = os.close(file)
+    if close_error != ok { ret (nothing, from_os(close_error)) }
+    ret (bytes[0usize..filled], ok)
+}
+
+// Write through one rooted open. Parent creation and the final create/truncate both stay
+// relative to the held directory, and the host refuses symbolic links during resolution.
+fn write_file_at(a: *mem.Arena, r: *const Root, relative_path: str, data: []const u8) -> err {
+    var flags: os.OpenFlags = zero
+    flags.write = true
+    flags.create = true
+    flags.truncate = true
+    let (file, open_error) = os.open_at(a, r.dir, relative_path, flags, .NoSymlinks)
+    if open_error != ok { ret from_os(open_error) }
+    var sent = 0usize
+    while sent < data.len {
+        let (written, write_error) = os.write(file, data[sent..data.len])
+        if write_error != ok {
+            let ignored = os.close(file)
+            ret from_os(write_error)
+        }
+        if written == 0usize {
+            let ignored = os.close(file)
+            ret Io
+        }
+        sent += written
+    }
+    ret from_os(os.close(file))
+}
+
 // The path to the final component is walked with links refused, and the final component
 // itself is removed as whatever it is -- so removing a symbolic link removes the link, not
 // what it points at. `directory` picks which of the two a name is allowed to be, because a

@@ -895,6 +895,7 @@ const OBJ_CASE_INSENSITIVE: u32 = 64u32
 const OBJ_DONT_REPARSE: u32 = 4096u32
 
 const FILE_OPEN: u32 = 1u32
+const FILE_CREATE: u32 = 2u32
 const FILE_OPEN_IF: u32 = 3u32
 const FILE_OVERWRITE: u32 = 4u32
 const FILE_OVERWRITE_IF: u32 = 5u32
@@ -1626,6 +1627,45 @@ fn release_parent(parent: own Dir, dir: Dir) {
     if parent.raw != dir.raw {
         let closed = raw_close_handle(parent.raw)
     }
+}
+
+// Open the final name itself to collect metadata. Parent components are opened with
+// reparse traversal disabled, and OPEN_REPARSE_POINT describes rather than follows the
+// final link.
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    if !relative_path_ok(relative_path) { ret (info, Denied) }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret (info, parent_error) }
+    let (handle, open_error) = open_relative(a, parent, name, FILE_READ_ATTRIBUTES | SYNCHRONIZE, FILE_OPEN, OBJ_CASE_INSENSITIVE, FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT)
+    if open_error != ok {
+        release_parent(parent, dir)
+        ret (info, open_error)
+    }
+    let (described, attributes, info_error) = info_from_handle(handle)
+    info = described
+    if info_error == ok && attributes & ATTRIBUTE_REPARSE_POINT != 0u32 {
+        info.kind = reparse_kind(handle)
+    }
+    let closed = raw_close_handle(handle)
+    release_parent(parent, dir)
+    ret (info, info_error)
+}
+
+// The directory handle anchors creation; FILE_CREATE is one kernel decision, so a name
+// that appeared after the parent walk is not opened or followed.
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let (handle, create_error) = open_relative(a, parent, name, DIRECTORY_ACCESS, FILE_CREATE, OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE, FILE_SYNCHRONOUS_IO_NONALERT | FILE_DIRECTORY_FILE)
+    if create_error != ok {
+        release_parent(parent, dir)
+        ret create_error
+    }
+    let closed = raw_close_handle(handle)
+    release_parent(parent, dir)
+    ret ok
 }
 
 // The file is opened for deletion and then marked to go, which is this host's way of

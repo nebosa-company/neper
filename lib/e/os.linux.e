@@ -2606,6 +2606,54 @@ fn release_parent(parent: own Dir, dir: Dir) {
     }
 }
 
+// `fstatat` describes the final name without following it. Its parent came from
+// `openat2` with NoSymlinks+Beneath, so no component can redirect the lookup.
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    if !relative_path_ok(relative_path) { ret (info, Denied) }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret (info, parent_error) }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret (info, name_error)
+    }
+    var buffer: StatBuffer = zero
+    let result = syscall(SYS_NEWFSTATAT, parent.raw, name_address, mem.address_of(&buffer), AT_SYMLINK_NOFOLLOW, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    if result < 0isize { ret (info, from_errno(result)) }
+    info.kind = kind_from_mode(buffer.mode)
+    info.size = u64(buffer.size)
+    info.modified_ns = buffer.modified * NANOSECONDS_PER_SECOND + buffer.modified_ns
+    info.accessed_ns = buffer.accessed * NANOSECONDS_PER_SECOND + buffer.accessed_ns
+    info.created_ns = -1i64
+    info.mode = buffer.mode & PERMISSION_MASK
+    info.file_id = buffer.inode
+    info.link_count = buffer.link_count
+    ret (info, ok)
+}
+
+// `mkdirat` acts on one name in the securely opened parent, never on a path joined to root.
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret name_error
+    }
+    let result = syscall(SYS_MKDIRAT, parent.raw, name_address, DIRECTORY_MODE, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    ret from_errno(result)
+}
+
 // `unlinkat` never follows the final component, which is what makes removing a symbolic
 // link remove the link.
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {

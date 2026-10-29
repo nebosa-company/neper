@@ -634,11 +634,14 @@ type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
 const SYS_OPENAT: usize = 463usize
 const SYS_RENAMEAT: usize = 465usize
+const SYS_FSTATAT64: usize = 470usize
 const SYS_UNLINKAT: usize = 472usize
+const SYS_MKDIRAT: usize = 475usize
 const SYS_RENAMEATX: usize = 488usize
 const SYS_FSYNC: usize = 95usize
 const AT_FDCWD: usize = 18446744073709551516usize
 const AT_REMOVEDIR: usize = 128usize
+const AT_SYMLINK_NOFOLLOW: usize = 32usize
 const O_WRONLY: usize = 1usize
 const O_TRUNC: usize = 1024usize
 const O_APPEND: usize = 8usize
@@ -764,6 +767,52 @@ fn release_parent(parent: own Dir, dir: Dir) {
     if parent.raw != dir.raw {
         let closed = syscall(SYS_CLOSE, parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
     }
+}
+
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    if !relative_path_ok(relative_path) { ret (info, Denied) }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret (info, parent_error) }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret (info, name_error)
+    }
+    var buffer: StatBuffer = zero
+    let result = syscall(SYS_FSTATAT64, parent.raw, name_address, mem.address_of(&buffer), AT_SYMLINK_NOFOLLOW, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    if result < 0isize { ret (info, from_errno(result)) }
+    let mode = u32(buffer.mode)
+    info.kind = kind_from_mode(mode)
+    info.size = u64(buffer.size)
+    info.modified_ns = buffer.modified * NANOSECONDS_PER_SECOND + buffer.modified_ns
+    info.accessed_ns = buffer.accessed * NANOSECONDS_PER_SECOND + buffer.accessed_ns
+    info.created_ns = buffer.born * NANOSECONDS_PER_SECOND + buffer.born_ns
+    info.mode = mode & PERMISSION_MASK
+    info.file_id = buffer.inode
+    info.link_count = u64(buffer.link_count)
+    ret (info, ok)
+}
+
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret name_error
+    }
+    let result = syscall(SYS_MKDIRAT, parent.raw, name_address, DIRECTORY_MODE, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    ret from_errno(result)
 }
 
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {

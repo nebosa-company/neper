@@ -232,6 +232,16 @@ fn hex_name(a: *mem.Arena, root: str) -> (str, err) {
     ret (str.done(&b), ok)
 }
 
+fn child_path(a: *mem.Arena, parent: str, name: str) -> (str, err) {
+    let (b0, be) = str.builder(a, parent.len + name.len + 2usize)
+    if be != ok { ret ("", be) }
+    var b = b0
+    try str.push(&b, parent)
+    try str.push_byte(&b, 47u8)
+    try str.push(&b, name)
+    ret (str.done(&b), ok)
+}
+
 // Removes a directory tree: the walk lists a directory before what is in it, so the
 // directories are removed in reverse after the files.
 fn rm_tree(a: *mem.Arena, root: str) -> err {
@@ -308,6 +318,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // the store leaves the empty directories (listing is files only)
     let (_, nf) = store.get(&fs_s, a, "dir", 0usize)
     if nf != store.NotFound { os.exit(9i32) }
+    // A link inside the root cannot redirect any key operation to a sibling directory.
+    let (outside_root, ore) = hex_name(a, tmp)
+    if ore != ok || fs.make_dirs(a, outside_root) != ok { os.exit(150i32) }
+    let (outside_marker, ome) = child_path(a, outside_root, "marker.txt")
+    let (outside_put, ope) = child_path(a, outside_root, "put.txt")
+    let (inside_link, ile) = child_path(a, root, "through-link")
+    if ome != ok || ope != ok || ile != ok { os.exit(151i32) }
+    if fs.write_file(a, outside_marker, "outside") != ok { os.exit(152i32) }
+    let link_error = fs.symlink(a, outside_root, inside_link)
+    if link_error == ok {
+        if store.put(&fs_s, a, "through-link/put.txt", "escaped") == ok { os.exit(153i32) }
+        let (_, get_error) = store.get(&fs_s, a, "through-link/marker.txt", 0usize)
+        if get_error == ok { os.exit(154i32) }
+        let (_, stat_error) = store.stat(&fs_s, a, "through-link/marker.txt")
+        if stat_error == ok { os.exit(155i32) }
+        if store.delete(&fs_s, a, "through-link/marker.txt") == ok { os.exit(156i32) }
+        let (put_created, put_exists_error) = fs.exists(a, outside_put)
+        if put_exists_error != ok || put_created { os.exit(157i32) }
+        let (outside_data, outside_read_error) = fs.read_file(a, outside_marker, 0usize)
+        let outside_text: str = outside_data
+        if outside_read_error != ok || !str.eq(outside_text, "outside") { os.exit(158i32) }
+        if fs.remove_file(a, inside_link) != ok { os.exit(159i32) }
+    } else if link_error != fs.Denied {
+        os.exit(160i32)
+    }
+    if fs.remove_file(a, outside_marker) != ok || fs.remove_dir(a, outside_root) != ok { os.exit(161i32) }
     let cleanup = rm_tree(a, root)
     // 3. HTTP through the in-process server
     let (kv0, kve) = store.memory(a, 64usize)

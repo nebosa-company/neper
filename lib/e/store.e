@@ -247,21 +247,12 @@ fn fs_error(e: err) -> err {
     ret Failed
 }
 
-// `root` + `/` + the key; a Windows host takes the forward slash as it takes its own.
-fn fs_path(a: *mem.Arena, f: *FsStore, key: str) -> (str, err) {
-    let (b0, be) = str.builder(a, f.root.len + key.len + 2usize)
-    if be != ok { ret ("", be) }
-    var b = b0
-    try str.push(&b, f.root)
-    try str.push_byte(&b, 47u8)
-    try str.push(&b, key)
-    ret (str.done(&b), ok)
-}
-
 fn fs_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err {
     var f = mem.cast[*FsStore](ctx)
-    let (full, pe) = fs_path(a, f, key)
-    if pe != ok { ret pe }
+    let (root0, root_error) = fs.root(a, f.root)
+    if root_error != ok { ret fs_error(root_error) }
+    var rooted = root0
+    defer let _ = fs.root_close(&rooted)
     // the parent directories of a nested key
     var last = 0usize
     var i = 0usize
@@ -270,32 +261,35 @@ fn fs_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err {
         i += 1usize
     }
     if last > 0usize {
-        let (dir, de) = fs_path(a, f, key[0usize..last])
-        if de != ok { ret de }
-        let me = fs.make_dirs(a, dir)
+        let me = fs.make_dirs_at(a, &rooted, key[0usize..last])
         if me != ok { ret fs_error(me) }
     }
-    ret fs_error(fs.write_file(a, full, data))
+    ret fs_error(fs.write_file_at(a, &rooted, key, data))
 }
 
 fn fs_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err) {
     var f = mem.cast[*FsStore](ctx)
-    let (full, pe) = fs_path(a, f, key)
-    if pe != ok { ret (zero, pe) }
-    let (info, se) = fs.stat(a, full)
+    let (root0, root_error) = fs.root(a, f.root)
+    if root_error != ok { ret (zero, fs_error(root_error)) }
+    var rooted = root0
+    defer let _ = fs.root_close(&rooted)
+    let (info, se) = fs.stat_at(a, &rooted, key)
     if se != ok { ret (zero, fs_error(se)) }
     if info.kind != .File { ret (zero, NotFound) }
     if limit != 0usize && info.size > u64(limit) { ret (zero, TooLarge) }
-    let (data, re) = fs.read_file(a, full, 0usize)
+    let (data, re) = fs.read_file_at(a, &rooted, key, limit)
+    if re == fs.Invalid { ret (zero, TooLarge) }
     if re != ok { ret (zero, fs_error(re)) }
     ret (data, ok)
 }
 
 fn fs_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err) {
     var f = mem.cast[*FsStore](ctx)
-    let (full, pe) = fs_path(a, f, key)
-    if pe != ok { ret (0u64, pe) }
-    let (info, se) = fs.stat(a, full)
+    let (root0, root_error) = fs.root(a, f.root)
+    if root_error != ok { ret (0u64, fs_error(root_error)) }
+    var rooted = root0
+    defer let _ = fs.root_close(&rooted)
+    let (info, se) = fs.stat_at(a, &rooted, key)
     if se != ok { ret (0u64, fs_error(se)) }
     if info.kind != .File { ret (0u64, NotFound) }
     ret (info.size, ok)
@@ -303,9 +297,12 @@ fn fs_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err) {
 
 fn fs_delete(ctx: *void, a: *mem.Arena, key: str) -> err {
     var f = mem.cast[*FsStore](ctx)
-    let (full, pe) = fs_path(a, f, key)
-    if pe != ok { ret pe }
-    let e = fs.remove_file(a, full)
+    let (root0, root_error) = fs.root(a, f.root)
+    if root_error == fs.NotFound { ret ok }
+    if root_error != ok { ret fs_error(root_error) }
+    var rooted = root0
+    defer let _ = fs.root_close(&rooted)
+    let e = fs.remove_at(a, &rooted, key, false)
     if e == fs.NotFound { ret ok }
     ret fs_error(e)
 }
