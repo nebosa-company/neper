@@ -204,6 +204,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var writer = io.slice_writer(&sw)
     if json5.write(&writer, &v) != ok { os.exit(103i32) }
     if !text_is(out[0usize..sw.off],"{a:[1,\"x\",2.5],\"two words\":null,if:true,\"7up\":10}") { os.exit(104i32) }
+    // `json.Number` is public over a string. A hand-built lexeme must be refused before the
+    // writer can turn a scalar into extra JSON5 syntax.
+    var injected = json.Value{ Number: json.Number{ lexeme: "1, evil: 2" } }
+    sw.off = 0usize
+    let injected_error = json5.write(&writer, &injected)
+    if injected_error != json.Invalid || sw.off != 0usize { os.exit(106i32) }
     let r = run_vectors()
     if r != 0u8 { os.exit(i32(r)) }
     try io.print("fmt json5 ok")

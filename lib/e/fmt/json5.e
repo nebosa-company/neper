@@ -513,7 +513,11 @@ fn write_value(w: *io.Writer, value: *const json.Value, indent: u8, depth: usize
         if flag { ret io.write_all(w, "true") }
         ret io.write_all(w, "false")
     case .Number as n:
-        ret io.write_all(w, n.lexeme)
+        // Number is public over a public string, so a caller can construct one without going
+        // through the parser. Revalidate before it becomes JSON5 syntax.
+        let (checked, number_error) = json.number(n.lexeme)
+        if number_error != ok { ret number_error }
+        ret io.write_all(w, checked.lexeme)
     case .String as text:
         ret json.write_string(w, text)
     case .Array as items:
