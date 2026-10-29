@@ -1514,8 +1514,8 @@ fn become_child(plan: SpawnPlan, stdio: Stdio) {
         if moved < 0isize { let failed = syscall(SYS_EXIT_GROUP, EXEC_FAILED, 0usize, 0usize, 0usize, 0usize, 0usize) }
     }
     if stdio.stdin.raw != 0usize { let bound = syscall(SYS_DUP2, stdio.stdin.raw, 0usize, 0usize, 0usize, 0usize, 0usize) }
-    if stdio.stdout.raw != 1usize { let bound = syscall(SYS_DUP2, stdio.stdout.raw, 1usize, 0usize, 0usize, 0usize, 0usize) }
-    if stdio.stderr.raw != 2usize { let bound = syscall(SYS_DUP2, stdio.stderr.raw, 2usize, 0usize, 0usize, 0usize, 0usize) }
+    if stdio.stdout.raw != 0usize && stdio.stdout.raw != 1usize { let bound = syscall(SYS_DUP2, stdio.stdout.raw, 1usize, 0usize, 0usize, 0usize, 0usize) }
+    if stdio.stderr.raw != 0usize && stdio.stderr.raw != 2usize { let bound = syscall(SYS_DUP2, stdio.stderr.raw, 2usize, 0usize, 0usize, 0usize, 0usize) }
     let replaced = syscall(SYS_EXECVE, plan.program, plan.argv, plan.envp, 0usize, 0usize, 0usize)
     // `execve` only returns when it failed, and there is nothing to report it to.
     let gone = syscall(SYS_EXIT_GROUP, EXEC_FAILED, 0usize, 0usize, 0usize, 0usize, 0usize)

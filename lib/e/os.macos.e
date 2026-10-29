@@ -1534,7 +1534,9 @@ fn spawn_inner(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (Proc, er
     var slot = 0usize
     while slot < 3usize {
         let wanted = stdio_raw(options.stdio, slot)
-        if wanted != slot {
+        // A zero Stdio field leaves this child descriptor inherited. It is not a request to
+        // duplicate the parent's stdin onto stdout or stderr.
+        if wanted != 0usize && wanted != slot {
             let bound = raw_spawn_actions_dup2(&actions, i32(wanted), i32(slot))
             if bound != 0i32 {
                 let failure = from_spawn_status(bound)
