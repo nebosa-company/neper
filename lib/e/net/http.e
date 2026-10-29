@@ -205,6 +205,7 @@ fn parse_decimal(value: str) -> (usize, err) {
         parsed = parsed * 10u64 + digit
         at += 1usize
     }
+    if parsed > u64(~0usize) { ret (0usize, TooLarge) }
     ret (usize(parsed), ok)
 }
 
@@ -224,6 +225,7 @@ fn parse_hex(value: str) -> (usize, err) {
         parsed = parsed * 16u64 + u64(digit)
         at += 1usize
     }
+    if parsed > u64(~0usize) { ret (0usize, TooLarge) }
     ret (usize(parsed), ok)
 }
 

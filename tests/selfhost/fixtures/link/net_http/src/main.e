@@ -163,6 +163,23 @@ fn main(a: *mem.Arena) -> err {
     let (body_request, body_error) = http.read_request(a, &short_body)
     if body_error != http.TooLarge { ret Failed }
 
+    // Parsed framing lengths must fit the target's usize before they can affect a
+    // request body or the chunk terminator. On wasm32 these values used to narrow to 0.
+    var giant_length_source: OneByte = zero
+    let (giant_length_handle, giant_length_reader_error) = http.reader(a, one_reader(&giant_length_source, "POST / HTTP/1.1\r\nContent-Length: 4294967296\r\n\r\n"), message_limits(64usize, 128usize, 4usize, 0usize))
+    if giant_length_reader_error != ok { ret giant_length_reader_error }
+    var giant_length_reader = giant_length_handle
+    let (_, giant_length_error) = http.read_request(a, &giant_length_reader)
+    if giant_length_error != http.TooLarge { ret Failed }
+
+    var giant_chunk_source: OneByte = zero
+    let giant_chunk_input = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n100000000\r\n\r\n"
+    let (giant_chunk_handle, giant_chunk_reader_error) = http.reader(a, one_reader(&giant_chunk_source, giant_chunk_input), message_limits(64usize, 128usize, 4usize, 0usize))
+    if giant_chunk_reader_error != ok { ret giant_chunk_reader_error }
+    var giant_chunk_reader = giant_chunk_handle
+    let (_, giant_chunk_error) = http.read_response(a, &giant_chunk_reader)
+    if giant_chunk_error != http.TooLarge { ret Failed }
+
     // Conflicting length/chunk framing is rejected instead of becoming a smuggling
     // ambiguity, and methods remain case-sensitive tokens.
     var conflict_source: OneByte = zero
