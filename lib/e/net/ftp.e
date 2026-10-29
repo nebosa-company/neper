@@ -270,13 +270,17 @@ fn auth_tls(s: *Session, config: tls.ClientConfig) -> err {
     if s.secured { ret Unsupported }
     let (_, auth_error) = simple(s, "AUTH", "TLS", 2u16)
     if auth_error != ok { ret auth_error }
+    // The server has switched this control connection to TLS.  Even if any
+    // subsequent step fails, the old plaintext writer must never be reused.
+    s.broken = true
     if s.at < s.len { ret Protocol }
     let (slot, slot_error) = mem.alloc[tls.Stream](s.a, 1usize)
     if slot_error != ok { ret slot_error }
     let (made, make_error) = tls.client(s.a, s.source, s.sink, config)
     if make_error != ok { ret make_error }
     slot[0] = made
-    try tls.handshake(&slot[0])
+    let handshake_error = tls.handshake(&slot[0])
+    if handshake_error != ok { ret handshake_error }
     s.stream = &slot[0]
     s.source = tls.reader(s.stream)
     s.sink = tls.writer(s.stream)
@@ -289,6 +293,7 @@ fn auth_tls(s: *Session, config: tls.ClientConfig) -> err {
     let (_, prot_error) = simple(s, "PROT", "P", 2u16)
     if prot_error != ok { ret prot_error }
     s.protected = true
+    s.broken = false
     ret ok
 }
 
