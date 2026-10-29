@@ -67,5 +67,6 @@ web_page_csp
 web_shell
 web_match_media_not
 web_request_clone_body
+web_storage_numeric_key
 web_xml_entity_errors
 gpu_ftz_ops
