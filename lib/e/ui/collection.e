@@ -24,6 +24,19 @@ use e.ui.widget
 
 error TooLarge
 
+// Accessibility positions use u32 fields, including their one-based values.
+const MAX_A11Y_COUNT: usize = 4294967295usize
+
+fn a11y_count_fits(value: usize) -> bool { ret value <= MAX_A11Y_COUNT }
+
+// `value / divisor`, rounded up without forming `value + divisor - 1`.
+// Callers pass the at-least-one column count from `columns_across`.
+fn ceil_count(value: usize, divisor: usize) -> usize {
+    let whole = value / divisor
+    if value % divisor == 0usize { ret whole }
+    ret whole + 1usize
+}
+
 // A bounded data source: how many items, the stable key of one, and one built
 // into the arena as a node (written to `out`).
 type Source = struct { ctx: *void, count: fn(*void) -> usize, key: fn(*void, usize) -> widget.Key, build: fn(*void, *mem.Arena, usize, *widget.Node) -> err }
@@ -42,6 +55,7 @@ fn is_selected(selected: []const widget.Key, key: widget.Key) -> bool {
 // and `width` wide, a list item in the tree at `index` of `count`, selected when
 // its key is.
 fn row(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.Key, index: usize, count: usize, extent: f32, width: f32, separator: bool, selected: bool) -> (widget.Node, err) {
+    if index >= count || !a11y_count_fits(count) { ret (zero, TooLarge) }
     var parts_count = 1usize
     if separator { parts_count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, parts_count)
@@ -76,7 +90,7 @@ fn row(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.Ke
 // item over a separator, in a column `width` wide; `keys` name them (for the
 // selection) and `selected` says which are. A list in the tree named `label`.
 fn list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const widget.Node, keys: []const widget.Key, selected: []const widget.Key, separators: bool, width: f32) -> (widget.Node, err) {
-    if keys.len != items.len { ret (zero, TooLarge) }
+    if keys.len != items.len || !a11y_count_fits(items.len) { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
     if rows_error != ok { ret (zero, TooLarge) }
     var i = 0usize
@@ -104,6 +118,7 @@ fn list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, ite
 fn virtual_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: Source, selected: []const widget.Key, extent: f32, offset: f32, change: widget.Change[f32], separators: bool, width: f32, height: f32) -> (widget.Node, err) {
     if extent <= 0.0 { ret (zero, TooLarge) }
     let total = source.count(source.ctx)
+    if !a11y_count_fits(total) { ret (zero, TooLarge) }
     let (first, count) = widget.visible_range(offset, height, total, extent)
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
@@ -146,6 +161,7 @@ fn columns_across(width: f32, cell_width: f32, gap: f32) -> usize {
 // A cell of a grid: the item sized to the cell, a cell in the tree at its row and
 // column, selected when its key is.
 fn cell(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.Key, row_index: usize, column_index: usize, size: geometry.Size, selected: bool) -> (widget.Node, err) {
+    if row_index >= MAX_A11Y_COUNT || column_index >= MAX_A11Y_COUNT { ret (zero, TooLarge) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = item
@@ -172,8 +188,9 @@ fn cell(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.K
 // width -- with `gap` between; `keys` name them and `selected` says which are. A
 // grid in the tree named `label` with the row and column counts.
 fn grid_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const widget.Node, keys: []const widget.Key, selected: []const widget.Key, cell_size: geometry.Size, gap: f32, width: f32) -> (widget.Node, err) {
-    if keys.len != items.len { ret (zero, TooLarge) }
+    if keys.len != items.len || !a11y_count_fits(items.len) { ret (zero, TooLarge) }
     let columns = columns_across(width, cell_size.width, gap)
+    if !a11y_count_fits(columns) { ret (zero, TooLarge) }
     let (cells, cells_error) = mem.alloc[widget.Node](a, items.len)
     if cells_error != ok { ret (zero, TooLarge) }
     var i = 0usize
@@ -192,7 +209,7 @@ fn grid_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     sem.role = 30u8
     sem.label = label
     sem.column_count = u32(columns)
-    sem.row_count = u32((items.len + columns - 1usize) / columns)
+    sem.row_count = u32(ceil_count(items.len, columns))
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
 }
 
@@ -205,7 +222,9 @@ fn virtual_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     if cell_size.height <= 0.0 { ret (zero, TooLarge) }
     let total = source.count(source.ctx)
     let columns = columns_across(width, cell_size.width, gap)
-    let row_total = (total + columns - 1usize) / columns
+    if !a11y_count_fits(columns) { ret (zero, TooLarge) }
+    let row_total = ceil_count(total, columns)
+    if !a11y_count_fits(row_total) { ret (zero, TooLarge) }
     let extent = cell_size.height + gap
     let (first, count) = widget.visible_range(offset, height, row_total, extent)
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
@@ -213,13 +232,14 @@ fn virtual_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     var r = 0usize
     while r < count {
         let row_index = first + r
+        let row_start = row_index * columns
         var across = columns
-        if row_index * columns + across > total { across = total - row_index * columns }
+        if total - row_start < across { across = total - row_start }
         let (cells, cells_error) = mem.alloc[widget.Node](a, across)
         if cells_error != ok { ret (zero, TooLarge) }
         var c = 0usize
         while c < across {
-            let index = row_index * columns + c
+            let index = row_start + c
             let item_key = source.key(source.ctx, index)
             var built: widget.Node = zero
             let built_error = source.build(source.ctx, a, index, &built)
