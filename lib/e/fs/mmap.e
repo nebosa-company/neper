@@ -32,14 +32,15 @@ fn open(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (M
     ret (m, ok)
 }
 
-// The mapped bytes, writable when the mapping was opened so; a read-only mapping's
-// bytes come back through the same slice type, since the surface has one `bytes`,
-// and a write to them is the host's fault to report.
-fn bytes(m: Mapping) -> []u8 {
-    let (writable, writable_error) = os.mapping_bytes_mut(m.raw)
-    if writable_error == ok { ret writable }
-    // The same view `e.os` takes of its own mapping (D350: the fields are its alone).
-    ret os.mapping_region(m.raw)
+// The mapped bytes. This view is always read-only: a mapping opened read-only must
+// not hand out a writable slice whose first write faults the process.
+fn bytes(m: Mapping) -> []const u8 { ret os.mapping_bytes(m.raw) }
+
+// A writable view of a mapping opened for writing. Read-only mappings return the
+// host's `Unsupported` error rather than exposing their protected pages.
+fn bytes_mut(m: Mapping) -> ([]u8, err) {
+    let (view, view_error) = os.mapping_bytes_mut(m.raw)
+    ret (view, view_error)
 }
 
 fn flush(m: Mapping) -> err { ret os.mapping_flush(m.raw) }
