@@ -188,6 +188,23 @@ fn main(a: *mem.Arena) -> err {
     let want = "EHLO client.test\r\nAUTH PLAIN AGFsaWNlAHNlY3JldA==\r\nMAIL FROM:<a@x.test> SIZE=31\r\nRCPT TO:<b@x.test>\r\nRCPT TO:<c@x.test>\r\nDATA\r\nSubject: hi\r\n\r\n..dot\r\nbare\r\ncr\r\nlast\r\n.\r\nQUIT\r\n"
     if !same(scene.sent[..scene.writer.off], want) { ret fail(9i32) }
 
+    // A body ending in a bare CR is already a complete line after its LF is
+    // supplied; send must not add a second CRLF before the SMTP terminator.
+    var trailing: Scene = zero
+    trailing.writer = io.SliceWriter { data: trailing.sent[0..], off: 0usize }
+    trailing.reader = io.SliceReader { data: "220 tail.example\r\n250 tail.example\r\n250 ok\r\n250 ok\r\n354 end with dot\r\n250 queued\r\n221 bye\r\n", off: 0usize }
+    let (tail0, tail_connect_error) = smtp.connect(a, io.slice_reader(&trailing.reader), io.slice_writer(&trailing.writer), "client.test")
+    if tail_connect_error != ok { ret fail(40i32) }
+    var tail_session = tail0
+    if smtp.ehlo(&tail_session) != ok { ret fail(41i32) }
+    var trailing_body = io.SliceReader { data: "tail\r", off: 0usize }
+    let tail_rcpts = [1]str{ "b@x.test" }
+    let (_, tail_send_error) = smtp.send(&tail_session, "a@x.test", tail_rcpts[0..], io.slice_reader(&trailing_body), 0u64)
+    if tail_send_error != ok { ret fail(42i32) }
+    if smtp.quit(&tail_session) != ok { ret fail(43i32) }
+    let tail_want = "EHLO client.test\r\nMAIL FROM:<a@x.test>\r\nRCPT TO:<b@x.test>\r\nDATA\r\ntail\r\n.\r\nQUIT\r\n"
+    if !same(trailing.sent[..trailing.writer.off], tail_want) { ret fail(44i32) }
+
     // ---- HELO fallback, LOGIN, a rejected recipient list, and the refusals that never touch the wire ----
     var two: Scene = zero
     two.writer = io.SliceWriter { data: two.sent[0..], off: 0usize }
