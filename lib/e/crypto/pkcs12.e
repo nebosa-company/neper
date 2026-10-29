@@ -33,6 +33,10 @@ error Unsupported
 error TooSmall
 
 const DEPTH: u16 = 16u16
+// A PFX chooses these counts, so decoding must bound the work before either KDF.
+// One million leaves generous headroom over ordinary PFX counts while preventing
+// a tiny hostile PFX from scheduling billions of hash rounds.
+const MAX_PARSE_ITERATIONS: u32 = 1000000u32
 
 // ---- OIDs (content bytes) ----
 
@@ -93,6 +97,11 @@ fn int_of(v: asn1.Value) -> (u32, err) {
         i += 1usize
     }
     ret (n, ok)
+}
+
+fn parse_iterations(iterations: u32) -> err {
+    if iterations == 0u32 || iterations > MAX_PARSE_ITERATIONS { ret Invalid }
+    ret ok
 }
 
 // UTF-16BE (BMPString) to UTF-8.
@@ -279,7 +288,7 @@ fn pbes2_decrypt(a: *mem.Arena, params: asn1.Value, data: []const u8, password: 
     let (iter_value, iter_error) = next(&pr)
     if iter_error != ok { ret (zero, iter_error) }
     let (iterations, iterations_error) = int_of(iter_value)
-    if iterations_error != ok || iterations == 0u32 { ret (zero, Invalid) }
+    if iterations_error != ok || parse_iterations(iterations) != ok { ret (zero, Invalid) }
     var prf_bits = 160u16
     var key_len = 0usize
     while true {
@@ -515,6 +524,7 @@ fn parse(a: *mem.Arena, der: []const u8, password: str) -> (Store, err) {
             if n_error != ok { ret (store, n_error) }
             iterations = n
         }
+        if parse_iterations(iterations) != ok { ret (store, Invalid) }
         let s256 = oid_sha(1u8)
         let s512 = oid_sha(3u8)
         var bits = 0u16
