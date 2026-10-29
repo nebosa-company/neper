@@ -255,7 +255,12 @@ fn skip(s: *const Schema, node: u32, d: *Decoder) -> err {
                     let (key, key_error) = read_bytes(d)
                     if key_error != ok { ret key_error }
                 }
+                // A Null or empty-record array item can consume no bytes.  Its
+                // next occurrence has exactly the same result, so one success
+                // proves the rest of this positive block without looping n times.
+                let before = d.pos
                 try skip(s, child(s, node, 0usize), d)
+                if k == .Array && d.pos == before { break }
                 i += 1i64
             }
         }
@@ -447,7 +452,13 @@ fn decode_resolved(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *D
                 if key_error != ok { ret key_error }
                 try write_bytes(o, key)
             }
+            // Both positions stay fixed only for an item that is a no-op in
+            // this writer/reader pair.  Repeating it cannot affect the decoder
+            // or sink, so avoid an attacker-controlled count-length loop.
+            let input_before = d.pos
+            let output_before = o.used
             try decode_resolved(w, witem, r, ritem, d, o)
+            if wk == .Array && d.pos == input_before && o.used == output_before { break }
             i += 1i64
         }
         if has_block_end && d.pos != block_end { ret Malformed }

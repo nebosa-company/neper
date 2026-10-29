@@ -213,6 +213,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let oversized_block: [7]u8 = [7]u8{ 1u8, 128u8, 128u8, 128u8, 128u8, 32u8, 0u8 }
     var d18 = avro.decoder(oversized_block[..])
     if avro.skip(&array_schema, 0u32, &d18) != avro.Malformed { os.exit(30i32) }
+    // A positive block of Null values has no bytes per item.  The 2^32 count
+    // must be preserved without using it as an iteration count in skip or decode.
+    array_kinds[1usize] = .Null
+    let huge_null_block: [6]u8 = [6]u8{ 128u8, 128u8, 128u8, 128u8, 32u8, 0u8 }
+    var d19 = avro.decoder(huge_null_block[..])
+    if avro.skip(&array_schema, 0u32, &d19) != ok || d19.pos != huge_null_block.len { os.exit(31i32) }
+    var d20 = avro.decoder(huge_null_block[..])
+    var o11 = avro.sink(buffer[..])
+    if avro.decode_resolved(&array_schema, 0u32, &array_schema, 0u32, &d20, &o11) != ok || d20.pos != huge_null_block.len || !same(buffer[..o11.used], huge_null_block[..]) { os.exit(32i32) }
     try io.print("fmt avro ok\n")
     ret ok
 }
