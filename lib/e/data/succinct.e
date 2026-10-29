@@ -28,7 +28,11 @@ fn popcount(x: u64) -> usize {
     ret usize((v *% 0x0101010101010101u64) >> 56u32)
 }
 
-fn words_for(n: usize) -> usize { ret (n + 63usize) / 64usize }
+fn words_for(n: usize) -> usize {
+    let full_words = n / 64usize
+    if n % 64usize != 0usize { ret full_words + 1usize }
+    ret full_words
+}
 
 // A bit vector over `bits[..words_for(n)]` with `counts.len > words_for(n)`; the counts are computed here.
 // Any unused high bits in the final storage word are outside the logical vector.

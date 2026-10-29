@@ -40,6 +40,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if succinct.rank(&v, 200usize) != ones || succinct.select(&v, ones) != 200usize || succinct.select0(&v, zeros) != 200usize { os.exit(1i32) }
     let (_, small_error) = succinct.bit_vector(bits[..], 200usize, counts[..3usize])
     if small_error != succinct.TooSmall { os.exit(1i32) }
+    var overflow_counts: [1]u32 = zero
+    let max_usize = 0usize -% 1usize
+    let (_, overflow_error) = succinct.bit_vector(bits[0usize..0usize], max_usize, overflow_counts[..])
+    if overflow_error != succinct.TooSmall { os.exit(1i32) }
     // Padding in the final storage word is not part of the logical vector.
     var padded_bits: [1]u64 = zero
     var padded_counts: [2]u32 = zero
