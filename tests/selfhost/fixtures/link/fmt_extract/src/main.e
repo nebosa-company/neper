@@ -181,6 +181,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_e != x.Corrupt { os.exit(120) }
     let (latin_d, latin_e) = x.extract_as(a, "caf\xe9", .Text)
     if latin_e != x.Encoding { os.exit(121) }
+    // An overlong spelling of U+00A0 is not valid UTF-8 text.
+    let (_, overlong_e) = x.extract_as(a, "\xe0\x82\xa0", .Text)
+    if overlong_e != x.Encoding { os.exit(123) }
     if !str.eq(x.media_type(.Docx), "application/vnd.openxmlformats-officedocument.wordprocessingml.document") { os.exit(122) }
     ret ok
 }

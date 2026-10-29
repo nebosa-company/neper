@@ -18,12 +18,16 @@ use e.gfx.image
 
 error NotPdf
 error NoPages
+error InvalidAscii85
 
 type Object = struct { number: usize, start: usize, end: usize }
 
 const MAX_OBJECTS: usize = 4096usize
 const MAX_PAGES: usize = 512usize
 const MAX_STREAM: u64 = 8388608u64
+// ASCII85 can expand every input byte to four output bytes through `z`; cap it
+// at the same decoded-stream limit used by the Flate reader.
+const MAX_ASCII85: usize = 8388608usize
 
 fn is_space(c: u8) -> bool {
     ret c == 32u8 || c == 10u8 || c == 13u8 || c == 9u8 || c == 12u8 || c == 0u8
@@ -232,10 +236,54 @@ fn walk(a: *mem.Arena, data: []const u8, table: []const Object, count: usize, ro
     ret (n, ok)
 }
 
+fn ascii85_value(group: [5]u32) -> (u32, bool) {
+    let value = u64(group[0usize]) * 52200625u64 + u64(group[1usize]) * 614125u64 + u64(group[2usize]) * 7225u64 + u64(group[3usize]) * 85u64 + u64(group[4usize])
+    if value > 4294967295u64 { ret (0u32, false) }
+    ret (u32(value), true)
+}
+
+// The exact decoded size, so one-character zero groups cannot write past an
+// allocation sized from the shorter encoded input.
+fn ascii85_size(raw: []const u8) -> (usize, err) {
+    var i = 0usize
+    if raw.len >= 2usize && raw[0usize] == 60u8 && raw[1usize] == 126u8 { i = 2usize }
+    var count = 0usize
+    var size = 0usize
+    var done = false
+    while i < raw.len && !done {
+        let c = raw[i]
+        i += 1usize
+        if c == 126u8 {
+            if i >= raw.len || raw[i] != 62u8 { ret (0usize, InvalidAscii85) }
+            done = true
+        } else if c == 122u8 && count == 0usize {
+            if size > MAX_ASCII85 - 4usize { ret (0usize, mem.Exhausted) }
+            size += 4usize
+        } else if c >= 33u8 && c <= 117u8 {
+            count += 1usize
+            if count == 5usize {
+                if size > MAX_ASCII85 - 4usize { ret (0usize, mem.Exhausted) }
+                size += 4usize
+                count = 0usize
+            }
+        } else if !is_space(c) {
+            ret (0usize, InvalidAscii85)
+        }
+    }
+    if count == 1usize { ret (0usize, InvalidAscii85) }
+    if count > 1usize {
+        if size > MAX_ASCII85 - (count - 1usize) { ret (0usize, mem.Exhausted) }
+        size += count - 1usize
+    }
+    ret (size, ok)
+}
+
 // ASCII85 (Adobe): optional `<~`, groups of five characters `!`..`u` into four bytes, `z` for four zero bytes,
 // white space ignored, `~>` ends; a final partial group of n characters gives n - 1 bytes.
 fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err) {
-    let (out, out_error) = mem.alloc[u8](a, raw.len + 8usize)
+    let (size, size_error) = ascii85_size(raw)
+    if size_error != ok { ret (raw[0usize..0usize], size_error) }
+    let (out, out_error) = mem.alloc[u8](a, size)
     if out_error != ok { ret (raw[0usize..0usize], out_error) }
     var at = 0usize
     var n = 0usize
@@ -259,7 +307,8 @@ fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err) {
             group[count] = u32(c) - 33u32
             count += 1usize
             if count == 5usize {
-                let v = group[0usize] * 52200625u32 + group[1usize] * 614125u32 + group[2usize] * 7225u32 + group[3usize] * 85u32 + group[4usize]
+                let (v, valid) = ascii85_value(group)
+                if !valid { ret (raw[0usize..0usize], InvalidAscii85) }
                 out[n] = u8(v >> 24u32)
                 out[n + 1usize] = u8((v >> 16u32) & 255u32)
                 out[n + 2usize] = u8((v >> 8u32) & 255u32)
@@ -275,7 +324,8 @@ fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err) {
             group[k] = 84u32
             k += 1usize
         }
-        let v = group[0usize] * 52200625u32 + group[1usize] * 614125u32 + group[2usize] * 7225u32 + group[3usize] * 85u32 + group[4usize]
+        let (v, valid) = ascii85_value(group)
+        if !valid { ret (raw[0usize..0usize], InvalidAscii85) }
         let bytes: [4]u8 = [4]u8{ u8(v >> 24u32), u8((v >> 16u32) & 255u32), u8((v >> 8u32) & 255u32), u8(v & 255u32) }
         var j = 0usize
         while j + 1usize < count {

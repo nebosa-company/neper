@@ -95,5 +95,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if deck_two_error != ok || deck_two.shapes.len != 1usize || deck_two.shapes[0].fill != ooxml.NO_COLOR || deck_two.shapes[0].picture != ooxml.NO_PICTURE { os.exit(52) }
     let (absent_slide, absent_slide_error) = ooxml.slide_layout(a, deck_pics[0..], 3usize)
     if absent_slide_error != ooxml.NoMainPart { os.exit(53) }
+    // A hostile, overlong slide number must be ignored without overflowing usize.
+    if ooxml.slide_number("ppt/slides/slide99999999999999999999.xml") != 0usize { os.exit(54) }
     ret ok
 }

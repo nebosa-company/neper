@@ -83,6 +83,7 @@ fn decode_at(s: str, at: usize) -> (u32, usize) {
         code = (code << 6u32) | (c & 63u32)
         k += 1usize
     }
+    if (need == 3usize && code < 2048u32) || (need == 4usize && code < 65536u32) || (code >= 55296u32 && code <= 57343u32) || code > 1114111u32 { ret (0u32, 0usize) }
     ret (code, need)
 }
 

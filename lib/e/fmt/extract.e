@@ -41,6 +41,7 @@ use e.fmt.xlsx.book as book
 use e.fmt.vcard as vcard
 use e.fmt.mail as mail
 use e.bytes as bytes
+use e.text.utf8
 
 error Unsupported
 error Corrupt
@@ -89,30 +90,11 @@ fn skip_space(s: str, at: usize) -> usize {
 }
 
 fn valid_utf8(s: str) -> bool {
+    if !utf8.validate(s) { ret false }
     var i = 0usize
     while i < s.len {
-        let c = s[i]
-        var need = 0usize
-        if c < 128u8 {
-            if c == 0u8 { ret false }
-            i += 1usize
-            continue
-        } else if c >= 194u8 && c < 224u8 {
-            need = 1usize
-        } else if c >= 224u8 && c < 240u8 {
-            need = 2usize
-        } else if c >= 240u8 && c < 245u8 {
-            need = 3usize
-        } else {
-            ret false
-        }
-        if i + need >= s.len + 0usize && i + need > s.len - 1usize { ret false }
-        var k = 1usize
-        while k <= need {
-            if (s[i + k] & 192u8) != 128u8 { ret false }
-            k += 1usize
-        }
-        i += need + 1usize
+        if s[i] == 0u8 { ret false }
+        i += 1usize
     }
     ret true
 }

@@ -17,6 +17,7 @@
 // Memory: the package and every part live in the arena passed in.
 use e.mem
 use e.str
+use e.text.utf8
 use e.fmt.zip.write as zipw
 
 error BadText
@@ -80,6 +81,7 @@ fn default_meta() -> Meta {
 // ---- helpers -----------------------------------------------------------------------------
 
 fn clean(s: str) -> bool {
+    if !utf8.validate(s) { ret false }
     var i = 0usize
     while i < s.len {
         let c = s[i]
@@ -459,6 +461,7 @@ fn encode(a: *mem.Arena, blocks: []const Block, meta: Meta) -> ([]u8, err) {
         } else if block.kind == .Image {
             let (iw, ih, jpeg, good) = image_info(block.image.data)
             if !good || !clean(block.image.alt) { ret (zero, BadImage) }
+            if (block.image.width_emu == 0u32 && iw > 4294967295u32 / EMU_PER_PIXEL) || (block.image.height_emu == 0u32 && ih > 4294967295u32 / EMU_PER_PIXEL) { ret (zero, BadImage) }
             if jpeg { uses_jpeg = true } else { uses_png = true }
             images += 1usize
         }

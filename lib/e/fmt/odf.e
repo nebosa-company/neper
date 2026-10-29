@@ -292,6 +292,21 @@ fn odf_within(nodes: []const xml.Node, n: usize, root: usize) -> bool {
     ret false
 }
 
+// The nearest table that contains node `n`, so a nested table in a cell does
+// not become part of the outer sheet's row and cell walk.
+fn table_owner(nodes: []const xml.Node, n: usize) -> usize {
+    var at = n
+    var guard = 0usize
+    while at < nodes.len && guard < 64usize {
+        if nodes[at].kind == .Element && str.eq(odf_local(nodes[at].name), "table") { ret at }
+        let up = parent_of(nodes, at)
+        if up == NO_OWNER { ret NO_OWNER }
+        at = up
+        guard += 1usize
+    }
+    ret NO_OWNER
+}
+
 // Record a finished cell: its text into `cells` (when filling) over the repeats of its column and row, and the extent.
 fn emit_cell(fill: bool, cells: []str, columns: usize, row: usize, column: usize, cell_repeat: usize, row_repeat: usize, text: str, max_rows: *usize, max_columns: *usize) {
     if text.len == 0usize { ret }
@@ -337,8 +352,9 @@ fn walk_sheet(a: *mem.Arena, nodes: []const xml.Node, table: usize, fill: bool, 
     while i < nodes.len && odf_within(nodes, i, table) {
         if nodes[i].kind == .Element {
             let name = odf_local(nodes[i].name)
-            let is_row = str.eq(name, "table-row")
-            let is_cell = str.eq(name, "table-cell") || str.eq(name, "covered-table-cell")
+            let belongs = table_owner(nodes, i) == table
+            let is_row = belongs && str.eq(name, "table-row")
+            let is_cell = belongs && (str.eq(name, "table-cell") || str.eq(name, "covered-table-cell"))
             if is_row || is_cell {
                 // The cell before is finished.
                 if in_cell {

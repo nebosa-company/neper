@@ -20,6 +20,7 @@
 // Memory: the package and every result live in the arena passed in.
 use e.mem
 use e.str
+use e.text.utf8
 use e.algo.hash as hash
 use e.fmt.xlsx as xlsx
 use e.fmt.xml as xml
@@ -168,6 +169,7 @@ fn finite(v: f64) -> bool {
 }
 
 fn clean_text(s: str) -> bool {
+    if !utf8.validate(s) { ret false }
     var i = 0usize
     while i < s.len {
         let c = s[i]
@@ -178,6 +180,7 @@ fn clean_text(s: str) -> bool {
 }
 
 fn valid_sheet_name(name: str) -> bool {
+    if !utf8.validate(name) { ret false }
     let points = str.count_points(name)
     if points == 0usize || points > MAX_NAME_POINTS { ret false }
     if name[0usize] == 39u8 || name[name.len - 1usize] == 39u8 { ret false }

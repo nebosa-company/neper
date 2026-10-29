@@ -211,6 +211,9 @@ fn slide_number(name: str) -> usize {
     while at < name.len - suffix.len {
         if name[at] < 48u8 || name[at] > 57u8 { ret 0usize }
         n = n * 10usize + usize(name[at] - 48u8)
+        // `slides` and `slide_layout` only enumerate 1 through 9999. Reject a
+        // larger name before another digit could overflow `usize`.
+        if n >= 10000usize { ret 0usize }
         at += 1usize
     }
     i = 0usize

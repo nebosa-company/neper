@@ -80,6 +80,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if w.begin_page(&e) != ok { os.exit(34) }
     if w.begin_page(&e) != w.PageOpen { os.exit(35) }
     if w.put_text(&e, 1.0, 1.0, 10.0, .Regular, w.black(), "\xe6\x97\xa5") != w.Unsupported { os.exit(36) }
+    // An overlong UTF-8 spelling of U+00A0 must not be accepted as WinAnsi.
+    let (_, malformed_error) = w.text_width("\xe0\x82\xa0", 10.0, .Regular)
+    if malformed_error != w.Unsupported { os.exit(46) }
     if w.put_text(&e, 1.0, 1.0, 10.0, .Regular, w.black(), "a\nb") != w.Invalid { os.exit(37) }
     if w.put_text(&e, 1.0, 1.0, 0.0, .Regular, w.black(), "a") != w.Invalid { os.exit(38) }
     if w.fill_rect(&e, 1.0, 1.0, 0.0, 5.0, w.black()) != w.Invalid { os.exit(39) }

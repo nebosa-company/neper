@@ -1308,6 +1308,12 @@ $fmtXlsxBookWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $fmtXlsxBookWritten -ne 'executable written') { throw 'fmt_xlsx_book emission failed' }
 & $fmtXlsxBookPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_xlsx_book check failed: exit $LASTEXITCODE" }
+# `e.fmt.xlsx.book`: malformed text and sheet names are refused before they reach XML.
+$fmtXlsxBookUtf8Path = Join-Path $testBuild 'fmt-xlsx-book-utf8-selfhost.exe'
+$fmtXlsxBookUtf8Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xlsx_book_utf8\src\main.e') $repo 'x64' 'windows' $fmtXlsxBookUtf8Path
+if ($LASTEXITCODE -ne 0 -or $fmtXlsxBookUtf8Written -ne 'executable written') { throw 'fmt_xlsx_book_utf8 emission failed' }
+& $fmtXlsxBookUtf8Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_xlsx_book_utf8 check failed: exit $LASTEXITCODE" }
 # `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
 $fmtOoxmlPath = Join-Path $testBuild 'fmt-ooxml-selfhost.exe'
 $fmtOoxmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_ooxml\src\main.e') $repo 'x64' 'windows' $fmtOoxmlPath

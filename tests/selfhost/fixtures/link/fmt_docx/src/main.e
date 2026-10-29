@@ -127,5 +127,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ni_error != docx.BadImage { os.exit(40) }
     let (bm, bm_error) = docx.encode(a, no_blocks[0..0], docx.Meta { title: "a\x01", creator: "", created: "", page: .A4 })
     if bm_error != docx.BadMeta { os.exit(41) }
+    // DOCX parts are UTF-8 XML. A raw malformed byte must be refused instead of
+    // being copied into word/document.xml.
+    let bad_utf8 = [1]docx.Run{ docx.run("\x80") }
+    let bad_utf8_block = [1]docx.Block{ docx.paragraph(docx.para(.Normal, bad_utf8[0..])) }
+    let (_, bad_utf8_error) = docx.encode(a, bad_utf8_block[0..], docx.default_meta())
+    if bad_utf8_error != docx.BadText { os.exit(42) }
+    // A default 96-dpi size must fit the u32 EMU coordinates written to XML.
+    let oversized_png = [24]u8{ 137u8, 80u8, 78u8, 71u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 7u8, 161u8, 32u8, 0u8, 0u8, 0u8, 1u8 }
+    let oversized_image = [1]docx.Block{ docx.image(docx.Image { data: oversized_png[0..], width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, oversized_error) = docx.encode(a, oversized_image[0..], docx.default_meta())
+    if oversized_error != docx.BadImage { os.exit(43) }
     ret ok
 }

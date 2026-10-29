@@ -1236,6 +1236,11 @@ fmt_xlsx_book_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$fmt_xlsx_book_written" = 'executable written' ]
 chmod +x "$test_build/fmt-xlsx-book-selfhost"
 "$test_build/fmt-xlsx-book-selfhost"
+# `e.fmt.xlsx.book`: malformed text and sheet names are refused before they reach XML.
+fmt_xlsx_book_utf8_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xlsx_book_utf8/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-book-utf8-selfhost")
+[ "$fmt_xlsx_book_utf8_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xlsx-book-utf8-selfhost"
+"$test_build/fmt-xlsx-book-utf8-selfhost"
 # `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
 fmt_ooxml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_ooxml/src/main.e" "$repo" x64 linux "$test_build/fmt-ooxml-selfhost")
 [ "$fmt_ooxml_written" = 'executable written' ]
