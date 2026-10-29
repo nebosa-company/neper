@@ -553,6 +553,26 @@ fn mark_set(o: *Overlay, path: str, opaque: bool) -> err {
     ret ok
 }
 
+// Prepare storage for a new mark without changing the overlay's visible state.
+// A caller that has a destructive operation still to perform can publish the
+// returned slice and path only after that operation succeeds.
+fn mark_prepare(o: *Overlay, path: str) -> ([]Mark, str, err) {
+    var marks = o.marks
+    if o.count == marks.len {
+        let (bigger, bigger_error) = mem.alloc[Mark](o.a, marks.len * 2usize)
+        if bigger_error != ok { ret (marks, "", bigger_error) }
+        var i = 0usize
+        while i < o.count {
+            bigger[i] = marks[i]
+            i += 1usize
+        }
+        marks = bigger
+    }
+    let (kept, kept_error) = copy_text(o.a, path)
+    if kept_error != ok { ret (marks, "", kept_error) }
+    ret (marks, kept, ok)
+}
+
 fn mark_clear(o: *Overlay, path: str) {
     let (at, found) = mark_find(o, path)
     if found {
@@ -756,21 +776,39 @@ fn overlay_remove(ctx: *void, a: *mem.Arena, path: str) -> err {
         if children.len > 0usize { ret NotEmpty }
     }
     let (_, upper_error) = stat(a, &o.upper, p)
-    if upper_error == ok {
-        let removed = remove(a, &o.upper, p)
-        if removed != ok { ret removed }
-    } else if upper_error != fs.NotFound {
-        ret upper_error
-    }
+    if upper_error != ok && upper_error != fs.NotFound { ret upper_error }
     let (_, lower_error) = stat(a, &o.lower, p)
+    if lower_error != ok && lower_error != fs.NotFound { ret lower_error }
     if lower_error == ok {
-        let marked = mark_set(o, p, false)
-        if marked != ok { ret marked }
+        let (mark_at, mark_found) = mark_find(o, p)
+        var marks = o.marks
+        var kept = ""
+        if !mark_found {
+            let (prepared_marks, prepared_path, prepare_error) = mark_prepare(o, p)
+            if prepare_error != ok { ret prepare_error }
+            marks = prepared_marks
+            kept = prepared_path
+        }
+        if upper_error == ok {
+            let removed = remove(a, &o.upper, p)
+            if removed != ok { ret removed }
+        }
+        if mark_found {
+            o.marks[mark_at].opaque = false
+        } else {
+            o.marks = marks
+            o.marks[o.count].path = kept
+            o.marks[o.count].opaque = false
+            o.count += 1usize
+        }
         // the whiteout covers everything below, so the marks below it are redundant
         mark_prune_below(o, p)
         ret ok
     }
-    if lower_error != fs.NotFound { ret lower_error }
+    if upper_error == ok {
+        let removed = remove(a, &o.upper, p)
+        if removed != ok { ret removed }
+    }
     mark_clear(o, p)
     ret ok
 }

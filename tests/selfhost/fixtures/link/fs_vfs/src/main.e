@@ -2153,6 +2153,41 @@ fn overlay_scenarios(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
+// A failed whiteout allocation must leave an upper shadow intact: otherwise a
+// failed remove exposes the lower file it claimed not to remove.
+fn overlay_remove_exhaustion() -> i32 {
+    var work_storage: [4096]u8 = zero
+    var work = mem.arena_from(work_storage[..])
+    var lower_storage: [1024]u8 = zero
+    var lower_arena = mem.arena_from(lower_storage[..])
+    var upper_storage: [1024]u8 = zero
+    var upper_arena = mem.arena_from(upper_storage[..])
+    var overlay_storage: [128]u8 = zero
+    var overlay_arena = mem.arena_from(overlay_storage[..])
+    let (lower, lower_error) = vfs.mem_new(&lower_arena, 2usize)
+    if lower_error != ok { ret 1i32 }
+    var lower_store = lower
+    var lower_vfs = vfs.mem_vfs(&lower_store)
+    if !put(&work, &lower_vfs, "/x", "lower") { ret 2i32 }
+    let (upper, upper_error) = vfs.mem_new(&upper_arena, 2usize)
+    if upper_error != ok { ret 3i32 }
+    var upper_store = upper
+    var upper_vfs = vfs.mem_vfs(&upper_store)
+    if !put(&work, &upper_vfs, "/x", "upper") { ret 4i32 }
+    let (overlay, overlay_error) = vfs.overlay_new(&overlay_arena, upper_vfs, lower_vfs, 1usize)
+    if overlay_error != ok { ret 5i32 }
+    var overlay_store = overlay
+    var overlay_vfs = vfs.overlay_vfs(&overlay_store)
+    let remaining = overlay_arena.cap - overlay_arena.off
+    let (_, consume_error) = mem.alloc[u8](&overlay_arena, remaining)
+    if consume_error != ok { ret 6i32 }
+    if vfs.remove(&work, &overlay_vfs, "/x") != mem.Exhausted { ret 7i32 }
+    if !reads(&work, &overlay_vfs, "/x", "upper") { ret 8i32 }
+    if !reads(&work, &upper_vfs, "/x", "upper") { ret 9i32 }
+    if !reads(&work, &lower_vfs, "/x", "lower") { ret 10i32 }
+    ret 0i32
+}
+
 fn flatten_check(a: *mem.Arena, wide: *vfs.Vfs, flat: *vfs.Vfs, dir_path: str) -> bool {
     let (entries, failure) = vfs.list(a, wide, dir_path)
     if failure != ok { ret false }
@@ -2578,6 +2613,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     code = overlay_scenarios(a)
     if code != 0i32 {
         report("overlay", code)
+        os.exit(10i32)
+    }
+    code = overlay_remove_exhaustion()
+    if code != 0i32 {
+        report("overlay exhaustion", code)
         os.exit(10i32)
     }
     code = union_scenarios(a)
