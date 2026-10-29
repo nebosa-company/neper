@@ -4,9 +4,11 @@
 // THREADS is link/wasm_threads built with --threads (C207, D5679).
 // The sweep (scripts/wasm-sweep.sh --host neper-host) covers WASI itself; this covers what a page passes in and gets back.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { run } from '../../lib/wasm/neper-host.js'
+import { addLines } from '../../lib/wasm/source-map.js'
 
 const [filesPath, debugPath, releasePath, threadsPath] = process.argv.slice(2)
 const text = (bytes) => new TextDecoder().decode(bytes)
@@ -15,6 +17,26 @@ const capture = () => {
   return { got, stdout: (b) => { got.stdout += text(b) }, stderr: (b) => { got.stderr += text(b) } }
 }
 const options = { args: ['hello'], env: { HOSTVAR: 'v1' }, files: { '/input.txt': 'abc def' } }
+
+// Source-map VLQ decoding accepts the compiler's ordinary mapping and rejects malformed
+// sidecars promptly, so a trap report cannot leave a runner spinning in its decoder.
+const mapText = (mappings) => JSON.stringify({ version: 3, sources: ['source.e'], names: [], mappings })
+assert.equal(addLines('RuntimeError: wasm-function[3]:0x4)', mapText('IAAA')), 'RuntimeError: wasm-function[3]:0x4) [source.e:1]')
+const sourceMapUrl = new URL('../../lib/wasm/source-map.js', import.meta.url).href
+for (const [label, mappings] of [
+  ['invalid digit', '?AAAA'],
+  ['unterminated continuation', 'g'],
+  ['overflow', `${'+'.repeat(11)}AAAA`],
+]) {
+  const probe = [
+    `import { addLines } from ${JSON.stringify(sourceMapUrl)}`,
+    `try { addLines('wasm-function[0]:0x0)', ${JSON.stringify(mapText(mappings))}) } catch { process.exit(0) }`,
+    'process.exit(1)',
+  ].join('\n')
+  const result = spawnSync(process.execPath, ['--input-type=module', '--eval', probe], { encoding: 'utf8', timeout: 2000 })
+  assert.equal(result.error, undefined, `${label} source-map decoder exceeded its 2-second bound`)
+  assert.equal(result.status, 0, `${label} source-map decoder accepted malformed mappings: ${result.stderr ?? ''}`)
+}
 
 async function checkFiles(source, label) {
   const c = capture()
