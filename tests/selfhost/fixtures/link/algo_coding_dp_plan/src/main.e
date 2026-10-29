@@ -108,6 +108,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if arith_room != coding.TooSmall { os.exit(3i32) }
     let (_, arith_tight) = coding.arithmetic_decode(out[..arith_len], back[..100usize])
     if arith_tight != coding.TooSmall { os.exit(3i32) }
+    // A decoded count must be checked before it narrows on wasm32.
+    let oversized_count: [5]u8 = [5]u8{ 128u8, 128u8, 128u8, 128u8, 16u8 }
+    let (_, arith_oversized) = coding.arithmetic_decode(oversized_count[..], back[..])
+    if arith_oversized != coding.TooSmall { os.exit(3i32) }
 
     // 4: rANS over a static table of the same text.
     var freqs: [256]u32 = zero
@@ -125,6 +129,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ans_back_error != ok || ans_back != 400usize || !mem.eq[u8](back[..400usize], text[..]) { os.exit(4i32) }
     let (_, ans_cut) = coding.ans_decode(out[..ans_len - 20usize], freqs[..], back[..])
     if ans_cut != coding.Invalid { os.exit(4i32) }
+    // A canonical final rANS state makes the old wasm32 narrowing path answer
+    // zero success; it must instead report that the destination is too small.
+    let oversized_ans: [9]u8 = [9]u8{ 128u8, 128u8, 128u8, 128u8, 16u8, 0u8, 0u8, 128u8, 0u8 }
+    let (_, ans_oversized) = coding.ans_decode(oversized_ans[..], freqs[..], back[..])
+    if ans_oversized != coding.TooSmall { os.exit(4i32) }
     freqs[97usize] += 1u32
     let (_, ans_bad) = coding.ans_encode(text[..], freqs[..], out[..])
     if ans_bad != coding.Invalid { os.exit(4i32) }
@@ -154,6 +163,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if big_back_error != ok || big_back_len != 8200usize || !mem.eq[u8](big_back[..], big[..]) { os.exit(5i32) }
     let (_, dict_room) = coding.dictionary_encode(big[..], out[..], table[..])
     if dict_room != coding.TooSmall { os.exit(5i32) }
+    let (_, dict_oversized) = coding.dictionary_decode(oversized_count[..], back[..], table[..])
+    if dict_oversized != coding.TooSmall { os.exit(5i32) }
 
     // 6: simple8b: 300 ones then 200 values of random width.
     var values: [500]u64 = zero
