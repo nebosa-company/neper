@@ -223,9 +223,9 @@ fn parse_size(text: str) -> u64 {
     var value = 0u64
     var i = 0usize
     while i < text.len && digit(text[i]) {
-        let next = value * 10u64 + u64(text[i] - 48u8)
-        if next < value { ret 0u64 }
-        value = next
+        let next = u64(text[i] - 48u8)
+        if value > 1844674407370955161u64 || (value == 1844674407370955161u64 && next > 5u64) { ret 0u64 }
+        value = value * 10u64 + next
         i += 1usize
     }
     ret value

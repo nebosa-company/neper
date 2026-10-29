@@ -261,6 +261,14 @@ fn main(a: *mem.Arena) -> err {
     var z = z0
     if z_error != ok || smtp.ehlo(&z) != smtp.Closed { ret fail(26i32) }
 
+    // An oversized peer SIZE capability is ignored rather than overflowing while parsing.
+    var oversized: Scene = zero
+    oversized.writer = io.SliceWriter { data: oversized.sent[0..], off: 0usize }
+    oversized.reader = io.SliceReader { data: "220 a\r\n250-a\r\n250 SIZE 18446744073709551616\r\n", off: 0usize }
+    let (oversized0, oversized_error) = smtp.connect(a, io.slice_reader(&oversized.reader), io.slice_writer(&oversized.writer), "client.test")
+    var oversized_session = oversized0
+    if oversized_error != ok || smtp.ehlo(&oversized_session) != ok || oversized_session.caps.size != 0u64 { ret fail(28i32) }
+
     // ---- dot-stuffing and line ends, chunk by chunk (the state crosses chunk edges) ----
     var st = smtp.Stuffer { line_start: true, after_cr: false, wrote: 0usize }
     var out: [64]u8 = zero
