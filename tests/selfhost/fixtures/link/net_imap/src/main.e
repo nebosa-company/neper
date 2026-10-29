@@ -220,6 +220,19 @@ fn main(a: *mem.Arena) -> err {
     let want2 = "A1 LOGIN \"u\" \"wrong\"\r\nA2 NOOP\r\nA3 CAPABILITY\r\nA4 AUTHENTICATE PLAIN\r\nAGFsaWNlAHNlY3JldA==\r\n"
     if !same(two.sent[..wrote], want2) { ret fail(32i32) }
 
+    // A successful STARTTLS response followed by a failed TLS setup must make
+    // the raw session unusable; a later login cannot write credentials.
+    var failed_tls: Scene = zero
+    failed_tls.writer = io.SliceWriter { data: failed_tls.sent[0..], off: 0usize }
+    failed_tls.reader = io.SliceReader { data: "* OK ready\r\nA1 OK Begin TLS negotiation now\r\n", off: 0usize }
+    let (ft0, ft_connect_error) = imap.connect(a, io.slice_reader(&failed_tls.reader), io.slice_writer(&failed_tls.writer), 65536usize)
+    var ft = ft0
+    var empty_tls_config: tls.ClientConfig = zero
+    let tls_error = imap.starttls(&ft, empty_tls_config)
+    if ft_connect_error != ok || tls_error == ok || !ft.poisoned { ret fail(37i32) }
+    let before_login = failed_tls.writer.off
+    if imap.login(&ft, "alice", "secret") != imap.Closed || failed_tls.writer.off != before_login { ret fail(38i32) }
+
     // greeting refusal, an oversized response, a cut connection, an unexpected continuation
     var three: Scene = zero
     three.writer = io.SliceWriter { data: three.sent[0..], off: 0usize }
