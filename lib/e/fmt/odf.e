@@ -278,6 +278,14 @@ fn repeat_of(node: *const xml.Node, attribute: str) -> usize {
     ret usize(value)
 }
 
+// Advance a sheet coordinate without letting a repeat escape the bounded grid.  This keeps
+// later cells outside the grid outside it too, instead of letting a 32-bit cursor wrap back.
+fn advance_grid(at: usize, repeat: usize, limit: usize) -> usize {
+    if at >= limit { ret limit }
+    if repeat >= limit - at { ret limit }
+    ret at + repeat
+}
+
 // Whether node `n` is inside element `root` (a descendant of it).
 fn odf_within(nodes: []const xml.Node, n: usize, root: usize) -> bool {
     var at = n
@@ -310,17 +318,20 @@ fn table_owner(nodes: []const xml.Node, n: usize) -> usize {
 // Record a finished cell: its text into `cells` (when filling) over the repeats of its column and row, and the extent.
 fn emit_cell(fill: bool, cells: []str, columns: usize, row: usize, column: usize, cell_repeat: usize, row_repeat: usize, text: str, max_rows: *usize, max_columns: *usize) {
     if text.len == 0usize { ret }
-    var r = 0usize
-    while r < cell_repeat && column + r < LIMIT_GRID_COLUMNS {
-        var q = 0usize
-        while q < row_repeat && row + q < LIMIT_GRID_ROWS {
-            if fill && column + r < columns { cells[(row + q) * columns + column + r] = text }
-            if row + q + 1usize > *max_rows { *max_rows = row + q + 1usize }
-            q += 1usize
+    let row_end = advance_grid(row, row_repeat, LIMIT_GRID_ROWS)
+    let column_end = advance_grid(column, cell_repeat, LIMIT_GRID_COLUMNS)
+    if row >= row_end || column >= column_end { ret }
+    var c = column
+    while c < column_end {
+        var r = row
+        while r < row_end {
+            if fill && c < columns { cells[r * columns + c] = text }
+            r += 1usize
         }
-        if column + r + 1usize > *max_columns { *max_columns = column + r + 1usize }
-        r += 1usize
+        c += 1usize
     }
+    if row_end > *max_rows { *max_rows = row_end }
+    if column_end > *max_columns { *max_columns = column_end }
 }
 
 // The `p` element a text node sits in (an index), or NO_OWNER.
@@ -359,12 +370,12 @@ fn walk_sheet(a: *mem.Arena, nodes: []const xml.Node, table: usize, fill: bool, 
                 // The cell before is finished.
                 if in_cell {
                     emit_cell(fill, cells, columns, row, column, cell_repeat, row_repeat, cell_text, &max_rows, &max_columns)
-                    column += cell_repeat
+                    column = advance_grid(column, cell_repeat, LIMIT_GRID_COLUMNS)
                     in_cell = false
                 }
             }
             if is_row {
-                if started { row += row_repeat }
+                if started { row = advance_grid(row, row_repeat, LIMIT_GRID_ROWS) }
                 started = true
                 row_repeat = repeat_of(&nodes[i], "table:number-rows-repeated")
                 column = 0usize

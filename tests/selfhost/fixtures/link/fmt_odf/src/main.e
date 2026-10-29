@@ -10,6 +10,10 @@ use e.fmt.odf as odf
 use e.fmt.ooxml as ooxml
 use e.fmt.xml as xml
 
+fn odf_element(name: str, attributes: []const xml.Attribute, parent: u32) -> xml.Node {
+    ret xml.Node { kind: .Element, name: name, value: "", attributes: attributes, parent: parent, first_child: 4294967295u32, last_child: 4294967295u32, next_sibling: 4294967295u32 }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let odt: [821]u8 = [821]u8{ 80, 75, 3, 4, 20, 0, 0, 0, 0, 0, 0, 0, 33, 0, 94, 198, 50, 12, 39, 0, 0, 0, 39, 0, 0, 0, 8, 0, 0, 0, 109, 105, 109, 101, 116, 121, 112, 101, 97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 47, 118, 110, 100, 46, 111, 97, 115, 105, 115, 46, 111, 112, 101, 110, 100, 111, 99, 117, 109, 101, 110, 116, 46, 116, 101, 120, 116, 80, 75, 3, 4, 20, 0, 0, 0, 8, 0, 251, 186, 75, 93, 9, 209, 183, 43, 135, 1, 0, 0, 107, 4, 0, 0, 11, 0, 0, 0, 99, 111, 110, 116, 101, 110, 116, 46, 120, 109, 108, 141, 84, 203, 110, 195, 32, 16, 252, 21, 196, 161, 55, 151, 36, 189, 84, 110, 76, 212, 28, 170, 30, 170, 170, 82, 218, 115, 132, 97, 211, 160, 98, 64, 6, 231, 241, 247, 5, 219, 73, 237, 184, 137, 124, 225, 57, 51, 59, 236, 174, 61, 95, 28, 10, 133, 118, 80, 58, 105, 116, 134, 167, 247, 19, 140, 64, 115, 35, 164, 254, 206, 240, 215, 231, 75, 242, 136, 23, 116, 110, 54, 27, 201, 33, 21, 134, 87, 5, 104, 159, 112, 163, 125, 152, 81, 32, 107, 151, 54, 183, 25, 174, 74, 157, 26, 230, 164, 75, 53, 43, 192, 165, 158, 167, 198, 130, 62, 177, 210, 46, 58, 173, 67, 53, 39, 30, 14, 126, 44, 59, 98, 187, 92, 81, 178, 253, 88, 110, 196, 134, 119, 245, 66, 179, 92, 141, 118, 94, 131, 107, 246, 57, 35, 185, 17, 199, 243, 38, 122, 163, 243, 218, 225, 22, 213, 147, 243, 71, 5, 73, 212, 204, 240, 43, 176, 152, 213, 245, 108, 178, 158, 226, 230, 218, 84, 94, 73, 13, 137, 130, 29, 168, 144, 125, 76, 223, 193, 66, 137, 236, 214, 104, 152, 147, 70, 169, 85, 180, 67, 197, 149, 103, 90, 176, 82, 96, 250, 161, 152, 212, 168, 1, 58, 203, 244, 16, 187, 196, 52, 55, 74, 180, 162, 17, 67, 81, 96, 35, 214, 144, 194, 211, 8, 13, 67, 123, 111, 219, 160, 74, 58, 223, 89, 38, 210, 67, 113, 221, 207, 91, 128, 96, 186, 145, 165, 243, 40, 34, 255, 196, 200, 191, 18, 163, 37, 29, 132, 134, 19, 232, 142, 21, 246, 9, 41, 230, 252, 13, 101, 114, 105, 220, 82, 191, 55, 167, 128, 33, 217, 121, 9, 236, 135, 208, 184, 118, 23, 207, 181, 52, 36, 134, 131, 104, 19, 217, 216, 225, 25, 126, 192, 132, 134, 90, 181, 199, 97, 173, 57, 92, 82, 73, 191, 242, 23, 165, 157, 97, 186, 170, 114, 180, 109, 122, 160, 83, 218, 186, 165, 234, 177, 183, 73, 74, 179, 239, 31, 112, 80, 234, 108, 51, 110, 208, 115, 55, 11, 67, 228, 77, 238, 242, 38, 151, 12, 156, 144, 158, 81, 210, 107, 120, 210, 251, 22, 200, 149, 127, 5, 253, 5, 80, 75, 3, 4, 20, 0, 0, 0, 0, 0, 251, 186, 75, 93, 84, 243, 74, 251, 87, 0, 0, 0, 87, 0, 0, 0, 8, 0, 0, 0, 109, 101, 116, 97, 46, 120, 109, 108, 60, 111, 102, 102, 105, 99, 101, 58, 100, 111, 99, 117, 109, 101, 110, 116, 45, 109, 101, 116, 97, 32, 120, 109, 108, 110, 115, 58, 111, 102, 102, 105, 99, 101, 61, 34, 117, 114, 110, 58, 111, 97, 115, 105, 115, 58, 110, 97, 109, 101, 115, 58, 116, 99, 58, 111, 112, 101, 110, 100, 111, 99, 117, 109, 101, 110, 116, 58, 120, 109, 108, 110, 115, 58, 111, 102, 102, 105, 99, 101, 58, 49, 46, 48, 34, 47, 62, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 33, 0, 94, 198, 50, 12, 39, 0, 0, 0, 39, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 0, 0, 0, 0, 109, 105, 109, 101, 116, 121, 112, 101, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 8, 0, 251, 186, 75, 93, 9, 209, 183, 43, 135, 1, 0, 0, 107, 4, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 77, 0, 0, 0, 99, 111, 110, 116, 101, 110, 116, 46, 120, 109, 108, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 0, 0, 251, 186, 75, 93, 84, 243, 74, 251, 87, 0, 0, 0, 87, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 253, 1, 0, 0, 109, 101, 116, 97, 46, 120, 109, 108, 80, 75, 5, 6, 0, 0, 0, 0, 3, 0, 3, 0, 165, 0, 0, 0, 122, 2, 0, 0, 0, 0 }
     let odp: [675]u8 = [675]u8{ 80, 75, 3, 4, 20, 0, 0, 0, 0, 0, 0, 0, 33, 0, 51, 38, 172, 168, 47, 0, 0, 0, 47, 0, 0, 0, 8, 0, 0, 0, 109, 105, 109, 101, 116, 121, 112, 101, 97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 47, 118, 110, 100, 46, 111, 97, 115, 105, 115, 46, 111, 112, 101, 110, 100, 111, 99, 117, 109, 101, 110, 116, 46, 112, 114, 101, 115, 101, 110, 116, 97, 116, 105, 111, 110, 80, 75, 3, 4, 20, 0, 0, 0, 8, 0, 251, 186, 75, 93, 140, 182, 89, 118, 237, 0, 0, 0, 170, 2, 0, 0, 11, 0, 0, 0, 99, 111, 110, 116, 101, 110, 116, 46, 120, 109, 108, 141, 82, 65, 110, 195, 32, 16, 252, 10, 226, 238, 210, 222, 42, 132, 137, 122, 233, 7, 146, 62, 0, 195, 58, 66, 178, 89, 11, 112, 227, 254, 190, 64, 28, 215, 137, 26, 137, 19, 203, 238, 204, 206, 236, 130, 56, 44, 227, 64, 190, 193, 7, 139, 174, 165, 111, 47, 175, 148, 128, 211, 104, 172, 59, 183, 244, 235, 244, 217, 188, 211, 131, 20, 216, 247, 86, 3, 55, 168, 231, 17, 92, 108, 52, 186, 152, 78, 146, 200, 46, 240, 107, 181, 165, 179, 119, 28, 85, 176, 129, 59, 53, 66, 224, 81, 115, 156, 192, 221, 88, 124, 143, 230, 69, 234, 154, 137, 176, 196, 90, 118, 198, 238, 185, 198, 171, 75, 45, 55, 99, 211, 92, 119, 210, 170, 27, 170, 157, 23, 112, 97, 111, 27, 233, 208, 252, 108, 151, 201, 67, 72, 104, 21, 211, 46, 165, 200, 106, 124, 82, 103, 32, 37, 202, 141, 91, 138, 14, 232, 90, 234, 125, 202, 172, 113, 158, 170, 233, 112, 145, 162, 204, 55, 201, 147, 141, 3, 144, 48, 88, 3, 130, 173, 185, 91, 237, 131, 132, 185, 139, 25, 240, 87, 98, 15, 109, 216, 94, 130, 109, 86, 158, 184, 138, 23, 172, 114, 117, 132, 244, 240, 230, 209, 86, 181, 54, 251, 119, 79, 236, 110, 149, 236, 201, 87, 147, 191, 80, 75, 3, 4, 20, 0, 0, 0, 0, 0, 251, 186, 75, 93, 84, 243, 74, 251, 87, 0, 0, 0, 87, 0, 0, 0, 8, 0, 0, 0, 109, 101, 116, 97, 46, 120, 109, 108, 60, 111, 102, 102, 105, 99, 101, 58, 100, 111, 99, 117, 109, 101, 110, 116, 45, 109, 101, 116, 97, 32, 120, 109, 108, 110, 115, 58, 111, 102, 102, 105, 99, 101, 61, 34, 117, 114, 110, 58, 111, 97, 115, 105, 115, 58, 110, 97, 109, 101, 115, 58, 116, 99, 58, 111, 112, 101, 110, 100, 111, 99, 117, 109, 101, 110, 116, 58, 120, 109, 108, 110, 115, 58, 111, 102, 102, 105, 99, 101, 58, 49, 46, 48, 34, 47, 62, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 33, 0, 51, 38, 172, 168, 47, 0, 0, 0, 47, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 0, 0, 0, 0, 109, 105, 109, 101, 116, 121, 112, 101, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 8, 0, 251, 186, 75, 93, 140, 182, 89, 118, 237, 0, 0, 0, 170, 2, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 85, 0, 0, 0, 99, 111, 110, 116, 101, 110, 116, 46, 120, 109, 108, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 0, 0, 251, 186, 75, 93, 84, 243, 74, 251, 87, 0, 0, 0, 87, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 107, 1, 0, 0, 109, 101, 116, 97, 46, 120, 109, 108, 80, 75, 5, 6, 0, 0, 0, 0, 3, 0, 3, 0, 165, 0, 0, 0, 232, 1, 0, 0, 0, 0 }
@@ -67,5 +71,54 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if nested_rows != 1usize || nested_columns != 2usize { os.exit(32) }
     odf.walk_sheet(a, nested_doc.nodes, usize(nested_doc.root), true, nested_cells[0usize..], nested_columns, &nested_rows, &nested_columns)
     if !str.eq(nested_cells[0usize], "outer") || !str.eq(nested_cells[1usize], "right") { os.exit(33) }
+    // A 32-bit coordinate must remain at the grid boundary after a large repeated region,
+    // rather than wrap and let a later cell overwrite the first one.  Exercise columns and
+    // rows separately with the smallest mixed repeat sequence that wraps a u32 cursor.
+    let no_attributes: []const xml.Attribute = zero
+    let repeated_columns = [1]xml.Attribute{ xml.Attribute { name: "table:number-columns-repeated", value: "100000" } }
+    let first_columns = [2]xml.Attribute{ xml.Attribute { name: "table:number-columns-repeated", value: "100000" }, xml.Attribute { name: "office:value", value: "first" } }
+    let tail_columns = [1]xml.Attribute{ xml.Attribute { name: "table:number-columns-repeated", value: "67296" } }
+    let repeated_rows = [1]xml.Attribute{ xml.Attribute { name: "table:number-rows-repeated", value: "100000" } }
+    let first_rows = [1]xml.Attribute{ xml.Attribute { name: "table:number-rows-repeated", value: "100000" } }
+    let tail_rows = [1]xml.Attribute{ xml.Attribute { name: "table:number-rows-repeated", value: "67296" } }
+    let first_value = [1]xml.Attribute{ xml.Attribute { name: "office:value", value: "first" } }
+    let alias_value = [1]xml.Attribute{ xml.Attribute { name: "office:value", value: "alias" } }
+    let (overflow_nodes, overflow_nodes_error) = mem.alloc[xml.Node](a, 42954usize)
+    if overflow_nodes_error != ok { os.exit(34) }
+    overflow_nodes[0usize] = odf_element("table", no_attributes, 4294967295u32)
+    overflow_nodes[1usize] = odf_element("table-row", no_attributes, 0u32)
+    overflow_nodes[2usize] = odf_element("table-cell", first_columns[0usize..], 1u32)
+    var i = 3usize
+    while i < 42951usize {
+        overflow_nodes[i] = odf_element("table-cell", repeated_columns[0usize..], 1u32)
+        i += 1usize
+    }
+    overflow_nodes[42951usize] = odf_element("table-cell", tail_columns[0usize..], 1u32)
+    overflow_nodes[42952usize] = odf_element("table-cell", alias_value[0usize..], 1u32)
+    var overflow_columns: [64]str = zero
+    var overflow_rows_out = 0usize
+    var overflow_columns_out = 0usize
+    odf.walk_sheet(a, overflow_nodes[0usize..42953usize], 0usize, false, overflow_columns[0usize..], 0usize, &overflow_rows_out, &overflow_columns_out)
+    if overflow_rows_out != 1usize || overflow_columns_out != 64usize { os.exit(35) }
+    odf.walk_sheet(a, overflow_nodes[0usize..42953usize], 0usize, true, overflow_columns[0usize..], overflow_columns_out, &overflow_rows_out, &overflow_columns_out)
+    if !str.eq(overflow_columns[0usize], "first") || !str.eq(overflow_columns[63usize], "first") { os.exit(36) }
+    overflow_nodes[0usize] = odf_element("table", no_attributes, 4294967295u32)
+    overflow_nodes[1usize] = odf_element("table-row", first_rows[0usize..], 0u32)
+    overflow_nodes[2usize] = odf_element("table-cell", first_value[0usize..], 1u32)
+    i = 3usize
+    while i < 42951usize {
+        overflow_nodes[i] = odf_element("table-row", repeated_rows[0usize..], 0u32)
+        i += 1usize
+    }
+    overflow_nodes[42951usize] = odf_element("table-row", tail_rows[0usize..], 0u32)
+    overflow_nodes[42952usize] = odf_element("table-row", no_attributes, 0u32)
+    overflow_nodes[42953usize] = odf_element("table-cell", alias_value[0usize..], 42952u32)
+    var overflow_rows: [2000]str = zero
+    overflow_rows_out = 0usize
+    overflow_columns_out = 0usize
+    odf.walk_sheet(a, overflow_nodes[0usize..42954usize], 0usize, false, overflow_rows[0usize..], 0usize, &overflow_rows_out, &overflow_columns_out)
+    if overflow_rows_out != 2000usize || overflow_columns_out != 1usize { os.exit(37) }
+    odf.walk_sheet(a, overflow_nodes[0usize..42954usize], 0usize, true, overflow_rows[0usize..], overflow_columns_out, &overflow_rows_out, &overflow_columns_out)
+    if !str.eq(overflow_rows[0usize], "first") || !str.eq(overflow_rows[1999usize], "first") { os.exit(38) }
     ret ok
 }
