@@ -49,8 +49,10 @@ fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err) {
         let p = parts[i]
         if !zip.name_legal(p.name) || p.name.len > 65535usize { ret (zero, BadName) }
         if p.data.len > MAX_TOTAL { ret (zero, TooLarge) }
-        total += 30usize + p.name.len + p.data.len + 46usize + p.name.len
-        if total > MAX_TOTAL { ret (zero, TooLarge) }
+        let overhead = 76usize + p.name.len + p.name.len
+        if total > MAX_TOTAL - overhead { ret (zero, TooLarge) }
+        if p.data.len > MAX_TOTAL - total - overhead { ret (zero, TooLarge) }
+        total += overhead + p.data.len
         i += 1usize
     }
     let (out, out_error) = mem.alloc[u8](a, total)

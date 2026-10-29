@@ -280,6 +280,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var empty_source = Source { data: empty_zip, off: 0usize }
     let (empty_archive, empty_open_error) = open_over(a, &empty_source, limits)
     if empty_open_error != ok || zip.entries(&empty_archive).len != 0usize { os.exit(33) }
+    // The classic writer accepts the largest representable filename without truncating its fields.
+    var max_name_bytes: [65535]u8 = zero
+    var max_name_at = 0usize
+    while max_name_at < max_name_bytes.len {
+        max_name_bytes[max_name_at] = 97u8
+        max_name_at += 1usize
+    }
+    let max_name: str = max_name_bytes[0..]
+    var max_name_parts: [1]zipwrite.Part = zero
+    max_name_parts[0usize] = zipwrite.Part { name: max_name, data: no_data[..] }
+    let (max_name_zip, max_name_error) = zipwrite.store(a, max_name_parts[..])
+    let max_name_directory = 30usize + max_name.len
+    if max_name_error != ok || max_name_zip.len != 131168usize || max_name_zip[26usize] != 255u8 || max_name_zip[27usize] != 255u8 || max_name_zip[max_name_directory + 28usize] != 255u8 || max_name_zip[max_name_directory + 29usize] != 255u8 { os.exit(44) }
     // Refusals.
     var enc_source = Source { data: encrypted, off: 0usize }
     let (v1, e8) = open_over(a, &enc_source, limits)
