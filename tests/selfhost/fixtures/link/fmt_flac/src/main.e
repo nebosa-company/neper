@@ -192,6 +192,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, first_block_decoder_error) = flac.decoder(nonstreaminfo_first[..])
     if first_block_error != flac.Malformed || first_block_decoder_error != flac.Malformed { os.exit(83i32) }
 
+    // 84: STREAMINFO has a fixed 34-byte payload; a longer block is malformed too.
+    var overlong_streaminfo: [43]u8 = zero
+    mem.copy[u8](overlong_streaminfo[..4usize], mono[..4usize])
+    overlong_streaminfo[4usize] = 128u8
+    overlong_streaminfo[7usize] = 35u8
+    mem.copy[u8](overlong_streaminfo[8usize..42usize], mono[8usize..42usize])
+    let (_, overlong_error) = flac.stream_info(overlong_streaminfo[..])
+    let (_, overlong_decoder_error) = flac.decoder(overlong_streaminfo[..])
+    if overlong_error != flac.Malformed || overlong_decoder_error != flac.Malformed { os.exit(84i32) }
+
     try io.print("fmt flac ok\n")
     ret ok
 }

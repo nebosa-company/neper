@@ -121,7 +121,7 @@ fn metadata(src: []const u8) -> (StreamInfo, usize, err) {
         pos += 4usize
         if length > src.len - pos { ret (zero, 0usize, TooSmall) }
         if kind == 0u8 {
-            if length < 34usize || seen { ret (zero, 0usize, Malformed) }
+            if length != 34usize || seen { ret (zero, 0usize, Malformed) }
             var b = Bits { data: src[pos..pos + 34usize], pos: 0usize, bad: false }
             info.min_block = u32(read(&b, 16u32))
             info.max_block = u32(read(&b, 16u32))
