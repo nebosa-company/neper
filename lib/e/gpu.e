@@ -1755,7 +1755,8 @@ fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
     if presenter_error != ok { ret (zero, presenter_error) }
     defer unlock_state(presenter.device)
     if presenter.device.owner != state.queue.device.owner { ret (zero, WrongDevice) }
-    if !state.acquired || frame.serial != state.serial { ret (zero, InvalidHandle) }
+    let expected = state.images[1usize - state.front]
+    if !state.acquired || frame.serial != state.serial || frame.image.data.owner != expected.data.owner || frame.image.data.slot != expected.data.slot || frame.image.data.generation != expected.data.generation { ret (zero, InvalidHandle) }
     let sync_error = sync(q)
     if sync_error != ok { ret (zero, sync_error) }
     state.front = 1usize - state.front

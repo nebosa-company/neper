@@ -65,6 +65,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A native surface is not the CPU device's to present.
     let (_, native_error) = gpu.open_target(q, gpu.Surface { kind: .Win32, handle: zero, context: zero }, 8u32, 8u32, .Bgra8)
     if native_error != gpu.Unsupported { os.exit(9i32) }
+    // Frames are target-specific even when two targets have the same serial.
+    let (first_target, first_target_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 2u32, 2u32, .Rgba8)
+    if first_target_error != ok { os.exit(34i32) }
+    let (second_target, second_target_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 2u32, 2u32, .Rgba8)
+    if second_target_error != ok { os.exit(35i32) }
+    let (first_frame, first_frame_error) = gpu.acquire(first_target)
+    if first_frame_error != ok || first_frame.serial != 0u64 { os.exit(36i32) }
+    let (second_frame, second_frame_error) = gpu.acquire(second_target)
+    if second_frame_error != ok || second_frame.serial != 0u64 { os.exit(37i32) }
+    let (_, foreign_frame_error) = gpu.present(q, second_target, first_frame)
+    if foreign_frame_error != gpu.InvalidHandle { os.exit(38i32) }
+    let (_, own_frame_error) = gpu.present(q, second_target, second_frame)
+    if own_frame_error != ok { os.exit(39i32) }
+    if gpu.close_target(first_target) != ok || gpu.close_target(second_target) != ok { os.exit(40i32) }
     // An offscreen target: nothing presented yet, a frame acquired, filled, presented.
     let (t, target_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 16u32, 8u32, .Rgba8)
     if target_error != ok { os.exit(10i32) }
