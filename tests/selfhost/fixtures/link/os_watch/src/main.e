@@ -93,13 +93,26 @@ fn main(a: *mem.Arena) -> err {
     if !added { os.exit(22i32) }
     if os.watch_close(creating) != ok { os.exit(23i32) }
 
+    // Replacing a watched pathname changes its inode. The next write must still
+    // wake the watch, which requires the macOS kqueue registration to move too.
+    let (replacing, replacing_error) = os.watch_open(a, "np-watch", false)
+    if replacing_error != ok { os.exit(24i32) }
+    if write_file_of(a, "np-watch/replacement.txt", 98u8) != ok { os.exit(25i32) }
+    if os.replace(a, "np-watch/replacement.txt", "np-watch/seen.txt", true, false) != ok { os.exit(26i32) }
+    let (replaced, replaced_error) = saw(a, replacing, .Modified, "seen.txt")
+    if replaced_error != ok || !replaced { os.exit(27i32) }
+    if write_file_of(a, "np-watch/seen.txt", 99u8) != ok { os.exit(28i32) }
+    let (rewritten, rewritten_error) = saw(a, replacing, .Modified, "seen.txt")
+    if rewritten_error != ok || !rewritten { os.exit(29i32) }
+    if os.watch_close(replacing) != ok { os.exit(30i32) }
+
     let (removing, removing_error) = os.watch_open(a, "np-watch", false)
-    if removing_error != ok { os.exit(30i32) }
-    if os.remove_file(a, "np-watch/seen.txt") != ok { os.exit(31i32) }
+    if removing_error != ok { os.exit(31i32) }
+    if os.remove_file(a, "np-watch/seen.txt") != ok { os.exit(32i32) }
     let (removed, removed_error) = saw(a, removing, .Removed, "seen.txt")
-    if removed_error != ok { os.exit(32i32) }
-    if !removed { os.exit(33i32) }
-    if os.watch_close(removing) != ok { os.exit(34i32) }
+    if removed_error != ok { os.exit(33i32) }
+    if !removed { os.exit(34i32) }
+    if os.watch_close(removing) != ok { os.exit(35i32) }
     if os.remove_dir(a, "np-watch") != ok { os.exit(41i32) }
     ret ok
 }

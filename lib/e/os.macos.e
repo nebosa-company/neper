@@ -1244,9 +1244,19 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
                 state.found[usize(slot)] = true
                 var entry = &state.entries[usize(slot)]
                 if entry.inode != info.file_id || entry.size != info.size || entry.modified_ns != info.modified_ns {
+                    if entry.inode != info.file_id {
+                        // A rename-over changes what this name denotes. The old descriptor
+                        // remains attached to the removed vnode, so replace its registration
+                        // before relying on later content writes to wake this watch.
+                        if entry.descriptor >= 0isize {
+                            let closed = syscall(SYS_CLOSE, usize(entry.descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+                        }
+                        entry.descriptor = watch_register(a, state, full)
+                    }
                     entry.inode = info.file_id
                     entry.size = info.size
                     entry.modified_ns = info.modified_ns
+                    entry.directory = info.kind == .Dir
                     // A directory's own time moves with its listing, which is reported as the
                     // names that came and went and not as the directory changing.
                     if !entry.directory {
