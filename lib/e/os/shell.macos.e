@@ -12,6 +12,7 @@ use e.fs
 use e.mem
 use e.os
 use e.str
+use e.text.shlex
 use e.time
 
 error Unsupported
@@ -515,48 +516,39 @@ fn target_dock_menu(this: usize, command: usize, sender: usize) -> usize {
     ret dock_menu
 }
 
-// A Dock menu item: its program and arguments run in the background.
+// A Dock menu item: its program and arguments run in the background. The shell only
+// receives a fixed script; the program and parsed words are positional parameters, so
+// task text cannot become shell syntax.
 @cc(c)
 fn target_dock_task(this: usize, command: usize, sender: usize) {
     let held = os.msg0(sender, os.cocoa_sel("representedObject\x00"))
     var text: [1024]u8 = zero
     let length = os.cocoa_read_text(held, text[..])
     if length == 0usize || length > 1000usize { ret }
-    // `sh` starts the program in the background and ends, so no child is left to wait for.
-    var line: [1040]u8 = zero
-    var out = 0usize
-    line[out] = 39u8
-    out += 1usize
-    var at = 0usize
-    while at < length && text[at] != 10u8 {
-        line[out] = text[at]
-        out += 1usize
-        at += 1usize
-    }
-    line[out] = 39u8
-    line[out + 1usize] = 32u8
-    out += 2usize
-    at += 1usize
-    while at < length {
-        line[out] = text[at]
-        out += 1usize
-        at += 1usize
-    }
-    let tail = " >/dev/null 2>&1 &"
-    var t = 0usize
-    while t < tail.len {
-        line[out] = tail[t]
-        out += 1usize
-        t += 1usize
-    }
+    var program_end = 0usize
+    while program_end < length && text[program_end] != 10u8 { program_end += 1usize }
+    if program_end == 0usize || program_end == length { ret }
+    var argument_bytes: [1024]u8 = zero
+    var arguments: [512]str = zero
+    let (argument_count, split_error) = shlex.split(text[program_end + 1usize..length], argument_bytes[..], arguments[..])
+    if split_error != ok { ret }
+    // `sh` starts its fixed positional-parameter command in the background and ends,
+    // so no child is left to wait for. "$@" begins at $1: the sentinel below is $0.
     var storage: [16384]u8 = zero
     var scratch = mem.arena_from(storage[..])
-    var argv: [3]str = zero
+    var argv: [512]str = zero
     argv[0usize] = "/bin/sh"
     argv[1usize] = "-c"
-    argv[2usize] = line[0usize..out]
+    argv[2usize] = "exec \"$@\" >/dev/null 2>&1 &"
+    argv[3usize] = "neper-dock-task"
+    argv[4usize] = text[0usize..program_end]
+    var at = 0usize
+    while at < argument_count {
+        argv[5usize + at] = arguments[at]
+        at += 1usize
+    }
     var options: os.SpawnOptions = zero
-    options.argv = argv[..]
+    options.argv = argv[0usize..5usize + argument_count]
     options.inherit_env = true
     options.stdio.stdout = os.File { raw: 1usize }
     options.stdio.stderr = os.File { raw: 2usize }
