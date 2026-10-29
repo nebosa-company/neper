@@ -125,6 +125,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let not_image = [1]docx.Block{ docx.image(docx.Image { data: "GIF89a not a png", width_emu: 0u32, height_emu: 0u32, alt: "" }) }
     let (ni, ni_error) = docx.encode(a, not_image[0..], docx.default_meta())
     if ni_error != docx.BadImage { os.exit(40) }
+    // The old four-byte check accepted this false PNG prefix and read its fake dimensions.
+    let false_png_prefix = "\x89PNG\x00\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x00\x00\x00\x00"
+    let false_png_image = [1]docx.Block{ docx.image(docx.Image { data: false_png_prefix, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, false_png_error) = docx.encode(a, false_png_image[0..], docx.default_meta())
+    if false_png_error != docx.BadImage { os.exit(47) }
+    // A valid signature alone is not enough: dimensions follow an IHDR, not an arbitrary chunk.
+    let false_ihdr_png = "\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dJHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x00\x00\x00\x00"
+    let false_ihdr_image = [1]docx.Block{ docx.image(docx.Image { data: false_ihdr_png, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, false_ihdr_error) = docx.encode(a, false_ihdr_image[0..], docx.default_meta())
+    if false_ihdr_error != docx.BadImage { os.exit(48) }
+    // A complete signature and IHDR prefix still needs the rest of the 13-byte data and CRC.
+    let truncated_png_header = "\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    let truncated_png_image = [1]docx.Block{ docx.image(docx.Image { data: truncated_png_header, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, truncated_png_error) = docx.encode(a, truncated_png_image[0..], docx.default_meta())
+    if truncated_png_error != docx.BadImage { os.exit(49) }
     // Its SOF segment says it includes a component count, but the data ends before it.
     let truncated_jpeg = "\xff\xd8\xff\xc0\x00\x08\x08\x00\x01\x00\x01"
     let truncated_image = [1]docx.Block{ docx.image(docx.Image { data: truncated_jpeg, width_emu: 0u32, height_emu: 0u32, alt: "" }) }

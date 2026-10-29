@@ -139,7 +139,15 @@ fn style_id(style: Style) -> str {
 
 // The pixel size of a PNG or JPEG, and whether `data` is one: (width, height, jpeg, ok).
 fn image_info(data: []const u8) -> (u32, u32, bool, bool) {
-    if data.len >= 24usize && data[0usize] == 137u8 && data[1usize] == 80u8 && data[2usize] == 78u8 && data[3usize] == 71u8 {
+    // A PNG begins with all eight signature bytes and a complete 13-byte IHDR chunk.
+    if data.len >= 33usize && data[0usize] == 137u8 && data[1usize] == 80u8 && data[2usize] == 78u8 && data[3usize] == 71u8 && data[4usize] == 13u8 && data[5usize] == 10u8 && data[6usize] == 26u8 && data[7usize] == 10u8 && data[8usize] == 0u8 && data[9usize] == 0u8 && data[10usize] == 0u8 && data[11usize] == 13u8 && data[12usize] == 73u8 && data[13usize] == 72u8 && data[14usize] == 68u8 && data[15usize] == 82u8 {
+        let depth = data[24usize]
+        let color = data[25usize]
+        var depth_ok = false
+        if color == 0u8 { depth_ok = depth == 1u8 || depth == 2u8 || depth == 4u8 || depth == 8u8 || depth == 16u8 }
+        if color == 2u8 || color == 4u8 || color == 6u8 { depth_ok = depth == 8u8 || depth == 16u8 }
+        if color == 3u8 { depth_ok = depth == 1u8 || depth == 2u8 || depth == 4u8 || depth == 8u8 }
+        if !depth_ok || data[26usize] != 0u8 || data[27usize] != 0u8 || data[28usize] > 1u8 { ret (0u32, 0u32, false, false) }
         let w = (u32(data[16usize]) << 24u32) | (u32(data[17usize]) << 16u32) | (u32(data[18usize]) << 8u32) | u32(data[19usize])
         let h = (u32(data[20usize]) << 24u32) | (u32(data[21usize]) << 16u32) | (u32(data[22usize]) << 8u32) | u32(data[23usize])
         ret (w, h, false, w > 0u32 && h > 0u32)
