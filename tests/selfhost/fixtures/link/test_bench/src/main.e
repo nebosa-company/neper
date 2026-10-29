@@ -177,10 +177,26 @@ fn check_run() -> i32 {
     ret 0i32
 }
 
+fn check_calibration_limits() -> i32 {
+    var cfg = bench.config_default()
+    cfg.warmup_ns = 1i64
+    cfg.target_sample_ns = 1i64
+    cfg.max_iters = 3u64
+    var work = Work { n: 1u64, sink: 0u64 }
+    var samples: [2]f64 = zero
+    let (limited, limited_error) = bench.run[Work]("limited", cfg, &work, spin, samples[0..])
+    if limited_error != ok || limited.iters == 0u64 || limited.iters > 3u64 { ret 63i32 }
+    cfg.max_iters = 0u64
+    let (_, zero_error) = bench.run[Work]("zero", cfg, &work, spin, samples[0..])
+    if zero_error != bench.Invalid { ret 64i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var code = check_vectors(a)
     if code == 0i32 { code = check_parts() }
     if code == 0i32 { code = check_run() }
+    if code == 0i32 { code = check_calibration_limits() }
     if code != 0i32 { os.exit(code) }
     let e = io.print("test bench ok")
     ret ok

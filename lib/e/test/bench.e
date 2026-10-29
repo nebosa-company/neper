@@ -21,6 +21,7 @@ type Verdict = enum u8 { Improved, Regressed, NoChange }
 type Comparison = struct { change_pct: f64, t: f64, significant: bool, verdict: Verdict }
 error TooFew
 error TooSmall
+error Invalid
 
 // 100 ms of warm-up, samples of about 1 ms, at most 2**32 iterations per sample, and
 // the usual 1.5 interquartile-range fence for rejection.
@@ -329,6 +330,7 @@ fn time_batch[Ctx: type](ctx: *Ctx, body: fn(*Ctx), iters: u64) -> (f64, err) {
 // Warm `body` up for the configured time while doubling the batch, then pick the
 // iteration count whose batch lasts about `target_sample_ns`.
 fn calibrate[Ctx: type](ctx: *Ctx, body: fn(*Ctx), cfg: Config) -> (u64, err) {
+    if cfg.max_iters == 0u64 { ret (0u64, Invalid) }
     var iters = 1u64
     var spent = 0.0f64
     var per_iter = 1.0f64
@@ -337,7 +339,9 @@ fn calibrate[Ctx: type](ctx: *Ctx, body: fn(*Ctx), cfg: Config) -> (u64, err) {
         if te != ok { ret (1u64, te) }
         spent += elapsed
         if elapsed > 0.0f64 { per_iter = elapsed / f64(iters) }
-        if iters < cfg.max_iters { iters = iters * 2u64 }
+        if iters < cfg.max_iters {
+            if iters > cfg.max_iters / 2u64 { iters = cfg.max_iters } else { iters = iters * 2u64 }
+        }
     }
     var wanted = f64(cfg.target_sample_ns) / per_iter
     if wanted < 1.0f64 { wanted = 1.0f64 }
