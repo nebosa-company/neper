@@ -115,7 +115,7 @@ fn open(block: []const u8) -> (Exif, err) {
     e.data = block
     if rd16(&e, 2usize) != 42u32 { ret (e, Invalid) }
     let first = usize(rd32(&e, 4usize))
-    if first < 8usize || first + 2usize > block.len { ret (e, Invalid) }
+    if first < 8usize || first > block.len || block.len - first < 2usize { ret (e, Invalid) }
     e.ifd0 = first
     ret (e, ok)
 }
@@ -141,9 +141,10 @@ fn walk(e: *Exif, at: usize, ifd: u8, depth: usize, out: []Tag, used: *usize, se
         if *seen_count >= seen.len { ret TooLarge }
         seen[*seen_count] = cur
         *seen_count = *seen_count + 1usize
-        if cur + 2usize > e.data.len { ret Invalid }
+        if cur > e.data.len || e.data.len - cur < 2usize { ret Invalid }
         let n = usize(rd16(e, cur))
-        if cur + 2usize + n * 12usize + 4usize > e.data.len { ret Invalid }
+        let table_len = 2usize + n * 12usize + 4usize
+        if table_len > e.data.len - cur { ret Invalid }
         var i = 0usize
         while i < n {
             let entry = cur + 2usize + i * 12usize

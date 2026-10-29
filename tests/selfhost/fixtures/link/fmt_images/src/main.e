@@ -337,6 +337,10 @@ fn survive_tiff(a: *mem.Arena, blob: str) -> bool { ret survive(a, 3u8, blob) }
 fn survive_exif(a: *mem.Arena, blob: str) -> bool { ret survive(a, 4u8, blob) }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // An IFD0 offset beyond the block must be rejected before usize addition wraps.
+    if !exif_tags_fail(a, "II*\x00\xff\xff\xff\xff") { die(124i32) }
+    // A nested Exif IFD offset uses the same overflow-safe range validation.
+    if !exif_tags_fail(a, "II*\x00\x08\x00\x00\x00\x01\x00\x69\x87\x04\x00\x01\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00") { die(125i32) }
     // A complete image block still requires the GIF trailer after its data terminator.
     if !gif_missing_trailer(a, "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00") { die(113i32) }
     // A GIF image's LZW stream also requires its end-of-information code.
