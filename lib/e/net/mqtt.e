@@ -233,8 +233,18 @@ fn encode_connack(dst: []u8, session_present: bool, return_code: u8) -> (usize, 
 
 // ---- PUBLISH and acks -----------------------------------------------------
 
+fn valid_topic_name(topic: str) -> bool {
+    if topic.len == 0usize { ret false }
+    var i = 0usize
+    while i < topic.len {
+        if topic[i] == 43u8 || topic[i] == 35u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn encode_publish(dst: []u8, topic: str, payload: []const u8, qos: u8, retain: bool, dup: bool, packet_id: u16) -> (usize, err) {
-    if qos > 2u8 || (qos > 0u8 && packet_id == 0u16) { ret (0usize, Invalid) }
+    if !valid_topic_name(topic) || qos > 2u8 || (qos > 0u8 && packet_id == 0u16) { ret (0usize, Invalid) }
     if dst.len < 5usize { ret (0usize, TooSmall) }
     var first = (PUBLISH << 4u32) | (qos << 1u32)
     if retain { first = first | 1u8 }
@@ -264,6 +274,7 @@ fn decode_publish(src: []const u8) -> (Publish, err) {
     p.dup = (first & 8u8) == 8u8
     let (topic, used, te) = decode_utf8_string(b)
     if te != ok { ret (p, te) }
+    if !valid_topic_name(topic) { ret (p, Malformed) }
     p.topic = topic
     var at = used
     if p.qos > 0u8 {

@@ -43,6 +43,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e2 != ok || n2 != 36usize || fold(buf[..n2]) != 0x8c4336622f7c6366u64 { os.exit(1i32) }
     let (n3, e3) = mqtt.encode_publish(buf[..], "a/b", "hello", 1u8, false, false, 10u16)
     if e3 != ok || n3 != 14usize || fold(buf[..n3]) != 0xf07a63e9d49ff04au64 { os.exit(1i32) }
+    let (_, empty_topic_error) = mqtt.encode_publish(buf[..], "", "", 0u8, false, false, 0u16)
+    let (_, plus_topic_error) = mqtt.encode_publish(buf[..], "a/+", "", 0u8, false, false, 0u16)
+    let (_, hash_topic_error) = mqtt.encode_publish(buf[..], "a/#", "", 0u8, false, false, 0u16)
+    if empty_topic_error != mqtt.Invalid || plus_topic_error != mqtt.Invalid || hash_topic_error != mqtt.Invalid { os.exit(1i32) }
     let topics = [2]str{ "a/b", "c/#" }
     let qoss = [2]u8{ 1u8, 2u8 }
     let (n4, e4) = mqtt.encode_subscribe(stream[..], 1u16, topics[..], qoss[..])
@@ -79,6 +83,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (p, pe) = mqtt.decode_publish(buf[..n3])
     if pe != ok || !mem.eq[u8](p.topic, "a/b") || !mem.eq[u8](p.payload, "hello") { os.exit(2i32) }
     if p.qos != 1u8 || p.retain || p.dup || p.packet_id != 10u16 { os.exit(2i32) }
+    let (_, empty_topic_decode) = mqtt.decode_publish("\x30\x02\x00\x00")
+    let (_, wildcard_topic_decode) = mqtt.decode_publish("\x30\x04\x00\x02a+")
+    if empty_topic_decode != mqtt.Malformed || wildcard_topic_decode != mqtt.Malformed { os.exit(2i32) }
     let (t, te) = mqtt.packet_type(buf[..n3])
     if te != ok || t != 3u8 { os.exit(2i32) }
     let (rl, hb, re) = mqtt.remaining_length(buf[..n3])
