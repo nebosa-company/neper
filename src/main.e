@@ -2386,8 +2386,10 @@ fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, t
     written = nptest_append(buffer, written, "    ret ok\n}\nfn main(a: *mem.Arena, args: []str) -> err {\n    var nptest_result = ok\n    if args.len >= 2usize {\n        var nptest_guard: NptestGuard = zero\n        let (nptest_watch, nptest_watch_error) = nptest_os.thread_create[NptestGuard](nptest_watchdog, &nptest_guard, 1048576usize)\n        nptest_result = nptest_dispatch(a, args[1usize])\n        nptest_report_message(nptest_result)\n        nptest_atomic.store(&nptest_guard.done, 1u32, .Release)\n        nptest_os.wake_one_u32(&nptest_guard.done)\n        if nptest_watch_error == ok {\n            let nptest_joined = nptest_os.thread_join(nptest_watch)\n        }\n    }\n    ret nptest_result\n}\n")
     // A failed assertion's message (T005): `e.test` keeps it in its record, and the root
     // hands it to `neper test` on stderr between two 0x1E bytes, which the parent lifts
-    // out into the record's `message`. The `use` is last so the operand stays two lines down.
-    written = nptest_append(buffer, written, "fn nptest_report_message(result: err) {\n    if result == ok || nptest_test.current.message.len == 0usize { ret }\n    let (nptest_head, nptest_head_error) = nptest_os.write(nptest_os.stderr(), \"\\x1enptest-message:\")\n    let (nptest_body, nptest_body_error) = nptest_os.write(nptest_os.stderr(), nptest_test.current.message)\n    let (nptest_tail, nptest_tail_error) = nptest_os.write(nptest_os.stderr(), \"\\x1e\\n\")\n}\nuse e.test as nptest_test\n")
+    // out into the record's `message`. A caught assertion must not annotate a later
+    // unrelated error, so only `test.Failed` emits the record. The `use` is last so the
+    // operand stays two lines down.
+    written = nptest_append(buffer, written, "fn nptest_report_message(result: err) {\n    if result != nptest_test.Failed || nptest_test.current.message.len == 0usize { ret }\n    let (nptest_head, nptest_head_error) = nptest_os.write(nptest_os.stderr(), \"\\x1enptest-message:\")\n    let (nptest_body, nptest_body_error) = nptest_os.write(nptest_os.stderr(), nptest_test.current.message)\n    let (nptest_tail, nptest_tail_error) = nptest_os.write(nptest_os.stderr(), \"\\x1e\\n\")\n}\nuse e.test as nptest_test\n")
     ret (buffer[0usize..written], ok)
 }
 
