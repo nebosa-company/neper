@@ -90,9 +90,10 @@ fn parse(r: *Rd) -> (Ifd, err) {
     if magic == 43u32 { ret (h, Unsupported) }
     if magic != 42u32 { ret (h, Invalid) }
     let ifd = usize(u32_at(r, 4usize))
-    if ifd + 2usize > d.len { ret (h, Invalid) }
+    if ifd > d.len || d.len - ifd < 2usize { ret (h, Invalid) }
     let n = usize(u16_at(r, ifd))
-    if ifd + 2usize + n * 12usize + 4usize > d.len { ret (h, Invalid) }
+    let table_len = 2usize + n * 12usize + 4usize
+    if table_len > d.len - ifd { ret (h, Invalid) }
     h.bits = 1u32
     h.compression = 1u32
     h.samples = 1u32
@@ -189,7 +190,7 @@ fn parse(r: *Rd) -> (Ifd, err) {
     if h.predictor != 1u32 && (h.predictor != 2u32 || h.bits != 8u32) { ret (h, Unsupported) }
     if h.rows_per_strip == 0u32 { ret (h, Invalid) }
     if h.rows_per_strip > h.height { h.rows_per_strip = h.height }
-    h.strips = usize((h.height + h.rows_per_strip - 1u32) / h.rows_per_strip)
+    h.strips = usize(1u32 + (h.height - 1u32) / h.rows_per_strip)
     if strips != 0u32 && usize(strips) < h.strips { ret (h, Invalid) }
     h.extra = 0u32
     if extra_count > 0u32 { h.extra = u16_at(r, extra_at) }

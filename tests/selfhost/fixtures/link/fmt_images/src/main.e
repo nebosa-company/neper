@@ -437,6 +437,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     tiff_short_counts[126usize] = 131u8
     tiff_short_counts[131usize] = 255u8
     if !tiff_invalid(a, tiff_short_counts[..]) { die(117i32) }
+    // IFD offsets must be bounded before target-width addition.
+    if !tiff_invalid(a, "II*\x00\xff\xff\xff\xff") { die(122i32) }
+    // A one-entry strip table cannot cover two strips after overflow-safe ceiling division.
+    if !tiff_invalid(a, "II*\x00\x08\x00\x00\x00\x04\x00\x00\x01\x04\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x01\x04\x00\x01\x00\x00\x00\xff\xff\xff\xff\x11\x01\x04\x00\x01\x00\x00\x00\x00\x00\x00\x00\x16\x01\x04\x00\x01\x00\x00\x00\xfe\xff\xff\xff\x00\x00\x00\x00") { die(123i32) }
     // A QOI run may not describe pixels beyond the declared raster.
     if !qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xc1\x00\x00\x00\x00\x00\x00\x00\x01") { die(118i32) }
     // BI_RLE8 must end with the escape pair 00 01. A valid run followed by EOF
