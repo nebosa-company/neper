@@ -197,28 +197,84 @@ fn hex_upper(c: u8) -> u8 {
 
 fn is_hex(c: u8) -> bool { ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 70u8) || (c >= 97u8 && c <= 102u8) }
 
-// Byte `i` of `s` as the comparison sees it: hex digits of a `%XX` escape upper-cased.
+fn hex_value(c: u8) -> u8 {
+    if c >= 48u8 && c <= 57u8 { ret c - 48u8 }
+    if c >= 65u8 && c <= 70u8 { ret c - 55u8 }
+    ret c - 87u8
+}
+
+fn unreserved(c: u8) -> bool {
+    ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 45u8 || c == 46u8 || c == 95u8 || c == 126u8
+}
+
+// Number of bytes after RFC 9309 matching normalization. Unreserved `%XX`
+// escapes become one byte; reserved and non-ASCII escapes remain three bytes.
+fn norm_prefix(s: str, raw_end: usize) -> usize {
+    var raw = 0usize
+    var n = 0usize
+    while raw < raw_end {
+        if raw + 2usize < raw_end && s[raw] == 37u8 && is_hex(s[raw + 1usize]) && is_hex(s[raw + 2usize]) {
+            let value = hex_value(s[raw + 1usize]) * 16u8 + hex_value(s[raw + 2usize])
+            if unreserved(value) { n += 1usize } else { n += 3usize }
+            raw += 3usize
+        } else {
+            n += 1usize
+            raw += 1usize
+        }
+    }
+    ret n
+}
+
+fn norm_len(s: str) -> usize { ret norm_prefix(s, s.len) }
+
+// Byte `i` of the normalized comparison form. Reserved and non-ASCII escapes
+// retain `%XX` (with upper-case hex), while unreserved escapes decode.
 fn norm_at(s: str, i: usize) -> u8 {
-    let c = s[i]
-    if i >= 1usize && is_hex(c) && s[i - 1usize] == 37u8 { ret hex_upper(c) }
-    if i >= 2usize && is_hex(c) && s[i - 2usize] == 37u8 && is_hex(s[i - 1usize]) { ret hex_upper(c) }
-    ret c
+    var raw = 0usize
+    var n = 0usize
+    while raw < s.len {
+        if raw + 2usize < s.len && s[raw] == 37u8 && is_hex(s[raw + 1usize]) && is_hex(s[raw + 2usize]) {
+            let value = hex_value(s[raw + 1usize]) * 16u8 + hex_value(s[raw + 2usize])
+            if unreserved(value) {
+                if n == i { ret value }
+                n += 1usize
+            } else {
+                if n == i { ret 37u8 }
+                n += 1usize
+                if n == i { ret hex_upper(s[raw + 1usize]) }
+                n += 1usize
+                if n == i { ret hex_upper(s[raw + 2usize]) }
+                n += 1usize
+            }
+            raw += 3usize
+        } else {
+            if n == i { ret s[raw] }
+            n += 1usize
+            raw += 1usize
+        }
+    }
+    ret 0u8
 }
 
 // Does `part` (a pattern run without `*`) occur in `path` at `at`?
 fn part_at(pattern: str, from: usize, to: usize, path: str, at: usize) -> bool {
-    if at + (to - from) > path.len { ret false }
+    let pattern_from = norm_prefix(pattern, from)
+    let pattern_to = norm_prefix(pattern, to)
+    let part_len = pattern_to - pattern_from
+    if at + part_len > norm_len(path) { ret false }
     var k = 0usize
-    while k < to - from {
-        if norm_at(pattern, from + k) != norm_at(path, at + k) { ret false }
+    while k < part_len {
+        if norm_at(pattern, pattern_from + k) != norm_at(path, at + k) { ret false }
         k += 1usize
     }
     ret true
 }
 
 fn find_part(pattern: str, from: usize, to: usize, path: str, start: usize) -> (usize, bool) {
+    let part_len = norm_prefix(pattern, to) - norm_prefix(pattern, from)
+    let path_len = norm_len(path)
     var at = start
-    while at + (to - from) <= path.len {
+    while at + part_len <= path_len {
         if part_at(pattern, from, to, path, at) { ret (at, true) }
         at += 1usize
     }
@@ -233,6 +289,7 @@ fn matches(pattern: str, path: str) -> bool {
         anchored = true
         end -= 1usize
     }
+    let path_len = norm_len(path)
     // parts between stars: [part_start, part_end)
     var pos = 0usize
     var i = 0usize
@@ -245,18 +302,18 @@ fn matches(pattern: str, path: str) -> bool {
                 // the first part must be a prefix
                 if !is_last || !anchored {
                     if !part_at(pattern, part_start, i, path, 0usize) { ret false }
-                    pos = i - part_start
+                    pos = norm_prefix(pattern, i) - norm_prefix(pattern, part_start)
                 } else {
                     // no star at all and anchored: the whole path must equal the pattern
-                    if i - part_start != path.len { ret false }
+                    if norm_prefix(pattern, i) - norm_prefix(pattern, part_start) != path_len { ret false }
                     ret part_at(pattern, part_start, i, path, 0usize)
                 }
                 first = false
             } else if is_last {
                 if anchored {
-                    let len = i - part_start
-                    if path.len < pos + len { ret false }
-                    ret part_at(pattern, part_start, i, path, path.len - len)
+                    let len = norm_prefix(pattern, i) - norm_prefix(pattern, part_start)
+                    if path_len < pos + len { ret false }
+                    ret part_at(pattern, part_start, i, path, path_len - len)
                 }
                 if i == part_start { ret true }
                 let (at, found) = find_part(pattern, part_start, i, path, pos)
@@ -264,7 +321,7 @@ fn matches(pattern: str, path: str) -> bool {
             } else if i > part_start {
                 let (at, found) = find_part(pattern, part_start, i, path, pos)
                 if !found { ret false }
-                pos = at + (i - part_start)
+                pos = at + norm_prefix(pattern, i) - norm_prefix(pattern, part_start)
             }
             part_start = i + 1usize
         }
@@ -315,8 +372,9 @@ fn allowed(r: *const Robots, agent: str, path: str) -> bool {
             while k < grp.rule_count {
                 let rule = r.rules[grp.first_rule + k]
                 if matches(rule.pattern, path) {
-                    if !any || rule.pattern.len > best_len || (rule.pattern.len == best_len && rule.allow && !best_allow) {
-                        best_len = rule.pattern.len
+                    let rule_len = norm_len(rule.pattern)
+                    if !any || rule_len > best_len || (rule_len == best_len && rule.allow && !best_allow) {
+                        best_len = rule_len
                         best_allow = rule.allow
                         any = true
                     }

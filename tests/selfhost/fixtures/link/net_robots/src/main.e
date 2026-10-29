@@ -61,6 +61,18 @@ fn unhex(s: str, out: []u8) -> usize {
 // it query, so the vectors are walked here rather than line by line.
 type Ctx = struct { robots: robots.Robots, loaded: bool, sitemap_at: usize }
 
+fn check_percent(a: *mem.Arena) -> bool {
+    let source = "User-agent: *\nDisallow: /private\nDisallow: /keep%2F\n"
+    let (r, parse_error) = robots.parse(a, source)
+    if parse_error != ok { ret false }
+    if robots.allowed(&r, "bot", "/private") { ret false }
+    if robots.allowed(&r, "bot", "/%70rivate") { ret false }
+    if robots.allowed(&r, "bot", "/keep%2f") { ret false }
+    if !robots.allowed(&r, "bot", "/keep/tail") { ret false }
+    if !robots.allowed(&r, "bot", "/%2Fprivate") { ret false }
+    ret true
+}
+
 fn check_line(a: *mem.Arena, c: *Ctx, doc: []u8, line: str) -> u8 {
     var path: [256]u8 = zero
     let (kind, p0) = tok(line, 0usize)
@@ -203,6 +215,7 @@ fn v_19() -> str {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    if !check_percent(a) { os.exit(40i32) }
     var doc: [16384]u8 = zero
     var ctx: Ctx = zero
     let r_v_0 = run_chunk(a, &ctx, doc[0usize..16384usize], v_0())
