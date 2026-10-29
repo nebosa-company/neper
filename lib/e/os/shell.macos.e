@@ -75,8 +75,9 @@ fn capabilities() -> Capabilities {
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
-// at run time (`NeperShellTarget`, a subclass of NSObject) with two methods whose implementations are `@cc(c)` functions
-// of this file: one for a status item's button, one for a menu item. What they do is write into the state below, which
+// at run time (`NeperShellTarget`, a subclass of NSObject). Its tray methods are `@cc(c)` functions of this file: one for a
+// status item's primary click, one for its secondary-click recognizer, and one for a menu item. What they do is write into the
+// state below, which
 // `tray_poll` and `popup_menu` read once the run loop has delivered the click.
 type MenuPoint = struct { x: f64, y: f64 }
 type MenuImp = union { function: fn(usize, usize, usize), bits: usize }
@@ -121,22 +122,29 @@ fn tray_push(event: TrayEvent) {
     tray_tail = next
 }
 
-// A status item's button was clicked: left is a Select, right a Context, at the pointer's place on the screen.
-@cc(c)
-fn target_tray_clicked(this: usize, command: usize, sender: usize) {
+fn tray_emit(button: usize, kind: TrayEventKind) {
     var slot = 0usize
-    while slot < TRAYS && tray_buttons[slot] != sender { slot += 1usize }
+    while slot < TRAYS && tray_buttons[slot] != button { slot += 1usize }
     if slot == TRAYS { ret }
     var event: TrayEvent = zero
-    event.kind = .Select
+    event.kind = kind
     event.id = tray_ids[slot]
-    let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
-    let current = os.msg0(app, os.cocoa_sel("currentEvent\x00"))
-    if current != 0usize && os.msg0(current, os.cocoa_sel("type\x00")) == 4usize { event.kind = .Context }
     let at = msg_event_point(os.cocoa_class("NSEvent\x00"), os.cocoa_sel("mouseLocation\x00"))
     event.x = i32(at.x)
     event.y = i32(f64(cg_display_high(cg_main_display())) - at.y)
     tray_push(event)
+}
+
+// A status item's primary action is a Select at the pointer's place on the screen.
+@cc(c)
+fn target_tray_clicked(this: usize, command: usize, sender: usize) {
+    tray_emit(sender, .Select)
+}
+
+// The secondary-button recognizer identifies its attached status button as its view.
+@cc(c)
+fn target_tray_context(this: usize, command: usize, sender: usize) {
+    tray_emit(os.msg0(sender, os.cocoa_sel("view\x00")), .Context)
 }
 
 @cc(c)
@@ -183,9 +191,12 @@ fn target_ready() -> err {
     let types = "v@:@\x00"
     var tray: MenuImp = zero
     tray.function = target_tray_clicked
+    var context: MenuImp = zero
+    context.function = target_tray_context
     var chosen: MenuImp = zero
     chosen.function = target_menu_chosen
     let first = objc_class_method(class, os.cocoa_sel("neperTray:\x00"), tray.bits, &types[0usize])
+    let context_added = objc_class_method(class, os.cocoa_sel("neperTrayContext:\x00"), context.bits, &types[0usize])
     let second = objc_class_method(class, os.cocoa_sel("neperChoice:\x00"), chosen.bits, &types[0usize])
     var cancel: MenuImp = zero
     cancel.function = target_menu_cancel
@@ -291,15 +302,24 @@ fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
     let item = os.msg_double(bar, os.cocoa_sel("statusItemWithLength:\x00"), -1.0f64)
     var result = ok
     if item == 0usize { result = Failed } else {
-        let kept = os.msg0(item, os.cocoa_sel("retain\x00"))
         let button = os.msg0(item, os.cocoa_sel("button\x00"))
-        tray_decorate(button, icon, tooltip)
-        let targeted = os.msg1(button, os.cocoa_sel("setTarget:\x00"), shell_target)
-        let acted = os.msg1(button, os.cocoa_sel("setAction:\x00"), os.cocoa_sel("neperTray:\x00"))
-        let masked = os.msg1(button, os.cocoa_sel("sendActionOn:\x00"), 20usize)
-        tray_ids[slot] = id
-        tray_items[slot] = item
-        tray_buttons[slot] = button
+        if button == 0usize { result = Failed } else {
+            let gesture = os.msg2(os.msg0(os.cocoa_class("NSClickGestureRecognizer\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithTarget:action:\x00"), shell_target, os.cocoa_sel("neperTrayContext:\x00"))
+            if gesture == 0usize { result = Failed } else {
+                let secondary = os.msg1(gesture, os.cocoa_sel("setButtonMask:\x00"), 2usize)
+                let attached = os.msg1(button, os.cocoa_sel("addGestureRecognizer:\x00"), gesture)
+                let released = os.msg0(gesture, os.cocoa_sel("release\x00"))
+                let kept = os.msg0(item, os.cocoa_sel("retain\x00"))
+                tray_decorate(button, icon, tooltip)
+                let targeted = os.msg1(button, os.cocoa_sel("setTarget:\x00"), shell_target)
+                let acted = os.msg1(button, os.cocoa_sel("setAction:\x00"), os.cocoa_sel("neperTray:\x00"))
+                let masked = os.msg1(button, os.cocoa_sel("sendActionOn:\x00"), 4usize)
+                tray_ids[slot] = id
+                tray_items[slot] = item
+                tray_buttons[slot] = button
+            }
+        }
+        if result != ok { let removed = os.msg1(bar, os.cocoa_sel("removeStatusItem:\x00"), item) }
     }
     os.objc_pool_pop(pool)
     ret result
