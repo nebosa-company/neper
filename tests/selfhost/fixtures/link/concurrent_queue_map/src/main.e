@@ -151,6 +151,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e40 != cmap.Full || second_limited { os.exit(55) }
     let (limited_count, e41) = cmap.len[u64, u64](&limited)
     if e41 != ok || limited_count != 1usize { os.exit(56) }
+    // Table sizing rejects an unrepresentable request before touching the arena.
+    let map_mark = mem.mark(a)
+    let max_capacity = 0usize -% 1usize
+    let (_, too_large_error) = cmap.init[u64, u64](a, max_capacity, 1u16)
+    if too_large_error != mem.Exhausted || mem.mark(a) != map_mark { os.exit(67i32) }
+    // A capacity-one shard must not retain historical occupancy after removals.
+    // These supplied u64 hashes start in the four distinct slots of its table.
+    let (churn0, churn_error) = cmap.init[u64, u64](a, 1usize, 1u16)
+    if churn_error != ok { os.exit(68i32) }
+    var churn = churn0
+    let (added_two, added_two_error) = cmap.put[u64, u64](&churn, 2u64, 20u64)
+    if added_two_error != ok || !added_two { os.exit(69i32) }
+    let (_, removed_two, removed_two_error) = cmap.remove[u64, u64](&churn, 2u64)
+    if removed_two_error != ok || !removed_two { os.exit(70i32) }
+    let (added_one, added_one_error) = cmap.put[u64, u64](&churn, 1u64, 10u64)
+    if added_one_error != ok || !added_one { os.exit(71i32) }
+    let (_, removed_one, removed_one_error) = cmap.remove[u64, u64](&churn, 1u64)
+    if removed_one_error != ok || !removed_one { os.exit(72i32) }
+    let (added_eight, added_eight_error) = cmap.put[u64, u64](&churn, 8u64, 80u64)
+    if added_eight_error != ok || !added_eight { os.exit(73i32) }
+    let (_, removed_eight, removed_eight_error) = cmap.remove[u64, u64](&churn, 8u64)
+    if removed_eight_error != ok || !removed_eight { os.exit(74i32) }
+    let (added_zero, added_zero_error) = cmap.put[u64, u64](&churn, 0u64, 0u64)
+    if added_zero_error != ok || !added_zero { os.exit(75i32) }
+    // Backshifting a collision chain must keep the entry beyond the removal visible.
+    let (collision0, collision_error) = cmap.init[u64, u64](a, 2usize, 1u16)
+    if collision_error != ok { os.exit(76i32) }
+    var collision = collision0
+    let (added_zero_collision, added_zero_collision_error) = cmap.put[u64, u64](&collision, 0u64, 100u64)
+    if added_zero_collision_error != ok || !added_zero_collision { os.exit(77i32) }
+    let (added_four_collision, added_four_collision_error) = cmap.put[u64, u64](&collision, 4u64, 400u64)
+    if added_four_collision_error != ok || !added_four_collision { os.exit(78i32) }
+    let (_, removed_zero_collision, removed_zero_collision_error) = cmap.remove[u64, u64](&collision, 0u64)
+    if removed_zero_collision_error != ok || !removed_zero_collision { os.exit(79i32) }
+    let (four_value, has_four, four_error) = cmap.get[u64, u64](&collision, 4u64)
+    if four_error != ok || !has_four || four_value != 400u64 { os.exit(80i32) }
     let (m0, e20) = cmap.init[u64, u64](a, 8usize, 1u16)
     if e20 != ok { os.exit(29) }
     var m = m0
