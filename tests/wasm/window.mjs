@@ -104,6 +104,9 @@ async function exercise(path, label) {
 // clipboard's copy crosses the ring both ways, and the virtual keyboard's events become the right records.
 {
   const { attach, imports } = await import('../../lib/wasm/window.js')
+  const browserSmoke = await readFile(new URL('browser/webgl2_present.html', import.meta.url), 'utf8')
+  assert.match(browserSmoke, /import \{ attach \} from '\.\.\/\.\.\/\.\.\/lib\/wasm\/window\.js'/, 'the browser presenter smoke page follows the exported API')
+  assert.doesNotMatch(browserSmoke, /import \{ webgl2 \}/, 'the browser presenter smoke page does not import a removed API')
   const { canvas, frames } = shim(64, 48)
   const queue = []
   globalThis.requestAnimationFrame = (f) => queue.push(f)
