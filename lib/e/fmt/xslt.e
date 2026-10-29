@@ -236,6 +236,7 @@ fn compile_avt(c: *Compiler, id: xml.NodeId, text: str) -> (Avt, err) {
         let ch = text[i]
         if ch == 123u8 {
             if i + 1usize < text.len && text[i + 1usize] == 123u8 {
+                if used >= 4096usize { ret (zero, TooComplex) }
                 buffer[used] = 123u8
                 used += 1usize
                 i += 2usize
@@ -273,6 +274,7 @@ fn compile_avt(c: *Compiler, id: xml.NodeId, text: str) -> (Avt, err) {
         }
         if ch == 125u8 {
             if i + 1usize < text.len && text[i + 1usize] == 125u8 {
+                if used >= 4096usize { ret (zero, TooComplex) }
                 buffer[used] = 125u8
                 used += 1usize
                 i += 2usize
