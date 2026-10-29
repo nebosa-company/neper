@@ -97,7 +97,8 @@ fn run_one(a: *mem.Arena, c: json.Value) -> bool {
             var offs: [3]json.Value = zero
             var k = 0usize
             while k < 3usize {
-                let (at, has) = sig.nth_match(&set, i, data, k)
+                let (at, has, nth_error) = sig.nth_match(&set, i, data, k)
+                if nth_error != ok { ret false }
                 if !has { break }
                 offs[k] = nv(a, f64(at))
                 k += 1usize
