@@ -8508,7 +8508,7 @@ fn part33(b: *str.Builder) -> err {
     try str.push(b, "    const baseUrl = documentBaseURL(doc);\n")
     try str.push(b, "    const isAsync = getAttributeValue(el, 'async') !== null;\n")
     try str.push(b, "    let run;\n")
-    try str.push(b, "    if (src === null) run = () => { if (N.cspAllows(0, getAttributeValue(el, 'nonce') || '', text)) N.runModule(baseUrl, text, useCredentials); else fireScriptEvent(el, 'error'); };\n")
+    try str.push(b, "    if (src === null) run = () => { if (N.cspAllows(0, getAttributeValue(el, 'nonce') || '', text)) { if (N.runModule(baseUrl, text, useCredentials)) fireScriptEvent(el, 'load'); else fireScriptEvent(el, 'error'); } else fireScriptEvent(el, 'error'); };\n")
     try str.push(b, "    else {\n")
     try str.push(b, "      if (src === '') { scheduleTimer(() => fireScriptEvent(el, 'error'), 0, false, []); return; }\n")
     try str.push(b, "      const parsed = N.urlParse(src, baseUrl);\n")
