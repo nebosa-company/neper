@@ -236,6 +236,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, missing_pad_error) = webp.decode(a, reader_of(&state, missing_pad), options())
     if missing_pad_error != webp.Invalid { os.exit(157i32) }
 
+    // Nested ANMF chunks validate their length before adding odd-byte padding.
+    let anmf_length_overflow = "RIFF$\x00\x00\x00WEBPANMF\x18\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00VP8L\xff\xff\xff\xff"
+    let (_, anmf_length_error) = webp.inspect(reader_of(&state, anmf_length_overflow))
+    if anmf_length_error != webp.Invalid { os.exit(166i32) }
+
     // The RIFF size declares the entire source, not a valid prefix before junk.
     let (trailing, trailing_alloc) = mem.alloc[u8](a, small_source.len + 1usize)
     if trailing_alloc != ok { os.exit(160i32) }

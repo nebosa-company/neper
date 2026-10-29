@@ -170,9 +170,12 @@ fn first_bitstream(d: []const u8) -> (Container, err) {
     while at + 8usize <= d.len {
         let kind = tag(d, at)
         let size = usize(le32(d, at + 4usize))
-        let padded = size + (size & 1usize)
-        if padded > d.len - at - 8usize { ret (zero, Invalid) }
-        let body = d[at + 8usize..at + 8usize + size]
+        let available = d.len - at - 8usize
+        if size > available { ret (zero, Invalid) }
+        let padding = size & 1usize
+        if padding > available - size { ret (zero, Invalid) }
+        let body_at = at + 8usize
+        let body = d[body_at..body_at + size]
         if kind == TAG_ALPH { c.alpha = body }
         if (kind == TAG_VP8 || kind == TAG_VP8L) && !c.has_bitstream {
             c.bitstream = body
@@ -183,7 +186,7 @@ fn first_bitstream(d: []const u8) -> (Container, err) {
             c.width = w
             c.height = h
         }
-        at += 8usize + padded
+        at = body_at + size + padding
     }
     ret (c, ok)
 }
