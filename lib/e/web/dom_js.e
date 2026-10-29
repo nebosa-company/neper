@@ -8891,7 +8891,7 @@ fn part34(b: *str.Builder) -> err {
     try str.push(b, "const selectionObject = create(Selection.prototype);\n")
     try str.push(b, "setSlot(selectionObject, { isSelection: true, range: null, forwards: true, directionless: true });\n")
     try str.push(b, "function selectionSlot(o) { const s = slotOf(o); if (!s || !s.isSelection) illegal(); return s; }\n")
-    try str.push(b, "function inSelectableTree(node) { return rootNode(node) === mainDocument; }\n")
+    try str.push(b, "function inSelectableTree(node) { return node === mainDocument || ownerDoc(node) === mainDocument; }\n")
     try str.push(b, "function selectionNodeArg(node, method, n) {\n")
     try str.push(b, "  if (!isNode(node)) throw new TypeError(\"Failed to execute '\" + method + \"' on 'Selection': parameter \" + n + \" is not of type 'Node'.\");\n")
     try str.push(b, "  return node;\n")
