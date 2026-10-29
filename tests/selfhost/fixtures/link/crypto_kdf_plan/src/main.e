@@ -58,6 +58,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if kdf.scrypt("password", "NaCl", 1024usize, 8usize, 16usize, s64[0..], scratch) != ok || !same(s64[0..], scrypt_b[0..]) { os.exit(9i32) }
     if kdf.scrypt("password", "NaCl", 1024usize, 8usize, 16usize, s64[0..], scratch[..1000usize]) != kdf.TooSmall { os.exit(10i32) }
     if kdf.scrypt("password", "NaCl", 3usize, 8usize, 1usize, s64[0..], scratch) != kdf.Invalid { os.exit(11i32) }
+    // A valid scrypt shape can still exceed the supported scratch limit.
+    let layout_max = 4294967295usize
+    let overflow_r = layout_max / 128usize
+    if kdf.scrypt_scratch_required(2usize, overflow_r, 1usize) != layout_max { os.exit(11i32) }
+    if kdf.scrypt("password", "NaCl", 2usize, overflow_r, 1usize, s64[0..], scratch) != kdf.TooLarge { os.exit(11i32) }
     // bcrypt.
     var salt6: [16]u8 = zero
     var i = 0usize
@@ -118,6 +123,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if kdf.argon2id("password", "saltsalt", 2u32, 16u32, 2u32, tag16[0..], memory) != ok || !same(tag16[0..], argon_two[0..]) { os.exit(22i32) }
     if kdf.argon2id("password", "saltsalt", 2u32, 16u32, 2u32, tag16[0..], memory[..10000usize]) != kdf.TooSmall { os.exit(23i32) }
     if kdf.argon2id("password", "saltsalt", 0u32, 16u32, 2u32, tag16[0..], memory) != kdf.Invalid { os.exit(24i32) }
+    if kdf.argon2_memory_required(4194304u32) != layout_max { os.exit(24i32) }
+    if kdf.argon2id("password", "saltsalt", 1u32, 4194304u32, 1u32, tag16[0..], memory) != kdf.TooLarge { os.exit(24i32) }
     // BLAKE2b.
     let b_abc = hash.blake2b("abc")
     if !same(b_abc[0..], blake_a[0..]) { os.exit(25i32) }
