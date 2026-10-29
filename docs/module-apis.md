@@ -4402,7 +4402,7 @@ fn reservoir_decayed[T: type](items: []T, keys: []f64) -> WeightedReservoir[T]
 
 ```neper
 type Uuid = struct { bytes: [16]u8 }
-type Snowflake = struct { epoch_ms: u64, worker: u64, last_ms: u64, sequence: u64 }
+type Snowflake = struct { epoch_ms: u64, worker: u64, last_ms: u64, clock_ms: u64, sequence: u64 }
 error Invalid
 
 fn v4(random: [16]u8) -> Uuid

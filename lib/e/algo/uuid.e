@@ -166,8 +166,10 @@ fn uuid_format(uuid: Uuid, b: *str.Builder) -> err {
 // `rand.Pcg64`, so every identifier here reproduces from its inputs.
 
 // A Snowflake generator: 41 bits of milliseconds since `epoch_ms`, 10 of
-// `worker`, 12 of sequence within the millisecond.
-type Snowflake = struct { epoch_ms: u64, worker: u64, last_ms: u64, sequence: u64 }
+// `worker`, 12 of sequence within the millisecond. `last_ms` is the logical
+// timestamp carried by the last id; `clock_ms` is the latest accepted caller
+// timestamp, so a logical sequence rollover does not look like a clock rewind.
+type Snowflake = struct { epoch_ms: u64, worker: u64, last_ms: u64, clock_ms: u64, sequence: u64 }
 
 // Version 5 (RFC 9562 section 5.5): SHA-1 over the namespace bytes followed by
 // `name`, with the version and variant bits set; `scratch.len >= 16 + name.len`
@@ -294,25 +296,35 @@ fn ulid_format(u: Uuid, dst: []u8) -> (str, err) {
 // A Snowflake generator for `worker` (below 1024) counting from `epoch_ms`.
 fn snowflake(epoch_ms: u64, worker: u64) -> (Snowflake, err) {
     if worker >= 1024u64 { ret (zero, Invalid) }
-    ret (Snowflake { epoch_ms: epoch_ms, worker: worker, last_ms: 0u64, sequence: 0u64 }, ok)
+    ret (Snowflake { epoch_ms: epoch_ms, worker: worker, last_ms: 0u64, clock_ms: 0u64, sequence: 0u64 }, ok)
 }
 
 // The next id at the caller's clock `now_ms`. The 12-bit sequence counts the
 // ids of one millisecond and rolls over into the next one, so ids stay
-// strictly increasing until the clock catches up; a clock behind the last id,
-// or before the epoch, or a stamp past 41 bits, is `Invalid`.
+// strictly increasing until the clock catches up; a clock behind the last
+// accepted caller clock, or before the epoch, or a stamp past 41 bits, is
+// `Invalid`.
 fn snowflake_next(g: *Snowflake, now_ms: u64) -> (u64, err) {
-    if now_ms < g.last_ms || now_ms < g.epoch_ms { ret (0u64, Invalid) }
-    if now_ms == g.last_ms {
-        g.sequence = (g.sequence + 1u64) & 4095u64
-        if g.sequence == 0u64 { g.last_ms += 1u64 }
+    if now_ms < g.clock_ms || now_ms < g.epoch_ms { ret (0u64, Invalid) }
+    var next_ms = g.last_ms
+    var next_sequence = g.sequence
+    if now_ms > next_ms {
+        next_ms = now_ms
+        next_sequence = 0u64
     } else {
-        g.last_ms = now_ms
-        g.sequence = 0u64
+        next_sequence = (next_sequence + 1u64) & 4095u64
+        if next_sequence == 0u64 {
+            if next_ms == 0u64 -% 1u64 { ret (0u64, Invalid) }
+            next_ms += 1u64
+        }
     }
-    let elapsed = g.last_ms - g.epoch_ms
+    if next_ms < g.epoch_ms { ret (0u64, Invalid) }
+    let elapsed = next_ms - g.epoch_ms
     if elapsed >= 2199023255552u64 { ret (0u64, Invalid) }
-    ret ((elapsed << 22u64) | (g.worker << 12u64) | g.sequence, ok)
+    g.last_ms = next_ms
+    g.clock_ms = now_ms
+    g.sequence = next_sequence
+    ret ((elapsed << 22u64) | (g.worker << 12u64) | next_sequence, ok)
 }
 
 // Nano ID over the 64-symbol URL alphabet `_-0-9a-zA-Z`: every byte of the

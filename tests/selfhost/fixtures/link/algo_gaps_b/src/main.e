@@ -353,7 +353,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if narrow != uuid.Invalid { os.exit(11i32) }
 
     // 12: Snowflake ids: two in one millisecond, a later one, the rollover
-    // after 4,096 in a millisecond, and the clock then catching up.
+    // after 4,096 in a millisecond, and repeated calls before the caller clock
+    // catches the logical rollover up.
     let (s0, s_error) = uuid.snowflake(1288834974657u64, 5u64)
     if s_error != ok { os.exit(12i32) }
     var s = s0
@@ -368,12 +369,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     let (id3, e3) = uuid.snowflake_next(&s, 1288834975662u64)
-    let (id4, e4) = uuid.snowflake_next(&s, 1288834975663u64)
-    if e3 != ok || e4 != ok || id3 != 4219490304u64 || id4 != 4219490305u64 { os.exit(12i32) }
+    let (id4, e4) = uuid.snowflake_next(&s, 1288834975662u64)
+    let (id5, e5) = uuid.snowflake_next(&s, 1288834975663u64)
+    if e3 != ok || e4 != ok || e5 != ok || id3 != 4219490304u64 || id4 != 4219490305u64 || id5 != 4219490306u64 { os.exit(12i32) }
     let (_, backwards) = uuid.snowflake_next(&s, 1288834975000u64)
     if backwards != uuid.Invalid { os.exit(12i32) }
     let (_, wide_worker) = uuid.snowflake(0u64, 1024u64)
     if wide_worker != uuid.Invalid { os.exit(12i32) }
+    // A rejected 41-bit timestamp must not poison the next valid sample.
+    let (recover0, recover_init_error) = uuid.snowflake(0u64, 0u64)
+    if recover_init_error != ok { os.exit(12i32) }
+    var recover = recover0
+    let (_, too_wide) = uuid.snowflake_next(&recover, 2199023255552u64)
+    if too_wide != uuid.Invalid || recover.last_ms != 0u64 || recover.clock_ms != 0u64 || recover.sequence != 0u64 { os.exit(12i32) }
+    let (recovered, recovery_error) = uuid.snowflake_next(&recover, 1u64)
+    if recovery_error != ok || recovered != 4194304u64 { os.exit(12i32) }
+    // A final valid millisecond may fill its sequence, but its carry cannot
+    // wrap the u64 clock or change the generator after reporting Invalid.
+    let max_clock = 0u64 -% 1u64
+    let (edge0, edge_init_error) = uuid.snowflake(max_clock - 1u64, 0u64)
+    if edge_init_error != ok { os.exit(12i32) }
+    var edge = edge0
+    let (_, edge_first_error) = uuid.snowflake_next(&edge, max_clock)
+    if edge_first_error != ok { os.exit(12i32) }
+    i = 0usize
+    while i < 4095usize {
+        let (_, edge_fill_error) = uuid.snowflake_next(&edge, max_clock)
+        if edge_fill_error != ok { os.exit(12i32) }
+        i += 1usize
+    }
+    let (_, edge_rollover_error) = uuid.snowflake_next(&edge, max_clock)
+    if edge_rollover_error != uuid.Invalid || edge.last_ms != max_clock || edge.clock_ms != max_clock || edge.sequence != 4095u64 { os.exit(12i32) }
 
     // 13: a Nano ID from the replica's bytes.
     r = rand.pcg64(4u64, 4u64)
