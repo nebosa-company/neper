@@ -11,6 +11,8 @@
 // breaks are placed as they are scanned, brackets and emphasis runs are kept on a stack and
 // resolved into `Link`, `Image`, `Emph` and `Strong` spans, and the result is sorted so a
 // container precedes what it contains. Every span is over the input; nothing is copied.
+// Code-span opener runs share a 1 MiB scan budget per call, so unequal unmatched runs return
+// `TooLarge` instead of repeatedly rescanning their suffixes.
 //
 // ponytail: whitespace and punctuation are ASCII for the flanking rules, a tab is one column,
 // and reference links, entities, raw HTML and link destinations needing normalization are
@@ -37,6 +39,7 @@ error TooDeep
 
 const MAX_DEPTH: usize = 32usize
 const MAX_DELIMITERS: usize = 128usize
+const MAX_CODE_SPAN_SCAN: usize = 1048576usize
 
 const TAB: u8 = 9u8
 const LF: u8 = 10u8
@@ -506,24 +509,36 @@ fn autolink(text: str, at: usize) -> (usize, bool, bool) {
     ret (i, true, true)
 }
 
+fn spend_code_span_scan(scan_budget: *usize) -> bool {
+    if *scan_budget == 0usize { ret false }
+    *scan_budget -= 1usize
+    ret true
+}
+
 // The code span whose opening run is `at..run_end`: its content, or none when no run of the
-// same length closes it.
-fn code_span(text: str, at: usize, run_end: usize) -> (usize, usize, usize, bool) {
+// same length closes it. Each inspected candidate byte uses the shared parse budget.
+fn code_span(text: str, at: usize, run_end: usize, scan_budget: *usize) -> (usize, usize, usize, bool, err) {
     let n = run_end - at
     var i = run_end
     while i < text.len {
+        if !spend_code_span_scan(scan_budget) { ret (0usize, 0usize, 0usize, false, TooLarge) }
         if text[i] != 96u8 {
             i += 1usize
             continue
         }
-        var j = i
-        while j < text.len && text[j] == 96u8 { j += 1usize }
+        var j = i + 1usize
+        while j < text.len {
+            if !spend_code_span_scan(scan_budget) { ret (0usize, 0usize, 0usize, false, TooLarge) }
+            if text[j] != 96u8 { break }
+            j += 1usize
+        }
         if j - i == n {
             var from = run_end
             var to = i
             var all_space = true
             var k = from
             while k < to {
+                if !spend_code_span_scan(scan_budget) { ret (0usize, 0usize, 0usize, false, TooLarge) }
                 if text[k] != SPACE && text[k] != LF { all_space = false }
                 k += 1usize
             }
@@ -531,11 +546,11 @@ fn code_span(text: str, at: usize, run_end: usize) -> (usize, usize, usize, bool
                 from += 1usize
                 to -= 1usize
             }
-            ret (from, to, j, true)
+            ret (from, to, j, true, ok)
         }
         i = j
     }
-    ret (0usize, 0usize, 0usize, false)
+    ret (0usize, 0usize, 0usize, false, ok)
 }
 
 // A link destination and optional title after `(`; where the `)` is, or none.
@@ -659,6 +674,7 @@ fn parse_inlines(text: str, out: []Inline) -> (usize, err) {
     var s: Inlines = zero
     s.text = text
     s.out = out
+    var code_scan_budget = MAX_CODE_SPAN_SCAN
     var i = 0usize
     var text_start = 0usize
     while i < text.len {
@@ -701,7 +717,8 @@ fn parse_inlines(text: str, out: []Inline) -> (usize, err) {
         if c == 96u8 {
             var run = i
             while run < text.len && text[run] == 96u8 { run += 1usize }
-            let (from, to, after, closed) = code_span(text, i, run)
+            let (from, to, after, closed, span_error) = code_span(text, i, run, &code_scan_budget)
+            if span_error != ok { ret (0usize, span_error) }
             if closed {
                 let flush_error = flush_text(&s, text_start, i)
                 if flush_error != ok { ret (0usize, flush_error) }

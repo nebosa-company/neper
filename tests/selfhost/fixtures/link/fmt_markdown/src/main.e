@@ -421,6 +421,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, small_error) = markdown.parse_blocks("# a\n", few[..])
     if small_error != markdown.TooLarge { os.exit(100i32) }
 
+    // 101: a normal unmatched code span remains literal text.
+    try check(a, "`foo\n", "<p>`foo</p>\n", 101i32)
+
+    // 102: unequal unmatched runs once made every opener re-scan all later runs.
+    var adversarial: [20000]u8 = zero
+    var used = 0usize
+    var run = 1usize
+    while run <= 192usize {
+        var tick = 0usize
+        while tick < run {
+            adversarial[used] = 96u8
+            used += 1usize
+            tick += 1usize
+        }
+        adversarial[used] = 120u8
+        used += 1usize
+        run += 1usize
+    }
+    var attack_nodes: [1]markdown.Inline = zero
+    let (_, attack_error) = markdown.parse_inlines(adversarial[0usize..used], attack_nodes[..])
+    if attack_error != markdown.TooLarge { os.exit(102i32) }
+
     try io.print("fmt markdown ok\n")
     ret ok
 }
