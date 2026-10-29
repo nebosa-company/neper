@@ -212,8 +212,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (borrowed, borrowed_error) = only_value("a = 'abcdef'\n", small[..])
     if borrowed_error != ok || !str.eq(borrowed.text, "abcdef") { os.exit(16i32) }
 
-    // 17-19: datetime spellings are kept as written -- the `Z`, the space delimiter, the
-    // lowercase `t` -- since the caller is the one with a calendar.
+    // 17-19: valid datetime spellings retain their original delimiter and offset form.
     var room: [64]u8 = zero
     let (zulu, zulu_error) = only_value("a = 1979-05-27T07:32:00Z\n", room[..])
     if zulu_error != ok || zulu.kind != .Datetime || !str.eq(zulu.text, "1979-05-27T07:32:00Z") { os.exit(17i32) }
@@ -289,6 +288,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if multi_literal_control != toml.Invalid { os.exit(43i32) }
     let (raw_tab, raw_tab_error) = only_value("a = \"\t\"\n", room[..])
     if raw_tab_error != ok || raw_tab.text.len != 1usize || raw_tab.text[0usize] != 9u8 { os.exit(44i32) }
+
+    // 45-53: numeric separators stay between actual radix digits, signed zero retains
+    // its IEEE sign bit, and datetime values have a complete valid calendar shape.
+    let (negative_zero, negative_zero_error) = only_value("a = -0.0\n", room[..])
+    if negative_zero_error != ok || negative_zero.kind != .Float || mem.bitcast[u64](negative_zero.float) != 9223372036854775808u64 { os.exit(45i32) }
+    if outcome("a = 1_e5\n") != toml.Invalid { os.exit(46i32) }
+    if outcome("a = 1e_5\n") != toml.Invalid { os.exit(47i32) }
+    let (leap_day, leap_day_error) = only_value("a = 2000-02-29\n", room[..])
+    if leap_day_error != ok || leap_day.kind != .Datetime { os.exit(48i32) }
+    if outcome("a = 2023-02-29\n") != toml.Invalid { os.exit(49i32) }
+    if outcome("a = 0000-00-00\n") != toml.Invalid { os.exit(50i32) }
+    if outcome("a = 99:99:99\n") != toml.Invalid { os.exit(51i32) }
+    if outcome("a = 12:30:::\n") != toml.Invalid { os.exit(52i32) }
+    if outcome("a = 1979-05-27T07:32:00+99:00\n") != toml.Invalid { os.exit(53i32) }
 
     try io.print("fmt toml ok\n")
     ret ok

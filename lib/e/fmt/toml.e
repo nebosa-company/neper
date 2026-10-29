@@ -315,15 +315,22 @@ fn is_digit(c: u8) -> bool {
     ret c >= 48u8 && c <= 57u8
 }
 
-// Digits with `_` only between two of them, copied to the scratch without them.
-fn strip_underscores(p: *Parser, text: str) -> (str, err) {
+fn is_radix_digit(c: u8, radix: u8) -> bool {
+    if is_digit(c) { ret c - 48u8 < radix }
+    if radix != 16u8 { ret false }
+    ret (c >= 65u8 && c <= 70u8) || (c >= 97u8 && c <= 102u8)
+}
+
+// Digits with `_` only between two digits in the spelling's radix, copied to
+// the scratch without the separators.
+fn strip_underscores(p: *Parser, text: str, radix: u8) -> (str, err) {
     let start = p.used
     var i = 0usize
     while i < text.len {
         let c = text[i]
         if c == 95u8 {
             if i == 0usize || i + 1usize == text.len { ret ("", Invalid) }
-            if !str.is_ascii_alnum(text[i - 1usize]) || !str.is_ascii_alnum(text[i + 1usize]) { ret ("", Invalid) }
+            if !is_radix_digit(text[i - 1usize], radix) || !is_radix_digit(text[i + 1usize], radix) { ret ("", Invalid) }
         } else {
             let put_error = put(p, c)
             if put_error != ok { ret ("", put_error) }
@@ -341,15 +348,76 @@ fn looks_like_datetime(text: str) -> bool {
     ret false
 }
 
-fn datetime_ok(text: str) -> bool {
-    var i = 0usize
-    while i < text.len {
-        let c = text[i]
-        let allowed = is_digit(c) || c == 45u8 || c == 58u8 || c == 46u8 || c == 43u8 || c == 84u8 || c == 116u8 || c == 90u8 || c == 122u8 || c == SPACE
-        if !allowed { ret false }
-        i += 1usize
+fn decimal_pair(text: str, at: usize) -> (i64, bool) {
+    if at > text.len || text.len - at < 2usize { ret (0i64, false) }
+    if !is_digit(text[at]) || !is_digit(text[at + 1usize]) { ret (0i64, false) }
+    ret (i64(text[at] - 48u8) * 10i64 + i64(text[at + 1usize] - 48u8), true)
+}
+
+fn leap_year(year: i64) -> bool {
+    ret (year % 4i64 == 0i64 && year % 100i64 != 0i64) || year % 400i64 == 0i64
+}
+
+fn month_days(year: i64, month: i64) -> i64 {
+    if month == 2i64 {
+        if leap_year(year) { ret 29i64 }
+        ret 28i64
     }
-    ret true
+    if month == 4i64 || month == 6i64 || month == 9i64 || month == 11i64 { ret 30i64 }
+    ret 31i64
+}
+
+fn date_end(text: str, at: usize) -> (usize, bool) {
+    if at > text.len || text.len - at < 10usize { ret (0usize, false) }
+    var digit_at = 0usize
+    while digit_at < 4usize {
+        if !is_digit(text[at + digit_at]) { ret (0usize, false) }
+        digit_at += 1usize
+    }
+    if text[at + 4usize] != 45u8 || text[at + 7usize] != 45u8 { ret (0usize, false) }
+    let (month, month_ok) = decimal_pair(text, at + 5usize)
+    let (day, day_ok) = decimal_pair(text, at + 8usize)
+    if !month_ok || !day_ok || month < 1i64 || month > 12i64 { ret (0usize, false) }
+    let year = i64(text[at] - 48u8) * 1000i64 + i64(text[at + 1usize] - 48u8) * 100i64 + i64(text[at + 2usize] - 48u8) * 10i64 + i64(text[at + 3usize] - 48u8)
+    if day < 1i64 || day > month_days(year, month) { ret (0usize, false) }
+    ret (at + 10usize, true)
+}
+
+fn partial_time_end(text: str, at: usize) -> (usize, bool) {
+    if at > text.len || text.len - at < 8usize { ret (0usize, false) }
+    if text[at + 2usize] != 58u8 || text[at + 5usize] != 58u8 { ret (0usize, false) }
+    let (hour, hour_ok) = decimal_pair(text, at)
+    let (minute, minute_ok) = decimal_pair(text, at + 3usize)
+    let (second, second_ok) = decimal_pair(text, at + 6usize)
+    if !hour_ok || !minute_ok || !second_ok || hour > 23i64 || minute > 59i64 || second > 60i64 { ret (0usize, false) }
+    var end = at + 8usize
+    if end < text.len && text[end] == 46u8 {
+        end += 1usize
+        let fraction_start = end
+        while end < text.len && is_digit(text[end]) { end += 1usize }
+        if end == fraction_start { ret (0usize, false) }
+    }
+    ret (end, true)
+}
+
+fn datetime_ok(text: str) -> bool {
+    if text.len >= 10usize && is_digit(text[0usize]) && is_digit(text[1usize]) && is_digit(text[2usize]) && is_digit(text[3usize]) && text[4usize] == 45u8 {
+        let (date_at, date_ok) = date_end(text, 0usize)
+        if !date_ok { ret false }
+        if date_at == text.len { ret true }
+        if text[date_at] != 84u8 && text[date_at] != 116u8 && text[date_at] != SPACE { ret false }
+        let (time_at, time_ok) = partial_time_end(text, date_at + 1usize)
+        if !time_ok { ret false }
+        if time_at == text.len { ret true }
+        if text[time_at] == 90u8 || text[time_at] == 122u8 { ret time_at + 1usize == text.len }
+        if text[time_at] != 43u8 && text[time_at] != 45u8 { ret false }
+        let (zone_hour, zone_hour_ok) = decimal_pair(text, time_at + 1usize)
+        let (zone_minute, zone_minute_ok) = decimal_pair(text, time_at + 4usize)
+        if !zone_hour_ok || !zone_minute_ok || time_at + 3usize >= text.len || text[time_at + 3usize] != 58u8 { ret false }
+        ret zone_hour <= 23i64 && zone_minute <= 59i64 && time_at + 6usize == text.len
+    }
+    let (time_at, time_ok) = partial_time_end(text, 0usize)
+    ret time_ok && time_at == text.len
 }
 
 fn number(p: *Parser, text: str) -> (Value, err) {
@@ -380,7 +448,7 @@ fn number(p: *Parser, text: str) -> (Value, err) {
         var radix = 16u8
         if body[1usize] == 111u8 { radix = 8u8 }
         if body[1usize] == 98u8 { radix = 2u8 }
-        let (digits, digits_error) = strip_underscores(p, body[2usize..])
+        let (digits, digits_error) = strip_underscores(p, body[2usize..], radix)
         if digits_error != ok { ret (out, digits_error) }
         let (magnitude, magnitude_error) = str.parse_u64_radix(digits, radix)
         if magnitude_error != ok || magnitude > 9223372036854775807u64 { ret (out, Invalid) }
@@ -397,7 +465,7 @@ fn number(p: *Parser, text: str) -> (Value, err) {
         if c == 46u8 || c == 101u8 || c == 69u8 { is_float = true }
         i += 1usize
     }
-    let (digits, digits_error) = strip_underscores(p, body)
+    let (digits, digits_error) = strip_underscores(p, body, 10u8)
     if digits_error != ok { ret (out, digits_error) }
     // This is a decimal spelling. Check after removing separators so an underscore
     // cannot hide a prohibited leading zero (for example `0_1` or `0_1.0`).
