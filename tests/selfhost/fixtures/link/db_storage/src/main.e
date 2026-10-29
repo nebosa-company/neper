@@ -176,6 +176,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if storage.bitmap_count(bitmaps[4usize..8usize]) != 53usize { os.exit(6i32) }
     if storage.bitmap_and(bitmaps[4usize..8usize], bitmaps[8usize..12usize], combined[..]) != ok || storage.bitmap_count(combined[..]) != 0usize { os.exit(6i32) }
     if storage.bitmap_or(bitmaps[4usize..8usize], bitmaps[8usize..12usize], combined[..]) != ok || storage.bitmap_count(combined[..]) != 107usize { os.exit(6i32) }
+    // Two words times this cardinality wraps to zero without a checked capacity
+    // preflight.  Reject it and leave the caller's undersized output untouched.
+    var long_column: [65]u8 = zero
+    var short_bitmaps: [2]u64 = zero
+    short_bitmaps[0usize] = 123u64
+    short_bitmaps[1usize] = 456u64
+    let overflow_cardinality = (0usize -% 1usize) / 2usize + 1usize
+    let (_, overflow_error) = storage.index_bitmap(long_column[..], overflow_cardinality, short_bitmaps[..])
+    if overflow_error != storage.TooSmall || short_bitmaps[0usize] != 123u64 || short_bitmaps[1usize] != 456u64 { os.exit(6i32) }
     column[3usize] = 4u8
     let (_, bad_value) = storage.index_bitmap(column[..], 4usize, bitmaps[..])
     if bad_value != storage.Invalid { os.exit(6i32) }

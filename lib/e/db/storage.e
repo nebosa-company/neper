@@ -288,10 +288,15 @@ fn index_lookup_sparse(index: []const IndexEntry, keys: []const u64, page_size: 
 // One bitmap per distinct value of a column with values `< cardinality`,
 // laid out back to back in `out`; answers the words per bitmap.
 fn index_bitmap(values: []const u8, cardinality: usize, out: []u64) -> (usize, err) {
-    let words = (values.len + 63usize) / 64usize
-    if out.len < words * cardinality { ret (0usize, TooSmall) }
+    // Round up without overflowing when `values.len` reaches the machine limit.
+    var words = values.len / 64usize
+    if values.len % 64usize != 0usize { words += 1usize }
+    // The caller supplies the backing storage for every value's bitmap.  Prove
+    // the product fits before calculating it or using it as a loop bound.
+    if cardinality > 0usize && words > out.len / cardinality { ret (0usize, TooSmall) }
+    let needed = words * cardinality
     var w = 0usize
-    while w < words * cardinality {
+    while w < needed {
         out[w] = 0u64
         w += 1usize
     }
