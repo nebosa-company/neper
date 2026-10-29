@@ -154,6 +154,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4 != ok || empty.len != 0usize { os.exit(11) }
     let (again, e5) = zip.extract(a, &ar, 2usize)
     if e5 != ok || !same(again, pattern[0..]) { os.exit(12) }
+    // The declared compressed range for a raw-DEFLATE member must end with its
+    // final block, rather than accept trailing bytes that do not affect the output
+    // CRC or uncompressed size. Splice eight bytes before the central directory,
+    // then make both size fields and the directory offset self-consistent.
+    let deflate_local = 243usize
+    let deflate_data = deflate_local + 30usize + 9usize
+    let deflate_size = 2980usize
+    let directory_at = deflate_data + deflate_size
+    let third_directory = directory_at + 46usize + 5usize + 46usize + 4usize
+    let deflate_tail = 8usize
+    let (trailing_deflate, trailing_deflate_error) = mem.alloc[u8](a, archive.len + deflate_tail)
+    if trailing_deflate_error != ok { os.exit(45) }
+    mem.copy[u8](trailing_deflate[..directory_at], archive[..directory_at])
+    var tail_at = 0usize
+    while tail_at < deflate_tail {
+        trailing_deflate[directory_at + tail_at] = 165u8
+        tail_at += 1usize
+    }
+    mem.copy[u8](trailing_deflate[directory_at + deflate_tail..], archive[directory_at..])
+    write32(trailing_deflate, deflate_local + 18usize, u32(deflate_size + deflate_tail))
+    write32(trailing_deflate, third_directory + deflate_tail + 20usize, u32(deflate_size + deflate_tail))
+    write32(trailing_deflate, archive.len - 22usize + deflate_tail + 16usize, u32(directory_at + deflate_tail))
+    var trailing_deflate_source = Source { data: trailing_deflate, off: 0usize }
+    let (trailing_deflate_archive0, trailing_deflate_open_error) = open_over(a, &trailing_deflate_source, limits)
+    if trailing_deflate_open_error != ok { os.exit(46) }
+    var trailing_deflate_archive = trailing_deflate_archive0
+    let (_, trailing_deflate_extract_error) = zip.extract(a, &trailing_deflate_archive, 2usize)
+    if trailing_deflate_extract_error != zip.Invalid { os.exit(47) }
     // ZIP64.
     var source64 = Source { data: zip64, off: 0usize }
     let (big0, e6) = open_over(a, &source64, limits)

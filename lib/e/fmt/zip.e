@@ -435,9 +435,16 @@ fn entry_read(ctx: *void, dst: []u8) -> (usize, err) {
             hash.crc32_update(&e.crc, dst[..written])
         }
         if status == .Finished {
+            // A ZIP member's declared compressed range holds exactly one raw DEFLATE
+            // stream. The decoder may have prefetched bytes into its bit accumulator,
+            // and a large declared range can still have bytes that were never filled.
+            // Neither is part of the uncompressed CRC or size, so require all three
+            // sources of remaining compressed data to be empty before accepting it.
+            var held: [7]u8 = zero
+            let held_count = deflate.leftover(&e.decoder, held[..])
+            if e.compressed_left != 0u64 || e.in_at != e.in_len || held_count != 0usize { ret (0usize, Invalid) }
             if written > 0usize {
                 // The trailer check waits for the next call, which answers End.
-                e.compressed_left = 0u64
                 e.source_ended = true
                 e.finished = e.produced == e.expected_size && hash.crc32_done(&e.crc) == e.expected_crc
                 if !e.finished { ret (0usize, Checksum) }
