@@ -12,6 +12,9 @@ error Invalid
 
 fn open(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (Mapping, err) {
     if len == 0usize { ret (zero, Empty) }
+    let (info, info_error) = os.stat(a, path)
+    if info_error != ok { ret (zero, info_error) }
+    if offset > info.size || u64(len) > info.size - offset { ret (zero, Invalid) }
     var flags: os.OpenFlags = zero
     flags.read = true
     flags.write = writable

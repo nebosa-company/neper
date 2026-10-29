@@ -43,6 +43,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if write_whole(a, "np-fs-map.bin", original[..]) != ok { os.exit(10) }
     let (_, empty) = mmap.open(a, "np-fs-map.bin", false, 0u64, 0usize)
     if empty != mmap.Empty { os.exit(11) }
+    let (_, at_end) = mmap.open(a, "np-fs-map.bin", false, 16u64, 1usize)
+    if at_end != mmap.Invalid { os.exit(25) }
+    let (_, crossing_end) = mmap.open(a, "np-fs-map.bin", false, 15u64, 2usize)
+    if crossing_end != mmap.Invalid { os.exit(26) }
     let (reader, reader_error) = mmap.open(a, "np-fs-map.bin", false, 0u64, 16usize)
     if reader_error != ok { os.exit(12) }
     let seen = mmap.bytes(reader)
