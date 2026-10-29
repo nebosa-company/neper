@@ -952,6 +952,13 @@ fn auth_anonymous(dst: []u8) -> (usize, err) {
 // authentication; `REJECTED <mechanisms>` is `Rejected`; `AGREE_UNIX_FD` and `DATA` are accepted and ignored here.
 fn auth_reply(line: str, dst: []u8) -> (usize, bool, err) {
     if line.len >= 2usize && str.eq(line[0usize..2usize], "OK") {
+        if line.len != 35usize { ret (0usize, false, Invalid) }
+        if line[2usize] != 32u8 { ret (0usize, false, Invalid) }
+        var g = 3usize
+        while g < line.len {
+            if hex_value(line[g]) >= 16u8 { ret (0usize, false, Invalid) }
+            g += 1usize
+        }
         let begin = "BEGIN\r\n"
         if dst.len < begin.len { ret (0usize, false, TooSmall) }
         mem.copy[u8](dst[0usize..begin.len], begin)
@@ -1136,66 +1143,87 @@ fn rule_matches(rule: str, m: *const Message) -> bool {
 
 // The first usable entry of a bus address (`unix:path=/run/user/1000/bus,guid=...`, `unix:abstract=name`,
 // `unix:runtime=yes`, `tcp:host=h,port=1`), values with `%XX` escapes decoded in place into `out`.
+fn address_token_byte(c: u8) -> bool {
+    ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 45u8 || c == 95u8
+}
+
+fn address_value_byte(c: u8) -> bool {
+    ret address_token_byte(c) || c == 47u8 || c == 46u8 || c == 42u8
+}
+
 fn parse_address(text: str, out: []u8) -> (Address, err) {
     var a: Address = zero
     var colon = 0usize
     while colon < text.len && text[colon] != 58u8 { colon += 1usize }
     if colon == 0usize || colon >= text.len { ret (a, Invalid) }
+    var t = 0usize
+    while t < colon {
+        if !address_token_byte(text[t]) { ret (a, Invalid) }
+        t += 1usize
+    }
     a.transport = text[0usize..colon]
     var used = 0usize
     var i = colon + 1usize
+    if i >= text.len || text[i] == 59u8 { ret (a, ok) }
     while i <= text.len {
         var j = i
         while j < text.len && text[j] != 44u8 && text[j] != 59u8 { j += 1usize }
         let pair = text[i..j]
         var eq = 0usize
         while eq < pair.len && pair[eq] != 61u8 { eq += 1usize }
-        if eq < pair.len {
-            let key = pair[0usize..eq]
-            let raw = pair[eq + 1usize..]
-            // Decode %XX into out.
-            let start = used
-            var k = 0usize
-            while k < raw.len {
-                var c = raw[k]
-                if c == 37u8 && k + 2usize < raw.len {
-                    let hi = hex_value(raw[k + 1usize])
-                    let lo = hex_value(raw[k + 2usize])
-                    if hi < 16u8 && lo < 16u8 {
-                        c = (hi << 4u8) | lo
-                        k += 2usize
-                    }
-                }
-                if used >= out.len { ret (a, TooSmall) }
-                out[used] = c
-                used += 1usize
-                k += 1usize
+        if eq == 0usize || eq == pair.len { ret (a, Invalid) }
+        let key = pair[0usize..eq]
+        var q = 0usize
+        while q < key.len {
+            if !address_token_byte(key[q]) { ret (a, Invalid) }
+            q += 1usize
+        }
+        let raw = pair[eq + 1usize..]
+        // Decode %XX; unescaped bytes must be in D-Bus's optionally-escaped set.
+        let start = used
+        var k = 0usize
+        while k < raw.len {
+            var c = raw[k]
+            if c == 37u8 {
+                if k + 2usize >= raw.len { ret (a, Invalid) }
+                let hi = hex_value(raw[k + 1usize])
+                let lo = hex_value(raw[k + 2usize])
+                if hi >= 16u8 || lo >= 16u8 { ret (a, Invalid) }
+                c = (hi << 4u8) | lo
+                k += 2usize
+            } else if !address_value_byte(c) {
+                ret (a, Invalid)
             }
-            let value: str = out[start..used]
-            if str.eq(key, "path") {
-                a.path = value
-            } else if str.eq(key, "abstract") {
-                a.abstract_name = value
-            } else if str.eq(key, "host") {
-                a.host = value
-            } else if str.eq(key, "guid") {
-                a.guid = value
-            } else if str.eq(key, "runtime") {
-                a.runtime = str.eq(value, "yes")
-            } else if str.eq(key, "port") {
-                var port = 0u32
-                var d = 0usize
-                while d < value.len {
-                    if value[d] < 48u8 || value[d] > 57u8 { ret (a, Invalid) }
-                    port = port * 10u32 + u32(value[d] - 48u8)
-                    d += 1usize
-                }
-                if port > 65535u32 { ret (a, Invalid) }
-                a.port = u16(port)
+            if used >= out.len { ret (a, TooSmall) }
+            out[used] = c
+            used += 1usize
+            k += 1usize
+        }
+        let value: str = out[start..used]
+        if str.eq(key, "path") {
+            a.path = value
+        } else if str.eq(key, "abstract") {
+            a.abstract_name = value
+        } else if str.eq(key, "host") {
+            a.host = value
+        } else if str.eq(key, "guid") {
+            a.guid = value
+        } else if str.eq(key, "runtime") {
+            a.runtime = str.eq(value, "yes")
+        } else if str.eq(key, "port") {
+            var port = 0u32
+            var d = 0usize
+            while d < value.len {
+                if value[d] < 48u8 || value[d] > 57u8 { ret (a, Invalid) }
+                port = port * 10u32 + u32(value[d] - 48u8)
+                d += 1usize
             }
+            if port > 65535u32 { ret (a, Invalid) }
+            a.port = u16(port)
         }
         if j >= text.len || text[j] == 59u8 { break }
         i = j + 1usize
+        if i >= text.len { ret (a, Invalid) }
     }
     ret (a, ok)
 }
