@@ -1002,8 +1002,8 @@ fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
 // operation is written so that the day `e.os` learns the selection, these follow.
 
 // The clipboard (D5203), on NSPasteboard's general board. A text is `public.utf8-plain-text`; bytes sit under their
-// mime string as the type; files and an image have private types of their own (`com.neper.paths`: the paths, one per
-// line; `com.neper.image`: width and height as little-endian u32, then the pixels), which hold what was written exactly.
+// mime string as the type; files and an image have private types of their own (`com.neper.paths`: little-endian u64
+// byte lengths followed by path bytes; `com.neper.image`: width and height as little-endian u32, then the pixels).
 fn type_text() -> str { ret "public.utf8-plain-text" }
 fn type_paths() -> str { ret "com.neper.paths" }
 fn type_image() -> str { ret "com.neper.image" }
@@ -1063,17 +1063,20 @@ fn clipboard_write(a: *mem.Arena, items: []const Content) -> err {
             var total = 0usize
             var path = 0usize
             while path < item.paths.len {
-                total += item.paths[path].len + 1usize
+                total += item.paths[path].len + 8usize
                 path += 1usize
             }
-            let (joined, joined_error) = mem.alloc[u8](a, total + 1usize)
+            let (joined, joined_error) = mem.alloc[u8](a, total)
             if joined_error != ok { result = joined_error } else {
                 var written = 0usize
                 path = 0usize
                 while path < item.paths.len {
-                    if path != 0usize {
-                        joined[written] = 10u8
+                    let path_len = u64(item.paths[path].len)
+                    var shift = 0usize
+                    while shift < 8usize {
+                        joined[written] = u8((path_len >> u32(shift * 8usize)) & 255u64)
                         written += 1usize
+                        shift += 1usize
                     }
                     var byte = 0usize
                     while byte < item.paths[path].len {
@@ -1141,26 +1144,39 @@ fn clipboard_read(a: *mem.Arena, kind: ContentKind, mime: str) -> (Content, err)
         item.mime = mime
         item.bytes = data
     } else if kind == .Files {
-        var lines = 1usize
         var at = 0usize
+        var count = 0usize
         while at < data.len {
-            if data[at] == 10u8 { lines += 1usize }
-            at += 1usize
-        }
-        let (paths, paths_error) = mem.alloc[str](a, lines)
-        if paths_error != ok { ret (item, paths_error) }
-        var start = 0usize
-        var line = 0usize
-        at = 0usize
-        while at <= data.len {
-            if at == data.len || data[at] == 10u8 {
-                paths[line] = data[start..at]
-                line += 1usize
-                start = at + 1usize
+            if data.len - at < 8usize { ret (item, Failed) }
+            var path_len = 0u64
+            var shift = 0usize
+            while shift < 8usize {
+                path_len |= u64(data[at + shift]) << u32(shift * 8usize)
+                shift += 1usize
             }
-            at += 1usize
+            at += 8usize
+            if path_len > u64(data.len - at) { ret (item, Failed) }
+            at += usize(path_len)
+            count += 1usize
         }
-        item.paths = paths[0usize..lines]
+        let (paths, paths_error) = mem.alloc[str](a, count)
+        if paths_error != ok { ret (item, paths_error) }
+        at = 0usize
+        var path = 0usize
+        while path < count {
+            var path_len = 0u64
+            var shift = 0usize
+            while shift < 8usize {
+                path_len |= u64(data[at + shift]) << u32(shift * 8usize)
+                shift += 1usize
+            }
+            at += 8usize
+            let length = usize(path_len)
+            paths[path] = data[at..at + length]
+            at += length
+            path += 1usize
+        }
+        item.paths = paths[0usize..count]
     } else {
         if data.len < 8usize { ret (item, Failed) }
         var width = 0u32
