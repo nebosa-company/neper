@@ -65,5 +65,6 @@ wasm_threads
 web_csp
 web_page_csp
 web_shell
+web_match_media_not
 web_request_clone_body
 gpu_ftz_ops
