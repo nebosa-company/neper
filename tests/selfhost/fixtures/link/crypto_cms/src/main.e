@@ -381,6 +381,93 @@ fn run_vectors() -> u8 {
     ret 0u8
 }
 
+// `Signer.attributes` is the exact `[0] IMPLICIT` DER slice the verifier signs
+// after changing its tag to SET.  Re-sign small altered slices here so the cases
+// exercise real signature verification without duplicating CMS's full envelope.
+fn verify_altered_attributes(a: *mem.Arena, signed: cms.SignedData, attributes: []const u8) -> err {
+    if signed.signers.len != 1usize || attributes.len > 192usize { ret cms.Invalid }
+    var set_bytes: [192]u8 = zero
+    mem.copy[u8](set_bytes[0usize..attributes.len], attributes)
+    set_bytes[0usize] = 49u8
+    let (signature, signature_error) = sign.ed25519_sign(test_secret(), set_bytes[0usize..attributes.len])
+    if signature_error != ok { ret signature_error }
+    var signer: [1]cms.Signer = zero
+    signer[0usize] = signed.signers[0usize]
+    signer[0usize].attributes = attributes
+    signer[0usize].signature = signature.bytes[0usize..]
+    var altered = signed
+    altered.signers = signer[0usize..]
+    ret cms.verify_detached(a, &altered, signed_content())
+}
+
+// Mandatory signed attributes cannot be absent, duplicated, or carry multiple
+// values.  Each payload below is signed with the fixture key, so the verifier
+// reaches the attribute checks rather than merely rejecting a broken signature.
+fn mandatory_attribute_regressions(a: *mem.Arena) -> err {
+    var encoded: [4096]u8 = zero
+    let (written, signed_error) = cms.sign_ed25519(a, signed_content(), test_cert(), test_secret(), false, 1767323045i64, encoded[0usize..])
+    if signed_error != ok { ret signed_error }
+    let (signed, parse_error) = cms.parse(a, encoded[0usize..written])
+    if parse_error != ok || signed.signers.len != 1usize { ret cms.Invalid }
+    let source = signed.signers[0usize].attributes
+    // sign_ed25519 has contentType (26 bytes), signingTime (30), messageDigest
+    // (81), inside A0 81 89. Check that layout before using its pieces below.
+    if source.len != 140usize || source[0usize] != 160u8 || source[1usize] != 129u8 || source[2usize] != 137u8 { ret cms.Invalid }
+    if source[3usize] != 48u8 || source[4usize] != 24u8 || source[29usize] != 48u8 || source[59usize] != 48u8 || source[60usize] != 79u8 { ret cms.Invalid }
+
+    // messageDigest alone: contentType is mandatory whenever signedAttrs exist.
+    var missing_content_type: [83]u8 = zero
+    missing_content_type[0usize] = 160u8
+    missing_content_type[1usize] = 81u8
+    mem.copy[u8](missing_content_type[2usize..], source[59usize..140usize])
+    if verify_altered_attributes(a, signed, missing_content_type[0usize..]) != cms.BadDigest { ret cms.Invalid }
+
+    // Two contentType Attributes, each individually valid, remain ambiguous.
+    var duplicate_content_type: [136]u8 = zero
+    duplicate_content_type[0usize] = 160u8
+    duplicate_content_type[1usize] = 129u8
+    duplicate_content_type[2usize] = 133u8
+    mem.copy[u8](duplicate_content_type[3usize..29usize], source[3usize..29usize])
+    mem.copy[u8](duplicate_content_type[29usize..55usize], source[3usize..29usize])
+    mem.copy[u8](duplicate_content_type[55usize..], source[59usize..140usize])
+    if verify_altered_attributes(a, signed, duplicate_content_type[0usize..]) != cms.BadDigest { ret cms.Invalid }
+
+    // messageDigest is mandatory and singular by the same rule.
+    var duplicate_message_digest: [191]u8 = zero
+    duplicate_message_digest[0usize] = 160u8
+    duplicate_message_digest[1usize] = 129u8
+    duplicate_message_digest[2usize] = 188u8
+    mem.copy[u8](duplicate_message_digest[3usize..29usize], source[3usize..29usize])
+    mem.copy[u8](duplicate_message_digest[29usize..110usize], source[59usize..140usize])
+    mem.copy[u8](duplicate_message_digest[110usize..], source[59usize..140usize])
+    if verify_altered_attributes(a, signed, duplicate_message_digest[0usize..]) != cms.BadDigest { ret cms.Invalid }
+
+    // A single contentType Attribute whose SET has two values is invalid too.
+    var multiple_content_values: [120]u8 = zero
+    multiple_content_values[0usize] = 160u8
+    multiple_content_values[1usize] = 118u8
+    multiple_content_values[2usize] = 48u8
+    multiple_content_values[3usize] = 35u8
+    mem.copy[u8](multiple_content_values[4usize..15usize], source[5usize..16usize])
+    multiple_content_values[15usize] = 49u8
+    multiple_content_values[16usize] = 22u8
+    mem.copy[u8](multiple_content_values[17usize..28usize], source[18usize..29usize])
+    mem.copy[u8](multiple_content_values[28usize..39usize], source[18usize..29usize])
+    mem.copy[u8](multiple_content_values[39usize..], source[59usize..140usize])
+    if verify_altered_attributes(a, signed, multiple_content_values[0usize..]) != cms.BadDigest { ret cms.Invalid }
+
+    // A valid pair followed by an incomplete Attribute is malformed rather than
+    // an end-of-list; it must not be ignored after the mandatory values were found.
+    var malformed_tail: [141]u8 = zero
+    malformed_tail[0usize] = 160u8
+    malformed_tail[1usize] = 129u8
+    malformed_tail[2usize] = 138u8
+    mem.copy[u8](malformed_tail[3usize..140usize], source[3usize..140usize])
+    malformed_tail[140usize] = 48u8
+    if verify_altered_attributes(a, signed, malformed_tail[0usize..]) != cms.BadDigest { ret cms.Invalid }
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // the embedded certificate parses and its issuer-and-serial matching is exercised below
     let (c, c_error) = x509.parse(a, cert_bytes())
@@ -396,6 +483,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if empty_parse_error != ok || empty_signed.has_content { os.exit(103i32) }
     if cms.verify_detached(&empty_arena, &empty_signed, "") != ok { os.exit(104i32) }
     if cms.verify(&empty_arena, &empty_signed, "") != cms.Invalid { os.exit(105i32) }
+    var attributes_arena_storage: [65536]u8 = zero
+    var attributes_arena = mem.arena_from(attributes_arena_storage[..])
+    if mandatory_attribute_regressions(&attributes_arena) != ok { os.exit(106i32) }
     try io.print("crypto cms ok")
     ret ok
 }
