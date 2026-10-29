@@ -51,6 +51,15 @@ fn open_over(a: *mem.Arena, s: *Source, limits: zip.Limits) -> (zip.Archive, err
     ret (archive, open_error)
 }
 
+fn local_rejected(a: *mem.Arena, data: []const u8, limits: zip.Limits, storage: []u8) -> bool {
+    var source = Source { data: data, off: 0usize }
+    let (archive0, open_error) = open_over(a, &source, limits)
+    if open_error != ok { ret false }
+    var archive = archive0
+    let (_, reader_error) = zip.entry_reader(storage, &archive, 0usize)
+    ret reader_error == zip.Invalid
+}
+
 fn write16(dst: []u8, at: usize, value: u32) {
     dst[at] = u8(value & 255u32)
     dst[at + 1usize] = u8((value >> 8u32) & 255u32)
@@ -178,6 +187,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A writer-generated archive corrupted with an invalid raw name is rejected both
     // with and without bit 11.
     var no_data: [0]u8 = zero
+    // Local-file metadata cannot quietly disagree with the central directory (issue #1365).
+    var mismatch_parts: [1]zipwrite.Part = zero
+    mismatch_parts[0usize] = zipwrite.Part { name: "x", data: no_data[..] }
+    let (mismatch, mismatch_error) = zipwrite.store(a, mismatch_parts[..])
+    if mismatch_error != ok { os.exit(35) }
+    let mismatch_directory = 30usize + mismatch_parts[0usize].name.len
+    mismatch[30usize] = 121u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(36) }
+    mismatch[30usize] = 120u8
+    mismatch[8usize] = 8u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(37) }
+    mismatch[8usize] = 0u8
+    mismatch[14usize] = 1u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(38) }
+    mismatch[14usize] = 0u8
+    mismatch[18usize] = 1u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(39) }
+    mismatch[18usize] = 0u8
+    mismatch[6usize] = 8u8
+    mismatch[mismatch_directory + 8usize] = 8u8
+    mismatch[14usize] = 1u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(40) }
     var malformed_parts: [1]zipwrite.Part = zero
     malformed_parts[0usize] = zipwrite.Part { name: "x", data: no_data[..] }
     let (malformed, malformed_error) = zipwrite.store(a, malformed_parts[..])

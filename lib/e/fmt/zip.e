@@ -29,7 +29,7 @@ const WINDOW: usize = 32768usize
 // The central directory is read whole; past this it is refused rather than streamed.
 const DIRECTORY_LIMIT: u64 = 67108864u64
 
-type State = struct { source: io.Reader, seeker: io.Seeker, entries: []Entry, offsets: []u64 }
+type State = struct { source: io.Reader, seeker: io.Seeker, entries: []Entry, offsets: []u64, flags: []u16, directory_offset: u64 }
 
 type EntryState = struct {
     source: io.Reader,
@@ -66,6 +66,60 @@ fn read_at(s: *State, offset: u64, dst: []u8) -> err {
     let exact_error = io.read_exact(&s.source, dst)
     if exact_error != ok { ret Invalid }
     ret ok
+}
+
+// The local name is not retained by `open`, so compare it in bounded source-sized
+// pieces before exposing the entry's data.
+fn local_name_matches(s: *State, offset: u64, name: str, scratch: []u8) -> err {
+    var at = 0usize
+    while at < name.len {
+        var take = scratch.len
+        if name.len - at < take { take = name.len - at }
+        let read_error = read_at(s, offset + u64(at), scratch[..take])
+        if read_error != ok { ret read_error }
+        if !mem.eq[u8](scratch[..take], name[at..at + take]) { ret Invalid }
+        at += take
+    }
+    ret ok
+}
+
+// ZIP64 local extra fields provide only the local fields whose 32-bit values were
+// saturated, in uncompressed-size then compressed-size order.
+fn local_zip64_sizes(s: *State, offset: u64, length: u64, size: u64, compressed: u64) -> (u64, u64, err) {
+    var local_size = size
+    var local_compressed = compressed
+    var at = 0u64
+    while at < length {
+        if length - at < 4u64 { ret (0u64, 0u64, Invalid) }
+        var field: [4]u8 = zero
+        let field_error = read_at(s, offset + at, field[0..])
+        if field_error != ok { ret (0u64, 0u64, field_error) }
+        let id = le16(field[0..], 0usize)
+        let field_len = u64(le16(field[0..], 2usize))
+        at += 4u64
+        if field_len > length - at { ret (0u64, 0u64, Invalid) }
+        if id == 1u32 {
+            var value_at = 0u64
+            if local_size == 4294967295u64 {
+                if field_len - value_at < 8u64 { ret (0u64, 0u64, Invalid) }
+                var size_value: [8]u8 = zero
+                let size_value_error = read_at(s, offset + at + value_at, size_value[0..])
+                if size_value_error != ok { ret (0u64, 0u64, size_value_error) }
+                local_size = le64(size_value[0..], 0usize)
+                value_at += 8u64
+            }
+            if local_compressed == 4294967295u64 {
+                if field_len - value_at < 8u64 { ret (0u64, 0u64, Invalid) }
+                var compressed_value: [8]u8 = zero
+                let compressed_value_error = read_at(s, offset + at + value_at, compressed_value[0..])
+                if compressed_value_error != ok { ret (0u64, 0u64, compressed_value_error) }
+                local_compressed = le64(compressed_value[0..], 0usize)
+            }
+        }
+        at += field_len
+    }
+    if local_size == 4294967295u64 || local_compressed == 4294967295u64 { ret (0u64, 0u64, Invalid) }
+    ret (local_size, local_compressed, ok)
 }
 
 fn utf8_valid(name: str) -> bool {
@@ -178,6 +232,8 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
     if table_error != ok { ret (zero, table_error) }
     let (offsets, offsets_error) = mem.alloc[u64](a, usize(count))
     if offsets_error != ok { ret (zero, offsets_error) }
+    let (flag_table, flags_error) = mem.alloc[u16](a, usize(count))
+    if flags_error != ok { ret (zero, flags_error) }
     var total = 0u64
     var index = 0usize
     at = 0usize
@@ -232,14 +288,17 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
         if entry.size > limits.entry_bytes { ret (zero, TooLarge) }
         if entry.size > limits.total_bytes || total > limits.total_bytes - entry.size { ret (zero, TooLarge) }
         total += entry.size
-        if offset >= size { ret (zero, Invalid) }
+        if offset >= directory_offset { ret (zero, Invalid) }
         table[index] = entry
         offsets[index] = offset
+        flag_table[index] = u16(flags)
         at += 46usize + name_len + extra_len + comment_len
         index += 1usize
     }
     s.entries = table
     s.offsets = offsets
+    s.flags = flag_table
+    s.directory_offset = directory_offset
     var archive: Archive = zero
     archive.state = mem.cast[*void](s)
     ret (archive, ok)
@@ -261,14 +320,24 @@ fn entry_reader(storage: []u8, archive: *Archive, index: usize) -> (io.Reader, e
     if index >= s.entries.len { ret (zero, Invalid) }
     if storage.len < entry_storage() { ret (zero, io.TooSmall) }
     let entry = s.entries[index]
-    // The local header: its own name and extra lengths, then the data.
+    // The local header must describe the central entry and stay before the central
+    // directory. Otherwise an entry can be spliced onto a different payload.
+    let local_offset = s.offsets[index]
+    if local_offset > s.directory_offset || 30u64 > s.directory_offset - local_offset { ret (zero, Invalid) }
     var header: [30]u8 = zero
-    let header_error = read_at(s, s.offsets[index], header[0..])
+    let header_error = read_at(s, local_offset, header[0..])
     if header_error != ok { ret (zero, header_error) }
     if le32(header[0..], 0usize) != 67324752u32 { ret (zero, Invalid) }
-    let skip = u64(le16(header[0..], 26usize)) + u64(le16(header[0..], 28usize))
-    let (position, seek_error) = io.seek(&s.seeker, i64(s.offsets[index] + 30u64 + skip), .Start)
-    if seek_error != ok { ret (zero, seek_error) }
+    let local_flags = le16(header[0..], 6usize)
+    if local_flags != u32(s.flags[index]) || le16(header[0..], 8usize) != u32(entry.method) { ret (zero, Invalid) }
+    let name_len = u64(le16(header[0..], 26usize))
+    let extra_len = u64(le16(header[0..], 28usize))
+    let name_offset = local_offset + 30u64
+    if name_len > s.directory_offset - name_offset { ret (zero, Invalid) }
+    let extra_offset = name_offset + name_len
+    if extra_len > s.directory_offset - extra_offset { ret (zero, Invalid) }
+    let data_offset = extra_offset + extra_len
+    if entry.compressed_size > s.directory_offset - data_offset { ret (zero, Invalid) }
     let e = mem.cast[*EntryState](&storage[0])
     let blank: EntryState = zero
     *e = blank
@@ -276,6 +345,24 @@ fn entry_reader(storage: []u8, archive: *Archive, index: usize) -> (io.Reader, e
     var at = head / 8usize * 8usize
     e.input = storage[at..at + BUFFER]
     at += BUFFER
+    let name_error = local_name_matches(s, name_offset, entry.name, e.input)
+    if name_error != ok { ret (zero, name_error) }
+    let local_crc = le32(header[0..], 14usize)
+    var local_compressed = u64(le32(header[0..], 18usize))
+    var local_size = u64(le32(header[0..], 22usize))
+    if local_flags & 8u32 != 0u32 {
+        if local_crc != 0u32 || local_compressed != 0u64 || local_size != 0u64 { ret (zero, Invalid) }
+    } else {
+        if local_size == 4294967295u64 || local_compressed == 4294967295u64 {
+            let (zip64_size, zip64_compressed, zip64_error) = local_zip64_sizes(s, extra_offset, extra_len, local_size, local_compressed)
+            if zip64_error != ok { ret (zero, zip64_error) }
+            local_size = zip64_size
+            local_compressed = zip64_compressed
+        }
+        if local_crc != entry.crc32 || local_compressed != entry.compressed_size || local_size != entry.size { ret (zero, Invalid) }
+    }
+    let (position, seek_error) = io.seek(&s.seeker, i64(data_offset), .Start)
+    if seek_error != ok { ret (zero, seek_error) }
     let (d, d_error) = deflate.decoder(storage[at..], WINDOW)
     if d_error != ok { ret (zero, d_error) }
     e.decoder = d
