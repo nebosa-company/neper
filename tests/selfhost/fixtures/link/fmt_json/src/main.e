@@ -13,6 +13,8 @@ use e.str
 // handles, and one that only an unsigned reading reaches.
 type Record = struct { id: u16, name: str, ratio: f64, ready: bool }
 type Wide = struct { big: u64 }
+type Narrow = struct { small: u8 }
+type NarrowFloat = struct { ratio: f32 }
 
 fn roundtrip(a: *mem.Arena, source: str) -> ([]const u8, err) {
     var options: json.Options = zero
@@ -312,6 +314,10 @@ fn main(a: *mem.Arena) -> err {
     if wrong_shape != json.Invalid { os.exit(129i32) }
     let (_, not_object) = json.decode[Record](a, "[1,2]", codec_options)
     if not_object != json.Invalid { os.exit(130i32) }
+    let (_, narrow_error) = json.decode[Narrow](a, "{\"small\":256}", codec_options)
+    if narrow_error != json.Invalid { os.exit(200i32) }
+    let (_, narrow_float_error) = json.decode[NarrowFloat](a, "{\"ratio\":1e300}", codec_options)
+    if narrow_float_error != json.Invalid { os.exit(201i32) }
 
     // --- The streaming reader. The same grammar as `parse` over a source that arrives a piece
     // at a time, so a caller sees the shape rather than the value and the document need never be

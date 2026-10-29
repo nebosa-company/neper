@@ -97,6 +97,29 @@ fn write_case(a: *mem.Arena, text_in: str, expected: str) -> usize {
     ret 0usize
 }
 
+// A vCard fold may not cut the two octets of UTF-8 `é` apart. `FN:` plus 71
+// ASCII octets puts its first byte at column 75, exercising that boundary.
+fn utf8_fold_case() -> usize {
+    var card: vcard.Card = zero
+    var name: [73]u8 = zero
+    var i = 0usize
+    while i < 71usize {
+        name[i] = 97u8
+        i += 1usize
+    }
+    name[71usize] = 195u8
+    name[72usize] = 169u8
+    card.name = name[..]
+    var cards: [1]vcard.Card = zero
+    cards[0usize] = card
+    var output: [256]u8 = zero
+    let (written, write_error) = vcard.write(cards[..], output[..])
+    if write_error != ok { ret 1usize }
+    if written != 126usize { ret 2usize }
+    if output[100usize] != 13u8 || output[101usize] != 10u8 || output[102usize] != 32u8 || output[103usize] != 195u8 || output[104usize] != 169u8 { ret 3usize }
+    ret 0usize
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var r = 0usize
     var cards: [4]vcard.Card = zero
@@ -112,6 +135,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if r != 0usize { os.exit(40 + i32(r)) }
     r = write_case(a, "\x42\x45\x47\x49\x4e\x3a\x56\x43\x41\x52\x44\x0d\x0a\x56\x45\x52\x53\x49\x4f\x4e\x3a\x33\x2e\x30\x0d\x0a\x46\x4e\x3a\x45\x6d\x70\x74\x79\x20\x50\x68\x6f\x6e\x65\x0d\x0a\x4e\x3a\x50\x68\x6f\x6e\x65\x3b\x45\x6d\x70\x74\x79\x3b\x3b\x3b\x0d\x0a\x45\x4e\x44\x3a\x56\x43\x41\x52\x44\x0d\x0a", "\x42\x45\x47\x49\x4e\x3a\x56\x43\x41\x52\x44\x0d\x0a\x56\x45\x52\x53\x49\x4f\x4e\x3a\x33\x2e\x30\x0d\x0a\x46\x4e\x3a\x45\x6d\x70\x74\x79\x20\x50\x68\x6f\x6e\x65\x0d\x0a\x4e\x3a\x50\x68\x6f\x6e\x65\x3b\x45\x6d\x70\x74\x79\x3b\x3b\x3b\x0d\x0a\x45\x4e\x44\x3a\x56\x43\x41\x52\x44\x0d\x0a")
     if r != 0usize { os.exit(48 + i32(r)) }
+    r = utf8_fold_case()
+    if r != 0usize { os.exit(60 + i32(r)) }
     let (none_count, none_error) = vcard.parse(a, "just text", cards[0usize..4usize])
     if none_error != vcard.Malformed { os.exit(56) }
     var malformed_cards: [1]vcard.Card = zero

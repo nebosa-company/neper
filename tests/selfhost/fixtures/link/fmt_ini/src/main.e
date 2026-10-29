@@ -16,6 +16,8 @@ error Failed
 // handles, and one that only an unsigned parser reaches.
 type Settings = struct { port: u16, retries: i64, host: str, ratio: f64, verbose: bool }
 type Wide = struct { big: u64 }
+type Narrow = struct { small: u8 }
+type NarrowFloat = struct { ratio: f32 }
 
 // A module-scope `const` of type `str` does not type check (D134), so the sample is a call.
 fn sample() -> str {
@@ -236,6 +238,10 @@ fn main(a: *mem.Arena) -> err {
     if bad_number != ini.Invalid { os.exit(70i32) }
     let (_, bad_bool) = ini.decode[Settings](a, "verbose=yes\n", strict)
     if bad_bool != ini.Invalid { os.exit(71i32) }
+    let (_, narrow_error) = ini.decode[Narrow](a, "small=256\n", strict)
+    if narrow_error != ini.Invalid { os.exit(75i32) }
+    let (_, narrow_float_error) = ini.decode[NarrowFloat](a, "ratio=1e300\n", strict)
+    if narrow_float_error != ini.Invalid { os.exit(76i32) }
 
     // A quoted value reaches the field with its quoting undone, and a value that needs quoting
     // gets it on the way out.

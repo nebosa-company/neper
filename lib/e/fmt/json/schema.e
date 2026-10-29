@@ -14,8 +14,8 @@
 // on. `additionalProperties` names the extra member. Not here: `$ref` to anywhere else,
 // `prefixItems`, `patternProperties`, `dependentRequired`, `if`/`then`/`else`, `format`.
 
+use e.algo.bignum
 use e.fmt.json
-use e.math
 use e.mem
 use e.str
 use e.text.regex
@@ -25,6 +25,11 @@ error TooSmall
 error TooDeep
 
 const MAX_DEPTH: usize = 256usize
+// Exact `multipleOf` arithmetic is quadratic in the number of limbs. JSON values
+// that fit this schema engine's finite `f64` path need far less than this bound;
+// the cap keeps hostile decimal spellings from making validation unbounded.
+const MAX_MULTIPLE_DIGITS: usize = 1024usize
+const MAX_MULTIPLE_POWER: usize = 1024usize
 
 type Checker = struct { arena: *mem.Arena, root: *const json.Value, path: []u8 }
 
@@ -144,6 +149,89 @@ fn schema_usize(s: *const json.Value) -> (usize, err) {
     ret (usize(v), ok)
 }
 
+fn ten_to(a: *mem.Arena, exponent: usize) -> (bignum.Int, err) {
+    if exponent > MAX_MULTIPLE_POWER { ret (zero, TooDeep) }
+    let (one, one_error) = bignum.int_from_i64(a, 1i64)
+    if one_error != ok { ret (zero, one_error) }
+    let (ten, ten_error) = bignum.int_from_i64(a, 10i64)
+    if ten_error != ok { ret (zero, ten_error) }
+    var out = one
+    var base = ten
+    var remaining = exponent
+    while remaining > 0usize {
+        if remaining % 2usize == 1usize {
+            let (next, multiply_error) = bignum.int_mul(a, out, base)
+            if multiply_error != ok { ret (zero, multiply_error) }
+            out = next
+        }
+        remaining = remaining / 2usize
+        if remaining > 0usize {
+            let (next_base, square_error) = bignum.int_mul(a, base, base)
+            if square_error != ok { ret (zero, square_error) }
+            base = next_base
+        }
+    }
+    ret (out, ok)
+}
+
+// A JSON number as two arbitrary-precision integers. `json.decompose` has
+// already validated the lexeme and folded its decimal point and exponent into a
+// base-ten power, so this is exact rather than an `f64` approximation.
+fn exact_number(a: *mem.Arena, source_number: json.Number) -> (bignum.Int, bignum.Int, err) {
+    let (negative, start, end, power, decompose_error) = json.decompose(source_number.lexeme)
+    if decompose_error != ok { ret (zero, zero, decompose_error) }
+    if end - start > MAX_MULTIPLE_DIGITS { ret (zero, zero, TooDeep) }
+    let (one, one_error) = bignum.int_from_i64(a, 1i64)
+    if one_error != ok { ret (zero, zero, one_error) }
+    if start == end {
+        let (zero_value, zero_error) = bignum.int_from_i64(a, 0i64)
+        if zero_error != ok { ret (zero, zero, zero_error) }
+        ret (zero_value, one, ok)
+    }
+    let (digits, digits_error) = mem.alloc[u8](a, end - start)
+    if digits_error != ok { ret (zero, zero, digits_error) }
+    var count = 0usize
+    var at = start
+    while at < end {
+        if source_number.lexeme[at] != 46u8 {
+            digits[count] = source_number.lexeme[at]
+            count += 1usize
+        }
+        at += 1usize
+    }
+    var numerator: bignum.Int = zero
+    let (parsed, parsed_error) = bignum.int_parse(a, digits[..count], 10u8)
+    if parsed_error != ok { ret (zero, zero, parsed_error) }
+    numerator = parsed
+    if negative && numerator.sign != .Zero { numerator.sign = .Negative }
+    if power == 0i64 { ret (numerator, one, ok) }
+    if power > 0i64 {
+        let (scale, scale_error) = ten_to(a, usize(power))
+        if scale_error != ok { ret (zero, zero, scale_error) }
+        let (scaled, multiply_error) = bignum.int_mul(a, numerator, scale)
+        if multiply_error != ok { ret (zero, zero, multiply_error) }
+        ret (scaled, one, ok)
+    }
+    let (denominator, denominator_error) = ten_to(a, usize(0i64 - power))
+    if denominator_error != ok { ret (zero, zero, denominator_error) }
+    ret (numerator, denominator, ok)
+}
+
+fn exact_multiple(a: *mem.Arena, value: json.Number, divisor: json.Number) -> (bool, err) {
+    let (value_num, value_den, value_error) = exact_number(a, value)
+    if value_error != ok { ret (false, value_error) }
+    let (divisor_num, divisor_den, divisor_error) = exact_number(a, divisor)
+    if divisor_error != ok { ret (false, divisor_error) }
+    if divisor_num.sign != .Positive { ret (false, Invalid) }
+    let (left, left_error) = bignum.int_mul(a, value_num, divisor_den)
+    if left_error != ok { ret (false, left_error) }
+    let (right, right_error) = bignum.int_mul(a, value_den, divisor_num)
+    if right_error != ok { ret (false, right_error) }
+    let (_, remainder, divide_error) = bignum.int_divmod(a, left, right)
+    if divide_error != ok { ret (false, divide_error) }
+    ret (remainder.sign == .Zero, ok)
+}
+
 fn code_points(s: str) -> usize {
     var n = 0usize
     var i = 0usize
@@ -171,7 +259,7 @@ fn resolve_ref(c: *Checker, reference: str) -> (*const json.Value, err) {
 }
 
 // The numeric keywords over `v`; answers false at the first violated one.
-fn check_number(s: []const json.Member, v: f64) -> (bool, err) {
+fn check_number(c: *Checker, s: []const json.Member, v: f64, source_number: json.Number) -> (bool, err) {
     let (minimum_at, has_minimum) = member(s, "minimum")
     if has_minimum {
         let minimum = &s[minimum_at].value
@@ -206,8 +294,11 @@ fn check_number(s: []const json.Member, v: f64) -> (bool, err) {
         let (divisor, e) = schema_f64(multiple)
         if e != ok { ret (false, e) }
         if divisor <= 0.0f64 { ret (false, Invalid) }
-        let quotient = v / divisor
-        if quotient != math.trunc[f64](quotient) { ret (false, ok) }
+        let (divisor_number, is_number) = json.number_of(*multiple)
+        if !is_number { ret (false, Invalid) }
+        let (is_multiple, multiple_error) = exact_multiple(c.arena, source_number, divisor_number)
+        if multiple_error != ok { ret (false, multiple_error) }
+        if !is_multiple { ret (false, ok) }
     }
     ret (true, ok)
 }
@@ -422,7 +513,7 @@ fn check(c: *Checker, schema: *const json.Value, v: *const json.Value, n: usize,
     if is_number {
         let (value, e) = json.number_f64(number)
         if e != ok { ret (false, n, e) }
-        let (valid, number_error) = check_number(s, value)
+        let (valid, number_error) = check_number(c, s, value, number)
         if number_error != ok { ret (false, n, number_error) }
         if !valid { ret (false, n, ok) }
     }

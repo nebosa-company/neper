@@ -208,6 +208,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (v, v_error) = pep440.parse("1!2.0.0rc1.post3.dev4+Ubuntu.1")
     if v_error != ok || v.epoch != 1u64 || v.release_len != 3usize || v.pre_num != 1u64 || !v.has_post || !v.has_dev || !pep440.is_prerelease(v) || !pep440.is_postrelease(v) { os.exit(92i32) }
     if pep440.cmp(pep440.base_version(v), pep440.public(v)) <= 0i32 { os.exit(93i32) }
+    let (max_dev, max_dev_error) = pep440.contains("1.dev18446744073709551615", ">1.dev18446744073709551615", true)
+    if max_dev_error != ok || max_dev { os.exit(94i32) }
+    let (max_post, max_post_error) = pep440.contains("1.post18446744073709551615", ">1.post18446744073709551615", true)
+    if max_post_error != ok || max_post { os.exit(95i32) }
     try io.print("fmt semver pep440 ok")
     ret ok
 }

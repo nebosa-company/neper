@@ -45,6 +45,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !expect(a, "{\"properties\":{\"x\":{\"exclusiveMinimum\":0,\"exclusiveMaximum\":10}}}", "{\"x\":0}", false, "/x") { os.exit(18i32) }
     if !expect(a, "{\"properties\":{\"x\":{\"exclusiveMinimum\":0,\"exclusiveMaximum\":10}}}", "{\"x\":9.99}", true, "") { os.exit(19i32) }
     if !expect(a, "{\"multipleOf\":0.5}", "2.5", true, "") { os.exit(20i32) }
+    if !expect(a, "{\"multipleOf\":0.1}", "0.3", true, "") { os.exit(68i32) }
+    if !expect(a, "{\"multipleOf\":0.1}", "0.31", false, "") { os.exit(69i32) }
     if !expect(a, "{\"multipleOf\":3}", "10", false, "") { os.exit(21i32) }
     if !expect(a, "{\"properties\":{\"a\":{\"type\":\"string\"}},\"additionalProperties\":false}", "{\"a\":\"x\",\"b\":1}", false, "/b") { os.exit(22i32) }
     if !expect(a, "{\"properties\":{\"a\":{\"type\":\"string\"}},\"additionalProperties\":false}", "{\"a\":\"x\"}", true, "") { os.exit(23i32) }
@@ -92,7 +94,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tiny: [3]u8 = zero
     let (_, _, short) = schema.validate(a, "{\"properties\":{\"abcdef\":{\"type\":\"null\"}}}", "{\"abcdef\":1}", tiny[..])
     if short != schema.TooSmall { os.exit(67i32) }
-
     try io.print("fmt json schema ok\n")
     ret ok
 }

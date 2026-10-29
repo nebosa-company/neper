@@ -273,18 +273,24 @@ fn parse(a: *mem.Arena, data: []const u8, out: []Card) -> (usize, err) {
 
 type Out = struct { buf: []u8, len: usize, column: usize, over: bool }
 
+fn out_fold(o: *Out) {
+    if o.len + 3usize > o.buf.len {
+        o.over = true
+        ret
+    }
+    o.buf[o.len] = 13u8
+    o.buf[o.len + 1usize] = 10u8
+    o.buf[o.len + 2usize] = 32u8
+    o.len += 3usize
+    o.column = 1usize
+}
+
 fn out_byte(o: *Out, b: u8) {
+    if o.over { ret }
     // Lines are folded at 75 octets: a CRLF and a space.
     if o.column >= 75usize && b != 13u8 && b != 10u8 {
-        if o.len + 3usize > o.buf.len {
-            o.over = true
-            ret
-        }
-        o.buf[o.len] = 13u8
-        o.buf[o.len + 1usize] = 10u8
-        o.buf[o.len + 2usize] = 32u8
-        o.len += 3usize
-        o.column = 1usize
+        out_fold(o)
+        if o.over { ret }
     }
     if o.len >= o.buf.len {
         o.over = true
@@ -303,10 +309,34 @@ fn out_raw(o: *Out, s: str) {
     }
 }
 
+fn continuation(byte: u8) -> bool { ret byte >= 128u8 && byte <= 191u8 }
+
+// The width of a complete UTF-8 sequence at `at`; malformed input remains one
+// byte at a time, but a valid character is never split by a physical-line fold.
+fn utf8_width(s: str, at: usize) -> usize {
+    let first = s[at]
+    let remaining = s.len - at
+    if first >= 194u8 && first <= 223u8 && remaining >= 2usize && continuation(s[at + 1usize]) { ret 2usize }
+    if first >= 224u8 && first <= 239u8 && remaining >= 3usize && continuation(s[at + 1usize]) && continuation(s[at + 2usize]) { ret 3usize }
+    if first >= 240u8 && first <= 244u8 && remaining >= 4usize && continuation(s[at + 1usize]) && continuation(s[at + 2usize]) && continuation(s[at + 3usize]) { ret 4usize }
+    ret 1usize
+}
+
+fn out_utf8(o: *Out, s: str, at: usize, width: usize) {
+    if o.over { ret }
+    if o.column + width > 75usize { out_fold(o) }
+    var i = 0usize
+    while i < width {
+        out_byte(o, s[at + i])
+        i += 1usize
+    }
+}
+
 fn out_value(o: *Out, s: str) {
     var i = 0usize
     while i < s.len {
         let c = s[i]
+        var width = 1usize
         if c == 10u8 {
             out_byte(o, 92u8)
             out_byte(o, 110u8)
@@ -314,14 +344,15 @@ fn out_value(o: *Out, s: str) {
             out_byte(o, 92u8)
             out_byte(o, c)
         } else if c != 13u8 {
-            out_byte(o, c)
+            width = utf8_width(s, i)
+            if width > 1usize { out_utf8(o, s, i, width) } else { out_byte(o, c) }
         }
-        i += 1usize
+        i += width
     }
 }
 
 fn out_end(o: *Out) {
-    if o.len + 2usize > o.buf.len {
+    if o.over || o.len + 2usize > o.buf.len {
         o.over = true
         ret
     }

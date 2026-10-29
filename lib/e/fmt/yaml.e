@@ -858,6 +858,38 @@ fn pair_of(pairs: []const Pair, name: str) -> (Value, bool) {
     ret (.Null, false)
 }
 
+// The parser stores integers as `i64`, but a typed field can be narrower or
+// unsigned. Decide that conversion's range before making it: a direct narrowing
+// cast traps in debug and wraps in release.
+fn integer_into[T: type](number: i64) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            let high = i64((1u64 << (bits - 1u64)) - 1u64)
+            if number > high || number < 0i64 - high - 1i64 { ret (out, Invalid) }
+        }
+        out = T(number)
+        ret (out, ok)
+    }
+    if number < 0i64 { ret (out, Invalid) }
+    if bits < 64u64 && number > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+    out = T(number)
+    ret (out, ok)
+}
+
+// A finite source must stay finite in the field. This still permits YAML's
+// explicit `.inf` and `.nan` scalars, while rejecting a finite `f64` that
+// overflows a narrower floating-point field.
+fn float_into[T: type](number: f64) -> (T, err) {
+    var out: T = zero
+    let input_finite = number == number && number - number == 0.0f64
+    out = T(number)
+    let widened = f64(out)
+    if input_finite && (widened != widened || widened - widened != 0.0f64) { ret (out, Invalid) }
+    ret (out, ok)
+}
+
 fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
     var out: T = zero
     let (root, parse_error) = parse(a, source, options)
@@ -900,8 +932,8 @@ fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
                 default:
                     ret (out, Invalid)
                 }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = integer_into[f.ty](number)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
             if meta.kind[f.ty]() == .Float {
@@ -914,8 +946,8 @@ fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
                 default:
                     ret (out, Invalid)
                 }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = float_into[f.ty](number)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
                 ret (out, Invalid)
@@ -942,8 +974,17 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
             try write_scalar(writer, &item)
         } else {
         if meta.kind[f.ty]() == .Int {
-            let item: Value = Value{ Integer: i64(slot) }
-            try write_scalar(writer, &item)
+            // `Value.Integer` is deliberately signed. Do not cast an unsigned
+            // field above that representation's range and turn it negative.
+            if meta.signed[f.ty]() {
+                let item: Value = Value{ Integer: i64(slot) }
+                try write_scalar(writer, &item)
+            } else {
+                let unsigned = u64(slot)
+                if unsigned > 9223372036854775807u64 { ret Invalid }
+                let item: Value = Value{ Integer: i64(unsigned) }
+                try write_scalar(writer, &item)
+            }
         } else {
         if meta.kind[f.ty]() == .Float {
             let item: Value = Value{ Float: f64(slot) }

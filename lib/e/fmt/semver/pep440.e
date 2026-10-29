@@ -555,10 +555,15 @@ fn matches(s: Specifier, v: Version) -> bool {
     if s.op == 7u8 {
         var low = s.version
         if low.has_dev {
+            // There is no representable successor after the largest accepted dev number.
+            // A strict comparison retains the `>` relation without wrapping it to zero.
+            if low.dev_num == 18446744073709551615u64 { ret cmp(v, low) > 0i32 }
             low.dev_num += 1u64
             ret cmp(v, low) >= 0i32
         }
         if low.has_post {
+            // As above, an exhausted post number has no successor in this representation.
+            if low.post_num == 18446744073709551615u64 { ret cmp(v, low) > 0i32 }
             low.post_num += 1u64
             low.has_dev = true
             low.dev_num = 0u64

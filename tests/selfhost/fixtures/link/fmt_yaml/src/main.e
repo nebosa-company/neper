@@ -12,6 +12,9 @@ use e.str
 use e.fmt.yaml as yaml
 
 type Config = struct { name: str, port: i32, ratio: f64, debug: bool }
+type NarrowConfig = struct { port: u8 }
+type NarrowFloat = struct { ratio: f32 }
+type WideConfig = struct { big: u64 }
 
 fn options(depth: u16, duplicates: bool) -> yaml.Options {
     ret yaml.Options { max_depth: depth, allow_duplicate_keys: duplicates }
@@ -190,8 +193,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var typed_sink = io.slice_writer(&typed_state)
     if yaml.encode[Config](&typed_sink, &config) != ok { os.exit(77) }
     if !str.eq(buffer[..typed_state.off], "name: svc\nport: 99\nratio: 2.5\ndebug: true\n") { os.exit(78) }
+    var wide_config: WideConfig = zero
+    wide_config.big = 18446744073709551615u64
+    var wide_state = io.SliceWriter { data: buffer[..], off: 0usize }
+    var wide_sink = io.slice_writer(&wide_state)
+    if yaml.encode[WideConfig](&wide_sink, &wide_config) != yaml.Invalid { os.exit(99) }
     let (bad_config, e4) = yaml.decode[Config](a, "name: [1]\n", options(4u16, false))
     if e4 != yaml.Invalid { os.exit(79) }
+    let (narrow_config, narrow_error) = yaml.decode[NarrowConfig](a, "port: 256\n", options(4u16, false))
+    if narrow_error != yaml.Invalid { os.exit(97) }
+    let (narrow_float, narrow_float_error) = yaml.decode[NarrowFloat](a, "ratio: 1e300\n", options(4u16, false))
+    if narrow_float_error != yaml.Invalid { os.exit(98) }
     // Refusals.
     let (t1, e5) = yaml.parse(a, "a:\n\tb: 1\n", options(4u16, false))
     if e5 != yaml.Invalid { os.exit(80) }

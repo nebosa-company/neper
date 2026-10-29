@@ -621,6 +621,49 @@ fn field_entry(document: *const Document, name: str, case_sensitive: bool) -> (s
     ret ("", false)
 }
 
+// INI values arrive as text, so a field may be given either signed or unsigned
+// input. Check the field's exact range before converting: direct narrowing
+// traps in debug and truncates in release.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
+// A finite input cannot become infinity merely because the destination field
+// is narrower than `f64`.
+fn float_into[T: type](number: f64) -> (T, err) {
+    var out: T = zero
+    let input_finite = number == number && number - number == 0.0f64
+    out = T(number)
+    let widened = f64(out)
+    if input_finite && (widened != widened || widened - widened != 0.0f64) { ret (out, Invalid) }
+    ret (out, ok)
+}
+
 fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
     var out: T = zero
     let (document, parse_error) = parse(a, source, options)
@@ -643,25 +686,27 @@ fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
                 }
             } else {
             if meta.kind[f.ty]() == .Int {
-                var slot: f.ty = zero
                 // Read through whichever of the two the text fits, so a `u64` past the signed
                 // maximum and a negative are both exact. Neither takes a floating-point detour.
                 if text.len != 0usize && text[0usize] == MINUS {
                     let (signed, signed_error) = str.parse_i64(text)
                     if signed_error != ok { ret (out, Invalid) }
-                    slot = f.ty(signed)
+                    let (slot, slot_error) = integer_into[f.ty](signed, 0u64, true)
+                    if slot_error != ok { ret (out, slot_error) }
+                    meta.set[f, T](&out, slot)
                 } else {
                     let (unsigned, unsigned_error) = str.parse_u64(text)
                     if unsigned_error != ok { ret (out, Invalid) }
-                    slot = f.ty(unsigned)
+                    let (slot, slot_error) = integer_into[f.ty](0i64, unsigned, false)
+                    if slot_error != ok { ret (out, slot_error) }
+                    meta.set[f, T](&out, slot)
                 }
-                meta.set[f, T](&out, slot)
             } else {
             if meta.kind[f.ty]() == .Float {
                 let (number, number_error) = str.parse_f64(text)
                 if number_error != ok { ret (out, Invalid) }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = float_into[f.ty](number)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
                 ret (out, Invalid)
