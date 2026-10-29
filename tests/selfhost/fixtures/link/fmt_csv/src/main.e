@@ -7,6 +7,7 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.test.support
 use e.fmt.csv
 
 error Failed
@@ -76,6 +77,20 @@ fn main(a: *mem.Arena) -> err {
     try expect_end(&plain_reader)
     // And it stays ended.
     try expect_end(&plain_reader)
+
+    // A source may return its final record and End together.
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "last,record", failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { ret final_script_error }
+    let final_source = support.reader(&final_script)
+    let (final_handle, final_handle_error) = csv.reader(a, final_source, csv.csv(), 0usize, 0usize)
+    if final_handle_error != ok { ret final_handle_error }
+    var final_reader = final_handle
+    var final_expected: [2]str = zero
+    final_expected[0usize] = "last"
+    final_expected[1usize] = "record"
+    try expect_row(&final_reader, final_expected[..])
+    try expect_end(&final_reader)
 
     // --- A doubled quote is one quote of data; a quote that is not at the start of a field
     // is data as it stands. Both are what the field ends up holding, not how it was spelled.

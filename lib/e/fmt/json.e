@@ -1536,13 +1536,18 @@ fn stream_take(s: *ReaderState) -> (u8, bool, err) {
     if s.input_at == s.input_len {
         if s.spent { ret (0u8, false, ok) }
         let (count, read_error) = io.read(&s.source, s.input)
-        if read_error == io.End {
-            s.spent = true
-            ret (0u8, false, ok)
+        if count == 0usize {
+            if read_error == io.End {
+                s.spent = true
+                ret (0u8, false, ok)
+            }
+            if read_error != ok { ret (0u8, false, read_error) }
+            ret (0u8, false, io.NoProgress)
         }
-        if read_error != ok { ret (0u8, false, read_error) }
+        if read_error != ok && read_error != io.End { ret (0u8, false, read_error) }
         s.input_len = count
         s.input_at = 0usize
+        if read_error == io.End { s.spent = true }
     }
     let byte = s.input[s.input_at]
     s.input_at += 1usize

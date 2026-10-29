@@ -99,6 +99,7 @@ type ReaderState = struct {
     seen_key: []str,
     seen_count: usize,
     ended: bool,
+    source_ended: bool,
 }
 
 fn is_space(byte: u8) -> bool {
@@ -367,11 +368,20 @@ fn get(document: *const Document, section: str, key: str) -> (str, bool) {
 
 fn take(s: *ReaderState) -> (u8, bool, err) {
     if s.input_at == s.input_len {
+        if s.source_ended { ret (0u8, false, ok) }
         let (count, read_error) = io.read(&s.source, s.input)
-        if read_error == io.End { ret (0u8, false, ok) }
-        if read_error != ok { ret (0u8, false, read_error) }
+        if count == 0usize {
+            if read_error == io.End {
+                s.source_ended = true
+                ret (0u8, false, ok)
+            }
+            if read_error != ok { ret (0u8, false, read_error) }
+            ret (0u8, false, io.NoProgress)
+        }
+        if read_error != ok && read_error != io.End { ret (0u8, false, read_error) }
         s.input_len = count
         s.input_at = 0usize
+        if read_error == io.End { s.source_ended = true }
     }
     let byte = s.input[s.input_at]
     s.input_at += 1usize
@@ -448,6 +458,7 @@ fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err) {
     state[0usize].section_len = 0usize
     state[0usize].seen_count = 0usize
     state[0usize].ended = false
+    state[0usize].source_ended = false
     // The table of what has been seen exists only to refuse a duplicate; a caller who allows
     // them pays nothing for the option.
     if !options.allow_duplicate_keys {

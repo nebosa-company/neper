@@ -8,6 +8,7 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.test.support
 use e.fmt.ini
 
 error Failed
@@ -87,6 +88,17 @@ fn main(a: *mem.Arena) -> err {
     if expect_entry(&stream_reader, "paths", "escaped", "a\tb\nc") != ok { os.exit(21i32) }
     if expect_entry(&stream_reader, "paths", "bare", "value with ; inside") != ok { os.exit(22i32) }
     if expect_end(&stream_reader) != ok { os.exit(23i32) }
+
+    // The last line may arrive with End and without a line ending.
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "[final]\nkey=value", failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { ret final_script_error }
+    let final_source = support.reader(&final_script)
+    let (final_stream, final_stream_error) = ini.reader(a, final_source, strict)
+    if final_stream_error != ok { ret final_stream_error }
+    var final_reader = final_stream
+    if expect_entry(&final_reader, "final", "key", "value") != ok { os.exit(77i32) }
+    if expect_end(&final_reader) != ok { os.exit(78i32) }
 
     // --- Folding. A `zero` Options is case-insensitive, and that is done to the stored name
     // rather than to the comparison: `get` is exact either way, and the folded document is what

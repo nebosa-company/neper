@@ -8,6 +8,7 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.test.support
 
 // The codec maps a struct to an object, so the fixture needs one field of each kind it
 // handles, and one that only an unsigned reading reaches.
@@ -344,6 +345,23 @@ fn main(a: *mem.Arena) -> err {
     let (_, still_more, done_error) = json.reader_next_err(&events)
     if done_error != ok { ret done_error }
     if still_more { os.exit(152i32) }
+
+    // The final complete document may be delivered with End.
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "{\"a\":[1]}", failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { ret final_script_error }
+    let final_source = support.reader(&final_script)
+    let (final_handle, final_handle_error) = json.reader(a, final_source, stream_options)
+    if final_handle_error != ok { ret final_handle_error }
+    var final_events = final_handle
+    if !event_is(&final_events, "{") { os.exit(202i32) }
+    if !event_key(&final_events, "a") { os.exit(203i32) }
+    if !event_is(&final_events, "[") { os.exit(204i32) }
+    if !event_number(&final_events, "1") { os.exit(205i32) }
+    if !event_is(&final_events, "]") { os.exit(206i32) }
+    if !event_is(&final_events, "}") { os.exit(207i32) }
+    let (_, final_more, final_done_error) = json.reader_next_err(&final_events)
+    if final_done_error != ok || final_more { os.exit(208i32) }
 
     // A number keeps the lexeme it arrived with here too, which is the module's one decision
     // reaching the streaming path.

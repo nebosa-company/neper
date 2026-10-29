@@ -42,7 +42,7 @@ const DEFAULT_ROW_LIMIT: usize = 65536usize
 // many reads as it needs.
 const INPUT_CAPACITY: usize = 4096usize
 
-type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool }
+type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool, source_ended: bool }
 
 fn csv() -> Dialect {
     ret Dialect { delimiter: COMMA, quote: QUOTE, crlf: false, header: false }
@@ -66,11 +66,20 @@ fn usable(dialect: Dialect) -> bool {
 // from here and from nowhere else, which is what makes `unread` below a subtraction.
 fn take(s: *ReaderState) -> (u8, bool, err) {
     if s.input_at == s.input_len {
+        if s.source_ended { ret (0u8, false, ok) }
         let (count, read_error) = io.read(&s.source, s.input)
-        if read_error == io.End { ret (0u8, false, ok) }
-        if read_error != ok { ret (0u8, false, read_error) }
+        if count == 0usize {
+            if read_error == io.End {
+                s.source_ended = true
+                ret (0u8, false, ok)
+            }
+            if read_error != ok { ret (0u8, false, read_error) }
+            ret (0u8, false, io.NoProgress)
+        }
+        if read_error != ok && read_error != io.End { ret (0u8, false, read_error) }
         s.input_len = count
         s.input_at = 0usize
+        if read_error == io.End { s.source_ended = true }
     }
     let byte = s.input[s.input_at]
     s.input_at += 1usize
@@ -226,6 +235,7 @@ fn reader(a: *mem.Arena, source: io.Reader, dialect: Dialect, field_limit: usize
     state[0usize].row = row
     state[0usize].fields = table
     state[0usize].ended = false
+    state[0usize].source_ended = false
     // A caller who said the first record is a header is asking not to be handed it. Reading
     // it here rather than on the first `reader_next_err` keeps that out of the loop, and a
     // caller who wants the header asks for a dialect that does not claim one.
