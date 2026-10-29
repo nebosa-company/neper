@@ -371,14 +371,25 @@ fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err
     ret failure
 }
 
-// rename(2) replaces an existing destination; without `overwrite` that is refused first.
+// `renameatx_np(RENAME_EXCL)` decides whether the destination is free as part of
+// the rename. Checking it first then calling rename(2) races a creator of `dst`.
 // ponytail: `durable` is not honoured (no fsync of the directory).
 fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err {
-    if !overwrite {
-        let (existing, existing_error) = lstat(a, dst)
-        if existing_error == ok { ret Exists }
+    if overwrite { ret rename(a, src, dst) }
+    let checkpoint = mem.mark(a)
+    let (source_address, source_error) = c_string(a, src)
+    if source_error != ok {
+        mem.reset(a, checkpoint)
+        ret source_error
     }
-    ret rename(a, src, dst)
+    let (destination_address, destination_error) = c_string(a, dst)
+    if destination_error != ok {
+        mem.reset(a, checkpoint)
+        ret destination_error
+    }
+    let result = syscall(SYS_RENAMEATX, AT_FDCWD, source_address, AT_FDCWD, destination_address, RENAME_EXCL, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
 }
 
 fn symlink(a: *mem.Arena, target_path: str, link: str) -> err {
