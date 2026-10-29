@@ -83,7 +83,7 @@ const OP_CLOSE: usize = 6usize
 const OP_REMOVE: usize = 7usize
 const FS_RESULT_OK: usize = 0usize
 
-type FsHandle = struct { used: bool, name: [64]u8, name_len: usize, offset: usize, size: usize, loaded: bool, dirty: bool, data: [512]u8 }
+type FsHandle = struct { used: bool, name: [64]u8, name_len: usize, offset: usize, size: usize, loaded: bool, dirty: bool, append: bool, data: [512]u8 }
 var fs_handles: [8]FsHandle = zero
 
 fn fs_send_word(word: usize) {
@@ -130,6 +130,18 @@ fn fs_name_str(slot: usize) -> str {
     ret fs_handles[slot].name[0usize..fs_handles[slot].name_len]
 }
 
+fn fs_load(slot: usize) -> err {
+    if fs_handles[slot].loaded { ret ok }
+    fs_send_word(OP_READ)
+    fs_send_str(fs_name_str(slot))
+    let result = fs_recv_word()
+    let count = fs_recv_handle_data(slot)
+    if result != FS_RESULT_OK { ret NotFound }
+    fs_handles[slot].size = count
+    fs_handles[slot].loaded = true
+    ret ok
+}
+
 fn write(f: File, buf: str) -> (usize, err) {
     if f.raw < FILE_BASE {
         if f.raw <= 2usize { ret (console_write(buf), ok) }
@@ -137,30 +149,43 @@ fn write(f: File, buf: str) -> (usize, err) {
     }
     let slot = f.raw - FILE_BASE
     if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0usize, Unsupported) }
+    var start = fs_handles[slot].offset
+    if fs_handles[slot].append { start = fs_handles[slot].size }
     var n = 0usize
-    while n < buf.len && fs_handles[slot].offset + n < FS_BLOCK {
-        fs_handles[slot].data[fs_handles[slot].offset + n] = buf[n]
+    while n < buf.len && start + n < FS_BLOCK {
+        fs_handles[slot].data[start + n] = buf[n]
         n += 1usize
     }
-    fs_handles[slot].offset += n
+    fs_handles[slot].offset = start + n
     if fs_handles[slot].offset > fs_handles[slot].size { fs_handles[slot].size = fs_handles[slot].offset }
     fs_handles[slot].dirty = true
     ret (n, ok)
+}
+
+@test
+fn append_write_uses_current_end(a: *mem.Arena) -> err {
+    var handle: FsHandle = zero
+    handle.used = true
+    handle.loaded = true
+    handle.append = true
+    handle.size = 3usize
+    handle.data[0usize] = 97u8
+    handle.data[1usize] = 98u8
+    handle.data[2usize] = 99u8
+    fs_handles[0usize] = handle
+    let (position, seek_error) = seek(File { raw: FILE_BASE }, 0i64, SeekWhence.Start)
+    let (written, write_error) = write(File { raw: FILE_BASE }, "!")
+    if seek_error != ok || position != 0u64 || write_error != ok || written != 1usize || fs_handles[0usize].data[3usize] != 33u8 || fs_handles[0usize].size != 4usize { ret Failed }
+    fs_handles[0usize].used = false
+    ret ok
 }
 
 fn read(f: File, buffer: []u8) -> (usize, err) {
     if f.raw < FILE_BASE { ret (0usize, ok) }
     let slot = f.raw - FILE_BASE
     if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0usize, Unsupported) }
-    if !fs_handles[slot].loaded {
-        fs_send_word(OP_READ)
-        fs_send_str(fs_name_str(slot))
-        let result = fs_recv_word()
-        let count = fs_recv_handle_data(slot)
-        if result != FS_RESULT_OK { ret (0usize, NotFound) }
-        fs_handles[slot].size = count
-        fs_handles[slot].loaded = true
-    }
+    let load_error = fs_load(slot)
+    if load_error != ok { ret (0usize, load_error) }
     var n = 0usize
     while n < buffer.len && fs_handles[slot].offset + n < fs_handles[slot].size {
         buffer[n] = fs_handles[slot].data[fs_handles[slot].offset + n]
@@ -194,10 +219,25 @@ fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err) {
     fs_handles[slot].size = 0usize
     fs_handles[slot].loaded = false
     fs_handles[slot].dirty = false
-    // Opened to write: start from an empty, dirty buffer, so a truncating create writes even nothing.
+    fs_handles[slot].append = flags.append
     if flags.write {
-        fs_handles[slot].loaded = true
-        fs_handles[slot].dirty = true
+        let load_error = fs_load(slot)
+        if load_error != ok {
+            if !flags.create {
+                fs_handles[slot].used = false
+                ret (File { raw: 0usize }, load_error)
+            }
+            fs_handles[slot].loaded = true
+            fs_handles[slot].size = 0usize
+            fs_handles[slot].offset = 0usize
+            fs_handles[slot].dirty = true
+        } else if flags.truncate {
+            fs_handles[slot].size = 0usize
+            fs_handles[slot].offset = 0usize
+            fs_handles[slot].dirty = true
+        } else if flags.append {
+            fs_handles[slot].offset = fs_handles[slot].size
+        }
     }
     ret (File { raw: FILE_BASE + slot }, ok)
 }
