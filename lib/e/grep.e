@@ -75,8 +75,12 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
     if pattern.len == 0usize { ret (none, Invalid) }
     let call_mark = mem.mark(a)
     let options = fs.WalkOptions { recursive: true, follow_symlinks: false }
+    let first_scan_mark = mem.mark(a)
     let (created, walk_error) = fs.walk(a, root, options)
-    if walk_error != ok { ret (none, Invalid) }
+    if walk_error != ok {
+        mem.reset(a, call_mark)
+        ret (none, Invalid)
+    }
     var walker = created
     var total = 0usize
     while true {
@@ -104,6 +108,9 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
         mem.reset(a, call_mark)
         ret (none, Invalid)
     }
+    // The count pass retains only `total`; its walk allocations must not displace
+    // returned matches and their second-pass paths and file contents.
+    mem.reset(a, first_scan_mark)
     let (matches, allocation_error) = mem.alloc[Match](a, total)
     if allocation_error != ok {
         mem.reset(a, call_mark)
@@ -138,6 +145,11 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
             var line_start = 0usize
             while offset + pattern.len <= bytes.len {
                 if at(bytes, pattern, offset) {
+                    if used >= matches.len {
+                        let ignored = fs.walk_close(&walker)
+                        mem.reset(a, call_mark)
+                        ret (none, Invalid)
+                    }
                     var line_end = offset
                     while line_end < bytes.len && bytes[line_end] != 10u8 && bytes[line_end] != 13u8 { line_end += 1usize }
                     matches[used] = Match { path: entry.path, line: line, column: u32(offset - line_start + 1usize), text: bytes[line_start..line_end] }

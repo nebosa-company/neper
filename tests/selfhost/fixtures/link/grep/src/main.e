@@ -25,6 +25,29 @@ fn main(a: *mem.Arena) -> err {
         at += 1usize
     }
     if line_sum != 5u32 || column_sum != 11u32 { os.exit(7i32) }
+    // An unmatched search retains exactly one completed walk: the count walk is
+    // scratch, while the second walk owns the paths that a nonempty result needs.
+    var scratch_storage: [32768]u8 = zero
+    var scratch_arena = mem.arena_from(scratch_storage[..])
+    let scratch_mark = mem.mark(&scratch_arena)
+    let (no_matches, no_match_error) = grep.search(&scratch_arena, directory, "not-present")
+    if no_match_error != ok || no_matches.len != 0usize { os.exit(23i32) }
+    let search_used = scratch_arena.off - scratch_mark
+    mem.reset(&scratch_arena, scratch_mark)
+    let options = fs.WalkOptions { recursive: true, follow_symlinks: false }
+    let (walk_value, walk_error) = fs.walk(&scratch_arena, directory, options)
+    if walk_error != ok { os.exit(24i32) }
+    var scratch_walk = walk_value
+    while true {
+        let (_, present, next_error) = fs.walk_next_err(&scratch_walk)
+        if next_error != ok {
+            let ignored = fs.walk_close(&scratch_walk)
+            os.exit(25i32)
+        }
+        if !present { break }
+    }
+    if fs.walk_close(&scratch_walk) != ok { os.exit(26i32) }
+    if scratch_arena.off - scratch_mark != search_used { os.exit(27i32) }
     let (empty, empty_error) = grep.search(a, directory, "")
     if empty_error != grep.Invalid || empty.len != 0usize { os.exit(8i32) }
     // An index records the trigram snapshot of the tree it saw. Replacing a
