@@ -1587,6 +1587,18 @@ fn same_site_allowed(ss: u8, is_top_level: bool) -> bool {
     ret is_top_level
 }
 
+fn default_cookie_path(request: str) -> str {
+    if request.len == 0usize || request[0usize] != 47u8 { ret "/" }
+    var slash = 0usize
+    var i = 1usize
+    while i < request.len {
+        if request[i] == 47u8 { slash = i }
+        i += 1usize
+    }
+    if slash == 0usize { ret "/" }
+    ret request[0usize..slash]
+}
+
 // Processes one `Set-Cookie` header received for `url`; `partition_key` is the top-frame site when known.
 fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, partition_key: str, has_partition_key: bool, now_ms: i64) {
     let parts_end = index_of(header, 59u8)
@@ -1600,7 +1612,7 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
     if name.len == 0usize { ret }
     if name.len + value.len > 4096usize { ret }
     var domain = request.host
-    var path = "/"
+    var path = default_cookie_path(request.path)
     var secure = false
     var http_only = false
     var partitioned = false
