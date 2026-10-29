@@ -11,6 +11,14 @@
 
 error TooSmall
 
+// Whether scratch can hold `vectors` state vectors of `count` entries without
+// forming their product first.  The division is deliberate: a caller can pass
+// a target-width count that would overflow a `usize` multiplication.
+fn has_scratch(scratch_len: usize, count: usize, vectors: usize) -> bool {
+    if vectors == 0usize { ret true }
+    ret count <= scratch_len / vectors
+}
+
 // One explicit Euler step of size `h`; `scratch.len >= y.len`.
 fn euler[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, scratch: []f64) -> err {
     let n = y.len
@@ -28,7 +36,7 @@ fn euler[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: 
 // One classical RK4 step; `scratch.len >= 5 * y.len`.
 fn rk4[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, scratch: []f64) -> err {
     let n = y.len
-    if scratch.len < 5usize * n { ret TooSmall }
+    if !has_scratch(scratch.len, n, 5usize) { ret TooSmall }
     var k1 = scratch[..n]
     var k2 = scratch[n..2usize * n]
     var k3 = scratch[2usize * n..3usize * n]
@@ -67,7 +75,7 @@ fn rk4[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []
 // leaves `y` alone and answers a taken step of 0. `scratch.len >= 8 * y.len`.
 fn rkf45[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, tolerance: f64, scratch: []f64) -> (f64, f64, err) {
     let n = y.len
-    if scratch.len < 8usize * n { ret (0.0f64, h, TooSmall) }
+    if !has_scratch(scratch.len, n, 8usize) { ret (0.0f64, h, TooSmall) }
     var k1 = scratch[..n]
     var k2 = scratch[n..2usize * n]
     var k3 = scratch[2usize * n..3usize * n]
@@ -156,7 +164,7 @@ fn sqrt_f64(x: f64) -> f64 {
 // accelerations at the two ends.
 fn verlet[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err {
     let n = x.len
-    if v.len != n || scratch.len < 2usize * n { ret TooSmall }
+    if v.len != n || !has_scratch(scratch.len, n, 2usize) { ret TooSmall }
     var a0 = scratch[..n]
     var a1 = scratch[n..2usize * n]
     acceleration(ctx, x, a0)
@@ -214,7 +222,7 @@ fn yoshida[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: 
 // `scratch.len >= 2 * y.len`.
 fn euler_maruyama[Ctx: type](ctx: *Ctx, drift: fn(*Ctx, f64, []const f64, []f64), diffusion: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, noise: []const f64, scratch: []f64) -> err {
     let n = y.len
-    if noise.len < n || scratch.len < 2usize * n { ret TooSmall }
+    if noise.len < n || !has_scratch(scratch.len, n, 2usize) { ret TooSmall }
     var a = scratch[..n]
     var b = scratch[n..2usize * n]
     drift(ctx, t, y, a)
