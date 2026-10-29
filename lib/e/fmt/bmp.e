@@ -182,6 +182,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
     if start > d.len { ret (zero, Invalid) }
     // the palette
     var palette: [256]u32 = zero
+    var palette_len = 0usize
     if h.bits <= 8u32 {
         var count = usize(h.colors)
         let full = 1usize << usize(h.bits)
@@ -194,6 +195,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
             palette[k] = (u32(d[p + 2usize]) << 16u32) | (u32(d[p + 1usize]) << 8u32) | u32(d[p]) | 4278190080u32
             k += 1usize
         }
+        palette_len = count
     }
     // palette indices for RLE, decoded to one byte per pixel
     if h.compression == 1u32 || h.compression == 2u32 {
@@ -213,31 +215,38 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
             let v = d[at + 1usize]
             at += 2usize
             if n > 0usize {
+                if y >= ht || x > w || n > w - x { ret (zero, Invalid) }
                 var k = 0usize
                 while k < n {
                     var px = v
                     if h.compression == 2u32 {
                         if k % 2usize == 0usize { px = v >> 4u32 } else { px = v & 15u8 }
                     }
-                    if x < w && y < ht { idx[y * w + x] = px }
+                    if usize(px) >= palette_len { ret (zero, Invalid) }
+                    idx[y * w + x] = px
                     x += 1usize
                     k += 1usize
                 }
             } else if v == 0u8 {
+                if y >= ht { ret (zero, Invalid) }
                 x = 0usize
                 y += 1usize
             } else if v == 1u8 {
                 done = true
             } else if v == 2u8 {
                 if at + 2usize > d.len { ret (zero, Invalid) }
-                x += usize(d[at])
-                y += usize(d[at + 1usize])
+                let dx = usize(d[at])
+                let dy = usize(d[at + 1usize])
+                if y > ht || x > w || dx > w - x || dy > ht - y { ret (zero, Invalid) }
+                x += dx
+                y += dy
                 at += 2usize
             } else {
                 let count = usize(v)
                 var bytes_used = count
                 if h.compression == 2u32 { bytes_used = (count + 1usize) / 2usize }
                 if at + bytes_used > d.len { ret (zero, Invalid) }
+                if y >= ht || x > w || count > w - x { ret (zero, Invalid) }
                 var k = 0usize
                 while k < count {
                     var px = 0u8
@@ -247,14 +256,14 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
                     } else {
                         px = d[at + k]
                     }
-                    if x < w && y < ht { idx[y * w + x] = px }
+                    if usize(px) >= palette_len { ret (zero, Invalid) }
+                    idx[y * w + x] = px
                     x += 1usize
                     k += 1usize
                 }
                 at += bytes_used
                 if bytes_used % 2usize == 1usize { at += 1usize }
             }
-            if y > ht + 1usize { break }
         }
         if !done { ret (zero, Invalid) }
         var row = 0usize
@@ -314,6 +323,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
                 let byte = d[src + col / per]
                 let shift = u32(8usize - usize(h.bits) * (col % per + 1usize))
                 let index = usize((u32(byte) >> shift) & ((1u32 << h.bits) - 1u32))
+                if index >= palette_len { ret (zero, Invalid) }
                 let c = palette[index]
                 rr = u8((c >> 16u32) & 255u32)
                 gg = u8((c >> 8u32) & 255u32)

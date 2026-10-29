@@ -456,6 +456,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     rle_without_eob[46usize] = 2u8
     rle_without_eob[62usize] = 1u8
     if !bmp_invalid(a, rle_without_eob[..]) { die(114i32) }
+    // RLE runs and palette indices must remain inside the declared raster/palette;
+    // clipping them used to accept malformed images as black pixels.
+    var rle_overrun: [66]u8 = zero
+    rle_overrun[0usize] = 66u8
+    rle_overrun[1usize] = 77u8
+    rle_overrun[2usize] = 66u8
+    rle_overrun[10usize] = 62u8
+    rle_overrun[14usize] = 40u8
+    rle_overrun[18usize] = 1u8
+    rle_overrun[22usize] = 1u8
+    rle_overrun[26usize] = 1u8
+    rle_overrun[28usize] = 8u8
+    rle_overrun[30usize] = 1u8
+    rle_overrun[34usize] = 4u8
+    rle_overrun[46usize] = 2u8
+    rle_overrun[62usize] = 2u8
+    rle_overrun[64usize] = 0u8
+    rle_overrun[65usize] = 1u8
+    if !bmp_invalid(a, rle_overrun[..]) { die(120i32) }
+    var rle_bad_index = rle_overrun
+    rle_bad_index[62usize] = 1u8
+    rle_bad_index[63usize] = 2u8
+    if !bmp_invalid(a, rle_bad_index[..]) { die(121i32) }
     // A DIB's declared size must be fully present and precede pixel data.
     var bmp_short_v5: [58]u8 = zero
     bmp_short_v5[0usize] = 66u8
