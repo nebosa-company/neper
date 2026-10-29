@@ -42,6 +42,18 @@ fn rejected(a: *mem.Arena, source: str) -> bool {
     ret failure != ok
 }
 
+fn canonical_rejected(a: *mem.Arena, source: str) -> bool {
+    var options: json.Options = zero
+    options.allow_duplicate_keys = true
+    let (value, parse_error) = json.parse(a, source, options)
+    if parse_error != ok { ret false }
+    let (state, sink, writer_error) = io.memory_writer(a, 4096usize)
+    if writer_error != ok { ret false }
+    var held = state
+    var out = io.writer(mem.cast[*void](&held), io.memory_write)
+    ret json.canonicalize(&out, &value) == json.DuplicateKey
+}
+
 // The reader's events, asked about one at a time. Each answers whether the next event is the one
 // named, so the walk below reads as the document does.
 fn next_event(r: *json.Reader) -> (json.Event, bool) {
@@ -201,6 +213,8 @@ fn main(a: *mem.Arena) -> err {
     permissive.allow_duplicate_keys = true
     let (kept, kept_error) = json.parse(a, "{\"a\":1,\"a\":2}", permissive)
     if kept_error != ok { os.exit(51i32) }
+    if !canonical_rejected(a, "{\"a\":1,\"a\":2}") { os.exit(52i32) }
+    if !canonical_rejected(a, "{\"outer\":{\"a\":1,\"a\":2}}") { os.exit(53i32) }
 
     // --- Depth is bounded, and the bound is the caller's.
     var shallow: json.Options = zero

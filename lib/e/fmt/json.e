@@ -2259,6 +2259,9 @@ fn write_es6_number(w: *io.Writer, value: f64) -> err {
 // ponytail: members go out by repeated selection of the next key, O(n^2) comparisons and no
 // storage; an object with thousands of members would want an index sorted once.
 fn canonicalize(w: *io.Writer, value: *const Value) -> err {
+    // A canonical JSON byte sequence cannot name two values for the same property. Check the
+    // whole tree before writing so a rejected value never leaves a partial canonical document.
+    if !free_of_duplicates(value) { ret DuplicateKey }
     switch *value {
     case .Null:
         ret io.write_all(w, "null")
