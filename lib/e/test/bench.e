@@ -188,6 +188,23 @@ fn summarize(samples: []f64, fence_x10: u32) -> (Stats, err) {
     ret (s, ok)
 }
 
+// Welch-Satterthwaite degrees of freedom for the two standard errors. The
+// comparison can be called with hand-built Stats, so keep degenerate inputs
+// non-significant instead of allowing a sample-count underflow or a divide by
+// zero to manufacture a critical value.
+fn welch_df(base: Stats, current: Stats) -> usize {
+    if base.kept < 2usize || current.kept < 2usize { ret 0usize }
+    let base_variance = base.std_err * base.std_err
+    let current_variance = current.std_err * current.std_err
+    let variance = base_variance + current_variance
+    if variance <= 0.0f64 { ret 0usize }
+    let denominator = base_variance * base_variance / f64(base.kept - 1usize) + current_variance * current_variance / f64(current.kept - 1usize)
+    if denominator <= 0.0f64 { ret 0usize }
+    let df = variance * variance / denominator
+    if df < 1.0f64 { ret 1usize }
+    ret usize(df)
+}
+
 // Welch's t of the change from `base` to `current` over their kept samples, the change
 // in the mean as a percentage of the base mean, and a verdict: `Improved` or `Regressed`
 // when the t statistic exceeds the critical value and the change is larger than
@@ -205,7 +222,8 @@ fn compare(base: Stats, current: Stats, threshold_pct: f64) -> Comparison {
     if magnitude < 0.0f64 { magnitude = 0.0f64 - magnitude }
     var change = c.change_pct
     if change < 0.0f64 { change = 0.0f64 - change }
-    c.significant = magnitude > t_critical(base.kept + current.kept - 2usize)
+    let df = welch_df(base, current)
+    c.significant = df > 0usize && magnitude > t_critical(df)
     if c.significant && change > threshold_pct {
         if c.change_pct < 0.0f64 { c.verdict = .Improved } else { c.verdict = .Regressed }
     }

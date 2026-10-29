@@ -144,6 +144,23 @@ fn check_parts() -> i32 {
     var z: bench.Stats = zero
     let c = bench.compare(z, z, 1.0f64)
     if c.verdict != bench.Verdict.NoChange || c.change_pct != 0.0f64 { ret 48i32 }
+    // Welch-Satterthwaite must use the unequal variances and sample sizes. The
+    // pooled df path calls this t=1.99 significant at df=31; Welch's df is
+    // about 2, so the same comparison is not significant.
+    var unequal_base: bench.Stats = zero
+    unequal_base.mean = 100.0f64
+    unequal_base.std_err = 1.0f64
+    unequal_base.kept = 30usize
+    var unequal_current: bench.Stats = zero
+    unequal_current.mean = 120.0f64
+    unequal_current.std_err = 10.0f64
+    unequal_current.kept = 3usize
+    let unequal = bench.compare(unequal_base, unequal_current, 5.0f64)
+    if unequal.significant || unequal.verdict != bench.Verdict.NoChange { ret 49i32 }
+    var degenerate_base = unequal_base
+    degenerate_base.kept = 1usize
+    let degenerate = bench.compare(degenerate_base, unequal_current, 5.0f64)
+    if degenerate.significant || degenerate.verdict != bench.Verdict.NoChange { ret 50i32 }
     ret 0i32
 }
 
