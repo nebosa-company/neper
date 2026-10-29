@@ -17,6 +17,7 @@ type OrSet = struct { elems: []OrElem, count: usize, site: u32, counter: u32 }
 type Kind = enum u8 { GCounter, PnCounter, Lww, OrSet }
 type Crdt = struct { kind: Kind, gcounter: GCounter, pncounter: PnCounter, lww: Lww, orset: OrSet }
 error TooSmall
+error Exhausted
 
 fn fill(xs: []u64) {
     var i = 0usize
@@ -94,6 +95,9 @@ fn orset(elems: []OrElem, site: u32) -> OrSet { ret OrSet { elems: elems, count:
 
 fn orset_add(s: *OrSet, element: u64) -> err {
     if s.count >= s.elems.len { ret TooSmall }
+    // Tag zero is never issued. Once the last u32 tag is issued, this replica
+    // cannot make another unique `(site, counter)` identity.
+    if s.counter == 4294967295u32 { ret Exhausted }
     s.counter += 1u32
     s.elems[s.count] = OrElem { element: element, tag: Tag { site: s.site, counter: s.counter }, removed: false }
     s.count += 1usize
