@@ -45,6 +45,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (empty, has_empty) = mime.header(headers, "x-empty")
     let (_, has_none) = mime.header(headers, "accept")
     if !has_host || !text_equal(host, "example.com") || !has_kind || !text_equal(kind, "text/plain") || !has_empty || empty.len != 0usize || has_none { os.exit(9) }
+    // Header parsing stops at the empty line and must leave the message body on
+    // the supplied reader for its caller.
+    var body_reader = io.slice_reader(&source_state)
+    var body: [8]u8 = zero
+    let (body_count, body_error) = io.read(&body_reader, body[..])
+    if body_error != ok || !text_equal(body[..body_count], "body") { os.exit(14) }
     var folded_state: io.SliceReader = zero
     folded_state.data = "A: one\r\n two\r\n\r\n"
     let (_, folded) = mime.parse_headers(a, io.slice_reader(&folded_state), 256usize, 8usize)

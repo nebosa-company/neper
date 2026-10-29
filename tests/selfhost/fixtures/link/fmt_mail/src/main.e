@@ -22,6 +22,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e5 != mail.InvalidAddress { os.exit(5) }
     let (bad2, e6) = mail.parse_address(a, "Name <unclosed@x.y")
     if e6 != mail.InvalidAddress { os.exit(6) }
+    let (bad3, e6b) = mail.parse_address(a, "two@@example.com")
+    let (bad4, e6c) = mail.parse_address(a, "bob@example.com (unclosed")
+    if e6b != mail.InvalidAddress || e6c != mail.InvalidAddress { os.exit(28) }
     let (list, e7) = mail.parse_address_list(a, "Ada <ada@example.com>, \"Bob, Jr\" <bob@example.org>,(a, comment) carol@example.net")
     if e7 != ok || list.len != 3usize || !str.eq(list[1].name, "Bob, Jr") || !str.eq(list[2].address, "carol@example.net") { os.exit(7) }
     let (empty, e8) = mail.parse_address_list(a, "")
@@ -45,6 +48,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e16 != mail.InvalidDate { os.exit(16) }
     let (d5, e17) = mail.parse_date("12 Sep 2026 15:04")
     if e17 != mail.InvalidDate { os.exit(17) }
+    let (_, bad_seconds) = mail.parse_date("12 Sep 2026 15:04x05 +0200")
+    let (_, bad_zone) = mail.parse_date("12 Sep 2026 15:04 +2400")
+    let (_, trailing_date) = mail.parse_date("12 Sep 2026 15:04 +0200 trailing")
+    if bad_seconds != mail.InvalidDate || bad_zone != mail.InvalidDate || trailing_date != mail.InvalidDate { os.exit(29) }
     // A message.
     let raw = "From: Ada <ada@example.com>\r\nSubject: =?utf-8?B?R3LDvMOfZQ==?=\r\n  =?ISO-8859-1?Q?_caf=E9?=\r\nContent-Type: text/plain\r\n\r\nhello body\r\nline two\r\n"
     var source_state = io.SliceReader { data: raw, off: 0usize }

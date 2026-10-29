@@ -31,10 +31,21 @@ fn namespace(v: Version) -> str {
 fn content_type(a: *mem.Arena, v: Version, action: str) -> (str, err) {
     if v == .Soap11 { ret ("text/xml; charset=utf-8", ok) }
     if action.len == 0usize { ret ("application/soap+xml; charset=utf-8", ok) }
-    let (head, head_error) = str.concat(a, "application/soap+xml; charset=utf-8; action=\"", action)
-    if head_error != ok { ret ("", head_error) }
-    let (whole, whole_error) = str.concat(a, head, "\"")
-    ret (whole, whole_error)
+    let (made, made_error) = str.builder(a, action.len * 2usize + 64usize)
+    if made_error != ok { ret ("", made_error) }
+    var out = made
+    try str.push(&out, "application/soap+xml; charset=utf-8; action=\"")
+    var at = 0usize
+    while at < action.len {
+        let c = action[at]
+        // A media-type parameter is a quoted-string, not a raw header value.
+        if c < 32u8 || c == 127u8 { ret ("", Invalid) }
+        if c == 34u8 || c == 92u8 { try str.push_byte(&out, 92u8) }
+        try str.push_byte(&out, c)
+        at += 1usize
+    }
+    try str.push(&out, "\"")
+    ret (str.done(&out), ok)
 }
 
 // ---- building ----

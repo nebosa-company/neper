@@ -80,7 +80,10 @@ fn strip_comments(a: *mem.Arena, source: str) -> (str, err) {
             }
         } else {
         if c == 40u8 { depth += 1usize } else {
-        if c == 41u8 && depth > 0usize { depth -= 1usize } else {
+        if c == 41u8 {
+            if depth == 0usize { ret ("", InvalidAddress) }
+            depth -= 1usize
+        } else {
         if depth == 0usize {
             if c == 34u8 { quote = true }
             out[used] = c
@@ -91,6 +94,7 @@ fn strip_comments(a: *mem.Arena, source: str) -> (str, err) {
         }
         i += 1usize
     }
+    if depth != 0usize { ret ("", InvalidAddress) }
     ret (str.trim(out[..used]), ok)
 }
 
@@ -113,14 +117,19 @@ fn unquote(a: *mem.Arena, text: str) -> (str, err) {
 }
 
 fn address_legal(address: str) -> bool {
-    let (at, has_at) = str.rfind(address, "@")
-    if !has_at || at == 0usize || at + 1usize == address.len { ret false }
+    var at = 0usize
+    var at_count = 0usize
     var i = 0usize
     while i < address.len {
         let c = address[i]
         if c <= 32u8 || c == 60u8 || c == 62u8 || c == 44u8 || c == 34u8 || c == 40u8 || c == 41u8 { ret false }
+        if c == 64u8 {
+            at = i
+            at_count += 1usize
+        }
         i += 1usize
     }
+    if at_count != 1usize || at == 0usize || at + 1usize == address.len { ret false }
     ret true
 }
 
@@ -241,7 +250,7 @@ fn zone_minutes(text: str) -> (i16, bool) {
     if text.len == 5usize && (text[0] == 43u8 || text[0] == 45u8) {
         let (hours, hours_ok) = digits_of(text[1usize..3usize])
         let (minutes, minutes_ok) = digits_of(text[3usize..5usize])
-        if !hours_ok || !minutes_ok || minutes >= 60i64 { ret (0i16, false) }
+        if !hours_ok || !minutes_ok || hours > 23i64 || minutes >= 60i64 { ret (0i16, false) }
         var total = i16(hours * 60i64 + minutes)
         if text[0] == 45u8 { total = 0i16 - total }
         ret (total, true)
@@ -275,7 +284,7 @@ fn parse_date(source: str) -> (Date, err) {
         fields[count] = word
         count += 1usize
     }
-    if count < 5usize { ret (zero, InvalidDate) }
+    if count != 5usize { ret (zero, InvalidDate) }
     let (day, day_ok) = digits_of(fields[0])
     let (month, month_ok) = month_number(fields[1])
     let (year0, year_ok) = digits_of(fields[2])
@@ -296,6 +305,7 @@ fn parse_date(source: str) -> (Date, err) {
         second_ok = parsed_ok
     }
     if !hour_ok || !minute_ok || !second_ok || clock[2] != 58u8 { ret (zero, InvalidDate) }
+    if clock.len == 8usize && clock[5usize] != 58u8 { ret (zero, InvalidDate) }
     if hour > 23i64 || minute > 59i64 || second > 60i64 { ret (zero, InvalidDate) }
     let (offset, offset_ok) = zone_minutes(fields[4])
     if !offset_ok { ret (zero, InvalidDate) }

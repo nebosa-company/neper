@@ -477,6 +477,8 @@ fn run_vectors() -> u8 {
 fn main(a: *mem.Arena, args: []str) -> err {
     let r = run_vectors()
     if r != 0u8 { os.exit(i32(r)) }
+    let (_, foreign_namespace) = sitemap.parse(a, "<urlset xmlns=\"https://example.invalid/sitemap\"><url><loc>https://example.invalid/</loc></url></urlset>")
+    if foreign_namespace != sitemap.Invalid { os.exit(30) }
     try io.print("fmt sitemap ok")
     ret ok
 }

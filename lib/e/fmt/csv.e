@@ -134,7 +134,6 @@ fn read_record(s: *ReaderState) -> (Row, bool, err) {
             continue
         }
         if after_quote {
-            after_quote = false
             // A doubled quote is one quote of data, and the field is open again.
             if byte == s.dialect.quote {
                 let (kept, keep_error) = keep(s, row_at, byte)
@@ -143,7 +142,17 @@ fn read_record(s: *ReaderState) -> (Row, bool, err) {
                 in_quotes = true
                 continue
             }
-            if byte != s.dialect.delimiter && byte != CR && byte != LF {
+            // A bare CR is data only in an unquoted field. After a closing quote
+            // it would continue that quoted field; only CRLF may end it.
+            if byte == CR {
+                let (next, next_more, next_error) = take(s)
+                if next_error != ok { ret (empty, false, next_error) }
+                if next_more && next == LF { break }
+                if next_more { unread(s) } else { s.ended = true }
+                ret (empty, false, Invalid)
+            }
+            after_quote = false
+            if byte != s.dialect.delimiter && byte != LF {
                 ret (empty, false, Invalid)
             }
         }

@@ -138,5 +138,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var cbody = c1.body
     let (k1, e29) = read_all(&cbody, out[0..])
     if e29 != multipart.Invalid { os.exit(35) }
+    // A boundary delimiter is a line: a boundary-looking substring in the
+    // preamble must not start a part.
+    let fake = "preamble--b0und=ary\r\nX-Fake: yes\r\n\r\nnot-a-part\r\n--b0und=ary--\r\n"
+    var fake_source = Trickle { data: fake, off: 0usize, chunk: 5usize }
+    let (fake0, e30) = multipart.reader(storage, io.Reader { ctx: mem.cast[*void](&fake_source), read: trickle_read }, "b0und=ary", 8u32, 100000u64)
+    if e30 != ok { os.exit(36) }
+    var fake_reader = fake0
+    let (_, fake_has, e31) = multipart.reader_next_err(&fake_reader)
+    if e31 != ok || fake_has { os.exit(37) }
     ret ok
 }

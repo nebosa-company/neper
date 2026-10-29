@@ -175,7 +175,7 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Sitemap, err) {
     if root == xml.NONE { ret (out, Invalid) }
     let root_name = local(doc.nodes[usize(root)].name)
     let (root_namespace, root_bound) = resolved_namespace(&doc, root)
-    if !root_bound { ret (out, Invalid) }
+    if !root_bound || !same(root_namespace, "http://www.sitemaps.org/schemas/sitemap/0.9") { ret (out, Invalid) }
     var entry_name = "url"
     if same(root_name, "sitemapindex") {
         out.index = true

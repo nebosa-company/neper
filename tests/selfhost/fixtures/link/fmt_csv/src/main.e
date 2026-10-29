@@ -144,6 +144,15 @@ fn main(a: *mem.Arena) -> err {
     let (_, trailing_more, trailing_next) = csv.reader_next_err(&trailing_reader)
     if trailing_next != csv.Invalid { ret Failed }
 
+    // A bare CR is data in an unquoted field, but after a closing quote it would
+    // continue a quoted field and must not be accepted as one.
+    var quote_cr_state = source_over("\"a\"\rb\n")
+    let (quote_cr, quote_cr_error) = csv.reader(a, io.slice_reader(&quote_cr_state), csv.csv(), 0usize, 0usize)
+    if quote_cr_error != ok { ret quote_cr_error }
+    var quote_cr_reader = quote_cr
+    let (_, quote_cr_more, quote_cr_next) = csv.reader_next_err(&quote_cr_reader)
+    if quote_cr_next != csv.Invalid { ret Failed }
+
     // --- Both limits, each reported as `TooLarge` rather than as a truncated row.
     var wide_state = source_over("a,b,c\n")
     let (wide, wide_error) = csv.reader(a, io.slice_reader(&wide_state), csv.csv(), 2usize, 0usize)

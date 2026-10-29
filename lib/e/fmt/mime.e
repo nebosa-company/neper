@@ -232,24 +232,23 @@ fn parse_headers(a: *mem.Arena, source: io.Reader, byte_limit: usize, count_limi
     var found_end = false
     while !found_end {
         if filled == byte_limit { ret (zero, TooLarge) }
-        let (count, read_error) = io.read(&reader, buffer[filled..])
+        // Reading only one byte at a time is deliberate: callers retain the
+        // supplied reader as the message body after this function returns, so
+        // a bulk read must not consume bytes beyond the empty line.
+        let (count, read_error) = io.read(&reader, buffer[filled..filled + 1usize])
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
         filled += count
         // The block ends at the first CRLF CRLF, or LF LF.
-        var at = 0usize
-        while at < filled && !found_end {
-            if buffer[at] == 10u8 {
-                if at + 2usize < filled && buffer[at + 1usize] == 13u8 && buffer[at + 2usize] == 10u8 {
-                    block_end = at + 1usize
-                    found_end = true
-                }
-                if at + 1usize < filled && buffer[at + 1usize] == 10u8 {
-                    block_end = at + 1usize
-                    found_end = true
-                }
-            }
-            at += 1usize
+        if filled >= 4usize && buffer[filled - 4usize] == 13u8 && buffer[filled - 3usize] == 10u8 && buffer[filled - 2usize] == 13u8 && buffer[filled - 1usize] == 10u8 {
+            block_end = filled
+            found_end = true
+        } else if filled >= 3usize && buffer[filled - 3usize] == 10u8 && buffer[filled - 2usize] == 13u8 && buffer[filled - 1usize] == 10u8 {
+            block_end = filled
+            found_end = true
+        } else if filled >= 2usize && buffer[filled - 2usize] == 10u8 && buffer[filled - 1usize] == 10u8 {
+            block_end = filled
+            found_end = true
         }
     }
     if !found_end { block_end = filled }

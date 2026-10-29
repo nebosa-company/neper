@@ -125,6 +125,34 @@ fn find_in_window(s: *ReaderState, needle: str) -> (usize, bool, err) {
     }
 }
 
+// Finds the first boundary delimiter line.  A boundary-like substring in a
+// preamble is not a delimiter unless it is at the start of the stream or
+// immediately follows CRLF.  Keep enough suffix bytes while refilling to
+// recognize a delimiter and its preceding CRLF across a window boundary.
+fn find_initial_boundary(s: *ReaderState, needle: str) -> (usize, bool, err) {
+    while true {
+        let (found_at, found) = str.find(s.window[s.at..s.len], needle)
+        if found {
+            let candidate = s.at + found_at
+            let stream_at = s.consumed - u64(s.len - s.at) + u64(found_at)
+            if stream_at == 0u64 || (candidate >= 2usize && s.window[candidate - 2usize] == 13u8 && s.window[candidate - 1usize] == 10u8) {
+                ret (candidate, true, ok)
+            }
+            // The next candidate can overlap this one, so retain all but its
+            // first byte for the next search.
+            s.at = candidate + 1usize
+            continue
+        }
+        let unread = s.len - s.at
+        if unread > needle.len + 1usize {
+            s.at = s.len - needle.len - 1usize
+        }
+        let (more, refill_error) = refill(s)
+        if refill_error != ok { ret (0usize, false, refill_error) }
+        if !more { ret (0usize, false, ok) }
+    }
+}
+
 // Ensures `n` unread bytes are in the window when the source has them.
 fn ensure(s: *ReaderState, n: usize) -> err {
     while s.len - s.at < n {
@@ -170,7 +198,7 @@ fn reader_next_err(source_reader: *Reader) -> (Part, bool, err) {
         opener[0] = 45u8
         opener[1] = 45u8
         mem.copy[u8](opener[2usize..2usize + s.boundary.len], s.boundary)
-        let (found_at, found, find_error) = find_in_window(s, opener[..2usize + s.boundary.len])
+        let (found_at, found, find_error) = find_initial_boundary(s, opener[..2usize + s.boundary.len])
         if find_error != ok { ret (zero, false, find_error) }
         if !found { ret (zero, false, Invalid) }
         s.at = found_at + 2usize + s.boundary.len
