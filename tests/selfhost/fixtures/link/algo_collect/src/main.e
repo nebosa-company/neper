@@ -768,6 +768,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_94()) != 0u8 { os.exit(95i32) }
     if run(a, vectors_95()) != 0u8 { os.exit(96i32) }
     if run(a, vectors_96()) != 0u8 { os.exit(97i32) }
+    // Signed endpoints and i64::MIN steps must not overflow while counting a
+    // one-element range, and a whole-width range is still only TooLarge.
+    let maximum = 9223372036854775807i64
+    let minimum = 0i64 - 9223372036854775807i64 - 1i64
+    let (up_edge, up_edge_error) = collect.range(a, maximum - 1i64, maximum, maximum)
+    if up_edge_error != ok || up_edge.len != 1usize || up_edge[0usize] != maximum - 1i64 { os.exit(98i32) }
+    let (down_edge, down_edge_error) = collect.range(a, 1i64, 0i64, minimum)
+    if down_edge_error != ok || down_edge.len != 1usize || down_edge[0usize] != 1i64 { os.exit(99i32) }
+    let (_, wide_error) = collect.range(a, minimum, maximum, 1i64)
+    if wide_error != collect.TooLarge { os.exit(100i32) }
     try io.print("algo collect ok")
     ret ok
 }

@@ -33,6 +33,19 @@ error NotInteger
 const MAX_RANGE: usize = 1000000usize
 const MAX_PRODUCT: usize = 1000000usize
 
+// The unsigned distance between ordered signed endpoints.  Cross-zero spans can
+// be one bit wider than i64, so take the negative endpoint's magnitude without
+// ever converting a negative i64 to u64 or negating i64::MIN.
+fn signed_distance(upper: i64, lower: i64) -> u64 {
+    if lower >= 0i64 || upper < 0i64 { ret u64(upper - lower) }
+    let lower_magnitude = u64(0i64 - (lower + 1i64)) + 1u64
+    ret lower_magnitude + u64(upper)
+}
+
+fn negative_magnitude(value: i64) -> u64 {
+    ret u64(0i64 - (value + 1i64)) + 1u64
+}
+
 fn same(left: json.Value, right: json.Value) -> bool {
     ret json.values_equal(&left, &right)
 }
@@ -346,10 +359,17 @@ fn range(a: *mem.Arena, start: i64, limit: i64, step: i64) -> ([]const i64, err)
     // The count first, so nothing is built that is refused.
     var count = 0u64
     if step > 0i64 && start < limit {
-        count = (u64(limit - start) + u64(step) - 1u64) / u64(step)
+        // Subtracting signed endpoints can overflow across the whole i64 span.
+        let up_distance = signed_distance(limit, start)
+        let up_stride = u64(step)
+        count = up_distance / up_stride
+        if up_distance % up_stride != 0u64 { count += 1u64 }
     }
     if step < 0i64 && start > limit {
-        count = (u64(start - limit) + u64(0i64 - step) - 1u64) / u64(0i64 - step)
+        let down_distance = signed_distance(start, limit)
+        let down_stride = negative_magnitude(step)
+        count = down_distance / down_stride
+        if down_distance % down_stride != 0u64 { count += 1u64 }
     }
     if count > u64(MAX_RANGE) { ret (none, TooLarge) }
     if count == 0u64 { ret (none, ok) }
@@ -359,7 +379,9 @@ fn range(a: *mem.Arena, start: i64, limit: i64, step: i64) -> ([]const i64, err)
     var x = start
     while i < usize(count) {
         out[i] = x
-        x += step
+        // The next value is needed only when another element remains.  Avoid
+        // overflowing after the final valid boundary value.
+        if i + 1usize < usize(count) { x += step }
         i += 1usize
     }
     ret (out, ok)
