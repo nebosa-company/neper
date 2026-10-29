@@ -190,6 +190,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     invalid_text_state.data = invalid_text_bytes[0..]
     var invalid_text_writer = io.slice_writer(&invalid_text_state)
     if msgpack.write(&invalid_text_writer, &invalid_text) != msgpack.Invalid || invalid_text_state.off != 0usize { os.exit(28) }
+
+    // Typed structs with 65,536 fields must use map32, not a wrapping map16
+    // count. Exercise the shared header writer without a giant source fixture.
+    var map32_bytes: [5]u8 = zero
+    var map32_state: io.SliceWriter = zero
+    map32_state.data = map32_bytes[..]
+    var map32_writer = io.slice_writer(&map32_state)
+    if msgpack.write_map_header(&map32_writer, 65536usize) != ok { os.exit(29) }
+    if map32_state.off != 5usize || map32_bytes[0usize] != 223u8 || map32_bytes[1usize] != 0u8 || map32_bytes[2usize] != 1u8 || map32_bytes[3usize] != 0u8 || map32_bytes[4usize] != 0u8 { os.exit(30) }
     os.exit(0)
     ret ok
 }

@@ -297,6 +297,17 @@ fn write_string(writer: *io.Writer, text: str) -> err {
     ret io.write_all(writer, text)
 }
 
+fn write_map_header(writer: *io.Writer, count: usize) -> err {
+    if count < 16usize { ret write_byte(writer, 128u8 + u8(count)) }
+    if count < 65536usize {
+        try write_byte(writer, 222u8)
+        ret write_be(writer, u64(count), 2usize)
+    }
+    if count > 4294967295usize { ret TooLarge }
+    try write_byte(writer, 223u8)
+    ret write_be(writer, u64(count), 4usize)
+}
+
 fn write(writer: *io.Writer, value: *const Value) -> err {
     switch *value {
     case .Nil:
@@ -336,18 +347,7 @@ fn write(writer: *io.Writer, value: *const Value) -> err {
         }
         ret ok
     case .Map as pairs:
-        if pairs.len < 16usize {
-            try write_byte(writer, 128u8 + u8(pairs.len))
-        } else {
-            if pairs.len < 65536usize {
-                try write_byte(writer, 222u8)
-                try write_be(writer, u64(pairs.len), 2usize)
-            } else {
-                if pairs.len > 4294967295usize { ret TooLarge }
-                try write_byte(writer, 223u8)
-                try write_be(writer, u64(pairs.len), 4usize)
-            }
-        }
+        try write_map_header(writer, pairs.len)
         var at = 0usize
         while at < pairs.len {
             try write(writer, &pairs[at].key)
@@ -514,12 +514,7 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
     for f in meta.fields[T]() {
         count += 1usize
     }
-    if count < 16usize {
-        try write_byte(writer, 128u8 + u8(count))
-    } else {
-        try write_byte(writer, 222u8)
-        try write_be(writer, u64(count), 2usize)
-    }
+    try write_map_header(writer, count)
     for f in meta.fields[T]() {
         try write_string(writer, f.name)
         var slot: f.ty = zero
