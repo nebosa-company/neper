@@ -21,6 +21,15 @@ type Api = eglcontext.Api
 type Options = eglcontext.Options
 type Context = struct { egl_state: eglcontext.State, dispatch: gl.Dispatch, uses_egl: bool, hwnd: usize, hdc: usize, wgl: usize, hidden: os.Window, owns_window: bool, live: bool }
 
+// Native teardown is injected for the cleanup regression; the production path
+// supplies the Win32/WGL wrappers below.
+type WglReleaser = struct {
+    make_current: fn(usize, usize) -> i32,
+    delete_context: fn(usize) -> i32,
+    release_dc: fn(usize, usize) -> i32,
+    close_window: fn(os.Window) -> err,
+}
+
 // WGL_ARB_create_context and WGL_ARB_create_context_profile: wglext.h is not in scripts/khronos,
 // and these four values are all of it this module uses.
 const WGL_CONTEXT_MAJOR_VERSION_ARB: i32 = 8337i32
@@ -175,6 +184,31 @@ fn wgl_on(c: *Context, hwnd: usize, options: Options) -> err {
     ret ok
 }
 
+fn native_wgl_make_current(hdc: usize, wgl: usize) -> i32 { ret raw_wgl_make_current(hdc, wgl) }
+fn native_wgl_delete_context(wgl: usize) -> i32 { ret raw_wgl_delete_context(wgl) }
+fn native_release_dc(hwnd: usize, hdc: usize) -> i32 { ret raw_release_dc(hwnd, hdc) }
+fn native_close_window(w: os.Window) -> err { ret os.window_close(w) }
+
+fn release_wgl_with(c: *Context, releaser: WglReleaser) -> err {
+    if c.live {
+        let released = releaser.make_current(0usize, 0usize)
+        if c.wgl != 0usize { let deleted = releaser.delete_context(c.wgl) }
+        c.wgl = 0usize
+        c.live = false
+    }
+    if c.hdc != 0usize {
+        let dropped = releaser.release_dc(c.hwnd, c.hdc)
+        c.hdc = 0usize
+    }
+    if c.owns_window {
+        c.owns_window = false
+        let closed = releaser.close_window(c.hidden)
+        c.hidden = os.Window { raw: 0usize }
+        ret closed
+    }
+    ret ok
+}
+
 fn angle_display(a: *mem.Arena) -> (usize, err) {
     if egl.load(a, "") != ok { ret (0usize, Unsupported) }
     let display = egl.get_display(egl.DEFAULT_DISPLAY)
@@ -191,15 +225,21 @@ fn headless(a: *mem.Arena, options: Options) -> (Context, err) {
         let (s, state_error) = eglcontext.headless(display, options, true)
         c.egl_state = s
         c.uses_egl = true
-        ret (c, mapped(state_error))
+        let outcome = mapped(state_error)
+        if outcome != ok { let cleaned = close(&c) }
+        ret (c, outcome)
     }
     let (w, window_error) = os.window_open(a, os.WindowOptions { title: "neper GL", width: 16u32, height: 16u32, resizable: false, visible: false, mode: .Windowed })
     if window_error != ok { ret (c, Unsupported) }
     let (hwnd, instance, native_error) = os.window_native(w)
     c.hidden = w
     c.owns_window = true
-    if native_error != ok { ret (c, Failed) }
+    if native_error != ok {
+        let cleaned = close(&c)
+        ret (c, Failed)
+    }
     let made = wgl_on(&c, hwnd, options)
+    if made != ok { let cleaned = close(&c) }
     ret (c, made)
 }
 
@@ -214,9 +254,12 @@ fn for_window(a: *mem.Arena, w: os.Window, options: Options) -> (Context, err) {
         let (s, state_error) = eglcontext.on_window(display, hwnd, options)
         c.egl_state = s
         c.uses_egl = true
-        ret (c, mapped(state_error))
+        let outcome = mapped(state_error)
+        if outcome != ok { let cleaned = close(&c) }
+        ret (c, outcome)
     }
     let made = wgl_on(&c, hwnd, options)
+    if made != ok { let cleaned = close(&c) }
     ret (c, made)
 }
 
@@ -259,19 +302,13 @@ fn close(c: *Context) -> err {
     if c.uses_egl {
         closed = mapped(eglcontext.close(&c.egl_state))
     } else {
-        if c.live {
-            let released = raw_wgl_make_current(0usize, 0usize)
-            let deleted = raw_wgl_delete_context(c.wgl)
-            c.live = false
+        let releaser = WglReleaser {
+            make_current: native_wgl_make_current,
+            delete_context: native_wgl_delete_context,
+            release_dc: native_release_dc,
+            close_window: native_close_window,
         }
-        if c.hdc != 0usize {
-            let dropped = raw_release_dc(c.hwnd, c.hdc)
-            c.hdc = 0usize
-        }
-        if c.owns_window {
-            c.owns_window = false
-            closed = os.window_close(c.hidden)
-        }
+        closed = release_wgl_with(c, releaser)
     }
     gl.release(&c.dispatch)
     ret closed

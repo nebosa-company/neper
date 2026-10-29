@@ -12,7 +12,16 @@ error Failed
 
 type Api = enum u8 { Gl, Gles }
 type Options = struct { api: Api, major: u32, minor: u32 }
-type State = struct { display: usize, config: usize, context: usize, surface: usize, live: bool }
+type State = struct { display: usize, config: usize, context: usize, surface: usize, initialized: bool, live: bool }
+
+// The EGL calls used to release a state.  Keeping this tiny seam explicit lets
+// the cleanup order be checked without a particular driver's failure behaviour.
+type Releaser = struct {
+    make_current: fn(usize, usize, usize, usize) -> u32,
+    destroy_surface: fn(usize, usize) -> u32,
+    destroy_context: fn(usize, usize) -> u32,
+    terminate: fn(usize) -> u32,
+}
 
 fn profile_of(options: Options) -> gl.Profile {
     if options.api == .Gles {
@@ -89,10 +98,14 @@ fn create(s: *State, options: Options, surface_bits: i32) -> err {
 fn headless(display: usize, options: Options, surfaceless: bool) -> (State, err) {
     var s: State = zero
     s.display = display
+    s.initialized = true
     var surface_bits = 0i32
     if !surfaceless { surface_bits = egl.PBUFFER_BIT }
     let create_error = create(&s, options, surface_bits)
-    if create_error != ok { ret (s, create_error) }
+    if create_error != ok {
+        let closed = close(&s)
+        ret (s, create_error)
+    }
     if egl.make_current(display, egl.NO_SURFACE, egl.NO_SURFACE, s.context) == egl.TRUE { ret (s, ok) }
     var pbuffer: [8]i32 = zero
     pbuffer[0usize] = egl.WIDTH
@@ -102,11 +115,17 @@ fn headless(display: usize, options: Options, surfaceless: bool) -> (State, err)
     pbuffer[4usize] = egl.NONE
     if surfaceless {
         let (config, config_error) = choose(display, options, egl.PBUFFER_BIT)
-        if config_error != ok { ret (s, Failed) }
+        if config_error != ok {
+            let closed = close(&s)
+            ret (s, Failed)
+        }
         s.config = config
     }
     s.surface = egl.create_pbuffer_surface(display, s.config, &pbuffer[0usize])
-    if s.surface == egl.NO_SURFACE || egl.make_current(display, s.surface, s.surface, s.context) != egl.TRUE { ret (s, Failed) }
+    if s.surface == egl.NO_SURFACE || egl.make_current(display, s.surface, s.surface, s.context) != egl.TRUE {
+        let closed = close(&s)
+        ret (s, Failed)
+    }
     ret (s, ok)
 }
 
@@ -115,11 +134,21 @@ fn headless(display: usize, options: Options, surfaceless: bool) -> (State, err)
 fn on_window(display: usize, native: usize, options: Options) -> (State, err) {
     var s: State = zero
     s.display = display
+    s.initialized = true
     let create_error = create(&s, options, egl.WINDOW_BIT)
-    if create_error != ok { ret (s, create_error) }
+    if create_error != ok {
+        let closed = close(&s)
+        ret (s, create_error)
+    }
     s.surface = egl.create_window_surface(display, s.config, native, nil)
-    if s.surface == egl.NO_SURFACE { ret (s, Failed) }
-    if egl.make_current(display, s.surface, s.surface, s.context) != egl.TRUE { ret (s, Failed) }
+    if s.surface == egl.NO_SURFACE {
+        let closed = close(&s)
+        ret (s, Failed)
+    }
+    if egl.make_current(display, s.surface, s.surface, s.context) != egl.TRUE {
+        let closed = close(&s)
+        ret (s, Failed)
+    }
     ret (s, ok)
 }
 
@@ -141,12 +170,35 @@ fn swap_interval(s: *const State, interval: i32) -> err {
     ret ok
 }
 
-fn close(s: *State) -> err {
-    if !s.live { ret ok }
-    let released = egl.make_current(s.display, egl.NO_SURFACE, egl.NO_SURFACE, egl.NO_CONTEXT)
-    if s.surface != egl.NO_SURFACE { let destroyed = egl.destroy_surface(s.display, s.surface) }
-    let gone = egl.destroy_context(s.display, s.context)
-    let finished = egl.terminate(s.display)
+fn release_with(s: *State, releaser: Releaser) {
+    if !s.initialized { ret }
+    let released = releaser.make_current(s.display, egl.NO_SURFACE, egl.NO_SURFACE, egl.NO_CONTEXT)
+    if s.surface != egl.NO_SURFACE { let destroyed = releaser.destroy_surface(s.display, s.surface) }
+    if s.context != egl.NO_CONTEXT { let gone = releaser.destroy_context(s.display, s.context) }
+    let finished = releaser.terminate(s.display)
+    s.display = egl.NO_DISPLAY
+    s.config = 0usize
+    s.context = egl.NO_CONTEXT
+    s.surface = egl.NO_SURFACE
+    s.initialized = false
     s.live = false
+}
+
+fn native_make_current(display: usize, draw: usize, read: usize, context: usize) -> u32 {
+    ret egl.make_current(display, draw, read, context)
+}
+
+fn native_destroy_surface(display: usize, surface: usize) -> u32 { ret egl.destroy_surface(display, surface) }
+fn native_destroy_context(display: usize, context: usize) -> u32 { ret egl.destroy_context(display, context) }
+fn native_terminate(display: usize) -> u32 { ret egl.terminate(display) }
+
+fn close(s: *State) -> err {
+    let releaser = Releaser {
+        make_current: native_make_current,
+        destroy_surface: native_destroy_surface,
+        destroy_context: native_destroy_context,
+        terminate: native_terminate,
+    }
+    release_with(s, releaser)
     ret ok
 }

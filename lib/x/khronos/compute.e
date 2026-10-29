@@ -381,7 +381,13 @@ fn open_here(a: *mem.Arena, at: usize, is_es: bool) -> (mtl.Context, err) {
     var options = context.Options { api: .Gl, major: 4u32, minor: 3u32 }
     if is_es { options = context.Options { api: .Gles, major: 3u32, minor: 1u32 } }
     let (c, c_error) = context.headless(a, options)
-    if c_error != ok { ret (none, Unsupported) }
+    if c_error != ok {
+        // A target-specific constructor may retain partial EGL or WGL state;
+        // close defensively before the rejected probe is dropped.
+        var partial = c
+        let closed = context.close(&partial)
+        ret (none, Unsupported)
+    }
     slots[at] = Slot { c: c, live: true, arena: a, denormal_caps: 0usize, int64_caps: 0usize, float64_caps: 0usize, subgroup_caps: 0usize, is_es: is_es, es_profile: 0u8, storage_ext: 0usize }
     var loaded = context.load(a, &slots[at].c, options)
     if loaded == ok && !gl.present(gl.BUFFER_STORAGE_ENTRY) {

@@ -3703,6 +3703,12 @@ $khronosLoadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $khronosLoadWritten -ne 'executable written') { throw 'x.khronos.gl loader fixture emission failed' }
 & $khronosLoadPath
 if ($LASTEXITCODE -ne 0) { throw "the GL loader answered wrongly: exit $LASTEXITCODE" }
+# Partial EGL/WGL construction unwinds display, context, surface, HDC and hidden-window state through injected releasers.
+$khronosCleanupPath = Join-Path $testBuild 'x-khronos-context-cleanup-selfhost.exe'
+$khronosCleanupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_context_cleanup\src\main.e') $repo 'x64' 'windows' $khronosCleanupPath
+if ($LASTEXITCODE -ne 0 -or $khronosCleanupWritten -ne 'executable written') { throw 'x_khronos_context_cleanup emission failed' }
+& $khronosCleanupPath
+if ($LASTEXITCODE -ne 0) { throw "partial GL context cleanup answered wrongly: exit $LASTEXITCODE" }
 # `x.khronos.context` (D5880, D5886): headless GL 3.3/4.3 through WGL and GLES 3.0/3.1 through
 # ANGLE's libEGL.dll when one is on PATH, drawn, read back and computed on; then a context on an
 # os window, cleared, scissored, read back and swapped; then examples/gl_triangle for 3 frames.

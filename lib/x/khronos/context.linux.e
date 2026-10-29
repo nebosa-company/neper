@@ -69,7 +69,9 @@ fn headless(a: *mem.Arena, options: Options) -> (Context, err) {
     }
     let (s, state_error) = eglcontext.headless(display, options, surfaceless)
     c.egl_state = s
-    ret (c, mapped(state_error))
+    let outcome = mapped(state_error)
+    if outcome != ok { let cleaned = close(&c) }
+    ret (c, outcome)
 }
 
 fn open_xlib(a: *mem.Arena) -> err {
@@ -104,7 +106,9 @@ fn for_window(a: *mem.Arena, w: os.Window, options: Options) -> (Context, err) {
         c.host = w
         c.has_host = true
         if hosted_error == ok { remember_hosted(hosted_state.surface, window_id) }
-        ret (c, mapped(hosted_error))
+        let outcome = mapped(hosted_error)
+        if outcome != ok { let cleaned = close(&c) }
+        ret (c, outcome)
     }
     if egl.load(a, "") != ok || open_xlib(a) != ok { ret (c, Unsupported) }
     let x_display = xlib.open_display(nil)
@@ -116,11 +120,16 @@ fn for_window(a: *mem.Arena, w: os.Window, options: Options) -> (Context, err) {
     // EGL 1.4 takes the Xlib display as its native display; 1.5 names the platform.
     var display = egl.get_display(x_display)
     if egl.present(egl.GET_PLATFORM_DISPLAY_ENTRY) { display = egl.get_platform_display(u32(egl.PLATFORM_X11_KHR), as_pointer(x_display), nil) }
-    if eglcontext.initialize(display) != ok { ret (c, Unsupported) }
+    if eglcontext.initialize(display) != ok {
+        let cleaned = close(&c)
+        ret (c, Unsupported)
+    }
     let (s, state_error) = eglcontext.on_window(display, window_id, options)
     c.egl_state = s
     if state_error == ok { remember_size(s.surface, w) }
-    ret (c, mapped(state_error))
+    let outcome = mapped(state_error)
+    if outcome != ok { let cleaned = close(&c) }
+    ret (c, outcome)
 }
 
 // The window's size as the surface was made, for make_current to compare with.
