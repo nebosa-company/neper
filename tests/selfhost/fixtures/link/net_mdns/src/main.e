@@ -124,6 +124,24 @@ fn main(a: *mem.Arena) -> err {
     let (_, e5) = mdns.announce(a, out[0..], services[..0], false)
     if e5 != mdns.Invalid { ret fail(5i32) }
 
+    // TXT RDATA is limited by the two-byte DNS RDLENGTH field.
+    var txt_bytes: [255]u8 = zero
+    let txt_value: str = txt_bytes[0..]
+    var oversized_txt: [256]str = zero
+    var txt_i = 0usize
+    while txt_i < oversized_txt.len {
+        oversized_txt[txt_i] = txt_value
+        txt_i += 1usize
+    }
+    var oversized_service = services[0]
+    oversized_service.txt = oversized_txt[0..]
+    let oversized_services = [1]mdns.Service{ oversized_service }
+    var oversized_storage: [131072]u8 = zero
+    var oversized_arena = mem.arena_from(oversized_storage[0..])
+    var oversized_out: [70000]u8 = zero
+    let (_, oversized_error) = mdns.announce(&oversized_arena, oversized_out[0..], oversized_services[0..], false)
+    if oversized_error != mdns.Invalid { ret fail(33i32) }
+
     // ---- queries ----
     let (q1, qe1) = mdns.query(out[0..], "_ipp._tcp.local", 12u16, false, zero)
     if qe1 != ok || !same(out[..q1], "\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x04\x5f\x69\x70\x70\x04\x5f\x74\x63\x70\x05\x6c\x6f\x63\x61\x6c\x00\x00\x0c\x00\x01") { ret fail(6i32) }

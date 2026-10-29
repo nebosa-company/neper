@@ -160,6 +160,7 @@ fn out_u32(o: *Out, v: u32) -> err {
 
 // One resource record: name, type, class, ttl and the rdata length followed by `rdata`.
 fn out_record(o: *Out, name: []const u8, kind: u16, class: u16, ttl: u32, rdata: []const u8) -> err {
+    if rdata.len > 65535usize { ret Invalid }
     try out_bytes(o, name)
     try out_u16(o, kind)
     try out_u16(o, class)
@@ -175,6 +176,7 @@ fn txt_rdata(a: *mem.Arena, strings: []const str) -> ([]const u8, err) {
     var i = 0usize
     while i < strings.len {
         if strings[i].len > 255usize { ret ("", Invalid) }
+        if total > 65535usize - strings[i].len { ret ("", Invalid) }
         total += 1usize + strings[i].len
         i += 1usize
     }
