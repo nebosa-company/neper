@@ -404,6 +404,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
     if !signature_ok(data) { ret (zero, Invalid) }
     var header: Header = zero
     var seen_header = false
+    var seen_iend = false
     var pal: Palette = zero
     var idat_total = 0usize
     var at = 8usize
@@ -437,11 +438,15 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
                 if header.frames == 0u32 { header.frames = 1u32 }
             }
             if kind == 1229209940u32 { idat_total += length }
-            if kind == 1229278788u32 { break }
+            if kind == 1229278788u32 {
+                if length != 0usize || at + 12usize != data.len { ret (zero, Invalid) }
+                seen_iend = true
+                break
+            }
         }
         at += 12usize + length
     }
-    if !seen_header || idat_total < 6usize { ret (zero, Invalid) }
+    if !seen_header || !seen_iend || idat_total < 6usize { ret (zero, Invalid) }
     if header.color == 3u32 && pal.plte.len == 0usize { ret (zero, Invalid) }
     // Second walk: the zlib stream, IDAT chunks laid end to end.
     let (zlib, zlib_error) = mem.alloc[u8](a, idat_total)

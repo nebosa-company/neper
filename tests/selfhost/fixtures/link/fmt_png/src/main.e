@@ -146,6 +146,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     corrupt[40] = corrupt[40] ^ 255u8
     let (_, crc_error) = png.decode(a, reader_of(&state, corrupt), options())
     if crc_error != png.Checksum { os.exit(212i32) }
+    let iend_at = rgba8_png().len - 12usize
+    let (_, missing_iend_error) = png.decode(a, reader_of(&state, rgba8_png()[..iend_at]), options())
+    if missing_iend_error != png.Invalid { os.exit(226i32) }
+    let (nonzero_iend, nonzero_iend_alloc) = mem.alloc[u8](a, rgba8_png().len + 1usize)
+    if nonzero_iend_alloc != ok { os.exit(227i32) }
+    mem.copy[u8](nonzero_iend[..iend_at + 8usize], rgba8_png()[..iend_at + 8usize])
+    nonzero_iend[iend_at + 3usize] = 1u8
+    nonzero_iend[iend_at + 8usize] = 0u8
+    png.put32(nonzero_iend, iend_at + 9usize, png.crc32(nonzero_iend[iend_at + 4usize..iend_at + 9usize]))
+    let (_, nonzero_iend_error) = png.decode(a, reader_of(&state, nonzero_iend), options())
+    if nonzero_iend_error != png.Invalid { os.exit(228i32) }
+    let (duplicate_iend, duplicate_iend_alloc) = mem.alloc[u8](a, rgba8_png().len + 12usize)
+    if duplicate_iend_alloc != ok { os.exit(229i32) }
+    mem.copy[u8](duplicate_iend[..rgba8_png().len], rgba8_png())
+    mem.copy[u8](duplicate_iend[rgba8_png().len..], rgba8_png()[iend_at..])
+    let (_, duplicate_iend_error) = png.decode(a, reader_of(&state, duplicate_iend), options())
+    if duplicate_iend_error != png.Invalid { os.exit(230i32) }
     let (_, bounded_error) = png.decode(a, reader_of(&state, rgba8_png()), png.DecodeOptions { max_width: 8u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
     let (_, pixel_bounded_error) = png.decode(a, reader_of(&state, rgba8_png()), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 62u64, verify_crc: true })
     if bounded_error != png.TooLarge || pixel_bounded_error != png.TooLarge { os.exit(213i32) }
