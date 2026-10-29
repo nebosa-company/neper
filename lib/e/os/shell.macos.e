@@ -258,7 +258,12 @@ fn target_ready() -> err {
 fn icon_image(icon: Icon) -> usize {
     let count = usize(icon.width) * usize(icon.height)
     let data = os.cf_data_create(0usize, mem.address_of(&icon.pixels[0usize]), count * 4usize)
+    if data == 0usize { ret 0usize }
     let provider = os.cg_provider_with_data(data)
+    if provider == 0usize {
+        os.cf_release(data)
+        ret 0usize
+    }
     let space = os.cg_color_space()
     let picture = os.cg_image_create(usize(icon.width), usize(icon.height), 8usize, 32usize, usize(icon.width) * 4usize, space, 8194u32, provider, 0usize, 0i32, 0i32)
     var image = 0usize
@@ -2582,7 +2587,16 @@ fn print_page(a: *mem.Arena, job: *PrintJob, page: Icon) -> err {
     let pool = os.objc_pool_push()
     let count = usize(page.width) * usize(page.height)
     let data = os.cf_data_create(0usize, mem.address_of(&page.pixels[0usize]), count * 4usize)
+    if data == 0usize {
+        os.objc_pool_pop(pool)
+        ret Failed
+    }
     let provider = os.cg_provider_with_data(data)
+    if provider == 0usize {
+        os.cf_release(data)
+        os.objc_pool_pop(pool)
+        ret Failed
+    }
     let space = os.cg_color_space()
     let picture = os.cg_image_create(usize(page.width), usize(page.height), 8usize, 32usize, usize(page.width) * 4usize, space, 8194u32, provider, 0usize, 0i32, 0i32)
     var result = ok
