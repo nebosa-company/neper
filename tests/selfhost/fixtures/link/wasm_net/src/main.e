@@ -4,6 +4,7 @@
 // its writing half, 300 KB sent and read back whole, and a file moved with send_file.
 
 use e.cancel
+use e.io
 use e.mem
 use e.net
 use e.os
@@ -407,7 +408,10 @@ fn main(a: *mem.Arena) -> err {
         let mismatch_code = family_mismatches()
         if mismatch_code != 0i32 { os.exit(mismatch_code) }
         let implicit_code = implicit_datagram()
-        if implicit_code != 0i32 { os.exit(implicit_code) }
+        if implicit_code != 0i32 {
+            if implicit_code == 127i32 { try io.print("wasm_net implicit UDP delivery timed out\n") }
+            os.exit(implicit_code)
+        }
         let refused_code = refused()
         if refused_code != 0i32 { os.exit(refused_code) }
     }
