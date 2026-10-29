@@ -5,6 +5,7 @@
 use e.os
 use e.mem
 use e.io
+use e.test.support
 use e.fmt.quoted_printable as qp
 
 fn bytes_equal(a: []const u8, b: []const u8) -> bool {
@@ -94,9 +95,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var total = 0usize
     while true {
         let (count, read_error) = qp.read(&r, decoded[total..])
+        total += count
         if read_error == io.End { break }
         if read_error != ok { os.exit(6) }
-        total += count
     }
     if !bytes_equal(decoded[..total], "h\xc3\xa9llo = w\xc3\xb6rld \r\nline two  ") { os.exit(7) }
     // Strict decoding: lower-case hex, a bare CR and a byte above 126 are invalid.
@@ -121,12 +122,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var n = 0usize
     while true {
         let (count, read_error) = qp.read(&small, one[0..])
+        if count > 0usize {
+            got[n] = one[0usize]
+            n += count
+        }
         if read_error == io.End { break }
         if read_error != ok { os.exit(10) }
-        got[n] = one[0]
-        n += count
     }
     if n != 3usize || got[0] != 120u8 || got[1] != 65u8 || got[2] != 121u8 { os.exit(11) }
+
+    // A source is allowed to return its final decoded bytes and End together.
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end", failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { os.exit(22) }
+    var final_source = support.reader(&final_script)
+    var final_storage: [64]u8 = zero
+    var final_reader = qp.reader(final_storage[..], final_source)
+    var final_out: [8]u8 = zero
+    let (final_count, final_error) = qp.read(&final_reader, final_out[..])
+    if final_count != 3usize || final_error != io.End || !bytes_equal(final_out[..3usize], "end") { os.exit(23) }
+
     let (_, limit_error) = qp.writer(writer_storage[0..], sink, 77u8)
     if limit_error != qp.Invalid { os.exit(12) }
     os.exit(0)

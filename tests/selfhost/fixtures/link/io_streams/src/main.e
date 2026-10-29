@@ -240,6 +240,29 @@ fn main(a: *mem.Arena) -> err {
     if drained_error != ok { ret drained_error }
     if !str.eq(drained, "buffered bytes") { ret Failed }
 
+    // A buffered source preserves the final bytes when the callback returns them
+    // together with its terminal error, just as read_all and copy do above.
+    let final_buffered_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end", failure: io.End } }
+    var (final_buffered_script, final_buffered_script_error) = support.scripted_reader(a, final_buffered_steps[..])
+    if final_buffered_script_error != ok { ret final_buffered_script_error }
+    var final_buffered_source = support.reader(&final_buffered_script)
+    var (final_buffered_handle, final_buffered_handle_error) = io.buffered_reader(a, final_buffered_source, 8usize)
+    if final_buffered_handle_error != ok { ret final_buffered_handle_error }
+    var final_buffered = io.buffered_source(&final_buffered_handle)
+    var final_buffered_bytes: [8]u8 = zero
+    let (final_buffered_count, final_buffered_error) = io.read(&final_buffered, final_buffered_bytes[..])
+    if final_buffered_count != 3usize || final_buffered_error != io.End || !str.eq(final_buffered_bytes[..3usize], "end") { ret Failed }
+
+    let failed_buffered_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "bad", failure: Failed } }
+    var (failed_buffered_script, failed_buffered_script_error) = support.scripted_reader(a, failed_buffered_steps[..])
+    if failed_buffered_script_error != ok { ret failed_buffered_script_error }
+    var failed_buffered_source = support.reader(&failed_buffered_script)
+    var (failed_buffered_handle, failed_buffered_handle_error) = io.buffered_reader(a, failed_buffered_source, 8usize)
+    if failed_buffered_handle_error != ok { ret failed_buffered_handle_error }
+    var failed_buffered = io.buffered_source(&failed_buffered_handle)
+    let (failed_buffered_count, failed_buffered_error) = io.read(&failed_buffered, final_buffered_bytes[..])
+    if failed_buffered_count != 3usize || failed_buffered_error != Failed || !str.eq(final_buffered_bytes[..3usize], "bad") { ret Failed }
+
     // A buffered sink holds bytes back until it is flushed.
     var flushed_buffer: [32]u8 = zero
     var flushed_state = io.SliceWriter { data: flushed_buffer[..], off: 0usize }

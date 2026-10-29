@@ -97,6 +97,7 @@ type BufferState = struct {
     buffer: []u8,
     off: usize,
     len: usize,
+    pending_error: err,
 }
 
 type DetailBufferState = struct {
@@ -663,9 +664,11 @@ fn buffered_read(ctx: *void, dst: []u8) -> (usize, err) {
     if state.off == state.len {
         state.off = 0usize
         state.len = 0usize
+        state.pending_error = ok
         let (count, read_error) = read(&state.source, state.buffer)
-        if read_error != ok { ret (0usize, read_error) }
         state.len = count
+        if read_error != ok { state.pending_error = read_error }
+        if count == 0usize { ret (0usize, read_error) }
     }
     var take = state.len - state.off
     if take > dst.len { take = dst.len }
@@ -675,6 +678,7 @@ fn buffered_read(ctx: *void, dst: []u8) -> (usize, err) {
         at += 1usize
     }
     state.off += take
+    if state.off == state.len && state.pending_error != ok { ret (take, state.pending_error) }
     ret (take, ok)
 }
 
@@ -871,6 +875,7 @@ fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedR
     state[0usize].buffer = buffer
     state[0usize].off = 0usize
     state[0usize].len = 0usize
+    state[0usize].pending_error = ok
     handle.state = mem.cast[*void](&state[0usize])
     ret (handle, ok)
 }
@@ -893,6 +898,7 @@ fn buffered_writer(a: *mem.Arena, sink: Writer, capacity: usize) -> (BufferedWri
     state[0usize].buffer = buffer
     state[0usize].off = 0usize
     state[0usize].len = 0usize
+    state[0usize].pending_error = ok
     handle.state = mem.cast[*void](&state[0usize])
     ret (handle, ok)
 }

@@ -16,7 +16,7 @@ type Reader = struct { state: *void }
 type Writer = struct { state: *void }
 error Invalid
 
-type ReaderState = struct { source: io.Reader, buffer: []u8, start: usize, end: usize, ended: bool }
+type ReaderState = struct { source: io.Reader, buffer: []u8, start: usize, end: usize, ended: bool, pending_error: err }
 type WriterState = struct { sink: io.Writer, line: []u8, used: usize, limit: usize, pending_cr: u8 }
 
 fn is_hex_upper(c: u8) -> bool {
@@ -47,6 +47,7 @@ fn reader(storage: []u8, source: io.Reader) -> Reader {
     state.start = 0usize
     state.end = 0usize
     state.ended = false
+    state.pending_error = ok
     r.state = mem.cast[*void](state)
     ret r
 }
@@ -65,12 +66,11 @@ fn refill(s: *ReaderState) -> err {
     }
     if s.end == s.buffer.len { ret ok }
     let (count, read_error) = io.read(&s.source, s.buffer[s.end..])
-    if read_error == io.End {
-        s.ended = true
-        ret ok
-    }
-    if read_error != ok { ret read_error }
     s.end += count
+    if read_error != ok {
+        s.ended = true
+        s.pending_error = read_error
+    }
     ret ok
 }
 
@@ -85,6 +85,7 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
             if refill_error != ok { ret (written, refill_error) }
         }
         if s.start >= s.end {
+            if s.pending_error != ok { ret (written, s.pending_error) }
             if written == 0usize { ret (0usize, io.End) }
             ret (written, ok)
         }
