@@ -1727,6 +1727,47 @@ fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy
     ret (beneath, beneath_error)
 }
 
+// Describe the final name itself after walking its parents without links, matching the
+// rooted operation's NoSymlinks contract on the native hosts.
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    if !relative_path_ok(relative_path) { ret (info, Denied) }
+    let (parent, name, parent_error) = open_parent(u32(dir.raw), relative_path)
+    if parent_error != ok { ret (info, parent_error) }
+    var raw: [8]u64 = zero
+    let status = wasi_path_filestat_get(parent, 0u32, address_of_str(name), u32(name.len), u32(mem.address_of(&raw[0usize])))
+    if status == 0u32 {
+        info.kind = kind_of_filetype(raw[2usize] & 255u64)
+        info.size = raw[4usize]
+        info.accessed_ns = i64(raw[5usize])
+        info.modified_ns = i64(raw[6usize])
+        info.created_ns = -1i64
+        info.file_id = raw[1usize]
+        info.file_volume = raw[0usize]
+        info.link_count = raw[3usize]
+        info.mode = 420u32
+        if info.kind == EntryKind.Dir { info.mode = 493u32 }
+        if info.kind == EntryKind.Symlink { info.mode = 511u32 }
+        if info.kind != EntryKind.Symlink {
+            var host_mode: [1]u32 = zero
+            if host_fs_mode(parent, address_of_str(name), u32(name.len), u32(mem.address_of(&host_mode[0usize]))) == 0u32 { info.mode = host_mode[0usize] }
+        }
+    }
+    if parent != u32(dir.raw) { let closed = wasi_fd_close(parent) }
+    if status != 0u32 { ret (info, wasi_error(status)) }
+    ret (info, ok)
+}
+
+// Create one final name beneath a parent reached without following links.
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(u32(dir.raw), relative_path)
+    if parent_error != ok { ret parent_error }
+    let made = wasi_error(wasi_path_create_directory(parent, address_of_str(name), u32(name.len)))
+    if parent != u32(dir.raw) { let closed = wasi_fd_close(parent) }
+    ret made
+}
+
 // unlink never follows the last component, which is what makes removing a link remove the link.
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {
     if !relative_path_ok(relative_path) { ret Denied }

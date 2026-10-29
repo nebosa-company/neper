@@ -635,6 +635,14 @@ fn main(a: *mem.Arena) -> err {
     if root_read != 11usize { os.exit(243i32) }
     if os.close(through_root) != ok { os.exit(244i32) }
 
+    // Rooted metadata and directory creation use the held directory rather than a
+    // re-resolved path, including on WASI where these operations have their own host calls.
+    let (root_entry, root_entry_error) = fs.stat_at(a, &root_holder, "one.txt")
+    if root_entry_error != ok || root_entry.kind != .File || root_entry.size != 11u64 { os.exit(310i32) }
+    if fs.make_dirs_at(a, &root_holder, "at-made/nested") != ok { os.exit(311i32) }
+    let (nested_entry, nested_entry_error) = fs.stat_at(a, &root_holder, "at-made/nested")
+    if nested_entry_error != ok || nested_entry.kind != .Directory { os.exit(312i32) }
+
     // A name that would leave the root, and one that ignores it entirely.
     let (upward, upward_error) = fs.open_at(a, &root_holder, "../np-fs", root_flags, .NoSymlinks)
     if upward_error != fs.Denied { os.exit(245i32) }
