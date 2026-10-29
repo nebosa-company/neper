@@ -84,7 +84,8 @@ fn parse_container(d: []const u8, bounded: bool) -> (Container, err) {
     let riff_size = usize(le32(d, 4usize))
     var end = d.len
     var shortened = false
-    if riff_size <= d.len - 8usize { end = riff_size + 8usize } else {
+    if riff_size < d.len - 8usize || (bounded && riff_size == d.len - 8usize) { ret (zero, Invalid) }
+    if riff_size > d.len - 8usize {
         if !bounded { ret (zero, Invalid) }
         shortened = true
     }
@@ -143,6 +144,7 @@ fn parse_container(d: []const u8, bounded: bool) -> (Container, err) {
         }
         at += 8usize + padded
     }
+    if !shortened && at != end { ret (zero, Invalid) }
     if !c.has_bitstream {
         if shortened && c.width != 0u32 && c.height != 0u32 { ret (c, ok) }
         ret (zero, Invalid)

@@ -211,6 +211,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     put32(large_container, chunk_at + 4usize, large_container.len - chunk_at - 8usize)
     let (large_info, large_info_error) = webp.inspect(reader_of(&state, large_container))
     if large_info_error != ok || large_info.width != 23u32 || large_info.height != 17u32 { os.exit(155i32) }
+    // Seeing bytes after an exact bounded RIFF boundary is trailing data, not a
+    // shorter form of the same container.
+    put32(large_container, 4usize, 65536usize - 8usize)
+    put32(large_container, chunk_at + 4usize, 65536usize - chunk_at - 8usize)
+    let (_, bounded_trailing_error) = webp.inspect(reader_of(&state, large_container))
+    if bounded_trailing_error != webp.Invalid { os.exit(165i32) }
 
     // RIFF chunks with an odd body require their byte of alignment padding.
     let (missing_pad, missing_pad_alloc) = mem.alloc[u8](a, small_source.len + 9usize)
@@ -229,6 +235,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     put32(missing_pad, pad_at + 4usize, 1usize)
     let (_, missing_pad_error) = webp.decode(a, reader_of(&state, missing_pad), options())
     if missing_pad_error != webp.Invalid { os.exit(157i32) }
+
+    // The RIFF size declares the entire source, not a valid prefix before junk.
+    let (trailing, trailing_alloc) = mem.alloc[u8](a, small_source.len + 1usize)
+    if trailing_alloc != ok { os.exit(160i32) }
+    copy_at = 0usize
+    while copy_at < small_source.len {
+        trailing[copy_at] = small_source[copy_at]
+        copy_at += 1usize
+    }
+    trailing[small_source.len] = 0u8
+    let (_, trailing_inspect_error) = webp.inspect(reader_of(&state, trailing))
+    if trailing_inspect_error != webp.Invalid { os.exit(161i32) }
+    let (_, trailing_decode_error) = webp.decode(a, reader_of(&state, trailing), options())
+    if trailing_decode_error != webp.Invalid { os.exit(162i32) }
+
+    // A complete RIFF cannot leave a partial next chunk header at its end.
+    let (partial_tail, partial_tail_alloc) = mem.alloc[u8](a, small_source.len + 4usize)
+    if partial_tail_alloc != ok { os.exit(163i32) }
+    copy_at = 0usize
+    while copy_at < small_source.len {
+        partial_tail[copy_at] = small_source[copy_at]
+        copy_at += 1usize
+    }
+    put32(partial_tail, 4usize, partial_tail.len - 8usize)
+    partial_tail[small_source.len] = 74u8
+    partial_tail[small_source.len + 1usize] = 85u8
+    partial_tail[small_source.len + 2usize] = 78u8
+    partial_tail[small_source.len + 3usize] = 75u8
+    let (_, partial_tail_error) = webp.decode(a, reader_of(&state, partial_tail), options())
+    if partial_tail_error != webp.Invalid { os.exit(164i32) }
 
     // A non-animated VP8X canvas must agree with the coded image dimensions.
     let (mismatched_canvas, mismatched_canvas_alloc) = mem.alloc[u8](a, small_source.len + 18usize)
