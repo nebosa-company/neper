@@ -56,6 +56,10 @@ fn rd_vint(c: *Cur) -> u64 {
         }
         let b = c.data[c.at]
         c.at += 1usize
+        if shift == 63u32 && (b & 127u8) > 1u8 {
+            c.bad = true
+            ret 0u64
+        }
         value = value | (u64(b & 127u8) << shift)
         if (b & 128u8) == 0u8 { break }
         shift += 7u32
@@ -161,7 +165,8 @@ fn open(a: *mem.Arena, data: []const u8, limits: Limits) -> (Archive, err) {
             let info = rd_vint(&c)
             let host = rd_vint(&c)
             let name_length = rd_vint(&c)
-            if c.bad || name_length > u64(head_end - c.at) { ret (archive, Invalid) }
+            if c.bad || c.at > head_end { ret (archive, Invalid) }
+            if name_length > u64(head_end - c.at) { ret (archive, Invalid) }
             if (file_flags & 8u64) != 0u64 { ret (archive, Unsupported) }
             if (info & 63u64) != 0u64 { ret (archive, Unsupported) }
             if usize(name_length) > st.name_budget { ret (archive, TooLarge) }
