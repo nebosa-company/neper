@@ -475,18 +475,21 @@ fn match_component(m: *Matcher, pattern: str, name: str) -> bool {
 // directory the relative path is already relative to.
 fn glob_next(text: str, from: usize, style: Style) -> (str, usize, bool) {
     var start = from
-    while start < text.len {
-        if !is_separator(text[start], style) { break }
-        start += 1usize
+    // A user-controlled run of `./` used to recurse once per component here. This helper is
+    // called before matching charges its work budget, so keep the skip iterative as well.
+    while true {
+        while start < text.len {
+            if !is_separator(text[start], style) { break }
+            start += 1usize
+        }
+        if start >= text.len { ret ("", text.len, false) }
+        var end = start
+        while end < text.len && !is_separator(text[end], style) { end += 1usize }
+        if end - start != 1usize || text[start] != 46u8 {
+            ret (text[start..end], end, true)
+        }
+        start = end
     }
-    if start >= text.len { ret ("", text.len, false) }
-    var end = start
-    while end < text.len && !is_separator(text[end], style) { end += 1usize }
-    if end - start == 1usize && text[start] == 46u8 {
-        let (skipped, after, found) = glob_next(text, end, style)
-        ret (skipped, after, found)
-    }
-    ret (text[start..end], end, true)
 }
 
 fn is_parent(component: str) -> bool {
