@@ -124,6 +124,9 @@ fn parse_name(s: str, at: usize, o: *Out) -> (usize, str, err) {
             }
             if s[p] == 67u8 || s[p] == 68u8 {
                 if p + 1usize >= s.len || last.len == 0usize { ret (p, "", Malformed) }
+                let discriminator = s[p + 1usize]
+                if s[p] == 67u8 && discriminator != 49u8 && discriminator != 50u8 && discriminator != 51u8 { ret (p, "", Malformed) }
+                if s[p] == 68u8 && discriminator != 48u8 && discriminator != 49u8 && discriminator != 50u8 { ret (p, "", Malformed) }
                 if s[p] == 68u8 {
                     let tilde_error = emit(o, "~")
                     if tilde_error != ok { ret (p, "", tilde_error) }
@@ -142,6 +145,7 @@ fn parse_name(s: str, at: usize, o: *Out) -> (usize, str, err) {
             p = after
         }
         if p >= s.len { ret (p, "", Malformed) }
+        if first { ret (p, "", Malformed) }
         ret (p + 1usize, last, ok)
     }
     if p + 1usize < s.len && s[p] == 83u8 && s[p + 1usize] == 116u8 {

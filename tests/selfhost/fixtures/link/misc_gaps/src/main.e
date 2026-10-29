@@ -333,6 +333,12 @@ fn check_demangle() -> i32 {
     if short_error != debug.TooSmall { ret 10i32 }
     let (_, long_length_error) = debug.demangle("_Z99999999999999999999x", dst[..])
     if long_length_error != debug.Malformed { ret 10i32 }
+    let (_, empty_nested_error) = debug.demangle("_ZNE", dst[0..])
+    if empty_nested_error != debug.Malformed { ret 10i32 }
+    let (_, invalid_ctor_error) = debug.demangle("_ZN3FooC9Ev", dst[0..])
+    if invalid_ctor_error != debug.Malformed { ret 10i32 }
+    let (_, invalid_dtor_error) = debug.demangle("_ZN3FooD3Ev", dst[0..])
+    if invalid_dtor_error != debug.Malformed { ret 10i32 }
     ret 0i32
 }
 
