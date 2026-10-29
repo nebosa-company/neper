@@ -2574,12 +2574,19 @@ fn ml_token_text(m: *Ml, buffer: []u8) -> usize {
                         ml_fail(m, Invalid)
                         ret n
                     }
+                    // Numeric character references must stay within the Unicode
+                    // scalar range.  Check before multiplying so a huge decimal
+                    // or hexadecimal value cannot wrap back into a valid scalar.
+                    if value > 1114111u32 / base || value * base > 1114111u32 - v {
+                        ml_fail(m, Invalid)
+                        ret n
+                    }
                     value = value * base + v
                     k += 1usize
                 }
                 scalar = value
             }
-            if scalar == 0u32 {
+            if scalar == 0u32 || (scalar >= 55296u32 && scalar <= 57343u32) || scalar > 1114111u32 {
                 ml_fail(m, Invalid)
                 ret n
             }
