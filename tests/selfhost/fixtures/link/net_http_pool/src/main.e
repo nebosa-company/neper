@@ -57,6 +57,8 @@ fn serve_connection(s: *Server, conn: net.Socket) -> bool {
         s.requests += 1usize
         if target_is(buf[0usize..], used, "/chunk") {
             if !send_all(conn, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n") { ret false }
+        } else if target_is(buf[0usize..], used, "/early") {
+            if !send_all(conn, "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok") { ret false }
         } else if target_is(buf[0usize..], used, "/close") {
             if !send_all(conn, "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 1\r\n\r\nx") { ret false }
             close_after = true
@@ -160,13 +162,14 @@ fn main(a: *mem.Arena) -> err {
     var slots: [4]http.PoolSlot = zero
     var pool = http.pool_new(a, slots[0usize..], limits(), 2usize, 1000u64)
 
-    // Reuse: Content-Length, chunked, HEAD and 204 all keep the one connection.
+    // Reuse: Content-Length, chunked, informational, HEAD and 204 all keep the one connection.
     expect(&pool, a, endpoint_a, .Get, "/a", 0u64, 200u16, "ok", 10i32)
     expect(&pool, a, endpoint_a, .Get, "/a", 10u64, 200u16, "ok", 12i32)
     expect(&pool, a, endpoint_a, .Get, "/chunk", 20u64, 200u16, "abc", 14i32)
     expect(&pool, a, endpoint_a, .Head, "/head", 30u64, 200u16, "", 16i32)
     expect(&pool, a, endpoint_a, .Get, "/nocontent", 40u64, 204u16, "", 18i32)
-    if pool.opened != 1usize || pool.reused != 4usize { os.exit(20i32) }
+    expect(&pool, a, endpoint_a, .Get, "/early", 45u64, 200u16, "ok", 20i32)
+    if pool.opened != 1usize || pool.reused != 5usize { os.exit(22i32) }
     if http.pool_idle(&pool) != 1usize || http.pool_open(&pool) != 1usize { os.exit(21i32) }
 
     // Not reusable: Connection: close, a close-delimited body, HTTP/1.0 without keep-alive.
@@ -180,7 +183,7 @@ fn main(a: *mem.Arena) -> err {
     expect(&pool, a, endpoint_a, .Get, "/h10ka", 80u64, 200u16, "k", 31i32)
     if pool.opened != 4usize || http.pool_idle(&pool) != 1usize { os.exit(33i32) }
     expect(&pool, a, endpoint_a, .Get, "/a", 90u64, 200u16, "ok", 34i32)
-    if pool.opened != 4usize || pool.reused != 6usize { os.exit(36i32) }
+    if pool.opened != 4usize || pool.reused != 7usize { os.exit(36i32) }
 
     // Idle eviction: the connection last used at 90 is past idle_ms (1000) at 1091.
     let before_evicted = pool.evicted
@@ -262,7 +265,7 @@ fn main(a: *mem.Arena) -> err {
     // B: two held, the small pool once; C: one held, the small pool once.
     if server_b.accepts != 3usize { os.exit(77i32) }
     if server_c.accepts != 2usize { os.exit(78i32) }
-    if server_a.requests != 16usize { os.exit(79i32) }
+    if server_a.requests != 17usize { os.exit(79i32) }
     let unused_a = net.close(server_a.listener)
     let unused_b = net.close(server_b.listener)
     let unused_c = net.close(server_c.listener)

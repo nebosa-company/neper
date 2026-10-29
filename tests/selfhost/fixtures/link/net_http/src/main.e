@@ -127,6 +127,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (chunk_response, chunk_response_error) = http.read_response(a, &chunks)
     if chunk_response_error != ok { ret chunk_response_error }
     if chunk_response.version != .Http11 || chunk_response.status != 200u16 || !str.eq(chunk_response.reason, "OK") || !str.eq(chunk_response.body, "Wikipedia") { ret Failed }
+    // Informational heads are skipped until the final response is available.
+    var informational_source: OneByte = zero
+    let informational_input = "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"
+    let (informational_handle, informational_reader_error) = http.reader(a, one_reader(&informational_source, informational_input), message_limits(64usize, 128usize, 8usize, 16usize))
+    if informational_reader_error != ok { ret informational_reader_error }
+    var informational_reader = informational_handle
+    let (informational_response, informational_response_error) = http.read_response(a, &informational_reader)
+    if informational_response_error != ok || informational_response.status != 200u16 || !str.eq(informational_response.body, "ok") { ret Failed }
     // A close-delimited HTTP/1.0 response remains bounded by body_bytes.
     var close_source: OneByte = zero
     let (close_handle, close_reader_error) = http.reader(a, one_reader(&close_source, "HTTP/1.0 404 Missing\r\n\r\nnope"), message_limits(64usize, 64usize, 4usize, 4usize))
