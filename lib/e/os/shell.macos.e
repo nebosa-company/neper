@@ -8,6 +8,7 @@
 // tool or call here gives is `Unsupported` and the capability record says so. The type block is
 // a copy of `shell.windows.e`'s.
 
+use e.atomic
 use e.fs
 use e.mem
 use e.os
@@ -3027,17 +3028,20 @@ fn screen_capture(a: *mem.Arena) -> (Icon, err) {
 // only on a Mac that has it enrolled; `biometric_verify` shows the system sheet through `evaluatePolicy:localizedReason:reply:`,
 // whose reply is a block (built by hand like the permission block, a global one), and waits up to a minute for the person.
 var bio_locks: [1]sync.Mutex = zero
-var bio_block: usize = zero
-var bio_done: bool = zero
-var bio_ok: bool = zero
+// The framework retains its completion block until it calls it.  Its ABI
+// storage therefore lives for the process, not in `biometric_verify`'s caller
+// arena.  `result` is 0 while pending, 1 when rejected and 2 when granted.
+type BioState = struct { words: [8]u64, block: Atomic[usize], result: Atomic[u32] }
+var bio_state: BioState = zero
 
 type BioInvoke = union { function: fn(usize, usize, usize), bits: usize }
 
 @cc(c)
 fn bio_replied(block: usize, success: usize, failure: usize) {
-    if block != bio_block { ret }
-    bio_ok = success & 255usize != 0usize
-    bio_done = true
+    if block != atomic.load(&bio_state.block, .Acquire) { ret }
+    var result = 1u32
+    if success & 255usize != 0usize { result = 2u32 }
+    atomic.store(&bio_state.result, result, .Release)
 }
 
 fn biometric_context() -> usize {
@@ -3063,61 +3067,69 @@ fn biometric_available() -> bool {
 
 fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
     if !biometric_available() { ret (.Unavailable, Unsupported) }
-    // LocalAuthentication retains its reply block and may invoke it after a
-    // timeout. Serialize requests and give each block a unique arena address so
-    // a late reply cannot satisfy a later evaluation.
+    // LocalAuthentication invokes its reply asynchronously on its own queue.
+    // Keep a timed-out request alive through `invalidate`'s cancellation reply
+    // before this process-lifetime block can be reused.
     sync.mutex_lock(&bio_locks[0usize])
-    let (words, words_error) = mem.alloc[u64](a, 8usize)
-    if words_error != ok {
-        sync.mutex_unlock(&bio_locks[0usize])
-        ret (.Unavailable, words_error)
-    }
     let pool = os.objc_pool_push()
     let context = biometric_context()
+    if context == 0usize {
+        os.objc_pool_pop(pool)
+        sync.mutex_unlock(&bio_locks[0usize])
+        ret (.Unavailable, Failed)
+    }
     var invoke: BioInvoke = zero
     invoke.function = bio_replied
     let symbol = "_NSConcreteGlobalBlock\x00"
-    words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
-    words[1usize] = 268435456u64
-    words[2usize] = u64(invoke.bits)
-    words[3usize] = u64(mem.address_of(&words[4usize]))
-    words[4usize] = 0u64
-    words[5usize] = 32u64
-    bio_block = mem.address_of(&words[0usize])
-    bio_done = false
-    bio_ok = false
+    bio_state.words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    bio_state.words[1usize] = 268435456u64
+    bio_state.words[2usize] = u64(invoke.bits)
+    bio_state.words[3usize] = u64(mem.address_of(&bio_state.words[4usize]))
+    bio_state.words[4usize] = 0u64
+    bio_state.words[5usize] = 32u64
+    let block = mem.address_of(&bio_state.words[0usize])
+    atomic.store(&bio_state.result, 0u32, .Release)
+    atomic.store(&bio_state.block, block, .Release)
     let why = os.cocoa_text(reason)
-    let asked = os.msg4(context, os.cocoa_sel("evaluatePolicy:localizedReason:reply:\x00"), 1usize, why, bio_block, 0usize)
+    let asked = os.msg4(context, os.cocoa_sel("evaluatePolicy:localizedReason:reply:\x00"), 1usize, why, block, 0usize)
     var waited = 0usize
-    while !bio_done && waited < 600usize {
+    while atomic.load(&bio_state.result, .Acquire) == 0u32 && waited < 600usize {
         os.cocoa_pump(100000000i64)
         waited += 1usize
+    }
+    let timed_out = atomic.load(&bio_state.result, .Acquire) == 0u32
+    if timed_out {
+        // Apple documents that this stops the pending evaluation and delivers
+        // its cancellation through the reply.  Do not release the block until
+        // that reply has stopped referring to it.
+        let invalidated = os.msg0(context, os.cocoa_sel("invalidate\x00"))
+        while atomic.load(&bio_state.result, .Acquire) == 0u32 {
+            os.cocoa_pump(100000000i64)
+        }
     }
     os.cf_release(why)
     let released = os.msg0(context, os.cocoa_sel("release\x00"))
     os.objc_pool_pop(pool)
-    let completed = bio_done
-    let granted = bio_ok
-    bio_block = 0usize
+    let result = atomic.load(&bio_state.result, .Acquire)
+    atomic.store(&bio_state.block, 0usize, .Release)
     sync.mutex_unlock(&bio_locks[0usize])
-    if !completed { ret (.Unavailable, Failed) }
-    if granted { ret (.Granted, ok) }
+    if timed_out { ret (.Unavailable, Failed) }
+    if result == 2u32 { ret (.Granted, ok) }
     ret (.Denied, ok)
 }
 
 @test
 fn biometric_reply_ignores_foreign_block(a: *mem.Arena) -> err {
-    bio_block = 17usize
-    bio_done = false
-    bio_ok = false
+    atomic.store(&bio_state.block, 17usize, .Release)
+    atomic.store(&bio_state.result, 0u32, .Release)
     bio_replied(18usize, 1usize, 0usize)
-    if bio_done {
-        bio_block = 0usize
+    if atomic.load(&bio_state.result, .Acquire) != 0u32 {
+        atomic.store(&bio_state.block, 0usize, .Release)
         ret Invalid
     }
     bio_replied(17usize, 1usize, 0usize)
-    let good = bio_done && bio_ok
-    bio_block = 0usize
+    let good = atomic.load(&bio_state.result, .Acquire) == 2u32
+    atomic.store(&bio_state.block, 0usize, .Release)
     if !good { ret Invalid }
     ret ok
 }
