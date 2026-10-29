@@ -151,7 +151,7 @@ fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err) {
     var first = 0u32
     while true {
         while nbits < size {
-            if pos >= src.len { ret (produced, ok) }
+            if pos >= src.len { ret (produced, Invalid) }
             acc = acc | (u32(src[pos]) << nbits)
             nbits += 8u32
             pos += 1usize
@@ -168,7 +168,7 @@ fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err) {
         if code == end { break }
         if old == 4294967295u32 {
             if code >= clear { ret (produced, Invalid) }
-            if produced >= out.len { break }
+            if produced >= out.len { ret (produced, Invalid) }
             out[produced] = u8(code)
             produced += 1usize
             old = code
@@ -195,7 +195,7 @@ fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err) {
         sp += 1usize
         while sp > 0usize {
             sp -= 1usize
-            if produced >= out.len { ret (produced, ok) }
+            if produced >= out.len { ret (produced, Invalid) }
             out[produced] = stack[sp]
             produced += 1usize
         }

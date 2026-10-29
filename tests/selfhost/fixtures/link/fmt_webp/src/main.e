@@ -212,6 +212,46 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (large_info, large_info_error) = webp.inspect(reader_of(&state, large_container))
     if large_info_error != ok || large_info.width != 23u32 || large_info.height != 17u32 { os.exit(155i32) }
 
+    // RIFF chunks with an odd body require their byte of alignment padding.
+    let (missing_pad, missing_pad_alloc) = mem.alloc[u8](a, small_source.len + 9usize)
+    if missing_pad_alloc != ok { os.exit(156i32) }
+    copy_at = 0usize
+    while copy_at < small_source.len {
+        missing_pad[copy_at] = small_source[copy_at]
+        copy_at += 1usize
+    }
+    put32(missing_pad, 4usize, missing_pad.len - 8usize)
+    let pad_at = small_source.len
+    missing_pad[pad_at] = 74u8
+    missing_pad[pad_at + 1usize] = 85u8
+    missing_pad[pad_at + 2usize] = 78u8
+    missing_pad[pad_at + 3usize] = 75u8
+    put32(missing_pad, pad_at + 4usize, 1usize)
+    let (_, missing_pad_error) = webp.decode(a, reader_of(&state, missing_pad), options())
+    if missing_pad_error != webp.Invalid { os.exit(157i32) }
+
+    // A non-animated VP8X canvas must agree with the coded image dimensions.
+    let (mismatched_canvas, mismatched_canvas_alloc) = mem.alloc[u8](a, small_source.len + 18usize)
+    if mismatched_canvas_alloc != ok { os.exit(158i32) }
+    copy_at = 0usize
+    while copy_at < 12usize {
+        mismatched_canvas[copy_at] = small_source[copy_at]
+        copy_at += 1usize
+    }
+    mismatched_canvas[12usize] = 86u8
+    mismatched_canvas[13usize] = 80u8
+    mismatched_canvas[14usize] = 56u8
+    mismatched_canvas[15usize] = 88u8
+    put32(mismatched_canvas, 16usize, 10usize)
+    copy_at = 12usize
+    while copy_at < small_source.len {
+        mismatched_canvas[copy_at + 18usize] = small_source[copy_at]
+        copy_at += 1usize
+    }
+    put32(mismatched_canvas, 4usize, mismatched_canvas.len - 8usize)
+    let (_, mismatched_canvas_error) = webp.decode(a, reader_of(&state, mismatched_canvas), options())
+    if mismatched_canvas_error != webp.Invalid { os.exit(159i32) }
+
     try io.print("fmt webp ok\n")
     ret ok
 }

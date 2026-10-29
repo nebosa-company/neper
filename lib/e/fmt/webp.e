@@ -136,19 +136,26 @@ fn parse_container(d: []const u8, bounded: bool) -> (Container, err) {
                 c.has_bitstream = true
             }
         }
-        at += 8usize + size + (size & 1usize)
+        let padded = size + (size & 1usize)
+        if padded > end - at - 8usize {
+            if !shortened { ret (zero, Invalid) }
+            break
+        }
+        at += 8usize + padded
     }
     if !c.has_bitstream {
         if shortened && c.width != 0u32 && c.height != 0u32 { ret (c, ok) }
         ret (zero, Invalid)
     }
     if frames > 1u32 { c.frames = frames }
+    let (w, h, alpha_hint, dims_error) = bitstream_dimensions(c.bitstream, c.lossless)
+    if dims_error != ok { ret (zero, dims_error) }
     if c.width == 0u32 {
-        let (w, h, alpha_hint, dims_error) = bitstream_dimensions(c.bitstream, c.lossless)
-        if dims_error != ok { ret (zero, dims_error) }
         c.width = w
         c.height = h
         if c.lossless && alpha_hint { c.has_alpha = true }
+    } else if !c.animated && (c.width != w || c.height != h) {
+        ret (zero, Invalid)
     }
     if c.alpha.len > 0usize { c.has_alpha = true }
     ret (c, ok)
@@ -161,7 +168,8 @@ fn first_bitstream(d: []const u8) -> (Container, err) {
     while at + 8usize <= d.len {
         let kind = tag(d, at)
         let size = usize(le32(d, at + 4usize))
-        if at + 8usize + size > d.len { ret (zero, Invalid) }
+        let padded = size + (size & 1usize)
+        if padded > d.len - at - 8usize { ret (zero, Invalid) }
         let body = d[at + 8usize..at + 8usize + size]
         if kind == TAG_ALPH { c.alpha = body }
         if (kind == TAG_VP8 || kind == TAG_VP8L) && !c.has_bitstream {
@@ -173,7 +181,7 @@ fn first_bitstream(d: []const u8) -> (Container, err) {
             c.width = w
             c.height = h
         }
-        at += 8usize + size + (size & 1usize)
+        at += 8usize + padded
     }
     ret (c, ok)
 }

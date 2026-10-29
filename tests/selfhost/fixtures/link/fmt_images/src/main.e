@@ -99,6 +99,14 @@ fn bmp_toolarge(a: *mem.Arena, blob: str) -> bool {
     ret failure == bmp.TooLarge
 }
 
+fn bmp_invalid(a: *mem.Arena, blob: []const u8) -> bool {
+    let m = mem.mark(a)
+    var s = io.SliceReader { data: blob, off: 0usize }
+    let (_, failure) = bmp.decode(a, io.slice_reader(&s), bmp.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64 })
+    mem.reset(a, m)
+    ret failure == bmp.Invalid
+}
+
 // ---- TIFF ------------------------------------------------------------------------------
 
 fn tiff_ok(a: *mem.Arena, blob: str, w: u32, h: u32, want: u32) -> bool {
@@ -116,6 +124,14 @@ fn tiff_toolarge(a: *mem.Arena, blob: str) -> bool {
     let (_, failure) = tiff.decode(a, io.slice_reader(&s), tiff.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64 })
     mem.reset(a, m)
     ret failure == tiff.TooLarge
+}
+
+fn tiff_invalid(a: *mem.Arena, blob: []const u8) -> bool {
+    let m = mem.mark(a)
+    var s = io.SliceReader { data: blob, off: 0usize }
+    let (_, failure) = tiff.decode(a, io.slice_reader(&s), tiff.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64 })
+    mem.reset(a, m)
+    ret failure == tiff.Invalid
 }
 
 // ---- GIF -------------------------------------------------------------------------------
@@ -158,6 +174,14 @@ fn gif_missing_trailer(a: *mem.Arena, blob: str) -> bool {
     let (_, inspect_failure) = gif.inspect(a, io.slice_reader(&inspected))
     mem.reset(a, m)
     ret decode_failure == gif.Invalid && inspect_failure == gif.Invalid
+}
+
+fn gif_invalid(a: *mem.Arena, blob: str) -> bool {
+    let m = mem.mark(a)
+    var s = io.SliceReader { data: blob, off: 0usize }
+    let (_, failure) = gif.decode_frames(a, io.slice_reader(&s), gif_options())
+    mem.reset(a, m)
+    ret failure == gif.Invalid
 }
 
 // ---- EXIF ------------------------------------------------------------------------------
@@ -315,6 +339,135 @@ fn survive_exif(a: *mem.Arena, blob: str) -> bool { ret survive(a, 4u8, blob) }
 fn main(a: *mem.Arena, args: []str) -> err {
     // A complete image block still requires the GIF trailer after its data terminator.
     if !gif_missing_trailer(a, "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00") { die(113i32) }
+    // A GIF image's LZW stream also requires its end-of-information code.
+    if !gif_invalid(a, "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x01\x04\x00\x3b") { die(115i32) }
+    // TIFF LZW likewise needs its 257 end code after a complete strip.
+    var tiff_lzw_without_eoi: [101]u8 = zero
+    tiff_lzw_without_eoi[0usize] = 73u8
+    tiff_lzw_without_eoi[1usize] = 73u8
+    tiff_lzw_without_eoi[2usize] = 42u8
+    tiff_lzw_without_eoi[4usize] = 8u8
+    tiff_lzw_without_eoi[8usize] = 7u8
+    tiff_lzw_without_eoi[11usize] = 1u8
+    tiff_lzw_without_eoi[12usize] = 3u8
+    tiff_lzw_without_eoi[14usize] = 1u8
+    tiff_lzw_without_eoi[18usize] = 1u8
+    tiff_lzw_without_eoi[22usize] = 1u8
+    tiff_lzw_without_eoi[23usize] = 1u8
+    tiff_lzw_without_eoi[24usize] = 3u8
+    tiff_lzw_without_eoi[26usize] = 1u8
+    tiff_lzw_without_eoi[30usize] = 1u8
+    tiff_lzw_without_eoi[34usize] = 2u8
+    tiff_lzw_without_eoi[35usize] = 1u8
+    tiff_lzw_without_eoi[36usize] = 3u8
+    tiff_lzw_without_eoi[38usize] = 1u8
+    tiff_lzw_without_eoi[42usize] = 8u8
+    tiff_lzw_without_eoi[46usize] = 3u8
+    tiff_lzw_without_eoi[47usize] = 1u8
+    tiff_lzw_without_eoi[48usize] = 3u8
+    tiff_lzw_without_eoi[50usize] = 1u8
+    tiff_lzw_without_eoi[54usize] = 5u8
+    tiff_lzw_without_eoi[58usize] = 6u8
+    tiff_lzw_without_eoi[59usize] = 1u8
+    tiff_lzw_without_eoi[60usize] = 3u8
+    tiff_lzw_without_eoi[62usize] = 1u8
+    tiff_lzw_without_eoi[66usize] = 1u8
+    tiff_lzw_without_eoi[70usize] = 17u8
+    tiff_lzw_without_eoi[71usize] = 1u8
+    tiff_lzw_without_eoi[72usize] = 4u8
+    tiff_lzw_without_eoi[74usize] = 1u8
+    tiff_lzw_without_eoi[78usize] = 98u8
+    tiff_lzw_without_eoi[82usize] = 23u8
+    tiff_lzw_without_eoi[83usize] = 1u8
+    tiff_lzw_without_eoi[84usize] = 4u8
+    tiff_lzw_without_eoi[86usize] = 1u8
+    tiff_lzw_without_eoi[90usize] = 3u8
+    tiff_lzw_without_eoi[98usize] = 128u8
+    if !tiff_invalid(a, tiff_lzw_without_eoi[..]) { die(116i32) }
+    // StripByteCounts is invalid when it has fewer entries than StripOffsets,
+    // even if its tag appears before StripOffsets in the IFD.
+    var tiff_short_counts: [132]u8 = zero
+    tiff_short_counts[0usize] = 73u8
+    tiff_short_counts[1usize] = 73u8
+    tiff_short_counts[2usize] = 42u8
+    tiff_short_counts[4usize] = 8u8
+    tiff_short_counts[8usize] = 9u8
+    tiff_short_counts[10usize] = 23u8
+    tiff_short_counts[11usize] = 1u8
+    tiff_short_counts[12usize] = 4u8
+    tiff_short_counts[14usize] = 1u8
+    tiff_short_counts[18usize] = 1u8
+    tiff_short_counts[22usize] = 1u8
+    tiff_short_counts[34usize] = 0u8
+    tiff_short_counts[35usize] = 1u8
+    tiff_short_counts[36usize] = 3u8
+    tiff_short_counts[38usize] = 1u8
+    tiff_short_counts[42usize] = 1u8
+    tiff_short_counts[46usize] = 1u8
+    tiff_short_counts[47usize] = 1u8
+    tiff_short_counts[48usize] = 3u8
+    tiff_short_counts[50usize] = 1u8
+    tiff_short_counts[54usize] = 2u8
+    tiff_short_counts[58usize] = 2u8
+    tiff_short_counts[59usize] = 1u8
+    tiff_short_counts[60usize] = 3u8
+    tiff_short_counts[62usize] = 1u8
+    tiff_short_counts[66usize] = 8u8
+    tiff_short_counts[70usize] = 3u8
+    tiff_short_counts[71usize] = 1u8
+    tiff_short_counts[72usize] = 3u8
+    tiff_short_counts[74usize] = 1u8
+    tiff_short_counts[78usize] = 1u8
+    tiff_short_counts[82usize] = 6u8
+    tiff_short_counts[83usize] = 1u8
+    tiff_short_counts[84usize] = 3u8
+    tiff_short_counts[86usize] = 1u8
+    tiff_short_counts[90usize] = 1u8
+    tiff_short_counts[94usize] = 17u8
+    tiff_short_counts[95usize] = 1u8
+    tiff_short_counts[96usize] = 4u8
+    tiff_short_counts[98usize] = 2u8
+    tiff_short_counts[102usize] = 122u8
+    tiff_short_counts[106usize] = 22u8
+    tiff_short_counts[107usize] = 1u8
+    tiff_short_counts[108usize] = 4u8
+    tiff_short_counts[110usize] = 1u8
+    tiff_short_counts[114usize] = 1u8
+    tiff_short_counts[122usize] = 130u8
+    tiff_short_counts[126usize] = 131u8
+    tiff_short_counts[131usize] = 255u8
+    if !tiff_invalid(a, tiff_short_counts[..]) { die(117i32) }
+    // A QOI run may not describe pixels beyond the declared raster.
+    if !qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xc1\x00\x00\x00\x00\x00\x00\x00\x01") { die(118i32) }
+    // BI_RLE8 must end with the escape pair 00 01. A valid run followed by EOF
+    // used to be accepted as a completed image.
+    var rle_without_eob: [64]u8 = zero
+    rle_without_eob[0usize] = 66u8
+    rle_without_eob[1usize] = 77u8
+    rle_without_eob[2usize] = 64u8
+    rle_without_eob[10usize] = 62u8
+    rle_without_eob[14usize] = 40u8
+    rle_without_eob[18usize] = 1u8
+    rle_without_eob[22usize] = 1u8
+    rle_without_eob[26usize] = 1u8
+    rle_without_eob[28usize] = 8u8
+    rle_without_eob[30usize] = 1u8
+    rle_without_eob[34usize] = 2u8
+    rle_without_eob[46usize] = 2u8
+    rle_without_eob[62usize] = 1u8
+    if !bmp_invalid(a, rle_without_eob[..]) { die(114i32) }
+    // A DIB's declared size must be fully present and precede pixel data.
+    var bmp_short_v5: [58]u8 = zero
+    bmp_short_v5[0usize] = 66u8
+    bmp_short_v5[1usize] = 77u8
+    bmp_short_v5[2usize] = 58u8
+    bmp_short_v5[10usize] = 54u8
+    bmp_short_v5[14usize] = 124u8
+    bmp_short_v5[18usize] = 1u8
+    bmp_short_v5[22usize] = 1u8
+    bmp_short_v5[26usize] = 1u8
+    bmp_short_v5[28usize] = 24u8
+    if !bmp_invalid(a, bmp_short_v5[..]) { die(119i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07")) { die(110i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07\x00\x00\x00\x00\x00\x00\x00\x02")) { die(111i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07\x00\x00\x00\x00\x00\x00\x00\x01\x00")) { die(112i32) }

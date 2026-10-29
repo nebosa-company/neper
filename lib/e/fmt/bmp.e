@@ -56,7 +56,7 @@ fn parse_header(d: []const u8) -> (Header, err) {
         h.compression = 0u32
         h.palette_entry = 3usize
     } else if size >= 40u32 && size <= 124u32 {
-        if d.len < 14usize + 40usize { ret (h, Invalid) }
+        if d.len < 14usize + usize(size) { ret (h, Invalid) }
         let w = le32(d, 18usize)
         let ht = le32(d, 22usize)
         if w >= 2147483648u32 { ret (h, Invalid) }
@@ -256,6 +256,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
             }
             if y > ht + 1usize { break }
         }
+        if !done { ret (zero, Invalid) }
         var row = 0usize
         while row < ht {
             var dst_row = row

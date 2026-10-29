@@ -103,6 +103,7 @@ fn parse(r: *Rd) -> (Ifd, err) {
     var bits_type = 0u32
     var bits_count = 0u32
     var strips = 0u32
+    var strip_counts = 0u32
     var extra_at = 0usize
     var extra_count = 0u32
     var tiled = false
@@ -142,7 +143,7 @@ fn parse(r: *Rd) -> (Ifd, err) {
             } else {
                 h.counts_at = at
                 h.counts_type = t
-                if count != strips && strips != 0u32 { ret (h, Invalid) }
+                strip_counts = count
             }
         } else if tag == 320u32 {
             if t != 3u32 { ret (h, Invalid) }
@@ -166,6 +167,7 @@ fn parse(r: *Rd) -> (Ifd, err) {
         k += 1usize
     }
     if tiled { ret (h, Unsupported) }
+    if strip_counts != 0u32 && strip_counts != strips { ret (h, Invalid) }
     if h.width == 0u32 || h.height == 0u32 { ret (h, Invalid) }
     if h.offsets_at == 0usize || h.counts_at == 0usize && h.compression != 1u32 { ret (h, Invalid) }
     if h.planar != 1u32 { ret (h, Unsupported) }
@@ -269,7 +271,7 @@ fn lzw(src: []const u8, out: []u8) -> (usize, err) {
     var first = 0u32
     while true {
         while nbits < size {
-            if pos >= src.len { ret (produced, ok) }
+            if pos >= src.len { ret (produced, Invalid) }
             acc = (acc << 8u32) | u32(src[pos])
             nbits += 8u32
             pos += 1usize
@@ -285,7 +287,7 @@ fn lzw(src: []const u8, out: []u8) -> (usize, err) {
         }
         if old == 4294967295u32 {
             if code >= 256u32 { ret (produced, Invalid) }
-            if produced >= out.len { break }
+            if produced >= out.len { ret (produced, Invalid) }
             out[produced] = u8(code)
             produced += 1usize
             old = code
@@ -312,7 +314,7 @@ fn lzw(src: []const u8, out: []u8) -> (usize, err) {
         sp += 1usize
         while sp > 0usize {
             sp -= 1usize
-            if produced >= out.len { ret (produced, ok) }
+            if produced >= out.len { ret (produced, Invalid) }
             out[produced] = stack[sp]
             produced += 1usize
         }
