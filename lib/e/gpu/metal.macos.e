@@ -33,6 +33,7 @@ fn last_problem(out: []u8) -> usize {
     ret at
 }
 
+// `Create` returns an owned Objective-C object: every nonzero device from this function receives `release`.
 @import("/System/Library/Frameworks/Metal.framework/Metal", "MTLCreateSystemDefaultDevice")
 extern fn default_device() -> usize
 
@@ -50,6 +51,9 @@ fn available() -> bool {
         let handle = os.raw_dlopen(mem.address_of(&metal[0usize]), 2i32)
         if handle == 0usize { ret false }
         let device = default_device()
+        if device != 0usize {
+            let dropped = os.msg0(device, os.cocoa_sel("release\x00"))
+        }
         let closed = os.raw_dlclose(handle)
         ret device != 0usize
     }
@@ -66,8 +70,12 @@ fn open(a: *mem.Arena) -> (Context, err) {
     when target.os == .Macos {
         if !available() { ret (none, NoDevice) }
         let device = default_device()
+        if device == 0usize { ret (none, NoDevice) }
         let queue = os.msg0(device, os.cocoa_sel("newCommandQueue\x00"))
-        if queue == 0usize { ret (none, Failed) }
+        if queue == 0usize {
+            let dropped = os.msg0(device, os.cocoa_sel("release\x00"))
+            ret (none, Failed)
+        }
         ret (Context { device: device, queue: queue }, ok)
     }
     ret (none, Unsupported)
@@ -75,6 +83,7 @@ fn open(a: *mem.Arena) -> (Context, err) {
 
 fn close(context: Context) {
     let dropped = os.msg0(context.queue, os.cocoa_sel("release\x00"))
+    let released = os.msg0(context.device, os.cocoa_sel("release\x00"))
 }
 
 // `bytes` of storage the CPU and the device share, zero filled by the system.
