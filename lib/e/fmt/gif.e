@@ -89,7 +89,8 @@ fn count_frames(d: []const u8) -> (u32, usize, err) {
     var frames = 0u32
     while at < d.len {
         let tag = d[at]
-        if tag == 59u8 { break }
+        // The trailer completes the GIF stream. Bytes after it remain tolerated.
+        if tag == 59u8 { ret (frames, start, ok) }
         if tag == 33u8 {
             if at + 2usize > d.len { ret (0u32, 0usize, Invalid) }
             let (next, _, failure) = sub_blocks(d, at + 2usize)
@@ -109,7 +110,7 @@ fn count_frames(d: []const u8) -> (u32, usize, err) {
             ret (0u32, 0usize, Invalid)
         }
     }
-    ret (frames, start, ok)
+    ret (0u32, 0usize, Invalid)
 }
 
 // The canvas size and the number of frames, from the block structure alone; the reader is

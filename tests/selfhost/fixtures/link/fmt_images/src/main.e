@@ -150,6 +150,16 @@ fn gif_toolarge(a: *mem.Arena, blob: str) -> bool {
     ret failure == gif.TooLarge
 }
 
+fn gif_missing_trailer(a: *mem.Arena, blob: str) -> bool {
+    let m = mem.mark(a)
+    var decoded = io.SliceReader { data: blob, off: 0usize }
+    let (_, decode_failure) = gif.decode_frames(a, io.slice_reader(&decoded), gif_options())
+    var inspected = io.SliceReader { data: blob, off: 0usize }
+    let (_, inspect_failure) = gif.inspect(a, io.slice_reader(&inspected))
+    mem.reset(a, m)
+    ret decode_failure == gif.Invalid && inspect_failure == gif.Invalid
+}
+
 // ---- EXIF ------------------------------------------------------------------------------
 
 fn block_for(data: str, kind: u8) -> ([]const u8, err) {
@@ -303,6 +313,8 @@ fn survive_tiff(a: *mem.Arena, blob: str) -> bool { ret survive(a, 3u8, blob) }
 fn survive_exif(a: *mem.Arena, blob: str) -> bool { ret survive(a, 4u8, blob) }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // A complete image block still requires the GIF trailer after its data terminator.
+    if !gif_missing_trailer(a, "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00") { die(113i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07")) { die(110i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07\x00\x00\x00\x00\x00\x00\x00\x02")) { die(111i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07\x00\x00\x00\x00\x00\x00\x00\x01\x00")) { die(112i32) }
