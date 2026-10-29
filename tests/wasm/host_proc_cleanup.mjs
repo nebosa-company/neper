@@ -1,5 +1,5 @@
 // Direct NetHost boundary checks: invalid sockets allocate nothing, a listener keeps
-// the requested backlog, and a waited ordinary child does not accumulate in procs.
+// the requested backlog, and process/group aliases retain exactly the needed host record.
 import assert from 'node:assert/strict'
 import net from 'node:net'
 import { BASE, FUNCTIONS, NetHost, context } from '../../lib/wasm/run-wasm-host.mjs'
@@ -8,9 +8,11 @@ const saved = { cwd: context.cwd, tmp: context.tmp, preopens: context.preopens, 
 const data = new Uint8Array(65536)
 const host = new NetHost(data)
 const wait = FUNCTIONS.findIndex(([name]) => name === 'proc_wait')
+const groupClose = FUNCTIONS.findIndex(([name]) => name === 'proc_group_close')
 const open = FUNCTIONS.findIndex(([name]) => name === 'sock_open')
 const listen = FUNCTIONS.findIndex(([name]) => name === 'sock_listen')
 const argv = Buffer.from(`${process.execPath}\0-e\0\0`)
+const linger = Buffer.from(`${process.execPath}\0-e\0setTimeout(() => {}, 20)\0`)
 
 try {
   context.cwd = process.cwd()
@@ -45,6 +47,26 @@ try {
     assert.equal(host.procs.size, 0, `wait ${turn} reclaimed its process entry`)
     assert.equal(await host.call(wait, [id, 0]), 8, `wait ${turn} cannot reuse a reclaimed handle`)
   }
+  // `proc.run` with contain_tree waits the root and then drops the group. Both aliases name one
+  // host record, which disappears only after both lifetimes have ended.
+  data.fill(0)
+  data.set(argv, 128)
+  assert.equal(await host.procSpawn([0, argv.length, 3, 0, 3, 0, 0, 1, 2]), 0)
+  const contained = host.view.getUint32(64, true)
+  assert.equal(await host.call(wait, [contained, 0]), 0, 'the contained child exits')
+  assert.equal(host.procs.size, 1, 'a waited group stays until its group owner closes')
+  assert.equal(await host.call(groupClose, [contained]), 0, 'closing the contained group succeeds')
+  assert.equal(host.procs.size, 0, 'closing a waited group reclaims its process record')
+
+  // Closing the group first must not invalidate the still-aliased Proc: its wait owns the remaining lifetime.
+  data.fill(0)
+  data.set(linger, 128)
+  assert.equal(await host.procSpawn([0, linger.length, 3, 0, 3, 0, 0, 1, 2]), 0)
+  const early = host.view.getUint32(64, true)
+  assert.equal(await host.call(groupClose, [early]), 0, 'an early group close succeeds')
+  assert.equal(host.procs.size, 1, 'an early group close retains the aliased process')
+  assert.equal(await host.call(wait, [early, 0]), 0, 'the aliased process remains waitable')
+  assert.equal(host.procs.size, 0, 'waiting after an early group close reclaims the record')
 } finally {
   Object.assign(context, saved)
   host.closeAll()

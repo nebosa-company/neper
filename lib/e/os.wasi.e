@@ -286,6 +286,9 @@ extern fn host_proc_kill(handle: u32) -> u32
 @import("neper_host", "proc_group_kill")
 extern fn host_proc_group_kill(handle: u32, force: u32) -> u32
 
+@import("neper_host", "proc_group_close")
+extern fn host_proc_group_close(handle: u32) -> u32
+
 @import("neper_host", "fs_mode")
 extern fn host_fs_mode(dirfd: u32, path: u32, path_len: u32, mode: u32) -> u32
 
@@ -2275,7 +2278,9 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
     if force { flag = 1u32 }
     ret wasi_error(host_proc_group_kill(host_handle(group.raw), flag))
 }
-fn proc_group_close(group: own ProcGroup) -> err { ret ok }
+fn proc_group_close(group: own ProcGroup) -> err {
+    ret wasi_error(host_proc_group_close(host_handle(group.raw)))
+}
 fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) { ret (FileLock { raw: 0usize }, Unsupported) }
 fn file_unlock(lock: own FileLock) -> err { ret ok }
 // The file's bytes at `offset`, read in pieces and sent; the file's own position stays where it was.
