@@ -522,7 +522,15 @@ fn check64_b(a: *mem.Arena, seed: u64) -> err {
 fn main(a: *mem.Arena, args: []str) -> err {
     compute.install()
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
-    if found_error != ok || found.len == 0usize {
+    if found_error == gpu.Unsupported {
+        try io.print("no OpenGL compute device; nothing checked\n")
+        ret ok
+    }
+    if found_error != ok {
+        try io.printf["OpenGL device enumeration failed: {}\n"](found_error)
+        os.exit(1i32)
+    }
+    if found.len == 0usize {
         try io.print("no OpenGL compute device; nothing checked\n")
         ret ok
     }
