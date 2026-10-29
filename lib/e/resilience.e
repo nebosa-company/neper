@@ -94,12 +94,17 @@ fn backoff(attempt: u32, base: u64, cap: u64, rng: *rand.Pcg64) -> u64 {
 // the answer is the next `previous`. Always within `[base, cap]`.
 fn backoff_decorrelated(previous: u64, base: u64, cap: u64, rng: *rand.Pcg64) -> u64 {
     if base >= cap { ret cap }
-    var low = previous
-    if low < base { low = base }
-    if low > cap { low = cap }
-    var high = low *% 3u64
-    if high / 3u64 != low || high > cap { high = cap }
-    ret low + rand.pcg64_bounded(rng, high - low + 1u64)
+    var source = previous
+    if source < base { source = base }
+    // A caller normally feeds back the preceding answer. Preserve the existing
+    // clamp for an externally supplied value above the configured cap.
+    if source > cap { ret cap }
+    var high = cap
+    if source <= cap / 3u64 { high = source * 3u64 }
+    // `[0, u64::MAX]` has 2^64 members, which cannot be represented as the
+    // bounded generator's upper argument. A raw draw is exactly that range.
+    if base == 0u64 && high == 18446744073709551615u64 { ret rand.pcg64_next(rng) }
+    ret base + rand.pcg64_bounded(rng, high - base + 1u64)
 }
 
 fn heartbeat(ids: []u64, last_seen: []u64) -> Heartbeat {

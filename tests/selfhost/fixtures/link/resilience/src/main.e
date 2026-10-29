@@ -78,6 +78,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if res.backoff_decorrelated(top, 100u64, top, &r) < 100u64 { os.exit(3i32) }
     if res.backoff_decorrelated(6000u64, 100u64, 5000u64, &r) != 5000u64 { os.exit(3i32) }
     if res.backoff_decorrelated(0u64, 10u64, 10u64, &r) != 10u64 { os.exit(3i32) }
+    var low_draw = rand.pcg64(7u64, 3u64)
+    if res.backoff_decorrelated(10u64, 1u64, 100u64, &low_draw) != 2u64 { os.exit(3i32) }
+    var full_expected_rng = rand.pcg64(7u64, 3u64)
+    let full_expected = rand.pcg64_next(&full_expected_rng)
+    var full_range_rng = rand.pcg64(7u64, 3u64)
+    if res.backoff_decorrelated(top, 0u64, top, &full_range_rng) != full_expected { os.exit(3i32) }
 
     // 4: heartbeat observe and sweep.
     var ids: [4]u64 = zero
