@@ -407,13 +407,17 @@ fn n_attr_set_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     let h = host_of(it)
     let (at, found, id) = attr_at(it, h, args)
     if !found { ret (js.undefv(), ok) }
-    let (value, ve) = sarg(it, args, 2usize)
+    let (name, se) = sarg(it, args, 2usize)
+    if se != ok { ret (js.undefv(), se) }
+    let (value, ve) = sarg(it, args, 3usize)
     if ve != ok { ret (js.undefv(), ve) }
+    let (nc, ne) = js.to_number(it, arg(args, 4usize))
+    if ne != ok { ret (js.undefv(), ne) }
     let old = h.d.nodes[usize(id)].attributes
     let (copy, ce) = mem.alloc[html.Attribute](h.d.a, old.len)
     if ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
     mem.copy[html.Attribute](copy, old)
-    copy[at] = html.Attribute { namespace: old[at].namespace, name: old[at].name, value: value }
+    copy[at] = html.Attribute { namespace: ns_of_code(nc), name: name, value: value }
     h.d.nodes[usize(id)].attributes = copy
     h.d.version += 1u64
     ret (js.undefv(), ok)
@@ -1173,7 +1177,7 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "attrSet", 3u32, n_attr_set)
     js.add_method(it, n, "attrPut", 4u32, n_attr_put)
     js.add_method(it, n, "attrDelAt", 2u32, n_attr_del_at)
-    js.add_method(it, n, "attrSetAt", 3u32, n_attr_set_at)
+    js.add_method(it, n, "attrSetAt", 5u32, n_attr_set_at)
     js.add_method(it, n, "textGet", 1u32, n_text_get)
     js.add_method(it, n, "textSet", 2u32, n_text_set)
     js.add_method(it, n, "innerGet", 1u32, n_inner_get)
