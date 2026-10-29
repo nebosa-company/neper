@@ -210,6 +210,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, invalid_bits_decoder_error) = flac.decoder(invalid_bits[..])
     if invalid_bits_error != flac.Malformed || invalid_bits_decoder_error != flac.Malformed { os.exit(85i32) }
 
+    // 86-87: total samples is an exact STREAMINFO count when nonzero. Changing
+    // only its low byte leaves both valid constant frames and their CRCs intact.
+    let constant = const_flac()
+    mem.copy[u8](copy[..constant.len], constant)
+    copy[25usize] = copy[25usize] - 1u8
+    let (_, short_total_error) = flac.decode(copy[..constant.len], out[..], scratch[..])
+    if short_total_error != flac.Malformed { os.exit(86i32) }
+    mem.copy[u8](copy[..constant.len], constant)
+    copy[25usize] = copy[25usize] + 1u8
+    let (_, long_total_error) = flac.decode(copy[..constant.len], out[..], scratch[..])
+    if long_total_error != flac.Malformed { os.exit(87i32) }
+
     try io.print("fmt flac ok\n")
     ret ok
 }

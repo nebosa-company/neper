@@ -481,10 +481,17 @@ fn decode(src: []const u8, out: []i32, scratch: []i64) -> (usize, err) {
     let channels = usize(d.info.channels)
     var total = 0usize
     while d.pos < d.src.len {
+        if d.info.total != 0u64 {
+            let (frame, frame_error) = header(d.src, d.pos, d.info)
+            if frame_error != ok { ret (total, frame_error) }
+            if u64(total) + u64(frame.block_size) > d.info.total { ret (total, Malformed) }
+        }
         let (n, fe) = decode_frame(&d, out[total * channels..], scratch)
         if fe != ok { ret (total, fe) }
         total += n
     }
+    // A zero count means unknown; every other STREAMINFO count is exact.
+    if d.info.total != 0u64 && u64(total) != d.info.total { ret (total, Malformed) }
     ret (total, ok)
 }
 
