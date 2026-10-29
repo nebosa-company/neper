@@ -263,15 +263,60 @@ fn layer_env(a: *mem.Arena, c: *Config, prefix: str, entries: []const str) -> er
 
 // The environment layer from the process environment, for the keys already known.
 fn layer_process_env(a: *mem.Arena, c: *Config, prefix: str) -> err {
-    clear_layer(c, .Env)
+    // Collect before replacing the live layer. A failed lookup or allocation must
+    // leave the previous environment values intact.
+    let checkpoint = mem.mark(a)
     let known = c.count
+    let (pending, pending_error) = mem.alloc[Entry](a, known)
+    if pending_error != ok {
+        mem.reset(a, checkpoint)
+        ret pending_error
+    }
+    var pending_count = 0usize
+    var kept = 0usize
     var i = 0usize
     while i < known {
+        if c.entries[i].layer == .Env {
+            i += 1usize
+            continue
+        }
+        kept += 1usize
         let key = c.entries[i].key
         let (name, ne) = env_name(a, prefix, key)
-        if ne != ok { ret ne }
+        if ne != ok {
+            mem.reset(a, checkpoint)
+            ret ne
+        }
         let (v, e) = os.env(a, name)
-        if e == ok { try set(c, .Env, key, v) }
+        if e != ok && e != os.NotFound {
+            mem.reset(a, checkpoint)
+            ret e
+        }
+        if e == ok {
+            var at = 0usize
+            while at < pending_count {
+                if str.eq(pending[at].key, key) {
+                    pending[at].value = v
+                    break
+                }
+                at += 1usize
+            }
+            if at == pending_count {
+                pending[pending_count] = Entry { key: key, value: v, layer: .Env }
+                pending_count += 1usize
+            }
+        }
+        i += 1usize
+    }
+    if pending_count > c.entries.len - kept {
+        mem.reset(a, checkpoint)
+        ret Full
+    }
+    clear_layer(c, .Env)
+    i = 0usize
+    while i < pending_count {
+        c.entries[c.count] = pending[i]
+        c.count += 1usize
         i += 1usize
     }
     ret ok
@@ -413,6 +458,8 @@ fn reload(a: *mem.Arena, c: *Config, path: str, format: Format) -> (usize, err) 
 }
 
 // The folder and file name of path (the folder is . for a bare name); both borrow it.
+// On Windows, a drive-root separator stays with the folder: `C:\\file` watches
+// `C:\\`, while `C:` would instead be relative to that drive's current directory.
 fn split_path(path: str) -> (str, str) {
     var cut = path.len
     var i = path.len
@@ -425,13 +472,21 @@ fn split_path(path: str) -> (str, str) {
     }
     if cut == path.len { ret (".", path) }
     if cut == 0usize { ret (path[0..1], path[1..]) }
+    when target.os == .Windows {
+        if cut == 2usize && path.len > 2usize && path[1usize] == 58u8 { ret (path[..cut + 1usize], path[cut + 1usize..]) }
+    }
     ret (path[0..cut], path[cut + 1usize..])
+}
+
+fn names_equal(event_path: str, base: str) -> bool {
+    when target.os == .Windows { ret str.compare_ascii_fold(event_path, base) == 0i32 }
+    ret str.eq(event_path, base)
 }
 
 // Whether an event path names `base`, bare or under the watched folder (hosts differ on which).
 fn names_file(event_path: str, base: str) -> bool {
-    if str.eq(event_path, base) { ret true }
-    if event_path.len <= base.len || !str.ends_with(event_path, base) { ret false }
+    if names_equal(event_path, base) { ret true }
+    if event_path.len <= base.len || !names_equal(event_path[event_path.len - base.len..], base) { ret false }
     let before = event_path[event_path.len - base.len - 1usize]
     ret before == 47u8 || before == 92u8
 }

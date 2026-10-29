@@ -233,6 +233,15 @@ fn check_reload(a: *mem.Arena) -> i32 {
     let (d4, b4) = config.split_path("a\\b.ini")
     if !str.eq(d1, "a/b") || !str.eq(b1, "c.ini") || !str.eq(d2, ".") || !str.eq(b2, "c.ini") { ret 50i32 }
     if !str.eq(d3, "/") || !str.eq(b3, "c.ini") || !str.eq(d4, "a") || !str.eq(b4, "b.ini") { ret 51i32 }
+    when target.os == .Windows {
+        let (d5, b5) = config.split_path("C:\\app.json")
+        let (d6, b6) = config.split_path("C:/app.json")
+        if !str.eq(d5, "C:\\") || !str.eq(b5, "app.json") || !str.eq(d6, "C:/") || !str.eq(b6, "app.json") { ret 52i32 }
+        if !config.names_file("LIVE.JSON", "live.json") || !config.names_file("np-config\\LIVE.JSON", "live.json") { ret 53i32 }
+    }
+    when target.os != .Windows {
+        if config.names_file("LIVE.JSON", "live.json") { ret 52i32 }
+    }
     ret 0i32
 }
 
@@ -271,6 +280,32 @@ fn check_flags(a: *mem.Arena) -> i32 {
     more[0] = "path=unset"
     if config.layer_defaults(&cfg, more[0..]) != ok { ret 67i32 }
     if config.layer_process_env(a, &cfg, "") != ok { ret 68i32 }
+    ret 0i32
+}
+
+// A failed process-environment lookup must neither become success nor remove the
+// prior environment layer. The small refresh arena leaves room for the staged entry
+// and name, but not for PATH's host environment materialization.
+fn check_process_env_error() -> i32 {
+    var setup_backing: [512]u8 = zero
+    var setup = mem.arena_from(setup_backing[..])
+    let (c0, ce) = config.config(&setup, 4usize)
+    if ce != ok { ret 80i32 }
+    var cfg = c0
+    var defaults: [1]str = zero
+    defaults[0usize] = "path=default"
+    if config.layer_defaults(&cfg, defaults[..]) != ok { ret 81i32 }
+    var prior: [1]str = zero
+    prior[0usize] = "PATH=old"
+    if config.layer_env(&setup, &cfg, "", prior[..]) != ok { ret 82i32 }
+    let (before, before_found) = config.layer_of(&cfg, "path")
+    if !before_found || before != config.Layer.Env || !value_is(&cfg, "path", "old") { ret 83i32 }
+    var refresh_backing: [64]u8 = zero
+    var refresh = mem.arena_from(refresh_backing[..])
+    let refresh_error = config.layer_process_env(&refresh, &cfg, "")
+    if refresh_error != os.OutOfMemory { ret 84i32 }
+    let (after, after_found) = config.layer_of(&cfg, "path")
+    if !after_found || after != config.Layer.Env || !value_is(&cfg, "path", "old") { ret 85i32 }
     ret 0i32
 }
 
@@ -321,6 +356,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var code = check_vectors(a)
     if code == 0i32 { code = check_reload(a) }
     if code == 0i32 { code = check_flags(a) }
+    if code == 0i32 { code = check_process_env_error() }
     if code == 0i32 { code = check_watch(a) }
     cleanup(a)
     if code != 0i32 { os.exit(code) }
