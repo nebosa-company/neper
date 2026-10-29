@@ -130,6 +130,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let truncated_image = [1]docx.Block{ docx.image(docx.Image { data: truncated_jpeg, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
     let (_, truncated_error) = docx.encode(a, truncated_image[0..], docx.default_meta())
     if truncated_error != docx.BadImage { os.exit(44) }
+    // A complete SOF needs one or more component records (three bytes each).
+    let zero_components_jpeg = "\xff\xd8\xff\xc0\x00\x08\x08\x00\x01\x00\x01\x00"
+    let zero_components_image = [1]docx.Block{ docx.image(docx.Image { data: zero_components_jpeg, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, zero_components_error) = docx.encode(a, zero_components_image[0..], docx.default_meta())
+    if zero_components_error != docx.BadImage { os.exit(45) }
+    let missing_component_jpeg = "\xff\xd8\xff\xc0\x00\x08\x08\x00\x01\x00\x01\x01"
+    let missing_component_image = [1]docx.Block{ docx.image(docx.Image { data: missing_component_jpeg, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, missing_component_error) = docx.encode(a, missing_component_image[0..], docx.default_meta())
+    if missing_component_error != docx.BadImage { os.exit(46) }
     let (bm, bm_error) = docx.encode(a, no_blocks[0..0], docx.Meta { title: "a\x01", creator: "", created: "", page: .A4 })
     if bm_error != docx.BadMeta { os.exit(41) }
     // DOCX parts are UTF-8 XML. A raw malformed byte must be refused instead of
