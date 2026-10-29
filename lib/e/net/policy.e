@@ -1747,6 +1747,13 @@ fn jar_process_response(a: *mem.Arena, j: *CookieJar, url: str, set_cookie: str,
 
 type CookieHeader = struct { present: bool, value: str }
 
+fn cookie_path_matches(request: str, cookie: str) -> bool {
+    if !str.starts_with(request, cookie) { ret false }
+    if request.len == cookie.len || cookie.len == 0usize { ret true }
+    if cookie[cookie.len - 1usize] == 47u8 { ret true }
+    ret request[cookie.len] == 47u8
+}
+
 // The `Cookie` header for a request, or absent when no cookie applies.
 fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool, partition_key: str, has_partition_key: bool, now_ms: i64) -> CookieHeader {
     let u = parse_url(a, url)
@@ -1773,7 +1780,7 @@ fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool,
             continue
         }
         if !domain_matches(a, u.host, c.domain) { continue }
-        if !str.starts_with(u.path, c.path) { continue }
+        if !cookie_path_matches(u.path, c.path) { continue }
         if c.secure && !str.eq(u.scheme, "https") { continue }
         if !same_site_allowed(c.same_site, is_top_level) { continue }
         if n > 0usize { out = join(a, out, "; ") }

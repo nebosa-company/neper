@@ -662,6 +662,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if policy.is_simple_cors_request(a, "GET", control_headers) { os.exit(78i32) }
     var tab_values: [1]str = [1]str{ "en\tUS" }
     if !policy.is_cors_safelisted_request_header(a, "Accept-Language", tab_values[0usize]) { os.exit(79i32) }
+    var path_jar = policy.new_cookie_jar(a, false)
+    policy.jar_process_response(a, &path_jar, "https://example.com/foo/start", "sid=abc; Path=/foo", "", false, 1800000000000i64)
+    let path_child = policy.jar_cookie_header(a, &path_jar, "https://example.com/foo/bar", true, "", false, 1800000000000i64)
+    if !path_child.present || !str.eq(path_child.value, "sid=abc") { os.exit(80i32) }
+    let path_sibling = policy.jar_cookie_header(a, &path_jar, "https://example.com/foobar", true, "", false, 1800000000000i64)
+    if path_sibling.present { os.exit(81i32) }
+    policy.jar_process_response(a, &path_jar, "https://example.com/foo/start", "slash=1; Path=/foo/", "", false, 1800000000000i64)
+    let slash_child = policy.jar_cookie_header(a, &path_jar, "https://example.com/foo/bar", true, "", false, 1800000000000i64)
+    if !slash_child.present || !str.eq(slash_child.value, "sid=abc; slash=1") { os.exit(82i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
