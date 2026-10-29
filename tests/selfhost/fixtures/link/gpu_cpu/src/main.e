@@ -166,12 +166,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dy_error != ok { os.exit(12i32) }
     let (before, before_error) = gpu.token(q)
     if before_error != ok || before.serial != 0u64 { os.exit(13i32) }
+    let (before_done, before_done_error) = gpu.done(before)
+    if before_done_error != ok || !before_done || gpu.wait(before) != ok || gpu.wait_for(q, before) != ok { os.exit(90i32) }
     let launch_error = gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, dx, dy)
     if launch_error != ok { os.exit(14i32) }
     let (after, after_error) = gpu.token(q)
     if after_error != ok || after.serial != 1u64 || after.owner != dx.owner { os.exit(15i32) }
     let (finished, done_error) = gpu.done(after)
     if done_error != ok || !finished || gpu.wait(after) != ok || gpu.wait_for(q, after) != ok { os.exit(16i32) }
+    let bad_queue = gpu.Token { owner: after.owner, queue: after.queue + 1u32, serial: after.serial }
+    let (bad_queue_done, bad_queue_error) = gpu.done(bad_queue)
+    if bad_queue_done || bad_queue_error != gpu.InvalidHandle || gpu.wait(bad_queue) != gpu.InvalidHandle || gpu.wait_for(q, bad_queue) != gpu.InvalidHandle { os.exit(91i32) }
+    let future = gpu.Token { owner: after.owner, queue: after.queue, serial: after.serial + 1u64 }
+    let (future_done, future_error) = gpu.done(future)
+    if future_done || future_error != gpu.InvalidHandle || gpu.wait(future) != gpu.InvalidHandle || gpu.wait_for(q, future) != gpu.InvalidHandle { os.exit(92i32) }
     var result: [1000]f32 = zero
     if gpu.download(q, dy, result[0..]) != ok { os.exit(17i32) }
     i = 0usize

@@ -107,7 +107,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_command: usize, pending_block: mtl.Buffer, pending_queue: *QueueState, pending_checked: bool }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_command: usize, pending_block: mtl.Buffer, pending_queue: *QueueState, pending_checked: bool }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
@@ -1030,8 +1030,10 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     }
     let state = &states[0usize]
     var empty_stage: []vulkan.Buffer = zero
+    var empty_queue: *QueueState = zero
     var stage_at = 0usize
     while stage_at < MAX_QUEUES {
+        state.queue_states[stage_at] = empty_queue
         state.staging[stage_at] = empty_stage
         stage_at += 1usize
     }
@@ -1287,6 +1289,7 @@ fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err) {
     let (handles, handles_error) = mem.alloc[Queue](state.arena, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Queue { state: mem.cast[*void](&states[0usize]) }
+    state.queue_states[usize(state.queues)] = &states[0usize]
     state.queues += 1u32
     ret (&handles[0usize], ok)
 }
@@ -1459,7 +1462,8 @@ fn token(q: *Queue) -> (Token, err) {
     ret (Token { owner: state.device.owner, queue: state.index, serial: state.serial }, ok)
 }
 
-fn token_device(token_value: Token) -> (*DeviceState, err) {
+// Resolves a token's issuing queue while keeping its device locked.
+fn token_queue(token_value: Token) -> (*QueueState, err) {
     locks.mutex_lock(&registry_locks[0usize])
     var found: *DeviceState = zero
     var i = 0usize
@@ -1475,32 +1479,39 @@ fn token_device(token_value: Token) -> (*DeviceState, err) {
     lock_state(found)
     if found.closed {
         unlock_state(found)
-        ret (found, InvalidHandle)
+        ret (zero, InvalidHandle)
     }
     if metal_finish(found) {
         unlock_state(found)
-        ret (found, Lost)
+        ret (zero, Lost)
     }
-    ret (found, ok)
+    if usize(token_value.queue) >= usize(found.queues) {
+        unlock_state(found)
+        ret (zero, InvalidHandle)
+    }
+    let state = found.queue_states[usize(token_value.queue)]
+    if mem.address_of(state) == 0usize || token_value.serial > state.serial {
+        unlock_state(found)
+        ret (zero, InvalidHandle)
+    }
+    ret (state, ok)
 }
 
 fn wait_for(q: *Queue, dependency: Token) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
     defer unlock_state(state.device)
-    if dependency.serial == 0u64 { ret ok }
     if dependency.owner != state.device.owner { ret WrongDevice }
-    let (device, device_error) = token_device(dependency)
-    if device_error != ok { ret device_error }
-    defer unlock_state(device)
+    let (dependency_state, dependency_error) = token_queue(dependency)
+    if dependency_error != ok { ret dependency_error }
+    defer unlock_state(dependency_state.device)
     ret ok
 }
 
 fn done(token_value: Token) -> (bool, err) {
-    if token_value.serial == 0u64 { ret (true, ok) }
-    let (device, device_error) = token_device(token_value)
-    if device_error != ok { ret (false, device_error) }
-    defer unlock_state(device)
+    let (state, state_error) = token_queue(token_value)
+    if state_error != ok { ret (false, state_error) }
+    defer unlock_state(state.device)
     // Every submission on the CPU backend has completed before its launch returned.
     ret (true, ok)
 }
