@@ -961,8 +961,6 @@ fn n_frame_create(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     ch.net_fn = h.net_fn
     ch.has_net = h.has_net
     ch.now = h.now
-    ch.parent = it
-    ch.has_parent = true
     try list.push[*js.Interp](&h.children, cit)
     ret (js.obj_value(cit.global), ok)
 }
@@ -1274,6 +1272,12 @@ fn new_context_in(a: *mem.Arena, d: *dom.Dom, base: str, donor: *js.Interp) -> (
     cell[0usize] = blank
     cell[0usize].d = d
     cell[0usize].base = base
+    // A child needs its embedder while its DOM layer initializes: initial
+    // about:blank and srcdoc documents inherit that origin.
+    if donor != js.null_interp() {
+        cell[0usize].parent = donor
+        cell[0usize].has_parent = true
+    }
     let (l, le) = list.init[str](a, 64usize)
     if le != ok { ret (it, le) }
     cell[0usize].log = l
