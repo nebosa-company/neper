@@ -12,5 +12,8 @@ fn main() -> err {
     let exact = collate.Options { case_sensitive: true, numeric: false }
     if collate.natural_cmp("A", "a", exact) >= 0i32 { os.exit(5i32) }
     if collate.natural_cmp("x9999999999999999999999999999999999999999", "x10000000000000000000000000000000000000000", folded) >= 0i32 { os.exit(6i32) }
+    // A lossy code-point decode turns either malformed byte into U+FFFD, but compare
+    // still promises a total order for arbitrary str values.
+    if collate.compare("\x80", "\x81", folded) >= 0i32 || collate.compare("\x81", "\x80", folded) <= 0i32 { os.exit(7i32) }
     ret ok
 }

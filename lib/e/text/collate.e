@@ -23,6 +23,20 @@ fn codepoint_cmp(a: str, b: str) -> i32 {
     }
 }
 
+// Invalid UTF-8 is deliberately lossy in codepoint_cmp, so it cannot distinguish
+// different malformed byte strings. Preserve a total order with this final raw tie-break.
+fn byte_cmp(a: str, b: str) -> i32 {
+    var at = 0usize
+    while at < a.len && at < b.len {
+        if a[at] < b[at] { ret -1i32 }
+        if a[at] > b[at] { ret 1i32 }
+        at += 1usize
+    }
+    if a.len < b.len { ret -1i32 }
+    if a.len > b.len { ret 1i32 }
+    ret 0i32
+}
+
 fn natural_cmp(a: str, b: str, options: Options) -> i32 {
     var left = 0usize
     var right = 0usize
@@ -90,5 +104,7 @@ fn natural_cmp(a: str, b: str, options: Options) -> i32 {
 fn compare(a: str, b: str, options: Options) -> i32 {
     let primary = natural_cmp(a, b, options)
     if primary != 0i32 { ret primary }
-    ret codepoint_cmp(a, b)
+    let secondary = codepoint_cmp(a, b)
+    if secondary != 0i32 { ret secondary }
+    ret byte_cmp(a, b)
 }
