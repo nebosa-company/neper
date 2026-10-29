@@ -114,6 +114,37 @@ fn wait_any_pending_connect(a: *mem.Arena, loop: *async.Loop, control: cancel.Co
     ret 0i32
 }
 
+// Operations belong to the loop that submitted them. Refuse another loop before
+// polling it, so a pending socket cannot hang `wait` or time out from `wait_any`.
+fn cross_loop_refusals(a: *mem.Arena, submitted: *async.Loop, control: cancel.Control) -> i32 {
+    let (other0, other_error) = async.init(a)
+    if other_error != ok { ret 43i32 }
+    var other = other0
+    let (first_record, first_error) = aio.new_record(a, submitted, control, .Connect)
+    if first_error != ok { ret 44i32 }
+    var first = aio.Op[bool] { state: mem.cast[*void](first_record) }
+    let (_, wait_error) = aio.wait[bool](&other, &first)
+    if wait_error != aio.WrongLoop { ret 45i32 }
+    let (second_record, second_error) = aio.new_record(a, submitted, control, .Connect)
+    if second_error != ok { ret 46i32 }
+    var candidates: [1]aio.AnyOp = [1]aio.AnyOp{ aio.AnyOp { state: mem.cast[*void](second_record) } }
+    let (selected, ready, any_error) = aio.wait_any(&other, candidates[..], time.Duration { nanos: 0i64 })
+    if any_error != aio.WrongLoop || ready || selected != 0usize { ret 47i32 }
+    if async.close(&other) != ok { ret 48i32 }
+
+    // A copied Loop wrapper names the same poller and remains valid for its
+    // operations; identity is the underlying state, not the wrapper address.
+    let (copy_record, copy_error) = aio.new_record(a, submitted, control, .Connect)
+    if copy_error != ok { ret 49i32 }
+    copy_record.connected = true
+    copy_record.state = .Succeeded
+    var alias = *submitted
+    var copied = aio.Op[bool] { state: mem.cast[*void](copy_record) }
+    let (copy_value, copy_wait_error) = aio.wait[bool](&alias, &copied)
+    if copy_wait_error != ok || !copy_value { ret 50i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena) -> err {
     let (loop0, loop_error) = async.init(a)
     if loop_error == async.Unsupported { ret ok }
@@ -126,6 +157,8 @@ fn main(a: *mem.Arena) -> err {
     if partial_write_code != 0i32 { os.exit(partial_write_code) }
     let pending_connect_code = wait_any_pending_connect(a, &loop, free)
     if pending_connect_code != 0i32 { os.exit(pending_connect_code) }
+    let cross_loop_code = cross_loop_refusals(a, &loop, free)
+    if cross_loop_code != 0i32 { os.exit(cross_loop_code) }
 
     // A listener on an ephemeral port; an accept operation registered on the loop.
     let (listener, listener_error) = os.socket_open(.Ip4, .Stream)

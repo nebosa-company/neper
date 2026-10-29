@@ -7,7 +7,7 @@
 // driven -- by `wait` or `wait_any` on the calling thread -- and hold their buffers until
 // then, as the fence says an uncancellable callback must.
 //
-// `wait` drives the loop until its operation settles: it polls, hands each event to the
+// `wait` drives the loop that submitted its operation until it settles: it polls, hands each event to the
 // operation whose token it carries and ignores the rest, which a level-triggered poller
 // reports again. `wait_any` does the same for a slice and answers the first settled
 // operation in input order; a pending callback operation in the slice is run first,
@@ -20,7 +20,9 @@
 // rolled back.
 //
 // `take` on an operation that is still pending, or was taken already, is `Closed`; a
-// loop that refuses a registration (closed) is `Closed` at submission.
+// loop that refuses a registration (closed) is `Closed` at submission. Passing a
+// different loop to `wait` or `wait_any` is `WrongLoop` rather than silently polling
+// a registration set that cannot complete the operation.
 
 use e.async
 use e.cancel as cancel_api
@@ -36,6 +38,7 @@ type State = enum u8 { Pending, Succeeded, Failed, Cancelled, TimedOut }
 error Cancelled
 error Timeout
 error Closed
+error WrongLoop
 
 type Kind = enum u8 { Read, Write, Accept, Connect }
 
@@ -132,6 +135,12 @@ fn connect(a: *mem.Arena, loop: *async.Loop, socket: os.Socket, address: os.Sock
 
 fn terminal(r: *Record) -> bool {
     ret r.state != .Pending
+}
+
+fn on_loop(r: *const Record, loop: *const async.Loop) -> bool {
+    // Loop values may be copied, so compare their underlying poller state rather
+    // than the address of a particular Loop wrapper.
+    ret r.loop.state == loop.state
 }
 
 fn settle(r: *Record, outcome: State, failure: err) {
@@ -271,6 +280,7 @@ fn take[T: type](op: *Op[T]) -> (T, err) {
 
 fn wait[T: type](loop: *async.Loop, op: *Op[T]) -> (T, err) {
     let r = mem.cast[*Record](op.state)
+    if !on_loop(r, loop) { ret (zero, WrongLoop) }
     let drive_error = drive(loop, r)
     if drive_error != ok { ret (zero, drive_error) }
     let (value, take_error) = take[T](op)
@@ -279,6 +289,12 @@ fn wait[T: type](loop: *async.Loop, op: *Op[T]) -> (T, err) {
 
 fn wait_any(loop: *async.Loop, ops: []AnyOp, timeout: time.Duration) -> (usize, bool, err) {
     if ops.len == 0usize { ret (0usize, false, ok) }
+    var checked = 0usize
+    while checked < ops.len {
+        let r = mem.cast[*Record](ops[checked].state)
+        if !on_loop(r, loop) { ret (0usize, false, WrongLoop) }
+        checked += 1usize
+    }
     let (start, start_error) = time.monotonic()
     if start_error != ok { ret (0usize, false, start_error) }
     var events: [16]async.Event = zero
