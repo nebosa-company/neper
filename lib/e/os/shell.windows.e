@@ -2345,12 +2345,14 @@ fn activation_of(a: *mem.Arena, args: []const str) -> Activation {
     if args.len < 2usize { ret activation }
     let first = args[1usize]
     if first.len == 0usize { ret activation }
+    let first_letter = (first[0usize] >= 97u8 && first[0usize] <= 122u8) || (first[0usize] >= 65u8 && first[0usize] <= 90u8)
+    if !first_letter { ret activation }
     var at = 0usize
     var scheme = false
     while at < first.len {
         let c = first[at]
         if c == 58u8 {
-            scheme = at > 1usize && at + 1usize < first.len
+            scheme = at > 0usize && at + 1usize < first.len
             break
         }
         let letter = (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || (c >= 48u8 && c <= 57u8) || c == 43u8 || c == 45u8 || c == 46u8

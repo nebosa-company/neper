@@ -56,6 +56,21 @@ fn present(a: *mem.Arena, path: str) -> bool {
 fn main(a: *mem.Arena, args: []str) -> err {
     let caps = shell.capabilities()
     if !caps.open_uri || !caps.reveal || !caps.trash || caps.tray != caps.popup_menu { os.exit(1i32) }
+    let (exe, exe_error) = fs.executable_path(a)
+    if exe_error != ok { os.exit(32i32) }
+    var activation_args: [2]str = zero
+    activation_args[0usize] = exe
+    activation_args[1usize] = "x:open"
+    let one_letter = shell.activation_of(a, activation_args[..])
+    if one_letter.kind != .Url || !same(one_letter.payload, "x:open") { os.exit(33i32) }
+    activation_args[1usize] = "1x:open"
+    if shell.activation_of(a, activation_args[..]).kind != .Launch { os.exit(34i32) }
+    activation_args[1usize] = "+x:open"
+    if shell.activation_of(a, activation_args[..]).kind != .Launch { os.exit(35i32) }
+    activation_args[1usize] = "-x:open"
+    if shell.activation_of(a, activation_args[..]).kind != .Launch { os.exit(36i32) }
+    activation_args[1usize] = ".x:open"
+    if shell.activation_of(a, activation_args[..]).kind != .Launch { os.exit(37i32) }
     if shell.open_uri(a, "") != shell.Invalid || shell.reveal(a, "") != shell.Invalid || shell.trash(a, "") != shell.Invalid { os.exit(2i32) }
     if shell.reveal(a, "no/such/neper-shell-item") != shell.NotFound || shell.trash(a, "no/such/neper-shell-item") != shell.NotFound { os.exit(3i32) }
     var items: [2]shell.MenuItem = zero
