@@ -261,12 +261,17 @@ fn check_sheet(sheet: xlsx.Sheet, layout: Layout) -> (usize, err) {
     while m < layout.merges.len {
         let one = layout.merges[m]
         if one.rows == 0u32 || one.columns == 0u32 || (one.rows == 1u32 && one.columns == 1u32) { ret (0usize, BadLayout) }
-        if usize(one.row) + usize(one.rows) > MAX_ROWS || usize(one.column) + usize(one.columns) > MAX_COLUMNS { ret (0usize, BadLayout) }
+        if usize(one.row) >= MAX_ROWS || usize(one.column) >= MAX_COLUMNS { ret (0usize, BadLayout) }
+        if usize(one.rows) > MAX_ROWS - usize(one.row) || usize(one.columns) > MAX_COLUMNS - usize(one.column) { ret (0usize, BadLayout) }
+        let one_row_end = usize(one.row) + usize(one.rows)
+        let one_column_end = usize(one.column) + usize(one.columns)
         var k = 0usize
         while k < m {
             let other = layout.merges[k]
-            let rows_apart = one.row >= other.row + other.rows || other.row >= one.row + one.rows
-            let columns_apart = one.column >= other.column + other.columns || other.column >= one.column + one.columns
+            let other_row_end = usize(other.row) + usize(other.rows)
+            let other_column_end = usize(other.column) + usize(other.columns)
+            let rows_apart = usize(one.row) >= other_row_end || usize(other.row) >= one_row_end
+            let columns_apart = usize(one.column) >= other_column_end || usize(other.column) >= one_column_end
             if !rows_apart && !columns_apart { ret (0usize, BadLayout) }
             k += 1usize
         }
@@ -393,10 +398,12 @@ fn sheet_xml(a: *mem.Arena, sheet: xlsx.Sheet, layout: Layout, sst_table: *Share
         var m = 0usize
         while m < layout.merges.len {
             let one = layout.merges[m]
+            let last_column = usize(one.column) + usize(one.columns) - 1usize
+            let last_row = usize(one.row) + usize(one.rows) - 1usize
             try str.push(&b, "<mergeCell ref=\"")
             try push_ref(&b, usize(one.column), usize(one.row))
             try str.push(&b, ":")
-            try push_ref(&b, usize(one.column + one.columns - 1u32), usize(one.row + one.rows - 1u32))
+            try push_ref(&b, last_column, last_row)
             try str.push(&b, "\"/>")
             m += 1usize
         }

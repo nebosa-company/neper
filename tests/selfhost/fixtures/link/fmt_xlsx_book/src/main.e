@@ -173,6 +173,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let probe_75 = [1]xlsx.Sheet{ xlsx.Sheet { name: "T", grid: one_grid[0..] } }
     let (junk_75, junk_error_75) = book.encode(a, probe_75[0..], out_layout[0..])
     if junk_error_75 != book.BadLayout { os.exit(75) }
+    // On wasm32, the former `row + rows` bounds check wrapped before rejecting this merge.
+    let wrapped_row = [1]book.Merge{ book.Merge { row: 4294967295u32, column: 0u32, rows: 1u32, columns: 2u32 } }
+    let wrapped_layout = [1]book.Layout{ book.Layout { widths: zero, merges: wrapped_row[0..], bold_header: false } }
+    let probe_80 = [1]xlsx.Sheet{ xlsx.Sheet { name: "T", grid: one_grid[0..] } }
+    let (junk_80, junk_error_80) = book.encode(a, probe_80[0..], wrapped_layout[0..])
+    if junk_error_80 != book.BadLayout { os.exit(80) }
     let (wide, wide_error) = mem.alloc[xlsx.Cell](a, 16385usize)
     if wide_error != ok { os.exit(76) }
     var wi = 0usize
