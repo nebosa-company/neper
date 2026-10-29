@@ -13,6 +13,8 @@ error Failed
 
 // The codec maps a struct to a row, so the fixture needs one field of each kind it handles.
 type Person = struct { id: u16, name: str, score: f64, active: bool }
+type NarrowInt = struct { small: u8 }
+type NarrowFloat = struct { ratio: f32 }
 
 fn source_over(text: str) -> io.SliceReader {
     ret io.SliceReader { data: text, off: 0usize }
@@ -274,6 +276,12 @@ fn main(a: *mem.Arena) -> err {
     var wrong_state = source_over("x,a,0,true\n")
     let (_, wrong_error) = csv.decode_rows[Person](a, io.slice_reader(&wrong_state), csv.csv())
     if wrong_error != csv.Invalid { os.exit(101i32) }
+    var too_wide_integer_state = source_over("256\n")
+    let (_, too_wide_integer_error) = csv.decode_rows[NarrowInt](a, io.slice_reader(&too_wide_integer_state), csv.csv())
+    if too_wide_integer_error != csv.Invalid { os.exit(102i32) }
+    var too_wide_float_state = source_over("1e300\n")
+    let (_, too_wide_float_error) = csv.decode_rows[NarrowFloat](a, io.slice_reader(&too_wide_float_state), csv.csv())
+    if too_wide_float_error != csv.Invalid { os.exit(103i32) }
 
     // --- Over a real file, where the source ends by taking nothing rather than by saying so,
     // and where a row spans more than one read of the reader's own input buffer.

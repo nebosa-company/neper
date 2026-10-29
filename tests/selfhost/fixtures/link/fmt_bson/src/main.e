@@ -9,6 +9,8 @@ use e.str
 use e.fmt.bson as bson
 
 type Rec = struct { name: str, count: i32, ratio: f64, flag: bool }
+type NarrowInt = struct { number: i8 }
+type NarrowFloat = struct { number: f32 }
 
 fn same(a: []const u8, b: []const u8) -> bool {
     if a.len != b.len { ret false }
@@ -138,5 +140,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bad_key = bson.Value { Document: bad_key_elements[..] }
     let (_, bad_key_error) = bson.size(&bad_key)
     if bad_key_error != bson.Invalid { os.exit(37) }
+    let too_wide_integer: [21]u8 = [21]u8{ 21u8, 0u8, 0u8, 0u8, 18u8, 110u8, 117u8, 109u8, 98u8, 101u8, 114u8, 0u8, 128u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8 }
+    let (_, too_wide_integer_error) = bson.decode[NarrowInt](a, too_wide_integer[..], 4u16)
+    if too_wide_integer_error != bson.Invalid { os.exit(38) }
+    let too_wide_float: [21]u8 = [21]u8{ 21u8, 0u8, 0u8, 0u8, 1u8, 110u8, 117u8, 109u8, 98u8, 101u8, 114u8, 0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 239u8, 127u8, 0u8 }
+    let (_, too_wide_float_error) = bson.decode[NarrowFloat](a, too_wide_float[..], 4u16)
+    if too_wide_float_error != bson.Invalid { os.exit(39) }
     ret ok
 }

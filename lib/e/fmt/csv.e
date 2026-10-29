@@ -329,6 +329,47 @@ fn copy_text(a: *mem.Arena, text: str) -> (str, err) {
     ret (buffer, ok)
 }
 
+// Decide the target range before narrowing a parsed integer: direct casts trap in debug and
+// wrap in release. `signed` is used only when `is_signed` is true.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
+// A finite CSV number cannot become infinity merely because the destination field is narrower.
+fn float_into[T: type](number: f64) -> (T, err) {
+    var out: T = zero
+    let input_finite = number == number && number - number == 0.0f64
+    out = T(number)
+    let widened = f64(out)
+    if input_finite && (widened != widened || widened - widened != 0.0f64) { ret (out, Invalid) }
+    ret (out, ok)
+}
+
 fn decode_rows[T: type](a: *mem.Arena, source: io.Reader, dialect: Dialect) -> ([]T, err) {
     var empty: []T = zero
     let (handle, reader_error) = reader(a, source, dialect, 0usize, 0usize)
@@ -376,19 +417,23 @@ fn decode_rows[T: type](a: *mem.Arena, source: io.Reader, dialect: Dialect) -> (
                     if text.len != 0usize && text[0usize] == MINUS {
                         let (signed, signed_error) = str.parse_i64(text)
                         if signed_error != ok { ret (empty, Invalid) }
-                        slot = f.ty(signed)
+                        let (converted, converted_error) = integer_into[f.ty](signed, 0u64, true)
+                        if converted_error != ok { ret (empty, converted_error) }
+                        slot = converted
                     } else {
                         let (unsigned, unsigned_error) = str.parse_u64(text)
                         if unsigned_error != ok { ret (empty, Invalid) }
-                        slot = f.ty(unsigned)
+                        let (converted, converted_error) = integer_into[f.ty](0i64, unsigned, false)
+                        if converted_error != ok { ret (empty, converted_error) }
+                        slot = converted
                     }
                     meta.set[f, T](&value, slot)
                 } else {
                 if meta.kind[f.ty]() == .Float {
                     let (number, number_error) = str.parse_f64(text)
                     if number_error != ok { ret (empty, Invalid) }
-                    var slot: f.ty = zero
-                    slot = f.ty(number)
+                    let (slot, slot_error) = float_into[f.ty](number)
+                    if slot_error != ok { ret (empty, slot_error) }
                     meta.set[f, T](&value, slot)
                 } else {
                     ret (empty, Invalid)

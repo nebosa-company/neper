@@ -140,6 +140,37 @@ fn integer_of(value: Value) -> (i64, err) {
     ret (mem.bitcast[i64](acc), ok)
 }
 
+// Decide the target range before narrowing an INTEGER: direct casts trap in debug and wrap in
+// release. `signed` is used only when `is_signed` is true.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
 fn boolean_of(value: Value) -> (bool, err) {
     if value.content.len != 1usize { ret (false, NonCanonical) }
     if value.content[0] == 0u8 { ret (false, ok) }
@@ -184,8 +215,8 @@ fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err
             if !is_universal(field, 2u32, false) { ret (out, Invalid) }
             let (number, number_error) = integer_of(field)
             if number_error != ok { ret (out, number_error) }
-            var slot: f.ty = zero
-            slot = f.ty(number)
+            let (slot, slot_error) = integer_into[f.ty](number, 0u64, true)
+            if slot_error != ok { ret (out, slot_error) }
             meta.set[f, T](&out, slot)
         } else {
             ret (out, Invalid)

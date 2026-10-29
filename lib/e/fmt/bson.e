@@ -359,6 +359,37 @@ fn integer_of(value: Value) -> (i64, bool) {
     }
 }
 
+// Decide the target range before narrowing an integer: direct casts trap in debug and wrap in
+// release. `signed` is used only when `is_signed` is true.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
 fn float_of(value: Value) -> (f64, bool) {
     switch value {
     case .Double as number:
@@ -370,6 +401,16 @@ fn float_of(value: Value) -> (f64, bool) {
     default:
         ret (0.0, false)
     }
+}
+
+// A finite BSON number cannot become infinity merely because the destination field is narrower.
+fn float_into[T: type](number: f64) -> (T, err) {
+    var out: T = zero
+    let input_finite = number == number && number - number == 0.0f64
+    out = T(number)
+    let widened = f64(out)
+    if input_finite && (widened != widened || widened - widened != 0.0f64) { ret (out, Invalid) }
+    ret (out, ok)
 }
 
 fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err) {
@@ -409,15 +450,15 @@ fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err
             if meta.kind[f.ty]() == .Int {
                 let (number, is_integer) = integer_of(found)
                 if !is_integer { ret (out, Invalid) }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = integer_into[f.ty](number, 0u64, true)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
             if meta.kind[f.ty]() == .Float {
                 let (number, is_number) = float_of(found)
                 if !is_number { ret (out, Invalid) }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = float_into[f.ty](number)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
                 ret (out, Invalid)

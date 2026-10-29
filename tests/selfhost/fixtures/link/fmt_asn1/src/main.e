@@ -9,6 +9,8 @@ use e.fmt.asn1 as asn1
 
 type Record = struct { count: i32, flag: bool, name: str, delta: i64 }
 type Wide = struct { data: []const u8 }
+type NarrowSigned = struct { value: i8 }
+type NarrowUnsigned = struct { value: u8 }
 
 fn same(a: []const u8, b: []const u8) -> bool {
     if a.len != b.len { ret false }
@@ -159,5 +161,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let missing: [11]u8 = [11]u8{ 48, 9, 2, 2, 1, 2, 1, 1, 255, 4, 0 }
     let (partial, e19) = asn1.decode[Record](a, missing[0..], 4u16)
     if e19 != asn1.Invalid { os.exit(25) }
+    let too_wide_signed: [6]u8 = [6]u8{ 48u8, 4u8, 2u8, 2u8, 0u8, 128u8 }
+    let (_, too_wide_signed_error) = asn1.decode[NarrowSigned](a, too_wide_signed[..], 4u16)
+    if too_wide_signed_error != asn1.Invalid { os.exit(45) }
+    let negative_unsigned: [5]u8 = [5]u8{ 48u8, 3u8, 2u8, 1u8, 255u8 }
+    let (_, negative_unsigned_error) = asn1.decode[NarrowUnsigned](a, negative_unsigned[..], 4u16)
+    if negative_unsigned_error != asn1.Invalid { os.exit(46) }
     ret ok
 }
