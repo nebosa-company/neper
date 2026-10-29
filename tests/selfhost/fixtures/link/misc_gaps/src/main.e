@@ -135,6 +135,10 @@ fn check_pad(a: *mem.Arena) -> i32 {
     if centre_error != ok || !str.eq(centre, "0ab00") { ret 3i32 }
     let (_, empty_error) = str.pad(a, "ab", 5usize, .Left, "")
     if empty_error != str.InvalidSeparator { ret 3i32 }
+    let (_, multiple_fill_error) = str.pad(a, "a", 3usize, .Right, "xy")
+    if multiple_fill_error != str.InvalidSeparator { ret 3i32 }
+    let (_, invalid_fill_error) = str.pad(a, "a", 3usize, .Right, "\xc0\x80")
+    if invalid_fill_error != str.InvalidSeparator { ret 3i32 }
     ret 0i32
 }
 
