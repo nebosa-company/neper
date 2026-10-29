@@ -9,6 +9,7 @@ use e.os
 use e.mem
 use e.io
 use e.str
+use e.test.support
 use e.fmt.zstd as zstd
 
 fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err) {
@@ -18,9 +19,8 @@ fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err) {
     ret (mem.view(a, a.off - words * 8usize, words * 8usize), ok)
 }
 
-fn inflate(storage: []u8, packed: []const u8, out: []u8, pull: usize, limit: u64) -> (usize, err) {
-    var source_state = io.SliceReader { data: packed, off: 0usize }
-    let (r0, reader_error) = zstd.reader(storage, io.slice_reader(&source_state), limit)
+fn inflate_from(storage: []u8, source: io.Reader, out: []u8, pull: usize, limit: u64) -> (usize, err) {
+    let (r0, reader_error) = zstd.reader(storage, source, limit)
     if reader_error != ok { ret (0usize, reader_error) }
     var r = r0
     var total = 0usize
@@ -28,12 +28,19 @@ fn inflate(storage: []u8, packed: []const u8, out: []u8, pull: usize, limit: u64
         var stop = total + pull
         if stop > out.len { stop = out.len }
         let (count, read_error) = zstd.read(&r, out[total..stop])
+        total += count
         if read_error == io.End { break }
         if read_error != ok { ret (total, read_error) }
-        total += count
         if total == out.len { ret (total, io.TooSmall) }
     }
     ret (total, ok)
+}
+
+fn inflate(storage: []u8, packed: []const u8, out: []u8, pull: usize, limit: u64) -> (usize, err) {
+    var source_state = io.SliceReader { data: packed, off: 0usize }
+    let source = io.slice_reader(&source_state)
+    let (count, inflate_error) = inflate_from(storage, source, out, pull, limit)
+    ret (count, inflate_error)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -59,6 +66,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e6 != ok || !str.eq(out[..n19], text) { os.exit(7) }
     let (n4, e7) = inflate(storage, small, out, 5usize, 10000000u64)
     if e7 != ok || !str.eq(out[..n4], small_text) { os.exit(8) }
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: small, failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { os.exit(27) }
+    let final_source = support.reader(&final_script)
+    let (final_count, final_error) = inflate_from(storage, final_source, out, 5usize, 10000000u64)
+    if final_error != ok || final_count != small_text.len || !str.eq(out[..final_count], small_text) { os.exit(27) }
     let (n5, e8) = inflate(storage, runs, out, 4096usize, 10000000u64)
     if e8 != ok || n5 != 10003usize || out[0] != 97u8 || out[5000] != 98u8 || out[10002] != 97u8 { os.exit(9) }
     // The writer, read back.

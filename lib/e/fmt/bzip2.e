@@ -136,8 +136,12 @@ fn take_bits(s: *State, n: u32) -> (u32, err) {
     while s.bit_count < n {
         if s.in_at == s.in_len {
             let (count, read_error) = io.read(&s.source, s.input)
-            if read_error == io.End || (read_error == ok && count == 0usize) { ret (0u32, Invalid) }
-            if read_error != ok { ret (0u32, read_error) }
+            if count == 0usize {
+                if read_error == io.End { ret (0u32, Invalid) }
+                if read_error != ok { ret (0u32, read_error) }
+                ret (0u32, Invalid)
+            }
+            if read_error != ok && read_error != io.End { ret (0u32, read_error) }
             s.in_at = 0usize
             s.in_len = count
         }

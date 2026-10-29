@@ -641,12 +641,13 @@ fn take(s: *State, n: usize) -> ([]u8, err) {
     var filled = 0usize
     while filled < n {
         let (count, read_error) = io.read(&s.source, s.input[filled..n])
+        filled += count
         if read_error == io.End || (read_error == ok && count == 0usize) {
+            if filled == n { ret (s.input[..n], ok) }
             if filled == 0usize { ret (zero, io.End) }
             ret (zero, Invalid)
         }
         if read_error != ok { ret (zero, read_error) }
-        filled += count
     }
     ret (s.input[..n], ok)
 }
