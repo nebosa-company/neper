@@ -331,12 +331,16 @@ fn decode_ack(src: []const u8) -> (u8, u16, err) {
 
 fn encode_subscribe(dst: []u8, packet_id: u16, topics: []const str, qoss: []const u8) -> (usize, err) {
     if packet_id == 0u16 || topics.len == 0usize || topics.len != qoss.len { ret (0usize, Invalid) }
+    var i = 0usize
+    while i < topics.len {
+        if !valid_filter(topics[i]) || qoss[i] > 2u8 { ret (0usize, Invalid) }
+        i += 1usize
+    }
     if dst.len < 7usize { ret (0usize, TooSmall) }
     let _ = put_u16(dst, 5usize, packet_id)
     var at = 7usize
-    var i = 0usize
+    i = 0usize
     while i < topics.len {
-        if qoss[i] > 2u8 { ret (0usize, Invalid) }
         let e = put_string(dst, &at, topics[i])
         if e != ok { ret (0usize, e) }
         if at >= dst.len { ret (0usize, TooSmall) }

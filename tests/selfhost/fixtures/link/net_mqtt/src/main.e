@@ -47,6 +47,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let qoss = [2]u8{ 1u8, 2u8 }
     let (n4, e4) = mqtt.encode_subscribe(stream[..], 1u16, topics[..], qoss[..])
     if e4 != ok || n4 != 16usize || fold(stream[..n4]) != 0xbf799b6250917d0u64 { os.exit(1i32) }
+    let invalid_filters = [2]str{ "sport+", "a/#/b" }
+    let invalid_qoss = [2]u8{ 0u8, 0u8 }
+    let (_, invalid_filter_error) = mqtt.encode_subscribe(stream[..], 3u16, invalid_filters[..], invalid_qoss[..])
+    if invalid_filter_error != mqtt.Invalid { os.exit(1i32) }
+    let empty_level_filters = [3]str{ "a//b", "/", "+/#" }
+    let empty_level_qoss = [3]u8{ 0u8, 1u8, 2u8 }
+    let (empty_level_n, empty_level_error) = mqtt.encode_subscribe(stream[..], 4u16, empty_level_filters[..], empty_level_qoss[..])
+    if empty_level_error != ok || empty_level_n == 0usize { os.exit(1i32) }
     let (n5, e5) = mqtt.encode_unsubscribe(stream[..], 2u16, topics[..1usize])
     if e5 != ok || n5 != 9usize || fold(stream[..n5]) != 0x2b7b77a5a643ba55u64 { os.exit(1i32) }
     let values = [6]usize{ 0usize, 127usize, 128usize, 16383usize, 16384usize, 268435455usize }
