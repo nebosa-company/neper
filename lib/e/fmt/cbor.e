@@ -294,19 +294,29 @@ fn decode_text(d: *Decoder) -> (str, err) {
     ret (out, ok)
 }
 
+// Array and map counts are stored as u64 in CBOR but become usize for callers and arena storage.
+fn container_count(value: u64) -> (usize, err) {
+    if mem.size_of[usize]() == 4usize && value > 4294967295u64 { ret (0usize, Invalid) }
+    ret (usize(value), ok)
+}
+
 // The item count, and whether the array is indefinite (then the count is 0 and the caller reads
 // until `at_break`, consuming the break with `decode_head`).
 fn decode_array_len(d: *Decoder) -> (usize, bool, err) {
     let (item, head_error) = expect(d, MAJOR_ARRAY)
     if head_error != ok { ret (0usize, false, head_error) }
-    ret (usize(item.value), item.indefinite, ok)
+    let (count, count_error) = container_count(item.value)
+    if count_error != ok { ret (0usize, false, count_error) }
+    ret (count, item.indefinite, ok)
 }
 
 // The pair count, likewise.
 fn decode_map_len(d: *Decoder) -> (usize, bool, err) {
     let (item, head_error) = expect(d, MAJOR_MAP)
     if head_error != ok { ret (0usize, false, head_error) }
-    ret (usize(item.value), item.indefinite, ok)
+    let (count, count_error) = container_count(item.value)
+    if count_error != ok { ret (0usize, false, count_error) }
+    ret (count, item.indefinite, ok)
 }
 
 fn decode_tag(d: *Decoder) -> (u64, err) {
@@ -630,7 +640,9 @@ fn decode(a: *mem.Arena, d: *Decoder, max_depth: u16) -> (Value, err) {
     if major == MAJOR_ARRAY || major == MAJOR_MAP {
         let (item, head_error) = decode_head(d)
         if head_error != ok { ret (none, head_error) }
-        var count = usize(item.value)
+        let (declared, declared_error) = container_count(item.value)
+        if declared_error != ok { ret (none, declared_error) }
+        var count = declared
         if item.indefinite {
             let (counted, count_error) = count_until_break(d)
             if count_error != ok { ret (none, count_error) }

@@ -333,6 +333,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let huge_map_len = unhex("bb8000000000000000f6", raw[..])
     var huge_map = cbor.decoder(raw[..huge_map_len])
     if cbor.skip(&huge_map) != cbor.Truncated { os.exit(57i32) }
+    // CBOR's 64-bit container count must not wrap to zero when `usize` is wasm32.
+    if mem.size_of[usize]() == 4usize {
+        let wide_array_len = unhex("9b0000000100000000", raw[..])
+        var wide_array = cbor.decoder(raw[..wide_array_len])
+        let (wide_array_count, wide_array_indefinite, wide_array_error) = cbor.decode_array_len(&wide_array)
+        if wide_array_error != cbor.Invalid || wide_array_indefinite || wide_array_count != 0usize { os.exit(62i32) }
+        var wide_array_value = cbor.decoder(raw[..wide_array_len])
+        let (wide_array_decoded, wide_array_decoded_error) = cbor.decode(a, &wide_array_value, 128u16)
+        if wide_array_decoded_error != cbor.Invalid { os.exit(63i32) }
+        let wide_map_len = unhex("bb0000000100000000", raw[..])
+        var wide_map = cbor.decoder(raw[..wide_map_len])
+        let (wide_map_count, wide_map_indefinite, wide_map_error) = cbor.decode_map_len(&wide_map)
+        if wide_map_error != cbor.Invalid || wide_map_indefinite || wide_map_count != 0usize { os.exit(64i32) }
+        var wide_map_value = cbor.decoder(raw[..wide_map_len])
+        let (wide_map_decoded, wide_map_decoded_error) = cbor.decode(a, &wide_map_value, 128u16)
+        if wide_map_decoded_error != cbor.Invalid { os.exit(65i32) }
+    }
     // An indefinite map cannot end after only its key. `decode` already
     // rejects this; `skip` must agree rather than treating it as a valid item.
     let dangling_map_len = unhex("bf6161ff", raw[..])
