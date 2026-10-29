@@ -11343,6 +11343,8 @@ if ($wasmNode) {
     if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
     $wasmProcCleanup = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs') @() (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs')
     if ($wasmProcCleanup.Status -ne 0) { throw "the WASM process-host cleanup check failed: $($wasmProcCleanup.Output)" }
+    $wasmPreopenSymlink = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_preopen_symlink.mjs') @() (Join-Path $repo 'tests\wasm\host_preopen_symlink.mjs')
+    if ($wasmPreopenSymlink.Status -ne 0) { throw "the WASM preopen symlink boundary check failed: $($wasmPreopenSymlink.Output)" }
     $wasmSysDiskPrecision = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_sys_disk_precision.mjs') @() (Join-Path $repo 'tests\wasm\host_sys_disk_precision.mjs')
     if ($wasmSysDiskPrecision.Status -ne 0) { throw "the WASM sys_disk precision check failed: $($wasmSysDiskPrecision.Output)" }
     $wasmHostImportRanges = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_import_ranges.mjs') @() (Join-Path $repo 'tests\wasm\host_import_ranges.mjs')

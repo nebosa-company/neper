@@ -43386,3 +43386,10 @@ same-minimum pair report `Unrepresentable`. Other minimum operands are reduced b
 the signed Euclidean loop, including the former `i64::MIN / -1` trap, and successful
 calls retain `a*x + b*y == g`. The math-special and math-ntheory fixtures pin these
 limits, failures and ordinary signed Bezout identities.
+
+## D5919 — WASI permission paths stay inside a preopen
+
+`underPreopen` checks both the lexical path and its canonical real path. A symlink or
+junction that resolves outside the preopen is refused before `fs_mode`, `fs_chmod` or
+`sys_disk` uses it. The host passes the canonical path to the filesystem operation,
+so `chmod` cannot follow an in-tree link to a file outside the preopen.

@@ -2995,3 +2995,4 @@ D5913	3725	f16 and bf16 on the CPU code generators: widen to f32, operate, round
 D5914	2685	f16 and bf16 in GLSL, word-equal to the CPU's
 D5915	1243	Presenter ownership ends at fallback, replacement and window close
 D5916	1245	GL dispatch follows the current context, not the process
+D5919	387	WASI permission paths stay inside a preopen
