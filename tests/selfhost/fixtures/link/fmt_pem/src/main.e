@@ -7,6 +7,7 @@ use e.mem
 use e.io
 use e.str
 use e.fmt.pem as pem
+use e.fmt.mime as mime
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let text = "junk before\r\n-----BEGIN THING-----\r\nAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8w\r\nMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9g\r\nYWJjZA==\r\n-----END THING-----\r\nafter"
@@ -52,5 +53,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e7 != pem.Invalid { os.exit(20) }
     let (b8, r8, e8) = pem.decode(a, text, 99usize)
     if e8 != pem.TooLarge { os.exit(21) }
+    // Text written by encode must not be able to make a second PEM delimiter or
+    // header line. Validation happens before any bytes reach the writer.
+    var injected_label: pem.Block = zero
+    injected_label.label = "X-----\n-----BEGIN INJECTED"
+    injected_label.bytes = block.bytes
+    var bad_label_buffer: [256]u8 = zero
+    var bad_label_state = io.SliceWriter { data: bad_label_buffer[..], off: 0usize }
+    var bad_label_writer = io.slice_writer(&bad_label_state)
+    if pem.encode(&bad_label_writer, &injected_label) != pem.Invalid || bad_label_state.off != 0usize { os.exit(22) }
+    var injected_headers: [1]mime.Header = zero
+    injected_headers[0usize].name = "Proc-Type: injected"
+    injected_headers[0usize].value = "safe"
+    var injected_header: pem.Block = zero
+    injected_header.label = "THING"
+    injected_header.headers = injected_headers[..]
+    injected_header.bytes = block.bytes
+    var bad_name_buffer: [256]u8 = zero
+    var bad_name_state = io.SliceWriter { data: bad_name_buffer[..], off: 0usize }
+    var bad_name_writer = io.slice_writer(&bad_name_state)
+    if pem.encode(&bad_name_writer, &injected_header) != pem.Invalid || bad_name_state.off != 0usize { os.exit(23) }
+    injected_headers[0usize].name = "Proc-Type"
+    injected_headers[0usize].value = "safe\r\nInjected: yes"
+    var bad_value_buffer: [256]u8 = zero
+    var bad_value_state = io.SliceWriter { data: bad_value_buffer[..], off: 0usize }
+    var bad_value_writer = io.slice_writer(&bad_value_state)
+    if pem.encode(&bad_value_writer, &injected_header) != pem.Invalid || bad_value_state.off != 0usize { os.exit(24) }
     ret ok
 }
