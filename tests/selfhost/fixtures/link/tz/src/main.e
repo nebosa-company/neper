@@ -131,6 +131,64 @@ fn unordered_transition_pack(out: []u8, second_time: u8) -> usize {
     ret 82usize
 }
 
+// A TZif2 pack whose first transition is the first whole UTC second below
+// Timestamp's range. Its positive offset change makes Timestamp's minimum
+// civil value a gap, so resolve must reject the unrepresentable gap edge.
+fn edge_gap_pack(out: []u8) -> usize {
+    if out.len < 155usize { ret 0usize }
+    out[0usize] = 78u8
+    out[1usize] = 80u8
+    out[2usize] = 84u8
+    out[3usize] = 90u8
+    out[4usize] = 1u8
+    out[6usize] = 120u8
+    out[7usize] = 1u8
+    out[11usize] = 1u8
+    out[13usize] = 90u8
+    out[14usize] = 137u8
+
+    let first = 18usize
+    out[first] = 84u8
+    out[first + 1usize] = 90u8
+    out[first + 2usize] = 105u8
+    out[first + 3usize] = 102u8
+    out[first + 4usize] = 50u8
+    out[first + 39usize] = 2u8
+    out[first + 43usize] = 8u8
+
+    let second = first + 64usize
+    out[second] = 84u8
+    out[second + 1usize] = 90u8
+    out[second + 2usize] = 105u8
+    out[second + 3usize] = 102u8
+    out[second + 4usize] = 50u8
+    out[second + 35usize] = 1u8
+    out[second + 39usize] = 2u8
+    out[second + 43usize] = 8u8
+
+    let body = second + 44usize
+    out[body] = 255u8
+    out[body + 1usize] = 255u8
+    out[body + 2usize] = 255u8
+    out[body + 3usize] = 253u8
+    out[body + 4usize] = 218u8
+    out[body + 5usize] = 62u8
+    out[body + 6usize] = 130u8
+    out[body + 7usize] = 251u8
+    out[body + 8usize] = 1u8
+    out[body + 17usize] = 14u8
+    out[body + 18usize] = 16u8
+    out[body + 19usize] = 1u8
+    out[body + 20usize] = 4u8
+    out[body + 21usize] = 83u8
+    out[body + 22usize] = 84u8
+    out[body + 23usize] = 68u8
+    out[body + 25usize] = 68u8
+    out[body + 26usize] = 83u8
+    out[body + 27usize] = 84u8
+    ret body + 29usize
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (db, e1) = tz.builtin(a)
     if e1 != ok { os.exit(1) }
@@ -176,6 +234,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let min_date = time.to_date(min_instant)
     let min_time = time.to_time(min_instant)
     if min_local.date.year != min_date.year || min_local.date.month != min_date.month || min_local.date.day != min_date.day || min_local.time.hour != min_time.hour || min_local.time.minute != min_time.minute || min_local.time.second != min_time.second || min_local.time.nanos != min_time.nanos { os.exit(47) }
+    let max_wall = tz.Local { date: max_date, time: max_time }
+    let (_, max_resolve_error) = tz.resolve(sao_paulo, max_wall)
+    if max_resolve_error != time.Invalid { os.exit(76) }
+    let min_wall = tz.Local { date: min_date, time: min_time }
+    let (_, min_resolve_error) = tz.resolve(auckland, min_wall)
+    if min_resolve_error != time.Invalid { os.exit(77) }
+    var edge_pack: [192]u8 = zero
+    let edge_length = edge_gap_pack(edge_pack[0..])
+    let (edge_db, edge_load_error) = tz.load(a, edge_pack[0usize..edge_length])
+    if edge_load_error != ok { os.exit(78) }
+    let edge_zone = zone_of(&edge_db, "Z", 79)
+    let (_, edge_resolve_error) = tz.resolve(edge_zone, min_wall)
+    if edge_resolve_error != time.Invalid { os.exit(80) }
     // Resolve.
     let ambiguous = tz.Local { date: time.Date { year: 2024, month: 10u8, day: 27u8 }, time: time.Time { hour: 3u8, minute: 30u8, second: 0u8, nanos: 0u32 } }
     let (r1, e2) = tz.resolve(sofia, ambiguous)
@@ -217,8 +288,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e6 != tz.NotFound { os.exit(62) }
     let (bad, e7) = tz.load(a, "not a pack at all")
     if e7 != tz.InvalidData { os.exit(63) }
+    let bad2_mark = mem.mark(a)
     let (bad2, e8) = tz.load(a, "NPTZ\x05\x002025c\x01\x00\x00\x00\x03\x00UTC\x04\x00\x00\x00junk")
-    if e8 != tz.InvalidData { os.exit(64) }
+    if e8 != tz.InvalidData || mem.mark(a) != bad2_mark { os.exit(64) }
+    var truncated_storage: [64]u8 = zero
+    var truncated_arena = mem.arena_from(truncated_storage[0..])
+    let truncated_mark = mem.mark(&truncated_arena)
+    let (_, truncated_error) = tz.load(&truncated_arena, "NPTZ\x00\x00\x00\x00\x01\x00")
+    if truncated_error != tz.InvalidData || mem.mark(&truncated_arena) != truncated_mark { os.exit(81) }
     invalid_footer(a, "STD999999999999999999999999999999", 65)
     invalid_footer(a, "STD25", 66)
     invalid_footer(a, "STD0:60", 67)

@@ -26,6 +26,9 @@ error TooLarge
 
 const NANOS: i64 = 1000000000i64
 const DAY: i64 = 86400i64
+const TIMESTAMP_MAX: i64 = 9223372036854775807i64
+const TIMESTAMP_MIN: i64 = -9223372036854775807i64 - 1i64
+const TIMESTAMP_EDGE_SECONDS: i64 = 9223372036i64
 
 type Rule = struct { has_dst: bool, std_offset: i32, dst_offset: i32, std_name: str, dst_name: str, start_month: i64, start_week: i64, start_day: i64, start_time: i64, end_month: i64, end_week: i64, end_day: i64, end_time: i64 }
 type ZoneData = struct { name: str, transitions: []i64, type_of: []u8, offsets: []i32, daylight: []bool, abbreviations: []str, rule: Rule, has_rule: bool }
@@ -307,31 +310,60 @@ fn load(a: *mem.Arena, source: []const u8) -> (Database, err) {
     let count = le32(source, at)
     at += 4usize
     if count > 65536usize { ret (zero, TooLarge) }
+    // Every record needs at least its two-byte name length and four-byte data
+    // length. Reject an impossible top-level count before it can size an arena
+    // allocation from malformed input.
+    if count > (source.len - at) / 6usize { ret (zero, InvalidData) }
+    let start = mem.mark(a)
     let (zones, zones_error) = mem.alloc[ZoneData](a, count)
-    if zones_error != ok { ret (zero, zones_error) }
+    if zones_error != ok {
+        mem.reset(a, start)
+        ret (zero, zones_error)
+    }
     let (zone_names, names_error) = mem.alloc[str](a, count)
-    if names_error != ok { ret (zero, names_error) }
+    if names_error != ok {
+        mem.reset(a, start)
+        ret (zero, names_error)
+    }
     var i = 0usize
     while i < count {
-        if at + 2usize > source.len { ret (zero, InvalidData) }
+        if at + 2usize > source.len {
+            mem.reset(a, start)
+            ret (zero, InvalidData)
+        }
         let name_len = le16(source, at)
         at += 2usize
-        if at + name_len + 4usize > source.len { ret (zero, InvalidData) }
+        if at + name_len + 4usize > source.len {
+            mem.reset(a, start)
+            ret (zero, InvalidData)
+        }
         let name = source[at..at + name_len]
         at += name_len
         let data_len = le32(source, at)
         at += 4usize
-        if data_len > 1048576usize { ret (zero, TooLarge) }
-        if at + data_len > source.len { ret (zero, InvalidData) }
+        if data_len > 1048576usize {
+            mem.reset(a, start)
+            ret (zero, TooLarge)
+        }
+        if at + data_len > source.len {
+            mem.reset(a, start)
+            ret (zero, InvalidData)
+        }
         let (parsed, parse_error) = parse_tzif(a, name, source[at..at + data_len])
-        if parse_error != ok { ret (zero, parse_error) }
+        if parse_error != ok {
+            mem.reset(a, start)
+            ret (zero, parse_error)
+        }
         zones[i] = parsed
         zone_names[i] = name
         at += data_len
         i += 1usize
     }
     let (storage, storage_error) = mem.alloc[State](a, 1usize)
-    if storage_error != ok { ret (zero, storage_error) }
+    if storage_error != ok {
+        mem.reset(a, start)
+        ret (zero, storage_error)
+    }
     storage[0].version = release
     storage[0].zones = zones
     storage[0].zone_names = zone_names
@@ -396,6 +428,23 @@ fn to_local(selected_zone: Zone, instant: time.Timestamp) -> Local {
     ret Local { date: time.to_date(shifted), time: time.to_time(shifted) }
 }
 
+// Civil values are interpreted as UTC only to discover which offsets might
+// apply. Turning one back into an instant must report an out-of-range result,
+// rather than wrapping it or inheriting timestamp_add's saturating semantics.
+fn local_candidate(as_utc: time.Timestamp, offset: i64) -> (time.Timestamp, err) {
+    let shift = offset * NANOS
+    if shift > 0i64 && as_utc.nanos < TIMESTAMP_MIN + shift { ret (zero, time.Invalid) }
+    if shift < 0i64 && as_utc.nanos > TIMESTAMP_MAX + shift { ret (zero, time.Invalid) }
+    ret (time.Timestamp { nanos: as_utc.nanos - shift }, ok)
+}
+
+// A missing-time edge is exactly on a whole second. This narrower range makes
+// both that value and its preceding nanosecond representable.
+fn timestamp_edge(seconds: i64) -> (time.Timestamp, err) {
+    if seconds < -TIMESTAMP_EDGE_SECONDS || seconds > TIMESTAMP_EDGE_SECONDS { ret (zero, time.Invalid) }
+    ret (time.Timestamp { nanos: seconds * NANOS }, ok)
+}
+
 fn resolve(selected_zone: Zone, local: Local) -> (Resolve, err) {
     let z = mem.cast[*const ZoneData](selected_zone.state)
     let (as_utc, civil_error) = time.from_civil(local.date, local.time)
@@ -403,13 +452,23 @@ fn resolve(selected_zone: Zone, local: Local) -> (Resolve, err) {
     let wall = floor_div(as_utc.nanos, NANOS)
     let before = i64(offset_at_seconds(z, wall - DAY).seconds)
     let after = i64(offset_at_seconds(z, wall + DAY).seconds)
-    let first = time.Timestamp { nanos: as_utc.nanos - before * NANOS }
-    let second = time.Timestamp { nanos: as_utc.nanos - after * NANOS }
     let first_holds = i64(offset_at_seconds(z, wall - before).seconds) == before
     let second_holds = i64(offset_at_seconds(z, wall - after).seconds) == after
-    if before == after || (first_holds && !second_holds) { ret (Resolve{ Unique: first }, ok) }
-    if second_holds && !first_holds { ret (Resolve{ Unique: second }, ok) }
+    if before == after || (first_holds && !second_holds) {
+        let (first, first_error) = local_candidate(as_utc, before)
+        if first_error != ok { ret (zero, first_error) }
+        ret (Resolve{ Unique: first }, ok)
+    }
+    if second_holds && !first_holds {
+        let (second, second_error) = local_candidate(as_utc, after)
+        if second_error != ok { ret (zero, second_error) }
+        ret (Resolve{ Unique: second }, ok)
+    }
     if first_holds && second_holds {
+        let (first, first_error) = local_candidate(as_utc, before)
+        if first_error != ok { ret (zero, first_error) }
+        let (second, second_error) = local_candidate(as_utc, after)
+        if second_error != ok { ret (zero, second_error) }
         var pair: [2]time.Timestamp = zero
         if first.nanos < second.nanos {
             pair[0] = first
@@ -434,8 +493,10 @@ fn resolve(selected_zone: Zone, local: Local) -> (Resolve, err) {
         if offset_at_seconds(z, mid).seconds == low_offset { low = mid } else { high = mid }
     }
     var edges: [2]time.Timestamp = zero
-    edges[0] = time.Timestamp { nanos: high * NANOS - 1i64 }
-    edges[1] = time.Timestamp { nanos: high * NANOS }
+    let (edge, edge_error) = timestamp_edge(high)
+    if edge_error != ok { ret (zero, edge_error) }
+    edges[0] = time.Timestamp { nanos: edge.nanos - 1i64 }
+    edges[1] = edge
     ret (Resolve{ Missing: edges }, ok)
 }
 
