@@ -72,6 +72,15 @@ fn read_raw(d: *Decoder, n: usize) -> ([]const u8, err) {
     ret (d.data[start..d.pos], ok)
 }
 
+// A decoded byte count must fit the target width and the unread input before it
+// becomes a slice length.  Checking the remaining input first keeps wasm32 from
+// narrowing a valid i64 count such as 2^32 to zero.
+fn byte_count(d: *const Decoder, n: i64) -> (usize, err) {
+    if n < 0i64 || d.pos > d.data.len { ret (0usize, Malformed) }
+    if u64(n) > u64(d.data.len - d.pos) { ret (0usize, Malformed) }
+    ret (usize(n), ok)
+}
+
 fn skip_raw(d: *Decoder, n: usize) -> err {
     let (taken, taken_error) = read_raw(d, n)
     ret taken_error
@@ -111,8 +120,9 @@ fn read_double(d: *Decoder) -> (f64, err) {
 fn read_bytes(d: *Decoder) -> ([]const u8, err) {
     let (n, n_error) = read_long(d)
     if n_error != ok { ret (zero, n_error) }
-    if n < 0i64 { ret (zero, Malformed) }
-    let (raw, raw_error) = read_raw(d, usize(n))
+    let (count, count_error) = byte_count(d, n)
+    if count_error != ok { ret (zero, count_error) }
+    let (raw, raw_error) = read_raw(d, count)
     ret (raw, raw_error)
 }
 
@@ -235,8 +245,9 @@ fn skip(s: *const Schema, node: u32, d: *Decoder) -> err {
         if n < 0i64 {
             let (block_bytes, block_error) = read_long(d)
             if block_error != ok { ret block_error }
-            if block_bytes < 0i64 { ret Malformed }
-            try skip_raw(d, usize(block_bytes))
+            let (count, count_error) = byte_count(d, block_bytes)
+            if count_error != ok { ret count_error }
+            try skip_raw(d, count)
         } else {
             var i = 0i64
             while i < n {

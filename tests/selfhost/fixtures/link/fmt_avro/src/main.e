@@ -204,6 +204,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var d16 = avro.decoder(wrong_block_size[..])
     var o10 = avro.sink(buffer[..])
     if avro.decode_resolved(&array_schema, 0u32, &array_schema, 0u32, &d16, &o10) != avro.Malformed { os.exit(28i32) }
+    // A 2^32 byte length is valid Avro but must not narrow to zero on wasm32.
+    let oversized_length: [5]u8 = [5]u8{ 128u8, 128u8, 128u8, 128u8, 32u8 }
+    var d17 = avro.decoder(oversized_length[..])
+    let (_, oversized_error) = avro.read_bytes(&d17)
+    if oversized_error != avro.Malformed { os.exit(29i32) }
+    // The same check applies to negative array-block byte sizes used by skip.
+    let oversized_block: [7]u8 = [7]u8{ 1u8, 128u8, 128u8, 128u8, 128u8, 32u8, 0u8 }
+    var d18 = avro.decoder(oversized_block[..])
+    if avro.skip(&array_schema, 0u32, &d18) != avro.Malformed { os.exit(30i32) }
     try io.print("fmt avro ok\n")
     ret ok
 }
