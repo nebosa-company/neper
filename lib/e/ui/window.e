@@ -204,6 +204,15 @@ fn take_frame_request_for(id: Id) -> bool {
     ret true
 }
 
+// Commit a target extent only after its replacement images exist. This keeps the
+// cached drawable extent aligned with the target if allocation or the device fails.
+fn commit_resized_extent(s: *State, width: u32, height: u32, resize_error: err) -> err {
+    if resize_error != ok { ret resize_error }
+    s.width = width
+    s.height = height
+    ret ok
+}
+
 fn metrics(window: *const Window) -> (Metrics, err) {
     var none: Metrics = zero
     let (s, state_error) = state_of(window)
@@ -214,12 +223,25 @@ fn metrics(window: *const Window) -> (Metrics, err) {
     if !(scale > 0.0) { scale = 1.0 }
     // The target follows the client area.
     if host.width != s.width || host.height != s.height {
-        if host.width != 0u32 && host.height != 0u32 && gpu.resize(s.frames, host.width, host.height) == ok {
-            s.width = host.width
-            s.height = host.height
+        if host.width != 0u32 && host.height != 0u32 {
+            let resize_error = gpu.resize(s.frames, host.width, host.height)
+            let committed_error = commit_resized_extent(s, host.width, host.height, resize_error)
+            if committed_error != ok { ret (none, committed_error) }
         }
     }
     ret (Metrics { logical_size: geometry.Size { width: f32(host.width) / scale, height: f32(host.height) / scale }, framebuffer_width: host.width, framebuffer_height: host.height, scale: scale, focused: host.focused, visible: host.visible }, ok)
+}
+
+@test
+fn failed_resize_keeps_cached_extent(a: *mem.Arena) -> err {
+    var state: State = zero
+    state.width = 320u32
+    state.height = 200u32
+    let failed = commit_resized_extent(&state, 640u32, 400u32, gpu.InvalidHandle)
+    if failed != gpu.InvalidHandle || state.width != 320u32 || state.height != 200u32 { ret Invalid }
+    if commit_resized_extent(&state, 640u32, 400u32, ok) != ok { ret Invalid }
+    if state.width != 640u32 || state.height != 400u32 { ret Invalid }
+    ret ok
 }
 
 fn draw_target(window: *const Window) -> (scene.Target, err) {
