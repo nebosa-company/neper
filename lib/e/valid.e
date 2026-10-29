@@ -55,11 +55,12 @@ fn luhn_sum(d: []const u8, shifted: bool) -> u32 {
     ret total
 }
 
-// The digit that appended to `s` makes it pass `luhn`; `Invalid` on a stray character.
+// The digit that appended to `s` makes it pass `luhn`; `Invalid` on a malformed
+// source or one whose completed number would not fit the validator's 64-digit limit.
 fn luhn_check_digit(s: str) -> (u8, err) {
     var d: [64]u8 = zero
     let n = digits(s, d[..])
-    if n > 64usize { ret (0u8, Invalid) }
+    if n == 0usize || n >= 64usize { ret (0u8, Invalid) }
     ret (u8((10u32 - luhn_sum(d[..n], true) % 10u32) % 10u32), ok)
 }
 

@@ -21,6 +21,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e2 != ok || d2 != 3u8 { os.exit(1i32) }
     let (_, e3) = valid.luhn_check_digit("79x")
     if e3 != valid.Invalid { os.exit(1i32) }
+    let (_, e4) = valid.luhn_check_digit("")
+    if e4 != valid.Invalid { os.exit(1i32) }
+    let (_, e5) = valid.luhn_check_digit("0000000000000000000000000000000000000000000000000000000000000000")
+    if e5 != valid.Invalid { os.exit(1i32) }
 
     // 2: ISBN-13 and ISBN-10.
     if !valid.isbn13("978-0-306-40615-7") || valid.isbn13("978-0-307-40615-7") || valid.isbn13("798-0-306-40615-7") { os.exit(2i32) }
