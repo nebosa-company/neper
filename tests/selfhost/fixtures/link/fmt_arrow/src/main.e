@@ -32,6 +32,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, validity_error) = arrow.columns(bad_validity[..], cols[..], names[..])
     if validity_error != arrow.Malformed { os.exit(12i32) }
 
+    // 2^62 + 1 makes a wrapped `(length + 1) * 4` look like an eight-byte
+    // Utf8 offsets requirement.  The zero-null second Utf8 node must reject
+    // it before the wrapped last-row offset can be read.
+    var huge_utf8 = stream
+    huge_utf8[1120usize] = 1u8
+    huge_utf8[1127usize] = 64u8
+    let (_, huge_utf8_error) = arrow.columns(huge_utf8[..], cols[..], names[..])
+    if huge_utf8_error != arrow.Malformed { os.exit(13i32) }
+
+    // A 2^62 Int64 node cannot fit the small fixed-width data buffer.  The
+    // decoder must reject it without multiplying its hostile row count by 8.
+    var huge_i64 = stream
+    huge_i64[992usize] = 0u8
+    huge_i64[999usize] = 64u8
+    let (_, huge_i64_error) = arrow.columns(huge_i64[..], cols[..], names[..])
+    if huge_i64_error != arrow.Malformed { os.exit(13i32) }
+
+    // A zero-row batch still has one offset per Utf8 column.  Each FieldNode
+    // in this known-good batch is made empty so the Utf8 last-row check must
+    // not calculate `length - 1`.
+    var empty_batch = stream
+    var node = 0usize
+    while node < 10usize {
+        let field_node = 976usize + node * 16usize
+        empty_batch[field_node] = 0u8
+        empty_batch[field_node + 8usize] = 0u8
+        node += 1usize
+    }
+    let (empty_count, empty_error) = arrow.columns(empty_batch[..], cols[..], names[..])
+    if empty_error != ok || empty_count != 10usize || cols[4usize].len != 0usize || cols[9usize].len != 0usize { os.exit(13i32) }
+
     // 1: schema count and names (pre-order, children included).
     let (count, e) = arrow.columns(stream[..], cols[..], names[..])
     if e != ok || count != 10usize { os.exit(1i32) }

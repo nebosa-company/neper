@@ -357,7 +357,7 @@ fn bind(m: *const Message, cols: []Column, count: usize) -> err {
             let (offsets, offsets_error) = buffer(m, buffers, b)
             if offsets_error != ok { ret offsets_error }
             b += 1usize
-            if offsets.len < (usize(n) + 1usize) * 4usize { ret Malformed }
+            if offsets.len / 4usize <= length { ret Malformed }
             cols[i].offsets = offsets
         }
         if kind != .List && kind != .Struct {
@@ -365,11 +365,13 @@ fn bind(m: *const Message, cols: []Column, count: usize) -> err {
             if data_error != ok { ret data_error }
             b += 1usize
             if kind == .Bool {
-                if data.len * 8usize < usize(n) { ret Malformed }
+                if data.len < validity_bytes { ret Malformed }
             } else if kind == .Utf8 || kind == .Binary {
-                let (_, end, end_error) = list_range(&cols[i], usize(n) - 1usize)
-                if n > 0i64 && (end_error != ok || end > data.len) { ret Malformed }
-            } else if data.len < usize(n) * width(kind) {
+                if length > 0usize {
+                    let (_, end, end_error) = list_range(&cols[i], length - 1usize)
+                    if end_error != ok || end > data.len { ret Malformed }
+                }
+            } else if data.len / width(kind) < length {
                 ret Malformed
             }
             cols[i].data = data
