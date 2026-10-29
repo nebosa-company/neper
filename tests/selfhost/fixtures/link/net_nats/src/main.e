@@ -439,6 +439,20 @@ fn session(a: *mem.Arena) -> bool {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    var invalid_options = nats.options(false)
+    var invalid_buf: [256]u8 = zero
+    invalid_options.name = "\xc0\x80"
+    let (_, overlong_error) = nats.encode_connect(invalid_buf[0usize..], &invalid_options)
+    if overlong_error != nats.Invalid { os.exit(114i32) }
+    invalid_options.name = "\xed\xa0\x80"
+    let (_, surrogate_error) = nats.encode_connect(invalid_buf[0usize..], &invalid_options)
+    if surrogate_error != nats.Invalid { os.exit(115i32) }
+    invalid_options.name = "\xf4\x90\x80\x80"
+    let (_, range_error) = nats.encode_connect(invalid_buf[0usize..], &invalid_options)
+    if range_error != nats.Invalid { os.exit(116i32) }
+    invalid_options.name = "\xf5\x80\x80\x80"
+    let (_, lead_error) = nats.encode_connect(invalid_buf[0usize..], &invalid_options)
+    if lead_error != nats.Invalid { os.exit(117i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(100i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(101i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(102i32) }

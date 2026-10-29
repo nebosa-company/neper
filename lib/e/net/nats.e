@@ -212,7 +212,8 @@ fn put_json_string(dst: []u8, at: *usize, s: str) -> err {
             // A UTF-8 sequence to its scalar value.
             var width = 0usize
             var scalar = 0u32
-            if c >= 240u8 && c < 248u8 {
+            if c >= 240u8 {
+                if c > 244u8 { ret Invalid }
                 width = 4usize
                 scalar = u32(c & 7u8)
             } else if c >= 224u8 {
@@ -231,6 +232,7 @@ fn put_json_string(dst: []u8, at: *usize, s: str) -> err {
                 scalar = (scalar << 6u32) | u32(s[i + k] & 63u8)
                 k += 1usize
             }
+            if (width == 2usize && scalar < 128u32) || (width == 3usize && scalar < 2048u32) || (width == 4usize && scalar < 65536u32) || scalar > 1114111u32 || (scalar >= 55296u32 && scalar <= 57343u32) { ret Invalid }
             i += width - 1usize
             if scalar >= 65536u32 {
                 let v = scalar - 65536u32
