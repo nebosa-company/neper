@@ -207,6 +207,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let checkpoint = mem.mark(a)
     let (_, default_error) = xml.reader(a, io.Reader { ctx: zero, read: endless }, options)
     if default_error != xml.TooLarge || mem.mark(a) != checkpoint { os.exit(61) }
+    let (_, e29) = count_events(a, "<a>&#1;</a>", 8u16)
+    if e29 != xml.Invalid { os.exit(71) }
+    let (_, e30) = count_events(a, "<a>&#xFFFE;</a>", 8u16)
+    if e30 != xml.Invalid { os.exit(72) }
+    let (_, e31) = count_events(a, "<a>\x01</a>", 8u16)
+    if e31 != xml.Invalid { os.exit(73) }
+    let (_, e32) = count_events(a, "<a>\x80</a>", 8u16)
+    if e32 != xml.Invalid { os.exit(74) }
+    let (_, e33) = count_events(a, "<a x=\"\x80\"/>", 8u16)
+    if e33 != xml.Invalid { os.exit(75) }
+    let (_, e34) = count_events(a, "<a><![CDATA[\x01]]></a>", 8u16)
+    if e34 != xml.Invalid { os.exit(76) }
     ret ok
 }
 

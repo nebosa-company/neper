@@ -63,6 +63,27 @@ fn reader_with_limit(a: *mem.Arena, source: io.Reader, options: Options, limit: 
 
 fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }
 
+// XML 1.0 (5th edition) Char. The broader ranges deliberately include the
+// discouraged characters, which XML permits but recommends avoiding.
+fn is_xml_char(scalar: u32) -> bool {
+    if scalar == 9u32 || scalar == 10u32 || scalar == 13u32 { ret true }
+    if scalar >= 32u32 && scalar <= 55295u32 { ret true }
+    if scalar >= 57344u32 && scalar <= 65533u32 { ret true }
+    ret scalar >= 65536u32 && scalar <= 1114111u32
+}
+
+// XML is encoded as UTF-8 here, so reject malformed UTF-8 and disallowed XML
+// characters before any parser path can borrow raw input as an event value.
+fn valid_xml_characters(source: []const u8) -> bool {
+    var at = 0usize
+    while at < source.len {
+        let (decoded, decode_error) = utf8.decode(source, at)
+        if decode_error != ok || !is_xml_char(decoded.scalar) { ret false }
+        at += usize(decoded.width)
+    }
+    ret true
+}
+
 // XML 1.0 (5th edition) NameStartChar and NameChar.
 fn is_name_start(scalar: u32) -> bool {
     if scalar == 58u32 || (scalar >= 65u32 && scalar <= 90u32) || scalar == 95u32 || (scalar >= 97u32 && scalar <= 122u32) { ret true }
@@ -177,7 +198,8 @@ fn decode(a: *mem.Arena, raw: []const u8) -> (str, err) {
                 scalar = dec
                 parse_error = dec_error
             }
-            if parse_error != ok || scalar > 1114111u64 || scalar == 0u64 || (scalar >= 55296u64 && scalar <= 57343u64) { ret ("", Invalid) }
+            if parse_error != ok || scalar > 1114111u64 { ret ("", Invalid) }
+            if !is_xml_char(u32(scalar)) { ret ("", Invalid) }
             used = push_scalar(out, used, u32(scalar))
         } else {
             ret ("", Unsupported)
@@ -408,6 +430,7 @@ type Document = struct { nodes: []const Node, root: NodeId }
 
 // A pull reader straight over `source`, no `io.Reader` in between.
 fn stream(a: *mem.Arena, source: []const u8, options: Options) -> (Reader, err) {
+    if !valid_xml_characters(source) { ret (zero, Invalid) }
     let (storage, storage_error) = mem.alloc[State](a, 1usize)
     if storage_error != ok { ret (zero, storage_error) }
     let (stack, stack_error) = mem.alloc[str](a, usize(options.max_depth) + 1usize)
