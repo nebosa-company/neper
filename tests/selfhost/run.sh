@@ -10950,6 +10950,11 @@ if command -v node >/dev/null 2>&1; then
     wasm_status=0
     (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/wasm_threads.threads.wasm" exit > /dev/null) || wasm_status=$?
     [ "$wasm_status" -eq 7 ] || { printf '%s\n' "wasm_threads exit answered $wasm_status, not 7" >&2; exit 1; }
+    # A capped thread host makes a fresh 64 KiB stack's memory.grow fail. The fixture also pins
+    # the near-4 GiB stack bound and checks that the failed growth did not advance a reservation.
+    wasm_fixture=wasm_thread_reservation
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a threaded WebAssembly module" >&2; exit 1; }
+    (cd "$repo" && NEPER_WASM_MAX_PAGES=initial node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.threads.wasm") || { printf '%s\n' 'wasm_thread_reservation failed under a capped threaded host' >&2; exit 1; }
     # (D5750, C204) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
     # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
     for wasm_fixture in os_pipe_threads net_pop3; do

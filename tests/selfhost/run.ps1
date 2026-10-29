@@ -11277,6 +11277,18 @@ if ($wasmNode) {
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "atomic 8000`nmutex 8000`nids distinct`nmain id 1`na thread started a thread`ndetached`nwait timeout`ndetails per thread`n200 cycles`nmain returns") { throw "wasm_threads answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmThreadsPath @('exit')
     if ($wasmRun.Status -ne 7) { throw "wasm_threads exit answered $($wasmRun.Status), not 7" }
+    # A capped thread host makes a fresh 64 KiB stack's memory.grow fail. The fixture also pins
+    # the near-4 GiB stack bound and checks that the failed growth did not advance a reservation.
+    $wasmFixture = 'wasm_thread_reservation'
+    $wasmReservationPath = Join-Path $wasmBuild "$wasmFixture.threads.wasm"
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmReservationPath --threads) -ne 'executable written') { throw 'wasm_thread_reservation did not emit as a threaded WebAssembly module' }
+    $hadWasmMaxPages = Test-Path Env:NEPER_WASM_MAX_PAGES
+    $previousWasmMaxPages = $env:NEPER_WASM_MAX_PAGES
+    $env:NEPER_WASM_MAX_PAGES = 'initial'
+    try { $wasmRun = Invoke-Wasm $wasmReservationPath @() } finally {
+        if ($hadWasmMaxPages) { $env:NEPER_WASM_MAX_PAGES = $previousWasmMaxPages } else { Remove-Item Env:NEPER_WASM_MAX_PAGES }
+    }
+    if ($wasmRun.Status -ne 0) { throw "wasm_thread_reservation failed under a capped threaded host: exit $($wasmRun.Status) $($wasmRun.Output)" }
     # (D5750, C204) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
     # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
     foreach ($wasmFixture in 'os_pipe_threads', 'net_pop3') {

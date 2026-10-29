@@ -771,18 +771,15 @@ fn neper_os_thread_create(result: *ThreadResult, entry: usize, context: usize, s
     result.failure = Failed
     var room = stack
     if room < 65536usize { room = 65536usize }
-    if room > MEMORY_END { ret }
+    if room > MEMORY_END - 64usize { ret }
     var size = (room + 64usize + 65535usize) / 65536usize * 65536usize
     var block = rt_block_take(size)
     if block != 0usize {
         size = rt_load64(block + 40usize)
     } else {
-        let (start, reserve_error) = neper_os_reserve(size)
-        if reserve_error != ok { ret }
-        block = mem.address_of(start)
+        block = rt_thread_reserve(size)
+        if block == 0usize { ret }
     }
-    // Only a fresh block can fail to grow (a free one was grown before); its addresses are lost.
-    if !rt_grow(block + size) { ret }
     var record: [7]u64 = zero
     record[0usize] = 1u64
     record[1usize] = u64(entry)
@@ -860,6 +857,25 @@ fn neper_os_reserve(n: usize) -> (*u8, err) {
     rt_reserve_top = start + (n + 65535usize) / 65536usize * 65536usize
     rt_release()
     ret (rt_pointer(start), ok)
+}
+
+// A new thread needs its reservation and memory growth to be one transaction: another
+// reservation may follow as soon as the lock is released, so rolling back afterwards could
+// leave a hole. A failed grow therefore publishes no reservation.
+fn rt_thread_reserve(n: usize) -> usize {
+    rt_acquire()
+    if rt_reserve_top == 0usize || rt_reserve_top >= MEMORY_END || n > MEMORY_END - rt_reserve_top {
+        rt_release()
+        ret 0usize
+    }
+    let start = rt_reserve_top
+    if !rt_grow(start + n) {
+        rt_release()
+        ret 0usize
+    }
+    rt_reserve_top = start + n
+    rt_release()
+    ret start
 }
 
 fn neper_os_commit(p: *u8, n: usize) -> err {
