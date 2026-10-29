@@ -2202,7 +2202,11 @@ fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollIntere
     }
     if interest.writable {
         let added = poller_change(state.queue, fd, EVFILT_WRITE, EV_ADD, 0u32, token)
-        if added < 0isize { ret from_errno(added) }
+        if added < 0isize {
+            // A failed second filter must not leave an untracked read filter behind.
+            if mark & 1u8 != 0u8 { let removed = poller_change(state.queue, fd, EVFILT_READ, EV_DELETE, 0u32, 0usize) }
+            ret from_errno(added)
+        }
         mark = mark | 2u8
     }
     let free = poller_slot_free(state)

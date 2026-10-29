@@ -9,6 +9,7 @@ use e.os
 
 const READ_TOKEN: usize = 4242usize
 const WRITE_TOKEN: usize = 9182usize
+const ROLLBACK_TOKEN: usize = 7147usize
 
 fn loopback() -> os.SocketAddress {
     var address: os.SocketAddress = zero
@@ -37,6 +38,28 @@ fn main(a: *mem.Arena) -> err {
     let (poller, poller_error) = os.poller_open(a)
     if poller_error == os.Unsupported { ret ok }
     if poller_error != ok { os.exit(10i32) }
+
+    // A pipe's read end accepts EVFILT_READ but macOS rejects EVFILT_WRITE. A failed
+    // combined registration must remove that first filter: otherwise this write returns
+    // an event for an operation whose caller already saw an error.
+    let (pipe_read, pipe_write, pipe_error) = os.pipe()
+    if pipe_error != ok { os.exit(66i32) }
+    var combined: os.PollInterest = zero
+    combined.readable = true
+    combined.writable = true
+    let combined_error = os.poller_register(poller, os.file_handle(pipe_read), ROLLBACK_TOKEN, combined)
+    if combined_error != ok {
+        var marker: [1]u8 = zero
+        marker[0usize] = 65u8
+        let (written, write_error) = os.write(pipe_write, marker[..])
+        if write_error != ok || written != 1usize { os.exit(67i32) }
+        var rollback_events: [2]os.PollEvent = zero
+        let (leaked, leaked_error) = os.poller_wait(poller, rollback_events[..], 0i64)
+        if leaked_error != ok || leaked != 0usize { os.exit(68i32) }
+    } else {
+        if os.poller_unregister(poller, os.file_handle(pipe_read)) != ok { os.exit(69i32) }
+    }
+    if os.close(pipe_read) != ok || os.close(pipe_write) != ok { os.exit(70i32) }
 
     // Two receivers, each with a token of its own, so a wait that reported the wrong one
     // would be visible rather than merely wrong in the count.
