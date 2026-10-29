@@ -48,6 +48,59 @@ fn zone_of(db: *const tz.Database, name: str, code: i32) -> tz.Zone {
     ret z
 }
 
+// A one-zone TZif2 pack with a footer selected by the caller. The headers and
+// one UTC type are valid so a failure proves footer validation rather than a
+// container rejection.
+fn footer_pack(out: []u8, footer: str) -> usize {
+    if footer.len + 128usize > out.len { ret 0usize }
+    out[0usize] = 78u8
+    out[1usize] = 80u8
+    out[2usize] = 84u8
+    out[3usize] = 90u8
+    out[4usize] = 1u8
+    out[6usize] = 120u8
+    out[7usize] = 1u8
+    out[11usize] = 1u8
+    out[13usize] = 90u8
+    let data_len = 110usize + footer.len
+    out[14usize] = u8(data_len)
+    let first = 18usize
+    out[first] = 84u8
+    out[first + 1usize] = 90u8
+    out[first + 2usize] = 105u8
+    out[first + 3usize] = 102u8
+    out[first + 4usize] = 50u8
+    out[first + 39usize] = 1u8
+    out[first + 43usize] = 4u8
+    let second = first + 54usize
+    out[second] = 84u8
+    out[second + 1usize] = 90u8
+    out[second + 2usize] = 105u8
+    out[second + 3usize] = 102u8
+    out[second + 4usize] = 50u8
+    out[second + 39usize] = 1u8
+    out[second + 43usize] = 4u8
+    let body = second + 44usize
+    out[body + 6usize] = 85u8
+    out[body + 7usize] = 84u8
+    out[body + 8usize] = 67u8
+    out[body + 10usize] = 10u8
+    var at = 0usize
+    while at < footer.len {
+        out[body + 11usize + at] = footer[at]
+        at += 1usize
+    }
+    out[body + 11usize + footer.len] = 10u8
+    ret 128usize + footer.len
+}
+
+fn invalid_footer(a: *mem.Arena, footer: str, code: i32) {
+    var pack: [512]u8 = zero
+    let length = footer_pack(pack[0..], footer)
+    let (_, load_error) = tz.load(a, pack[0usize..length])
+    if load_error != tz.InvalidData { os.exit(code) }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (db, e1) = tz.builtin(a)
     if e1 != ok { os.exit(1) }
@@ -124,5 +177,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e7 != tz.InvalidData { os.exit(63) }
     let (bad2, e8) = tz.load(a, "NPTZ\x05\x002025c\x01\x00\x00\x00\x03\x00UTC\x04\x00\x00\x00junk")
     if e8 != tz.InvalidData { os.exit(64) }
+    invalid_footer(a, "STD999999999999999999999999999999", 65)
+    invalid_footer(a, "STD25", 66)
+    invalid_footer(a, "STD0:60", 67)
+    invalid_footer(a, "STD0:0:60", 68)
+    invalid_footer(a, "STD0DST,M13.1.0,M1.1.0", 69)
+    invalid_footer(a, "STD0DST,M1.6.0,M1.1.0", 70)
+    invalid_footer(a, "STD0DST,M1.1.7,M1.1.0", 71)
+    invalid_footer(a, "STD0DST,M1.1.0/168,M1.1.0", 72)
+    invalid_footer(a, "STD0DST,M999999999999999999999999999999.1.0,M1.1.0", 73)
     ret ok
 }

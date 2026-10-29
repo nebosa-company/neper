@@ -66,8 +66,23 @@ fn rule_name(text: str, at: usize) -> (str, usize, bool) {
     ret (text[at..stop], stop, true)
 }
 
+// An unsigned, bounded decimal field. Checking before multiplication makes long
+// untrusted TZif footer fields invalid instead of overflowing i64.
+fn rule_number(text: str, at: usize, maximum: i64) -> (i64, usize, bool) {
+    var cursor = at
+    var value = 0i64
+    while cursor < text.len && str.is_ascii_digit(text[cursor]) {
+        let digit = i64(text[cursor] - 48u8)
+        if digit > maximum || value > (maximum - digit) / 10i64 { ret (0i64, at, false) }
+        value = value * 10i64 + digit
+        cursor += 1usize
+    }
+    if cursor == at { ret (0i64, at, false) }
+    ret (value, cursor, true)
+}
+
 // `[+-]h[:m[:s]]` in seconds; POSIX offsets are west-positive, so the caller negates.
-fn rule_time(text: str, at: usize) -> (i64, usize, bool) {
+fn rule_time(text: str, at: usize, maximum_hours: i64) -> (i64, usize, bool) {
     var cursor = at
     var sign = 1i64
     if cursor < text.len && (text[cursor] == 43u8 || text[cursor] == 45u8) {
@@ -75,15 +90,11 @@ fn rule_time(text: str, at: usize) -> (i64, usize, bool) {
         cursor += 1usize
     }
     var parts: [3]i64 = zero
+    let maximum: [3]i64 = [3]i64{ maximum_hours, 59i64, 59i64 }
     var index = 0usize
     while index < 3usize {
-        var digits = cursor
-        var value = 0i64
-        while digits < text.len && str.is_ascii_digit(text[digits]) {
-            value = value * 10i64 + i64(text[digits] - 48u8)
-            digits += 1usize
-        }
-        if digits == cursor { ret (0i64, at, false) }
+        let (value, digits, good) = rule_number(text, cursor, maximum[index])
+        if !good { ret (0i64, at, false) }
         parts[index] = value
         cursor = digits
         index += 1usize
@@ -98,15 +109,11 @@ fn rule_date(text: str, at: usize) -> (i64, i64, i64, i64, usize, bool) {
     if at >= text.len || text[at] != 77u8 { ret (0i64, 0i64, 0i64, 0i64, at, false) }
     var cursor = at + 1usize
     var fields: [3]i64 = zero
+    let maximum: [3]i64 = [3]i64{ 12i64, 5i64, 6i64 }
     var index = 0usize
     while index < 3usize {
-        var digits = cursor
-        var value = 0i64
-        while digits < text.len && str.is_ascii_digit(text[digits]) {
-            value = value * 10i64 + i64(text[digits] - 48u8)
-            digits += 1usize
-        }
-        if digits == cursor { ret (0i64, 0i64, 0i64, 0i64, at, false) }
+        let (value, digits, good) = rule_number(text, cursor, maximum[index])
+        if !good { ret (0i64, 0i64, 0i64, 0i64, at, false) }
         fields[index] = value
         cursor = digits
         index += 1usize
@@ -115,10 +122,10 @@ fn rule_date(text: str, at: usize) -> (i64, i64, i64, i64, usize, bool) {
             cursor += 1usize
         }
     }
-    if fields[0] < 1i64 || fields[0] > 12i64 || fields[1] < 1i64 || fields[1] > 5i64 || fields[2] > 6i64 { ret (0i64, 0i64, 0i64, 0i64, at, false) }
+    if fields[0] < 1i64 || fields[1] < 1i64 { ret (0i64, 0i64, 0i64, 0i64, at, false) }
     var at_time = 7200i64
     if cursor < text.len && text[cursor] == 47u8 {
-        let (parsed, after, good) = rule_time(text, cursor + 1usize)
+        let (parsed, after, good) = rule_time(text, cursor + 1usize, 167i64)
         if !good { ret (0i64, 0i64, 0i64, 0i64, at, false) }
         at_time = parsed
         cursor = after
@@ -130,7 +137,7 @@ fn parse_rule(text: str) -> (Rule, bool) {
     var rule: Rule = zero
     let (std_name, after_std, std_good) = rule_name(text, 0usize)
     if !std_good { ret (rule, false) }
-    let (std_west, after_offset, offset_good) = rule_time(text, after_std)
+    let (std_west, after_offset, offset_good) = rule_time(text, after_std, 24i64)
     if !offset_good { ret (rule, false) }
     rule.std_name = std_name
     rule.std_offset = i32(0i64 - std_west)
@@ -142,7 +149,7 @@ fn parse_rule(text: str) -> (Rule, bool) {
     rule.dst_offset = rule.std_offset + 3600i32
     var cursor = after_dst
     if cursor < text.len && text[cursor] != 44u8 {
-        let (dst_west, after_dst_offset, dst_offset_good) = rule_time(text, cursor)
+        let (dst_west, after_dst_offset, dst_offset_good) = rule_time(text, cursor, 24i64)
         if !dst_offset_good { ret (rule, false) }
         rule.dst_offset = i32(0i64 - dst_west)
         cursor = after_dst_offset
