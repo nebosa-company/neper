@@ -19,6 +19,34 @@ fn same(a: []const u8, b: []const u8) -> bool {
     ret true
 }
 
+// Deliberately returns its final bytes with io.End, which io.Reader permits.
+type EndingReader = struct {
+    data: []const u8,
+    off: usize,
+}
+
+fn ending_read(ctx: *void, dst: []u8) -> (usize, err) {
+    var state = mem.cast[*EndingReader](ctx)
+    if dst.len == 0usize { ret (0usize, ok) }
+    if state.off >= state.data.len { ret (0usize, io.End) }
+    var take = state.data.len - state.off
+    if take > dst.len { take = dst.len }
+    mem.copy[u8](dst[..take], state.data[state.off..state.off + take])
+    state.off += take
+    if state.off == state.data.len { ret (take, io.End) }
+    ret (take, ok)
+}
+
+fn drain(r: *gzip.Reader, out: []u8) -> (usize, err) {
+    var total = 0usize
+    while true {
+        let (count, read_error) = gzip.read(r, out[total..])
+        total += count
+        if read_error == io.End { ret (total, ok) }
+        if read_error != ok { ret (total, read_error) }
+    }
+}
+
 // Reads everything through a gzip reader over `framed` in 100-byte pulls.
 fn inflate(storage: []u8, framed: []const u8, out: []u8, limit: u64) -> (usize, err) {
     var source_state = io.SliceReader { data: framed, off: 0usize }
@@ -116,5 +144,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e8 != io.TooSmall { os.exit(16) }
     let (n7, e9) = inflate(storage, framed[0..80], out, 1000000u64)
     if e9 != gzip.Invalid { os.exit(17) }
+    // A private refill can contain later members and enclosing bytes. They must
+    // survive a final read that returns both bytes and io.End.
+    var joined: [183]u8 = zero
+    mem.copy[u8](joined[..91usize], framed[..])
+    mem.copy[u8](joined[91usize..182usize], framed[..])
+    joined[182usize] = 33u8
+    var ending = EndingReader { data: joined[..], off: 0usize }
+    let (first0, first_error) = gzip.reader(storage, io.Reader { ctx: mem.cast[*void](&ending), read: ending_read }, 1000000u64)
+    if first_error != ok { os.exit(23) }
+    var first = first0
+    let (first_count, first_read_error) = drain(&first, out)
+    if first_read_error != ok || !same(out[..first_count], text) { os.exit(24) }
+    if ending.off != joined.len { os.exit(25) }
+    let (second_source, remaining_error) = gzip.remaining(&first)
+    if remaining_error != ok { os.exit(26) }
+    let (storage2, storage2_error) = aligned(a, needed)
+    if storage2_error != ok { os.exit(27) }
+    let (second0, second_error) = gzip.reader(storage2, second_source, 1000000u64)
+    if second_error != ok { os.exit(28) }
+    var second = second0
+    let (second_count, second_read_error) = drain(&second, out)
+    if second_read_error != ok || !same(out[..second_count], text) { os.exit(29) }
+    var (suffix_source, suffix_error) = gzip.remaining(&second)
+    if suffix_error != ok { os.exit(30) }
+    var suffix: [2]u8 = zero
+    let (suffix_count, suffix_read_error) = io.read(&suffix_source, suffix[..])
+    if suffix_read_error != ok || suffix_count != 1usize || suffix[0usize] != 33u8 { os.exit(31) }
+    let (end_count, end_error) = io.read(&suffix_source, suffix[..])
+    if end_count != 0usize || end_error != io.End { os.exit(32) }
     ret ok
 }

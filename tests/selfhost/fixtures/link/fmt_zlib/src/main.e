@@ -17,6 +17,46 @@ fn same(a: []const u8, b: []const u8) -> bool {
     ret true
 }
 
+// Deliberately returns its final bytes with io.End, which io.Reader permits.
+type EndingReader = struct {
+    data: []const u8,
+    off: usize,
+}
+
+fn ending_read(ctx: *void, dst: []u8) -> (usize, err) {
+    var state = mem.cast[*EndingReader](ctx)
+    if dst.len == 0usize { ret (0usize, ok) }
+    if state.off >= state.data.len { ret (0usize, io.End) }
+    var take = state.data.len - state.off
+    if take > dst.len { take = dst.len }
+    mem.copy[u8](dst[..take], state.data[state.off..state.off + take])
+    state.off += take
+    if state.off == state.data.len { ret (take, io.End) }
+    ret (take, ok)
+}
+
+fn drain(r: *zlib.Reader, out: []u8) -> (usize, err) {
+    var total = 0usize
+    while true {
+        let (count, read_error) = zlib.read(r, out[total..])
+        total += count
+        if read_error == io.End { ret (total, ok) }
+        if read_error != ok { ret (total, read_error) }
+    }
+}
+
+fn read_all(source: *io.Reader, out: []u8) -> (usize, err) {
+    var total = 0usize
+    while true {
+        if total == out.len { ret (total, io.TooSmall) }
+        let (count, read_error) = io.read(source, out[total..])
+        total += count
+        if read_error == io.End { ret (total, ok) }
+        if read_error != ok { ret (total, read_error) }
+        if count == 0usize { ret (total, io.NoProgress) }
+    }
+}
+
 // Reads everything through a zlib reader over `framed` in 100-byte pulls.
 fn inflate(storage: []u8, framed: []const u8, out: []u8, limit: u64) -> (usize, err) {
     var source_state = io.SliceReader { data: framed, off: 0usize }
@@ -91,5 +131,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e8 != io.TooSmall { os.exit(16) }
     let (n7, e9) = inflate(storage, framed[0..60], out, 1000000u64)
     if e9 != zlib.Invalid { os.exit(17) }
+    // The decoder can hold suffix bytes alongside the four-byte trailer. Keep
+    // those bytes available even when the source returns data and io.End together.
+    var suffixed: [73]u8 = zero
+    mem.copy[u8](suffixed[..70usize], framed[..])
+    suffixed[70usize] = 120u8
+    suffixed[71usize] = 121u8
+    suffixed[72usize] = 122u8
+    var ending = EndingReader { data: suffixed[..], off: 0usize }
+    let (r8, e10) = zlib.reader(storage, io.Reader { ctx: mem.cast[*void](&ending), read: ending_read }, 1000000u64)
+    if e10 != ok { os.exit(18) }
+    var r8_ready = r8
+    let (n8, e11) = drain(&r8_ready, out)
+    if e11 != ok || !same(out[..n8], text) { os.exit(19) }
+    if ending.off != suffixed.len { os.exit(20) }
+    var (suffix_source, suffix_error) = zlib.remaining(&r8_ready)
+    if suffix_error != ok { os.exit(21) }
+    var suffix: [4]u8 = zero
+    let (suffix_count, suffix_read_error) = read_all(&suffix_source, suffix[..])
+    if suffix_read_error != ok || suffix_count != 3usize || suffix[0usize] != 120u8 || suffix[1usize] != 121u8 || suffix[2usize] != 122u8 { os.exit(22) }
+    let (end_count, end_error) = io.read(&suffix_source, suffix[..])
+    if end_count != 0usize || end_error != io.End { os.exit(23) }
     ret ok
 }

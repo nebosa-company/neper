@@ -3,7 +3,7 @@
 // compares the big-endian Adler-32 trailer before answering `io.End`; a writer that
 // puts the 0x78 0x9c header first, deflates through a 4 KiB staging buffer and
 // writes the trailer on `finish`. A preset dictionary (FDICT) is `Invalid`; output
-// past `output_limit` is `deflate.TooLarge`.
+// past `output_limit` is `deflate.TooLarge`. `remaining` exposes post-trailer bytes.
 use e.io
 use e.mem
 use e.algo.deflate as deflate
@@ -28,6 +28,7 @@ type ReaderState = struct {
     produced: u64,
     output_limit: u64,
     source_ended: bool,
+    pending_error: err,
 }
 
 type WriterState = struct {
@@ -74,6 +75,7 @@ fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err) 
     s.produced = 0u64
     s.output_limit = output_limit
     s.source_ended = false
+    s.pending_error = ok
     var r: Reader = zero
     r.state = mem.cast[*void](s)
     ret (r, ok)
@@ -81,12 +83,23 @@ fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err) 
 
 // Refills the input buffer from the source; false at its end.
 fn fill(s: *ReaderState) -> (bool, err) {
+    if s.pending_error != ok {
+        let pending = s.pending_error
+        s.pending_error = ok
+        if pending == io.End { ret (false, ok) }
+        ret (false, pending)
+    }
     let (count, read_error) = io.read(&s.source, s.input)
-    if read_error == io.End { ret (false, ok) }
-    if read_error != ok { ret (false, read_error) }
     s.in_at = 0usize
     s.in_len = count
-    ret (count > 0usize, ok)
+    if read_error == io.End { s.source_ended = true }
+    if count > 0usize {
+        if read_error != ok { s.pending_error = read_error }
+        ret (true, ok)
+    }
+    if read_error == io.End { ret (false, ok) }
+    if read_error != ok { ret (false, read_error) }
+    ret (false, io.NoProgress)
 }
 
 fn next_byte(s: *ReaderState) -> (u8, err) {
@@ -98,6 +111,31 @@ fn next_byte(s: *ReaderState) -> (u8, err) {
     let byte = s.input[s.in_at]
     s.in_at += 1usize
     ret (byte, ok)
+}
+
+// The unread bytes after a complete zlib stream. The returned reader borrows
+// this reader's storage, so it must be drained before that storage is reused.
+fn remaining(source_reader: *Reader) -> (io.Reader, err) {
+    let s = mem.cast[*ReaderState](source_reader.state)
+    if s.stage != 3u32 { ret (zero, Invalid) }
+    ret (io.Reader { ctx: mem.cast[*void](s), read: remaining_read }, ok)
+}
+
+fn remaining_read(ctx: *void, dst: []u8) -> (usize, err) {
+    let s = mem.cast[*ReaderState](ctx)
+    if dst.len == 0usize { ret (0usize, ok) }
+    let held = deflate.leftover(&s.decoder, dst)
+    if held > 0usize { ret (held, ok) }
+    if s.in_at < s.in_len {
+        var take = s.in_len - s.in_at
+        if take > dst.len { take = dst.len }
+        mem.copy[u8](dst[..take], s.input[s.in_at..s.in_at + take])
+        s.in_at += take
+        ret (take, ok)
+    }
+    if s.pending_error != ok { ret (0usize, s.pending_error) }
+    let (count, read_error) = io.read(&s.source, dst)
+    ret (count, read_error)
 }
 
 fn adler_update(a_in: u32, b_in: u32, data: []const u8) -> (u32, u32) {
@@ -147,7 +185,7 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
         if written > 0usize { ret (written, ok) }
     }
     // The trailer: whatever the decoder over-read comes first.
-    var trailer: [8]u8 = zero
+    var trailer: [4]u8 = zero
     let held = deflate.leftover(&s.decoder, trailer[0..])
     var i = held
     while i < 4usize {
