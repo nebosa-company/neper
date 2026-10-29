@@ -36,6 +36,7 @@ error Unexpected
 error Order
 error Unmet
 error BadIndex
+error TooManyArgs
 
 fn mock(expectations: []Expectation, calls: []Call) -> Mock {
     ret Mock { expectations: expectations, count: 0usize, calls: calls, logged: 0usize, chain: 0u32 }
@@ -145,6 +146,9 @@ fn scripted(e: *const Expectation) -> i64 {
 
 // The double's method body: record the call and answer the scripted value.
 fn call(m: *Mock, method: u32, args: []const i64) -> (i64, err) {
+    // Calls and expectations both have fixed four-slot argument records. Refuse an oversized
+    // call before it can partly match an expectation or be logged with its tail missing.
+    if args.len > MAX_ARGS { ret (0i64, TooManyArgs) }
     if m.logged >= m.calls.len { ret (0i64, Full) }
     var record: Call = zero
     record.method = method
