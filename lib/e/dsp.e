@@ -301,7 +301,7 @@ fn window(kind: Window, n: usize, out: []f64) -> err {
 // A windowed-sinc low-pass of `taps` coefficients with unit DC gain
 // (SciPy's `firwin(taps, cutoff, window=kind)`).
 fn design_windowed_sinc(taps: usize, cutoff: f64, kind: Window, out: []f64) -> err {
-    if taps == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
+    if taps == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
     let window_error = window(kind, taps, out)
     if window_error != ok { ret window_error }
     let centre = f64(taps - 1usize) / 2.0f64
@@ -618,7 +618,7 @@ fn finish_lowpass(zr: []f64, zi: []f64, pr: []f64, pi: []f64, gain: f64, cutoff:
 // A Butterworth low-pass of `order` at `cutoff` (Nyquist fraction) into `b`,
 // `a` (`order + 1` entries each); `scratch.len >= 12 * (order + 1)`.
 fn design_butterworth(order: usize, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err {
-    if order == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
+    if order == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
     if scratch.len < 12usize * (order + 1usize) { ret TooSmall }
     var pr = scratch[..order]
     var pi = scratch[order..2usize * order]
@@ -635,7 +635,7 @@ fn design_butterworth(order: usize, cutoff: f64, b: []f64, a: []f64, scratch: []
 // A Chebyshev type I low-pass with `ripple_db` passband ripple; storage as
 // `design_butterworth`.
 fn design_chebyshev(order: usize, ripple_db: f64, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err {
-    if order == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 || ripple_db <= 0.0f64 { ret Invalid }
+    if order == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 || !finite_f64(ripple_db) || ripple_db <= 0.0f64 { ret Invalid }
     if scratch.len < 12usize * (order + 1usize) { ret TooSmall }
     var pr = scratch[..order]
     var pi = scratch[order..2usize * order]
@@ -735,7 +735,7 @@ fn poly_roots(c: []const f64, rr: []f64, ri: []f64) -> err {
 
 // A Bessel low-pass (SciPy's `norm="phase"`); storage as `design_butterworth`.
 fn design_bessel(order: usize, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err {
-    if order == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
+    if order == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
     if scratch.len < 12usize * (order + 1usize) { ret TooSmall }
     var pr = scratch[..order]
     var pi = scratch[order..2usize * order]
@@ -851,7 +851,7 @@ fn ellipdeg(n: usize, m1: f64) -> f64 {
 // `attenuation_db` stopband depth, as SciPy's `ellip`; storage as
 // `design_butterworth`.
 fn design_elliptic(order: usize, ripple_db: f64, attenuation_db: f64, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err {
-    if order == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 || ripple_db <= 0.0f64 || attenuation_db <= ripple_db { ret Invalid }
+    if order == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 || !finite_f64(ripple_db) || ripple_db <= 0.0f64 || !finite_f64(attenuation_db) || attenuation_db <= ripple_db { ret Invalid }
     if scratch.len < 12usize * (order + 1usize) { ret TooSmall }
     let nz = 2usize * (order / 2usize)
     var zr = scratch[..nz]
@@ -1232,8 +1232,14 @@ fn dtw(a: []const f64, b: []const f64, cost: []f64) -> (f64, err) {
 // The warping path of a filled `dtw` matrix from `(0, 0)` to the end, as index
 // pairs into `path_a`/`path_b` (at most `na + nb - 1`); answers its length.
 fn dtw_path(cost: []const f64, na: usize, nb: usize, path_a: []usize, path_b: []usize) -> (usize, err) {
-    if na == 0usize || nb == 0usize || cost.len < na * nb { ret (0usize, Invalid) }
-    if path_a.len < na + nb - 1usize || path_b.len < na + nb - 1usize { ret (0usize, TooSmall) }
+    if na == 0usize || nb == 0usize { ret (0usize, Invalid) }
+    let maximum = 0usize -% 1usize
+    if na > maximum / nb { ret (0usize, Invalid) }
+    let cells = na * nb
+    if cost.len < cells { ret (0usize, Invalid) }
+    if na - 1usize > maximum - nb { ret (0usize, TooSmall) }
+    let needed = na - 1usize + nb
+    if path_a.len < needed || path_b.len < needed { ret (0usize, TooSmall) }
     var i = na - 1usize
     var j = nb - 1usize
     var count = 0usize
@@ -1413,7 +1419,7 @@ fn resample_polyphase(x: []const f64, up: usize, down: usize, taps: []const f64,
 // Band-limited resampling by a Hann-windowed sinc of `half_width` input
 // samples each side: `out[i]` is the signal at input time `i / ratio`.
 fn resample_sinc(x: []const f64, ratio: f64, half_width: usize, out: []f64) -> err {
-    if ratio <= 0.0f64 || half_width == 0usize { ret Invalid }
+    if ratio <= 0.0f64 || half_width == 0usize || half_width > (0usize -% 1usize) / 2usize { ret Invalid }
     var i = 0usize
     while i < out.len {
         let t = f64(i) / ratio
