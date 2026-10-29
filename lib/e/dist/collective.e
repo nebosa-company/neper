@@ -13,7 +13,9 @@ type Collective = struct { vectors: []f64, n: usize, d: usize }
 error Invalid
 
 fn collective(vectors: []f64, n: usize, d: usize) -> (Collective, err) {
-    if n == 0usize || vectors.len < n * d { ret (zero, Invalid) }
+    if n == 0usize { ret (zero, Invalid) }
+    if d != 0usize && n > ~0usize / d { ret (zero, Invalid) }
+    if vectors.len < n * d { ret (zero, Invalid) }
     ret (Collective { vectors: vectors, n: n, d: d }, ok)
 }
 

@@ -63,6 +63,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !rows_equal(v[..], 4usize, 10usize, maxes[..]) { os.exit(1i32) }
     let (_, too_small) = collective.collective(v[..], 5usize, 10usize)
     if too_small != collective.Invalid { os.exit(1i32) }
+    let dimensions_wrap = ~0usize / 2usize + 1usize
+    let (_, overflowed_shape) = collective.collective(v[..], dimensions_wrap, 2usize)
+    if overflowed_shape != collective.Invalid { os.exit(1i32) }
 
     // 2: binomial broadcast from root 2 of five nodes.
     var w: [50]f64 = zero
