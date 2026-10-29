@@ -3,7 +3,8 @@
 // with every sample within a few steps of libjpeg's; an encode of RGBA, BGRA and
 // greyscale decoded back within the error libjpeg itself makes on this checkerboard
 // (18 at quality 95, 98 at 50); refusals for a bad signature, a bound
-// past the options, a progressive request and an unsupported source format.
+// past the options, a progressive request, an unsupported source format, and
+// an EOI marker placed before a scan has supplied all of its entropy bits.
 // `reference.py` regenerates the data.
 
 use e.fmt.jpeg
@@ -164,6 +165,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     frame.width = 1usize
     frame.height = 16385usize
     if jpeg.within(frame, raised) != jpeg.TooLarge { os.exit(151i32) }
+
+    // An early marker is not entropy padding. The decoder must refuse the scan
+    // instead of fabricating zero bits until it reaches the declared MCU count.
+    let (truncated, truncated_alloc) = mem.alloc[u8](a, baseline444_jpg().len)
+    if truncated_alloc != ok { os.exit(152i32) }
+    mem.copy[u8](truncated, baseline444_jpg())
+    var sos_at = 0usize
+    while sos_at + 3usize < truncated.len && !(truncated[sos_at] == 255u8 && truncated[sos_at + 1usize] == 218u8) { sos_at += 1usize }
+    if sos_at + 3usize >= truncated.len { os.exit(153i32) }
+    let sos_length = usize(truncated[sos_at + 2usize]) * 256usize + usize(truncated[sos_at + 3usize])
+    let entropy_at = sos_at + 2usize + sos_length
+    if entropy_at + 2usize >= truncated.len { os.exit(154i32) }
+    truncated[entropy_at + 1usize] = 255u8
+    truncated[entropy_at + 2usize] = 217u8
+    let (_, early_eoi_error) = jpeg.decode(a, reader_of(&state, truncated), options())
+    if early_eoi_error != jpeg.Invalid { os.exit(155i32) }
 
     try io.print("fmt jpeg ok\n")
     ret ok

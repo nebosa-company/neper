@@ -93,46 +93,50 @@ type Bits = struct { data: []const u8, at: usize, cache: u32, count: u32, marker
 // ------------------------------------------------------------------ bit reading
 
 fn fill(b: *Bits) {
-    while b.count <= 24u32 {
-        var byte = 0u32
-        if !b.marker_hit && b.at < b.data.len {
-            byte = u32(b.data[b.at])
-            if byte == 255u32 {
-                var next = 0u32
-                if b.at + 1usize < b.data.len { next = u32(b.data[b.at + 1usize]) }
-                if next == 0u32 {
-                    b.at += 2usize
-                } else {
-                    b.marker_hit = true
-                    byte = 0u32
-                }
-            } else {
-                b.at += 1usize
+    while b.count <= 24u32 && !b.marker_hit {
+        if b.at >= b.data.len {
+            b.marker_hit = true
+            break
+        }
+        let byte = u32(b.data[b.at])
+        if byte == 255u32 {
+            if b.at + 1usize >= b.data.len || b.data[b.at + 1usize] != 0u8 {
+                b.marker_hit = true
+                break
             }
+            b.at += 2usize
+        } else {
+            b.at += 1usize
         }
         b.cache = b.cache | (byte << (24u32 - b.count))
         b.count += 8u32
     }
 }
 
-fn take(b: *Bits, n: u32) -> u32 {
-    if n == 0u32 { ret 0u32 }
+fn take(b: *Bits, n: u32) -> (u32, err) {
+    if n == 0u32 { ret (0u32, ok) }
     fill(b)
+    if b.count < n { ret (0u32, Invalid) }
     let v = b.cache >> (32u32 - n)
     b.cache = b.cache << n
     b.count -= n
-    ret v
+    ret (v, ok)
 }
 
-fn take_bit(b: *Bits) -> u32 {
-    ret take(b, 1u32)
+fn take_bit(b: *Bits) -> (u32, err) {
+    let (bit, bit_error) = take(b, 1u32)
+    ret (bit, bit_error)
 }
 
 fn decode_symbol(b: *Bits, h: *const Huffman) -> (u32, err) {
-    var code = i32(take_bit(b))
+    let (first, first_error) = take_bit(b)
+    if first_error != ok { ret (0u32, first_error) }
+    var code = i32(first)
     var length = 1usize
     while length <= 16usize && code > h.maxcode[length] {
-        code = (code << 1u32) | i32(take_bit(b))
+        let (bit, bit_error) = take_bit(b)
+        if bit_error != ok { ret (0u32, bit_error) }
+        code = (code << 1u32) | i32(bit)
         length += 1usize
     }
     if length > 16usize { ret (0u32, Invalid) }
@@ -147,8 +151,18 @@ fn extend(value: u32, bits: u32) -> i32 {
     ret i32(value)
 }
 
+// A decoded scan may leave only the padding bits of its final entropy byte.
+// Its next unread byte must be an unstuffed marker, never more entropy data.
+fn scan_boundary(b: *Bits) -> err {
+    if b.count > 7u32 { ret Invalid }
+    if b.at + 1usize >= b.data.len || b.data[b.at] != 255u8 || b.data[b.at + 1usize] == 0u8 { ret Invalid }
+    ret ok
+}
+
 // After a restart marker: the bit buffer starts over at the byte after it.
 fn restart(b: *Bits) -> err {
+    let boundary_error = scan_boundary(b)
+    if boundary_error != ok { ret boundary_error }
     b.cache = 0u32
     b.count = 0u32
     b.marker_hit = false
@@ -209,11 +223,15 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             let (t, t_error) = decode_symbol(b, &dc[c.dc_table])
             if t_error != ok { ret t_error }
             if t > 16u32 { ret Invalid }
-            let diff = extend(take(b, t), t)
+            let (dc_bits, dc_bits_error) = take(b, t)
+            if dc_bits_error != ok { ret dc_bits_error }
+            let diff = extend(dc_bits, t)
             c.predictor += diff
             c.coefficients[base] = c.predictor << s.al
-        } else if take_bit(b) != 0u32 {
-            c.coefficients[base] = c.coefficients[base] | (1i32 << s.al)
+        } else {
+            let (dc_refine, dc_refine_error) = take_bit(b)
+            if dc_refine_error != ok { ret dc_refine_error }
+            if dc_refine != 0u32 { c.coefficients[base] = c.coefficients[base] | (1i32 << s.al) }
         }
         if s.se == 0usize { ret ok }
     }
@@ -234,7 +252,11 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             if size == 0u32 {
                 if r < 15u32 {
                     s.eobrun = (1u32 << r) - 1u32
-                    if r > 0u32 { s.eobrun += take(b, r) }
+                    if r > 0u32 {
+                        let (run_bits, run_bits_error) = take(b, r)
+                        if run_bits_error != ok { ret run_bits_error }
+                        s.eobrun += run_bits
+                    }
                     break
                 }
                 k += 16usize
@@ -242,7 +264,9 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             }
             k += usize(r)
             if k > 63usize { ret Invalid }
-            c.coefficients[base + zz(k)] = extend(take(b, size), size) << s.al
+            let (ac_bits, ac_bits_error) = take(b, size)
+            if ac_bits_error != ok { ret ac_bits_error }
+            c.coefficients[base + zz(k)] = extend(ac_bits, size) << s.al
             k += 1usize
         }
         ret ok
@@ -261,17 +285,25 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             if size == 0u32 {
                 if r < 15i32 {
                     s.eobrun = (1u32 << u32(r))
-                    if r > 0i32 { s.eobrun += take(b, u32(r)) }
+                    if r > 0i32 {
+                        let (refine_run_bits, refine_run_bits_error) = take(b, u32(r))
+                        if refine_run_bits_error != ok { ret refine_run_bits_error }
+                        s.eobrun += refine_run_bits
+                    }
                     break
                 }
             } else {
                 if size != 1u32 { ret Invalid }
-                if take_bit(b) != 0u32 { value = p1 } else { value = m1 }
+                let (new_sign, new_sign_error) = take_bit(b)
+                if new_sign_error != ok { ret new_sign_error }
+                if new_sign != 0u32 { value = p1 } else { value = m1 }
             }
             while k <= s.se {
                 let at = base + zz(k)
                 if c.coefficients[at] != 0i32 {
-                    if take_bit(b) != 0u32 {
+                    let (existing_bit, existing_bit_error) = take_bit(b)
+                    if existing_bit_error != ok { ret existing_bit_error }
+                    if existing_bit != 0u32 {
                         let coef = c.coefficients[at]
                         if (coef & p1) == 0i32 {
                             if coef >= 0i32 { c.coefficients[at] = coef + p1 } else { c.coefficients[at] = coef + m1 }
@@ -292,10 +324,14 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
     if s.eobrun > 0u32 {
         while k <= s.se {
             let at = base + zz(k)
-            if c.coefficients[at] != 0i32 && take_bit(b) != 0u32 {
-                let coef = c.coefficients[at]
-                if (coef & p1) == 0i32 {
-                    if coef >= 0i32 { c.coefficients[at] = coef + p1 } else { c.coefficients[at] = coef + m1 }
+            if c.coefficients[at] != 0i32 {
+                let (eob_bit, eob_bit_error) = take_bit(b)
+                if eob_bit_error != ok { ret eob_bit_error }
+                if eob_bit != 0u32 {
+                    let coef = c.coefficients[at]
+                    if (coef & p1) == 0i32 {
+                        if coef >= 0i32 { c.coefficients[at] = coef + p1 } else { c.coefficients[at] = coef + m1 }
+                    }
                 }
             }
             k += 1usize
@@ -747,6 +783,8 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
         var b = Bits { data: dec.data, at: dec.at + length, cache: 0u32, count: 0u32, marker_hit: false }
         let decode_error = decode_scan(&b, f, &s, dec.dc[0..], dec.ac[0..])
         if decode_error != ok { ret (zero, decode_error) }
+        let boundary_error = scan_boundary(&b)
+        if boundary_error != ok { ret (zero, boundary_error) }
         scans += 1usize
         // Resume the marker walk after the entropy data.
         dec.at = b.at
@@ -814,7 +852,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
 // Continues the marker walk from `dec.at` after a scan's entropy data.
 fn parse_headers_from(dec: *Decoder) -> err {
     while true {
-        while dec.at < dec.data.len && dec.data[dec.at] != 255u8 { dec.at += 1usize }
+        if dec.at >= dec.data.len || dec.data[dec.at] != 255u8 { ret Invalid }
         while dec.at < dec.data.len && dec.data[dec.at] == 255u8 { dec.at += 1usize }
         if dec.at >= dec.data.len { ret Invalid }
         let marker = u32(dec.data[dec.at])
