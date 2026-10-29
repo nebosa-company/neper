@@ -3050,7 +3050,7 @@ fn cocoa_pump(timeout_ns: i64) {
 // for every host), and the candidate window is placed at the window's top left.
 type CocoaRange = struct { location: usize, length: usize }
 type CocoaTextImp = union { function: fn(usize, usize, usize, usize, usize) -> usize, bits: usize }
-type CocoaTextImp6 = union { function: fn(usize, usize, usize, usize, usize, usize), bits: usize }
+type CocoaTextImp7 = union { function: fn(usize, usize, usize, usize, usize, usize, usize), bits: usize }
 type CocoaTextImp2 = union { function: fn(usize, usize) -> usize, bits: usize }
 type CocoaRangeImp = union { function: extern fn(usize, usize) -> CocoaRange, bits: usize }
 type CocoaRectImp = union { function: extern fn(usize, usize, usize, usize, usize) -> CgRect, bits: usize }
@@ -3063,6 +3063,7 @@ extern fn cocoa_set_class(object: usize, class: usize) -> usize
 
 var cocoa_text_class: usize = zero
 var cocoa_marked: [16]bool = zero
+var cocoa_marked_ranges: [16]CocoaRange = zero
 
 fn cocoa_view_slot(view: usize) -> usize {
     var at = 0usize
@@ -3079,6 +3080,7 @@ fn view_insert_text(this: usize, command: usize, string: usize, location: usize,
     let slot = cocoa_view_slot(this)
     if slot >= COCOA_TABLE { ret 0usize }
     cocoa_marked[slot] = false
+    cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: 0usize }
     var plain = string
     let attributed = msg1(string, cocoa_sel("respondsToSelector:\x00"), cocoa_sel("string\x00"))
     if attributed & 255usize != 0usize { plain = msg0(string, cocoa_sel("string\x00")) }
@@ -3089,15 +3091,27 @@ fn view_insert_text(this: usize, command: usize, string: usize, location: usize,
 }
 
 @cc(c)
-fn view_set_marked(this: usize, command: usize, string: usize, selected: usize, length: usize, replaced: usize) {
+fn view_set_marked(this: usize, command: usize, string: usize, selected: usize, length: usize, replaced: usize, replaced_length: usize) {
     let slot = cocoa_view_slot(this)
-    if slot < COCOA_TABLE { cocoa_marked[slot] = true }
+    if slot < COCOA_TABLE {
+        var plain = string
+        let attributed = msg1(string, cocoa_sel("respondsToSelector:\x00"), cocoa_sel("string\x00"))
+        if attributed & 255usize != 0usize { plain = msg0(string, cocoa_sel("string\x00")) }
+        // The view has no persistent text storage. Its marked text is the transient
+        // input-method string, whose range starts at its synthetic storage origin.
+        let marked_length = msg0(plain, cocoa_sel("length\x00"))
+        cocoa_marked[slot] = marked_length != 0usize
+        cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: marked_length }
+    }
 }
 
 @cc(c)
 fn view_unmark(this: usize, command: usize) -> usize {
     let slot = cocoa_view_slot(this)
-    if slot < COCOA_TABLE { cocoa_marked[slot] = false }
+    if slot < COCOA_TABLE {
+        cocoa_marked[slot] = false
+        cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: 0usize }
+    }
     ret 0usize
 }
 
@@ -3110,6 +3124,8 @@ fn view_has_marked(this: usize, command: usize) -> usize {
 
 @cc(c)
 fn view_marked_range(this: usize, command: usize) -> CocoaRange {
+    let slot = cocoa_view_slot(this)
+    if slot < COCOA_TABLE && cocoa_marked[slot] { ret cocoa_marked_ranges[slot] }
     // NSNotFound when nothing is marked.
     ret CocoaRange { location: 9223372036854775807usize, length: 0usize }
 }
@@ -3150,7 +3166,7 @@ fn cocoa_make_text_class(view: usize) -> usize {
     if class == 0usize { ret 0usize }
     var insert: CocoaTextImp = zero
     insert.function = view_insert_text
-    var marked: CocoaTextImp6 = zero
+    var marked: CocoaTextImp7 = zero
     marked.function = view_set_marked
     var unmark: CocoaTextImp2 = zero
     unmark.function = view_unmark
@@ -3336,6 +3352,8 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
         let opaque = msg_flag(layer, cocoa_sel("setOpaque:\x00"), 1i32)
     }
     cocoa_windows[slot] = window
+    cocoa_marked[slot] = false
+    cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: 0usize }
     let delegate = cocoa_make_delegate()
     if delegate != 0usize { let delegated = msg1(window, cocoa_sel("setDelegate:\x00"), delegate) }
     let text_class = cocoa_make_text_class(msg0(window, cocoa_sel("contentView\x00")))
@@ -3374,6 +3392,8 @@ fn window_close(w: Window) -> err {
     let closed = msg0(window, cocoa_sel("close\x00"))
     let released = msg0(window, cocoa_sel("release\x00"))
     cocoa_windows[slot] = 0usize
+    cocoa_marked[slot] = false
+    cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: 0usize }
     cocoa_layers[slot] = 0usize
     cocoa_resize_handlers[slot] = 0usize
     // `[window close]` may synchronously queue its Close request, and the pump may
