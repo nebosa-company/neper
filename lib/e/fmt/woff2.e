@@ -440,17 +440,21 @@ fn reconstruct_glyf(a: *mem.Arena, data: []const u8, loca_len: usize) -> (Glyphs
     var subs: [7]Buf = zero
     k = 0usize
     while k < 7usize {
-        if off + sizes[k] > data.len { ret (zero, Invalid) }
-        subs[k] = Buf { data: data, pos: off, end: off + sizes[k], bad: false }
-        off += sizes[k]
+        if off > data.len { ret (zero, Invalid) }
+        if sizes[k] > data.len - off { ret (zero, Invalid) }
+        let sub_end = off + sizes[k]
+        subs[k] = Buf { data: data, pos: off, end: sub_end, bad: false }
+        off = sub_end
         k += 1usize
     }
     let has_overlap_map = (option & 1u32) != 0u32
     var overlap_map: []const u8 = data[0..0]
     if has_overlap_map {
         let len = (glyph_count + 7usize) >> 3usize
-        if off + len > data.len { ret (zero, Invalid) }
-        overlap_map = data[off..off + len]
+        if off > data.len { ret (zero, Invalid) }
+        if len > data.len - off { ret (zero, Invalid) }
+        let overlap_end = off + len
+        overlap_map = data[off..overlap_end]
     }
     let bbox_map_len = ((glyph_count + 31usize) >> 5usize) << 2usize
     let bbox_map = take(&subs[5], bbox_map_len)

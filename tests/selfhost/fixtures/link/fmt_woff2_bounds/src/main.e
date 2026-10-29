@@ -77,6 +77,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, wrapped) = woff2.transformed_length_add(2147483648usize, 2147483648usize)
     if oversize || cumulative || wrapped { os.exit(5i32) }
 
+    // A transformed glyf blob with its final, unused substream declared as
+    // u32::MAX must not wrap its end back into this small input on wasm32.
+    // The preceding empty-glyph streams make the blob otherwise complete.
+    var wrapped_glyf: [42]u8 = zero
+    wrapped_glyf[5usize] = 1u8
+    put32(wrapped_glyf[..], 8usize, 2u32)
+    put32(wrapped_glyf[..], 28usize, 4u32)
+    put32(wrapped_glyf[..], 32usize, 4294967295u32)
+    let (_, wrapped_glyf_error) = woff2.reconstruct_glyf(a, wrapped_glyf[..], 4usize)
+    if wrapped_glyf_error != woff2.Invalid { os.exit(6i32) }
+
     try io.print("fmt woff2 bounds ok\n")
     ret ok
 }
