@@ -95,6 +95,8 @@ fn checks_clean() -> i32 {
     let (_, a) = arch.add_module(&g, "core", 0u8)
     let (_, b) = arch.add_module(&g, "app", 1u8)
     if a != ok || b != ok { ret 20i32 }
+    let (duplicate, duplicate_error) = arch.add_module(&g, "core", 9u8)
+    if duplicate != arch.NONE || duplicate_error != arch.Duplicate || g.modules != 2usize { ret 25i32 }
     if arch.add_dep(&g, "app", "core") != ok { ret 21i32 }
     var rs: [2]arch.Rule = zero
     rs[0] = arch.Rule { kind: .Layering, from: "", to: "", lo: 0u8, hi: 0u8 }

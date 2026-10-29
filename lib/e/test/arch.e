@@ -29,6 +29,7 @@ type Rule = struct { kind: RuleKind, from: str, to: str, lo: u8, hi: u8 }
 type Violation = struct { rule: usize, module: u32, other: u32 }
 error TooSmall
 error Unknown
+error Duplicate
 
 // `mark` and `stack` hold at least `names.len` entries (cycle detection scratch).
 fn graph(names: []str, layers: []u8, deps_from: []u32, deps_to: []u32, mark: []u8, stack: []u32) -> Graph {
@@ -36,6 +37,11 @@ fn graph(names: []str, layers: []u8, deps_from: []u32, deps_to: []u32, mark: []u
 }
 
 fn add_module(g: *Graph, name: str, layer: u8) -> (u32, err) {
+    var i = 0usize
+    while i < g.modules {
+        if str.eq(g.names[i], name) { ret (NONE, Duplicate) }
+        i += 1usize
+    }
     if g.modules >= g.names.len || g.modules >= g.layers.len { ret (NONE, TooSmall) }
     g.names[g.modules] = name
     g.layers[g.modules] = layer
