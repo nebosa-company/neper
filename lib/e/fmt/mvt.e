@@ -89,8 +89,10 @@ fn decode_geometry(a: *mem.Arena, kind: u8, commands: []const u32) -> ([]Point, 
     if points_error != ok { ret (zero, zero, points_error) }
     let (parts, parts_error) = mem.alloc[usize](a, part_total + 2usize)
     if parts_error != ok { ret (zero, zero, parts_error) }
-    var x = 0i32
-    var y = 0i32
+    // MVT deltas are i32, but a sequence of valid deltas can leave the coordinate range.
+    // Keep the running position wide until each point is checked before narrowing it.
+    var x = 0i64
+    var y = 0i64
     var n = 0usize
     var p = 0usize
     i = 0usize
@@ -108,9 +110,10 @@ fn decode_geometry(a: *mem.Arena, kind: u8, commands: []const u32) -> ([]Point, 
                     parts[p] = n
                     p += 1usize
                 }
-                x = x + unzig(commands[i])
-                y = y + unzig(commands[i + 1usize])
-                points[n] = Point { x: x, y: y }
+                x = x + i64(unzig(commands[i]))
+                y = y + i64(unzig(commands[i + 1usize]))
+                if x < 0i64 - 2147483648i64 || x > 2147483647i64 || y < 0i64 - 2147483648i64 || y > 2147483647i64 { ret (zero, zero, Invalid) }
+                points[n] = Point { x: i32(x), y: i32(y) }
                 n += 1usize
                 i += 2usize
                 k += 1usize

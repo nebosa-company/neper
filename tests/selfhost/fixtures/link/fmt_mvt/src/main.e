@@ -61,5 +61,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if high.kind != mvt.VALUE_UINT || high.unsigned != 9223372036854775808u64 { os.exit(38) }
     if highest.kind != mvt.VALUE_UINT || highest.unsigned != 18446744073709551615u64 { os.exit(39) }
     if small.kind != mvt.VALUE_UINT || small.unsigned != 42u64 || small.integer != 42i64 { os.exit(40) }
+    // Valid i32 deltas may add up outside the Point coordinate range. These must be malformed
+    // geometry, not a checked arithmetic trap or a wrapped point.
+    let beyond_positive: [6]u32 = [6]u32{ 9u32, 4294967294u32, 0u32, 10u32, 2u32, 0u32 }
+    let (_, _, positive_error) = mvt.decode_geometry(a, mvt.KIND_LINE, beyond_positive[..])
+    if positive_error != mvt.Invalid { os.exit(41) }
+    let beyond_negative: [6]u32 = [6]u32{ 9u32, 1u32, 0u32, 10u32, 4294967295u32, 0u32 }
+    let (_, _, negative_error) = mvt.decode_geometry(a, mvt.KIND_LINE, beyond_negative[..])
+    if negative_error != mvt.Invalid { os.exit(42) }
     ret ok
 }
