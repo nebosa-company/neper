@@ -124,6 +124,34 @@ fn main(a: *mem.Arena) -> err {
     let (_, e5) = mdns.announce(a, out[0..], services[..0], false)
     if e5 != mdns.Invalid { ret fail(5i32) }
 
+    // 63 + 63 + 63 + 61-byte labels fill the 255-byte DNS wire-name limit.
+    var long_name: [300]u8 = zero
+    var long_at = 0usize
+    var long_part = 0usize
+    while long_part < 4usize {
+        var long_len = 63usize
+        if long_part == 3usize { long_len = 61usize }
+        var long_char = 0usize
+        while long_char < long_len {
+            long_name[long_at] = 97u8
+            long_at += 1usize
+            long_char += 1usize
+        }
+        if long_part < 3usize {
+            long_name[long_at] = 46u8
+            long_at += 1usize
+        }
+        long_part += 1usize
+    }
+    let (_, boundary_name_error) = mdns.query(out[0..], long_name[..long_at], 12u16, false, zero)
+    if boundary_name_error != ok { ret fail(34i32) }
+    // Extend that final label to 63 bytes: four individually valid labels now exceed the DNS limit.
+    long_name[long_at] = 97u8
+    long_name[long_at + 1usize] = 97u8
+    long_at += 2usize
+    let (_, long_name_error) = mdns.query(out[0..], long_name[..long_at], 12u16, false, zero)
+    if long_name_error != mdns.Invalid { ret fail(35i32) }
+
     // TXT RDATA is limited by the two-byte DNS RDLENGTH field.
     var txt_bytes: [255]u8 = zero
     let txt_value: str = txt_bytes[0..]
