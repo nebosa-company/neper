@@ -158,6 +158,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var w = io.slice_writer(&sink)
     if png.encode(&w, half_view, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Unsupported { os.exit(216i32) }
 
+    // The encoder must refuse dimensions that PNG itself forbids before it checks the final row
+    // length: zero height used to underflow that calculation, while zero/2^31 dimensions could
+    // write an IHDR that this module's decoder rightly rejects.
+    var invalid_image: image.ConstImage = zero
+    invalid_image.width = 1u32
+    invalid_image.height = 0u32
+    invalid_image.stride = 4usize
+    invalid_image.format = .Rgba8
+    invalid_image.alpha = .Straight
+    if png.encode(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(221i32) }
+    if png.encode_adaptive(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(222i32) }
+    invalid_image.width = 0u32
+    invalid_image.height = 1u32
+    invalid_image.stride = 0usize
+    if png.encode(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(223i32) }
+    invalid_image.width = 2147483648u32
+    if png.encode(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(224i32) }
+    invalid_image.width = 1u32
+    invalid_image.height = 2147483648u32
+    if png.encode(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(225i32) }
+
     mem.copy[u8](corrupt, rgba8_png())
     png.put32(corrupt, 16usize, 4097u32)
     png.put32(corrupt, 20usize, 4096u32)

@@ -918,11 +918,14 @@ fn encode_adaptive(writer: *io.Writer, value: image.ConstImage, options: EncodeO
 
 // `adaptive` selects filters per row; `colors` above zero selects indexed output over the palette in `pal`.
 fn encode_with(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, adaptive: bool, pal: []u32, colors: usize) -> err {
+    // Keep encoder and decoder constraints symmetric. In particular, a zero height makes the
+    // old hand-written final-row length expression subtract a stride from zero.
+    if value.width == 0u32 || value.height == 0u32 || value.width > 2147483647u32 || value.height > 2147483647u32 { ret Invalid }
     let (channels, color0, channels_error) = source_channels(value)
     if channels_error != ok { ret channels_error }
-    let (_, size_error) = image.required_bytes(value.width, value.height, value.format, value.stride)
+    let (needed, size_error) = image.required_bytes(value.width, value.height, value.format, value.stride)
     if size_error != ok { ret Invalid }
-    if value.pixels.len < value.stride * usize(value.height) - value.stride + usize(value.width) * image.bytes_per_pixel(value.format) { ret Invalid }
+    if value.pixels.len < needed { ret Invalid }
     var color = color0
     var depth = 8u8
     if colors > 0usize {
