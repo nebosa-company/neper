@@ -125,6 +125,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, small) = ll.table(&g, 5u32, nullable[..], first[..], follow[..], tbl[..29usize])
     if small != ll.TooSmall { os.exit(5i32) }
 
+    // A conflicted table keeps the lowest rule. For A -> A | a that fallback
+    // must reject the non-progressing recursive expansion instead of looping.
+    let loop_lhs = [2]u32 { 1u32, 1u32 }
+    let loop_rhs = [2]u32 { 1u32, 0u32 }
+    let loop_start = [3]usize { 0usize, 1usize, 2usize }
+    let loop_grammar = base.grammar(loop_lhs[..], loop_rhs[..], loop_start[..], 1u32)
+    var loop_nullable: [2]bool = zero
+    var loop_first: [2]u64 = zero
+    var loop_follow: [2]u64 = zero
+    var loop_table: [2]u32 = zero
+    let (loop_conflicts, loop_table_error) = ll.table(&loop_grammar, 1u32, loop_nullable[..], loop_first[..], loop_follow[..], loop_table[..])
+    if loop_table_error != ok || loop_conflicts != 1usize { os.exit(6i32) }
+    let loop_sentence = [1]u32 { 0u32 }
+    let (loop_count, loop_error) = ll.parse(&loop_grammar, 1u32, loop_table[..], loop_sentence[..], stack[..], rules[..])
+    if loop_count == 0usize || loop_error != ll.Invalid { os.exit(6i32) }
+
     try io.print("parse ll ok\n")
     ret ok
 }

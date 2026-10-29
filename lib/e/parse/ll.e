@@ -198,6 +198,8 @@ fn parse(g: *const base.Grammar, start: u32, tbl: []const u32, sentence: []const
     var depth = 2usize
     var i = 0usize
     var n = 0usize
+    var stalled = 0usize
+    let max_stall = symbol_count(g)
     while true {
         depth -= 1usize
         let top = stack[depth]
@@ -211,6 +213,7 @@ fn parse(g: *const base.Grammar, start: u32, tbl: []const u32, sentence: []const
         if top < g.terminals {
             if top != a { ret (n, Invalid) }
             i += 1usize
+            stalled = 0usize
             continue
         }
         let r = tbl[(usize(top) - usize(g.terminals)) * cols + usize(a)]
@@ -219,6 +222,18 @@ fn parse(g: *const base.Grammar, start: u32, tbl: []const u32, sentence: []const
         out_rules[n] = r
         n += 1usize
         let len = base.rule_len(g, usize(r))
+        if len == 1usize {
+            let only = base.rule_symbol(g, usize(r), 0usize)
+            if only == top { ret (n, Invalid) }
+            if only >= g.terminals {
+                stalled += 1usize
+                if stalled >= max_stall { ret (n, Invalid) }
+            } else {
+                stalled = 0usize
+            }
+        } else {
+            stalled = 0usize
+        }
         if depth + len > stack.len { ret (n, TooSmall) }
         var k = len
         while k > 0usize {
