@@ -11026,6 +11026,7 @@ if command -v node >/dev/null 2>&1; then
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/host_files/src/main.e" "$repo" wasm32 wasi "$wasm_build/host_files.wasm")" = 'executable written' ]
     (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm" "$wasm_build/wasm_threads.threads.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_proc_cleanup.mjs) || { printf '%s\n' 'the WASM process-host cleanup check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host_import_ranges.mjs) || { printf '%s\n' 'the WASM host-import guest-range check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/window_ranges.mjs) || { printf '%s\n' 'the WASM window guest-range check failed' >&2; exit 1; }
     # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.wasm")" = 'executable written' ]

@@ -11337,6 +11337,8 @@ if ($wasmNode) {
     if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
     $wasmProcCleanup = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs') @() (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs')
     if ($wasmProcCleanup.Status -ne 0) { throw "the WASM process-host cleanup check failed: $($wasmProcCleanup.Output)" }
+    $wasmHostImportRanges = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_import_ranges.mjs') @() (Join-Path $repo 'tests\wasm\host_import_ranges.mjs')
+    if ($wasmHostImportRanges.Status -ne 0) { throw "the WASM host-import guest-range check failed: $($wasmHostImportRanges.Output)" }
     $wasmWindowRanges = Invoke-Wasm (Join-Path $repo 'tests\wasm\window_ranges.mjs') @() (Join-Path $repo 'tests\wasm\window_ranges.mjs')
     if ($wasmWindowRanges.Status -ne 0) { throw "the WASM window guest-range check failed: $($wasmWindowRanges.Output)" }
     # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
