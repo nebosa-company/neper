@@ -105,6 +105,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, room) = bitmap.roaring_to_list(&rc, list[..100usize])
     if room != bitmap.TooSmall { os.exit(3i32) }
 
+    // 3b: Empty buckets require no output-container capacity. AND sees
+    // different lows in one key; OR sees the containers retained by remove.
+    var narrow_keys_a: [1]u16 = zero
+    var narrow_kind_a: [1]u8 = zero
+    var narrow_count_a: [1]u32 = zero
+    var narrow_slot_a: [1]u32 = zero
+    var narrow_pool_a: [4096]u16 = zero
+    var narrow_keys_b: [1]u16 = zero
+    var narrow_kind_b: [1]u8 = zero
+    var narrow_count_b: [1]u32 = zero
+    var narrow_slot_b: [1]u32 = zero
+    var narrow_pool_b: [4096]u16 = zero
+    var zero_keys: [0]u16 = zero
+    var zero_kind: [0]u8 = zero
+    var zero_count: [0]u32 = zero
+    var zero_slot: [0]u32 = zero
+    var zero_pool: [0]u16 = zero
+    var narrow_a = bitmap.roaring(narrow_keys_a[..], narrow_kind_a[..], narrow_count_a[..], narrow_slot_a[..], narrow_pool_a[..])
+    var narrow_b = bitmap.roaring(narrow_keys_b[..], narrow_kind_b[..], narrow_count_b[..], narrow_slot_b[..], narrow_pool_b[..])
+    var empty_out = bitmap.roaring(zero_keys[..], zero_kind[..], zero_count[..], zero_slot[..], zero_pool[..])
+    if bitmap.roaring_add(&narrow_a, 1u32) != ok || bitmap.roaring_add(&narrow_b, 2u32) != ok { os.exit(7i32) }
+    if bitmap.roaring_and(&narrow_a, &narrow_b, &empty_out) != ok || empty_out.n != 0usize || bitmap.roaring_count(&empty_out) != 0usize { os.exit(7i32) }
+    if bitmap.roaring_or(&narrow_a, &narrow_b, &empty_out) != bitmap.TooSmall { os.exit(7i32) }
+    if !bitmap.roaring_remove(&narrow_a, 1u32) || !bitmap.roaring_remove(&narrow_b, 2u32) { os.exit(7i32) }
+    if narrow_a.n != 1usize || narrow_b.n != 1usize { os.exit(7i32) }
+    if bitmap.roaring_or(&narrow_a, &narrow_b, &empty_out) != ok || empty_out.n != 0usize || bitmap.roaring_count(&empty_out) != 0usize { os.exit(7i32) }
+
     // 4: removals from A.
     h = 0u64
     i = 0usize
