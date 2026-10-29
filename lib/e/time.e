@@ -171,12 +171,13 @@ const NANOS_PER_SECOND: i64 = 1000000000i64
 const NANOS_PER_DAY: i64 = 86400000000000i64
 const NANOS_PER_MINUTE: i64 = 60000000000i64
 
-// The days either side of the epoch that an i64 of nanoseconds can reach. The last
-// partial day at each end is left out: a whole day of nanoseconds added to 106751 days
-// passes what an i64 holds, and a range that is one day short at each extreme is
-// better than one that wraps.
-const MAX_CIVIL_DAY: i64 = 106750i64
-const MIN_CIVIL_DAY: i64 = -106750i64
+// The days either side of the epoch that an i64 of nanoseconds can reach. The
+// boundary days are partial: their in-day limits retain every representable
+// timestamp without admitting a civil time whose final sum would overflow.
+const MAX_CIVIL_DAY: i64 = 106751i64
+const MIN_CIVIL_DAY: i64 = -106752i64
+const MAX_CIVIL_NANOS: i64 = 85636854775807i64
+const MIN_CIVIL_NANOS: i64 = 763145224192i64
 
 const ISO8601_LENGTH: usize = 30usize
 
@@ -301,7 +302,16 @@ fn from_civil(d: Date, t: Time) -> (Timestamp, err) {
     let day_number = days_from_civil(year, month, day)
     if day_number > MAX_CIVIL_DAY || day_number < MIN_CIVIL_DAY { ret (Timestamp { nanos: 0i64 }, Invalid) }
     let second_of_day = i64(t.hour) * 3600i64 + i64(t.minute) * 60i64 + i64(t.second)
-    ret (Timestamp { nanos: day_number * NANOS_PER_DAY + second_of_day * NANOS_PER_SECOND + i64(t.nanos) }, ok)
+    let in_day = second_of_day * NANOS_PER_SECOND + i64(t.nanos)
+    if day_number == MAX_CIVIL_DAY && in_day > MAX_CIVIL_NANOS { ret (Timestamp { nanos: 0i64 }, Invalid) }
+    if day_number == MIN_CIVIL_DAY && in_day < MIN_CIVIL_NANOS { ret (Timestamp { nanos: 0i64 }, Invalid) }
+    // Multiplying the minimum partial day alone is below i64.min, although its
+    // late in-day values are representable. Form it from the preceding full day.
+    if day_number == MIN_CIVIL_DAY {
+        let preceding = (day_number + 1i64) * NANOS_PER_DAY
+        ret (Timestamp { nanos: preceding - (NANOS_PER_DAY - in_day) }, ok)
+    }
+    ret (Timestamp { nanos: day_number * NANOS_PER_DAY + in_day }, ok)
 }
 
 fn write_digits(buf: []u8, at: usize, value: i64, width: usize) {

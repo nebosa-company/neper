@@ -35,5 +35,22 @@ fn main() {
     let offset_time = time.to_time_at(top_timestamp, 1i32)
     if max_date.year != offset_date.year || max_date.month != offset_date.month || max_date.day != offset_date.day { os.exit(11) }
     if max_time.hour != offset_time.hour || max_time.minute != offset_time.minute || max_time.second != offset_time.second || max_time.nanos != offset_time.nanos { os.exit(12) }
+    // The partial civil days at both timestamp endpoints still round-trip through
+    // the public ISO formatter and parser, while their next nanoseconds are invalid.
+    var iso: [30]u8 = zero
+    let top_text = time.format_iso8601(top_timestamp, iso[..])
+    let (top_roundtrip, top_roundtrip_error) = time.parse_iso8601(top_text)
+    if top_roundtrip_error != ok || top_roundtrip.nanos != largest { os.exit(13) }
+    let bottom_text = time.format_iso8601(bottom_timestamp, iso[..])
+    let (bottom_roundtrip, bottom_roundtrip_error) = time.parse_iso8601(bottom_text)
+    if bottom_roundtrip_error != ok || bottom_roundtrip.nanos != smallest { os.exit(14) }
+    let too_late_date = time.Date { year: 2262i32, month: 4u8, day: 11u8 }
+    let too_late_time = time.Time { hour: 23u8, minute: 47u8, second: 16u8, nanos: 854775808u32 }
+    let (_, too_late_error) = time.from_civil(too_late_date, too_late_time)
+    if too_late_error != time.Invalid { os.exit(15) }
+    let too_early_date = time.Date { year: 1677i32, month: 9u8, day: 21u8 }
+    let too_early_time = time.Time { hour: 0u8, minute: 12u8, second: 43u8, nanos: 145224191u32 }
+    let (_, too_early_error) = time.from_civil(too_early_date, too_early_time)
+    if too_early_error != time.Invalid { os.exit(16) }
     os.exit(0)
 }
