@@ -16,6 +16,8 @@ error TooSmall
 const HEADER_LEN: usize = 55usize
 const MAX_MEMBERS: usize = 32usize
 const FLAG_SAMPLED: u8 = 1u8
+const FLAG_RANDOM: u8 = 2u8
+const FLAG_SUPPORTED: u8 = 3u8
 
 fn nibble(c: u8) -> (u8, bool) {
     if c >= 48u8 && c <= 57u8 { ret (c - 48u8, true) }
@@ -76,7 +78,7 @@ fn format_traceparent(c: *const TraceContext, out: []u8) -> (usize, err) {
     hex(c.span_id[0..], out[36..52])
     out[52usize] = 45u8
     var flag: [1]u8 = zero
-    flag[0usize] = c.flags
+    flag[0usize] = c.flags & FLAG_SUPPORTED
     hex(flag[0..], out[53..55])
     ret (HEADER_LEN, ok)
 }
@@ -118,6 +120,7 @@ fn propagate(parent: *const TraceContext, new_span_id: []const u8, out: []u8) ->
 }
 
 fn sampled(c: *const TraceContext) -> bool { ret (c.flags & FLAG_SAMPLED) != 0u8 }
+fn random(c: *const TraceContext) -> bool { ret (c.flags & FLAG_RANDOM) != 0u8 }
 
 // A non-zero span id from `r`.
 fn span_id_from(r: *rand.Pcg64) -> [8]u8 {
