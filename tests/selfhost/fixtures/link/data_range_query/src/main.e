@@ -10,6 +10,10 @@ use e.io
 use e.mem
 use e.os
 
+// Mirrors the documented slice header for a non-dereferenced test view.
+type RawI64Slice = struct { base: *i64, len: usize }
+type I64SliceHolder = struct { words: []i64 }
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var values: [13]i64 = zero
     var i = 0usize
@@ -88,7 +92,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if fenwick.lower_bound(&h, 0i64) != 0usize || fenwick.lower_bound(&h, -1i64) != 0usize { os.exit(3i32) }
 
     // 4: range minimum and maximum over every window.
-    if sparse_table.levels_for(13usize) != 4usize || sparse_table.levels_for(0usize) != 1usize || sparse_table.levels_for(16usize) != 5usize { os.exit(4i32) }
+    let maximum = 0usize -% 1usize
+    if sparse_table.levels_for(13usize) != 4usize || sparse_table.levels_for(0usize) != 1usize || sparse_table.levels_for(16usize) != 5usize || sparse_table.levels_for(maximum) != mem.size_of[usize]() * 8usize { os.exit(4i32) }
     var min_storage: [52]i64 = zero
     var max_storage: [52]i64 = zero
     let (mins, min_error) = sparse_table.build[i64](min_storage[..], values[..], false)
@@ -119,6 +124,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if past_error != sparse_table.Invalid { os.exit(4i32) }
     let (_, room_error) = sparse_table.build[i64](min_storage[..40usize], values[..], false)
     if room_error != sparse_table.TooSmall { os.exit(4i32) }
+    // These views have a large logical length but only one physical byte. The
+    // builder must reject storage before touching them or wrapping n * levels.
+    var capacity_byte: [1]u8 = zero
+    var huge_byte_arena = mem.Arena { base: &capacity_byte[0usize], cap: maximum, off: 0usize }
+    let huge_bytes = mem.view(&huge_byte_arena, 0usize, maximum)
+    var one_byte: [1]u8 = zero
+    let (_, huge_build_error) = sparse_table.build[u8](one_byte[..], huge_bytes, false)
+    if huge_build_error != sparse_table.TooSmall { os.exit(4i32) }
+    // Querying a forged table must similarly refuse its impossible capacity.
+    var no_bytes: [0]u8 = zero
+    let forged = sparse_table.SparseTable[u8] { table: no_bytes[..], count: maximum, levels: sparse_table.levels_for(maximum), prefer_max: false }
+    let (_, forged_error) = sparse_table.query[u8](&forged, 0usize, maximum)
+    if forged_error != sparse_table.Invalid { os.exit(4i32) }
 
     // 5: the disjoint table's sums over every window.
     var sum_storage: [52]i64 = zero
@@ -153,6 +171,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if eight_error != ok { os.exit(5i32) }
     let (whole, whole_error) = sparse_table.disjoint_query(&eight_sums, 0usize, 8usize)
     if whole_error != ok || whole != 28i64 { os.exit(5i32) }
+    // This fabricated i64 view has one physical cell, but n * levels is not
+    // representable on either target. The preflight must not dereference it.
+    var capacity_word: [1]i64 = zero
+    var holder = I64SliceHolder { words: capacity_word[..] }
+    let raw_words = mem.cast[*RawI64Slice](&holder.words)
+    raw_words.len = maximum / 16usize + 1usize
+    let huge_words = holder.words
+    var one_sum: [1]i64 = zero
+    let (_, huge_sum_error) = sparse_table.disjoint_build(one_sum[..], huge_words)
+    if huge_sum_error != sparse_table.TooSmall { os.exit(5i32) }
+    var no_sums: [0]i64 = zero
+    let forged_sums = sparse_table.DisjointTable { table: no_sums[..], count: maximum, levels: sparse_table.levels_for(maximum) }
+    let (_, forged_sum_error) = sparse_table.disjoint_query(&forged_sums, 0usize, maximum)
+    if forged_sum_error != sparse_table.Invalid { os.exit(5i32) }
 
     try io.print("data range query ok\n")
     ret ok
