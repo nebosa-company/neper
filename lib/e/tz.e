@@ -246,6 +246,7 @@ fn parse_tzif(a: *mem.Arena, name: str, data: []const u8) -> (ZoneData, err) {
     var i = 0usize
     while i < timecnt {
         if wide { transitions[i] = be64(data, at + i * 8usize) } else { transitions[i] = be32(data, at + i * 4usize) }
+        if i > 0usize && transitions[i] <= transitions[i - 1usize] { ret (zone_data, InvalidData) }
         i += 1usize
     }
     at += timecnt * time_width

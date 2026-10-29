@@ -101,6 +101,36 @@ fn invalid_footer(a: *mem.Arena, footer: str, code: i32) {
     if load_error != tz.InvalidData { os.exit(code) }
 }
 
+// A one-zone TZif v1 pack with two transition times. `second_time` is at most
+// the first time, so RFC 8536's required strict ascending order is violated.
+fn unordered_transition_pack(out: []u8, second_time: u8) -> usize {
+    if out.len < 82usize { ret 0usize }
+    out[0usize] = 78u8
+    out[1usize] = 80u8
+    out[2usize] = 84u8
+    out[3usize] = 90u8
+    out[4usize] = 1u8
+    out[6usize] = 120u8
+    out[7usize] = 1u8
+    out[11usize] = 1u8
+    out[13usize] = 90u8
+    out[14usize] = 64u8
+    let header = 18usize
+    out[header] = 84u8
+    out[header + 1usize] = 90u8
+    out[header + 2usize] = 105u8
+    out[header + 3usize] = 102u8
+    out[header + 35usize] = 2u8
+    out[header + 39usize] = 1u8
+    out[header + 43usize] = 4u8
+    out[header + 47usize] = 2u8
+    out[header + 51usize] = second_time
+    out[header + 60usize] = 85u8
+    out[header + 61usize] = 84u8
+    out[header + 62usize] = 67u8
+    ret 82usize
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (db, e1) = tz.builtin(a)
     if e1 != ok { os.exit(1) }
@@ -186,5 +216,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     invalid_footer(a, "STD0DST,M1.1.7,M1.1.0", 71)
     invalid_footer(a, "STD0DST,M1.1.0/168,M1.1.0", 72)
     invalid_footer(a, "STD0DST,M999999999999999999999999999999.1.0,M1.1.0", 73)
+    var unordered_pack: [128]u8 = zero
+    let unordered_length = unordered_transition_pack(unordered_pack[0..], 1u8)
+    let (_, unordered_error) = tz.load(a, unordered_pack[0usize..unordered_length])
+    if unordered_error != tz.InvalidData { os.exit(74) }
+    var duplicate_pack: [128]u8 = zero
+    let duplicate_length = unordered_transition_pack(duplicate_pack[0..], 2u8)
+    let (_, duplicate_error) = tz.load(a, duplicate_pack[0usize..duplicate_length])
+    if duplicate_error != tz.InvalidData { os.exit(75) }
     ret ok
 }
