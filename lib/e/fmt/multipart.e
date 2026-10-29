@@ -102,15 +102,17 @@ fn refill(s: *ReaderState) -> (bool, err) {
     }
     if s.len == s.window.len { ret (false, TooLarge) }
     let (count, read_error) = io.read(&s.source, s.window[s.len..])
-    if read_error == io.End || (read_error == ok && count == 0usize) {
+    if count > 0usize {
+        s.len += count
+        s.consumed += u64(count)
+        if s.consumed > s.byte_limit { ret (false, TooLarge) }
+    }
+    if read_error == io.End {
         s.source_ended = true
-        ret (false, ok)
+        ret (count > 0usize, ok)
     }
     if read_error != ok { ret (false, read_error) }
-    s.len += count
-    s.consumed += u64(count)
-    if s.consumed > s.byte_limit { ret (false, TooLarge) }
-    ret (true, ok)
+    ret (count > 0usize, ok)
 }
 
 // The position of `needle` in the unread window, filling as needed; (0, false) when

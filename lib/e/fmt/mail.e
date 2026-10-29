@@ -331,10 +331,9 @@ fn read_message(a: *mem.Arena, source: io.Reader, header_limit: usize) -> (Messa
     while !found {
         if filled == header_limit { ret (zero, TooLarge) }
         let (count, read_error) = io.read(&input, buffer[filled..])
-        if read_error == io.End { break }
-        if read_error != ok { ret (zero, read_error) }
-        if count == 0usize { break }
         filled += count
+        if read_error != ok && read_error != io.End { ret (zero, read_error) }
+        if count == 0usize { break }
         var at = 0usize
         while at + 1usize < filled && !found {
             if buffer[at] == 10u8 {
@@ -349,6 +348,7 @@ fn read_message(a: *mem.Arena, source: io.Reader, header_limit: usize) -> (Messa
             }
             at += 1usize
         }
+        if read_error == io.End { break }
     }
     if !found { block_end = filled }
     // Folded lines are joined before mime sees them: a break followed by space or tab
@@ -392,7 +392,11 @@ fn chain_read(ctx: *void, dst: []u8) -> (usize, err) {
     let c = mem.cast[*Chain](ctx)
     if !c.first_done {
         let (count, read_error) = io.read(&c.first, dst)
-        if read_error == ok && count > 0usize { ret (count, ok) }
+        if count > 0usize {
+            if read_error != ok && read_error != io.End { ret (count, read_error) }
+            if read_error == io.End { c.first_done = true }
+            ret (count, ok)
+        }
         if read_error != ok && read_error != io.End { ret (count, read_error) }
         c.first_done = true
     }

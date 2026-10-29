@@ -221,10 +221,10 @@ fn parse_reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Document
     var filled = 0usize
     while filled < buffer.len {
         let (count, read_error) = io.read(&input, buffer[filled..])
+        filled += count
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
         if count == 0usize { break }
-        filled += count
     }
     if filled > options.max_bytes { ret (zero, TooLarge) }
     let (document, parse_error) = parse(a, buffer[..filled], options)

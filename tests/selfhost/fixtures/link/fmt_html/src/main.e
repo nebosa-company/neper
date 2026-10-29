@@ -9,6 +9,7 @@ use e.os
 use e.mem
 use e.io
 use e.str
+use e.test.support
 use e.fmt.html as html
 
 fn options(bytes: usize, nodes: usize, depth: u16, comments: bool) -> html.Options {
@@ -108,6 +109,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if f_html == html.NONE || first_named(&fragment, f_html, "head") == html.NONE || f_body == html.NONE { os.exit(26) }
     let (f_text, e7) = html.text_content(a, &fragment, f_body)
     if e7 != ok || !str.eq(f_text, "just text") || count_named(&fragment, f_body, "b") != 1usize { os.exit(27) }
+    // A complete final chunk and End must reach the reader-based parser together.
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "<p>final", failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { os.exit(35) }
+    let ended_source = support.reader(&ended_script)
+    let (ended_document, ended_error) = html.parse_reader(a, ended_source, options(1024usize, 64usize, 8u16, false))
+    if ended_error != ok { os.exit(36) }
+    let ended_html = first_named(&ended_document, ended_document.root, "html")
+    if ended_html == html.NONE { os.exit(37) }
+    let ended_body = first_named(&ended_document, ended_html, "body")
+    if ended_body == html.NONE { os.exit(38) }
+    let ended_p = first_named(&ended_document, ended_body, "p")
+    if ended_p == html.NONE { os.exit(39) }
+    let (ended_text, ended_text_error) = html.text_content(a, &ended_document, ended_p)
+    if ended_text_error != ok || !str.eq(ended_text, "final") { os.exit(40) }
     // Refusals.
     let (bad_utf8, e8) = html.parse(a, "<p>\xff</p>", options(1024usize, 64usize, 8u16, false))
     if e8 != html.InvalidEncoding { os.exit(28) }

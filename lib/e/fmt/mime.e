@@ -236,9 +236,8 @@ fn parse_headers(a: *mem.Arena, source: io.Reader, byte_limit: usize, count_limi
         // supplied reader as the message body after this function returns, so
         // a bulk read must not consume bytes beyond the empty line.
         let (count, read_error) = io.read(&reader, buffer[filled..filled + 1usize])
-        if read_error == io.End { break }
-        if read_error != ok { ret (zero, read_error) }
         filled += count
+        if read_error != ok && read_error != io.End { ret (zero, read_error) }
         // The block ends at the first CRLF CRLF, or LF LF.
         if filled >= 4usize && buffer[filled - 4usize] == 13u8 && buffer[filled - 3usize] == 10u8 && buffer[filled - 2usize] == 13u8 && buffer[filled - 1usize] == 10u8 {
             block_end = filled
@@ -250,6 +249,7 @@ fn parse_headers(a: *mem.Arena, source: io.Reader, byte_limit: usize, count_limi
             block_end = filled
             found_end = true
         }
+        if read_error == io.End { break }
     }
     if !found_end { block_end = filled }
     // Count lines, then fill.

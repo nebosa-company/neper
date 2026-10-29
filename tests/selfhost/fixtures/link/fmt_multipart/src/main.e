@@ -8,6 +8,7 @@ use e.os
 use e.mem
 use e.io
 use e.str
+use e.test.support
 use e.fmt.mime as mime
 use e.fmt.multipart as multipart
 
@@ -69,6 +70,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e7 != ok || has4 { os.exit(9) }
     let (p5, has5, e8) = multipart.reader_next_err(&r)
     if e8 != ok || has5 { os.exit(10) }
+    // The source may carry this complete message and End in one callback.
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: message, failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { os.exit(38) }
+    let ended_source = support.reader(&ended_script)
+    let (ended0, ended_error) = multipart.reader(storage, ended_source, "b0und=ary", 8u32, 100000u64)
+    if ended_error != ok { os.exit(39) }
+    var ended_reader = ended0
+    let (ended_part, ended_has, ended_next_error) = multipart.reader_next_err(&ended_reader)
+    if ended_next_error != ok || !ended_has || ended_part.headers.len != 2usize { os.exit(40) }
+    var ended_body = ended_part.body
+    let (ended_count, ended_body_error) = read_all(&ended_body, out[0..])
+    if ended_body_error != ok || !str.eq(out[..ended_count], "hello\r\n--not it\r\n-- dashes") { os.exit(41) }
     // The writer, read back.
     var sink_buffer: [512]u8 = zero
     var sink_state = io.SliceWriter { data: sink_buffer[..], off: 0usize }

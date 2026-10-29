@@ -7,6 +7,7 @@ use e.os
 use e.mem
 use e.io
 use e.str
+use e.test.support
 use e.fmt.mail as mail
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -68,6 +69,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
         filled += count
     }
     if !str.eq(out[..filled], "hello body\r\nline two\r\n") { os.exit(21) }
+    // The whole message can arrive with End in its sole source callback.
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: raw, failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { os.exit(30) }
+    let ended_source = support.reader(&ended_script)
+    let (ended_message, ended_message_error) = mail.read_message(a, ended_source, 4096usize)
+    if ended_message_error != ok || ended_message.headers.len != 3usize { os.exit(31) }
+    var ended_body = ended_message.body
+    let (ended_count, ended_body_error) = io.read(&ended_body, out[..])
+    if ended_body_error != ok || !str.eq(out[..ended_count], "hello body\r\nline two\r\n") { os.exit(32) }
+    let (_, ended_end_error) = io.read(&ended_body, out[..])
+    if ended_end_error != io.End { os.exit(33) }
+    // A chained body cannot discard bytes when its first reader ends with them.
+    let chain_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "one", failure: io.End } }
+    var (chain_script, chain_script_error) = support.scripted_reader(a, chain_steps[..])
+    if chain_script_error != ok { os.exit(34) }
+    var chain_tail_state = io.SliceReader { data: "two", off: 0usize }
+    var chain_state = mail.Chain { first: support.reader(&chain_script), second: io.slice_reader(&chain_tail_state), first_done: false }
+    var chain_reader = io.Reader { ctx: mem.cast[*void](&chain_state), read: mail.chain_read }
+    let (chain_first_count, chain_first_error) = io.read(&chain_reader, out[..])
+    if chain_first_error != ok || !str.eq(out[..chain_first_count], "one") { os.exit(35) }
+    let (chain_second_count, chain_second_error) = io.read(&chain_reader, out[..])
+    if chain_second_error != ok || !str.eq(out[..chain_second_count], "two") { os.exit(36) }
     let (subject, e19) = mail.decode_header(a, message.headers[1].value, 256usize)
     if e19 != ok || !str.eq(subject, "Gr\xc3\xbc\xc3\x9fe caf\xc3\xa9") { os.exit(22) }
     let (plain, e20) = mail.decode_header(a, "plain subject", 256usize)

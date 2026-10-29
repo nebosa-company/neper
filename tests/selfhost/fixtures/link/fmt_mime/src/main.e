@@ -4,6 +4,7 @@
 use e.os
 use e.mem
 use e.io
+use e.test.support
 use e.fmt.mime as mime
 
 fn text_equal(a: str, b: str) -> bool {
@@ -79,6 +80,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     tab_state.data = "X: \tallowed\t\n\n"
     let (tab_headers, tab_error) = mime.parse_headers(a, io.slice_reader(&tab_state), 64usize, 8usize)
     if bare_cr != mime.Invalid || nul_value != mime.Invalid || del_value != mime.Invalid || tab_error != ok || tab_headers.len != 1usize || !text_equal(tab_headers[0usize].value, "allowed") { os.exit(13) }
+    // EOF may accompany the last byte of a valid header block without dropping it.
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "X-End: complete", failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { os.exit(15) }
+    let ended_source = support.reader(&ended_script)
+    let (ended_headers, ended_error) = mime.parse_headers(a, ended_source, 64usize, 8usize)
+    if ended_error != ok || ended_headers.len != 1usize || !text_equal(ended_headers[0usize].value, "complete") { os.exit(16) }
     os.exit(0)
     ret ok
 }
