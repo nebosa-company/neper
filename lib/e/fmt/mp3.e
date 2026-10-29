@@ -564,6 +564,8 @@ fn huffman(st: *State, dst: []f32, bs: *Bits, g: usize, limit: usize) {
     var count1 = huff_tab32()
     if gr.count1_table != 0u32 { count1 = huff_tab33() }
     while true {
+        // Count-1 leaves expand to four spectral values; the caller owns 576 slots.
+        if out > dst.len || dst.len - out < 4usize { break }
         var leaf = i32(tb(count1, usize(peek(&c, 4u32))))
         if (leaf & 8i32) == 0i32 {
             let extra = u32(leaf & 3i32)

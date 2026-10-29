@@ -138,6 +138,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tagged, tagged_error) = mp3.open(a, tagged_bytes)
     if tagged_error != ok || mp3.frame_count(tagged) != mp3.frame_count(d) || tagged.at != d.at + 20usize { os.exit(67i32) }
 
+    // 288 big-value pairs fill the 576 spectral slots; a following count-1 leaf must stop.
+    var count1_granules: [1]mp3.Granule = zero
+    count1_granules[0usize].big_values = 288u32
+    count1_granules[0usize].region_count[0usize] = 2u32
+    count1_granules[0usize].sfb = "\xfe\xfe\x44\x02"
+    var count1_scf: [4]f32 = zero
+    var count1_pow43: [17]f32 = zero
+    var count1_state: mp3.State = zero
+    count1_state.gr = count1_granules[..]
+    count1_state.scf = count1_scf[..]
+    count1_state.pow43 = count1_pow43[..]
+    var count1_guarded: [577]f32 = zero
+    count1_guarded[576usize] = 123.0
+    var count1_bits = mp3.Bits { data: "\x00\x00\x00\x00", pos: 0usize, limit: 32usize }
+    mp3.huffman(&count1_state, count1_guarded[..576usize], &count1_bits, 0usize, 32usize)
+    if count1_bits.pos != count1_bits.limit || count1_guarded[576usize] != 123.0 { os.exit(68i32) }
+
     try io.print("fmt mp3 ok\n")
     ret ok
 }
