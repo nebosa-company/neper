@@ -22,7 +22,7 @@ type Attribute = struct { name: str, values: []const str }
 type Entry = struct { dn: str, attributes: []const Attribute }
 type Change = struct { operation: u8, attribute: str, values: []const str }
 type Session = struct {
-    a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, next_id: u32,
+    a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, poisoned: bool, next_id: u32,
     last: Result, limit: usize, buf: []u8, at: usize, len: usize, msg: []u8, out: []u8, references: usize,
 }
 type Writer = struct { buf: []u8, at: usize, failed: bool }
@@ -556,6 +556,7 @@ fn begin_message(s: *Session, w: *Writer) -> (usize, u32) {
 }
 
 fn send_message(s: *Session, w: *Writer, mark: usize) -> err {
+    if s.poisoned { ret Closed }
     end(w, mark)
     if w.failed { ret TooLarge }
     try io.write_all(&s.sink, w.buf[..w.at])
@@ -625,7 +626,7 @@ fn connect(a: *mem.Arena, source: io.Reader, sink: io.Writer, limit: usize) -> (
     let (out, out_error) = mem.alloc[u8](a, 65536usize)
     if out_error != ok { ret (empty, out_error) }
     ret (Session {
-        a: a, source: source, sink: sink, stream: nil, secured: false, next_id: 0u32,
+        a: a, source: source, sink: sink, stream: nil, secured: false, poisoned: false, next_id: 0u32,
         last: Result { code: 0u32, matched_dn: "", message: "", referrals: zero }, limit: limit,
         buf: buf, at: 0usize, len: 0usize, msg: msg, out: out, references: 0usize,
     }, ok)
@@ -633,6 +634,7 @@ fn connect(a: *mem.Arena, source: io.Reader, sink: io.Writer, limit: usize) -> (
 
 // StartTLS: the extended request 1.3.6.1.4.1.1466.20037, then the handshake over the same connection.
 fn starttls(s: *Session, config: tls.ClientConfig) -> err {
+    if s.poisoned { ret Closed }
     if s.secured { ret Unsupported }
     var w = Writer { buf: s.out, at: 0usize, failed: false }
     let (mark, id) = begin_message(s, &w)
@@ -648,13 +650,27 @@ fn starttls(s: *Session, config: tls.ClientConfig) -> err {
     if result_error != ok { ret result_error }
     s.last = result
     if result.code != 0u32 { ret Rejected }
-    if s.at < s.len { ret Protocol }
+    if s.at < s.len {
+        s.poisoned = true
+        ret Protocol
+    }
     let (slot, slot_error) = mem.alloc[tls.Stream](s.a, 1usize)
-    if slot_error != ok { ret slot_error }
+    if slot_error != ok {
+        s.poisoned = true
+        ret slot_error
+    }
     let (made, make_error) = tls.client(s.a, s.source, s.sink, config)
-    if make_error != ok { ret make_error }
+    if make_error != ok {
+        s.poisoned = true
+        ret make_error
+    }
     slot[0] = made
-    try tls.handshake(&slot[0])
+    let handshake_error = tls.handshake(&slot[0])
+    if handshake_error != ok {
+        let _ = tls.close(&slot[0])
+        s.poisoned = true
+        ret handshake_error
+    }
     s.stream = &slot[0]
     s.source = tls.reader(s.stream)
     s.sink = tls.writer(s.stream)
@@ -665,6 +681,7 @@ fn starttls(s: *Session, config: tls.ClientConfig) -> err {
 }
 
 fn bind_op(s: *Session, name: str, sasl: bool, mechanism: str, credentials: []const u8) -> err {
+    if s.poisoned { ret Closed }
     if !clean(name) { ret Invalid }
     defer wipe(s.out)
     var w = Writer { buf: s.out, at: 0usize, failed: false }

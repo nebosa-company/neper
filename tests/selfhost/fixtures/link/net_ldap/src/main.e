@@ -317,6 +317,16 @@ fn main(a: *mem.Arena) -> err {
         secret_at += 1usize
     }
     if secret_left { ret fail(51i32) }
+    var start_fail: Scene = zero
+    start_fail.writer = io.SliceWriter { data: start_fail.sent[0..], off: 0usize }
+    start_fail.reader = io.SliceReader { data: "\x30\x0c\x02\x01\x01\x78\x07\x0a\x01\x00\x04\x00\x04\x00", off: 0usize }
+    let (sf0, sf_error) = ldap.connect(a, io.slice_reader(&start_fail.reader), io.slice_writer(&start_fail.writer), 512usize)
+    var sf = sf0
+    var empty_config: tls.ClientConfig = zero
+    let start_failure = ldap.starttls(&sf, empty_config)
+    if sf_error != ok || start_failure == ok { ret fail(52i32) }
+    let before_bind = start_fail.writer.off
+    if ldap.bind_simple(&sf, "cn=secret", "password") != ldap.Closed || start_fail.writer.off != before_bind { ret fail(53i32) }
     var junk: Scene = zero
     junk.writer = io.SliceWriter { data: junk.sent[0..], off: 0usize }
     junk.reader = io.SliceReader { data: "\x04\x01\x00", off: 0usize }
