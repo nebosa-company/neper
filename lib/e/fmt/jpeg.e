@@ -222,7 +222,8 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             if !dc[c.dc_table].present { ret Invalid }
             let (t, t_error) = decode_symbol(b, &dc[c.dc_table])
             if t_error != ok { ret t_error }
-            if t > 16u32 { ret Invalid }
+            // This decoder accepts only 8-bit DCT frames, whose DC categories are 0..11.
+            if t > 11u32 { ret Invalid }
             let (dc_bits, dc_bits_error) = take(b, t)
             if dc_bits_error != ok { ret dc_bits_error }
             let diff = extend(dc_bits, t)

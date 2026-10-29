@@ -131,6 +131,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var state: io.SliceReader = zero
     let (_, signature_error) = jpeg.decode(a, reader_of(&state, "definitely not a jpeg stream"), options())
     if signature_error != jpeg.Invalid { os.exit(140i32) }
+    // A baseline DC Huffman symbol may not name category 12 before prediction.
+    var dc_counts: [16]u8 = zero
+    dc_counts[0usize] = 1u8
+    var dc_values: [1]u8 = zero
+    dc_values[0usize] = 12u8
+    let (bad_dc, bad_dc_error) = jpeg.build_huffman(dc_counts[..], dc_values[..])
+    if bad_dc_error != ok { os.exit(156i32) }
+    var dc_tables: [1]jpeg.Huffman = zero
+    dc_tables[0usize] = bad_dc
+    var entropy = jpeg.Bits { data: "\x00\x00", at: 0usize, cache: 0u32, count: 0u32, marker_hit: false }
+    var bad_frame: jpeg.Frame = zero
+    var scan: jpeg.Scan = zero
+    var coefficients: [64]i32 = zero
+    var component: jpeg.Component = zero
+    component.coefficients = coefficients[..]
+    if jpeg.decode_block(&entropy, &bad_frame, &scan, dc_tables[..], dc_tables[..], &component, 0usize) != jpeg.Invalid { os.exit(157i32) }
     let (_, bounded_error) = jpeg.decode(a, reader_of(&state, baseline444_jpg()), jpeg.DecodeOptions { max_width: 16u32, max_height: 0u32, max_pixels: 0u64 })
     if bounded_error != jpeg.TooLarge { os.exit(141i32) }
     let (scratch, scratch_alloc) = mem.alloc[u8](a, 4096usize)
