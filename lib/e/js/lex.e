@@ -5,7 +5,7 @@
 // is read whole: its cooked and raw strings and the source of each `${...}` substitution come back in `Lexer.template`, and
 // the parser parses each substitution's source on its own.
 //
-// Identifiers are ASCII letters, `$`, `_`, any byte of a non-ASCII character and `\u` escapes; names keep their spelling
+// Identifiers are ASCII letters, `$`, `_`, valid non-ASCII UTF-8/WTF-8 scalars and `\u` escapes; names keep their spelling
 // with escapes decoded. Numbers are decimal, hex, octal (`0o`, legacy `0`), binary, with exponents and `_` separators; a
 // trailing `n` marks a BigInt literal. A line terminator (LF, CR, U+2028, U+2029) before a token sets `nl`.
 
@@ -66,14 +66,28 @@ fn uspace_len(s: str, at: usize) -> usize {
     ret 0usize
 }
 
-// The scalar value starting at `at` of UTF-8 text.
-fn scalar_in(s: str, at: usize) -> u32 {
+// One UTF-8 or WTF-8 scalar at `at`: value, byte length and validity.  JavaScript
+// strings use WTF-8 internally, so a well-formed surrogate encoding remains valid.
+fn scalar_at(s: str, at: usize) -> (u32, usize, bool) {
+    if at >= s.len { ret (0u32, 0usize, false) }
     let c = s[at]
-    if c < 128u8 { ret u32(c) }
-    if c >= 240u8 && at + 3usize < s.len { ret ((u32(c) & 7u32) << 18u32) | ((u32(s[at + 1usize]) & 63u32) << 12u32) | ((u32(s[at + 2usize]) & 63u32) << 6u32) | (u32(s[at + 3usize]) & 63u32) }
-    if c >= 224u8 && at + 2usize < s.len { ret ((u32(c) & 15u32) << 12u32) | ((u32(s[at + 1usize]) & 63u32) << 6u32) | (u32(s[at + 2usize]) & 63u32) }
-    if c >= 192u8 && at + 1usize < s.len { ret ((u32(c) & 31u32) << 6u32) | (u32(s[at + 1usize]) & 63u32) }
-    ret u32(c)
+    if c < 128u8 { ret (u32(c), 1usize, true) }
+    if c >= 194u8 && c <= 223u8 && at + 1usize < s.len {
+        let b1 = s[at + 1usize]
+        if b1 >= 128u8 && b1 <= 191u8 { ret (((u32(c) & 31u32) << 6u32) | (u32(b1) & 63u32), 2usize, true) }
+    }
+    if c >= 224u8 && c <= 239u8 && at + 2usize < s.len {
+        let b1 = s[at + 1usize]
+        let b2 = s[at + 2usize]
+        if b1 >= 128u8 && b1 <= 191u8 && b2 >= 128u8 && b2 <= 191u8 && !(c == 224u8 && b1 < 160u8) { ret (((u32(c) & 15u32) << 12u32) | ((u32(b1) & 63u32) << 6u32) | (u32(b2) & 63u32), 3usize, true) }
+    }
+    if c >= 240u8 && c <= 244u8 && at + 3usize < s.len {
+        let b1 = s[at + 1usize]
+        let b2 = s[at + 2usize]
+        let b3 = s[at + 3usize]
+        if b1 >= 128u8 && b1 <= 191u8 && b2 >= 128u8 && b2 <= 191u8 && b3 >= 128u8 && b3 <= 191u8 && !(c == 240u8 && b1 < 144u8) && !(c == 244u8 && b1 > 143u8) { ret (((u32(c) & 7u32) << 18u32) | ((u32(b1) & 63u32) << 12u32) | ((u32(b2) & 63u32) << 6u32) | (u32(b3) & 63u32), 4usize, true) }
+    }
+    ret (0u32, 0usize, false)
 }
 
 // ID_Start for non-ASCII scalars: the letter categories and Nl, plus Other_ID_Start.
@@ -97,14 +111,15 @@ fn id_part_cp(cp: u32) -> bool {
     ret cat == .Mn || cat == .Mc || cat == .Nd || cat == .Pc
 }
 
-fn id_part_at(s: str, at: usize) -> bool {
+fn id_part_len(s: str, at: usize) -> usize {
     let c = s[at]
-    if c >= 128u8 {
-        // Continuation bytes belong to the scalar whose lead byte was checked.
-        if c < 192u8 { ret true }
-        ret id_part_cp(scalar_in(s, at))
+    if c < 128u8 {
+        if is_id_part(c) { ret 1usize }
+        ret 0usize
     }
-    ret is_id_part(c)
+    let (cp, byte_count, valid) = scalar_at(s, at)
+    if !valid || !id_part_cp(cp) { ret 0usize }
+    ret byte_count
 }
 fn hex_value(c: u8) -> i32 {
     if c >= 48u8 && c <= 57u8 { ret i32(c) - 48i32 }
@@ -257,8 +272,15 @@ fn put_unit(b: *str.Builder, src: str, c: i64, after: usize) -> usize {
 fn read_ident(lx: *Lexer) -> (str, bool, err) {
     let start = lx.pos
     var at = start
-    if start < lx.src.len && lx.src[start] >= 192u8 && !id_start_cp(scalar_in(lx.src, start)) { ret ("", false, fail(lx, "invalid character in identifier")) }
-    while at < lx.src.len && id_part_at(lx.src, at) { at += 1usize }
+    if start < lx.src.len && lx.src[start] >= 128u8 {
+        let (cp, start_width, valid) = scalar_at(lx.src, start)
+        if start_width == 0usize || !valid || !id_start_cp(cp) { ret ("", false, fail(lx, "invalid character in identifier")) }
+    }
+    while at < lx.src.len {
+        let part_width = id_part_len(lx.src, at)
+        if part_width == 0usize { break }
+        at += part_width
+    }
     if at >= lx.src.len || lx.src[at] != 92u8 {
         lx.pos = at
         ret (lx.src[start..at], false, ok)
@@ -269,9 +291,15 @@ fn read_ident(lx: *Lexer) -> (str, bool, err) {
     var pos = start
     while pos < lx.src.len {
         let c = lx.src[pos]
-        if id_part_at(lx.src, pos) {
-            let pe = str.push_byte(&out, c)
-            pos += 1usize
+        let copy_width = id_part_len(lx.src, pos)
+        if copy_width > 0usize {
+            var copied = 0usize
+            while copied < copy_width {
+                let pe = str.push_byte(&out, lx.src[pos])
+                if pe != ok { ret ("", true, pe) }
+                pos += 1usize
+                copied += 1usize
+            }
         } else if c == 92u8 && pos + 1usize < lx.src.len && lx.src[pos + 1usize] == 117u8 {
             let (cp, after) = read_unicode_escape(lx.src, pos + 2usize)
             if cp < 0i64 { ret ("", true, fail(lx, "bad unicode escape in identifier")) }
@@ -331,7 +359,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
             t.big = true
             at += 1usize
         }
-        if at < src.len && id_part_at(src, at) { ret fail(lx, "identifier directly after number") }
+        if at < src.len && id_part_len(src, at) > 0usize { ret fail(lx, "identifier directly after number") }
         lx.pos = at
         t.end = at
         ret ok
@@ -356,7 +384,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
             lx.pos = k
             t.end = k
             if k < src.len && (src[k] == 95u8 || src[k] == 110u8) { ret fail(lx, "legacy octal literals cannot have separators or be BigInts") }
-            if k < src.len && id_part_at(src, k) { ret fail(lx, "identifier directly after number") }
+            if k < src.len && id_part_len(src, k) > 0usize { ret fail(lx, "identifier directly after number") }
             ret ok
         }
     }
@@ -430,7 +458,7 @@ fn read_number(lx: *Lexer, t: *Tok) -> err {
     }
     t.num = v3
     t.big = is_big
-    if at < src.len && id_part_at(src, at) { ret fail(lx, "identifier directly after number") }
+    if at < src.len && id_part_len(src, at) > 0usize { ret fail(lx, "identifier directly after number") }
     lx.pos = at
     t.end = at
     ret ok
@@ -830,7 +858,11 @@ fn regex_at(lx: *Lexer, start: usize) -> (Tok, err) {
     t.text = src[start + 1usize..pos]
     pos += 1usize
     let flag_start = pos
-    while pos < src.len && id_part_at(src, pos) { pos += 1usize }
+    while pos < src.len {
+        let flag_width = id_part_len(src, pos)
+        if flag_width == 0usize { break }
+        pos += flag_width
+    }
     t.flags = src[flag_start..pos]
     lx.pos = pos
     t.end = pos

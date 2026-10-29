@@ -16,6 +16,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (it, re) = realm.new_realm(a)
         if re != ok { os.exit(1) }
         it.quiet = true
+        // A continuation byte is not an IdentifierStart or IdentifierPart by itself.
+        let (bad_start, bad_start_error) = realm.run(it, "\x80 = 1")
+        if bad_start_error == ok { os.exit(5) }
+        let (bad_part, bad_part_error) = realm.run(it, "name\x80 = 1")
+        if bad_part_error == ok { os.exit(6) }
+        let (greek, greek_error) = realm.run(it, "\xCE\xB1 = 1")
+        if greek_error != ok { os.exit(7) }
         let (v, e) = realm.run(it, "function* g() { yield 1; yield 2 } var x = g(); x.next(); var y = g(); y.next(); y.next();")
         if e != ok { os.exit(2) }
         js.shutdown_generators(it)
