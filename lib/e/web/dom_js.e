@@ -9059,7 +9059,7 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "  dropEffect: { get() { return dataTransferSlot(this).dropEffect; }, set(v) { const s = dataTransferSlot(this); const str = String(v); if (['none', 'copy', 'link', 'move'].indexOf(str) >= 0) s.dropEffect = str; } },\n")
     try str.push(b, "  effectAllowed: { get() { return dataTransferSlot(this).effectAllowed; }, set(v) { const s = dataTransferSlot(this); const str = String(v); if (['none', 'copy', 'copyLink', 'copyMove', 'link', 'linkMove', 'move', 'all', 'uninitialized'].indexOf(str) >= 0) s.effectAllowed = str; } },\n")
     try str.push(b, "  items: { get() { return dataTransferSlot(this).itemList; } },\n")
-    try str.push(b, "  types: { get() { const s = dataTransferSlot(this); const out = []; for (const e of s.items) out.push(e.kind === 'file' ? 'Files' : e.type); return out; } },\n")
+    try str.push(b, "  types: { get() { const s = dataTransferSlot(this); const out = []; let hasFiles = false; for (const e of s.items) { if (e.kind === 'file') { if (!hasFiles) out.push('Files'); hasFiles = true; } else out.push(e.type); } return out; } },\n")
     try str.push(b, "  files: { get() { const s = dataTransferSlot(this); const files = s.items.filter(e => e.kind === 'file').map(e => e.file); return makeFileListFrom(() => files); } }\n")
     try str.push(b, "});\n")
     try str.push(b, "operations(DataTransfer.prototype, {\n")
