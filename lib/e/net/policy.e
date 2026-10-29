@@ -990,11 +990,27 @@ fn upper(a: *mem.Arena, s: str) -> str {
     ret out[0usize..s.len]
 }
 
+fn is_cors_unsafe_request_header_byte(c: u8) -> bool {
+    if c <= 8u8 || (c >= 10u8 && c <= 31u8) || c == 127u8 { ret true }
+    if c == 34u8 || c == 40u8 || c == 41u8 || c == 58u8 || c == 60u8 || c == 62u8 || c == 63u8 || c == 64u8 || c == 91u8 || c == 92u8 || c == 93u8 || c == 123u8 || c == 125u8 { ret true }
+    ret false
+}
+
+fn cors_safelisted_value(value: str) -> bool {
+    var i = 0usize
+    while i < value.len {
+        if is_cors_unsafe_request_header_byte(value[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // Whether `name: value` is a CORS-safelisted request header.
 fn is_cors_safelisted_request_header(a: *mem.Arena, name: str, value: str) -> bool {
     let l = lower(a, trim(name))
     if !(str.eq(l, "accept") || str.eq(l, "accept-language") || str.eq(l, "content-language") || str.eq(l, "content-type")) { ret false }
     if value.len > 128usize { ret false }
+    if !cors_safelisted_value(value) { ret false }
     if str.eq(l, "content-type") {
         let semi = index_of(value, 59u8)
         var essence = value

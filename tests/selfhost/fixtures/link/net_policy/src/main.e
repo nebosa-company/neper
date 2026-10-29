@@ -655,6 +655,13 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    var unsafe_names: [1]str = [1]str{ "Accept" }
+    var control_values: [1]str = [1]str{ "text/plain\x01" }
+    let control_headers = policy.Headers { names: unsafe_names[..], values: control_values[..] }
+    if policy.is_cors_safelisted_request_header(a, unsafe_names[0usize], control_values[0usize]) { os.exit(77i32) }
+    if policy.is_simple_cors_request(a, "GET", control_headers) { os.exit(78i32) }
+    var tab_values: [1]str = [1]str{ "en\tUS" }
+    if !policy.is_cors_safelisted_request_header(a, "Accept-Language", tab_values[0usize]) { os.exit(79i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
