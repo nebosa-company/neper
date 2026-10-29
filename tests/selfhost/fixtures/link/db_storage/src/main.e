@@ -318,6 +318,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if storage.wal_truncate(&w, checkpoint_lsn) != 20usize || w.used != 609usize { os.exit(13i32) }
     if storage.wal_truncate(&w, checkpoint_lsn) != 0usize { os.exit(13i32) }
 
+    // A direct record read accepts complete records and rejects every short
+    // prefix or invalid offset as Corrupt instead of trapping on a slice.
+    let (record_lsn, record_kind, _, record_val, record_error) = storage.wal_record(log[..w.used], 0usize)
+    if record_error != ok || record_lsn != checkpoint_lsn || record_kind != storage.KIND_CHECKPOINT || record_val != 0i64 { os.exit(14i32) }
+    var prefix_len = 0usize
+    while prefix_len < 29usize {
+        let (_, _, _, _, prefix_error) = storage.wal_record(log[..prefix_len], 0usize)
+        if prefix_error != storage.Corrupt { os.exit(14i32) }
+        prefix_len += 1usize
+    }
+    let (_, _, _, _, end_error) = storage.wal_record(log[..w.used], w.used)
+    let (_, _, _, _, beyond_error) = storage.wal_record(log[..w.used], w.used + 1usize)
+    let (_, _, _, _, tail_error) = storage.wal_record(log[..w.used], w.used - 1usize)
+    if end_error != storage.Corrupt || beyond_error != storage.Corrupt || tail_error != storage.Corrupt { os.exit(14i32) }
+
     // 14: recovery replays the remaining puts and deletes; a torn tail stops
     // cleanly, a corrupt record answers Corrupt.
     var tkeys: [64]u64 = zero

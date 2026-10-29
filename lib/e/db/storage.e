@@ -847,6 +847,7 @@ fn wal_truncate(w: *Wal, checkpoint_lsn: u64) -> usize {
 
 // Parse the record at `off`; answers (lsn, kind, key, val, ok | Corrupt).
 fn wal_record(log: []const u8, off: usize) -> (u64, u8, u64, i64, err) {
+    if off > log.len || RECORD > log.len - off { ret (0u64, 0u8, 0u64, 0i64, Corrupt) }
     let crc = hash.crc32(log[off..off + 25usize])
     var stored = 0u32
     var i = 0usize
