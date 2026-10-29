@@ -10439,7 +10439,7 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "  const s = setSlot(this, { isFormData: true, entries: [] });\n")
     try str.push(b, "  if (form !== undefined) {\n")
     try str.push(b, "    if (!isObject(form) || !slotOf(form) || slotOf(form).localName !== 'form') throw new TypeError(\"Failed to construct 'FormData': parameter 1 is not of type 'HTMLFormElement'.\");\n")
-    try str.push(b, "    for (const e of constructEntryList(form, submitter)) s.entries.push(e);\n")
+    try str.push(b, "    for (const e of constructEntryList(form, submitter)) s.entries.push([e.name, e.value]);\n")
     try str.push(b, "  }\n")
     try str.push(b, "}\n")
     try str.push(b, "iface('FormData', FormData, null);\n")
