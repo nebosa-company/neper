@@ -2496,6 +2496,14 @@ fn descends_from(s: *State, index: usize, top: usize) -> bool {
     ret false
 }
 
+// A focus kept behind a focusless modal must not receive any keyboard or text
+// route. The modal may deliberately have no focusable descendant, so clearing
+// focus would lose the element to restore when it closes.
+fn modal_blocks_focus(s: *State) -> bool {
+    let (modal, has_modal) = topmost_modal(s)
+    ret has_modal && (!s.has_focus || !descends_from(s, usize(s.focus), modal))
+}
+
 // The first live scope in the subtree of `top`, if any.
 fn scope_under(s: *State, top: usize) -> (usize, bool) {
     var i = 0usize
@@ -5521,8 +5529,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         // Enter or Space on a focused tap region is a tap at its centre.
         let code = key_code(k.key.physical)
         hold_modifier(s, code, true)
-        let (modal, has_modal) = topmost_modal(s)
-        if has_modal && (!s.has_focus || !descends_from(s, usize(s.focus), modal)) {
+        if modal_blocks_focus(s) {
             let (_, modal_key_error) = dispatch_key(s, k)
             ret modal_key_error
         }
@@ -5578,6 +5585,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .KeyUp as k:
         let code = key_code(k.key.physical)
         hold_modifier(s, code, false)
+        if modal_blocks_focus(s) { ret ok }
         if menu_alt_key(code) {
             let enter = s.menu_alt_down && !s.menu_alt_used
             s.menu_alt_down = false
@@ -5595,6 +5603,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .Text as t:
+        if modal_blocks_focus(s) { ret ok }
         let (editor, has_editor) = focused_edit(s)
         if has_editor { ret edit_text_input(s, editor, t.text) }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
@@ -5602,6 +5611,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .Composition as c:
+        if modal_blocks_focus(s) { ret ok }
         let (editor, has_editor) = focused_edit(s)
         if has_editor { edit_compose(s, editor, c.text) }
         ret ok

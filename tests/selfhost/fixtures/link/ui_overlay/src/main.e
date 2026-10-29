@@ -17,8 +17,9 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 use e.ui.window
+use e.text.layout
 
-type Log = struct { taps_3: usize, taps_5: usize, taps_7: usize, dismissed: usize, shortcuts: usize }
+type Log = struct { taps_3: usize, taps_5: usize, taps_7: usize, dismissed: usize, shortcuts: usize, key_ups: usize, edit_buffer: []u8 }
 
 fn on_3(ctx: *void, g: widget.Gesture) -> err {
     let log = mem.cast[*Log](ctx)
@@ -47,6 +48,17 @@ fn on_dismiss(ctx: *void) -> err {
 fn on_shortcut(ctx: *void) -> err {
     let log = mem.cast[*Log](ctx)
     log.shortcuts += 1usize
+    ret ok
+}
+
+fn on_key_up(ctx: *void, event: input.Event) -> err {
+    let log = mem.cast[*Log](ctx)
+    switch event {
+    case .KeyUp as key:
+        if key.key.physical == 13u32 { log.key_ups += 1usize }
+    default:
+        log.key_ups = log.key_ups
+    }
     ret ok
 }
 
@@ -79,15 +91,20 @@ fn plain_key(code: u32) -> input.Event {
     ret input.Event { KeyDown: input.KeyEvent { window: window.Id { slot: 0u32, generation: 0u32 }, key: input.Key { physical: code, logical: code }, modifiers: zero, repeat: false } }
 }
 
+fn key_up(code: u32) -> input.Event {
+    ret input.Event { KeyUp: input.KeyEvent { window: window.Id { slot: 0u32, generation: 0u32 }, key: input.Key { physical: code, logical: code }, modifiers: zero, repeat: false } }
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.001 && d > -0.001
 }
 
-// The tree: a plain box, a tap region, an overlay below the box holding a red tap
-// region, an overlay to the right of the box kept inside the window, and -- when
-// asked -- a modal overlay in the centre holding a green focusable region.
+// The tree: a plain box, a tap region, a button and an editor behind the overlay
+// cases, plus an overlay below the box holding a red tap region, one to its right,
+// and -- when asked -- a modal overlay in the centre holding a green region.
 fn build(a: *mem.Arena, ctx: *void, with_modal: bool, modal_focusable: bool) -> (widget.Node, err) {
+    let log = mem.cast[*Log](ctx)
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
     if shortcuts_error != ok { ret (zero, shortcuts_error) }
     shortcuts[0usize] = widget.Shortcut { key: 83u32, modifiers: input.Modifiers { shift: false, control: true, alt: false, meta: false, caps_lock: false, num_lock: false }, action: widget.Submit { ctx: ctx, invoke: on_shortcut } }
@@ -100,15 +117,19 @@ fn build(a: *mem.Arena, ctx: *void, with_modal: bool, modal_focusable: bool) -> 
     let (dialog, dialog_error) = mem.alloc[widget.Node](a, 1usize)
     if dialog_error != ok { ret (zero, dialog_error) }
     dialog[0usize] = widget.region(7u64, widget.Region { gesture: widget.GestureAction { ctx: ctx, invoke: on_7 }, gestures: 1u8, enabled: true, focusable: modal_focusable }, sized(20.0, 20.0, 0.0, 1.0, 0.0), zero)
-    var count = 4usize
-    if with_modal { count = 5usize }
+    var count = 6usize
+    if with_modal { count = 7usize }
     let (children, children_error) = mem.alloc[widget.Node](a, count)
     if children_error != ok { ret (zero, children_error) }
     children[0usize] = widget.box(2u64, sized(40.0, 20.0, 0.5, 0.5, 0.5), zero)
     children[1usize] = widget.region(3u64, widget.Region { gesture: widget.GestureAction { ctx: ctx, invoke: on_3 }, gestures: 1u8, enabled: true, focusable: true }, sized(40.0, 20.0, 0.0, 0.0, 1.0), zero)
     children[2usize] = widget.overlay(4u64, widget.Overlay { anchor: 2u64, placement: .Below, offset: zero, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
     children[3usize] = widget.overlay(8u64, widget.Overlay { anchor: 2u64, placement: .Right, offset: zero, modal: false, dismiss: zero }, style.defaults(), aside[0usize..1usize])
-    if with_modal { children[4usize] = widget.overlay(6u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: widget.Submit { ctx: ctx, invoke: on_dismiss } }, style.defaults(), dialog[0usize..1usize]) }
+    children[4usize] = widget.button(11u64, widget.Button { action: widget.Action { ctx: ctx, invoke: on_key_up }, enabled: true }, sized(40.0, 10.0, 0.4, 0.4, 0.4), zero)
+    var no_fonts: []const layout.FontChoice = zero
+    let edit_style = layout.Style { fonts: no_fonts, language: "", line_height: 16.0 }
+    children[5usize] = widget.edit(12u64, widget.Edit { buffer: log.edit_buffer, len: 0usize, style: edit_style, color: paint.rgba(1.0, 1.0, 1.0, 1.0), selection: paint.rgba(0.0, 0.0, 1.0, 1.0), change: zero, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, sized(40.0, 10.0, 0.2, 0.2, 0.2))
+    if with_modal { children[6usize] = widget.overlay(6u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: widget.Submit { ctx: ctx, invoke: on_dismiss } }, style.defaults(), dialog[0usize..1usize]) }
     var column = style.defaults()
     column.width = style.Length { Px: 64.0 }
     column.height = style.Length { Px: 64.0 }
@@ -134,6 +155,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if runtime_error != ok { os.exit(6i32) }
     var runtime = rt
     var log: Log = zero
+    let (edit_buffer, edit_buffer_error) = mem.alloc[u8](a, 16usize)
+    if edit_buffer_error != ok { os.exit(52i32) }
+    log.edit_buffer = edit_buffer
     let ctx = mem.cast[*void](&log)
     let (frame_storage, storage_error) = mem.alloc[u8](a, 1048576usize)
     if storage_error != ok { os.exit(7i32) }
@@ -219,6 +243,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.dispatch(&runtime, plain_key(13u32)) != ok || widget.dispatch(&runtime, plain_key(32u32)) != ok || widget.dispatch(&runtime, ctrl_s()) != ok { os.exit(49i32) }
     if log.taps_3 != 1usize || log.shortcuts != 1usize { os.exit(50i32) }
     if widget.dispatch(&runtime, plain_key(27u32)) != ok || log.dismissed != 2usize { os.exit(51i32) }
+    // KeyUp must not invoke a button that a focusless modal leaves behind it.
+    let (root_5, build_5_error) = build(&frame, ctx, false, false)
+    if build_5_error != ok { os.exit(53i32) }
+    let (_, fifth_error) = widget.reconcile(&runtime, &frame, root_5, limits)
+    if fifth_error != ok { os.exit(54i32) }
+    let (button, button_count) = widget.find_by_key(state, 11u64)
+    if button_count != 1usize || widget.focus(&runtime, button) != ok { os.exit(55i32) }
+    let (root_6, build_6_error) = build(&frame, ctx, true, false)
+    if build_6_error != ok { os.exit(56i32) }
+    let (_, sixth_error) = widget.reconcile(&runtime, &frame, root_6, limits)
+    if sixth_error != ok { os.exit(57i32) }
+    let (focus_6, has_focus_6) = widget.focused(&runtime)
+    if !has_focus_6 || focus_6.slot != button.slot { os.exit(58i32) }
+    if widget.dispatch(&runtime, key_up(13u32)) != ok || log.key_ups != 0usize { os.exit(59i32) }
+    // Text and IME composition must likewise leave an editor behind a focusless
+    // modal unchanged, including its transient composition state.
+    let (root_7, build_7_error) = build(&frame, ctx, false, false)
+    if build_7_error != ok { os.exit(60i32) }
+    let (_, seventh_error) = widget.reconcile(&runtime, &frame, root_7, limits)
+    if seventh_error != ok { os.exit(61i32) }
+    let (editor, editor_count) = widget.find_by_key(state, 12u64)
+    if editor_count != 1usize || widget.focus(&runtime, editor) != ok { os.exit(62i32) }
+    let (root_8, build_8_error) = build(&frame, ctx, true, false)
+    if build_8_error != ok { os.exit(63i32) }
+    let (_, eighth_error) = widget.reconcile(&runtime, &frame, root_8, limits)
+    if eighth_error != ok { os.exit(64i32) }
+    let (focus_7, has_focus_7) = widget.focused(&runtime)
+    if !has_focus_7 || focus_7.slot != editor.slot { os.exit(65i32) }
+    if widget.dispatch(&runtime, input.Event { Text: input.TextEvent { window: window.Id { slot: 0u32, generation: 0u32 }, text: "x" } }) != ok { os.exit(66i32) }
+    if widget.dispatch(&runtime, input.Event { Composition: input.Composition { window: window.Id { slot: 0u32, generation: 0u32 }, text: "y", selection_start: 0usize, selection_end: 1usize } }) != ok { os.exit(67i32) }
+    let (value, has_value) = widget.edit_value(&runtime, editor)
+    if !has_value || value.len != 0usize || state.compose_len != 0usize { os.exit(68i32) }
     if widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(43i32) }
     try io.print("ui overlay ok\n")
     ret ok
