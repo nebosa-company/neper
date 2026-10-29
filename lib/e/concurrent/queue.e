@@ -16,10 +16,17 @@ type State[T: type] = struct { lock: sync.Mutex, not_empty: sync.Condition, not_
 
 fn init[T: type](a: *mem.Arena, initial_capacity: usize) -> (Queue[T], err) {
     if initial_capacity == 0usize { ret (zero, Invalid) }
+    let start = mem.mark(a)
     let (storage, storage_error) = mem.alloc[State[T]](a, 1usize)
-    if storage_error != ok { ret (zero, storage_error) }
+    if storage_error != ok {
+        mem.reset(a, start)
+        ret (zero, storage_error)
+    }
     let (items, items_error) = mem.alloc[T](a, initial_capacity)
-    if items_error != ok { ret (zero, items_error) }
+    if items_error != ok {
+        mem.reset(a, start)
+        ret (zero, items_error)
+    }
     storage[0].lock = sync.mutex()
     storage[0].not_empty = sync.condition()
     storage[0].not_full = sync.condition()

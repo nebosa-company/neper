@@ -77,6 +77,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // --- The queue, single-threaded.
     let (none, e1) = queue.init[u64](a, 0usize)
     if e1 != queue.Invalid { os.exit(1) }
+    // A failure after the queue state is reserved must restore the caller's mark.
+    var queue_rollback_bytes: [256]u8 = zero
+    var queue_rollback_arena = mem.arena_from(queue_rollback_bytes[..])
+    let queue_rollback_mark = mem.mark(&queue_rollback_arena)
+    let (_, queue_rollback_error) = queue.init[u64](&queue_rollback_arena, 1000usize)
+    if queue_rollback_error != mem.Exhausted || mem.mark(&queue_rollback_arena) != queue_rollback_mark { os.exit(81i32) }
     let (q0, e2) = queue.init[u64](a, 4usize)
     if e2 != ok { os.exit(2) }
     var q = q0
