@@ -51,6 +51,20 @@ fn greedy(text: str, width: usize, lines: []usize, scratch: []usize) -> (usize, 
     ret (line, ok)
 }
 
+// Keep a finite cost distinct from the `usize` maximum used as unreachable.
+fn capped_cost_add(left: usize, right: usize) -> usize {
+    let limit = 0usize -% 2usize
+    if left >= limit || right >= limit || left > limit - right { ret limit }
+    ret left + right
+}
+
+fn capped_cost_mul(left: usize, right: usize) -> usize {
+    let limit = 0usize -% 2usize
+    if left == 0usize || right == 0usize { ret 0usize }
+    if left >= limit || right >= limit || left > limit / right { ret limit }
+    ret left * right
+}
+
 // The Knuth minimum-raggedness break: `lines.len >= 2 * count` and
 // `scratch.len >= 4 * words + 2`.
 fn optimal(text: str, width: usize, lines: []usize, scratch: []usize) -> (usize, err) {
@@ -74,9 +88,9 @@ fn optimal(text: str, width: usize, lines: []usize, scratch: []usize) -> (usize,
             let length = bounds[2usize * (j - 1usize) + 1usize] - bounds[2usize * i]
             if length > width && i + 1usize != j { i = 0usize } else if cost[i] != unreachable_cost {
                 var slack = 0usize
-                if length < width && j != count { slack = (width - length) * (width - length) }
-                var total = cost[i] + slack
-                if length > width { total = cost[i] + width * width * (length - width) }
+                if length < width && j != count { slack = capped_cost_mul(width - length, width - length) }
+                var total = capped_cost_add(cost[i], slack)
+                if length > width { total = capped_cost_add(cost[i], capped_cost_mul(capped_cost_mul(width, width), length - width)) }
                 if total < cost[j] {
                     cost[j] = total
                     parent[j] = i
