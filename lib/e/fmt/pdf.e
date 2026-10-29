@@ -71,11 +71,28 @@ fn at_token(data: []const u8, at: usize, word: str, from: usize, until: usize) -
     ret true
 }
 
+// A structural keyword is a token that is not a PDF Name. The name marker is a
+// delimiter, so at_token alone would otherwise accept /endobj as endobj.
+fn at_keyword(data: []const u8, at: usize, word: str, from: usize, until: usize) -> bool {
+    if !at_token(data, at, word, from, until) { ret false }
+    if at > 0usize && data[at - 1usize] == 47u8 { ret false }
+    ret true
+}
+
+// stream has a stricter grammar than the other structural keywords: it is
+// immediately followed by the required CR or LF that starts its data.
+fn at_stream_keyword(data: []const u8, at: usize, from: usize, until: usize) -> bool {
+    if !at_keyword(data, at, "stream", from, until) { ret false }
+    let after = at + 6usize
+    ret after < until && (data[after] == 13u8 || data[after] == 10u8)
+}
+
 // The first token `word` in data[from..until], or `until` when there is none.
-fn find_token(data: []const u8, word: str, from: usize, until: usize) -> usize {
+// The first structural keyword in data[from..until], or until when there is none.
+fn find_keyword(data: []const u8, word: str, from: usize, until: usize) -> usize {
     var at = from
     while at + word.len <= until {
-        if at_token(data, at, word, from, until) { ret at }
+        if at_keyword(data, at, word, from, until) { ret at }
         at += 1usize
     }
     ret until
@@ -208,7 +225,7 @@ fn stream_keyword(data: []const u8, from: usize, until: usize) -> usize {
             at = skip_hex(data, at, until)
             continue
         }
-        if at_token(data, at, "stream", from, until) { ret at }
+        if at_stream_keyword(data, at, from, until) { ret at }
         at += 1usize
     }
     ret until
@@ -241,23 +258,23 @@ fn object_end(data: []const u8, from: usize) -> usize {
             at = skip_hex(data, at, data.len)
             continue
         }
-        if at_token(data, at, "endobj", from, data.len) { ret at }
-        if at_token(data, at, "stream", from, data.len) {
+        if at_keyword(data, at, "endobj", from, data.len) { ret at }
+        if at_stream_keyword(data, at, from, data.len) {
             let start = stream_start(data, at, data.len)
             let (length, has_length) = stream_length(data, from, at)
             var after = start
             if has_length && length <= data.len - start { after = start + length }
-            if at_token(data, after, "endstream", from, data.len) {
+            if at_keyword(data, after, "endstream", from, data.len) {
                 at = after + 9usize
                 continue
             }
             if after < data.len && data[after] == 13u8 { after += 1usize }
             if after < data.len && data[after] == 10u8 { after += 1usize }
-            if at_token(data, after, "endstream", from, data.len) {
+            if at_keyword(data, after, "endstream", from, data.len) {
                 at = after + 9usize
                 continue
             }
-            let finish = find_token(data, "endstream", after, data.len)
+            let finish = find_keyword(data, "endstream", after, data.len)
             if finish >= data.len { ret data.len }
             at = finish + 9usize
             continue
@@ -560,7 +577,7 @@ fn stream_capped(a: *mem.Arena, data: []const u8, s: usize, e: usize, cap: usize
     if has_length && length <= e - from {
         until = from + length
     } else {
-        until = find_token(data, "endstream", from, e)
+        until = find_keyword(data, "endstream", from, e)
         // Trim the end-of-line before `endstream` when there is no direct length.
         if until > from && data[until - 1usize] == 10u8 { until -= 1usize }
         if until > from && data[until - 1usize] == 13u8 { until -= 1usize }
