@@ -9,6 +9,26 @@ use e.mem
 use e.os
 use e.test.coverage
 
+type HitWork = struct { file_id: u32, region_id: u32, rounds: usize }
+
+fn hit_worker(work: *HitWork) {
+    var i = 0usize
+    while i < work.rounds {
+        coverage.hit(work.file_id, work.region_id)
+        i += 1usize
+    }
+}
+
+fn join_all(workers: []os.Thread, count: usize) -> err {
+    var i = 0usize
+    while i < count {
+        let join_error = os.thread_join(workers[i])
+        if join_error != ok { ret join_error }
+        i += 1usize
+    }
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var empty: [4]coverage.Counter = zero
     let (none, none_error) = coverage.snapshot(empty[0..])
@@ -32,6 +52,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     coverage.hit(2u32, 1u32)
     let (after, after_error) = coverage.snapshot(dst[0..])
     if after_error != ok || after.len != 3usize || after[2].hits != 1u64 { os.exit(7i32) }
+
+    // Instrumented code can call the hook concurrently. All workers must
+    // contribute to one pair rather than racing slot allocation or increments.
+    var work = HitWork { file_id: 9u32, region_id: 4u32, rounds: 2000usize }
+    var workers: [4]os.Thread = zero
+    var started = 0usize
+    while started < workers.len {
+        let (worker, spawn_error) = os.thread_create[HitWork](hit_worker, &work, 1048576usize)
+        if spawn_error != ok { os.exit(16i32) }
+        workers[started] = worker
+        started += 1usize
+    }
+    try join_all(workers[..], workers.len)
+    let (parallel, parallel_error) = coverage.snapshot(dst[0..])
+    if parallel_error != ok || parallel.len != 4usize || parallel[3].file_id != 9u32 || parallel[3].region_id != 4u32 || parallel[3].hits != 8000u64 { os.exit(17i32) }
 
     // Merge: sums by pair, sorted by file then region.
     let first: [2]coverage.Counter = [2]coverage.Counter{ coverage.Counter { file_id: 2u32, region_id: 1u32, hits: 5u64 }, coverage.Counter { file_id: 1u32, region_id: 9u32, hits: 1u64 } }
