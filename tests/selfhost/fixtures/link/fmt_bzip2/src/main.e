@@ -73,5 +73,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e12 != bzip2.Invalid { os.exit(14) }
     let (huge, e13) = bzip2.storage_required(1000000usize)
     if e13 != bzip2.TooLarge { os.exit(15) }
+    // A final partial pull reaches EOF before the full-buffer accounting path.
+    let (n8, e14) = inflate(storage, small, out, 7000usize, u64(small_text.len - 1usize))
+    if e14 != bzip2.TooLarge { os.exit(16) }
     ret ok
 }

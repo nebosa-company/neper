@@ -440,7 +440,11 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
             if load_error != ok { ret (written, load_error) }
             if !loaded {
                 s.finished = true
-                if written > 0usize { ret (written, ok) }
+                if written > 0usize {
+                    s.output_total += u64(written)
+                    if s.output_total > s.output_limit { ret (0usize, TooLarge) }
+                    ret (written, ok)
+                }
                 ret (0usize, io.End)
             }
         }
