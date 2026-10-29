@@ -9,6 +9,7 @@
 use e.data.list as list
 use e.fmt.dom as dom
 use e.fmt.html as html
+use e.fmt.mime as mime
 use e.fmt.url as url
 use e.gfx.cssvalue as cv
 use e.js.interp as js
@@ -16,6 +17,8 @@ use e.js.module as module
 use e.js.realm as realm
 use e.mem
 use e.str
+use e.text.charset as charset
+use e.text.charset_cjk as charset_cjk
 use e.web.dom_js as dom_js
 
 // A synchronous fetch supplied by the page: (context, url, referrer, use credentials) -> (body text, status, reached the server).
@@ -734,6 +737,42 @@ fn n_utf8_decode(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     ret (js.str_value(out), ok)
 }
 
+// The File API resolves an explicit label first, then the Blob MIME charset, then UTF-8.
+fn file_reader_encoding(a: *mem.Arena, label: str, mime_type: str) -> (str, err) {
+    let (explicit_name, explicit_known) = charset.label_to_name(label)
+    if explicit_known { ret (explicit_name, ok) }
+    let (media, media_error) = mime.parse_media_type(a, mime_type, mime_type.len)
+    if media_error == mime.Invalid || media_error == mime.TooLarge { ret ("UTF-8", ok) }
+    if media_error != ok { ret ("", media_error) }
+    var parameter_at = 0usize
+    while parameter_at < media.parameters.len {
+        let parameter = media.parameters[parameter_at]
+        if charset.eq_fold(parameter.name, "charset") {
+            let (mime_name, mime_known) = charset.label_to_name(parameter.value)
+            if mime_known { ret (mime_name, ok) }
+            ret ("UTF-8", ok)
+        }
+        parameter_at += 1usize
+    }
+    ret ("UTF-8", ok)
+}
+
+fn n_decode_text(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (label, label_error) = sarg(it, args, 0usize)
+    if label_error != ok { ret (js.undefv(), label_error) }
+    let (mime_type, mime_error) = sarg(it, args, 1usize)
+    if mime_error != ok { ret (js.undefv(), mime_error) }
+    let (binary, binary_error) = sarg(it, args, 2usize)
+    if binary_error != ok { ret (js.undefv(), binary_error) }
+    let (bytes, bytes_error) = latin1_to_bytes(it.a, binary)
+    if bytes_error != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    let (name, name_error) = file_reader_encoding(it.a, label, mime_type)
+    if name_error != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    let (out, out_error) = charset_cjk.decode_sniffing_bom(it.a, name, bytes)
+    if out_error != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    ret (js.str_value(out), ok)
+}
+
 // net(method, url, headerLines, bodyBinary): the response as {status, statusText, url, headers: [[name, value]], body}, or null.
 fn n_net(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let h = host_of(it)
@@ -1207,6 +1246,7 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "setFlags", 3u32, n_set_flags)
     js.add_method(it, n, "utf8Encode", 1u32, n_utf8_encode)
     js.add_method(it, n, "utf8Decode", 1u32, n_utf8_decode)
+    js.add_method(it, n, "decodeText", 3u32, n_decode_text)
     js.add_method(it, n, "net", 4u32, n_net)
     js.add_method(it, n, "computed", 2u32, n_computed)
     js.add_method(it, n, "urlParse", 2u32, n_url_parse)
