@@ -559,12 +559,19 @@ fn vm_set_super(h: *Hinter, sel: i64) {
 
 // Instruction length at `at`.
 fn vm_len(h: *Hinter, at: usize) -> usize {
+    if at < h.code_lo || at >= h.code_hi || at >= h.data.len { ret 0usize }
     let op = h.data[at]
-    if op == 0x40u8 { ret 2usize + usize(h.data[at + 1usize]) }
-    if op == 0x41u8 { ret 2usize + 2usize * usize(h.data[at + 1usize]) }
-    if op >= 0xB0u8 && op <= 0xB7u8 { ret 2usize + usize(op - 0xB0u8) }
-    if op >= 0xB8u8 && op <= 0xBFu8 { ret 3usize + 2usize * usize(op - 0xB8u8) }
-    ret 1usize
+    var n = 1usize
+    if op == 0x40u8 || op == 0x41u8 {
+        if h.code_hi - at < 2usize || h.data.len - at < 2usize { ret 0usize }
+        n = 2usize
+        if op == 0x40u8 { n += usize(h.data[at + 1usize]) }
+        if op == 0x41u8 { n += 2usize * usize(h.data[at + 1usize]) }
+    }
+    if op >= 0xB0u8 && op <= 0xB7u8 { n = 2usize + usize(op - 0xB0u8) }
+    if op >= 0xB8u8 && op <= 0xBFu8 { n = 3usize + 2usize * usize(op - 0xB8u8) }
+    if n > h.code_hi - at || n > h.data.len - at { ret 0usize }
+    ret n
 }
 
 // Skips to just past the EIF that closes the `if` being skipped (or the ELSE of it when `stop_else`), nested ifs passed over.
@@ -576,7 +583,12 @@ fn vm_skip_if(h: *Hinter, stop_else: bool) {
             ret
         }
         let op = h.data[h.ip]
-        h.ip += vm_len(h, h.ip)
+        let n = vm_len(h, h.ip)
+        if n == 0usize {
+            h.fail = true
+            ret
+        }
+        h.ip += n
         if op == 0x58u8 {
             depth += 1usize
         } else if op == 0x59u8 {
@@ -597,7 +609,12 @@ fn vm_skip_fdef(h: *Hinter) {
             ret
         }
         let op = h.data[h.ip]
-        h.ip += vm_len(h, h.ip)
+        let n = vm_len(h, h.ip)
+        if n == 0usize {
+            h.fail = true
+            ret
+        }
+        h.ip += n
         if op == 0x2Cu8 || op == 0x89u8 {
             depth += 1usize
         } else if op == 0x2Du8 {
@@ -1805,12 +1822,16 @@ fn try_trace_print(h: *Hinter, at: usize, opc: i64, sp0: usize, t0: i64, t1: i64
 
 fn vm_step_run(h: *Hinter) {
     let at = h.ip
-    if at + 3usize >= h.data.len {
+    if at < h.code_lo || at >= h.code_hi || at >= h.data.len {
         h.fail = true
         ret
     }
     let op = i64(h.data[at])
     let n = vm_len(h, at)
+    if n == 0usize {
+        h.fail = true
+        ret
+    }
     h.ip = at + n
     if op == 0x40i64 {
         var c = 0usize
