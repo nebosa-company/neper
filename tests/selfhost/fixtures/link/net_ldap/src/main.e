@@ -302,6 +302,21 @@ fn main(a: *mem.Arena) -> err {
     let (u0, u_error) = ldap.connect(a, io.slice_reader(&cut.reader), io.slice_writer(&cut.writer), 512usize)
     var u = u0
     if u_error != ok || ldap.bind_anonymous(&u) != ldap.Closed { ret fail(47i32) }
+    var failed: Scene = zero
+    failed.writer = io.SliceWriter { data: failed.sent[0..0], off: 0usize }
+    failed.reader = io.SliceReader { data: "", off: 0usize }
+    let (f0, f_error) = ldap.connect(a, io.slice_reader(&failed.reader), io.slice_writer(&failed.writer), 512usize)
+    var f = f0
+    if f_error != ok { ret fail(49i32) }
+    let bind_failure = ldap.bind_simple(&f, "cn=secret", "password")
+    if bind_failure == ok { ret fail(50i32) }
+    var secret_left = false
+    var secret_at = 0usize
+    while secret_at < f.out.len {
+        if f.out[secret_at] != 0u8 { secret_left = true }
+        secret_at += 1usize
+    }
+    if secret_left { ret fail(51i32) }
     var junk: Scene = zero
     junk.writer = io.SliceWriter { data: junk.sent[0..], off: 0usize }
     junk.reader = io.SliceReader { data: "\x04\x01\x00", off: 0usize }

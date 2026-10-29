@@ -666,6 +666,7 @@ fn starttls(s: *Session, config: tls.ClientConfig) -> err {
 
 fn bind_op(s: *Session, name: str, sasl: bool, mechanism: str, credentials: []const u8) -> err {
     if !clean(name) { ret Invalid }
+    defer wipe(s.out)
     var w = Writer { buf: s.out, at: 0usize, failed: false }
     let (mark, id) = begin_message(s, &w)
     let op = begin(&w, OP_BIND)
@@ -681,7 +682,6 @@ fn bind_op(s: *Session, name: str, sasl: bool, mechanism: str, credentials: []co
     }
     end(&w, op)
     try send_message(s, &w, mark)
-    wipe(s.out)
     ret expect_result(s, id, OP_BIND_RESPONSE)
 }
 
