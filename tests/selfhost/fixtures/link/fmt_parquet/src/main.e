@@ -185,6 +185,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     mem.copy[u8](wrong[..], plain[..])
     wrong[877] = 255u8
     if parquet.metadata(wrong[..], &m) != parquet.Malformed { os.exit(33i32) }
+    // A compact Thrift delta that would exceed the signed field-id range must
+    // be rejected rather than overflowing the parser state.
+    let overflowing_field: [1]u8 = [1]u8{ 241u8 }
+    var overflowing_reader = parquet.thrift(overflowing_field[..], 0usize)
+    let (_, _, overflowing_error) = parquet.thrift_field(&overflowing_reader, 32760i16)
+    if overflowing_error != parquet.Malformed { os.exit(34i32) }
 
     try io.print("fmt parquet ok\n")
     ret ok

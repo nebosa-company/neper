@@ -181,6 +181,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let invalid_enum: [1]u8 = [1]u8{ 6 }
     var d14 = avro.decoder(invalid_enum[0..])
     if avro.skip(&w, 6u32, &d14) != avro.Malformed { os.exit(26i32) }
+    // The most-negative block count has no positive counterpart and must not
+    // overflow while a negative-count array block is normalized.
+    var array_kinds: [2]avro.Kind = zero
+    var array_names: [2]str = zero
+    var array_starts: [2]usize = zero
+    var array_counts: [2]usize = zero
+    var array_sizes: [2]usize = zero
+    var array_defaults: [2]str = zero
+    var array_children: [1]u32 = [1]u32{ 1u32 }
+    var array_schema = avro.Schema { kind: array_kinds[..], name: array_names[..], child_start: array_starts[..], child_count: array_counts[..], children: array_children[..], size: array_sizes[..], fallback: array_defaults[..] }
+    node(&array_schema, 0usize, .Array, "", 0usize, 1usize)
+    node(&array_schema, 1usize, .Null, "", 0usize, 0usize)
+    let min_block: [12]u8 = [12]u8{ 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 1u8, 0u8, 0u8 }
+    var d15 = avro.decoder(min_block[..])
+    var o9 = avro.sink(buffer[..])
+    if avro.decode_resolved(&array_schema, 0u32, &array_schema, 0u32, &d15, &o9) != avro.Malformed { os.exit(27i32) }
+    // Negative-count blocks state their exact byte size.  The decoder must not
+    // accept a block whose declared size excludes its encoded item.
+    array_kinds[1usize] = .Int
+    let wrong_block_size: [4]u8 = [4]u8{ 1u8, 0u8, 2u8, 0u8 }
+    var d16 = avro.decoder(wrong_block_size[..])
+    var o10 = avro.sink(buffer[..])
+    if avro.decode_resolved(&array_schema, 0u32, &array_schema, 0u32, &d16, &o10) != avro.Malformed { os.exit(28i32) }
     try io.print("fmt avro ok\n")
     ret ok
 }

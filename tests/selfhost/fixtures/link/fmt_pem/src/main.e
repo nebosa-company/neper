@@ -53,6 +53,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e7 != pem.Invalid { os.exit(20) }
     let (b8, r8, e8) = pem.decode(a, text, 99usize)
     if e8 != pem.TooLarge { os.exit(21) }
+    // RFC 7468 labels may not contain a horizontal tab.
+    let (b9, r9, e9) = pem.decode(a, "-----BEGIN A\tB-----\nYWJj\n-----END A\tB-----\n", 16usize)
+    if e9 != pem.Invalid { os.exit(25) }
     // Text written by encode must not be able to make a second PEM delimiter or
     // header line. Validation happens before any bytes reach the writer.
     var injected_label: pem.Block = zero

@@ -41,6 +41,17 @@ fn cstring_end(source: []const u8, at: usize, limit: usize) -> (usize, err) {
     ret (end, ok)
 }
 
+// BSON element names are C strings in the wire format, so a NUL would end the
+// encoded name before the bytes the caller supplied.
+fn valid_key(key: str) -> bool {
+    var at = 0usize
+    while at < key.len {
+        if key[at] == 0u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 // The elements of the document at `at`, whose span was already checked.
 fn parse_document(a: *mem.Arena, source: []const u8, at: usize, length: usize, depth: u16, max_depth: u16) -> ([]const Element, err) {
     if depth >= max_depth { ret (zero, TooDeep) }
@@ -178,6 +189,7 @@ fn elements_size(elements: []const Element) -> (usize, err) {
     var total = 5usize
     var index = 0usize
     while index < elements.len {
+        if !valid_key(elements[index].key) { ret (0usize, Invalid) }
         let (inner, inner_error) = size(&elements[index].value)
         if inner_error != ok { ret (0usize, inner_error) }
         total += 2usize + elements[index].key.len + inner

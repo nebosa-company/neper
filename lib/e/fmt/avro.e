@@ -417,9 +417,15 @@ fn decode_resolved(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *D
     if first_error != ok { ret first_error }
     var n = first
     while n != 0i64 {
+        var block_end = 0usize
+        var has_block_end = false
         if n < 0i64 {
             let (block_bytes, block_error) = read_long(d)
             if block_error != ok { ret block_error }
+            if block_bytes < 0i64 || u64(block_bytes) > u64(d.data.len - d.pos) { ret Malformed }
+            block_end = d.pos + usize(block_bytes)
+            has_block_end = true
+            if n == 0i64 - 9223372036854775807i64 - 1i64 { ret Malformed }
             n = 0i64 - n
         }
         try write_long(o, n)
@@ -433,6 +439,7 @@ fn decode_resolved(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *D
             try decode_resolved(w, witem, r, ritem, d, o)
             i += 1i64
         }
+        if has_block_end && d.pos != block_end { ret Malformed }
         let (again, again_error) = read_long(d)
         if again_error != ok { ret again_error }
         n = again

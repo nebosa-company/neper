@@ -131,5 +131,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e8 != bson.Invalid { os.exit(35) }
     let (r9, e9) = bson.parse(a, doc[0..], 1u16)
     if e9 != bson.TooDeep { os.exit(36) }
+    // BSON element names are C strings and cannot carry a NUL byte.
+    var bad_key_elements: [1]bson.Element = zero
+    bad_key_elements[0usize].key = "a\x00b"
+    bad_key_elements[0usize].value = .Null
+    let bad_key = bson.Value { Document: bad_key_elements[..] }
+    let (_, bad_key_error) = bson.size(&bad_key)
+    if bad_key_error != bson.Invalid { os.exit(37) }
     ret ok
 }

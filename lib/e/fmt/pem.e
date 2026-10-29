@@ -78,7 +78,7 @@ fn decode(a: *mem.Arena, source: str, byte_limit: usize) -> (Block, str, err) {
     let begin_line = strip_cr(source[at..end])
     if !str.ends_with(begin_line, "-----") { ret (zero, source, Invalid) }
     let label = begin_line[11usize..begin_line.len - 5usize]
-    if label.len == 0usize { ret (zero, source, Invalid) }
+    if !valid_label(label) { ret (zero, source, Invalid) }
     at = end + 1usize
     if at > source.len { ret (zero, source, Invalid) }
     // Header lines: a colon in the first line marks a header block, closed by an empty line.

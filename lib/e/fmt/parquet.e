@@ -408,7 +408,10 @@ fn thrift_field(t: *Thrift, last: i16) -> (i16, u8, err) {
     if head == 0u8 { ret (0i16, 0u8, ok) }
     let kind = head & 15u8
     let delta = head >> 4u32
-    if delta != 0u8 { ret (last + i16(delta), kind, ok) }
+    if delta != 0u8 {
+        if last > 32767i16 - i16(delta) { ret (0i16, 0u8, Malformed) }
+        ret (last + i16(delta), kind, ok)
+    }
     let (id, e) = thrift_i64(t)
     if e != ok { ret (0i16, 0u8, e) }
     if id < 1i64 || id > 32767i64 { ret (0i16, 0u8, Malformed) }
