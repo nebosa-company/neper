@@ -12,14 +12,22 @@
 use e.mem
 use e.os
 use e.atomic
+use e.sync
+
+error Failed
 
 // Long enough that the parent has terminated it well before, short enough that nothing is left
 // running if the parent never does.
 const CHILD_PATIENCE: i64 = 30000000000i64
+const SPAWN_RACE_ROUNDS: usize = 32usize
 
 // `Atomic[T]` stands as a field rather than as a bare local, which is the shape
 // `link/os_futex` already uses.
 type Blocker = struct { flag: Atomic[u32] }
+// Two workers wait at each round's gate before they each launch a child with a distinct
+// relative cwd and stdout pipe. Parent-side cwd/fd swaps let those configurations cross.
+type SpawnRace = struct { ready: sync.Semaphore, release: sync.Semaphore, done: sync.Semaphore, abort: Atomic[u32] }
+type SpawnRaceJob = struct { race: *SpawnRace, image: str, directory: str, marker: str, answer: u8, failure: i32 }
 
 fn same(left: str, right: str) -> bool {
     if left.len != right.len { ret false }
@@ -99,6 +107,21 @@ fn run_child(a: *mem.Arena) -> bool {
         if !ends_with(here, "np-group-cwd") { os.exit(70i32) }
         os.exit(0i32)
     }
+    // --- Both halves of the concurrent spawn regression verify their own cwd and pipe.
+    if has_argument(a, "np-race-left") {
+        let (here, here_error) = os.current_dir(a)
+        if here_error != ok || !ends_with(here, "np-spawn-race-left") { os.exit(71i32) }
+        let (written, write_error) = os.write(os.stdout(), "L")
+        if write_error != ok || written != 1usize { os.exit(72i32) }
+        os.exit(0i32)
+    }
+    if has_argument(a, "np-race-right") {
+        let (here, here_error) = os.current_dir(a)
+        if here_error != ok || !ends_with(here, "np-spawn-race-right") { os.exit(73i32) }
+        let (written, write_error) = os.write(os.stdout(), "R")
+        if write_error != ok || written != 1usize { os.exit(74i32) }
+        os.exit(0i32)
+    }
     // --- Still running when the group is terminated. Waiting on a flag nothing will ever set
     // is how it blocks without a sleep of its own.
     if has_argument(a, "np-block-child") {
@@ -107,6 +130,105 @@ fn run_child(a: *mem.Arena) -> bool {
         os.exit(0i32)
     }
     ret false
+}
+
+fn spawn_race_once(a: *mem.Arena, job: *SpawnRaceJob) -> i32 {
+    let (reading, writing, pipe_error) = os.pipe()
+    if pipe_error != ok { ret 1i32 }
+    var argv: [2]str = zero
+    argv[0usize] = job.image
+    argv[1usize] = job.marker
+    var options: os.SpawnOptions = zero
+    options.argv = argv[..]
+    options.inherit_env = false
+    options.cwd = job.directory
+    options.stdio.stdin = os.stdin()
+    options.stdio.stdout = writing
+    options.stdio.stderr = os.stderr()
+    let (child, spawn_error) = os.spawn_with_options(a, options)
+    if spawn_error != ok {
+        let closed_read = os.close(reading)
+        let closed_write = os.close(options.stdio.stdout)
+        ret 2i32
+    }
+    if os.close(options.stdio.stdout) != ok {
+        let (ignored_status, ignored_wait_error) = os.wait(child)
+        let closed_read = os.close(reading)
+        ret 3i32
+    }
+    let (status, wait_error) = os.wait(child)
+    var reply: [1]u8 = zero
+    let (count, read_error) = os.read(reading, reply[..])
+    let closed_read = os.close(reading)
+    if wait_error != ok || status != 0i32 { ret 4i32 }
+    if read_error != ok || closed_read != ok { ret 5i32 }
+    if count != 1usize || reply[0usize] != job.answer { ret 6i32 }
+    ret 0i32
+}
+
+fn spawn_race_worker(job: *SpawnRaceJob) {
+    var storage: [16384]u8 = zero
+    var arena = mem.arena_from(storage[..])
+    var round = 0usize
+    while round < SPAWN_RACE_ROUNDS {
+        let announced = sync.semaphore_post(&job.race.ready, 1u32)
+        sync.semaphore_wait(&job.race.release)
+        if atomic.load(&job.race.abort, .Acquire) != 0u32 { ret }
+        let checkpoint = mem.mark(&arena)
+        let failure = spawn_race_once(&arena, job)
+        mem.reset(&arena, checkpoint)
+        if failure != 0i32 { job.failure = failure }
+        let completed = sync.semaphore_post(&job.race.done, 1u32)
+        round += 1usize
+    }
+}
+
+fn check_spawn_race(a: *mem.Arena, image: str) -> err {
+    let stale_left = os.remove_dir(a, "np-spawn-race-left")
+    let stale_right = os.remove_dir(a, "np-spawn-race-right")
+    if os.mkdir(a, "np-spawn-race-left") != ok { ret Failed }
+    if os.mkdir(a, "np-spawn-race-right") != ok {
+        let removed_left = os.remove_dir(a, "np-spawn-race-left")
+        ret Failed
+    }
+    var race: SpawnRace = zero
+    race.ready = sync.semaphore(0u32)
+    race.release = sync.semaphore(0u32)
+    race.done = sync.semaphore(0u32)
+    var left = SpawnRaceJob { race: &race, image: image, directory: "np-spawn-race-left", marker: "np-race-left", answer: 76u8, failure: 0i32 }
+    var right = SpawnRaceJob { race: &race, image: image, directory: "np-spawn-race-right", marker: "np-race-right", answer: 82u8, failure: 0i32 }
+    let (left_thread, left_error) = os.thread_create[SpawnRaceJob](spawn_race_worker, &left, 1048576usize)
+    if left_error != ok {
+        let removed_left = os.remove_dir(a, "np-spawn-race-left")
+        let removed_right = os.remove_dir(a, "np-spawn-race-right")
+        ret left_error
+    }
+    let (right_thread, right_error) = os.thread_create[SpawnRaceJob](spawn_race_worker, &right, 1048576usize)
+    if right_error != ok {
+        atomic.store(&race.abort, 1u32, .Release)
+        let released = sync.semaphore_post(&race.release, 1u32)
+        let joined = os.thread_join(left_thread)
+        let removed_left = os.remove_dir(a, "np-spawn-race-left")
+        let removed_right = os.remove_dir(a, "np-spawn-race-right")
+        ret right_error
+    }
+    var round = 0usize
+    while round < SPAWN_RACE_ROUNDS {
+        sync.semaphore_wait(&race.ready)
+        sync.semaphore_wait(&race.ready)
+        let released = sync.semaphore_post(&race.release, 2u32)
+        sync.semaphore_wait(&race.done)
+        sync.semaphore_wait(&race.done)
+        round += 1usize
+    }
+    let left_join = os.thread_join(left_thread)
+    let right_join = os.thread_join(right_thread)
+    let removed_left = os.remove_dir(a, "np-spawn-race-left")
+    let removed_right = os.remove_dir(a, "np-spawn-race-right")
+    if left_join != ok || right_join != ok { ret Failed }
+    if removed_left != ok || removed_right != ok { ret Failed }
+    if left.failure != 0i32 || right.failure != 0i32 { ret Failed }
+    ret ok
 }
 
 fn main(a: *mem.Arena) -> err {
@@ -179,6 +301,12 @@ fn main(a: *mem.Arena) -> err {
     if moved_wait_error != ok { os.exit(26i32) }
     if moved_status != 0i32 { os.exit(27i32 + moved_status) }
     if os.remove_dir(a, "np-group-cwd") != ok { os.exit(28i32) }
+
+    // Parent mutation is only a macOS implementation concern. The workers begin each round at
+    // one gate, then each child must see its own relative cwd and its own stdout pipe.
+    when target.os == .Macos {
+        if check_spawn_race(a, image) != ok { os.exit(29i32) }
+    }
 
     // --- A group, and the child in it ended by terminating the group rather than the child.
     let (group_argv, group_argv_error) = child_argv(a, image, "np-block-child")

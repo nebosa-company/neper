@@ -1329,16 +1329,14 @@ fn watch_close(w: own Watch) -> err {
 
 const SYS_PIPE: usize = 42usize
 const SYS_DUP: usize = 41usize
-const SYS_DUP2: usize = 90usize
 const SYS_KILL: usize = 37usize
 const SYS_WAIT4: usize = 7usize
-const SYS_FCHDIR: usize = 13usize
-const SYS_POSIX_SPAWN: usize = 244usize
 const SYS_POLL: usize = 230usize
 const SIGKILL: usize = 9usize
 const SIGTERM: usize = 15usize
 const SPAWN_LIST_MAX: usize = 1024usize
 const EXEC_FAILED: usize = 127usize
+const POSIX_SPAWN_SETPGROUP: i16 = 2i16
 
 type ProcUsage = struct { exit_code: i32, peak_memory: usize }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
@@ -1456,13 +1454,43 @@ fn environment_vector(a: *mem.Arena, additions: []const str) -> (usize, err) {
     ret (mem.address_of(&vector[0usize]), ok)
 }
 
-// posix_spawn(2) is the one way to start a process here: fork without libSystem leaves the
-// child with no Mach state to exec from. It has no file actions in this call, so the child's
-// descriptors 0 to 2 are set up in the parent around it -- saved, replaced by the stdio the
-// caller named, and put back -- and likewise the working directory. That is not safe against
-// another thread spawning at the same moment.
-// ponytail: stdio and cwd are swapped in the parent around the spawn; add
-// POSIX_SPAWN file actions (psfa) when threads exist on macOS.
+// `posix_spawn_file_actions_t` and `posix_spawnattr_t` are both `void *` in spawn.h, so a
+// word is their opaque storage. The file actions run in the child between creation and exec;
+// neither the caller's cwd nor its descriptors have to be changed while another thread starts.
+@import("c", "posix_spawn")
+extern fn raw_posix_spawn(pid: *i32, program: usize, actions: *const usize, attributes: *const usize, argv: usize, envp: usize) -> i32
+
+@import("c", "posix_spawn_file_actions_init")
+extern fn raw_spawn_actions_init(actions: *usize) -> i32
+
+@import("c", "posix_spawn_file_actions_destroy")
+extern fn raw_spawn_actions_destroy(actions: *usize) -> i32
+
+@import("c", "posix_spawn_file_actions_adddup2")
+extern fn raw_spawn_actions_dup2(actions: *usize, source: i32, destination: i32) -> i32
+
+// `addchdir_np` has been in macOS since 10.15, before this target's 11.0 deployment floor.
+@import("c", "posix_spawn_file_actions_addchdir_np")
+extern fn raw_spawn_actions_chdir(actions: *usize, directory: usize) -> i32
+
+@import("c", "posix_spawnattr_init")
+extern fn raw_spawn_attributes_init(attributes: *usize) -> i32
+
+@import("c", "posix_spawnattr_destroy")
+extern fn raw_spawn_attributes_destroy(attributes: *usize) -> i32
+
+@import("c", "posix_spawnattr_setflags")
+extern fn raw_spawn_attributes_flags(attributes: *usize, flags: i16) -> i32
+
+@import("c", "posix_spawnattr_setpgroup")
+extern fn raw_spawn_attributes_pgroup(attributes: *usize, group: i32) -> i32
+
+// libSystem's posix_spawn family returns a positive errno directly, unlike the syscall shim.
+fn from_spawn_status(status: i32) -> err {
+    if status == 0i32 { ret ok }
+    ret from_errno(0isize - isize(status))
+}
+
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
     let (child, spawn_error) = spawn_inner(a, options, false)
     ret (child, spawn_error)
@@ -1486,59 +1514,66 @@ fn spawn_inner(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (Proc, er
         envp = own_vector
     }
     var directory = 0usize
-    var home = 0isize
     if options.cwd.len != 0usize {
         let (directory_address, directory_error) = c_string(a, options.cwd)
         if directory_error != ok { ret (child, directory_error) }
         directory = directory_address
-        let (dot, dot_error) = c_string(a, ".")
-        if dot_error != ok { ret (child, dot_error) }
-        home = syscall(SYS_OPEN, dot, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
-        if home < 0isize { ret (child, from_errno(home)) }
-        let moved = syscall(SYS_CHDIR, directory, 0usize, 0usize, 0usize, 0usize, 0usize)
-        if moved < 0isize {
-            let closed = syscall(SYS_CLOSE, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
-            ret (child, from_errno(moved))
+    }
+
+    var actions = 0usize
+    let actions_init = raw_spawn_actions_init(&actions)
+    if actions_init != 0i32 { ret (child, from_spawn_status(actions_init)) }
+    if directory != 0usize {
+        let changed = raw_spawn_actions_chdir(&actions, directory)
+        if changed != 0i32 {
+            let failure = from_spawn_status(changed)
+            let ignored = raw_spawn_actions_destroy(&actions)
+            ret (child, failure)
         }
     }
-    var saved: [3]isize = zero
     var slot = 0usize
     while slot < 3usize {
-        saved[slot] = -1isize
-        var wanted = stdio_raw(options.stdio, slot)
+        let wanted = stdio_raw(options.stdio, slot)
         if wanted != slot {
-            saved[slot] = syscall(SYS_DUP, slot, 0usize, 0usize, 0usize, 0usize, 0usize)
-            let bound = syscall(SYS_DUP2, wanted, slot, 0usize, 0usize, 0usize, 0usize)
+            let bound = raw_spawn_actions_dup2(&actions, i32(wanted), i32(slot))
+            if bound != 0i32 {
+                let failure = from_spawn_status(bound)
+                let ignored = raw_spawn_actions_destroy(&actions)
+                ret (child, failure)
+            }
         }
         slot += 1usize
     }
-    var pid: i32 = 0i32
-    var description: [32]i64 = zero
-    // A group is the child's own, made by the kernel as it starts: POSIX_SPAWN_SETPGROUP (2) in
-    // the attribute block's flags, with a group of 0 meaning the child's pid. Afterwards it is too
-    // late -- setpgid on a child that has exec'd answers EACCES. The descriptor's first word is
-    // the attribute block's size and its second the block's address; the flags are the first
-    // short of the block and the group its fourth word, so a 16-byte block is enough.
-    var attributes: [4]i32 = zero
+
+    var attributes = 0usize
+    let attributes_init = raw_spawn_attributes_init(&attributes)
+    if attributes_init != 0i32 {
+        let failure = from_spawn_status(attributes_init)
+        let ignored = raw_spawn_actions_destroy(&actions)
+        ret (child, failure)
+    }
     if grouped {
-        attributes[0usize] = 2i32
-        description[0usize] = 16i64
-        description[1usize] = i64(mem.address_of(&attributes[0usize]))
-    }
-    let result = syscall(SYS_POSIX_SPAWN, mem.address_of(&pid), program, mem.address_of(&description[0usize]), argv, envp, 0usize)
-    var restore = 0usize
-    while restore < 3usize {
-        if saved[restore] >= 0isize {
-            let back = syscall(SYS_DUP2, usize(saved[restore]), restore, 0usize, 0usize, 0usize, 0usize)
-            let closed = syscall(SYS_CLOSE, usize(saved[restore]), 0usize, 0usize, 0usize, 0usize, 0usize)
+        let flags = raw_spawn_attributes_flags(&attributes, POSIX_SPAWN_SETPGROUP)
+        if flags != 0i32 {
+            let failure = from_spawn_status(flags)
+            let ignored_attributes = raw_spawn_attributes_destroy(&attributes)
+            let ignored_actions = raw_spawn_actions_destroy(&actions)
+            ret (child, failure)
         }
-        restore += 1usize
+        let group = raw_spawn_attributes_pgroup(&attributes, 0i32)
+        if group != 0i32 {
+            let failure = from_spawn_status(group)
+            let ignored_attributes = raw_spawn_attributes_destroy(&attributes)
+            let ignored_actions = raw_spawn_actions_destroy(&actions)
+            ret (child, failure)
+        }
     }
-    if home >= 0isize && directory != 0usize {
-        let back = syscall(SYS_FCHDIR, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
-        let closed = syscall(SYS_CLOSE, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
-    }
-    if result < 0isize { ret (child, from_errno(result)) }
+
+    var pid: i32 = 0i32
+    let result = raw_posix_spawn(&pid, program, &actions, &attributes, argv, envp)
+    let ignored_attributes = raw_spawn_attributes_destroy(&attributes)
+    let ignored_actions = raw_spawn_actions_destroy(&actions)
+    if result != 0i32 { ret (child, from_spawn_status(result)) }
     child.raw = usize(pid)
     ret (child, ok)
 }
