@@ -10,6 +10,7 @@
 
 use e.mem
 use e.os
+use e.sync
 
 error NoLoader
 error NoDevice
@@ -44,30 +45,40 @@ var api: Api = zero
 var driver: os.Lib = zero
 var loaded: bool = false
 var initialised: bool = false
+// `devices` may be called by several application threads. The driver handle,
+// entry points and cuInit state are one process-wide critical section.
+var loader_locks: [1]sync.Mutex = zero
 
 fn library_name() -> str {
     if os.NATIVE_SEPARATOR == 92u8 { ret "nvcuda.dll" }
     ret "libcuda.so.1"
 }
 
-fn load(a: *mem.Arena) -> err {
-    if loaded { ret ok }
-    let (library, library_error) = os.dlopen(a, library_name())
-    if library_error != ok { ret NoLoader }
-    let (p1, e1) = os.dlsym[fn(u32) -> i32](a, library, "cuInit")
-    let (p2, e2) = os.dlsym[fn(*i32) -> i32](a, library, "cuDeviceGetCount")
-    let (p3, e3) = os.dlsym[fn(*i32, i32) -> i32](a, library, "cuDeviceGet")
-    let (p4, e4) = os.dlsym[fn(*u8, i32, i32) -> i32](a, library, "cuDeviceGetName")
-    let (p5, e5) = os.dlsym[fn(*u8, i32) -> i32](a, library, "cuDeviceGetUuid")
-    let (p6, e6) = os.dlsym[fn(*usize, i32) -> i32](a, library, "cuDeviceTotalMem_v2")
-    let (p7, e7) = os.dlsym[fn(*i32, i32, i32) -> i32](a, library, "cuDeviceGetAttribute")
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok {
-        let closed = os.dlclose(library)
-        ret NoLoader
+fn prepare(a: *mem.Arena) -> err {
+    sync.mutex_lock(&loader_locks[0usize])
+    defer sync.mutex_unlock(&loader_locks[0usize])
+    if !loaded {
+        let (library, library_error) = os.dlopen(a, library_name())
+        if library_error != ok { ret NoLoader }
+        let (p1, e1) = os.dlsym[fn(u32) -> i32](a, library, "cuInit")
+        let (p2, e2) = os.dlsym[fn(*i32) -> i32](a, library, "cuDeviceGetCount")
+        let (p3, e3) = os.dlsym[fn(*i32, i32) -> i32](a, library, "cuDeviceGet")
+        let (p4, e4) = os.dlsym[fn(*u8, i32, i32) -> i32](a, library, "cuDeviceGetName")
+        let (p5, e5) = os.dlsym[fn(*u8, i32) -> i32](a, library, "cuDeviceGetUuid")
+        let (p6, e6) = os.dlsym[fn(*usize, i32) -> i32](a, library, "cuDeviceTotalMem_v2")
+        let (p7, e7) = os.dlsym[fn(*i32, i32, i32) -> i32](a, library, "cuDeviceGetAttribute")
+        if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok {
+            let closed = os.dlclose(library)
+            ret NoLoader
+        }
+        driver = library
+        api = Api { init: p1, device_get_count: p2, device_get: p3, device_get_name: p4, device_get_uuid: p5, device_total_mem: p6, device_get_attribute: p7 }
+        loaded = true
     }
-    driver = library
-    api = Api { init: p1, device_get_count: p2, device_get: p3, device_get_name: p4, device_get_uuid: p5, device_total_mem: p6, device_get_attribute: p7 }
-    loaded = true
+    if !initialised {
+        if api.init(0u32) != CUDA_SUCCESS { ret NoLoader }
+        initialised = true
+    }
     ret ok
 }
 
@@ -75,12 +86,8 @@ fn load(a: *mem.Arena) -> err {
 // driver, `NoDevice` a driver with no device, `Failed` a driver call that did not answer.
 fn devices(a: *mem.Arena, limit: usize) -> ([]Physical, err) {
     var none: []Physical = zero
-    let load_error = load(a)
-    if load_error != ok { ret (none, load_error) }
-    if !initialised {
-        if api.init(0u32) != CUDA_SUCCESS { ret (none, NoLoader) }
-        initialised = true
-    }
+    let prepare_error = prepare(a)
+    if prepare_error != ok { ret (none, prepare_error) }
     var count = 0i32
     let count_status = api.device_get_count(&count)
     if count_status == CUDA_ERROR_NO_DEVICE { ret (none, NoDevice) }
