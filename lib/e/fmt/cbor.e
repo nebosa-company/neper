@@ -385,7 +385,15 @@ fn skip_depth(d: *Decoder, depth: u16) -> err {
     if item.major == MAJOR_ARRAY || item.major == MAJOR_MAP {
         if depth == 0u16 { ret Invalid }
         if item.indefinite {
-            while !at_break(d) { try skip_depth(d, depth - 1u16) }
+            var items = 0usize
+            while !at_break(d) {
+                try skip_depth(d, depth - 1u16)
+                items += 1usize
+            }
+            // An indefinite map still has key/value pairs. Do not accept a
+            // break after a dangling key merely because every item itself was
+            // valid.
+            if item.major == MAJOR_MAP && items % 2usize != 0usize { ret Invalid }
             d.at += 1usize
             ret ok
         }

@@ -333,6 +333,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let huge_map_len = unhex("bb8000000000000000f6", raw[..])
     var huge_map = cbor.decoder(raw[..huge_map_len])
     if cbor.skip(&huge_map) != cbor.Truncated { os.exit(57i32) }
+    // An indefinite map cannot end after only its key. `decode` already
+    // rejects this; `skip` must agree rather than treating it as a valid item.
+    let dangling_map_len = unhex("bf6161ff", raw[..])
+    var dangling_map = cbor.decoder(raw[..dangling_map_len])
+    if cbor.skip(&dangling_map) != cbor.Invalid { os.exit(58i32) }
 
     try io.print("fmt cbor ok\n")
     ret ok
