@@ -163,6 +163,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let huff: [6]u8 = [6]u8{ 0x00, 0x00, 0x51, 0x82, 0xaa, 0xbb }
     let (_, huffe) = h3.headers_decode(huff[..], names_out[..], values_out[..], scratch[..])
     if huffe != h3.Unsupported { os.exit(4i32) }
+    // A static name reference with N=0 and T=1 is valid; N only controls
+    // whether an intermediary may add the field to the dynamic table.
+    let static_name_n0: [5]u8 = [5]u8{ 0x00, 0x00, 0x50, 0x01, 0x78 }
+    let (n0c, n0e) = h3.headers_decode(static_name_n0[..], names_out[..], values_out[..], scratch[..])
+    if n0e != ok || n0c != 1usize || !same(names_out[0usize], ":authority") || !same(values_out[0usize], "x") { os.exit(4i32) }
     let dyn: [3]u8 = [3]u8{ 0x00, 0x00, 0x80 }
     let (_, dyne) = h3.headers_decode(dyn[..], names_out[..], values_out[..], scratch[..])
     if dyne != h3.Unsupported { os.exit(4i32) }
