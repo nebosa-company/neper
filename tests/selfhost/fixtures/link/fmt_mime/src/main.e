@@ -29,7 +29,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_param) = mime.parse_media_type(a, "text/plain; charset", 4usize)
     let (_, too_many) = mime.parse_media_type(a, "text/plain; a=1; b=2", 1usize)
     let (_, unterminated) = mime.parse_media_type(a, "text/plain; a=\"open", 4usize)
-    if no_slash != mime.Invalid || bad_param != mime.Invalid || too_many != mime.TooLarge || unterminated != mime.Invalid { os.exit(6) }
+    let (_, raw_cr_parameter) = mime.parse_media_type(a, "text/plain; x=\"a\rb\"", 4usize)
+    let (_, raw_lf_parameter) = mime.parse_media_type(a, "text/plain; x=\"a\nb\"", 4usize)
+    if no_slash != mime.Invalid || bad_param != mime.Invalid || too_many != mime.TooLarge || unterminated != mime.Invalid || raw_cr_parameter != mime.Invalid || raw_lf_parameter != mime.Invalid { os.exit(6) }
     let (html, known) = mime.extension_type("HTML")
     let (unknown, is_known) = mime.extension_type("xyz")
     if !known || !text_equal(html, "text/html") || is_known || !text_equal(unknown, "application/octet-stream") { os.exit(7) }

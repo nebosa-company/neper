@@ -56,10 +56,12 @@ fn parameter_value(a: *mem.Arena, source: str, at: usize) -> (str, usize, err) {
         var end = at + 1usize
         var escapes = 0usize
         while end < source.len && source[end] != 34u8 {
+            if source[end] == 13u8 || source[end] == 10u8 { ret ("", at, Invalid) }
             if source[end] == 92u8 {
                 if end + 1usize >= source.len { ret ("", at, Invalid) }
                 escapes += 1usize
                 end += 1usize
+                if source[end] == 13u8 || source[end] == 10u8 { ret ("", at, Invalid) }
             }
             end += 1usize
         }
