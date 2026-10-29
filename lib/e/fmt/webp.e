@@ -223,17 +223,17 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
     var complete = false
     while filled < head.len {
         let (got, read_error) = io.read(&r, head[filled..])
+        filled += got
         if read_error == io.End {
             complete = true
             break
         }
         if read_error != ok { ret (zero, read_error) }
-        filled += got
     }
     if filled == head.len {
         var tail: [1]u8 = zero
-        let (_, tail_error) = io.read(&r, tail[..])
-        if tail_error == io.End { complete = true }
+        let (tail_count, tail_error) = io.read(&r, tail[..])
+        if tail_error == io.End && tail_count == 0usize { complete = true }
         if tail_error != ok && tail_error != io.End { ret (zero, tail_error) }
     }
     var data = head[..filled]

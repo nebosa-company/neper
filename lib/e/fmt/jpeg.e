@@ -678,9 +678,9 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
     var filled = 0usize
     while filled < head.len {
         let (got, read_error) = io.read(&r, head[filled..])
+        filled += got
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
-        filled += got
     }
     var dec: Decoder = zero
     dec.data = head[..filled]

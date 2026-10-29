@@ -122,9 +122,9 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
     var got = 0usize
     while got < head.len {
         let (n, read_error) = io.read(&r, head[got..])
+        got += n
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
-        got += n
     }
     let (h, failure) = parse_header(head[..got])
     if failure != ok { ret (zero, failure) }

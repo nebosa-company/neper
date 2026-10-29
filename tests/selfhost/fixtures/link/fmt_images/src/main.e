@@ -9,6 +9,7 @@ use e.algo.hash as hash
 use e.io
 use e.mem
 use e.os
+use e.test.support
 use e.gfx.image
 use e.fmt.qoi as qoi
 use e.fmt.bmp as bmp
@@ -337,6 +338,24 @@ fn survive_tiff(a: *mem.Arena, blob: str) -> bool { ret survive(a, 3u8, blob) }
 fn survive_exif(a: *mem.Arena, blob: str) -> bool { ret survive(a, 4u8, blob) }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // Inspect keeps the final BMP header bytes when their read also returns End.
+    var ended_bmp: [54]u8 = zero
+    ended_bmp[0usize] = 66u8
+    ended_bmp[1usize] = 77u8
+    ended_bmp[2usize] = 54u8
+    ended_bmp[10usize] = 54u8
+    ended_bmp[14usize] = 40u8
+    ended_bmp[18usize] = 1u8
+    ended_bmp[22usize] = 1u8
+    ended_bmp[26usize] = 1u8
+    ended_bmp[28usize] = 24u8
+    ended_bmp[34usize] = 4u8
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: ended_bmp[..], failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { die(180i32) }
+    let (ended_info, ended_error) = bmp.inspect(support.reader(&ended_script))
+    if ended_error != ok || ended_info.width != 1u32 || ended_info.height != 1u32 { die(181i32) }
+
     // An IFD0 offset beyond the block must be rejected before usize addition wraps.
     if !exif_tags_fail(a, "II*\x00\xff\xff\xff\xff") { die(124i32) }
     // A nested Exif IFD offset uses the same overflow-safe range validation.
