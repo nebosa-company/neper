@@ -297,6 +297,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad != sym.Syntax { os.exit(93i32) }
     let (_, bad2) = sym.parse(&p, "foo(x")
     if bad2 != sym.Syntax { os.exit(94i32) }
+    if sym.isqrt(9223372036854775807i64) != 3037000499i64 { os.exit(95i32) }
     try io.print("math sym ok")
     ret ok
 }

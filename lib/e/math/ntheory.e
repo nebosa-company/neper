@@ -740,8 +740,34 @@ fn stern_brocot_search(x: f64, tolerance: f64, max_den: u64) -> (u64, u64) {
 // The term after `b / d` in the Farey sequence of order `n`, given its predecessor
 // `a / c`; starting from `0/1, 1/n` walks the whole sequence to `1/1`.
 fn farey_next(a: u64, c: u64, b: u64, d: u64, n: u64) -> (u64, u64) {
-    let k = (n + c) / d
-    ret (k * b - a, k * d - c)
+    // Form the quotient and remainder of n + c without overflowing at the
+    // full-width boundary. A non-terminal Farey pair has d <= n and k >= 1.
+    let n_quotient = n / d
+    let c_quotient = c / d
+    let n_remainder = n % d
+    let c_remainder = c % d
+    var carry = 0u64
+    var remainder = 0u64
+    if n_remainder >= d - c_remainder {
+        carry = 1u64
+        remainder = n_remainder - (d - c_remainder)
+    } else {
+        remainder = n_remainder + c_remainder
+    }
+    let k = n_quotient + c_quotient + carry
+    // k*b is below twice the u64 range for a Farey pair. If it crosses the
+    // range, its wrapping low word and the one high word still recover the
+    // final (in-range) numerator without evaluating the overflowing product.
+    let maximum = 0u64 -% 1u64
+    var numerator = 0u64
+    if k <= maximum / b {
+        numerator = k * b - a
+    } else {
+        let low = k *% b
+        numerator = maximum - (a - low - 1u64)
+    }
+    let denominator = n - remainder
+    ret (numerator, denominator)
 }
 
 // Writes the Farey sequence of order `n` as numerator/denominator pairs and answers

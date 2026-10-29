@@ -200,6 +200,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if terms[20usize] != 1u64 || terms[21usize] != 1u64 { os.exit(10i32) }
     let (e, f) = ntheory.farey_next(0u64, 1u64, 1u64, 5u64, 5u64)
     if e != 1u64 || f != 4u64 { os.exit(10i32) }
+    let (wide_e, wide_f) = ntheory.farey_next(0u64, 1u64, 1u64, 18446744073709551615u64, 18446744073709551615u64)
+    if wide_e != 1u64 || wide_f != 18446744073709551614u64 { os.exit(10i32) }
+    let (product_e, product_f) = ntheory.farey_next(9223372036854775807u64, 9223372036854775808u64, 9223372036854775808u64, 9223372036854775809u64, 18446744073709551615u64)
+    if product_e != 9223372036854775809u64 || product_f != 9223372036854775810u64 { os.exit(10i32) }
     let (_, farey_room) = ntheory.farey(5u64, terms[..8usize])
     if farey_room != ntheory.TooSmall { os.exit(10i32) }
 
