@@ -6,9 +6,13 @@
 // capacity are requested, the active shard count is reduced so every shard has room
 // for a key. A new key into a full shard is `Full` -- the map is fixed, and "full"
 // is the shard's fullness, which is what a caller sizing `capacity` should expect.
-// `len` sums the shards one after another.
-// After `close` every operation is `Closed`. Zero capacity or shards is `Invalid`.
+// `len` sums the shards one after another. A short admission gate counts operations
+// before they take their shard lock; `close` shuts that gate and waits for those
+// operations, so after it returns every operation is `Closed`. Zero capacity or shards
+// is `Invalid`.
+use e.atomic
 use e.mem
+use e.os
 use e.sync
 
 type Map[K: type, V: type] = struct { state: *void }
@@ -19,9 +23,11 @@ error Invalid
 const EMPTY: u8 = 0u8
 const FULL_MARK: u8 = 1u8
 const DEAD: u8 = 2u8
+const CLOSING: u32 = 2147483648u32
+const ACTIVE_MASK: u32 = 2147483647u32
 
 type Shard[K: type, V: type] = struct { lock: sync.Mutex, keys: []K, values: []V, marks: []u8, count: usize, used: usize, limit: usize }
-type State[K: type, V: type] = struct { shards: []Shard[K, V], closed: bool }
+type State[K: type, V: type] = struct { shards: []Shard[K, V], admission: Atomic[u32] }
 
 fn init[K: type, V: type](a: *mem.Arena, capacity: usize, shards: u16) -> (Map[K, V], err) {
     if capacity == 0usize || shards == 0u16 { ret (zero, Invalid) }
@@ -62,7 +68,7 @@ fn init[K: type, V: type](a: *mem.Arena, capacity: usize, shards: u16) -> (Map[K
         i += 1usize
     }
     storage[0].shards = table
-    storage[0].closed = false
+    storage[0].admission = atomic.init(0u32)
     var m: Map[K, V] = zero
     m.state = mem.cast[*void](&storage[0])
     ret (m, ok)
@@ -103,9 +109,27 @@ fn probe[K: type, V: type](shard: *Shard[K, V], start: usize, key: K) -> (usize,
     ret (hole, false)
 }
 
+// The high bit closes admission; the remaining bits count operations that joined before
+// it. This lets different shards stay independent while close waits for that count.
+fn enter[K: type, V: type](s: *State[K, V]) -> err {
+    while true {
+        let seen = atomic.load(&s.admission, .Acquire)
+        if (seen & CLOSING) != 0u32 { ret Closed }
+        if (seen & ACTIVE_MASK) == ACTIVE_MASK { ret Full }
+        let (won, current) = atomic.cas(&s.admission, seen, seen + 1u32, .Acquire, .Relaxed)
+        if won { ret ok }
+    }
+}
+
+fn leave[K: type, V: type](s: *State[K, V]) {
+    let previous = atomic.sub(&s.admission, 1u32, .Release)
+    if previous == (CLOSING | 1u32) { os.wake_all_u32(&s.admission) }
+}
+
 fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool, err) {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret (zero, false, Closed) }
+    let enter_error = enter[K, V](s)
+    if enter_error != ok { ret (zero, false, enter_error) }
     let (index, start) = locate[K, V](s, key)
     let shard = &s.shards[index]
     sync.mutex_lock(&shard.lock)
@@ -113,13 +137,15 @@ fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool, err) {
     var value: V = zero
     if found { value = shard.values[slot] }
     sync.mutex_unlock(&shard.lock)
+    leave[K, V](s)
     ret (value, found, ok)
 }
 
 // True when the key was new; a present key takes the value and answers false.
 fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret (false, Closed) }
+    let enter_error = enter[K, V](s)
+    if enter_error != ok { ret (false, enter_error) }
     let (index, start) = locate[K, V](s, key)
     let shard = &s.shards[index]
     sync.mutex_lock(&shard.lock)
@@ -127,10 +153,12 @@ fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     if found {
         shard.values[slot] = value
         sync.mutex_unlock(&shard.lock)
+        leave[K, V](s)
         ret (false, ok)
     }
     if shard.count >= shard.limit || shard.used + 1usize > shard.marks.len * 3usize / 4usize {
         sync.mutex_unlock(&shard.lock)
+        leave[K, V](s)
         ret (false, Full)
     }
     if shard.marks[slot] == EMPTY { shard.used += 1usize }
@@ -139,12 +167,14 @@ fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     shard.marks[slot] = FULL_MARK
     shard.count += 1usize
     sync.mutex_unlock(&shard.lock)
+    leave[K, V](s)
     ret (true, ok)
 }
 
 fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool, err) {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret (zero, false, Closed) }
+    let enter_error = enter[K, V](s)
+    if enter_error != ok { ret (zero, false, enter_error) }
     let (index, start) = locate[K, V](s, key)
     let shard = &s.shards[index]
     sync.mutex_lock(&shard.lock)
@@ -156,12 +186,14 @@ fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool, err) {
         shard.count -= 1usize
     }
     sync.mutex_unlock(&shard.lock)
+    leave[K, V](s)
     ret (value, found, ok)
 }
 
 fn len[K: type, V: type](m: *const Map[K, V]) -> (usize, err) {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret (0usize, Closed) }
+    let enter_error = enter[K, V](s)
+    if enter_error != ok { ret (0usize, enter_error) }
     var total = 0usize
     var i = 0usize
     while i < s.shards.len {
@@ -171,12 +203,21 @@ fn len[K: type, V: type](m: *const Map[K, V]) -> (usize, err) {
         sync.mutex_unlock(&shard.lock)
         i += 1usize
     }
+    leave[K, V](s)
     ret (total, ok)
 }
 
 fn close[K: type, V: type](m: *Map[K, V]) -> err {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret Closed }
-    s.closed = true
-    ret ok
+    while true {
+        let seen = atomic.load(&s.admission, .Acquire)
+        if (seen & CLOSING) != 0u32 { ret Closed }
+        let (won, current) = atomic.cas(&s.admission, seen, seen | CLOSING, .AcqRel, .Acquire)
+        if won { break }
+    }
+    while true {
+        let seen = atomic.load(&s.admission, .Acquire)
+        if seen == CLOSING { ret ok }
+        let ignored = os.wait_u32(&s.admission, seen, -1i64)
+    }
 }

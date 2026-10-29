@@ -6,8 +6,10 @@
 // and Closed; then two threads putting 400 distinct keys each into sixteen shards
 // while the main thread reads. Every check has its own exit code.
 use e.os
+use e.atomic
 use e.mem
 use e.str
+use e.sync
 use e.time
 use e.thread
 use e.concurrent.queue as queue
@@ -24,6 +26,43 @@ fn produce(p: *Producer) {
 }
 
 type Filler = struct { m: cmap.Map[u64, u64], base: u64, count: u64, failed: bool }
+
+// The getter pauses inside its hash protocol after map.get has joined the map's
+// admission generation. This makes close's wait observable without scheduling luck.
+type CloseControl = struct { entered: sync.Event, release: sync.Event }
+type BlockingKey = struct { id: u64, control: *CloseControl, block: bool }
+type BlockingGet = struct { map: cmap.Map[BlockingKey, u64], key: BlockingKey, value: u64, found: bool, failure: err }
+type MapCloser = struct { map: cmap.Map[BlockingKey, u64], started: sync.Event, finished: Atomic[u32], failure: err }
+const CLOSE_PENDING: u32 = 2147483648u32
+const ACTIVE_OPERATIONS: u32 = 2147483647u32
+
+fn blocking_key_hash(key: BlockingKey) -> u64 {
+    if key.block {
+        sync.event_set(&key.control.entered)
+        sync.event_wait(&key.control.release)
+    }
+    ret key.id
+}
+
+fn blocking_key_eq(a: BlockingKey, b: BlockingKey) -> bool { ret a.id == b.id }
+
+fn run_blocking_get(w: *BlockingGet) {
+    let (value, found, failure) = cmap.get[BlockingKey, u64](&w.map, w.key)
+    w.value = value
+    w.found = found
+    w.failure = failure
+}
+
+fn run_map_close(w: *MapCloser) {
+    sync.event_set(&w.started)
+    w.failure = cmap.close[BlockingKey, u64](&w.map)
+    atomic.store(&w.finished, 1u32, .Release)
+}
+
+fn close_state(s: *cmap.State[BlockingKey, u64]) -> (bool, usize) {
+    let phase = atomic.load(&s.admission, .Acquire)
+    ret ((phase & CLOSE_PENDING) != 0u32, usize(phase & ACTIVE_OPERATIONS))
+}
 
 fn fill(f: *Filler) {
     var i = 0u64
@@ -175,5 +214,58 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if le != ok || re != ok || !lh || !rh || lv != i * 2u64 || rv != (100000u64 + i) * 2u64 { os.exit(52) }
         i += 1u64
     }
+    // --- Close waits for an admitted operation before publishing Closed.
+    var control: CloseControl = zero
+    control.entered = sync.event(true, false)
+    control.release = sync.event(true, false)
+    let (blocked0, blocked_error) = cmap.init[BlockingKey, u64](a, 1usize, 1u16)
+    if blocked_error != ok { os.exit(57i32) }
+    var blocked = blocked0
+    let stored_key = BlockingKey { id: 77u64, control: nil, block: false }
+    let (stored, store_error) = cmap.put[BlockingKey, u64](&blocked, stored_key, 900u64)
+    if store_error != ok || !stored { os.exit(58i32) }
+    var getter: BlockingGet = zero
+    getter.map = blocked
+    getter.key = BlockingKey { id: 77u64, control: &control, block: true }
+    let (getter_thread, getter_spawn_error) = thread.spawn[BlockingGet](run_blocking_get, &getter, 0usize)
+    if getter_spawn_error == os.Unsupported { ret ok }
+    if getter_spawn_error != ok { os.exit(59i32) }
+    sync.event_wait(&control.entered)
+    var closer: MapCloser = zero
+    closer.map = blocked
+    closer.started = sync.event(true, false)
+    let (closer_thread, closer_spawn_error) = thread.spawn[MapCloser](run_map_close, &closer, 0usize)
+    if closer_spawn_error != ok {
+        sync.event_set(&control.release)
+        let joined_getter = thread.join(getter_thread)
+        if closer_spawn_error == os.Unsupported { ret ok }
+        os.exit(60i32)
+    }
+    sync.event_wait(&closer.started)
+    var waiting = false
+    while !waiting {
+        let (closing, active) = close_state(mem.cast[*cmap.State[BlockingKey, u64]](blocked.state))
+        if closing {
+            if active != 1usize {
+                sync.event_set(&control.release)
+                let joined_getter = thread.join(getter_thread)
+                let joined_closer = thread.join(closer_thread)
+                os.exit(61i32)
+            }
+            waiting = true
+        }
+    }
+    if atomic.load(&closer.finished, .Acquire) != 0u32 {
+        sync.event_set(&control.release)
+        let joined_getter = thread.join(getter_thread)
+        let joined_closer = thread.join(closer_thread)
+        os.exit(62i32)
+    }
+    sync.event_set(&control.release)
+    if thread.join(getter_thread) != ok || thread.join(closer_thread) != ok { os.exit(63i32) }
+    if getter.failure != ok || !getter.found || getter.value != 900u64 { os.exit(64i32) }
+    if closer.failure != ok || atomic.load(&closer.finished, .Acquire) != 1u32 { os.exit(65i32) }
+    let (_, _, after_close_error) = cmap.get[BlockingKey, u64](&blocked, stored_key)
+    if after_close_error != cmap.Closed { os.exit(66i32) }
     ret ok
 }
