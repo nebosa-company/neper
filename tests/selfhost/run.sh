@@ -2404,6 +2404,11 @@ chmod +x "$test_build/text-encoding-std-selfhost"
 "$test_build/css-style-selfhost"
 "$test_build/fmt-dom-selfhost"
 "$test_build/fmt-css-selfhost"
+# `e.fmt.css`: a matching selector cannot mask an invalid later selector-list arm.
+fmt_css_selector_validation_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_css_selector_validation/src/main.e" "$repo" x64 linux "$test_build/fmt-css-selector-validation-selfhost")
+[ "$fmt_css_selector_validation_written" = 'executable written' ]
+chmod +x "$test_build/fmt-css-selector-validation-selfhost"
+"$test_build/fmt-css-selector-validation-selfhost"
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 dist_consensus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_consensus/src/main.e" "$repo" x64 linux "$test_build/dist-consensus-selfhost")
 [ "$dist_consensus_written" = 'executable written' ]
@@ -2693,6 +2698,12 @@ fmt_arrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$fmt_arrow_written" = 'executable written' ]
 chmod +x "$test_build/fmt-arrow-selfhost"
 "$test_build/fmt-arrow-selfhost"
+# `e.fmt.mermaid`: quoted YAML titles, escaped HTML-bearing labels, and exhausted builders return errors.
+fmt_mermaid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mermaid/src/main.e" "$repo" x64 linux "$test_build/fmt-mermaid-selfhost")
+[ "$fmt_mermaid_written" = 'executable written' ]
+chmod +x "$test_build/fmt-mermaid-selfhost"
+fmt_mermaid_output=$("$test_build/fmt-mermaid-selfhost")
+[ "$fmt_mermaid_output" = 'fmt mermaid ok' ]
 # `e.net.balance`: the `aabacaa` sequence, P2C picks equal to a PCG replica, a 65537-slot Maglev table equal to the replica with one backend's removal moving a fifth of the slots (D876).
 net_balance_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_balance/src/main.e" "$repo" x64 linux "$test_build/net-balance-selfhost")
 [ "$net_balance_written" = 'executable written' ]
@@ -4254,6 +4265,12 @@ fmt_woff_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/fmt-woff-selfhost"
 fmt_woff_output=$("$test_build/fmt-woff-selfhost")
 [ "$fmt_woff_output" = 'fmt woff ok' ]
+# `e.fmt.woff2`: declared lengths and optional metadata/private ranges stay inside the container.
+fmt_woff2_bounds_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_woff2_bounds/src/main.e" "$repo" x64 linux "$test_build/fmt-woff2-bounds-selfhost")
+[ "$fmt_woff2_bounds_written" = 'executable written' ]
+chmod +x "$test_build/fmt-woff2-bounds-selfhost"
+fmt_woff2_bounds_output=$("$test_build/fmt-woff2-bounds-selfhost")
+[ "$fmt_woff2_bounds_output" = 'fmt woff2 bounds ok' ]
 # e.fmt.xlsx and x.migrate.typemaps against Appdor's xlsx.js and importer maps (700 cases, D2347).
 fmt_xlsx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xlsx/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-selfhost" -j 2)
 [ "$fmt_xlsx_written" = 'executable written' ]
