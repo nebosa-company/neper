@@ -55,8 +55,15 @@ fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err) {
     }
     let (out, out_error) = mem.alloc[u8](a, total)
     if out_error != ok { ret (zero, out_error) }
-    let (offsets, offsets_error) = mem.alloc[u32](a, parts.len)
-    if offsets_error != ok { ret (zero, offsets_error) }
+    // An empty archive has no offsets table but is still a valid 22-byte ZIP.
+    // Avoid asking the arena for a zero-length allocation, which is not a
+    // meaningful resource allocation on every target.
+    var offsets: []u32 = zero
+    if parts.len > 0usize {
+        let (made, offsets_error) = mem.alloc[u32](a, parts.len)
+        if offsets_error != ok { ret (zero, offsets_error) }
+        offsets = made
+    }
     var at = 0usize
     i = 0usize
     while i < parts.len {

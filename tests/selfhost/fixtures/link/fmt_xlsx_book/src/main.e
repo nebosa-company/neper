@@ -116,7 +116,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (zb, zb_error) = zipw.store(a, bad_part[0..])
     if zb_error != zipw.BadName { os.exit(62) }
     let (zn, zn_error) = zipw.store(a, zparts[0..0])
-    if zn_error != zipw.TooLarge { os.exit(63) }
+    if zn_error != ok { os.exit(163) }
+    if zn.len != 22usize { os.exit(164) }
+    let want_empty = "PK\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    if want_empty.len != 22usize { os.exit(165) }
+    if !same(zn, want_empty) { os.exit(166) }
     let one = [1]xlsx.Cell{ xlsx.number_cell(1.0) }
     let one_grid = [1][]const xlsx.Cell{ one[0..] }
     let probe_64 = [1]xlsx.Sheet{ xlsx.Sheet { name: "a:b", grid: one_grid[0..] } }
