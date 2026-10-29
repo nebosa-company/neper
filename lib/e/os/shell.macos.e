@@ -12,6 +12,7 @@ use e.fs
 use e.mem
 use e.os
 use e.str
+use e.sync
 use e.text.shlex
 use e.time
 
@@ -2414,11 +2415,29 @@ fn power_inhibit(a: *mem.Arena, keep_display: bool) -> err {
     ret ok
 }
 
+fn power_release_error(kill_error: err, wait_error: err) -> err {
+    if kill_error != ok && kill_error != os.NotFound { ret kill_error }
+    if wait_error != ok && wait_error != os.NotFound { ret wait_error }
+    ret ok
+}
+
 fn power_release(a: *mem.Arena) -> err {
     if !inhibiting { ret NotFound }
     let killed = os.kill(inhibitor)
+    if killed != ok && killed != os.NotFound { ret killed }
     let (usage, wait_error) = os.wait_usage(inhibitor)
+    let release_error = power_release_error(killed, wait_error)
+    if release_error != ok { ret release_error }
     inhibiting = false
+    ret ok
+}
+
+@test
+fn power_release_reports_child_failures(a: *mem.Arena) -> err {
+    if power_release_error(os.Denied, ok) != os.Denied { ret Failed }
+    if power_release_error(ok, os.Failed) != os.Failed { ret Failed }
+    if power_release_error(os.NotFound, os.NotFound) != ok { ret Failed }
+    if power_release_error(ok, ok) != ok { ret Failed }
     ret ok
 }
 
@@ -3007,7 +3026,8 @@ fn screen_capture(a: *mem.Arena) -> (Icon, err) {
 // Biometrics (D5220): LocalAuthentication's `canEvaluatePolicy:` for Touch ID is asked every time, so the capability is true
 // only on a Mac that has it enrolled; `biometric_verify` shows the system sheet through `evaluatePolicy:localizedReason:reply:`,
 // whose reply is a block (built by hand like the permission block, a global one), and waits up to a minute for the person.
-var bio_words: [8]u64 = zero
+var bio_locks: [1]sync.Mutex = zero
+var bio_block: usize = zero
 var bio_done: bool = zero
 var bio_ok: bool = zero
 
@@ -3015,6 +3035,7 @@ type BioInvoke = union { function: fn(usize, usize, usize), bits: usize }
 
 @cc(c)
 fn bio_replied(block: usize, success: usize, failure: usize) {
+    if block != bio_block { ret }
     bio_ok = success & 255usize != 0usize
     bio_done = true
 }
@@ -3042,20 +3063,31 @@ fn biometric_available() -> bool {
 
 fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
     if !biometric_available() { ret (.Unavailable, Unsupported) }
+    // LocalAuthentication retains its reply block and may invoke it after a
+    // timeout. Serialize requests and give each block a unique arena address so
+    // a late reply cannot satisfy a later evaluation.
+    sync.mutex_lock(&bio_locks[0usize])
+    let (words, words_error) = mem.alloc[u64](a, 8usize)
+    if words_error != ok {
+        sync.mutex_unlock(&bio_locks[0usize])
+        ret (.Unavailable, words_error)
+    }
     let pool = os.objc_pool_push()
     let context = biometric_context()
     var invoke: BioInvoke = zero
     invoke.function = bio_replied
     let symbol = "_NSConcreteGlobalBlock\x00"
-    bio_words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
-    bio_words[1usize] = 268435456u64
-    bio_words[2usize] = u64(invoke.bits)
-    bio_words[3usize] = u64(mem.address_of(&bio_words[4usize]))
-    bio_words[4usize] = 0u64
-    bio_words[5usize] = 32u64
+    words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    words[1usize] = 268435456u64
+    words[2usize] = u64(invoke.bits)
+    words[3usize] = u64(mem.address_of(&words[4usize]))
+    words[4usize] = 0u64
+    words[5usize] = 32u64
+    bio_block = mem.address_of(&words[0usize])
     bio_done = false
+    bio_ok = false
     let why = os.cocoa_text(reason)
-    let asked = os.msg4(context, os.cocoa_sel("evaluatePolicy:localizedReason:reply:\x00"), 1usize, why, mem.address_of(&bio_words[0usize]), 0usize)
+    let asked = os.msg4(context, os.cocoa_sel("evaluatePolicy:localizedReason:reply:\x00"), 1usize, why, bio_block, 0usize)
     var waited = 0usize
     while !bio_done && waited < 600usize {
         os.cocoa_pump(100000000i64)
@@ -3064,9 +3096,30 @@ fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
     os.cf_release(why)
     let released = os.msg0(context, os.cocoa_sel("release\x00"))
     os.objc_pool_pop(pool)
-    if !bio_done { ret (.Unavailable, Failed) }
-    if bio_ok { ret (.Granted, ok) }
+    let completed = bio_done
+    let granted = bio_ok
+    bio_block = 0usize
+    sync.mutex_unlock(&bio_locks[0usize])
+    if !completed { ret (.Unavailable, Failed) }
+    if granted { ret (.Granted, ok) }
     ret (.Denied, ok)
+}
+
+@test
+fn biometric_reply_ignores_foreign_block(a: *mem.Arena) -> err {
+    bio_block = 17usize
+    bio_done = false
+    bio_ok = false
+    bio_replied(18usize, 1usize, 0usize)
+    if bio_done {
+        bio_block = 0usize
+        ret Invalid
+    }
+    bio_replied(17usize, 1usize, 0usize)
+    let good = bio_done && bio_ok
+    bio_block = 0usize
+    if !good { ret Invalid }
+    ret ok
 }
 
 // The photo picker is the open panel narrowed to the image types the system reads, as `file_dialog`'s Open with several
