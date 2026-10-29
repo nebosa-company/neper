@@ -12,14 +12,12 @@
 // Also the .xz container: stream header and footer, block headers with the single
 // LZMA2 filter, LZMA2 chunk framing (uncompressed chunks, LZMA chunks with the
 // state/props/dictionary reset bits), block padding, the CRC32, CRC64 or SHA-256
-// check and the index (record count, total uncompressed size and its CRC32).
+// check and the index (per-block unpadded/uncompressed sizes and its CRC32).
 // Compression is not written.
 //
-// ponytail: the .xz reader takes one filter (LZMA2) per block and does not verify
-// the optional compressed/uncompressed sizes in a block header nor each index
-// record against its block, only the count, the total and the index CRC; add BCJ
-// or delta filters and per-record checks when a producer other than xz/liblzma
-// defaults shows up.
+// ponytail: the .xz reader takes one LZMA2 filter per block; its optional block
+// sizes and every Index record are checked. Add BCJ or delta filters when a
+// producer other than xz/liblzma defaults shows up.
 use e.algo.hash as hash
 use e.crypto.hash as chash
 
@@ -496,6 +494,46 @@ fn check_size(kind: u32) -> usize {
     ret 64usize
 }
 
+// The Index and Footer precede optional four-byte Stream Padding. Parse them before
+// the Blocks so their records can be consumed beside the corresponding block
+// without allocating a block-size table.
+type IndexCursor = struct { at: usize, end: usize, count: u64, start: usize }
+
+fn index_cursor(src: []const u8, flags: u8) -> (IndexCursor, err) {
+    if src.len < 24usize { ret (zero, Malformed) }
+    var stream_end = src.len
+    while stream_end > 0usize && src[stream_end - 1usize] == 0u8 { stream_end -= 1usize }
+    if ((src.len - stream_end) & 3usize) != 0usize || stream_end < 24usize { ret (zero, Malformed) }
+    let footer = stream_end - 12usize
+    if hash.crc32(src[footer + 4usize..footer + 10usize]) != le32(src, footer) { ret (zero, Checksum) }
+    if src[footer + 8usize] != 0u8 || src[footer + 9usize] != flags || src[footer + 10usize] != 89u8 || src[footer + 11usize] != 90u8 { ret (zero, Malformed) }
+    let index_size = (u64(le32(src, footer + 4usize)) + 1u64) * 4u64
+    if index_size > u64(footer - 12usize) { ret (zero, Malformed) }
+    let start = footer - usize(index_size)
+    if src[start] != 0u8 { ret (zero, Malformed) }
+    var at = start + 1usize
+    let (count, count_error) = vli(src, &at)
+    if count_error != ok || at > footer { ret (zero, Malformed) }
+    let records = at
+    var scan = at
+    var i = 0u64
+    while i < count {
+        let (_, unpadded_error) = vli(src, &scan)
+        if unpadded_error != ok { ret (zero, unpadded_error) }
+        let (_, unpacked_error) = vli(src, &scan)
+        if unpacked_error != ok || scan > footer { ret (zero, Malformed) }
+        i += 1u64
+    }
+    let records_end = scan
+    while ((scan - start) & 3usize) != 0usize {
+        if scan >= footer || src[scan] != 0u8 { ret (zero, Malformed) }
+        scan += 1usize
+    }
+    if scan + 4usize != footer { ret (zero, Malformed) }
+    if hash.crc32(src[start..scan]) != le32(src, scan) { ret (zero, Checksum) }
+    ret (IndexCursor { at: records, end: records_end, count: count, start: start }, ok)
+}
+
 // A .xz stream: every block (single LZMA2 filter) decoded into `dst`, each block's
 // check verified (CRC32, CRC64, SHA-256; none accepted; other kinds Unsupported),
 // then the index and the footer. Answers the bytes written.
@@ -506,6 +544,9 @@ fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
     if hash.crc32(src[6..8]) != le32(src, 8usize) { ret (0usize, Checksum) }
     let kind = u32(src[7])
     let clen = check_size(kind)
+    let (index0, index_error) = index_cursor(src, src[7])
+    if index_error != ok { ret (0usize, index_error) }
+    var index = index0
     var at = 12usize
     var out = 0usize
     var blocks = 0u64
@@ -522,13 +563,21 @@ fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
             if (flags & 3u32) != 0u32 { ret (out, Unsupported) }
             if (flags & 60u32) != 0u32 { ret (out, Malformed) }
             var h = at + 2usize
+            var has_compressed_size = false
+            var compressed_size = 0u64
             if (flags & 64u32) != 0u32 {
-                let (_, e) = vli(src, &h)
+                let (value, e) = vli(src, &h)
                 if e != ok { ret (out, e) }
+                compressed_size = value
+                has_compressed_size = true
             }
+            var has_unpacked_size = false
+            var unpacked_size = 0u64
             if (flags & 128u32) != 0u32 {
-                let (_, e) = vli(src, &h)
+                let (value, e) = vli(src, &h)
                 if e != ok { ret (out, e) }
+                unpacked_size = value
+                has_unpacked_size = true
             }
             let (id, e1) = vli(src, &h)
             if e1 != ok { ret (out, e1) }
@@ -543,6 +592,10 @@ fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
             let block_out = out
             let (at2, out2, e4) = lzma2(src, at, dst, out, probs, dict_size)
             if e4 != ok { ret (out2, e4) }
+            let used_compressed = u64(at2 - block_start)
+            let used_unpacked = u64(out2 - block_out)
+            if has_compressed_size && compressed_size != used_compressed { ret (out2, Malformed) }
+            if has_unpacked_size && unpacked_size != used_unpacked { ret (out2, Malformed) }
             at = at2
             out = out2
             while ((at - block_start) & 3usize) != 0usize {
@@ -564,39 +617,17 @@ fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
             } else if kind != 0u32 {
                 ret (out, Unsupported)
             }
+            if blocks >= index.count { ret (out, Malformed) }
+            let (index_unpadded, index_unpadded_error) = vli(src, &index.at)
+            if index_unpadded_error != ok { ret (out, index_unpadded_error) }
+            let (index_unpacked, index_unpacked_error) = vli(src, &index.at)
+            if index_unpacked_error != ok { ret (out, index_unpacked_error) }
+            let used_unpadded = u64(hlen) + used_compressed + u64(clen)
+            if index_unpadded != used_unpadded || index_unpacked != used_unpacked { ret (out, Malformed) }
             at += clen
             blocks += 1u64
         }
     }
-    // Index: indicator, record count, (unpadded size, uncompressed size) pairs,
-    // padding, CRC32.
-    let index_start = at
-    at += 1usize
-    let (count, e5) = vli(src, &at)
-    if e5 != ok { ret (out, e5) }
-    if count != blocks { ret (out, Malformed) }
-    var total = 0u64
-    var r = 0u64
-    while r < count {
-        let (_, e6) = vli(src, &at)
-        if e6 != ok { ret (out, e6) }
-        let (unpacked, e7) = vli(src, &at)
-        if e7 != ok { ret (out, e7) }
-        total += unpacked
-        r += 1u64
-    }
-    if total != u64(out) { ret (out, Malformed) }
-    while ((at - index_start) & 3usize) != 0usize {
-        if at >= src.len || src[at] != 0u8 { ret (out, Malformed) }
-        at += 1usize
-    }
-    if at + 4usize > src.len { ret (out, Malformed) }
-    if hash.crc32(src[index_start..at]) != le32(src, at) { ret (out, Checksum) }
-    at += 4usize
-    // Footer: CRC32, backward size, stream flags, "YZ".
-    if at + 12usize > src.len { ret (out, Malformed) }
-    if hash.crc32(src[at + 4usize..at + 10usize]) != le32(src, at) { ret (out, Checksum) }
-    if (usize(le32(src, at + 4usize)) + 1usize) * 4usize != at - index_start { ret (out, Malformed) }
-    if src[at + 8usize] != 0u8 || src[at + 9usize] != src[7] || src[at + 10usize] != 89u8 || src[at + 11usize] != 90u8 { ret (out, Malformed) }
+    if at != index.start || blocks != index.count || index.at != index.end { ret (out, Malformed) }
     ret (out, ok)
 }

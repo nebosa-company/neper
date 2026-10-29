@@ -5,6 +5,7 @@
 // stream through `decode_raw`, three refusals (properties byte 225, a truncated
 // stream, a short destination), and the .xz container with a CRC32 check, with a
 // CRC64 check, and with a corrupted check. Every check has its own exit code.
+use e.algo.hash as hash
 use e.fmt.lzma as lzma
 use e.io
 use e.mem
@@ -89,6 +90,13 @@ fn copy(dst: []u8, src: []const u8) {
     }
 }
 
+fn put32(dst: []u8, at: usize, value: u32) {
+    dst[at] = u8(value & 255u32)
+    dst[at + 1usize] = u8((value >> 8u32) & 255u32)
+    dst[at + 2usize] = u8((value >> 16u32) & 255u32)
+    dst[at + 3usize] = u8((value >> 24u32) & 255u32)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var probs: [7990]u16 = zero
     var out: [4200]u8 = zero
@@ -164,6 +172,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var noncanonical_at = 0usize
     let (_, noncanonical_error) = lzma.vli(noncanonical_vli[..], &noncanonical_at)
     if noncanonical_error != lzma.Malformed || noncanonical_at != 2usize { os.exit(15i32) }
+
+    // Header-size metadata is covered by the block-header CRC and must agree
+    // with the compressed LZMA2 bytes and their decoded output.
+    copy(scratch[..], xz_text())
+    scratch[13usize] = 192u8
+    scratch[14usize] = 58u8
+    scratch[15usize] = 172u8
+    scratch[16usize] = 2u8
+    scratch[17usize] = 33u8
+    scratch[18usize] = 1u8
+    scratch[19usize] = 22u8
+    let sized_header_crc = hash.crc32(scratch[12usize..20usize])
+    put32(scratch[..], 20usize, sized_header_crc)
+    let (sized_n, sized_error) = lzma.decode_xz(scratch[..xz_text().len], out[..], probs[..])
+    if sized_error != ok || sized_n != 300usize || !bytes_equal(out[..sized_n], text()) { os.exit(16i32) }
+    scratch[14usize] = 57u8
+    let compressed_header_crc = hash.crc32(scratch[12usize..20usize])
+    put32(scratch[..], 20usize, compressed_header_crc)
+    let (_, compressed_header_error) = lzma.decode_xz(scratch[..xz_text().len], out[..], probs[..])
+    if compressed_header_error != lzma.Malformed { os.exit(17i32) }
+    scratch[14usize] = 58u8
+    scratch[15usize] = 173u8
+    let unpacked_header_crc = hash.crc32(scratch[12usize..20usize])
+    put32(scratch[..], 20usize, unpacked_header_crc)
+    let (_, unpacked_header_error) = lzma.decode_xz(scratch[..xz_text().len], out[..], probs[..])
+    if unpacked_header_error != lzma.Malformed { os.exit(18i32) }
+
+    // The Index record's unpadded size is per-block metadata, not just a total.
+    copy(scratch[..], xz_text())
+    let index_start = xz_text().len - 24usize
+    scratch[index_start + 2usize] = scratch[index_start + 2usize] + 1u8
+    let index_crc = hash.crc32(scratch[index_start..index_start + 8usize])
+    put32(scratch[..], index_start + 8usize, index_crc)
+    let (_, index_size_error) = lzma.decode_xz(scratch[..xz_text().len], out[..], probs[..])
+    if index_size_error != lzma.Malformed { os.exit(19i32) }
+
+    // Legal four-byte XZ Stream Padding remains outside the terminal Footer.
+    copy(scratch[..], xz_text())
+    scratch[xz_text().len] = 0u8
+    scratch[xz_text().len + 1usize] = 0u8
+    scratch[xz_text().len + 2usize] = 0u8
+    scratch[xz_text().len + 3usize] = 0u8
+    let (padded_n, padded_error) = lzma.decode_xz(scratch[..xz_text().len + 4usize], out[..], probs[..])
+    if padded_error != ok || padded_n != 300usize || !bytes_equal(out[..padded_n], text()) { os.exit(20i32) }
 
     try io.print("fmt lzma ok\n")
     ret ok
