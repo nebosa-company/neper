@@ -31,23 +31,25 @@ fn token_bucket(capacity: u64, refill: u64, interval: u64, now: u64) -> (TokenBu
 
 // Saturate before multiplying so a long idle period cannot wrap and under-refill.
 fn token_bucket_refill(b: *TokenBucket, now: u64) {
-    if now > b.last {
-        let elapsed = now - b.last
-        let full = b.capacity * b.interval
-        if b.level >= full {
+    if now == b.last { ret }
+    let elapsed = now -% b.last
+    // A smaller timestamp is forward only when it is a short crossing of u64::MAX.
+    // Treat the other half of the serial-number space as an ordinary clock rollback.
+    if now < b.last && elapsed >= 9223372036854775808u64 { ret }
+    let full = b.capacity * b.interval
+    if b.level >= full {
+        b.level = full
+    } else if b.refill != 0u64 {
+        let room = full - b.level
+        let whole = room / b.refill
+        let remainder = room % b.refill
+        if elapsed > whole || (elapsed == whole && remainder == 0u64) {
             b.level = full
-        } else if b.refill != 0u64 {
-            let room = full - b.level
-            let whole = room / b.refill
-            let remainder = room % b.refill
-            if elapsed > whole || (elapsed == whole && remainder == 0u64) {
-                b.level = full
-            } else {
-                b.level += elapsed * b.refill
-            }
+        } else {
+            b.level += elapsed * b.refill
         }
-        b.last = now
     }
+    b.last = now
 }
 
 // Take `cost` tokens at `now` if held; a denied request takes nothing.
@@ -74,19 +76,19 @@ fn leaky_bucket(capacity: u64, leak: u64, interval: u64, now: u64) -> (LeakyBuck
 }
 
 fn leaky_bucket_drain(b: *LeakyBucket, now: u64) {
-    if now > b.last {
-        let elapsed = now - b.last
-        if b.leak != 0u64 {
-            let whole = b.water / b.leak
-            let remainder = b.water % b.leak
-            if elapsed > whole || (elapsed == whole && remainder == 0u64) {
-                b.water = 0u64
-            } else {
-                b.water -= elapsed * b.leak
-            }
+    if now == b.last { ret }
+    let elapsed = now -% b.last
+    if now < b.last && elapsed >= 9223372036854775808u64 { ret }
+    if b.leak != 0u64 {
+        let whole = b.water / b.leak
+        let remainder = b.water % b.leak
+        if elapsed > whole || (elapsed == whole && remainder == 0u64) {
+            b.water = 0u64
+        } else {
+            b.water -= elapsed * b.leak
         }
-        b.last = now
     }
+    b.last = now
 }
 
 // Pour `cost` units at `now` if they fit under `capacity`.

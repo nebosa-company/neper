@@ -199,6 +199,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !ratelimit.leaky_bucket_allow(&drained_leaky, 0u64, 10u64) { os.exit(8i32) }
     if ratelimit.leaky_bucket_level(&drained_leaky, 2u64) != 0u64 { os.exit(8i32) }
 
+    // Token refill and leak drain use the short modular elapsed time across u64 rollover,
+    // but an ordinary backwards test clock does not grant a giant refill or drain.
+    let (roll_token, roll_token_error) = ratelimit.token_bucket(10u64, 1u64, 1u64, 18446744073709551610u64)
+    if roll_token_error != ok { os.exit(8i32) }
+    var wrapped_token = roll_token
+    if !ratelimit.token_bucket_allow(&wrapped_token, 18446744073709551610u64, 10u64) { os.exit(8i32) }
+    if ratelimit.token_bucket_tokens(&wrapped_token, 0u64) != 6u64 { os.exit(8i32) }
+    let (back_token, back_token_error) = ratelimit.token_bucket(10u64, 1u64, 1u64, 100u64)
+    if back_token_error != ok { os.exit(8i32) }
+    var backwards_token = back_token
+    if !ratelimit.token_bucket_allow(&backwards_token, 100u64, 10u64) { os.exit(8i32) }
+    if ratelimit.token_bucket_tokens(&backwards_token, 90u64) != 0u64 || ratelimit.token_bucket_tokens(&backwards_token, 101u64) != 1u64 { os.exit(8i32) }
+
+    let (roll_leaky, roll_leaky_error) = ratelimit.leaky_bucket(10u64, 1u64, 1u64, 18446744073709551610u64)
+    if roll_leaky_error != ok { os.exit(8i32) }
+    var wrapped_leaky = roll_leaky
+    if !ratelimit.leaky_bucket_allow(&wrapped_leaky, 18446744073709551610u64, 10u64) { os.exit(8i32) }
+    if ratelimit.leaky_bucket_level(&wrapped_leaky, 0u64) != 4u64 { os.exit(8i32) }
+    let (back_leaky, back_leaky_error) = ratelimit.leaky_bucket(10u64, 1u64, 1u64, 100u64)
+    if back_leaky_error != ok { os.exit(8i32) }
+    var backwards_leaky = back_leaky
+    if !ratelimit.leaky_bucket_allow(&backwards_leaky, 100u64, 10u64) { os.exit(8i32) }
+    if ratelimit.leaky_bucket_level(&backwards_leaky, 90u64) != 10u64 || ratelimit.leaky_bucket_level(&backwards_leaky, 101u64) != 9u64 { os.exit(8i32) }
+
     let (scaled_fixed, scaled_fixed_error) = ratelimit.fixed_window(10u64, 1u64)
     if scaled_fixed_error != ok { os.exit(8i32) }
     var bounded_fixed = scaled_fixed
