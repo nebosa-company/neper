@@ -708,6 +708,14 @@ fn main(a: *mem.Arena) -> err {
     let (allowed, allowed_error) = fs.read_file(a, "np-fs/one.txt", 11usize)
     if allowed_error != ok { os.exit(38i32) }
     if allowed.len != 11usize { os.exit(39i32) }
+    // Host file sizes are u64, but read buffers are target-sized.  On wasm32,
+    // a 4 GiB stat result must be refused before it can narrow to an empty read.
+    let (_, helper_limit_error) = fs.size_for_read(11u64, 10usize)
+    if helper_limit_error != fs.Invalid { os.exit(250i32) }
+    when target.arch == .Wasm32 {
+        let (oversize, oversize_error) = fs.size_for_read(4294967296u64, 0usize)
+        if oversize_error != fs.Invalid || oversize != 0usize { os.exit(251i32) }
+    }
 
     // A directory is not a file to read.
     let (as_file, as_file_error) = fs.read_file(a, "np-fs", 0usize)

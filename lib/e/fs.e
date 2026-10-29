@@ -357,6 +357,15 @@ fn make_dirs_at(a: *mem.Arena, r: *const Root, relative_path: str) -> err {
     ret ok
 }
 
+// A host's byte count is u64 while an arena allocation is indexed by usize.
+// Refuse a count the target cannot represent before narrowing it or applying a cap.
+fn size_for_read(size: u64, limit: usize) -> (usize, err) {
+    if mem.size_of[usize]() == 4usize && size > 4294967295u64 { ret (0usize, Invalid) }
+    let usable = usize(size)
+    if limit != 0usize && usable > limit { ret (0usize, Invalid) }
+    ret (usable, ok)
+}
+
 // Read through the root handle. The host's stat and open both refuse symlinks, and the
 // actual read is from the opened file rather than a path that can be swapped afterward.
 fn read_file_at(a: *mem.Arena, r: *const Root, relative_path: str, limit: usize) -> ([]u8, err) {
@@ -364,8 +373,8 @@ fn read_file_at(a: *mem.Arena, r: *const Root, relative_path: str, limit: usize)
     let (info, stat_error) = os.stat_at(a, r.dir, relative_path)
     if stat_error != ok { ret (nothing, from_os(stat_error)) }
     if info.kind == .Dir { ret (nothing, Invalid) }
-    let size = usize(info.size)
-    if limit != 0usize && size > limit { ret (nothing, Invalid) }
+    let (size, size_error) = size_for_read(info.size, limit)
+    if size_error != ok { ret (nothing, size_error) }
     var flags: os.OpenFlags = zero
     flags.read = true
     let (file, open_error) = os.open_at(a, r.dir, relative_path, flags, .NoSymlinks)
@@ -560,8 +569,8 @@ fn read_file(a: *mem.Arena, path_text: str, limit: usize) -> ([]u8, err) {
     let (info, stat_error) = os.stat(a, path_text)
     if stat_error != ok { ret (nothing, from_os(stat_error)) }
     if info.kind == .Dir { ret (nothing, Invalid) }
-    let size = usize(info.size)
-    if limit != 0usize && size > limit { ret (nothing, Invalid) }
+    let (size, size_error) = size_for_read(info.size, limit)
+    if size_error != ok { ret (nothing, size_error) }
     var flags: os.OpenFlags = zero
     flags.read = true
     let (file, open_error) = os.open(a, path_text, flags)
@@ -873,8 +882,8 @@ fn read_file_detail(a: *mem.Arena, path_text: str, limit: usize, detail: *os.Err
     let (info, stat_error) = os.stat_detail(a, path_text, detail)
     if stat_error != ok { ret (nothing, from_os(stat_error)) }
     if info.kind == .Dir { ret (nothing, Invalid) }
-    let size = usize(info.size)
-    if limit != 0usize && size > limit { ret (nothing, Invalid) }
+    let (size, size_error) = size_for_read(info.size, limit)
+    if size_error != ok { ret (nothing, size_error) }
     var flags: os.OpenFlags = zero
     flags.read = true
     let (file, open_error) = os.open_detail(a, path_text, flags, detail)
