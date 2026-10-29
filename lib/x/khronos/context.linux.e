@@ -137,11 +137,28 @@ fn remember_size(surface: usize, w: os.Window) {
     let (metrics, metrics_error) = os.window_metrics(w)
     if metrics_error != ok { ret }
     var slot = 0usize
-    while slot < 16usize && sized_surfaces[slot] != surface && sized_surfaces[slot] != 0usize { slot += 1usize }
+    var empty = 16usize
+    while slot < 16usize {
+        if sized_surfaces[slot] == surface { break }
+        if sized_surfaces[slot] == 0usize && empty == 16usize { empty = slot }
+        slot += 1usize
+    }
+    if slot == 16usize { slot = empty }
     if slot == 16usize { ret }
     sized_surfaces[slot] = surface
     sized_widths[slot] = metrics.width
     sized_heights[slot] = metrics.height
+}
+
+// Contexts and their EGL surfaces can be created and closed many times.  Free the
+// resize bookkeeping with the surface so a later context is still tracked.
+fn forget_size(surface: usize) {
+    var slot = 0usize
+    while slot < 16usize && sized_surfaces[slot] != surface { slot += 1usize }
+    if slot == 16usize { ret }
+    sized_surfaces[slot] = 0usize
+    sized_widths[slot] = 0u32
+    sized_heights[slot] = 0u32
 }
 
 // (D5899) Mesa's X11 window surface reports a resized window's new size at once, but its buffers keep the old one until a
@@ -166,6 +183,18 @@ fn remember_hosted(surface: usize, native: usize) {
     hosted_keys[slot] = surface
     hosted_natives[slot] = native
     hosted_surfaces[slot] = surface
+}
+
+// The replacement surface belongs to the State at close, not the original
+// surface which an Android window replacement may already have destroyed.
+fn forget_hosted(c: *Context) {
+    var slot = 0usize
+    while slot < 16usize && hosted_keys[slot] != c.egl_state.surface { slot += 1usize }
+    if slot == 16usize { ret }
+    c.egl_state.surface = hosted_surfaces[slot]
+    hosted_keys[slot] = 0usize
+    hosted_natives[slot] = 0usize
+    hosted_surfaces[slot] = 0usize
 }
 
 // The surface to draw a hosted context into now; NO_SURFACE while the host has no window.
@@ -228,6 +257,8 @@ fn load(a: *mem.Arena, c: *Context, options: Options) -> err {
 }
 
 fn close(c: *Context) -> err {
+    forget_size(c.egl_state.surface)
+    if c.has_host && c.x_display == 0usize { forget_hosted(c) }
     let closed = eglcontext.close(&c.egl_state)
     gl.release(&c.dispatch)
     if c.x_display != 0usize {

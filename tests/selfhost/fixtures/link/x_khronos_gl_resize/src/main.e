@@ -103,6 +103,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if context_error != ok { os.exit(1i32) }
     var live = c
+    // On X11, make two additional live window surfaces, then close them out of
+    // order.  The second close must find its slot after the first one's gap.
+    if !os.window_hosted() && os.NATIVE_SEPARATOR != 92u8 {
+        let (first_window, first_window_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos first spare", width: 32u32, height: 32u32, resizable: false, visible: false, mode: .Windowed })
+        if first_window_error != ok { os.exit(16i32) }
+        let (second_window, second_window_error) = os.window_open(a, os.WindowOptions { title: "neper x_khronos second spare", width: 32u32, height: 32u32, resizable: false, visible: false, mode: .Windowed })
+        if second_window_error != ok { os.exit(17i32) }
+        let (first_context, first_context_error) = context.for_window(a, first_window, options)
+        if first_context_error != ok { os.exit(18i32) }
+        let (second_context, second_context_error) = context.for_window(a, second_window, options)
+        if second_context_error != ok { os.exit(19i32) }
+        var first_live = first_context
+        var second_live = second_context
+        if context.close(&first_live) != ok { os.exit(20i32) }
+        if context.close(&second_live) != ok { os.exit(21i32) }
+        if os.window_close(first_window) != ok { os.exit(22i32) }
+        if os.window_close(second_window) != ok { os.exit(23i32) }
+    }
+    // The Linux context module keeps bounded resize bookkeeping.  Recycle more
+    // contexts than its table can hold before the final resize storm, so a
+    // closed context cannot leave a later surface untracked.
+    var cycle = 0usize
+    while cycle < 16usize {
+        if context.close(&live) != ok { os.exit(14i32) }
+        let (next, next_error) = context.for_window(a, w, options)
+        if next_error != ok { os.exit(15i32) }
+        live = next
+        cycle += 1usize
+    }
+    if context.make_current(&live) != ok { os.exit(2i32) }
     if context.load(a, &live, options) != ok { os.exit(2i32) }
     let (r_value, resizer_error) = resizer(a)
     if resizer_error == os.Unsupported {
