@@ -200,6 +200,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if font_error != ok { os.exit(6i32) }
     let font = shape.Font { id: 7u32, data: font_bytes, face_index: 0u32 }
     if scene.register_font(&renderer, font) != ok { os.exit(7i32) }
+    let overflow_limits = widget.Limits { max_elements: 1usize, max_states: 1usize, state_bytes: 18446744073709551600usize, state_classes: 1u16, max_depth: 1u16, max_commands: 1usize }
+    let (_, overflow_runtime_error) = widget.runtime(a, &renderer, overflow_limits)
+    if overflow_runtime_error != widget.TooLarge { os.exit(53i32) }
     let limits = widget.Limits { max_elements: 32usize, max_states: 16usize, state_bytes: 1024usize, state_classes: 4u16, max_depth: 8u16, max_commands: 64usize }
     let (rt, runtime_error) = widget.runtime(a, &renderer, limits)
     if runtime_error != ok { os.exit(8i32) }

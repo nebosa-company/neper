@@ -205,6 +205,7 @@ const HISTORY_BYTES: usize = 1024usize
 const MAX_COMPOSE: usize = 64usize
 const MAX_CLIP: usize = 256usize
 const EDIT_SCRATCH: usize = 65536usize
+const STATE_STORAGE_PADDING: usize = 16usize
 // Six navigation keys plus digits 0..9 for one focused Rating (D1169).
 const MAX_SHORTCUTS: usize = 16usize
 const GESTURE_TAP: u8 = 1u8
@@ -722,6 +723,7 @@ fn fire_gesture(a: GestureAction, g: Gesture) -> err {
 fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime, err) {
     if limits.max_elements == 0usize || limits.max_states == 0usize || limits.state_bytes == 0usize || limits.max_depth == 0u16 || limits.max_commands == 0usize { ret (zero, TooLarge) }
     if limits.max_elements > 65535usize || limits.max_states > 65535usize { ret (zero, TooLarge) }
+    if limits.state_bytes > 18446744073709551615usize - STATE_STORAGE_PADDING { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[State](a, 1usize)
     if states_error != ok { ret (zero, TooLarge) }
     let (elements, elements_error) = mem.alloc[Element](a, limits.max_elements)
@@ -730,7 +732,7 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     if focus_order_error != ok { ret (zero, TooLarge) }
     let (cells, cells_error) = mem.alloc[Cell](a, limits.max_states)
     if cells_error != ok { ret (zero, TooLarge) }
-    let (storage, storage_error) = mem.alloc[u8](a, limits.state_bytes + 16usize)
+    let (storage, storage_error) = mem.alloc[u8](a, limits.state_bytes + STATE_STORAGE_PADDING)
     if storage_error != ok { ret (zero, TooLarge) }
     let (scratch, scratch_error) = mem.alloc[u8](a, EDIT_SCRATCH)
     if scratch_error != ok { ret (zero, TooLarge) }
@@ -920,8 +922,10 @@ fn take_cell(s: *State, size: usize, align: usize, owner: u32) -> (usize, err) {
     i = 0usize
     while i < s.cells.len && s.cells[i].generation != 0u32 { i += 1usize }
     if i >= s.cells.len { ret (0usize, TooLarge) }
+    if align != 0usize && s.storage_used > 18446744073709551615usize - (align - 1usize) { ret (0usize, TooLarge) }
     let start = align_up(s.storage_used, align)
-    if start + size > s.limits.state_bytes { ret (0usize, TooLarge) }
+    if start > s.limits.state_bytes || size > s.limits.state_bytes - start { ret (0usize, TooLarge) }
+    if start > s.storage.len || size > s.storage.len - start { ret (0usize, TooLarge) }
     s.storage_used = start + size
     s.cells[i] = Cell { live: true, generation: 1u32, offset: start, size: size, align: align, owner: owner }
     ret (i, ok)
