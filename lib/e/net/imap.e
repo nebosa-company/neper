@@ -49,6 +49,7 @@ error Unsupported
 
 const LINE_LIMIT: usize = 8192usize
 const COMMAND_LIMIT: usize = 4096usize
+const LITERAL_LIMIT: usize = 1073741824usize
 
 fn no_capabilities() -> Capabilities {
     ret Capabilities { imap4rev1: false, starttls: false, login_disabled: false, auth_plain: false, sasl_ir: false, uidplus: false, idle: false, move: false, raw: "" }
@@ -219,8 +220,9 @@ fn literal_size(n: usize, line: []const u8) -> (usize, bool) {
     var value = 0usize
     var i = start
     while i < end {
-        value = value * 10usize + usize(line[i] - 48u8)
-        if value > 1073741824usize { ret (0usize, false) }
+        let digit = usize(line[i] - 48u8)
+        if value > LITERAL_LIMIT / 10usize || (value == LITERAL_LIMIT / 10usize && digit > LITERAL_LIMIT % 10usize) { ret (0usize, false) }
+        value = value * 10usize + digit
         i += 1usize
     }
     ret (value, true)
