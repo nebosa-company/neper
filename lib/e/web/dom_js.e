@@ -7646,6 +7646,7 @@ fn part30(b: *str.Builder) -> err {
     try str.push(b, "  }\n")
     try str.push(b, "  readableByteStreamControllerClearAlgorithms(controller);\n")
     try str.push(b, "  readableStreamClose(stream);\n")
+    try str.push(b, "  if (c.pendingPullIntos.length > 0) readableByteStreamControllerRespondInClosedState(controller, c.pendingPullIntos[0]);\n")
     try str.push(b, "}\n")
     try str.push(b, "function cloneArrayBuffer(buffer, byteOffset, byteLength) { return apply(ArrayBuffer.prototype.slice, buffer, [byteOffset, byteOffset + byteLength]); }\n")
     try str.push(b, "function readableByteStreamControllerEnqueue(controller, chunk) {\n")
