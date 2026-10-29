@@ -61,6 +61,212 @@ fn find(data: []const u8, word: str, from: usize, until: usize) -> usize {
     ret until
 }
 
+// Whether `word` is a PDF token at `at`: names and keywords are separated by whitespace
+// or a delimiter, rather than merely being a byte substring.
+fn at_token(data: []const u8, at: usize, word: str, from: usize, until: usize) -> bool {
+    if !at_word(data, at, word) { ret false }
+    if at > from && !is_space(data[at - 1usize]) && !is_delim(data[at - 1usize]) { ret false }
+    let after = at + word.len
+    if after < until && !is_space(data[after]) && !is_delim(data[after]) { ret false }
+    ret true
+}
+
+// The first token `word` in data[from..until], or `until` when there is none.
+fn find_token(data: []const u8, word: str, from: usize, until: usize) -> usize {
+    var at = from
+    while at + word.len <= until {
+        if at_token(data, at, word, from, until) { ret at }
+        at += 1usize
+    }
+    ret until
+}
+
+// The byte after a literal string starting at `at`, including nested parentheses and
+// escaped bytes; `until` for an unterminated string.
+fn skip_literal(data: []const u8, at: usize, until: usize) -> usize {
+    var scan = at + 1usize
+    var depth = 1usize
+    while scan < until && depth > 0usize {
+        if data[scan] == 92u8 {
+            scan += 1usize
+            if scan < until { scan += 1usize }
+        } else {
+            if data[scan] == 40u8 { depth += 1usize }
+            if data[scan] == 41u8 { depth -= 1usize }
+            scan += 1usize
+        }
+    }
+    ret scan
+}
+
+// The byte after a hexadecimal string starting at `at`, or `until` when it is unterminated.
+fn skip_hex(data: []const u8, at: usize, until: usize) -> usize {
+    var scan = at + 1usize
+    while scan < until && data[scan] != 62u8 { scan += 1usize }
+    if scan < until { scan += 1usize }
+    ret scan
+}
+
+// The byte at the line break ending a comment that starts at `at`.
+fn skip_comment(data: []const u8, at: usize, until: usize) -> usize {
+    var scan = at + 1usize
+    while scan < until && data[scan] != 10u8 && data[scan] != 13u8 { scan += 1usize }
+    ret scan
+}
+
+// The first byte of a stream's data after its `stream` keyword and line ending.
+fn stream_start(data: []const u8, at: usize, until: usize) -> usize {
+    var start = at + 6usize
+    if start < until && data[start] == 13u8 { start += 1usize }
+    if start < until && data[start] == 10u8 { start += 1usize }
+    ret start
+}
+
+// A decimal stream length that is no larger than the input itself. Larger values cannot
+// describe a usable direct stream here, and refusing them avoids arithmetic overflow.
+fn length_number_at(data: []const u8, from: usize, until: usize) -> (usize, usize, bool) {
+    var at = from
+    while at < until && is_space(data[at]) { at += 1usize }
+    if at >= until || !is_digit(data[at]) { ret (0usize, from, false) }
+    var value = 0usize
+    while at < until && is_digit(data[at]) {
+        let digit = usize(data[at] - 48u8)
+        if value > data.len / 10usize || (value == data.len / 10usize && digit > data.len % 10usize) { ret (0usize, from, false) }
+        value = value * 10usize + digit
+        at += 1usize
+    }
+    ret (value, at, true)
+}
+
+// A direct, top-level `/Length N` in the dictionary before `stream`; indirect lengths
+// deliberately return false because their value is in another object.
+fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, bool) {
+    var at = from
+    var depth = 0usize
+    while at < until {
+        let c = data[at]
+        if c == 40u8 {
+            at = skip_literal(data, at, until)
+            continue
+        }
+        if c == 37u8 {
+            at = skip_comment(data, at, until)
+            continue
+        }
+        if c == 60u8 && at + 1usize < until && data[at + 1usize] == 60u8 {
+            depth += 1usize
+            at += 2usize
+            continue
+        }
+        if c == 62u8 && at + 1usize < until && data[at + 1usize] == 62u8 {
+            if depth > 0usize { depth -= 1usize }
+            at += 2usize
+            continue
+        }
+        if c == 60u8 {
+            at = skip_hex(data, at, until)
+            continue
+        }
+        if depth == 1usize && c == 47u8 && at_token(data, at + 1usize, "Length", from, until) {
+            let end = at + 7usize
+            let (length, after_length, has_length) = length_number_at(data, end, until)
+            if has_length {
+                let (_, after_generation, has_generation) = length_number_at(data, after_length, until)
+                var marker = after_generation
+                while marker < until && is_space(data[marker]) { marker += 1usize }
+                if !(has_generation && at_token(data, marker, "R", from, until)) { ret (length, true) }
+            }
+        }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The first real `stream` keyword in an object span: strings, hex strings and comments
+// are skipped so their contents cannot be mistaken for object syntax.
+fn stream_keyword(data: []const u8, from: usize, until: usize) -> usize {
+    var at = from
+    while at < until {
+        let c = data[at]
+        if c == 40u8 {
+            at = skip_literal(data, at, until)
+            continue
+        }
+        if c == 37u8 {
+            at = skip_comment(data, at, until)
+            continue
+        }
+        if c == 60u8 && at + 1usize < until && data[at + 1usize] == 60u8 {
+            at += 2usize
+            continue
+        }
+        if c == 62u8 && at + 1usize < until && data[at + 1usize] == 62u8 {
+            at += 2usize
+            continue
+        }
+        if c == 60u8 {
+            at = skip_hex(data, at, until)
+            continue
+        }
+        if at_token(data, at, "stream", from, until) { ret at }
+        at += 1usize
+    }
+    ret until
+}
+
+// The end of an indirect object, skipping literal values and its stream data. A direct
+// `/Length` is authoritative for the stream bytes, including any `endobj` or `endstream`
+// byte sequence they contain; otherwise the reader falls back to the next endstream token.
+fn object_end(data: []const u8, from: usize) -> usize {
+    var at = from
+    while at < data.len {
+        let c = data[at]
+        if c == 40u8 {
+            at = skip_literal(data, at, data.len)
+            continue
+        }
+        if c == 37u8 {
+            at = skip_comment(data, at, data.len)
+            continue
+        }
+        if c == 60u8 && at + 1usize < data.len && data[at + 1usize] == 60u8 {
+            at += 2usize
+            continue
+        }
+        if c == 62u8 && at + 1usize < data.len && data[at + 1usize] == 62u8 {
+            at += 2usize
+            continue
+        }
+        if c == 60u8 {
+            at = skip_hex(data, at, data.len)
+            continue
+        }
+        if at_token(data, at, "endobj", from, data.len) { ret at }
+        if at_token(data, at, "stream", from, data.len) {
+            let start = stream_start(data, at, data.len)
+            let (length, has_length) = stream_length(data, from, at)
+            var after = start
+            if has_length && length <= data.len - start { after = start + length }
+            if at_token(data, after, "endstream", from, data.len) {
+                at = after + 9usize
+                continue
+            }
+            if after < data.len && data[after] == 13u8 { after += 1usize }
+            if after < data.len && data[after] == 10u8 { after += 1usize }
+            if at_token(data, after, "endstream", from, data.len) {
+                at = after + 9usize
+                continue
+            }
+            let finish = find_token(data, "endstream", after, data.len)
+            if finish >= data.len { ret data.len }
+            at = finish + 9usize
+            continue
+        }
+        at += 1usize
+    }
+    ret data.len
+}
+
 // The decimal number at `at` (after spaces): its value, the position after it, and whether there was one.
 fn number_at(data: []const u8, from: usize, until: usize) -> (usize, usize, bool) {
     var at = from
@@ -81,7 +287,7 @@ fn objects(a: *mem.Arena, data: []const u8) -> ([]Object, usize, err) {
     var count = 0usize
     var at = 0usize
     while at + 3usize <= data.len && count < MAX_OBJECTS {
-        if at_word(data, at, "obj") && at > 0usize && (is_space(data[at - 1usize]) || is_digit(data[at - 1usize])) {
+        if at_token(data, at, "obj", 0usize, data.len) && at > 0usize && (is_space(data[at - 1usize]) || is_digit(data[at - 1usize])) {
             // Walk back over the generation, a space and the number.
             var back = at
             while back > 0usize && is_space(data[back - 1usize]) { back -= 1usize }
@@ -94,7 +300,7 @@ fn objects(a: *mem.Arena, data: []const u8) -> ([]Object, usize, err) {
                 while num_start > 0usize && is_digit(data[num_start - 1usize]) { num_start -= 1usize }
                 if num_start < num_end && (num_start == 0usize || is_space(data[num_start - 1usize])) {
                     let (number, after, got) = number_at(data, num_start, num_end)
-                    let finish = find(data, "endobj", at + 3usize, data.len)
+                    let finish = object_end(data, at + 3usize)
                     table[count] = Object { number: number, start: at + 3usize, end: finish }
                     count += 1usize
                     at = finish
@@ -346,15 +552,19 @@ fn stream_of(a: *mem.Arena, data: []const u8, s: usize, e: usize) -> ([]const u8
 
 // `stream_of` with the inflated size limit a parameter (an image's samples are larger than a page's text).
 fn stream_capped(a: *mem.Arena, data: []const u8, s: usize, e: usize, cap: usize) -> ([]const u8, err) {
-    let keyword = find(data, "stream", s, e)
+    let keyword = stream_keyword(data, s, e)
     if keyword >= e { ret (data[s..s], ok) }
-    var from = keyword + 6usize
-    if from < e && data[from] == 13u8 { from += 1usize }
-    if from < e && data[from] == 10u8 { from += 1usize }
-    var until = find(data, "endstream", from, e)
-    // Trim the end-of-line before `endstream`.
-    if until > from && data[until - 1usize] == 10u8 { until -= 1usize }
-    if until > from && data[until - 1usize] == 13u8 { until -= 1usize }
+    let from = stream_start(data, keyword, e)
+    var until = e
+    let (length, has_length) = stream_length(data, s, keyword)
+    if has_length && length <= e - from {
+        until = from + length
+    } else {
+        until = find_token(data, "endstream", from, e)
+        // Trim the end-of-line before `endstream` when there is no direct length.
+        if until > from && data[until - 1usize] == 10u8 { until -= 1usize }
+        if until > from && data[until - 1usize] == 13u8 { until -= 1usize }
+    }
     var raw = data[from..until]
     // `/ASCII85Decode` first when the filter list has it (reportlab writes ASCII85 then Flate).
     let a85 = find(data, "ASCII85Decode", s, keyword)
@@ -1330,7 +1540,7 @@ fn unpredict(raw: []u8, row_bytes: usize, bpp: usize) -> usize {
 // 1-bit gray and stencil masks. False for what it does not read (Indexed, 16 bits, a size over MAX_IMAGE_PIXELS).
 fn decode_image(a: *mem.Arena, p: *Painter, s: usize, e: usize) -> (Image, bool) {
     let data = p.data
-    let keyword = find(data, "stream", s, e)
+    let keyword = stream_keyword(data, s, e)
     let width = int_after(data, s, keyword, "Width", 0usize)
     let height = int_after(data, s, keyword, "Height", 0usize)
     let bits = int_after(data, s, keyword, "BitsPerComponent", 8usize)
@@ -1478,7 +1688,7 @@ fn paint_xobject(a: *mem.Arena, p: *Painter, name: []const u8) {
     if !found { ret }
     let (s, e, has_span) = object_span(p.table, p.count, object)
     if !has_span { ret }
-    let keyword = find(p.data, "stream", s, e)
+    let keyword = stream_keyword(p.data, s, e)
     if has_pair(p.data, s, keyword, "Subtype", "Form") {
         if p.form_depth < 2usize {
             let (content, content_error) = stream_of(a, p.data, s, e)
