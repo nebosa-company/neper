@@ -349,27 +349,35 @@ fn lalr_table(g: *const base.Grammar, start: u32, c: *Collection, merged: []u32,
     ret (count, conflicts, fill_error)
 }
 
-// Drive ACTION/GOTO over `sentence` (terminal ids); `stack` holds states,
-// `out_rules` receives each reduce's rule. Answers the reduce count;
-// `Invalid` on a rejected input.
+// Drive ACTION/GOTO over `sentence` (terminal ids below `g.terminals`); `$`
+// is synthesized only after the caller sentence ends. `stack` holds states,
+// `out_rules` receives each reduce's rule. Answers the reduce count; `Invalid`
+// on a rejected input.
 fn parse(g: *const base.Grammar, action: []const u32, gotos: []const u32, sentence: []const u32, stack: []u32, out_rules: []u32) -> (usize, err) {
-    if !base.grammar_valid(g) { ret (0usize, Invalid) }
+    if !base.grammar_valid(g) || g.terminals > 63u32 { ret (0usize, Invalid) }
     if stack.len < 1usize { ret (0usize, TooSmall) }
     let cols = usize(g.terminals) + 1usize
     let nts = ll.symbol_count(g) - usize(g.terminals)
+    let action_rows = action.len / cols
     stack[0usize] = 0u32
     var depth = 1usize
     var i = 0usize
     var n = 0usize
     while true {
         var a = g.terminals
-        if i < sentence.len { a = sentence[i] }
-        if a > g.terminals { ret (n, Invalid) }
-        let act = action[usize(stack[depth - 1usize]) * cols + usize(a)]
+        if i < sentence.len {
+            a = sentence[i]
+            if a >= g.terminals { ret (n, Invalid) }
+        }
+        let state = usize(stack[depth - 1usize])
+        if state >= action_rows { ret (n, Invalid) }
+        let act = action[state * cols + usize(a)]
         let kind = tag(act)
         if kind == SHIFT {
+            let next_state = value(act)
+            if i >= sentence.len || usize(next_state) >= action_rows { ret (n, Invalid) }
             if depth >= stack.len { ret (n, TooSmall) }
-            stack[depth] = value(act)
+            stack[depth] = next_state
             depth += 1usize
             i += 1usize
         } else if kind == REDUCE {
@@ -378,14 +386,22 @@ fn parse(g: *const base.Grammar, action: []const u32, gotos: []const u32, senten
             let len = base.rule_len(g, rule)
             if len >= depth { ret (n, Invalid) }
             depth -= len
-            let to = gotos[usize(stack[depth - 1usize]) * nts + usize(g.lhs[rule]) - usize(g.terminals)]
-            if to == NONE { ret (n, Invalid) }
+            let lhs = g.lhs[rule]
+            if nts == 0usize || lhs < g.terminals { ret (n, Invalid) }
+            let nonterminal = usize(lhs) - usize(g.terminals)
+            if nonterminal >= nts { ret (n, Invalid) }
+            let from = usize(stack[depth - 1usize])
+            if from >= gotos.len / nts { ret (n, Invalid) }
+            let to = gotos[from * nts + nonterminal]
+            if to == NONE || usize(to) >= action_rows { ret (n, Invalid) }
+            if depth >= stack.len { ret (n, TooSmall) }
             stack[depth] = to
             depth += 1usize
             if n >= out_rules.len { ret (n, TooSmall) }
             out_rules[n] = u32(rule)
             n += 1usize
         } else if kind == ACCEPT {
+            if i != sentence.len { ret (n, Invalid) }
             ret (n, ok)
         } else {
             ret (n, Invalid)

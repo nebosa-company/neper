@@ -295,7 +295,8 @@ fn mark_no_input_cycles(g: *const base.Grammar, cols: usize, out: []u32, state: 
     ret ok
 }
 
-// Parse `sentence` (terminal ids) from `start` with `tbl` from `table`;
+// Parse `sentence` (terminal ids below `g.terminals`) from `start` with `tbl`
+// from `table`; `$` is synthesized only after the caller sentence ends.
 // `stack` holds the pending symbols, `out_rules` receives the rules applied
 // in leftmost order. Answers the rule count; `Invalid` on a rejected input.
 fn parse(g: *const base.Grammar, start: u32, tbl: []const u32, sentence: []const u32, stack: []u32, out_rules: []u32) -> (usize, err) {
@@ -316,8 +317,10 @@ fn parse(g: *const base.Grammar, start: u32, tbl: []const u32, sentence: []const
         depth -= 1usize
         let top = stack[depth]
         var a = g.terminals
-        if i < sentence.len { a = sentence[i] }
-        if a > g.terminals { ret (n, Invalid) }
+        if i < sentence.len {
+            a = sentence[i]
+            if a >= g.terminals { ret (n, Invalid) }
+        }
         if top == NONE {
             if i != sentence.len { ret (n, Invalid) }
             ret (n, ok)

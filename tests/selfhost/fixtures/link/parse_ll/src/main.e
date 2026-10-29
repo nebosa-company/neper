@@ -112,6 +112,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bad2 = [2]u32 { 0u32, 0u32 }
     let (_, reject2) = ll.parse(&g, 5u32, tbl[..], bad2[..], stack[..], rules[..])
     if reject2 != ll.Invalid { os.exit(4i32) }
+    let explicit_end = [1]u32 { 5u32 }
+    let (_, reject_end) = ll.parse(&g, 5u32, tbl[..], explicit_end[..], stack[..], rules[..])
+    if reject_end != ll.Invalid { os.exit(4i32) }
+    let outside_terminal = [1]u32 { 4294967295u32 }
+    let (_, reject_outside) = ll.parse(&g, 5u32, tbl[..], outside_terminal[..], stack[..], rules[..])
+    if reject_outside != ll.Invalid { os.exit(4i32) }
     let (_, room) = ll.parse(&g, 5u32, tbl[..], buf[..], stack[..3usize], rules[..])
     if room != ll.TooSmall { os.exit(4i32) }
 
