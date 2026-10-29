@@ -339,6 +339,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var dangling_map = cbor.decoder(raw[..dangling_map_len])
     if cbor.skip(&dangling_map) != cbor.Invalid { os.exit(58i32) }
 
+    // A CBOR text string is UTF-8, not arbitrary bytes. Both directions must
+    // reject a malformed sequence rather than laundering it through `str`.
+    let invalid_text_len = unhex("6180", raw[..])
+    var invalid_text = cbor.decoder(raw[..invalid_text_len])
+    let (invalid_text_value, invalid_text_error) = cbor.decode_text(&invalid_text)
+    if invalid_text_error != cbor.Invalid { os.exit(59i32) }
+    var invalid_text_out: [4]u8 = zero
+    var invalid_text_encoder = cbor.encoder(invalid_text_out[..])
+    if cbor.encode_text(&invalid_text_encoder, "\x80") != cbor.Invalid { os.exit(60i32) }
+
+    // Break closes an indefinite container; by itself it is not a CBOR item.
+    let stray_break_len = unhex("ff", raw[..])
+    var stray_break = cbor.decoder(raw[..stray_break_len])
+    if cbor.skip(&stray_break) != cbor.Invalid { os.exit(61i32) }
+
     try io.print("fmt cbor ok\n")
     ret ok
 }

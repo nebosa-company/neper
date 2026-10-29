@@ -8,6 +8,7 @@
 // on the way out and `indefinite` on the `Item` plus `at_break` on the way in.
 
 use e.mem
+use e.text.utf8
 
 type Encoder = struct { out: []u8, len: usize }
 
@@ -118,6 +119,7 @@ fn encode_bytes(e: *Encoder, data: []const u8) -> err {
 }
 
 fn encode_text(e: *Encoder, text: str) -> err {
+    if !utf8.validate(text) { ret Invalid }
     try encode_head(e, MAJOR_TEXT, u64(text.len))
     ret put_all(e, text)
 }
@@ -287,7 +289,9 @@ fn decode_bytes(d: *Decoder) -> ([]const u8, err) {
 
 fn decode_text(d: *Decoder) -> (str, err) {
     let (out, payload_error) = payload(d, MAJOR_TEXT)
-    ret (out, payload_error)
+    if payload_error != ok { ret (zero, payload_error) }
+    if !utf8.validate(out) { ret (zero, Invalid) }
+    ret (out, ok)
 }
 
 // The item count, and whether the array is indefinite (then the count is 0 and the caller reads
@@ -366,6 +370,9 @@ fn decode_f64(d: *Decoder) -> (f64, err) {
 fn skip_depth(d: *Decoder, depth: u16) -> err {
     let (item, head_error) = decode_head(d)
     if head_error != ok { ret head_error }
+    // `break` is only legal as the terminator handled by an enclosing
+    // indefinite-length container, never as an item to skip itself.
+    if item.major == MAJOR_SIMPLE && item.info == INFO_INDEFINITE { ret Invalid }
     if item.major == MAJOR_BYTES || item.major == MAJOR_TEXT {
         if !item.indefinite {
             if u64(d.data.len - d.at) < item.value { ret Truncated }
