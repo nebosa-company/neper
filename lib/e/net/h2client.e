@@ -103,6 +103,9 @@ fn eq_fold_name(x: str, y: str) -> bool {
 }
 
 fn skip_request_header(name: str) -> bool {
+    // The request builder owns all pseudo-headers; forwarding a caller-supplied
+    // one would create a duplicate or conflicting HTTP/2 request field.
+    if name.len > 0usize && name[0usize] == 58u8 { ret true }
     ret eq_fold_name(name, "host") || eq_fold_name(name, "connection") || eq_fold_name(name, "keep-alive") || eq_fold_name(name, "proxy-connection") || eq_fold_name(name, "transfer-encoding") || eq_fold_name(name, "upgrade")
 }
 
