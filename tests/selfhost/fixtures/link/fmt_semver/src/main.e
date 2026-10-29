@@ -23,7 +23,9 @@ fn bad_versions() -> str {
 }
 
 fn bad_ranges() -> str {
-    ret "~1-rc.2|1.x.3|1.2.3 -|- 2.0.0|>=1.2.3 - 2.0.0|1.2.3 -2.0.0|1.2.3 - 2.0.0 - 3.0.0|x.2|01.2.3|1.2.3-01|>|^"
+    // Every range form below would otherwise increment an overflowing component:
+    // caret (major and patch), tilde, x-range, and the upper end of a hyphen range.
+    ret "~1-rc.2|1.x.3|1.2.3 -|- 2.0.0|>=1.2.3 - 2.0.0|1.2.3 -2.0.0|1.2.3 - 2.0.0 - 3.0.0|x.2|01.2.3|1.2.3-01|>|^|^18446744073709551615.0.0|~1.18446744073709551615.x|^0.0.18446744073709551615|18446744073709551615.x|1.0.0 - 18446744073709551615"
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

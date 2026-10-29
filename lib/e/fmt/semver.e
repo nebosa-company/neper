@@ -28,6 +28,9 @@ const GREATER: u8 = 62u8
 const CARET: u8 = 94u8
 const TILDE: u8 = 126u8
 const BAR: u8 = 124u8
+// Range desugaring increments components for upper bounds.  Keep range inputs in
+// node-semver's safe-integer domain; full-version `parse` remains u64-wide.
+const MAX_SAFE_INTEGER: u64 = 9007199254740991u64
 
 const OP_ANY: u8 = 0u8
 const OP_EQ: u8 = 1u8
@@ -273,6 +276,7 @@ fn partial_component(s: str, present: bool) -> (u64, bool, err) {
     if !present || is_x(s) { ret (0u64, true, ok) }
     let (value, parse_error) = parse_number(s)
     if parse_error != ok { ret (0u64, false, parse_error) }
+    if value > MAX_SAFE_INTEGER { ret (0u64, false, Invalid) }
     ret (value, false, ok)
 }
 
