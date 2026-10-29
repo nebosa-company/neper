@@ -102,6 +102,16 @@ fn gopher_request(out: []u8, selector: str, query: str, has_query: bool) -> (usi
     var need = selector.len + 2usize
     if has_query { need += 1usize + query.len }
     if out.len < need { ret (0usize, TooLong) }
+    var i = 0usize
+    while i < selector.len {
+        if selector[i] < 32u8 || selector[i] == 127u8 { ret (0usize, BadHeader) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < query.len {
+        if query[i] < 32u8 || query[i] == 127u8 { ret (0usize, BadHeader) }
+        i += 1usize
+    }
     var at = put_text(out, 0usize, selector)
     if has_query {
         out[at] = 9u8

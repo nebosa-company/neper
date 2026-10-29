@@ -64,6 +64,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ge2 != ok || !str.eq(text_of(buf[0..], g2), "/search\tneper lang\r\n") { os.exit(26) }
     let (g3, ge3) = retro.gopher_request(buf[0..], "", "", false)
     if ge3 != ok || g3 != 2usize { os.exit(27) }
+    let (_, ge4) = retro.gopher_request(buf[0..], "/bad\r\nselector", "", false)
+    if ge4 != retro.BadHeader { os.exit(46) }
+    let (_, ge5) = retro.gopher_request(buf[0..], "/search", "bad\nquery", true)
+    if ge5 != retro.BadHeader { os.exit(47) }
     let (m1, me1) = retro.gopher_item("0About\t/about.txt\texample.org\t70")
     if me1 != ok || m1.kind != 48u8 || !str.eq(m1.display, "About") || !str.eq(m1.selector, "/about.txt") { os.exit(28) }
     if !str.eq(m1.host, "example.org") || m1.port != 70usize { os.exit(29) }
