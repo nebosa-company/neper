@@ -4,6 +4,7 @@
 use e.mem
 use e.meta
 use e.str
+use shapes
 
 error Failed
 
@@ -49,6 +50,7 @@ fn main(a: *mem.Arena) -> err {
     if !str.eq(meta.type_name[bool](), "bool") { ret Failed }
     if !str.eq(meta.type_name[Point](), "Point") { ret Failed }
     if !str.eq(meta.type_name[Colour](), "Colour") { ret Failed }
+    if !str.eq(meta.type_name[shapes.Vec3](), "shapes.Vec3") { ret Failed }
 
     // The answer is a constant, so it is legal where only a constant is: a `switch`
     // case reached through it has to fold at compile time like any other.
