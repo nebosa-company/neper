@@ -249,6 +249,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if r_error != ok || start_error != ok { os.exit(91i32) }
     let (n, n_error) = recur.expand(r, start, out[0usize..64usize])
     if n_error != ok || n != 3usize || out[2usize].date.month != 3u8 || out[2usize].date.day != 1u8 { os.exit(92i32) }
+    // A full zero-capacity result slice stops before its first write.
+    let (one, one_error) = recur.parse_rule("FREQ=DAILY;COUNT=1")
+    var no_dates: [0]calendar.DateTime = zero
+    let (zero_written, zero_error) = recur.expand(one, start, no_dates[..])
+    if one_error != ok || zero_error != ok || zero_written != 0usize { os.exit(92i32) }
     // expand_from drops what is before `from` but counts it toward COUNT.
     let (m, m_error) = recur.expand_from(r, start, out[1usize], out[0usize..64usize])
     if m_error != ok || m != 2usize || out[0usize].date.day != 29u8 { os.exit(93i32) }

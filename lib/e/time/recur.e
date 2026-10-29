@@ -586,6 +586,7 @@ fn expand_from(rule: Rule, start: calendar.DateTime, from: calendar.DateTime, ou
             if r.count > 0i64 && emitted >= r.count { ret (written, ok) }
             emitted += 1i64
             if calendar.compare(stamp, from) >= 0i32 {
+                if written == out.len { ret (written, ok) }
                 out[written] = stamp
                 written += 1usize
                 if written == out.len { ret (written, ok) }
