@@ -368,6 +368,31 @@ fn rejects_out_of_range_table_offset(a: *mem.Arena) -> bool {
     ret failure == woff.Invalid
 }
 
+fn rejects_limit_sized_sfnt(a: *mem.Arena) -> bool {
+    // Six bytes satisfy the directory bounds and zlib-header validation, but
+    // its 64 MiB original table plus the sfnt headers would formerly allocate
+    // more than the table limit before deflate could reject its contents.
+    var bad: [70]u8 = zero
+    bad[0usize] = 119u8
+    bad[1usize] = 79u8
+    bad[2usize] = 70u8
+    bad[3usize] = 70u8
+    bad[4usize] = 0u8
+    bad[5usize] = 1u8
+    bad[13usize] = 1u8
+    bad[44usize] = 109u8
+    bad[45usize] = 97u8
+    bad[46usize] = 120u8
+    bad[47usize] = 112u8
+    bad[51usize] = 64u8
+    bad[55usize] = 6u8
+    bad[56usize] = 4u8
+    bad[64usize] = 120u8
+    bad[65usize] = 1u8
+    let (_, failure) = woff.to_sfnt(a, bad[..])
+    ret failure == woff.Invalid
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
@@ -431,6 +456,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_59()) != 0u8 { os.exit(60i32) }
     if !rejects_expanded_uncompressed_table(a) { os.exit(61i32) }
     if !rejects_out_of_range_table_offset(a) { os.exit(62i32) }
+    if !rejects_limit_sized_sfnt(a) { os.exit(63i32) }
     try io.print("fmt woff ok")
     ret ok
 }

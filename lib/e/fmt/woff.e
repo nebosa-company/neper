@@ -4,7 +4,7 @@
 // tag-sorted 16-byte directory entry per table and the tables padded to four bytes. Any short, inconsistent or
 // uncompressible input is `Invalid`; WOFF2 is `e.fmt.woff2`.
 //
-// ponytail: an inflated table is held to 64 MiB, where the reference allocates whatever the header claims.
+// ponytail: each table and the reconstructed sfnt are held to 64 MiB, where the reference allocates whatever the header claims.
 //
 // Memory: the arena is retained; the sfnt lives in it.
 
@@ -71,12 +71,11 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
     let flavor = be32(bytes, 4usize)
     let count = usize((u32(bytes[12]) << 8u32) | u32(bytes[13]))
     if count == 0usize { ret (zero, Invalid) }
-    let (entries, ee) = mem.alloc[Entry](a, count)
-    if ee != ok { ret (zero, ee) }
-    let (window_size, we) = deflate.decoder_storage(32768usize)
-    if we != ok { ret (zero, we) }
-    let (storage, se) = mem.alloc[u8](a, window_size)
-    if se != ok { ret (zero, se) }
+    // Validate every directory record and the complete reconstructed sfnt before
+    // allocating an inflated table. This keeps a small malicious directory from
+    // requesting a large table or a wrapped aggregate allocation on wasm32.
+    if count > (LIMIT - 12usize) / 16usize { ret (zero, Invalid) }
+    var total = 12usize + count * 16usize
     var p = 44usize
     var i = 0usize
     while i < count {
@@ -84,7 +83,27 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
         let offset = usize(be32(bytes, p + 4usize))
         let comp = usize(be32(bytes, p + 8usize))
         let orig = usize(be32(bytes, p + 12usize))
-        if comp > orig || offset > bytes.len || comp > bytes.len - offset { ret (zero, Invalid) }
+        if orig > LIMIT || comp > orig || offset > bytes.len || comp > bytes.len - offset { ret (zero, Invalid) }
+        let padding = (4usize - (orig & 3usize)) & 3usize
+        if orig > LIMIT - total { ret (zero, Invalid) }
+        total += orig
+        if padding > LIMIT - total { ret (zero, Invalid) }
+        total += padding
+        p += 20usize
+        i += 1usize
+    }
+    let (entries, ee) = mem.alloc[Entry](a, count)
+    if ee != ok { ret (zero, ee) }
+    let (window_size, we) = deflate.decoder_storage(32768usize)
+    if we != ok { ret (zero, we) }
+    let (storage, se) = mem.alloc[u8](a, window_size)
+    if se != ok { ret (zero, se) }
+    p = 44usize
+    i = 0usize
+    while i < count {
+        let offset = usize(be32(bytes, p + 4usize))
+        let comp = usize(be32(bytes, p + 8usize))
+        let orig = usize(be32(bytes, p + 12usize))
         let raw = bytes[offset..offset + comp]
         var data: []const u8 = raw
         if comp < orig {
@@ -113,13 +132,6 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
     while search * 2usize <= count * 16usize {
         search *= 2usize
         selector += 1usize
-    }
-    var total = 12usize + count * 16usize
-    i = 0usize
-    while i < count {
-        total += entries[i].data.len
-        total += (4usize - (entries[i].data.len & 3usize)) & 3usize
-        i += 1usize
     }
     let (out, oe) = mem.alloc[u8](a, total)
     if oe != ok { ret (zero, oe) }
