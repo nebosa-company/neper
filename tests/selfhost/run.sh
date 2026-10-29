@@ -8980,6 +8980,11 @@ vulkan_buffer_status=0
 $test_build/neper-self test-file "$repo/lib/e/gpu/vulkan.e" "$repo" x64 linux "$test_build" --json > "$test_build/vulkan-buffer-test.jsonl" || vulkan_buffer_status=$?
 [ "$vulkan_buffer_status" -eq 0 ]
 grep -q '"passed":2,"failed":0' "$test_build/vulkan-buffer-test.jsonl"
+# The workgroup-size guard is pure arithmetic, so it runs without a GPU loader.
+gpu_workgroup_status=0
+$test_build/neper-self test-file "$repo/lib/e/gpu.e" "$repo" x64 linux "$test_build" --json > "$test_build/gpu-workgroup-test.jsonl" || gpu_workgroup_status=$?
+[ "$gpu_workgroup_status" -eq 0 ]
+grep -q '"passed":1,"failed":0' "$test_build/gpu-workgroup-test.jsonl"
 test_actual="$test_build/conformance-tools-test.jsonl"
 test_status=0
 $test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 linux "$test_build" --json > "$test_actual" || test_status=$?

@@ -1806,8 +1806,10 @@ const FAULTED: usize = 4294967294usize
 // rounded up; zero invocations is zero workgroups.
 fn groups_along(invocations: usize, size: usize) -> (usize, err) {
     if invocations > MAX_AXIS { ret (0usize, TooLarge) }
+    if size == 0usize { ret (0usize, TooLarge) }
     if invocations == 0usize { ret (0usize, ok) }
-    let groups = (invocations + size - 1usize) / size
+    var groups = invocations / size
+    if invocations % size != 0usize { groups += 1usize }
     if groups > 65535usize { ret (0usize, TooLarge) }
     ret (groups, ok)
 }
@@ -1967,6 +1969,32 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, s
     ret ok
 }
 
+// A workgroup must have at least one thread, and each intermediate product must
+// stay below the device limit before it is multiplied.
+fn workgroup_fits(x: usize, y: usize, z: usize, max_threads: usize) -> bool {
+    if x == 0usize || y == 0usize || z == 0usize { ret false }
+    if x > max_threads / y { ret false }
+    let xy = x * y
+    if xy > max_threads / z { ret false }
+    ret true
+}
+
+// These boundary checks are host-only: they cover the arithmetic without a GPU
+// loader or a Metal-capable machine.
+@test
+fn workgroup_dimensions_do_not_wrap(a: *mem.Arena) -> err {
+    if !workgroup_fits(4usize, 8usize, 8usize, 256usize) { ret TooLarge }
+    if workgroup_fits(0usize, 1usize, 1usize, 256usize) { ret TooLarge }
+    if workgroup_fits(257usize, 1usize, 1usize, 256usize) { ret TooLarge }
+    if workgroup_fits(9223372036854775808usize, 2usize, 1usize, 256usize) { ret TooLarge }
+    if workgroup_fits(1usize, 9223372036854775808usize, 2usize, 256usize) { ret TooLarge }
+    let (zero_groups, zero_error) = groups_along(1usize, 0usize)
+    if zero_error != TooLarge || zero_groups != 0usize { ret TooLarge }
+    let (huge_groups, huge_error) = groups_along(MAX_AXIS, 18446744073709551615usize)
+    if huge_error != ok || huge_groups != 1usize { ret TooLarge }
+    ret ok
+}
+
 // A launch on a Metal device (D5838): the same argument block as a Vulkan launch, in a buffer of its own, over the device's
 // heap, whose first 32 bytes are the checked build's fault block. The embedded text is MSL, as hex.
 fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y: usize, z: usize, shared_bytes: usize, ctx: *void, module_code: str, entry: str, layout: str, checked: bool) -> err {
@@ -2016,7 +2044,7 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
         driver.free(block)
         ret pipeline_error
     }
-    if x * y * z > pipeline.max_threads {
+    if !workgroup_fits(x, y, z, pipeline.max_threads) {
         driver.free(block)
         ret TooLarge
     }
@@ -2464,7 +2492,7 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     locks.mutex_lock(&cpu_launch_locks[0usize])
     defer locks.mutex_unlock(&cpu_launch_locks[0usize])
     if launch_active { ret Unsupported }
-    if x == 0usize || y == 0usize || z == 0usize || x * y * z > 1024usize { ret Unsupported }
+    if !workgroup_fits(x, y, z, 1024usize) { ret Unsupported }
     let (gx, gx_error) = groups_along(grid.x, x)
     if gx_error != ok { ret gx_error }
     let (gy, gy_error) = groups_along(grid.y, y)
