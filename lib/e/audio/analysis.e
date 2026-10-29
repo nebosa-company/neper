@@ -296,12 +296,15 @@ fn onsets(x: []const f64, frame: usize, hop: usize, threshold: f64, scratch: []f
 // autocorrelation of the mean-removed onset envelope is largest.
 fn tempo(envelope: []const f64, hop: usize, sample_rate: f64) -> (f64, err) {
     let n = envelope.len
-    if hop == 0usize || sample_rate <= 0.0f64 || n < 2usize { ret (0.0f64, Invalid) }
+    if hop == 0usize || !(sample_rate > 0.0f64) || sample_rate == math.inf64() || n < 2usize { ret (0.0f64, Invalid) }
     let frames_per_second = sample_rate / f64(hop)
-    var lo = usize(math.ceil[f64](60.0f64 * frames_per_second / 200.0f64))
+    let lo_float = 60.0f64 * frames_per_second / 200.0f64
+    if !(lo_float < f64(n)) { ret (0.0f64, Invalid) }
+    var lo = usize(math.ceil[f64](lo_float))
     if lo < 1usize { lo = 1usize }
-    var hi = usize(60.0f64 * frames_per_second / 40.0f64)
-    if hi >= n { hi = n - 1usize }
+    let hi_float = 60.0f64 * frames_per_second / 40.0f64
+    var hi = n - 1usize
+    if hi_float < f64(n) { hi = usize(hi_float) }
     if lo > hi { ret (0.0f64, Invalid) }
     var mean = 0.0f64
     var t = 0usize
@@ -402,7 +405,7 @@ fn beats(envelope: []const f64, bpm: f64, hop: usize, sample_rate: f64, tightnes
 // pitch class nearest its centre (C = 0); `out` holds `12 * frames`, frame
 // major; `scratch.len >= (2 * frames + 1) * frame`; answers the frame count.
 fn chroma(x: []const f64, sample_rate: f64, frame: usize, hop: usize, scratch: []f64, out: []f64) -> (usize, err) {
-    if sample_rate <= 0.0f64 { ret (0usize, Invalid) }
+    if !(sample_rate > 0.0f64) || sample_rate == math.inf64() { ret (0usize, Invalid) }
     let frames = frame_count(x.len, frame, hop)
     if frames == 0usize { ret (0usize, Invalid) }
     if out.len < 12usize * frames || scratch.len < (2usize * frames + 1usize) * frame { ret (0usize, TooSmall) }
@@ -422,7 +425,7 @@ fn chroma(x: []const f64, sample_rate: f64, frame: usize, hop: usize, scratch: [
         }
         var k = 1usize
         while k <= frame / 2usize {
-            let hz = f64(k) * sample_rate / f64(frame)
+            let hz = f64(k) / f64(frame) * sample_rate
             if hz >= 27.5f64 {
                 let midi = 69.0f64 + 12.0f64 * math.log2[f64](hz / 440.0f64)
                 let class = usize(math.round[f64](midi)) % 12usize

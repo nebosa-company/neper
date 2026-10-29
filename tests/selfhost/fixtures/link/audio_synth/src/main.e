@@ -177,6 +177,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !near(sum, -178.63335558331764f64, 1.0e-12f64) { os.exit(4i32) }
     if synth.karplus_strong(220.0f64, sr, 0.996f64, &r, pluck[..10usize]) != synth.TooSmall || synth.karplus_strong(0.0f64, sr, 0.996f64, &r, pluck[..]) != synth.Invalid { os.exit(4i32) }
+    if synth.karplus_strong(math.nan64(), sr, 0.996f64, &r, pluck[..]) != synth.Invalid || synth.karplus_strong(220.0f64, math.inf64(), 0.996f64, &r, pluck[..]) != synth.Invalid { os.exit(4i32) }
+    if synth.karplus_strong(1.0e-300f64, sr, 0.996f64, &r, pluck[..]) != synth.TooSmall { os.exit(4i32) }
 
     try io.print("audio synth ok\n")
     ret ok

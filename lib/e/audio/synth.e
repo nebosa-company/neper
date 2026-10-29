@@ -203,10 +203,13 @@ fn wavetable(table: []const f64, phase: f64, interpolation: Interpolation) -> f6
 // [-1, 1) from `r` start `out`, and every later sample is `decay / 2` times
 // the sum of the two samples one period earlier (the averaging filter).
 fn karplus_strong(frequency: f64, sample_rate: f64, decay: f64, r: *rand.Pcg64, out: []f64) -> err {
-    if frequency <= 0.0f64 || sample_rate <= 0.0f64 { ret Invalid }
-    let period = usize(math.round[f64](sample_rate / frequency))
-    if period < 2usize { ret Invalid }
-    if out.len < period { ret TooSmall }
+    if !(frequency > 0.0f64) || !(sample_rate > 0.0f64) || frequency == math.inf64() || sample_rate == math.inf64() { ret Invalid }
+    let period_float = math.round[f64](sample_rate / frequency)
+    if period_float < 2.0f64 { ret Invalid }
+    // The caller's output length is already a representable usize bound. Test it
+    // before narrowing a tiny frequency's enormous (or infinite) period.
+    if period_float > f64(out.len) || period_float >= f64(0usize -% 1usize) { ret TooSmall }
+    let period = usize(period_float)
     var i = 0usize
     while i < period {
         out[i] = 2.0f64 * rand.pcg64_f64(r) - 1.0f64

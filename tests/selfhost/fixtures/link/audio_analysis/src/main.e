@@ -85,6 +85,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if onsets_error != ok || onset_count != 4usize || marks[0usize] != 0usize || marks[1usize] != 32usize || marks[2usize] != 64usize || marks[3usize] != 96usize { os.exit(3i32) }
     let (bpm, tempo_error) = analysis.tempo(envelope[..], 128usize, sr)
     if tempo_error != ok || !near(bpm, 120.0f64, 1.0e-9f64) { os.exit(3i32) }
+    let (_, nan_tempo_error) = analysis.tempo(envelope[..], 128usize, math.nan64())
+    let (_, inf_tempo_error) = analysis.tempo(envelope[..], 128usize, math.inf64())
+    if nan_tempo_error != analysis.Invalid || inf_tempo_error != analysis.Invalid { os.exit(3i32) }
     let (beat_count, beats_error) = analysis.beats(envelope[..], bpm, 128usize, sr, 100.0f64, scratch, marks[..])
     if beats_error != ok || beat_count != 4usize || marks[0usize] != 0usize || marks[1usize] != 32usize || marks[2usize] != 64usize || marks[3usize] != 96usize { os.exit(3i32) }
     let (_, beats_room) = analysis.beats(envelope[..], bpm, 128usize, sr, 100.0f64, scratch, marks[..2usize])
@@ -103,6 +106,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var classes: [36]f64 = zero
     let (chroma_frames, chroma_error) = analysis.chroma(chord[..], sr, 1024usize, 512usize, scratch, classes[..])
     if chroma_error != ok || chroma_frames != 3usize || !near(digest(classes[..]), 234911.709508163f64, 1.0e-2f64) { os.exit(4i32) }
+    let (_, nan_chroma_error) = analysis.chroma(chord[..], math.nan64(), 1024usize, 512usize, scratch, classes[..])
+    let (_, inf_chroma_error) = analysis.chroma(chord[..], math.inf64(), 1024usize, 512usize, scratch, classes[..])
+    if nan_chroma_error != analysis.Invalid || inf_chroma_error != analysis.Invalid { os.exit(4i32) }
     var c = 0usize
     while c < 12usize {
         let chord_tone = c == 0usize || c == 4usize || c == 7usize
