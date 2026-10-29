@@ -451,9 +451,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_6()) != 0u8 { os.exit(106i32) }
     if run_chunk(a, vectors_7()) != 0u8 { os.exit(107i32) }
     if run_chunk(a, vectors_8()) != 0u8 { os.exit(108i32) }
-    if !retry_after_too_small(a, true) { os.exit(109i32) }
-    if !retry_after_too_small(a, false) { os.exit(110i32) }
-    if !encode_retry_after_too_small(a) { os.exit(111i32) }
+    var stream_frame: [9]u8 = zero
+    let (boundary_len, boundary_error) = h2.frame_encode(stream_frame[0usize..], h2.DATA, 0u8, 2147483647u32, "")
+    if boundary_error != ok || boundary_len != 9usize || stream_frame[5usize] != 127u8 || stream_frame[6usize] != 255u8 || stream_frame[7usize] != 255u8 || stream_frame[8usize] != 255u8 { os.exit(109i32) }
+    let (_, invalid_stream_error) = h2.frame_encode(stream_frame[0usize..], h2.DATA, 0u8, 2147483648u32, "")
+    if invalid_stream_error != h2.Invalid { os.exit(110i32) }
+    if !retry_after_too_small(a, true) { os.exit(111i32) }
+    if !retry_after_too_small(a, false) { os.exit(112i32) }
+    if !encode_retry_after_too_small(a) { os.exit(113i32) }
     try io.print("net http2 ok")
     ret ok
 }

@@ -78,6 +78,7 @@ fn frame_decode(buf: []const u8, max_size: usize) -> (Frame, usize, err) {
 }
 
 fn frame_encode(dst: []u8, kind: u8, flags: u8, stream: u32, payload: []const u8) -> (usize, err) {
+    if stream > 2147483647u32 { ret (0usize, Invalid) }
     if payload.len > 16777215usize { ret (0usize, FrameSize) }
     if dst.len < 9usize + payload.len { ret (0usize, TooSmall) }
     dst[0usize] = u8((payload.len >> 16usize) & 255usize)
@@ -85,7 +86,7 @@ fn frame_encode(dst: []u8, kind: u8, flags: u8, stream: u32, payload: []const u8
     dst[2usize] = u8(payload.len & 255usize)
     dst[3usize] = kind
     dst[4usize] = flags
-    put32(dst, 5usize, stream & 2147483647u32)
+    put32(dst, 5usize, stream)
     mem.copy[u8](dst[9usize..9usize + payload.len], payload)
     ret (9usize + payload.len, ok)
 }
