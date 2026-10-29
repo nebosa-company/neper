@@ -19,12 +19,23 @@ type Command = struct { name: str, help: str, options: []const Option, subcomman
 type Value = union enum u8 { Bool: bool, I64: i64, U64: u64, F64: f64, String: str }
 type ParsedOption = struct { name: str, values: []const Value }
 type Result = struct { command: str, options: []const ParsedOption, positionals: []const str }
+type ValidationLink = struct { command: *const Command, parent: *const ValidationLink }
 error InvalidSpec
 error InvalidArgument
 error Missing
 error Unknown
 
 fn validate(command: *const Command) -> err {
+    ret validate_inner(command, nil)
+}
+
+fn validate_inner(command: *const Command, ancestors: *const ValidationLink) -> err {
+    var cursor = ancestors
+    while cursor != nil {
+        if cursor.command == command { ret InvalidSpec }
+        cursor = cursor.parent
+    }
+    let current = ValidationLink{ command: command, parent: ancestors }
     if command.name.len == 0usize { ret InvalidSpec }
     if command.options.len > 256usize { ret InvalidSpec }
     var i = 0usize
@@ -47,7 +58,7 @@ fn validate(command: *const Command) -> err {
             if str.eq(command.subcommands[j].name, command.subcommands[i].name) { ret InvalidSpec }
             j += 1usize
         }
-        try validate(&command.subcommands[i])
+        try validate_inner(&command.subcommands[i], &current)
         i += 1usize
     }
     ret ok

@@ -29,14 +29,17 @@ fn valid_name(s: str) -> bool {
     ret true
 }
 
-fn count_commands(c: *const cli.Command) -> usize {
+fn count_commands(c: *const cli.Command, depth: usize) -> (usize, err) {
+    if depth > 16usize { ret (0usize, Invalid) }
     var n = 1usize
     var i = 0usize
     while i < c.subcommands.len {
-        n += count_commands(&c.subcommands[i])
+        let (child_count, child_error) = count_commands(&c.subcommands[i], depth + 1usize)
+        if child_error != ok { ret (0usize, child_error) }
+        n += child_count
         i += 1usize
     }
-    ret n
+    ret (n, ok)
 }
 
 fn joined(a: *mem.Arena, prefix: str, name: str) -> (str, err) {
@@ -51,7 +54,8 @@ fn joined(a: *mem.Arena, prefix: str, name: str) -> (str, err) {
 
 // The tree breadth-first: a node's children follow every node of its own level.
 fn flatten(a: *mem.Arena, root: *const cli.Command) -> ([]Node, err) {
-    let total = count_commands(root)
+    let (total, count_error) = count_commands(root, 0usize)
+    if count_error != ok { ret (zero, count_error) }
     let (nodes, ne) = mem.alloc[Node](a, total)
     if ne != ok { ret (zero, ne) }
     if !valid_name(root.name) { ret (zero, Invalid) }

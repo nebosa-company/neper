@@ -74,6 +74,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     deep_branches[0usize] = cli.Command{ name: "left", help: "", options: none_o[0usize..0usize], subcommands: deep[0usize..1usize] }
     deep_branches[1usize] = cli.Command{ name: "right", help: "", options: none_o[0usize..0usize], subcommands: deep[15usize..16usize] }
     let deep_root = cli.Command{ name: "deep", help: "", options: none_o[0usize..0usize], subcommands: deep_branches[..] }
+    let deep_limit_root = cli.Command{ name: "deep", help: "", options: none_o[0usize..0usize], subcommands: deep[0usize..1usize] }
+    // A runtime two-node cycle must be rejected by validation and completion.
+    var cyclic_root: [1]cli.Command = zero
+    var cyclic_child: [1]cli.Command = zero
+    cyclic_root[0usize] = cli.Command{ name: "cycle", help: "", options: none_o[0usize..0usize], subcommands: none_c[0usize..0usize] }
+    cyclic_child[0usize] = cli.Command{ name: "back", help: "", options: none_o[0usize..0usize], subcommands: none_c[0usize..0usize] }
+    cyclic_root[0usize].subcommands = cyclic_child[0usize..1usize]
+    cyclic_child[0usize].subcommands = cyclic_root[0usize..1usize]
 
     let (solo_bash, e1) = complete.bash(a, &solo)
     let (solo_zsh, e2) = complete.zsh(a, &solo)
@@ -121,6 +129,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ie2 != complete.Invalid { os.exit(12i32) }
     let (_, ie3) = complete.fish(a, &deep_root)
     if ie3 != complete.Invalid { os.exit(13i32) }
+    let (_, ie_limit) = complete.fish(a, &deep_limit_root)
+    if ie_limit != ok { os.exit(14i32) }
+    if cli.validate(&tool) != ok { os.exit(15i32) }
+    if cli.validate(&deep_root) != ok { os.exit(16i32) }
+    if cli.validate(&cyclic_root[0usize]) != cli.InvalidSpec { os.exit(17i32) }
+    let (_, ie4) = complete.bash(a, &cyclic_root[0usize])
+    if ie4 != complete.Invalid { os.exit(18i32) }
     try io.print("cli complete ok")
     ret ok
 }
