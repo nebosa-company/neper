@@ -361,7 +361,12 @@ fn vli(src: []const u8, at: *usize) -> (u64, err) {
         let b = u64(src[*at])
         *at += 1usize
         v = v | ((b & 127u64) << (7u32 * i))
-        if (b & 128u64) == 0u64 { ret (v, ok) }
+        if (b & 128u64) == 0u64 {
+            // XZ VLIs use the minimum number of bytes. A trailing zero payload
+            // after a continuation would be a second spelling of the same value.
+            if i > 0u32 && b == 0u64 { ret (0u64, Malformed) }
+            ret (v, ok)
+        }
         i += 1u32
     }
     ret (0u64, Malformed)

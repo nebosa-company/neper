@@ -158,6 +158,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, e13) = lzma.decode_xz(xz_text(), out[..200usize], probs[..])
     if e13 != lzma.TooSmall { os.exit(14i32) }
 
+    // XZ VLIs have one canonical encoding. A continued byte followed by a zero
+    // payload redundantly encodes 1 and must be malformed.
+    let noncanonical_vli: [2]u8 = [2]u8{ 129u8, 0u8 }
+    var noncanonical_at = 0usize
+    let (_, noncanonical_error) = lzma.vli(noncanonical_vli[..], &noncanonical_at)
+    if noncanonical_error != lzma.Malformed || noncanonical_at != 2usize { os.exit(15i32) }
+
     try io.print("fmt lzma ok\n")
     ret ok
 }
