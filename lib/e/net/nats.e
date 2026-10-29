@@ -92,7 +92,7 @@ fn valid_subject(subject: str, wildcards: bool) -> bool {
                 var j = 0usize
                 while j < t.len {
                     if t[j] == 42u8 || t[j] == 62u8 {
-                        if !wildcards { ret false }
+                        ret false
                     }
                     j += 1usize
                 }
