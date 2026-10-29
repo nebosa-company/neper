@@ -190,6 +190,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let probe_77 = [1]xlsx.Sheet{ xlsx.Sheet { name: "T", grid: wide_grid[0..] } }
     let (junk_77, junk_error_77) = book.encode(a, probe_77[0..], zero)
     if junk_error_77 != book.TooLarge { os.exit(77) }
+    // A valid sheet with one far cell must hit the dense-row budget before blank rows allocate.
+    let sparse_parts = [5]zipw.Part{
+        zipw.Part { name: "[Content_Types].xml", data: "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/></Types>" },
+        zipw.Part { name: "_rels/.rels", data: "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>" },
+        zipw.Part { name: "xl/workbook.xml", data: "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Sparse\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>" },
+        zipw.Part { name: "xl/_rels/workbook.xml.rels", data: "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/></Relationships>" },
+        zipw.Part { name: "xl/worksheets/sheet1.xml", data: "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1048576\"><c r=\"A1048576\"><v>1</v></c></row></sheetData></worksheet>" }
+    }
+    let (sparse_bytes, sparse_store_error) = zipw.store(a, sparse_parts[0..])
+    if sparse_store_error != ok { os.exit(167) }
+    let (sparse, sparse_error) = book.decode(a, sparse_bytes)
+    if sparse_error != book.TooLarge { os.exit(168) }
     let (nb, nb_error) = book.decode(a, "PK\x03\x04\x14\x00\x00\x00\x00\x00\xe0\x0dL]\x86Vk\x02\x11\x00\x00\x00\x11\x00\x00\x00\x09\x00\x00\x00hello.txtno workbook here\x0aPK\x01\x02\x14\x00\x14\x00\x00\x00\x00\x00\xe0\x0dL]\x86Vk\x02\x11\x00\x00\x00\x11\x00\x00\x00\x09\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00hello.txtPK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x007\x00\x00\x008\x00\x00\x00\x00\x00")
     if nb_error != book.NoWorkbook { os.exit(78) }
     let (nj, nj_error) = book.decode(a, "\x01\x02\x03\x04\x05\x06\x07\x08")

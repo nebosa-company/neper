@@ -6,11 +6,13 @@
 // model, and also what Excel and openpyxl write: shared, inline and formula-string cells,
 // DEFLATE-compressed parts, date cells found by their number format.
 //
-// Bounds are Excel's: 1,048,576 rows, 16,384 columns, a sheet name of 1 to 31 characters
-// without `: \ / ? * [ ]`, not bracketed by an apostrophe, unique ignoring ASCII case; a
+// Encode follows Excel's bounds: 1,048,576 rows, 16,384 columns, a sheet name of 1 to 31
+// characters without `: \ / ? * [ ]`, not bracketed by an apostrophe, unique ignoring ASCII case; a
 // text of at most 32,767 characters and none of the XML-illegal control characters; merges
 // that stay inside the sheet and do not overlap. Dates run from 1900-01-01 (Excel's 1900
 // leap-year quirk is honoured: the serial of 1900-03-01 is 61) to 9999-12-31.
+// Decode accepts those coordinates but returns `TooLarge` when its dense row grid would span
+// more than 65,536 rows, so one far-sparse cell cannot allocate every Excel row.
 //
 // Not here: charts, pivots, formulas (a formula cell decodes as its cached value), rich
 // text (runs are joined), styles beyond bold-header and date, comments, images, and
@@ -45,6 +47,7 @@ type Layout = struct { widths: []const Width, merges: []const Merge, bold_header
 type Shared = struct { slots: []u32, strings: []str, unique: usize, references: usize }
 
 const MAX_ROWS: usize = 1048576usize
+const MAX_DECODE_ROWS: usize = 65536usize
 const MAX_COLUMNS: usize = 16384usize
 const MAX_TEXT_POINTS: usize = 32767usize
 const MAX_NAME_POINTS: usize = 31usize
@@ -793,6 +796,7 @@ fn read_sheet(a: *mem.Arena, part: []const u8, sst_table: []const str, dates: []
                 cell_row = usize(row_i)
             }
             if column >= MAX_COLUMNS { ret (zero, BadWorkbook) }
+            if cell_row >= MAX_DECODE_ROWS { ret (zero, TooLarge) }
             next_column = column + 1usize
             var kind = ""
             let (t_text, has_t) = attr(&nodes[i], "t")
