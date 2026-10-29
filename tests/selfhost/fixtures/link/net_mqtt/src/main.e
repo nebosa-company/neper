@@ -43,6 +43,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e2 != ok || n2 != 36usize || fold(buf[..n2]) != 0x8c4336622f7c6366u64 { os.exit(1i32) }
     let (n3, e3) = mqtt.encode_publish(buf[..], "a/b", "hello", 1u8, false, false, 10u16)
     if e3 != ok || n3 != 14usize || fold(buf[..n3]) != 0xf07a63e9d49ff04au64 { os.exit(1i32) }
+    var bad_client = mqtt.connect("bad\xc0\x80", 60u16, true)
+    let (_, bad_client_error) = mqtt.encode_connect(stream[..], &bad_client)
+    var nul_client = mqtt.connect("bad\x00id", 60u16, true)
+    let (_, nul_client_error) = mqtt.encode_connect(stream[..], &nul_client)
+    if bad_client_error != mqtt.Invalid || nul_client_error != mqtt.Invalid { os.exit(1i32) }
+    var binary = mqtt.connect("bin", 1u16, true)
+    binary.has_username = true
+    binary.username = "name"
+    binary.has_password = true
+    binary.password = "\xc0\x80\x00"
+    binary.has_will = true
+    binary.will_topic = "will"
+    binary.will_payload = "\xff\x00"
+    let (_, binary_error) = mqtt.encode_connect(stream[..], &binary)
+    if binary_error != ok { os.exit(1i32) }
     let (_, empty_topic_error) = mqtt.encode_publish(buf[..], "", "", 0u8, false, false, 0u16)
     let (_, plus_topic_error) = mqtt.encode_publish(buf[..], "a/+", "", 0u8, false, false, 0u16)
     let (_, hash_topic_error) = mqtt.encode_publish(buf[..], "a/#", "", 0u8, false, false, 0u16)
@@ -85,7 +100,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if p.qos != 1u8 || p.retain || p.dup || p.packet_id != 10u16 { os.exit(2i32) }
     let (_, empty_topic_decode) = mqtt.decode_publish("\x30\x02\x00\x00")
     let (_, wildcard_topic_decode) = mqtt.decode_publish("\x30\x04\x00\x02a+")
-    if empty_topic_decode != mqtt.Malformed || wildcard_topic_decode != mqtt.Malformed { os.exit(2i32) }
+    let (_, malformed_utf8_decode) = mqtt.decode_publish("\x30\x04\x00\x02\xc3\x28")
+    let (_, nul_utf8_decode) = mqtt.decode_publish("\x30\x05\x00\x03a\x00b")
+    if empty_topic_decode != mqtt.Malformed || wildcard_topic_decode != mqtt.Malformed || malformed_utf8_decode != mqtt.Malformed || nul_utf8_decode != mqtt.Malformed { os.exit(2i32) }
     let (t, te) = mqtt.packet_type(buf[..n3])
     if te != ok || t != 3u8 { os.exit(2i32) }
     let (rl, hb, re) = mqtt.remaining_length(buf[..n3])

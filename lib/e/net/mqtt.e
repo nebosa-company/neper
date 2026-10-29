@@ -11,6 +11,7 @@
 
 use e.mem
 use e.str
+use e.text.utf8 as utf8
 
 type Publish = struct { topic: str, payload: []const u8, qos: u8, retain: bool, dup: bool, packet_id: u16 }
 type Connect = struct { client_id: str, keep_alive: u16, clean_session: bool, has_username: bool, username: str, has_password: bool, password: []const u8, has_will: bool, will_topic: str, will_payload: []const u8, will_qos: u8, will_retain: bool }
@@ -128,11 +129,22 @@ fn get_u16(src: []const u8, at: usize) -> (u16, err) {
 // A length-prefixed UTF-8 string (at most 65535 bytes); answers bytes written.
 fn utf8_string(dst: []u8, s: []const u8) -> (usize, err) {
     if s.len > 65535usize { ret (0usize, Invalid) }
+    if !utf8_valid(s) { ret (0usize, Invalid) }
     if dst.len < 2usize + s.len { ret (0usize, TooSmall) }
     let e = put_u16(dst, 0usize, u16(s.len))
     if e != ok { ret (0usize, e) }
     mem.copy[u8](dst[2usize..], s)
     ret (2usize + s.len, ok)
+}
+
+// Length-prefixed binary data (at most 65535 bytes); answers bytes written.
+fn binary_data(dst: []u8, data: []const u8) -> (usize, err) {
+    if data.len > 65535usize { ret (0usize, Invalid) }
+    if dst.len < 2usize + data.len { ret (0usize, TooSmall) }
+    let e = put_u16(dst, 0usize, u16(data.len))
+    if e != ok { ret (0usize, e) }
+    mem.copy[u8](dst[2usize..], data)
+    ret (2usize + data.len, ok)
 }
 
 // The length-prefixed string at `src`; answers (bytes, bytes consumed).
@@ -141,13 +153,33 @@ fn decode_utf8_string(src: []const u8) -> ([]const u8, usize, err) {
     if e != ok { ret (src[..0usize], 0usize, Malformed) }
     let end = 2usize + usize(n)
     if end > src.len { ret (src[..0usize], 0usize, Malformed) }
-    ret (src[2usize..end], end, ok)
+    let value = src[2usize..end]
+    if !utf8_valid(value) { ret (src[..0usize], 0usize, Malformed) }
+    ret (value, end, ok)
+}
+
+fn utf8_valid(s: []const u8) -> bool {
+    if !utf8.validate(s) { ret false }
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 0u8 { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 // A length-prefixed string appended at `*at`, which moves past it.
 fn put_string(dst: []u8, at: *usize, s: []const u8) -> err {
     if *at > dst.len { ret TooSmall }
     let (n, e) = utf8_string(dst[*at..], s)
+    *at += n
+    ret e
+}
+
+// Binary data appended at `*at`, which moves past it.
+fn put_binary(dst: []u8, at: *usize, data: []const u8) -> err {
+    if *at > dst.len { ret TooSmall }
+    let (n, e) = binary_data(dst[*at..], data)
     *at += n
     ret e
 }
@@ -197,7 +229,7 @@ fn encode_connect(dst: []u8, c: *const Connect) -> (usize, err) {
     if c.has_will {
         let e2 = put_string(dst, &at, c.will_topic)
         if e2 != ok { ret (0usize, e2) }
-        let e3 = put_string(dst, &at, c.will_payload)
+        let e3 = put_binary(dst, &at, c.will_payload)
         if e3 != ok { ret (0usize, e3) }
     }
     if c.has_username {
@@ -205,7 +237,7 @@ fn encode_connect(dst: []u8, c: *const Connect) -> (usize, err) {
         if e4 != ok { ret (0usize, e4) }
     }
     if c.has_password {
-        let e5 = put_string(dst, &at, c.password)
+        let e5 = put_binary(dst, &at, c.password)
         if e5 != ok { ret (0usize, e5) }
     }
     let (n, fe) = finish(dst, CONNECT << 4u32, at - 5usize)
