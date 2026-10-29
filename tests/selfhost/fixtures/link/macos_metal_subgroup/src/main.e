@@ -48,7 +48,8 @@ fn run(q: *gpu.Queue, a: []u32, b: []u64, c: []f32) -> err {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (found, found_error) = gpu.devices(a, .Metal, 4usize)
-    if found_error != ok { os.exit(0i32) }
+    if found_error == gpu.Unsupported || found_error == gpu.NoDevice { os.exit(0i32) }
+    if found_error != ok { os.exit(1i32) }
     if found.len == 0usize { os.exit(0i32) }
     var cpu_a: [360]u32 = zero
     var cpu_b: [40]u64 = zero

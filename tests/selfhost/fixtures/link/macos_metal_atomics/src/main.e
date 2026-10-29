@@ -27,7 +27,8 @@ fn ordered(words: []Atomic[u32]) {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let (found, found_error) = gpu.devices(a, .Metal, 4usize)
-    if found_error != ok { os.exit(0i32) }
+    if found_error == gpu.Unsupported || found_error == gpu.NoDevice { os.exit(0i32) }
+    if found_error != ok { os.exit(1i32) }
     if found.len == 0usize { os.exit(0i32) }
     let (dev, open_error) = gpu.open(a, .Metal, 0u32)
     if open_error != ok { os.exit(2i32) }
