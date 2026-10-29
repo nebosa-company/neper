@@ -6031,8 +6031,10 @@ fn parsed_function_name(text: str, tokens: []const lex.Token, node: syntax.Node)
         let token = tokens[token_at]
         if token.kind == .KwFn {
             saw_fn = true
-        } else if saw_fn && token.kind == .Identifier {
-            ret (lex.token_text(text, token), true)
+        } else {
+            if saw_fn && token.kind == .Identifier {
+                ret (lex.token_text(text, token), true)
+            }
         }
         token_at += 1usize
     }
