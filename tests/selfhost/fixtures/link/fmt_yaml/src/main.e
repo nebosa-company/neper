@@ -213,5 +213,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e13 != ok { os.exit(89) }
     let (escaped, has_escaped) = lookup(mapping_of(t9, 90), "a")
     if !has_escaped || !str.eq(text_of(escaped, 91), "quote \" # inside") { os.exit(92) }
+    // YAML double quotes cannot carry raw C0/DEL bytes.  The writer must use
+    // the parser's existing `\\xHH` spelling so arbitrary byte strings round-trip.
+    var controls: [3]u8 = zero
+    controls[0usize] = 0u8
+    controls[1usize] = 1u8
+    controls[2usize] = 127u8
+    var control_value = yaml.Value { String: controls[..] }
+    var control_buffer: [64]u8 = zero
+    var control_state = io.SliceWriter { data: control_buffer[..], off: 0usize }
+    var control_sink = io.slice_writer(&control_state)
+    if yaml.write(&control_sink, &control_value, 2u8) != ok { os.exit(93) }
+    let control_text = control_buffer[..control_state.off]
+    if !str.eq(control_text, "\"\\x00\\x01\\x7f\"\n") { os.exit(94) }
+    let (control_again, control_error) = yaml.parse(a, control_text, options(4u16, false))
+    if control_error != ok || !str.eq(text_of(control_again, 95), controls[..]) { os.exit(96) }
     ret ok
 }

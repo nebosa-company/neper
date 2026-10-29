@@ -681,12 +681,22 @@ fn needs_quotes(text: str) -> bool {
     var i = 0usize
     while i < text.len {
         let c = text[i]
-        if c < 32u8 || c == 34u8 || c == 92u8 { ret true }
+        if c < 32u8 || c == 127u8 || c == 34u8 || c == 92u8 { ret true }
         if c == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { ret true }
         if c == 35u8 && i > 0usize && text[i - 1usize] == 32u8 { ret true }
         i += 1usize
     }
     ret false
+}
+
+fn write_hex_escape(writer: *io.Writer, byte: u8) -> err {
+    let digits = "0123456789abcdef"
+    var escaped: [4]u8 = zero
+    escaped[0usize] = 92u8
+    escaped[1usize] = 120u8
+    escaped[2usize] = digits[usize(byte) / 16usize]
+    escaped[3usize] = digits[usize(byte) % 16usize]
+    ret io.write_all(writer, escaped[..])
 }
 
 fn write_string(writer: *io.Writer, text: str) -> err {
@@ -705,6 +715,10 @@ fn write_string(writer: *io.Writer, text: str) -> err {
         if escape.len > 0usize {
             try io.write_all(writer, text[run..i])
             try io.write_all(writer, escape)
+            run = i + 1usize
+        } else if c < 32u8 || c == 127u8 {
+            try io.write_all(writer, text[run..i])
+            try write_hex_escape(writer, c)
             run = i + 1usize
         }
         i += 1usize
