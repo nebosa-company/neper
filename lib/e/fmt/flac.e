@@ -136,7 +136,7 @@ fn metadata(src: []const u8) -> (StreamInfo, usize, err) {
                 info.md5[i] = src[pos + 18usize + i]
                 i += 1usize
             }
-            if info.min_block < 16u32 || info.max_block < info.min_block || info.rate == 0u32 { ret (zero, 0usize, Malformed) }
+            if info.min_block < 16u32 || info.max_block < info.min_block || info.rate == 0u32 || info.bits < 4u32 { ret (zero, 0usize, Malformed) }
             seen = true
         } else if kind == 127u8 {
             ret (zero, 0usize, Malformed)

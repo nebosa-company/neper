@@ -202,6 +202,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, overlong_decoder_error) = flac.decoder(overlong_streaminfo[..])
     if overlong_error != flac.Malformed || overlong_decoder_error != flac.Malformed { os.exit(84i32) }
 
+    // 85: RFC 9639 permits 4 through 32 bits per sample, not the 1-bit value this STREAMINFO encodes.
+    var invalid_bits: [42]u8 = zero
+    mem.copy[u8](invalid_bits[..], mono[..42usize])
+    invalid_bits[21usize] = 0u8
+    let (_, invalid_bits_error) = flac.stream_info(invalid_bits[..])
+    let (_, invalid_bits_decoder_error) = flac.decoder(invalid_bits[..])
+    if invalid_bits_error != flac.Malformed || invalid_bits_decoder_error != flac.Malformed { os.exit(85i32) }
+
     try io.print("fmt flac ok\n")
     ret ok
 }
