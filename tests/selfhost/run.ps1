@@ -11649,6 +11649,17 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.io archive did not assemble' }
     $ioBoot = Invoke-NeperOS $neperosImage @('-initrd', $ioArchive, '-append', 'shell')
     if ($ioBoot -notmatch '(?s)hello from e\.io on neperos.*e\.io writer runs at EL0.*io roundtrip ok.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.io did not run the portable surface and buffer round-trip: $ioBoot" }
+    # `window_present` must reject a source shorter than width * height before it reads the source
+    # or signals the compositor. This stand-alone program has neither mapping nor endpoint, so a
+    # successful result proves the guard ran before either side effect.
+    $windowPresentTest = Join-Path $testBuild 'window_present_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\window_present_test.e') $repo aarch64 neperos $windowPresentTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS window_present bounds program did not build' }
+    $windowPresentArchive = Join-Path $testBuild 'window-present-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $windowPresentArchive $windowPresentTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS window_present bounds archive did not assemble' }
+    $windowPresentBoot = Invoke-NeperOS $neperosImage @('-initrd', $windowPresentArchive, '-append', 'shell')
+    if ($windowPresentBoot -notmatch '(?s)window present short frame refused.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS window_present read a short frame: $windowPresentBoot" }
     # (D4704, C107) e.data.map and os.args on NeperOS: map_test hashes u64 and str keys through the
     # program runtime's `neper_hash_bytes` and reads `os.args` through `neper_os_args`, both new.
     $mapTest = Join-Path $testBuild 'map_test.img'

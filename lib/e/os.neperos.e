@@ -424,11 +424,17 @@ fn window_cursor(w: Window, shape: CursorShape) -> err { ret ok }
 // Blit the rendered pixels (Bgra8 packed into u32) into the shared surface at the surface stride, then
 // signal the compositor that the frame is ready. A pixel outside the surface is dropped.
 fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    let columns = usize(width)
+    let rows = usize(height)
+    // Clipping the destination does not make a partial source frame safe: each logical row must
+    // still be addressable before the blit indexes it.
+    if columns == 0usize || rows == 0usize { ret Unsupported }
+    if rows > pixels.len / columns { ret Unsupported }
     var y = 0usize
-    while y < usize(height) && y < SURFACE_H {
+    while y < rows && y < SURFACE_H {
         var x = 0usize
-        while x < usize(width) && x < SURFACE_W {
-            store32(SHARED_FRAME_VA + (y * SURFACE_W + x) * 4usize, u32(pixels[y * usize(width) + x]))
+        while x < columns && x < SURFACE_W {
+            store32(SHARED_FRAME_VA + (y * SURFACE_W + x) * 4usize, u32(pixels[y * columns + x]))
             x += 1usize
         }
         y += 1usize
