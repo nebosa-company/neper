@@ -187,6 +187,75 @@ def case_mermaid():
     return {"op": "mermaid", "project": pick(["demo", "my\nproject", "", "p\"q"]), "instances": insts}
 
 
+def mermaid_title(s):
+    """The hardened local serializer's quoted YAML title contract."""
+    out = []
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == '"':
+            out.append(r'\"')
+        elif c == "\\":
+            out.append(r"\\")
+        elif c == "\r" or c == "\n":
+            out.append(" ")
+            if c == "\r" and i + 1 < len(s) and s[i + 1] == "\n":
+                i += 1
+        elif ord(c) < 32 or ord(c) == 127:
+            out.append("\\x%02x" % ord(c))
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def mermaid_label(s):
+    """The hardened local serializer's HTML-label contract."""
+    out = []
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "&":
+            out.append("&amp;")
+        elif c == "<":
+            out.append("&lt;")
+        elif c == ">":
+            out.append("&gt;")
+        elif c == '"':
+            out.append("&quot;")
+        elif c == "\r" or c == "\n":
+            out.append(" ")
+            if c == "\r" and i + 1 < len(s) and s[i + 1] == "\n":
+                i += 1
+        elif ord(c) < 32 or ord(c) == 127:
+            out.append(" ")
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def hardened_mermaid(case):
+    """Expected output after the YAML and HTML escaping hardening (issue #167)."""
+    nodes = case["instances"]
+    out = '---\ntitle: "PetCow infrastructure — %s"\n---\n' % mermaid_title(case["project"])
+    out += "flowchart TD\n  classDef blocked fill:#ffd6d6,stroke:#cc0000,color:#000000;\n"
+    if not nodes:
+        return {"ok": out + '  empty["(no resources)"]\n'}
+    for i, node in enumerate(nodes):
+        out += '  n%d["%s<br/><small>%s</small>"]\n' % (i, mermaid_label(node["logical_id"]), mermaid_label(node["type"]))
+    for i, node in enumerate(nodes):
+        for wanted in node["depends_on"]:
+            for t, candidate in enumerate(nodes):
+                name = candidate["logical_id"]
+                if name == wanted or (len(name) > len(wanted) and name.startswith(wanted) and name[len(wanted)] == "["):
+                    out += "  n%d --> n%d\n" % (t, i)
+    for i, node in enumerate(nodes):
+        if node["blocking"]:
+            out += "  class n%d blocked;\n" % i
+    return {"ok": out}
+
+
 def run(exe, case):
     payload = {k: v for k, v in case.items() if not k.startswith("_")}
     r = subprocess.run([exe], input=json.dumps(payload), capture_output=True, text=True, encoding="utf-8")
@@ -228,7 +297,10 @@ def main(argv):
         cases.append(case_mermaid())
     lines = []
     for c in cases:
-        e = run(exe, c)
+        # Petcow's reference predates Mermaid output hardening. Keep it as the
+        # oracle for scan behavior, while generating the deliberately tightened
+        # YAML/HTML Mermaid contract locally.
+        e = hardened_mermaid(c) if c["op"] == "mermaid" else run(exe, c)
         payload = {k: v for k, v in c.items() if not k.startswith("_")}
         payload["e"] = e
         lines.append(json.dumps(payload, ensure_ascii=True, sort_keys=True))
