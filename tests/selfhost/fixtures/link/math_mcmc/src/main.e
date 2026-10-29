@@ -93,11 +93,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var goal = Target { rho: 0.5f64 }
     var r = rand.pcg64(21u64, 9u64)
     let count = 6000usize
+    // Sampler storage checks divide before multiplying row counts, including
+    // NUTS's depth-dependent layout.
+    let widest = ~0usize
+    if mcmc.has_rows(0usize, widest, 2usize) || mcmc.has_rows(0usize, widest, 3usize) || mcmc.has_rows(0usize, widest, 11usize) { os.exit(9i32) }
+    if mcmc.has_nuts_scratch(0usize, 1usize, widest) { os.exit(9i32) }
+    if !mcmc.has_rows(6usize, 3usize, 2usize) || mcmc.has_rows(5usize, 3usize, 2usize) { os.exit(9i32) }
+    if !mcmc.has_nuts_scratch(24usize, 1usize, 2usize) || mcmc.has_nuts_scratch(23usize, 1usize, 2usize) { os.exit(9i32) }
     let (samples, alloc_error) = mem.alloc[f64](a, 2usize * count)
     if alloc_error != ok { ret alloc_error }
     var scratch: [256]f64 = zero
     var x: [2]f64 = zero
     var m: [5]f64 = zero
+    var no_samples: [0]f64 = zero
+    let (_, row_wrap_error) = mcmc.metropolis_hastings[Target](&goal, log_density, &r, x[..], 1.0f64, no_samples[..], widest, scratch[..])
+    if row_wrap_error != mcmc.TooSmall { os.exit(9i32) }
+    let (_, nuts_wrap_error) = mcmc.nuts[Target](&goal, log_density, grad, &r, x[..], 0.3f64, widest, no_samples[..], 0usize, scratch[..])
+    if nuts_wrap_error != mcmc.TooSmall { os.exit(9i32) }
 
     // 1: Metropolis-Hastings from a far start.
     x[0usize] = 4.0f64
