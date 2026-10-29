@@ -170,6 +170,19 @@ fn detail_from_code(code: i32, operation: str, subject: str) -> ErrorDetail {
     ret ErrorDetail { kind: error_kind_of(code), native_code: code, operation: operation, subject: subject }
 }
 
+// The checked wrappers must not reuse an already-consumed native code. An
+// allocation or validation failure can occur before a syscall records one, so
+// its portable `err` supplies the detail in that case.
+fn detail_for_error(failure: err, operation: str, subject: str) -> ErrorDetail {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    if error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread && error_slot_fresh[slot] == 1u8 && error_kind_of(error_slot_code[slot]) == kind_of_error(failure) {
+        error_slot_fresh[slot] = 0u8
+        ret detail_from_code(error_slot_code[slot], operation, subject)
+    }
+    ret failed_detail(failure, operation, subject)
+}
+
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     var detail: ErrorDetail = zero
     detail.kind = .Other
@@ -177,16 +190,14 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     detail.subject = subject
     let thread = current_thread_id()
     let slot = thread % ERROR_SLOTS
-    // Another thread's slot, or one nothing has written, is no detail at all.
-    if error_slot_used[slot] == 0u8 { ret detail }
-    if error_slot_thread[slot] != thread { ret detail }
+    if error_slot_used[slot] == 0u8 || error_slot_thread[slot] != thread || error_slot_fresh[slot] != 1u8 { ret detail }
     error_slot_fresh[slot] = 0u8
     ret detail_from_code(error_slot_code[slot], operation, subject)
 }
 
 // The runtime's primitives answer an `err`, not the errno, so their detail names only the kind.
-fn failed_detail(e: err, operation: str, subject: str) -> ErrorDetail {
-    ret ErrorDetail { kind: kind_of_error(e), native_code: 0i32, operation: operation, subject: subject }
+fn failed_detail(failure: err, operation: str, subject: str) -> ErrorDetail {
+    ret ErrorDetail { kind: kind_of_error(failure), native_code: 0i32, operation: operation, subject: subject }
 }
 
 // A read, write or open whose failure carries its errno: the runtime primitives answer an `err`
@@ -290,13 +301,13 @@ fn lstat(a: *mem.Arena, path: str) -> (FileInfo, err) {
 
 fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
     let (info, stat_error) = stat(a, path)
-    if stat_error != ok { *detail = last_error_detail("stat", path) }
+    if stat_error != ok { *detail = detail_for_error(stat_error, "stat", path) }
     ret (info, stat_error)
 }
 
 fn lstat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
     let (info, stat_error) = lstat(a, path)
-    if stat_error != ok { *detail = last_error_detail("lstat", path) }
+    if stat_error != ok { *detail = detail_for_error(stat_error, "lstat", path) }
     ret (info, stat_error)
 }
 
@@ -321,19 +332,19 @@ fn set_current_dir(a: *mem.Arena, path: str) -> err { ret path_syscall(a, SYS_CH
 
 fn mkdir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
     let failure = mkdir(a, path)
-    if failure != ok { *detail = last_error_detail("mkdir", path) }
+    if failure != ok { *detail = detail_for_error(failure, "mkdir", path) }
     ret failure
 }
 
 fn remove_file_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
     let failure = remove_file(a, path)
-    if failure != ok { *detail = last_error_detail("remove_file", path) }
+    if failure != ok { *detail = detail_for_error(failure, "remove_file", path) }
     ret failure
 }
 
 fn remove_dir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
     let failure = remove_dir(a, path)
-    if failure != ok { *detail = last_error_detail("remove_dir", path) }
+    if failure != ok { *detail = detail_for_error(failure, "remove_dir", path) }
     ret failure
 }
 
@@ -356,7 +367,7 @@ fn rename(a: *mem.Arena, src: str, dst: str) -> err {
 
 fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err {
     let failure = rename(a, src, dst)
-    if failure != ok { *detail = last_error_detail("rename", src) }
+    if failure != ok { *detail = detail_for_error(failure, "rename", src) }
     ret failure
 }
 
@@ -416,7 +427,7 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err) {
 
 fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
     let (link_target, link_error) = read_link(a, path)
-    if link_error != ok { *detail = last_error_detail("read_link", path) }
+    if link_error != ok { *detail = detail_for_error(link_error, "read_link", path) }
     ret (link_target, link_error)
 }
 
@@ -491,7 +502,7 @@ fn canonical(a: *mem.Arena, path: str) -> (str, err) {
 
 fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
     let (resolved, resolve_error) = canonical(a, path)
-    if resolve_error != ok { *detail = last_error_detail("canonical", path) }
+    if resolve_error != ok { *detail = detail_for_error(resolve_error, "canonical", path) }
     ret (resolved, resolve_error)
 }
 
@@ -518,7 +529,7 @@ fn create_new(a: *mem.Arena, path: str) -> (File, err) {
 fn create_new_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (File, err) {
     let (file, create_error) = create_new(a, path)
     if create_error != ok {
-        *detail = last_error_detail("create_new", path)
+        *detail = detail_for_error(create_error, "create_new", path)
         ret (file, create_error)
     }
     ret (file, ok)
@@ -699,7 +710,7 @@ fn dir_close(dir: own Dir) -> err {
 fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err) {
     let (dir, open_error) = dir_open(a, path)
     if open_error != ok {
-        *detail = last_error_detail("dir_open", path)
+        *detail = detail_for_error(open_error, "dir_open", path)
         ret (dir, open_error)
     }
     ret (dir, ok)

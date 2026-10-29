@@ -189,5 +189,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !mem.eq[u8](concurrent_read_job.detail.operation, "read") || !mem.eq[u8](concurrent_write_job.detail.operation, "write") { os.exit(66i32) }
         if concurrent_read_job.detail.native_code == 0i32 || concurrent_write_job.detail.native_code == 0i32 { os.exit(67i32) }
     }
+    // macOS keeps consumed slots for cleanup arbitration. An arena failure makes no
+    // syscall, so its checked detail must use its own OutOfMemory error rather than
+    // the consumed NotFound code left in the slot.
+    when target.os == .Macos {
+        let (stale_info, stale_error) = os.stat(a, "np-no-such-file-stale-detail")
+        if stale_error != os.NotFound { os.exit(68i32) }
+        let stale = os.last_error_detail("stat", "np-no-such-file-stale-detail")
+        if stale.kind != .NotFound || stale.native_code == 0i32 { os.exit(69i32) }
+        var storage: [1]u8 = zero
+        var exhausted = mem.arena_from(storage[0usize..0usize])
+        var oom_detail: os.ErrorDetail = zero
+        let (oom_info, oom_error) = os.stat_detail(&exhausted, ".", &oom_detail)
+        if oom_error != os.OutOfMemory { os.exit(70i32) }
+        if oom_detail.kind != .OutOfMemory || oom_detail.native_code != 0i32 { os.exit(71i32) }
+    }
     ret os.dir_close(here)
 }
