@@ -133,8 +133,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bad_utf8_block = [1]docx.Block{ docx.paragraph(docx.para(.Normal, bad_utf8[0..])) }
     let (_, bad_utf8_error) = docx.encode(a, bad_utf8_block[0..], docx.default_meta())
     if bad_utf8_error != docx.BadText { os.exit(42) }
-    // A default 96-dpi size must fit the u32 EMU coordinates written to XML.
-    let oversized_png = [24]u8{ 137u8, 80u8, 78u8, 71u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 7u8, 161u8, 32u8, 0u8, 0u8, 0u8, 1u8 }
+    // A complete 500,000-by-1 1-bit PNG exceeds the default 96-dpi u32 EMU width.
+    // Keeping this image structurally valid makes the assertion exercise the extent
+    // bound rather than the independent PNG-header validation.
+    let oversized_png = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a\x00\x00\x00\x0d\x49\x48\x44\x52\x00\x07\xa1\x20\x00\x00\x00\x01\x01\x00\x00\x00\x00\xd3\x9a\x1d\xcd\x00\x00\x00\x53\x49\x44\x41\x54\x78\x9c\xed\xc1\x31\x01\x00\x00\x00\xc2\xa0\xf5\x4f\x6d\x08\x5f\xa0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xe0\x34\xf4\x25\x00\x01\xe8\x79\x9d\xec\x00\x00\x00\x00\x49\x45\x4e\x44\xae\x42\x60\x82"
     let oversized_image = [1]docx.Block{ docx.image(docx.Image { data: oversized_png[0..], width_emu: 0u32, height_emu: 0u32, alt: "" }) }
     let (_, oversized_error) = docx.encode(a, oversized_image[0..], docx.default_meta())
     if oversized_error != docx.BadImage { os.exit(43) }
