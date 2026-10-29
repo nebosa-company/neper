@@ -154,6 +154,22 @@ fn list_range(c: *const Column, i: usize) -> (usize, usize, err) {
     ret (start, end, ok)
 }
 
+// Validate every offset, including offsets for null rows. `limit` is the data
+// buffer length for Utf8/Binary or the resolved child length for List.
+fn validate_offsets(c: *const Column, limit: usize) -> err {
+    var previous = 0usize
+    var entry = 0usize
+    while entry <= c.len {
+        let (offset, offset_error) = offset_at(c, entry)
+        if offset_error != ok { ret offset_error }
+        if entry > 0usize && offset < previous { ret Malformed }
+        previous = offset
+        entry += 1usize
+    }
+    if previous > limit { ret Malformed }
+    ret ok
+}
+
 // The bytes of a Utf8/Binary row.
 fn get_utf8(c: *const Column, i: usize) -> (str, bool, err) {
     if c.kind != .Utf8 && c.kind != .Binary { ret ("", false, Invalid) }
@@ -366,15 +382,24 @@ fn bind(m: *const Message, cols: []Column, count: usize) -> err {
             b += 1usize
             if kind == .Bool {
                 if data.len < validity_bytes { ret Malformed }
-            } else if kind == .Utf8 || kind == .Binary {
-                if length > 0usize {
-                    let (_, end, end_error) = list_range(&cols[i], length - 1usize)
-                    if end_error != ok || end > data.len { ret Malformed }
-                }
-            } else if data.len / width(kind) < length {
-                ret Malformed
+            } else if kind != .Utf8 && kind != .Binary {
+                if data.len / width(kind) < length { ret Malformed }
             }
             cols[i].data = data
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < count {
+        let kind = cols[i].kind
+        if kind == .Utf8 || kind == .Binary {
+            let offset_error = validate_offsets(&cols[i], cols[i].data.len)
+            if offset_error != ok { ret offset_error }
+        } else if kind == .List {
+            let child = usize(cols[i].child)
+            if child >= count { ret Malformed }
+            let offset_error = validate_offsets(&cols[i], cols[child].len)
+            if offset_error != ok { ret offset_error }
         }
         i += 1usize
     }

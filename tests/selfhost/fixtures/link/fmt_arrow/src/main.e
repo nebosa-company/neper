@@ -32,6 +32,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, validity_error) = arrow.columns(bad_validity[..], cols[..], names[..])
     if validity_error != arrow.Malformed { os.exit(12i32) }
 
+    // The List's terminal offset may not exceed its seven-row child.
+    var bad_list_offset = stream
+    bad_list_offset[1396usize] = 8u8
+    let (_, list_offset_error) = arrow.columns(bad_list_offset[..], cols[..], names[..])
+    if list_offset_error != arrow.Malformed { os.exit(12i32) }
+
+    // Offset ordering and signedness are structural even for the null List row.
+    var bad_null_offsets = stream
+    bad_null_offsets[1380usize] = 1u8
+    let (_, null_offsets_error) = arrow.columns(bad_null_offsets[..], cols[..], names[..])
+    if null_offsets_error != arrow.Malformed { os.exit(12i32) }
+    var negative_null_offset = stream
+    negative_null_offset[1380usize] = 255u8
+    negative_null_offset[1381usize] = 255u8
+    negative_null_offset[1382usize] = 255u8
+    negative_null_offset[1383usize] = 255u8
+    let (_, negative_offset_error) = arrow.columns(negative_null_offset[..], cols[..], names[..])
+    if negative_offset_error != arrow.Malformed { os.exit(12i32) }
+
     // 2^62 + 1 makes a wrapped `(length + 1) * 4` look like an eight-byte
     // Utf8 offsets requirement.  The zero-null second Utf8 node must reject
     // it before the wrapped last-row offset can be read.
