@@ -10205,7 +10205,7 @@ fn part40(b: *str.Builder) -> err {
     try str.push(b, "      const o = r.options;\n")
     try str.push(b, "      if (node !== target && !o.subtree) continue;\n")
     try str.push(b, "      if (type === 'attributes' && !o.attributes) continue;\n")
-    try str.push(b, "      if (type === 'attributes' && o.attributeFilter !== undefined && (namespace !== null || o.attributeFilter.indexOf(name) < 0)) continue;\n")
+    try str.push(b, "      if (type === 'attributes' && o.attributeFilter !== undefined && o.attributeFilter.indexOf(name) < 0) continue;\n")
     try str.push(b, "      if (type === 'characterData' && !o.characterData) continue;\n")
     try str.push(b, "      if (type === 'childList' && !o.childList) continue;\n")
     try str.push(b, "      let entry = null;\n")
