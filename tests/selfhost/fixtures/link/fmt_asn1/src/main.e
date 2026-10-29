@@ -148,6 +148,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var r3 = asn1.reader(short[0..], 4u16)
     let (v3, q3, e17) = asn1.reader_next_err(&r3)
     if e17 != asn1.Invalid { os.exit(23) }
+    // A huge eight-octet DER length must not wrap through wasm32's `usize` and
+    // appear to be the one byte that follows it.
+    let wrapping_length: [11]u8 = [11]u8{ 4u8, 136u8, 1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8 }
+    var wrapping_reader = asn1.reader(wrapping_length[..], 4u16)
+    let (wrapping_value, wrapping_present, wrapping_error) = asn1.reader_next_err(&wrapping_reader)
+    if wrapping_error != asn1.Invalid { os.exit(44) }
     let (deep, e18) = asn1.decode[Record](a, der[0..], 0u16)
     if e18 != asn1.TooDeep { os.exit(24) }
     let missing: [11]u8 = [11]u8{ 48, 9, 2, 2, 1, 2, 1, 1, 255, 4, 0 }

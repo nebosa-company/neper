@@ -85,15 +85,21 @@ fn reader_next_err(source_reader: *Reader) -> (Value, bool, err) {
         let count = usize(length_first & 127u8)
         if count == 0usize { ret (zero, false, NonCanonical) }
         if count > 8usize { ret (zero, false, TooLarge) }
-        if at + count > data.len { ret (zero, false, Invalid) }
+        if count > data.len - at { ret (zero, false, Invalid) }
         if data[at] == 0u8 { ret (zero, false, NonCanonical) }
+        // Accumulate in a fixed-width integer. On wasm32 an eight-byte DER
+        // length otherwise wraps a `usize` and can turn a huge declaration
+        // into a small valid length.
+        var length64 = 0u64
         var i = 0usize
         while i < count {
-            length = (length << 8u32) | usize(data[at + i])
+            length64 = (length64 << 8u32) | u64(data[at + i])
             i += 1usize
         }
-        if length < 128usize { ret (zero, false, NonCanonical) }
+        if length64 < 128u64 { ret (zero, false, NonCanonical) }
         at += count
+        if length64 > u64(data.len - at) { ret (zero, false, Invalid) }
+        length = usize(length64)
     }
     if length > data.len - at { ret (zero, false, Invalid) }
     var value: Value = zero
