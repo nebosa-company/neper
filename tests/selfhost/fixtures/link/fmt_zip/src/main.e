@@ -2,8 +2,9 @@
 // over an in-memory seeker, its entries listed, the deflated one read through
 // `entry_reader` in 700-byte pulls and the stored one through `extract`; a hand-built
 // archive with every ZIP64 field saturated; refusals for an encrypted entry, a bzip2
-// method, a `..` name, a CRC mismatch, an entry limit of two, a byte limit below the
-// pattern, and a source that is not an archive. Every check has its own exit code.
+// method, unsafe names and metadata, a CRC mismatch, an entry limit of two, a byte
+// limit below the pattern, and a source that is not an archive. Every check has its
+// own exit code.
 use e.os
 use e.mem
 use e.io
@@ -128,7 +129,7 @@ fn write_zip64_entry(dst: []u8, at: usize, name: u8) {
     write16(dst, at + 47usize, 1u32)
     write16(dst, at + 49usize, 16u32)
     write64(dst, at + 51usize, 9223372036854775808u64)
-    write64(dst, at + 59usize, 0u64)
+    write64(dst, at + 59usize, 9223372036854775808u64)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -213,6 +214,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var trailing_deflate_archive = trailing_deflate_archive0
     let (_, trailing_deflate_extract_error) = zip.extract(a, &trailing_deflate_archive, 2usize)
     if trailing_deflate_extract_error != zip.Invalid { os.exit(47) }
+    // A DEFLATE member whose declared size is zero may not write even one byte into
+    // the caller's buffer before reporting its size mismatch.
+    let (declared_empty_deflate, declared_empty_deflate_error) = mem.alloc[u8](a, archive.len)
+    if declared_empty_deflate_error != ok { os.exit(52) }
+    mem.copy[u8](declared_empty_deflate, archive)
+    write32(declared_empty_deflate, deflate_local + 22usize, 0u32)
+    write32(declared_empty_deflate, third_directory + 24usize, 0u32)
+    var declared_empty_source = Source { data: declared_empty_deflate, off: 0usize }
+    let (declared_empty_archive0, declared_empty_open_error) = open_over(a, &declared_empty_source, limits)
+    if declared_empty_open_error != ok { os.exit(53) }
+    var declared_empty_archive = declared_empty_archive0
+    let (declared_empty_reader0, declared_empty_reader_error) = zip.entry_reader(storage, &declared_empty_archive, 2usize)
+    if declared_empty_reader_error != ok { os.exit(54) }
+    var declared_empty_reader = declared_empty_reader0
+    var declared_empty_output: [64]u8 = zero
+    var declared_empty_at = 0usize
+    while declared_empty_at < declared_empty_output.len {
+        declared_empty_output[declared_empty_at] = 165u8
+        declared_empty_at += 1usize
+    }
+    let (declared_empty_count, declared_empty_read_error) = io.read(&declared_empty_reader, declared_empty_output[..])
+    if declared_empty_count != 0usize || declared_empty_read_error != zip.Checksum || declared_empty_output[0usize] != 165u8 || declared_empty_output[declared_empty_output.len - 1usize] != 165u8 { os.exit(55) }
     // A seekable source may report End with the final stored or deflated member bytes.
     var ended_stored_source = EndedSource { data: archive, off: 0usize, end_at: archive.len }
     let (ended_stored_archive0, ended_stored_open_error) = open_ended_over(a, &ended_stored_source, limits)
@@ -269,6 +292,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (mismatch, mismatch_error) = zipwrite.store(a, mismatch_parts[..])
     if mismatch_error != ok { os.exit(35) }
     let mismatch_directory = 30usize + mismatch_parts[0usize].name.len
+    // Stored entries have identical compressed and uncompressed lengths. Reject a
+    // mismatched central entry before a reader can hand out its compressed range.
+    write32(mismatch, 18usize, 1u32)
+    write32(mismatch, mismatch_directory + 20usize, 1u32)
+    var mismatch_stored_source = Source { data: mismatch, off: 0usize }
+    let (_, mismatch_stored_open_error) = open_over(a, &mismatch_stored_source, limits)
+    if mismatch_stored_open_error != zip.Invalid { os.exit(56) }
+    write32(mismatch, 18usize, 0u32)
+    write32(mismatch, mismatch_directory + 20usize, 0u32)
     mismatch[30usize] = 121u8
     if !local_rejected(a, mismatch, limits, storage) { os.exit(36) }
     mismatch[30usize] = 120u8
@@ -304,6 +336,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var legacy_name_source = Source { data: malformed, off: 0usize }
     let (_, e17) = open_over(a, &legacy_name_source, limits)
     if e17 != zip.Invalid { os.exit(26) }
+    // Path validation must reject controls and a leading drive name, but preserve
+    // ordinary colons outside that drive-prefix form.
+    if zip.name_legal("a\x00b") || zip.name_legal("C:drive") || !zip.name_legal("1:2.txt") { os.exit(57) }
+    // A non-ASCII name is UTF-8 only when both ZIP headers carry the EFS bit.
+    var utf8_parts: [1]zipwrite.Part = zero
+    utf8_parts[0usize] = zipwrite.Part { name: "\xc3\xa9.txt", data: no_data[..] }
+    let (utf8_zip, utf8_zip_error) = zipwrite.store(a, utf8_parts[..])
+    if utf8_zip_error != ok { os.exit(58) }
+    let utf8_directory = 30usize + utf8_parts[0usize].name.len
+    if utf8_zip[6usize] != 0u8 || utf8_zip[7usize] != 8u8 || utf8_zip[utf8_directory + 8usize] != 0u8 || utf8_zip[utf8_directory + 9usize] != 8u8 { os.exit(59) }
+    var utf8_source = Source { data: utf8_zip, off: 0usize }
+    let (utf8_archive0, utf8_open_error) = open_over(a, &utf8_source, limits)
+    if utf8_open_error != ok { os.exit(60) }
+    var utf8_archive = utf8_archive0
+    let utf8_entries = zip.entries(&utf8_archive)
+    if utf8_entries.len != 1usize || !str.eq(utf8_entries[0usize].name, utf8_parts[0usize].name) { os.exit(61) }
+    utf8_zip[7usize] = 0u8
+    utf8_zip[utf8_directory + 9usize] = 0u8
+    var legacy_utf8_source = Source { data: utf8_zip, off: 0usize }
+    let (_, legacy_utf8_error) = open_over(a, &legacy_utf8_source, limits)
+    if legacy_utf8_error != zip.Invalid { os.exit(62) }
     // A central-directory extra area is a sequence of complete 4-byte headers and
     // payloads. A trailing byte must not be silently ignored.
     var extra_parts: [1]zipwrite.Part = zero
@@ -367,6 +420,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (max_name_zip, max_name_error) = zipwrite.store(a, max_name_parts[..])
     let max_name_directory = 30usize + max_name.len
     if max_name_error != ok || max_name_zip.len != 131168usize || max_name_zip[26usize] != 255u8 || max_name_zip[27usize] != 255u8 || max_name_zip[max_name_directory + 28usize] != 255u8 || max_name_zip[max_name_directory + 29usize] != 255u8 { os.exit(44) }
+    // A classic end record reserves 65535 as the ZIP64 count sentinel, so the writer
+    // must decline that count rather than emit an archive its own reader rejects.
+    let (too_many_parts, too_many_parts_error) = mem.alloc[zipwrite.Part](a, 65535usize)
+    if too_many_parts_error != ok { os.exit(63) }
+    let (_, too_many_error) = zipwrite.store(a, too_many_parts)
+    if too_many_error != zipwrite.TooLarge { os.exit(64) }
     // Refusals.
     var enc_source = Source { data: encrypted, off: 0usize }
     let (v1, e8) = open_over(a, &enc_source, limits)
