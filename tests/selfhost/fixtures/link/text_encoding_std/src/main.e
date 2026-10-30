@@ -66,5 +66,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.eq(sniff.determine("<meta http-equiv=refresh content=\"0; charset=koi8-r\">", ""), "windows-1252") { os.exit(23i32) }
     let (doc, used, de) = sniff.decode_document(a, "<meta charset=windows-1251><p>\xcf\xf0\xe8\xe2\xe5\xf2", "")
     if de != ok || !str.eq(used, "windows-1251") || !str.eq(doc, "<meta charset=windows-1251><p>\xd0\x9f\xd1\x80\xd0\xb8\xd0\xb2\xd0\xb5\xd1\x82") { os.exit(24i32) }
+    // BOM-less UTF-16 XML declarations select their byte order before the
+    // ASCII-oriented meta prescan, then decode as ordinary UTF-8 text.
+    let (le_doc, le_used, le_error) = sniff.decode_document(a, "\x3c\x00\x3f\x00\x78\x00\x6d\x00\x6c\x00\x3f\x00\x3e\x00", "")
+    if le_error != ok || !str.eq(le_used, "UTF-16LE") || !str.eq(le_doc, "<?xml?>") { os.exit(34i32) }
+    let (be_doc, be_used, be_error) = sniff.decode_document(a, "\x00\x3c\x00\x3f\x00\x78\x00\x6d\x00\x6c\x00\x3f\x00\x3e", "")
+    if be_error != ok || !str.eq(be_used, "UTF-16BE") || !str.eq(be_doc, "<?xml?>") { os.exit(35i32) }
     ret ok
 }
