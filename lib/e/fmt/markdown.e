@@ -750,6 +750,10 @@ fn parse_inlines(text: str, out: []Inline) -> (usize, err) {
         if c == 42u8 || c == 95u8 {
             var run = i
             while run < text.len && text[run] == c { run += 1usize }
+            if s.delimiter_count >= MAX_DELIMITERS {
+                i = run
+                continue
+            }
             var before = SPACE
             if i > 0usize { before = text[i - 1usize] }
             var after = SPACE
@@ -783,6 +787,10 @@ fn parse_inlines(text: str, out: []Inline) -> (usize, err) {
         if c == 91u8 || (c == 33u8 && i + 1usize < text.len && text[i + 1usize] == 91u8) {
             var width = 1usize
             if c == 33u8 { width = 2usize }
+            if s.delimiter_count >= MAX_DELIMITERS {
+                i += width
+                continue
+            }
             let e = flush_text(&s, text_start, i)
             if e != ok { ret (0usize, e) }
             let (node, node_error) = add(&s, .Text, i, width)
@@ -839,6 +847,11 @@ fn parse_inlines(text: str, out: []Inline) -> (usize, err) {
                     s.out[d.node].len = 0usize
                     let emphasis_error = process_emphasis(&s, opener + 1usize)
                     if emphasis_error != ok { ret (0usize, emphasis_error) }
+                    var above = opener + 1usize
+                    while above < s.delimiter_count {
+                        s.delimiters[above].removed = true
+                        above += 1usize
+                    }
                     if d.ch == 91u8 {
                         var j = opener
                         while j > 0usize {
