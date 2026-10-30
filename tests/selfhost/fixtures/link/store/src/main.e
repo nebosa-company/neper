@@ -12,11 +12,17 @@ use e.str
 
 type VKey = struct { key: str, good: bool, encoded: str }
 
-fn vectors() -> [100]VKey {
-    ret [100]VKey{     VKey{ key: "", good: false, encoded: "" },
+fn vectors() -> [106]VKey {
+    ret [106]VKey{     VKey{ key: "", good: false, encoded: "" },
     VKey{ key: "/", good: false, encoded: "/" },
     VKey{ key: "a", good: true, encoded: "a" },
     VKey{ key: "a/b", good: true, encoded: "a/b" },
+    VKey{ key: "a:b", good: false, encoded: "a%3Ab" },
+    VKey{ key: "NUL", good: false, encoded: "NUL" },
+    VKey{ key: "con.txt", good: false, encoded: "con.txt" },
+    VKey{ key: "COM1.txt", good: false, encoded: "COM1.txt" },
+    VKey{ key: "tail.", good: false, encoded: "tail." },
+    VKey{ key: "tail ", good: false, encoded: "tail%20" },
     VKey{ key: "a//b", good: false, encoded: "a//b" },
     VKey{ key: "/a", good: false, encoded: "/a" },
     VKey{ key: "a/", good: false, encoded: "a/" },
@@ -25,7 +31,7 @@ fn vectors() -> [100]VKey {
     VKey{ key: "a/./b", good: false, encoded: "a/./b" },
     VKey{ key: "a/../b", good: false, encoded: "a/../b" },
     VKey{ key: "a/..", good: false, encoded: "a/.." },
-    VKey{ key: "...", good: true, encoded: "..." },
+    VKey{ key: "...", good: false, encoded: "..." },
     VKey{ key: "a.b", good: true, encoded: "a.b" },
     VKey{ key: ".hidden", good: true, encoded: ".hidden" },
     VKey{ key: "a b", good: true, encoded: "a%20b" },
@@ -52,11 +58,11 @@ fn vectors() -> [100]VKey {
     VKey{ key: "&", good: true, encoded: "%26" },
     VKey{ key: "0\xc3\xbc", good: true, encoded: "0%C3%BC" },
     VKey{ key: "\x01#", good: true, encoded: "%01%23" },
-    VKey{ key: "%%.?..", good: true, encoded: "%25%25.%3F.." },
+    VKey{ key: "%%.?..", good: false, encoded: "%25%25.%3F.." },
     VKey{ key: "~?\\", good: false, encoded: "~%3F%5C" },
     VKey{ key: "~~_?\x01", good: true, encoded: "~~_%3F%01" },
     VKey{ key: "a..b+\xc3\xbc\xc3\xbc\xc3\xbcb", good: true, encoded: "a..b%2B%C3%BC%C3%BC%C3%BCb" },
-    VKey{ key: " ", good: true, encoded: "%20" },
+    VKey{ key: " ", good: false, encoded: "%20" },
     VKey{ key: "-\xc3\xbc+b-\xe2\x82\xac", good: true, encoded: "-%C3%BC%2Bb-%E2%82%AC" },
     VKey{ key: "ab\x01%a", good: true, encoded: "ab%01%25a" },
     VKey{ key: "\\?", good: false, encoded: "%5C%3F" },
@@ -64,12 +70,12 @@ fn vectors() -> [100]VKey {
     VKey{ key: "\xe2\x82\xac\xe2\x82\xac&+", good: true, encoded: "%E2%82%AC%E2%82%AC%26%2B" },
     VKey{ key: " \xc3\xbc~ a+&/", good: false, encoded: "%20%C3%BC~%20a%2B%26/" },
     VKey{ key: "\x01%\xe2\x82\xac#\xe2\x82\xac%", good: true, encoded: "%01%25%E2%82%AC%23%E2%82%AC%25" },
-    VKey{ key: "%?..&#..", good: true, encoded: "%25%3F..%26%23.." },
+    VKey{ key: "%?..&#..", good: false, encoded: "%25%3F..%26%23.." },
     VKey{ key: "A", good: true, encoded: "A" },
     VKey{ key: "#%&\x01..#", good: true, encoded: "%23%25%26%01..%23" },
     VKey{ key: "\\", good: false, encoded: "%5C" },
     VKey{ key: "\xe2\x82\xac%", good: true, encoded: "%E2%82%AC%25" },
-    VKey{ key: "0-_.", good: true, encoded: "0-_." },
+    VKey{ key: "0-_.", good: false, encoded: "0-_." },
     VKey{ key: "A", good: true, encoded: "A" },
     VKey{ key: "#=0", good: true, encoded: "%23%3D0" },
     VKey{ key: "+a_~#", good: true, encoded: "%2Ba_~%23" },
@@ -85,7 +91,7 @@ fn vectors() -> [100]VKey {
     VKey{ key: "a ..A", good: true, encoded: "a%20..A" },
     VKey{ key: "._/A_", good: true, encoded: "._/A_" },
     VKey{ key: "a\\a_\xe2\x82\xac ", good: false, encoded: "a%5Ca_%E2%82%AC%20" },
-    VKey{ key: "\xe2\x82\xac-.", good: true, encoded: "%E2%82%AC-." },
+    VKey{ key: "\xe2\x82\xac-.", good: false, encoded: "%E2%82%AC-." },
     VKey{ key: "+~A", good: true, encoded: "%2B~A" },
     VKey{ key: "=A%\xc3\xbc%._", good: true, encoded: "%3DA%25%C3%BC%25._" },
     VKey{ key: "?._~", good: true, encoded: "%3F._~" },
@@ -101,7 +107,7 @@ fn vectors() -> [100]VKey {
     VKey{ key: "b-A", good: true, encoded: "b-A" },
     VKey{ key: "=+\xc3\xbc", good: true, encoded: "%3D%2B%C3%BC" },
     VKey{ key: "/", good: false, encoded: "/" },
-    VKey{ key: "%..", good: true, encoded: "%25.." },
+    VKey{ key: "%..", good: false, encoded: "%25.." },
     VKey{ key: "..\xc3\xbc\xe2\x82\xac.\\", good: false, encoded: "..%C3%BC%E2%82%AC.%5C" },
     VKey{ key: "\\.~=_#", good: false, encoded: "%5C.~%3D_%23" },
     VKey{ key: ".0", good: true, encoded: ".0" },
@@ -112,7 +118,7 @@ fn vectors() -> [100]VKey {
     VKey{ key: ".", good: false, encoded: "." },
     VKey{ key: "a&=\x01.~ a", good: true, encoded: "a%26%3D%01.~%20a" },
     VKey{ key: "?-b", good: true, encoded: "%3F-b" },
-    VKey{ key: "+_ ", good: true, encoded: "%2B_%20" } }
+    VKey{ key: "+_ ", good: false, encoded: "%2B_%20" } }
 }
 
 // ---- the in-process server behind the HTTP transport ----
@@ -242,8 +248,11 @@ fn hex_name(a: *mem.Arena, root: str) -> (str, err) {
     let (b0, be) = str.builder(a, root.len + 40usize)
     if be != ok { ret ("", be) }
     var b = b0
-    try str.push(&b, root)
-    try str.push(&b, "/neper-store-")
+    if root.len != 0usize {
+        try str.push(&b, root)
+        try str.push_byte(&b, 47u8)
+    }
+    try str.push(&b, "neper-store-")
     var i = 0usize
     while i < 8usize {
         try str.push_hex_u32(&b, u32(rnd[i]))
@@ -325,21 +334,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let full_start = full_arena.off
     if store.put(&full_store, &full_arena, "b", "value which cannot be stored") != store.TooLarge || full_arena.off != full_start { os.exit(134i32) }
     // 2. filesystem
-    let (tmp, te) = fs.temp_dir(a)
-    if te != ok { os.exit(6i32) }
-    let (root, re) = hex_name(a, tmp)
+    let (root, re) = hex_name(a, "")
     if re != ok { os.exit(7i32) }
     if fs.make_dirs(a, root) != ok { os.exit(8i32) }
     var fstore = store.FsStore{ root: root }
     var fs_s = store.fs_store(&fstore)
     let c2 = store.conformance(&fs_s, a)
     if c2 != 0u32 { os.exit(i32(70u32 + c2)) }
+    // A caller may retain a trailing separator in its configured root; listing
+    // must not drop the first byte of every relative key.
+    let (trailing_root, trailing_root_error) = child_path(a, root, "")
+    if trailing_root_error != ok { os.exit(172i32) }
+    var trailing_fs = store.FsStore{ root: trailing_root }
+    var trailing_fs_store = store.fs_store(&trailing_fs)
+    if store.put(&trailing_fs_store, a, "tail.txt", "tail") != ok { os.exit(173i32) }
+    var trailing_entries: [1]store.Entry = zero
+    let (trailing_count, trailing_list_error) = store.list(&trailing_fs_store, a, "", trailing_entries[0usize..1usize])
+    if trailing_list_error != ok || trailing_count != 1usize || !str.eq(trailing_entries[0usize].key, "tail.txt") { os.exit(174i32) }
+    if store.delete(&trailing_fs_store, a, "tail.txt") != ok { os.exit(175i32) }
+    // The zero filesystem backend must not treat `/key` or the current directory
+    // as an implicit root.
+    var zero_fs: store.FsStore = zero
+    var zero_store = store.fs_store(&zero_fs)
+    if store.put(&zero_store, a, "zero", "x") != store.Invalid { os.exit(176i32) }
+    let (_, zero_get_error) = store.get(&zero_store, a, "zero", 0usize)
+    if zero_get_error != store.Invalid { os.exit(177i32) }
+    let (_, zero_stat_error) = store.stat(&zero_store, a, "zero")
+    if zero_stat_error != store.Invalid { os.exit(179i32) }
+    if store.delete(&zero_store, a, "zero") != store.Invalid { os.exit(180i32) }
+    var zero_entries: [1]store.Entry = zero
+    let (_, zero_list_error) = store.list(&zero_store, a, "", zero_entries[0usize..1usize])
+    if zero_list_error != store.Invalid { os.exit(178i32) }
     // a stray directory or foreign file under the root is not a key, and deleting through
     // the store leaves the empty directories (listing is files only)
     let (_, nf) = store.get(&fs_s, a, "dir", 0usize)
     if nf != store.NotFound { os.exit(9i32) }
     // A link inside the root cannot redirect any key operation to a sibling directory.
-    let (outside_root, ore) = hex_name(a, tmp)
+    let (outside_root, ore) = hex_name(a, "")
     if ore != ok || fs.make_dirs(a, outside_root) != ok { os.exit(150i32) }
     let (outside_marker, ome) = child_path(a, outside_root, "marker.txt")
     let (outside_put, ope) = child_path(a, outside_root, "put.txt")
@@ -405,7 +436,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 4. keys: validity and the HTTP encoding against Python
     let table = vectors()
     var i = 0usize
-    while i < 100usize {
+    while i < 106usize {
         let row = table[i]
         if store.valid_key(row.key) != row.good { os.exit(140i32) }
         if row.good {

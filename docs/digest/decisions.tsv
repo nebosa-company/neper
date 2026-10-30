@@ -2998,3 +2998,4 @@ D5916	1245	GL dispatch follows the current context, not the process
 D5919	387	WASI permission paths stay inside a preopen
 D5920	737	A failed presentation retires its acquisition, not its image serial
 D5921	416	JMESPath function arguments require separators
+D5922	742	Portable store keys and atomic filesystem replacement

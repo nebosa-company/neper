@@ -43412,3 +43412,16 @@ parser now requires a comma between every pair of function arguments and rejects
 trailing comma, matching the JMESPath grammar and python-jmespath. This prevents
 malformed untrusted expressions from changing their apparent arity or reaching the
 wrong function dispatch path.
+
+## D5922 — Portable store keys and atomic filesystem replacement
+
+`e.store` owns one portable key namespace: names rejected by a Windows filesystem,
+including colons, trailing dots or spaces and DOS device names, are rejected by every
+backend, and a key cannot also be another key's directory. `MemoryStore`, `FsStore`
+and `HttpStore` enforce that rule.
+
+`FsStore.put` writes a uniquely created sibling temporary file and renames it over the
+visible key only after the write succeeds. On Windows, a sibling rename uses the
+simple-name, null-root `FILE_RENAME_INFORMATION` form and passes the complete native
+record. Listing derives paths relative to the configured root and preserves lexical
+prefix results when its output buffer is short.

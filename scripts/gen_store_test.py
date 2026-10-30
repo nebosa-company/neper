@@ -32,15 +32,23 @@ def lit(s):
 
 
 def valid(key):
-    if not key or "\x00" in key or "\\" in key or key.startswith("/") or key.endswith("/"):
+    if not key or "\x00" in key or "\\" in key or ":" in key or key.startswith("/") or key.endswith("/"):
         return False
-    return all(seg not in ("", ".", "..") for seg in key.split("/"))
+    for seg in key.split("/"):
+        if seg in ("", ".", "..") or seg.endswith((".", " ")):
+            return False
+        base = seg.split(".", 1)[0].lower()
+        if base in ("con", "prn", "aux", "nul"):
+            return False
+        if len(base) == 4 and base[:3] in ("com", "lpt") and base[3] in "123456789":
+            return False
+    return True
 
 
 def main():
     rnd = random.Random(127)
     alphabet = ["a", "b", ".", "/", "..", " ", "%", "ü", "€", "~", "-", "_", "?", "#", "&", "=", "+", "\x01", "\\", "A", "0"]
-    keys = ["", "/", "a", "a/b", "a//b", "/a", "a/", ".", "..", "a/./b", "a/../b", "a/..", "...", "a.b", ".hidden", "a b", "ü/€", "x\\y", "a\x00b", "~tilde-_.ok"]
+    keys = ["", "/", "a", "a/b", "a:b", "NUL", "con.txt", "COM1.txt", "tail.", "tail ", "a//b", "/a", "a/", ".", "..", "a/./b", "a/../b", "a/..", "...", "a.b", ".hidden", "a b", "ü/€", "x\\y", "a\x00b", "~tilde-_.ok"]
     for _ in range(80):
         keys.append("".join(rnd.choice(alphabet) for _ in range(rnd.randint(1, 8))))
     vec = []

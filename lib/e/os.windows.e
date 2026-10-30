@@ -1694,6 +1694,30 @@ fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> er
     ret answer
 }
 
+fn same_relative_parent(left: str, right: str) -> bool {
+    var left_len = 0usize
+    var right_len = 0usize
+    var at = 0usize
+    while at < left.len {
+        if left[at] == 47u8 || left[at] == 92u8 { left_len = at + 1usize }
+        at += 1usize
+    }
+    at = 0usize
+    while at < right.len {
+        if right[at] == 47u8 || right[at] == 92u8 { right_len = at + 1usize }
+        at += 1usize
+    }
+    if left_len != right_len { ret false }
+    at = 0usize
+    while at < left_len {
+        let left_byte = left[at]
+        let right_byte = right[at]
+        if left_byte != right_byte && !((left_byte == 47u8 || left_byte == 92u8) && (right_byte == 47u8 || right_byte == 92u8)) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 // A rename here is a property of the open file rather than a call on two paths: the handle
 // carries where it should go, and the destination directory is a handle too, so nothing in
 // it is a string join.
@@ -1722,16 +1746,31 @@ fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path:
         answer = wide_error
     } else {
         var information: FileRenameInfo = zero
-        if overwrite { information.replace = 1u32 }
-        information.root_directory = dst_parent.raw
-        information.name_length = u32(count * 2usize)
-        var copied = 0usize
-        while copied < count {
-            information.name[copied] = wide_name[copied]
-            copied += 1usize
+        if count > information.name.len {
+            answer = Failed
+        } else {
+            if overwrite { information.replace = 1u32 }
+            // A simple name and a null root asks the filesystem to stay in the source
+            // parent. That is the documented form for a sibling rename, and avoids asking
+            // a provider to interpret a second directory handle when both names are already
+            // rooted through the same one.
+            if src_dir.raw == dst_dir.raw && same_relative_parent(src_path, dst_path) {
+                information.root_directory = 0usize
+            } else {
+                information.root_directory = dst_parent.raw
+            }
+            information.name_length = u32(count * 2usize)
+            var copied = 0usize
+            while copied < count {
+                information.name[copied] = wide_name[copied]
+                copied += 1usize
+            }
+            // `FILE_RENAME_INFORMATION` is a fixed native record here, not merely
+            // its 20-byte prefix. NtSetInformationFile validates the full record
+            // alignment before it reads FileNameLength, so pass the storage we own.
+            var status_block: IoStatusBlock = zero
+            answer = from_nt_status(raw_nt_set_information(handle, &status_block, mem.address_of(&information), u32(mem.size_of[FileRenameInfo]()), FILE_RENAME_CLASS))
         }
-        var status_block: IoStatusBlock = zero
-        answer = from_nt_status(raw_nt_set_information(handle, &status_block, mem.address_of(&information), 20u32 + u32(count * 2usize), FILE_RENAME_CLASS))
         // The handle followed the file through the rename, so this is the moved file.
         if answer == ok && durable {
             if raw_flush_file(handle) == 0i32 { answer = from_last_error() }

@@ -101,8 +101,38 @@ fn send(h: *HttpStore, a: *mem.Arena, method: http.Method, path_text: str, body:
 
 fn success(status: u16) -> bool { ret status >= 200u16 && status < 300u16 }
 
+// HTTP object stores may allow both `key` and `key/child`, but the portable Store
+// surface does not: filesystem-backed stores cannot represent that pair. Check both
+// directions before issuing the mutation so this backend keeps the same key tree.
+fn http_key_conflict(h: *HttpStore, a: *mem.Arena, key: str) -> err {
+    var at = 0usize
+    while at < key.len {
+        if key[at] == 47u8 {
+            let (_, parent_error) = http_stat(mem.cast[*void](h), a, key[0usize..at])
+            if parent_error == ok { ret store.Invalid }
+            if parent_error != store.NotFound { ret parent_error }
+        }
+        at += 1usize
+    }
+    let (b0, build_error) = str.builder(a, key.len + 1usize)
+    if build_error != ok { ret build_error }
+    var b = b0
+    let key_error = str.push(&b, key)
+    if key_error != ok { ret key_error }
+    let separator_error = str.push_byte(&b, 47u8)
+    if separator_error != ok { ret separator_error }
+    let child_prefix = str.done(&b)
+    var child: [1]store.Entry = zero
+    let (children, list_error) = http_list(mem.cast[*void](h), a, child_prefix, child[0usize..1usize])
+    if children != 0usize || list_error == store.TooLarge { ret store.Invalid }
+    if list_error != ok { ret list_error }
+    ret ok
+}
+
 fn http_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err {
     let h = mem.cast[*HttpStore](ctx)
+    let conflict_error = http_key_conflict(h, a, key)
+    if conflict_error != ok { ret conflict_error }
     let (path_text, te) = target_of(a, h, key, false)
     if te != ok { ret te }
     let (r, e) = send(h, a, .Put, path_text, data)

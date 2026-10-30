@@ -4,13 +4,16 @@
 // and the filesystem backend; `e.store.http` is the third, over `e.net.http`. Vendor clouds
 // are out of scope by the cloud ruling and ride their own clients.
 //
-// A key is a `/`-separated name with no empty, `.` or `..` segment, no leading `/` and no
-// backslash or NUL: it cannot leave its store. Prefix listing is a plain string prefix
-// over keys (`dir/` lists a "directory", `a` lists everything starting with `a`), sorted by
-// bytes. Deleting a key that is absent is not an error; reading one is `NotFound`.
+// A key is a portable `/`-separated name with no empty, `.` or `..` segment, no leading `/`,
+// no backslash, colon or NUL, no segment ending in dot or space, and no DOS device name. A key
+// cannot be another key's directory. Prefix listing is a plain string prefix over keys (`dir/`
+// lists a "directory", `a` lists everything starting with `a`), sorted by bytes. Deleting a key
+// that is absent is not an error; reading one is `NotFound`.
 // `conformance` is the one script every backend is run through.
 use e.fs
 use e.mem
+use e.os
+use e.path
 use e.str
 
 type Entry = struct { key: str, size: u64 }
@@ -24,6 +27,35 @@ error Failed
 
 // ---- keys ----------------------------------------------------------------------------
 
+fn ascii_lower(byte: u8) -> u8 {
+    if byte >= 65u8 && byte <= 90u8 { ret byte + 32u8 }
+    ret byte
+}
+
+fn ascii_equal(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var i = 0usize
+    while i < left.len {
+        if ascii_lower(left[i]) != ascii_lower(right[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// `CON`, `PRN`, `AUX`, `NUL`, `COM1` through `COM9`, and `LPT1` through `LPT9`
+// name devices on Windows even when an extension follows. Refuse them everywhere so
+// a memory key and a filesystem key never name different things.
+fn windows_device_name(segment: str) -> bool {
+    var base_end = 0usize
+    while base_end < segment.len && segment[base_end] != 46u8 { base_end += 1usize }
+    let base = segment[0usize..base_end]
+    if ascii_equal(base, "con") || ascii_equal(base, "prn") || ascii_equal(base, "aux") || ascii_equal(base, "nul") { ret true }
+    if base.len != 4usize { ret false }
+    let first = ascii_lower(base[0usize])
+    if !((first == 99u8 && ascii_lower(base[1usize]) == 111u8 && ascii_lower(base[2usize]) == 109u8) || (first == 108u8 && ascii_lower(base[1usize]) == 112u8 && ascii_lower(base[2usize]) == 116u8)) { ret false }
+    ret base[3usize] >= 49u8 && base[3usize] <= 57u8
+}
+
 fn valid_key(key: str) -> bool {
     if key.len == 0usize || key[0] == 47u8 || key[key.len - 1usize] == 47u8 { ret false }
     var seg = 0usize
@@ -32,11 +64,13 @@ fn valid_key(key: str) -> bool {
         if i == key.len || key[i] == 47u8 {
             let n = i - seg
             if n == 0usize { ret false }
+            let part = key[seg..i]
             if n == 1usize && key[seg] == 46u8 { ret false }
             if n == 2usize && key[seg] == 46u8 && key[seg + 1usize] == 46u8 { ret false }
+            if part[n - 1usize] == 46u8 || part[n - 1usize] == 32u8 || windows_device_name(part) { ret false }
             seg = i + 1usize
         } else {
-            if key[i] == 0u8 || key[i] == 92u8 { ret false }
+            if key[i] == 0u8 || key[i] == 58u8 || key[i] == 92u8 { ret false }
         }
         i += 1usize
     }
@@ -60,6 +94,11 @@ fn key_less(x: str, y: str) -> bool {
         i += 1usize
     }
     ret x.len < y.len
+}
+
+fn key_is_directory_of(directory: str, key: str) -> bool {
+    if directory.len >= key.len || key[directory.len] != 47u8 { ret false }
+    ret has_prefix(key, directory)
 }
 
 // ---- the surface ---------------------------------------------------------------------
@@ -153,6 +192,13 @@ fn copy_str(a: *mem.Arena, s: str) -> (str, err) {
 fn memory_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err {
     var m = mem.cast[*MemoryStore](ctx)
     let (at, found) = memory_find(m, key)
+    // Filesystem stores cannot hold both `a` and `a/b`. Enforce that portable
+    // object-store rule here as well, before copying data or changing the table.
+    var existing = 0usize
+    while existing < m.count {
+        if (!found || existing != at) && (key_is_directory_of(key, m.keys[existing]) || key_is_directory_of(m.keys[existing], key)) { ret Invalid }
+        existing += 1usize
+    }
     if !found && m.count == m.keys.len { ret TooLarge }
     let start = mem.mark(a)
     let (value, ve) = copy_str(a, data)
@@ -247,12 +293,68 @@ fn fs_error(e: err) -> err {
     ret Failed
 }
 
+fn store_path_style() -> path.Style {
+    if os.NATIVE_SEPARATOR == 92u8 { ret .Windows }
+    ret .Posix
+}
+
+// A filesystem can have foreign paths beneath its root. Refuse a file used as a
+// parent and a directory used as a final key so its key relation matches memory.
+fn fs_key_conflict(a: *mem.Arena, rooted: *const fs.Root, key: str) -> err {
+    var at = 0usize
+    while at < key.len {
+        if key[at] == 47u8 {
+            let (parent, parent_error) = fs.stat_at(a, rooted, key[0usize..at])
+            if parent_error == ok {
+                if parent.kind != .Directory { ret fs.Invalid }
+            } else if parent_error != fs.NotFound {
+                ret parent_error
+            }
+        }
+        at += 1usize
+    }
+    let (existing, existing_error) = fs.stat_at(a, rooted, key)
+    if existing_error == ok {
+        if existing.kind != .File { ret fs.Invalid }
+    } else if existing_error != fs.NotFound {
+        ret existing_error
+    }
+    ret ok
+}
+
+// The temporary value belongs beside its final key. Besides avoiding a cross-directory
+// rename, this means the replacement can use the host's same-parent atomic rename form.
+fn fs_temp_directory(a: *mem.Arena, root: str, key: str) -> (str, err) {
+    var parent_len = 0usize
+    var at = 0usize
+    while at < key.len {
+        if key[at] == 47u8 { parent_len = at }
+        at += 1usize
+    }
+    if parent_len == 0usize { ret (root, ok) }
+    let (b0, build_error) = str.builder(a, root.len + parent_len + 1usize)
+    if build_error != ok { ret ("", build_error) }
+    var b = b0
+    let root_error = str.push(&b, root)
+    if root_error != ok { ret ("", root_error) }
+    if root.len != 0usize && !path.is_separator(root[root.len - 1usize], store_path_style()) {
+        let separator_error = str.push_byte(&b, path.separator(store_path_style()))
+        if separator_error != ok { ret ("", separator_error) }
+    }
+    let parent_error = str.push(&b, key[0usize..parent_len])
+    if parent_error != ok { ret ("", parent_error) }
+    ret (str.done(&b), ok)
+}
+
 fn fs_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err {
     var f = mem.cast[*FsStore](ctx)
+    if f.root.len == 0usize { ret Invalid }
     let (root0, root_error) = fs.root(a, f.root)
     if root_error != ok { ret fs_error(root_error) }
     var rooted = root0
     defer let _ = fs.root_close(&rooted)
+    let conflict_error = fs_key_conflict(a, &rooted, key)
+    if conflict_error != ok { ret fs_error(conflict_error) }
     // the parent directories of a nested key
     var last = 0usize
     var i = 0usize
@@ -264,11 +366,39 @@ fn fs_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err {
         let me = fs.make_dirs_at(a, &rooted, key[0usize..last])
         if me != ok { ret fs_error(me) }
     }
-    ret fs_error(fs.write_file_at(a, &rooted, key, data))
+    // Write a sibling first, then replace the visible key in one rename. A failed
+    // write cannot truncate the value a caller was already able to read.
+    let (temp_directory, directory_error) = fs_temp_directory(a, f.root, key)
+    if directory_error != ok { ret fs_error(directory_error) }
+    let (temp_path, temp_file, temp_error) = fs.temp_file(a, temp_directory, "neper-store-temp-")
+    if temp_error != ok { ret fs_error(temp_error) }
+    if os.close(temp_file) != ok {
+        let ignored_remove = fs.remove_file(a, temp_path)
+        ret Failed
+    }
+    let (temp_key, relative_error) = path.relative(a, f.root, temp_path, store_path_style())
+    if relative_error != ok {
+        let ignored_remove = fs.remove_file(a, temp_path)
+        ret fs_error(relative_error)
+    }
+    let write_error = fs.write_file_at(a, &rooted, temp_key, data)
+    if write_error != ok {
+        let ignored_remove = fs.remove_at(a, &rooted, temp_key, false)
+        ret fs_error(write_error)
+    }
+    var options: fs.ReplaceOptions = zero
+    options.overwrite = true
+    let replace_error = fs.replace_at(a, &rooted, temp_key, &rooted, key, options)
+    if replace_error != ok {
+        let ignored_remove = fs.remove_at(a, &rooted, temp_key, false)
+        ret fs_error(replace_error)
+    }
+    ret ok
 }
 
 fn fs_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err) {
     var f = mem.cast[*FsStore](ctx)
+    if f.root.len == 0usize { ret (zero, Invalid) }
     let (root0, root_error) = fs.root(a, f.root)
     if root_error != ok { ret (zero, fs_error(root_error)) }
     var rooted = root0
@@ -285,6 +415,7 @@ fn fs_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err) {
 
 fn fs_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err) {
     var f = mem.cast[*FsStore](ctx)
+    if f.root.len == 0usize { ret (0u64, Invalid) }
     let (root0, root_error) = fs.root(a, f.root)
     if root_error != ok { ret (0u64, fs_error(root_error)) }
     var rooted = root0
@@ -297,6 +428,7 @@ fn fs_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err) {
 
 fn fs_delete(ctx: *void, a: *mem.Arena, key: str) -> err {
     var f = mem.cast[*FsStore](ctx)
+    if f.root.len == 0usize { ret Invalid }
     let (root0, root_error) = fs.root(a, f.root)
     if root_error == fs.NotFound { ret ok }
     if root_error != ok { ret fs_error(root_error) }
@@ -310,20 +442,24 @@ fn fs_delete(ctx: *void, a: *mem.Arena, key: str) -> err {
 // A walk of the root, each file's path relative to it with `/` separators.
 fn fs_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err) {
     var f = mem.cast[*FsStore](ctx)
+    if f.root.len == 0usize { ret (0usize, Invalid) }
     let options = fs.WalkOptions{ recursive: true, follow_symlinks: false }
     let (w0, we) = fs.walk(a, f.root, options)
     if we != ok { ret (0usize, fs_error(we)) }
     var w = w0
     var n = 0usize
+    var overflow = false
     var more = true
     while more {
         let (entry, has, ne) = fs.walk_next_err(&w)
         if ne != ok { ret (n, fs_error(ne)) }
         if !has { break }
         if entry.kind != .File { continue }
-        if entry.path.len <= f.root.len + 1usize { continue }
-        // the key: everything after the root and its separator, normalised to `/`
-        let tail = entry.path[f.root.len + 1usize..]
+        // `walk` joins its root, so a user spelling it with a trailing separator
+        // need not have the same byte length as the resulting entry path.
+        let (tail, relative_error) = path.relative(a, f.root, entry.path, store_path_style())
+        if relative_error != ok { ret (n, fs_error(relative_error)) }
+        if tail.len == 0usize { continue }
         let (raw, ce) = mem.alloc[u8](a, tail.len + 1usize)
         if ce != ok { ret (n, ce) }
         var i = 0usize
@@ -334,7 +470,19 @@ fn fs_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
         }
         let rel = raw[0usize..tail.len]
         if !has_prefix(rel, prefix) { continue }
-        if n == out.len { ret (n, TooLarge) }
+        if n == out.len {
+            overflow = true
+            if out.len == 0usize || !key_less(rel, out[n - 1usize].key) { continue }
+            // Keep the smallest `out.len` keys even when a walk reaches a later
+            // one first. The final item is discarded after its insertion point.
+            var at = n - 1usize
+            while at > 0usize && key_less(rel, out[at - 1usize].key) {
+                out[at] = out[at - 1usize]
+                at -= 1usize
+            }
+            out[at] = Entry{ key: rel, size: entry.size }
+            continue
+        }
         // insertion into byte order
         var at = n
         while at > 0usize && key_less(rel, out[at - 1usize].key) {
@@ -344,6 +492,7 @@ fn fs_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
         out[at] = Entry{ key: rel, size: entry.size }
         n += 1usize
     }
+    if overflow { ret (n, TooLarge) }
     ret (n, ok)
 }
 
@@ -434,6 +583,30 @@ fn conformance(s: *Store, a: *mem.Arena) -> u32 {
     let (_, ie) = get(s, a, "../etc/passwd", 0usize)
     if ie != Invalid { ret 40u32 }
     if delete(s, a, "x/../y") != Invalid { ret 41u32 }
+    // Names portable across every backend, including Windows filesystem stores.
+    if put(s, a, "a:b", "x") != Invalid { ret 49u32 }
+    if put(s, a, "NUL", "x") != Invalid { ret 50u32 }
+    if put(s, a, "COM1.txt", "x") != Invalid { ret 51u32 }
+    if put(s, a, "LPT9", "x") != Invalid { ret 63u32 }
+    if put(s, a, "trailing.", "x") != Invalid { ret 52u32 }
+    if put(s, a, "trailing ", "x") != Invalid { ret 53u32 }
+    // A key and a child key are rejected in either insertion order, matching a
+    // filesystem tree rather than accepting a relation one backend cannot store.
+    if put(s, a, "node", "x") != ok { ret 54u32 }
+    if put(s, a, "node/child", "x") != Invalid { ret 55u32 }
+    if delete(s, a, "node") != ok { ret 56u32 }
+    if put(s, a, "node/child", "x") != ok { ret 57u32 }
+    if put(s, a, "node", "x") != Invalid { ret 58u32 }
+    if delete(s, a, "node/child") != ok { ret 59u32 }
+    // A short output holds the lexically first matching key even if a filesystem
+    // walk encounters the later-created key first.
+    if put(s, a, "order-z", "x") != ok || put(s, a, "order-a", "x") != ok { ret 60u32 }
+    var short_entries: [1]Entry = zero
+    let (short_count, short_error) = list(s, a, "order-", short_entries[0usize..1usize])
+    if short_error != TooLarge || short_count != 1usize || !str.eq(short_entries[0usize].key, "order-a") { ret 61u32 }
+    let (empty_count, empty_error) = list(s, a, "order-", short_entries[0usize..0usize])
+    if empty_error != TooLarge || empty_count != 0usize { ret 64u32 }
+    if delete(s, a, "order-z") != ok || delete(s, a, "order-a") != ok { ret 62u32 }
     // a value of some size, byte for byte
     var big: [70000]u8 = zero
     var i = 0usize
