@@ -97,5 +97,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if w.begin_page(&e3) != ok || w.end_page(&e3) != ok || w.begin_page(&e3) != w.TooLarge { os.exit(44) }
     let (e4, e4_error) = w.document(a, 1usize, 4096usize, 0.0, 100.0, "")
     if e4_error != w.Invalid { os.exit(45) }
+
+    // Every drawing operation leaves the open page unchanged when its content
+    // region cannot hold the complete PDF operator sequence.
+    var (atomic, atomic_error) = w.document(a, 1usize, 8usize, 200.0, 100.0, "")
+    if atomic_error != ok { os.exit(47) }
+    if w.begin_page(&atomic) != ok { os.exit(48) }
+    let atomic_before = atomic.content.len
+    if w.put_text(&atomic, 1.0, 1.0, 10.0, .Regular, w.black(), "x") != w.TooLarge || atomic.content.len != atomic_before { os.exit(49) }
+    let (_, _, atomic_paragraph_error) = w.put_paragraph(&atomic, 1.0, 1.0, 20.0, 10.0, 12.0, .Regular, w.black(), "x")
+    if atomic_paragraph_error != w.TooLarge || atomic.content.len != atomic_before { os.exit(50) }
+    if w.fill_rect(&atomic, 1.0, 1.0, 2.0, 2.0, w.black()) != w.TooLarge || atomic.content.len != atomic_before { os.exit(51) }
+    if w.stroke_rect(&atomic, 1.0, 1.0, 2.0, 2.0, 1.0, w.black()) != w.TooLarge || atomic.content.len != atomic_before { os.exit(52) }
+    if w.draw_line(&atomic, 1.0, 1.0, 2.0, 2.0, 1.0, w.black()) != w.TooLarge || atomic.content.len != atomic_before { os.exit(53) }
+    let atomic_xs = [3]f64{ 1.0, 2.0, 3.0 }
+    let atomic_ys = [3]f64{ 1.0, 2.0, 1.0 }
+    if w.draw_path(&atomic, atomic_xs[0..], atomic_ys[0..], false, 1.0, w.black()) != w.TooLarge || atomic.content.len != atomic_before { os.exit(54) }
+    if w.fill_circle(&atomic, 4.0, 4.0, 2.0, w.black()) != w.TooLarge || atomic.content.len != atomic_before { os.exit(55) }
+    let atomic_widths = [1]f64{ 20.0 }
+    let atomic_row = [1]str{ "x" }
+    let atomic_rows = [1][]const str{ atomic_row[0..] }
+    let (_, atomic_table_error) = w.put_table(&atomic, 1.0, 1.0, atomic_widths[0..], atomic_rows[0..], 10.0, 12.0, 1.0, false, w.black(), w.black())
+    if atomic_table_error != w.TooLarge || atomic.content.len != atomic_before { os.exit(56) }
+    let bad_xs = [3]f64{ 1.0, 2.0, 1.0e20 }
+    if w.draw_path(&atomic, bad_xs[0..], atomic_ys[0..], true, 1.0, w.black()) != w.Invalid || atomic.content.len != atomic_before { os.exit(57) }
+
+    // A late unsupported cell is rejected before any earlier row is painted.
+    var (preflight, preflight_error) = w.document(a, 1usize, 512usize, 200.0, 100.0, "")
+    if preflight_error != ok { os.exit(58) }
+    if w.begin_page(&preflight) != ok { os.exit(58) }
+    let preflight_widths = [1]f64{ 40.0 }
+    let preflight_first = [1]str{ "first" }
+    let preflight_second = [1]str{ "\xe6\x97\xa5" }
+    let preflight_rows = [2][]const str{ preflight_first[0..], preflight_second[0..] }
+    let (_, preflight_table_error) = w.put_table(&preflight, 1.0, 1.0, preflight_widths[0..], preflight_rows[0..], 10.0, 12.0, 1.0, false, w.black(), w.black())
+    if preflight_table_error != w.Unsupported || preflight.content.len != 0usize { os.exit(59) }
     ret ok
 }
