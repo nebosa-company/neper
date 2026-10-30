@@ -685,7 +685,7 @@ fn external_merge[T: type](runs: []const T, bounds: []const usize, cursor: []usi
     if bounds.len < 1usize { ret Invalid }
     let k = bounds.len - 1usize
     if cursor.len < k || run_heap.len < k || out.len < runs.len { ret TooSmall }
-    if bounds[k] > runs.len { ret Invalid }
+    if bounds[0usize] != 0usize || bounds[k] != runs.len { ret Invalid }
     var size = 0usize
     var r = 0usize
     while r < k {

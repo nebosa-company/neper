@@ -179,6 +179,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if sort.external_merge[Rec](recs[..], bounds[..], cursor[..2usize], run_heap[..], scratch[..]) != sort.TooSmall { os.exit(12i32) }
     bounds[2usize] = 12usize
     if sort.external_merge[Rec](recs[..], bounds[..], cursor[..], run_heap[..], scratch[..]) != sort.Invalid { os.exit(12i32) }
+    bounds[2usize] = 27usize
+    bounds[0usize] = 1usize
+    if sort.external_merge[Rec](recs[..], bounds[..], cursor[..], run_heap[..], scratch[..]) != sort.Invalid { os.exit(12i32) }
+    bounds[0usize] = 0usize
+    bounds[3usize] = 39usize
+    if sort.external_merge[Rec](recs[..], bounds[..], cursor[..], run_heap[..], scratch[..]) != sort.Invalid { os.exit(12i32) }
 
     // 13: strings in byte order.
     var words: [12]str = zero
