@@ -196,5 +196,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if cookie.store(&leak, after_failure, 100i64) != ok || leak.count != 1usize || leak.used != 9usize { os.exit(252) }
     let (after_header, after_header_error) = cookie.header(a, &leak, "h.test", "/", false, 100i64)
     if after_header_error != ok || !str.eq(after_header, "k=v") { os.exit(253) }
+
+    // Replacing a cookie must reuse its allocation, and a replacement that
+    // really cannot fit must keep the old cookie live.
+    var tight_storage: [1]cookie.Cookie = zero
+    var tight_text: [14]u8 = zero
+    var tight = cookie.jar_new(tight_storage[..], tight_text[..])
+    let (tight_first, tight_first_error) = cookie.parse(a, "a=1; Path=/", "example.com", "/", false, 100i64)
+    if tight_first_error != ok || cookie.store(&tight, tight_first, 100i64) != ok { os.exit(254) }
+    let (tight_second, tight_second_error) = cookie.parse(a, "a=2; Path=/", "example.com", "/", false, 101i64)
+    if tight_second_error != ok || cookie.store(&tight, tight_second, 101i64) != ok || tight.count != 1usize || tight.used != 14usize { os.exit(254) }
+    let (tight_header, tight_header_error) = cookie.header(a, &tight, "example.com", "/", false, 101i64)
+    if tight_header_error != ok || !str.eq(tight_header, "a=2") { os.exit(254) }
+    let (too_wide, too_wide_error) = cookie.parse(a, "a=123; Path=/", "example.com", "/", false, 102i64)
+    if too_wide_error != ok || cookie.store(&tight, too_wide, 102i64) != cookie.JarFull { os.exit(255) }
+    let (preserved_header, preserved_header_error) = cookie.header(a, &tight, "example.com", "/", false, 102i64)
+    if preserved_header_error != ok || !str.eq(preserved_header, "a=2") || tight.count != 1usize || tight.used != 14usize { os.exit(255) }
     ret ok
 }
