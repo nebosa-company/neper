@@ -89,6 +89,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (replaced, replaced_error) = uri.resolve(a, base, empty_reference)
     let (shown_replaced, shown_replaced_error) = uri.format(a, replaced)
     if replaced_error != ok || shown_replaced_error != ok || !text_equal(shown_replaced, "http://a/b/c/d;p?") { os.exit(26) }
+    // Leading dot segments in a rootless reference must not manufacture a
+    // leading slash; the same rule applies after merging a path-relative base.
+    let (dot_path, dot_path_error) = uri.parse("./a")
+    let (dot_normal, dot_normal_error) = uri.normalize(a, dot_path)
+    let (dot_shown, dot_shown_error) = uri.format(a, dot_normal)
+    if dot_path_error != ok || dot_normal_error != ok || dot_shown_error != ok || !text_equal(dot_shown, "a") { os.exit(29) }
+    let (dot_dot_path, dot_dot_path_error) = uri.parse("../a")
+    let (dot_dot_normal, dot_dot_normal_error) = uri.normalize(a, dot_dot_path)
+    let (dot_dot_shown, dot_dot_shown_error) = uri.format(a, dot_dot_normal)
+    if dot_dot_path_error != ok || dot_dot_normal_error != ok || dot_dot_shown_error != ok || !text_equal(dot_dot_shown, "a") { os.exit(30) }
+    let (popped_path, popped_path_error) = uri.parse("a/../b")
+    let (popped_normal, popped_normal_error) = uri.normalize(a, popped_path)
+    let (popped_shown, popped_shown_error) = uri.format(a, popped_normal)
+    if popped_path_error != ok || popped_normal_error != ok || popped_shown_error != ok || !text_equal(popped_shown, "/b") { os.exit(37) }
+    let (single_dot, single_dot_error) = uri.parse(".")
+    let (single_dot_normal, single_dot_normal_error) = uri.normalize(a, single_dot)
+    if single_dot_error != ok || single_dot_normal_error != ok || single_dot_normal.path.len != 0usize { os.exit(31) }
+    let (double_dot, double_dot_error) = uri.parse("..")
+    let (double_dot_normal, double_dot_normal_error) = uri.normalize(a, double_dot)
+    if double_dot_error != ok || double_dot_normal_error != ok || double_dot_normal.path.len != 0usize { os.exit(32) }
+    let (mailto_base, mailto_base_error) = uri.parse("mailto:x")
+    let (mailto_reference, mailto_reference_error) = uri.parse("../a")
+    let (mailto_result, mailto_result_error) = uri.resolve(a, mailto_base, mailto_reference)
+    let (mailto_shown, mailto_shown_error) = uri.format(a, mailto_result)
+    if mailto_base_error != ok || mailto_reference_error != ok || mailto_result_error != ok || mailto_shown_error != ok || !text_equal(mailto_shown, "mailto:a") { os.exit(33) }
+    // An explicitly empty authority is distinct from an absent authority.
+    let (file_authority, file_authority_error) = uri.parse("file:///etc/hosts")
+    let (file_authority_shown, file_authority_shown_error) = uri.format(a, file_authority)
+    if file_authority_error != ok || !file_authority.has_authority || file_authority_shown_error != ok || !text_equal(file_authority_shown, "file:///etc/hosts") { os.exit(34) }
+    let (network_path, network_path_error) = uri.parse("///x")
+    let (network_path_shown, network_path_shown_error) = uri.format(a, network_path)
+    if network_path_error != ok || !network_path.has_authority || network_path_shown_error != ok || !text_equal(network_path_shown, "///x") { os.exit(35) }
+    let (plain_file, plain_file_error) = uri.parse("file:/etc/hosts")
+    let (plain_file_shown, plain_file_shown_error) = uri.format(a, plain_file)
+    if plain_file_error != ok || plain_file.has_authority || plain_file_shown_error != ok || !text_equal(plain_file_shown, "file:/etc/hosts") { os.exit(36) }
     let (form, form_error) = uri.form_decode(a, "Caf%C3%A9+%E2%98%95")
     if form_error != ok || !text_equal(form, "Café ☕") { os.exit(27) }
     let (_, invalid_form) = uri.form_decode(a, "%FF")
