@@ -2968,4 +2968,7 @@ D5931	2320	A large `mem.reset` gives memory back
 D5932	1207	`e.mem.pages`: `ensure` answers before the page fault does
 D5933	1929	`e.mem.heap`: one object at a time, checked at compile time
 D5934	1335	A refused commit is asked again, and then called what it is
-D5935	1031	The compiler touches `&slice[i]` given to an import
+D5935	1032	The compiler touches `&slice[i]` given to an import
+D5940	972	Multicol columns start where whole lines and unbreakable boxes do
+D5941	935	The browser app: page scripts, taps and fonts
+D5942	674	The browser on wasm32-wasi
