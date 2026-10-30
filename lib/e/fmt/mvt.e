@@ -34,6 +34,7 @@ type Value = struct { kind: u8, text: str, number: f64, integer: i64, unsigned: 
 type Point = struct { x: i32, y: i32 }
 type Feature = struct { id: u64, has_id: bool, kind: u8, tags: []u32, points: []Point, parts: []usize }
 type Layer = struct { name: str, version: u32, extent: u32, keys: []str, values: []Value, features: []Feature }
+type GeometryState = enum u8 { Start, PointDone, LineNeedLine, LineDone, PolygonNeedLine, PolygonNeedClose, PolygonDone }
 
 // The packed varints of `payload` as u32s into the arena.
 fn packed(a: *mem.Arena, payload: []const u8) -> ([]u32, err) {
@@ -67,26 +68,57 @@ fn unzig(v: u32) -> i32 {
 // The geometry commands into points and part ends.
 fn decode_geometry(a: *mem.Arena, kind: u8, commands: []const u32) -> ([]Point, []usize, err) {
     // First pass: how many points and parts.
+    if commands.len > 0usize && kind != KIND_POINT && kind != KIND_LINE && kind != KIND_POLYGON { ret (zero, zero, Invalid) }
     var point_total = 0usize
     var part_total = 0usize
+    var state: GeometryState = .Start
     var i = 0usize
     while i < commands.len {
         let command = commands[i] & 7u32
         let count = usize(commands[i] / 8u32)
         i += 1usize
-        if command == 1u32 || command == 2u32 {
-            if i + count * 2usize > commands.len { ret (zero, zero, Invalid) }
+        if command == 1u32 {
+            if count == 0usize || count > (commands.len - i) / 2usize { ret (zero, zero, Invalid) }
+            if count > MAX_POINTS - point_total { ret (zero, zero, TooMany) }
+            if kind == KIND_POINT {
+                if state != .Start { ret (zero, zero, Invalid) }
+                state = .PointDone
+            } else if kind == KIND_LINE {
+                if count != 1usize || (state != .Start && state != .LineDone) { ret (zero, zero, Invalid) }
+                state = .LineNeedLine
+                part_total += 1usize
+            } else {
+                if count != 1usize || (state != .Start && state != .PolygonDone) { ret (zero, zero, Invalid) }
+                state = .PolygonNeedLine
+                part_total += 1usize
+            }
             point_total += count
-            if command == 1u32 && kind != KIND_POINT { part_total += count }
+            i += count * 2usize
+        } else if command == 2u32 {
+            if count == 0usize || count > (commands.len - i) / 2usize { ret (zero, zero, Invalid) }
+            if count > MAX_POINTS - point_total { ret (zero, zero, TooMany) }
+            if kind == KIND_LINE {
+                if state != .LineNeedLine { ret (zero, zero, Invalid) }
+                state = .LineDone
+            } else if kind == KIND_POLYGON {
+                if count < 2usize || state != .PolygonNeedLine { ret (zero, zero, Invalid) }
+                state = .PolygonNeedClose
+            } else {
+                ret (zero, zero, Invalid)
+            }
+            point_total += count
             i += count * 2usize
         } else if command == 7u32 {
-            // ClosePath is a single marker for a polygon ring, never a line
-            // or point command and never a repeated run.
-            if kind != KIND_POLYGON || count != 1usize { ret (zero, zero, Invalid) }
+            if kind != KIND_POLYGON || count != 1usize || state != .PolygonNeedClose { ret (zero, zero, Invalid) }
+            state = .PolygonDone
         } else {
             ret (zero, zero, Invalid)
         }
-        if point_total > MAX_POINTS { ret (zero, zero, TooMany) }
+    }
+    if commands.len > 0usize {
+        if kind == KIND_POINT && state != .PointDone { ret (zero, zero, Invalid) }
+        if kind == KIND_LINE && state != .LineDone { ret (zero, zero, Invalid) }
+        if kind == KIND_POLYGON && state != .PolygonDone { ret (zero, zero, Invalid) }
     }
     let (points, points_error) = mem.alloc[Point](a, point_total + 1usize)
     if points_error != ok { ret (zero, zero, points_error) }

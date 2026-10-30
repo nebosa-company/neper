@@ -78,5 +78,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let wrong_close: [1]u32 = [1]u32{ 15u32 }
     let (_, _, close_error) = mvt.decode_geometry(a, mvt.KIND_LINE, wrong_close[..])
     if close_error != mvt.Invalid { os.exit(44) }
+    // MVT geometry commands have a grammar, not merely individually valid opcodes.
+    let missing_close: [8]u32 = [8]u32{ 9u32, 0u32, 0u32, 18u32, 2u32, 0u32, 0u32, 2u32 }
+    let premature_close: [4]u32 = [4]u32{ 9u32, 0u32, 0u32, 15u32 }
+    let short_ring: [7]u32 = [7]u32{ 9u32, 0u32, 0u32, 10u32, 2u32, 0u32, 15u32 }
+    let line_first: [3]u32 = [3]u32{ 10u32, 0u32, 0u32 }
+    let multi_move_line: [8]u32 = [8]u32{ 17u32, 0u32, 0u32, 0u32, 0u32, 10u32, 2u32, 0u32 }
+    let point_line: [6]u32 = [6]u32{ 9u32, 0u32, 0u32, 10u32, 2u32, 0u32 }
+    let (_, _, missing_close_error) = mvt.decode_geometry(a, mvt.KIND_POLYGON, missing_close[..])
+    let (_, _, premature_close_error) = mvt.decode_geometry(a, mvt.KIND_POLYGON, premature_close[..])
+    let (_, _, short_ring_error) = mvt.decode_geometry(a, mvt.KIND_POLYGON, short_ring[..])
+    let (_, _, line_first_error) = mvt.decode_geometry(a, mvt.KIND_LINE, line_first[..])
+    let (_, _, multi_move_error) = mvt.decode_geometry(a, mvt.KIND_LINE, multi_move_line[..])
+    let (_, _, point_line_error) = mvt.decode_geometry(a, mvt.KIND_POINT, point_line[..])
+    if missing_close_error != mvt.Invalid || premature_close_error != mvt.Invalid || short_ring_error != mvt.Invalid || line_first_error != mvt.Invalid || multi_move_error != mvt.Invalid || point_line_error != mvt.Invalid { os.exit(45) }
+    let valid_ring: [9]u32 = [9]u32{ 9u32, 0u32, 0u32, 18u32, 2u32, 0u32, 0u32, 2u32, 15u32 }
+    let (ring_points, ring_parts, ring_error) = mvt.decode_geometry(a, mvt.KIND_POLYGON, valid_ring[..])
+    if ring_error != ok || ring_points.len != 3usize || ring_parts.len != 1usize || ring_parts[0usize] != 3usize { os.exit(46) }
     ret ok
 }
