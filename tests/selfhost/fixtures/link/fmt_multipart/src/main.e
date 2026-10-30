@@ -83,6 +83,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var ended_body = ended_part.body
     let (ended_count, ended_body_error) = read_all(&ended_body, out[0..])
     if ended_body_error != ok || !str.eq(out[..ended_count], "hello\r\n--not it\r\n-- dashes") { os.exit(41) }
+    // A body line may begin with the full boundary text without being a delimiter.
+    // The suffix must be a closing marker or an (optionally padded) line ending.
+    let lookalike = "--b0und=ary\r\n\r\nbody\r\n--b0und=aryX\r\ntail\r\n--b0und=ary--\r\n"
+    var lookalike_source = Trickle { data: lookalike, off: 0usize, chunk: 5usize }
+    let (lookalike0, lookalike_error) = multipart.reader(storage, io.Reader { ctx: mem.cast[*void](&lookalike_source), read: trickle_read }, "b0und=ary", 8u32, 100000u64)
+    if lookalike_error != ok { os.exit(42) }
+    var lookalike_reader = lookalike0
+    let (lookalike_part, lookalike_has, lookalike_next_error) = multipart.reader_next_err(&lookalike_reader)
+    if lookalike_next_error != ok || !lookalike_has { os.exit(43) }
+    var lookalike_body = lookalike_part.body
+    let (lookalike_count, lookalike_body_error) = read_all(&lookalike_body, out[0..])
+    if lookalike_body_error != ok || !str.eq(out[..lookalike_count], "body\r\n--b0und=aryX\r\ntail") { os.exit(44) }
+    let (_, lookalike_more, lookalike_done_error) = multipart.reader_next_err(&lookalike_reader)
+    if lookalike_done_error != ok || lookalike_more { os.exit(45) }
+    // Transport padding is part of a valid body delimiter line.
+    let padded = "--b0und=ary\r\n\r\none\r\n--b0und=ary \t\r\n\r\ntwo\r\n--b0und=ary-- \t\r\n"
+    var padded_source = Trickle { data: padded, off: 0usize, chunk: 5usize }
+    let (padded0, padded_error) = multipart.reader(storage, io.Reader { ctx: mem.cast[*void](&padded_source), read: trickle_read }, "b0und=ary", 8u32, 100000u64)
+    if padded_error != ok { os.exit(46) }
+    var padded_reader = padded0
+    let (padded_part1, padded_has1, padded_next1_error) = multipart.reader_next_err(&padded_reader)
+    if padded_next1_error != ok || !padded_has1 { os.exit(47) }
+    var padded_body1 = padded_part1.body
+    let (padded_count1, padded_body1_error) = read_all(&padded_body1, out[0..])
+    if padded_body1_error != ok || !str.eq(out[..padded_count1], "one") { os.exit(48) }
+    let (padded_part2, padded_has2, padded_next2_error) = multipart.reader_next_err(&padded_reader)
+    if padded_next2_error != ok || !padded_has2 { os.exit(49) }
+    var padded_body2 = padded_part2.body
+    let (padded_count2, padded_body2_error) = read_all(&padded_body2, out[0..])
+    if padded_body2_error != ok || !str.eq(out[..padded_count2], "two") { os.exit(50) }
+    let (_, padded_more, padded_done_error) = multipart.reader_next_err(&padded_reader)
+    if padded_done_error != ok || padded_more { os.exit(51) }
     // The writer, read back.
     var sink_buffer: [512]u8 = zero
     var sink_state = io.SliceWriter { data: sink_buffer[..], off: 0usize }

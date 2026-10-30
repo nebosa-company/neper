@@ -240,6 +240,47 @@ fn body_reader(s: *ReaderState) -> io.Reader {
     ret io.Reader { ctx: mem.cast[*void](s), read: body_read }
 }
 
+// Checks and consumes a complete body delimiter line at `s.at`.  A byte match alone
+// is not a delimiter: the boundary must be followed by CRLF, or by `--`, with
+// optional transport padding before the line end.  Keep `s.at` at the candidate
+// until it is proved so a boundary-like body line can be returned to the caller.
+fn body_boundary(s: *ReaderState, needle_len: usize) -> (bool, err) {
+    var tail = needle_len
+    var closing = false
+    let initial_error = ensure(s, tail + 1usize)
+    if initial_error != ok { ret (false, initial_error) }
+    if s.len - s.at <= tail { ret (false, ok) }
+    if s.window[s.at + tail] == 45u8 {
+        let close_error = ensure(s, tail + 2usize)
+        if close_error != ok { ret (false, close_error) }
+        if s.len - s.at < tail + 2usize || s.window[s.at + tail + 1usize] != 45u8 { ret (false, ok) }
+        closing = true
+        tail += 2usize
+    }
+    while true {
+        let padding_error = ensure(s, tail + 1usize)
+        if padding_error != ok { ret (false, padding_error) }
+        if s.len - s.at <= tail {
+            if !closing { ret (false, ok) }
+            s.at += tail
+            s.closed = true
+            ret (true, ok)
+        }
+        let c = s.window[s.at + tail]
+        if c == 32u8 || c == 9u8 {
+            tail += 1usize
+            continue
+        }
+        if c != 13u8 { ret (false, ok) }
+        let line_error = ensure(s, tail + 2usize)
+        if line_error != ok { ret (false, line_error) }
+        if s.len - s.at < tail + 2usize || s.window[s.at + tail + 1usize] != 10u8 { ret (false, ok) }
+        s.at += tail + 2usize
+        if closing { s.closed = true }
+        ret (true, ok)
+    }
+}
+
 fn body_read(ctx: *void, dst: []u8) -> (usize, err) {
     let s = mem.cast[*ReaderState](ctx)
     if !s.in_body { ret (0usize, io.End) }
@@ -261,11 +302,17 @@ fn body_read(ctx: *void, dst: []u8) -> (usize, err) {
                 s.at += take
                 ret (take, ok)
             }
-            s.at += needle.len
-            s.in_body = false
-            let after_error = after_boundary(s)
-            if after_error != ok { ret (0usize, after_error) }
-            ret (0usize, io.End)
+            let (valid, boundary_error) = body_boundary(s, needle.len)
+            if boundary_error != ok { ret (0usize, boundary_error) }
+            if valid {
+                s.in_body = false
+                ret (0usize, io.End)
+            }
+            // This is ordinary body data whose prefix resembles a boundary. Return
+            // one byte so the next scan cannot rediscover the same candidate.
+            mem.copy[u8](dst[..1usize], s.window[s.at..s.at + 1usize])
+            s.at += 1usize
+            ret (1usize, ok)
         }
         // Without a delimiter, all but a possible prefix of one at the end is safe.
         let unread = s.len - s.at
