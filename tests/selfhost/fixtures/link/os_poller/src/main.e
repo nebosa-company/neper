@@ -6,10 +6,38 @@
 
 use e.mem
 use e.os
+use e.sync
+use e.thread
 
 const READ_TOKEN: usize = 4242usize
 const WRITE_TOKEN: usize = 9182usize
 const ROLLBACK_TOKEN: usize = 7147usize
+const DELAYED_WAKE_NS: i64 = 100000000i64
+const NARROWING_TIMEOUT_NS: i64 = 4294967297000000i64
+
+type DelayedWake = struct { poller: *os.Poller, armed: sync.Event, start: sync.Event, failure: err }
+
+// The worker cannot wake early: it first says that it is parked, then waits for the caller to
+// start the measured interval. The delay makes a narrowed millisecond timeout observable.
+fn delayed_wake(ctx: *DelayedWake) {
+    sync.event_set(&ctx.armed)
+    sync.event_wait(&ctx.start)
+    let (began, began_error) = os.clock(.Monotonic)
+    if began_error != ok {
+        ctx.failure = began_error
+        ret
+    }
+    var waiting = true
+    while waiting {
+        let (now, now_error) = os.clock(.Monotonic)
+        if now_error != ok {
+            ctx.failure = now_error
+            ret
+        }
+        if now - began >= DELAYED_WAKE_NS { waiting = false }
+    }
+    ctx.failure = os.poller_wake(*ctx.poller)
+}
 
 fn loopback() -> os.SocketAddress {
     var address: os.SocketAddress = zero
@@ -35,7 +63,7 @@ fn bind_ephemeral(s: os.Socket) -> (u16, err) {
 }
 
 fn main(a: *mem.Arena) -> err {
-    let (poller, poller_error) = os.poller_open(a)
+    var (poller, poller_error) = os.poller_open(a)
     if poller_error == os.Unsupported { ret ok }
     if poller_error != ok { os.exit(10i32) }
 
@@ -175,6 +203,29 @@ fn main(a: *mem.Arena) -> err {
     let (settled, settled_error) = os.poller_wait(poller, events[..], 0i64)
     if settled_error != ok { os.exit(56i32) }
     if settled != 0usize { os.exit(57i32) }
+
+    when target.os == .Linux {
+        // 2^32 + 1 milliseconds becomes one millisecond if it reaches epoll_wait without
+        // first being clamped to a signed int. A delayed wake is the only event, so the clock
+        // distinguishes that early return from the intended long finite wait.
+        var delayed: DelayedWake = zero
+        delayed.poller = &poller
+        delayed.armed = sync.event(true, false)
+        delayed.start = sync.event(true, false)
+        let (worker, worker_error) = thread.spawn[DelayedWake](delayed_wake, &delayed, 0usize)
+        if worker_error != ok { os.exit(71i32) }
+        sync.event_wait(&delayed.armed)
+        let (long_before, long_before_error) = os.clock(.Monotonic)
+        if long_before_error != ok { os.exit(72i32) }
+        sync.event_set(&delayed.start)
+        let (long_woken, long_woken_error) = os.poller_wait(poller, events[..], NARROWING_TIMEOUT_NS)
+        let (long_after, long_after_error) = os.clock(.Monotonic)
+        let joined = thread.join(worker)
+        if long_woken_error != ok || long_after_error != ok { os.exit(73i32) }
+        if joined != ok || delayed.failure != ok { os.exit(74i32) }
+        if long_woken != 0usize { os.exit(75i32) }
+        if long_after - long_before < 20000000i64 { os.exit(76i32) }
+    }
 
     if os.poller_unregister(poller, os.socket_handle(second)) != ok { os.exit(60i32) }
     if os.poller_close(poller) != ok { os.exit(61i32) }

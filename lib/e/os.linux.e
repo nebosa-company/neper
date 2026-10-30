@@ -234,6 +234,10 @@ const WAKE_TOKEN: usize = 18446744073709551615usize
 // is a frame local; a caller asking for more gets them across successive waits.
 const POLL_BATCH: usize = 64usize
 
+// `epoll_wait` accepts a signed C `int` timeout. Larger finite waits are retried by the
+// caller's deadline loop, rather than narrowing into a different timeout in the syscall.
+const EPOLL_TIMEOUT_MAX: isize = 2147483647isize
+
 // The kernel caps the environment well below this.
 const MAX_ENVIRONMENT: usize = 2097152usize
 
@@ -1245,9 +1249,11 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
     if timeout_ns > 0i64 {
         milliseconds = isize(timeout_ns / 1000000i64)
         if milliseconds == 0isize { milliseconds = 1isize }
+        if milliseconds > EPOLL_TIMEOUT_MAX { milliseconds = EPOLL_TIMEOUT_MAX }
     }
     var raw: [64]RawPollEvent = zero
-    // The kernel reads the timeout as an int, so -1 crosses as all ones, not as a narrowing.
+    // The kernel reads the timeout as an int, so -1 crosses as all ones; finite values were
+    // bounded above before this register-width conversion.
     let ready = syscall(SYS_EPOLL_WAIT, state.epoll, mem.address_of(&raw[0usize]), capacity, mem.bitcast[usize](milliseconds), 0usize, 0usize)
     if ready < 0isize { ret (0usize, from_errno(ready)) }
     var produced = 0usize
