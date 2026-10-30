@@ -237,9 +237,37 @@ neper_mem_mark:
     ldr x0, [x0, #16]
     ret
 
+// (D5931) A reset that frees 512 MiB or more hands back all but the first 128 MiB of it, a
+// whole mebibyte at a time, inside what the arena held: a fresh mapping over it, since
+// madvise here keeps the pages counted. Anything less costs this one compare and no call.
 .global neper_mem_reset
 neper_mem_reset:
+.Lreset:
+    ldr x2, [x0, #16]
     str x1, [x0, #16]
+    sub x2, x2, x1
+    mov x3, #0x20000000
+    cmp x2, x3
+    b.hi .Lreset_trim
+    ret
+.Lreset_trim:
+    ldr x3, [x0]
+    add x1, x1, x3
+    add x2, x2, x1
+    and x2, x2, #-0x100000
+    mov x3, #0x8000000
+    add x0, x1, x3
+    add x0, x0, #0xff, lsl #12
+    add x0, x0, #0xfff
+    and x0, x0, #-0x100000
+    subs x1, x2, x0
+    b.ls .Lreset_done
+    mov x2, #3
+    mov x3, #0x1012
+    mov x4, #-1
+    mov x5, #0
+    sys 197
+.Lreset_done:
     ret
 
 // The other debug fill (D217): what the reset gives back is 0xDD before the offset moves.
@@ -257,8 +285,7 @@ neper_mem_reset_fill:
     cmp x4, x5
     b.lo .Lreset_fill_byte
 .Lreset_fill_store:
-    str x1, [x0, #16]
-    ret
+    b .Lreset
 
 .global neper_mem_stats
 neper_mem_stats:

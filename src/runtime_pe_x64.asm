@@ -24,6 +24,8 @@ EXTERN __imp_SetHandleInformation:QWORD
 EXTERN __imp_WaitForSingleObject:QWORD
 EXTERN __imp_ReadFile:QWORD
 EXTERN __imp_VirtualAlloc:QWORD
+EXTERN __imp_VirtualFree:QWORD
+EXTERN __imp_Sleep:QWORD
 EXTERN __imp_VirtualQuery:QWORD
 EXTERN __imp_WideCharToMultiByte:QWORD
 EXTERN __imp_WriteFile:QWORD
@@ -34,6 +36,8 @@ EXTERN __imp_SetFilePointerEx:QWORD
 ; limit before `main` runs, for every process, however little it goes on to allocate.
 NP_ARENA_BYTES EQU 40000000h
 NP_ARENA_CHUNK EQU 100000h
+NP_RESET_TRIM EQU 20000000h
+NP_RESET_KEEP EQU 8000000h
 
 .code
 
@@ -191,22 +195,47 @@ np_fault_reserved:
     cmp rdx, rax
     cmova rdx, rax
     sub rdx, rcx
+; (D5934) A commit the system refuses is often refused for a moment: the pagefile grows
+; behind the request, and another process exits. So it is asked again for two seconds before
+; the program dies of it, which is what Firefox found on this system, and what a loaded
+; machine needs. Nothing here runs unless the first answer was no.
+    mov rsi, rcx
+    mov rdi, rdx
+    mov dword ptr [rsp+100], 20
+np_fault_commit:
+    mov rcx, rsi
+    mov rdx, rdi
     mov r8d, 1000h
     mov r9d, 4
     call qword ptr [__imp_VirtualAlloc]
     test rax, rax
-    jz np_fault_report
+    jnz np_fault_committed
+    mov ecx, 100
+    call qword ptr [__imp_Sleep]
+    dec dword ptr [rsp+100]
+    jnz np_fault_commit
+; Out of memory, and said so: 137, as Linux's OOM killer leaves it, and not an access
+; violation, since the program did nothing wrong.
+    lea rdi, np_fault_memory_text
+    mov dword ptr [rsp+100], 56
+    mov dword ptr [rsp+104], 137
+    jmp np_fault_say
+np_fault_committed:
     mov eax, 0FFFFFFFFh
     jmp np_fault_done
-; An access violation the handler does not resume -- outside reserved memory, or a
-; commit the system refused -- is fatal, and says where before the process dies with
-; 139, since a checked program never expects one: every dereference is checked.
+; An access violation the handler does not resume, outside reserved memory, is fatal, and
+; says where before the process dies with 139, since a checked program never expects one:
+; every dereference is checked.
 np_fault_report:
+    lea rdi, np_fault_text
+    mov dword ptr [rsp+100], 29
+    mov dword ptr [rsp+104], 139
+np_fault_say:
     mov ecx, -12
     call qword ptr [__imp_GetStdHandle]
     mov rsi, rax
-    lea rdx, np_fault_text
-    mov r8d, 29
+    mov rdx, rdi
+    mov r8d, dword ptr [rsp+100]
     call np_fault_write
     mov rax, qword ptr [rbx+40]
     lea rdi, [rsp+80]
@@ -228,7 +257,7 @@ np_fault_digit:
     lea rdx, [rsp+80]
     mov r8d, 17
     call np_fault_write
-    mov ecx, 139
+    mov ecx, dword ptr [rsp+104]
     call qword ptr [__imp_ExitProcess]
 np_fault_search:
     xor eax, eax
@@ -239,6 +268,7 @@ np_fault_done:
     pop rbx
     ret
 np_fault_text db "fatal: access violation at 0x"
+np_fault_memory_text db "fatal: out of memory: the system refused to commit at 0x"
 np_fault_handler ENDP
 
 
@@ -622,8 +652,32 @@ neper_mem_mark PROC
     ret
 neper_mem_mark ENDP
 
+; (D5931) A reset that frees 512 MiB or more hands back all but the first 128 MiB of it, a
+; whole chunk at a time, inside what the arena held. What is decommitted reads as zero and
+; recommits on touch. The checker refuses a slice past its reset, so nothing checked can see
+; it; anything less costs this one compare and no call. A refusal is not an error: the
+; memory stays where it was.
 neper_mem_reset PROC
+    mov rax, [rcx+16]
     mov [rcx+16], rdx
+    sub rax, rdx
+    cmp rax, NP_RESET_TRIM
+    ja reset_trim
+    ret
+reset_trim:
+    add rdx, [rcx]
+    add rax, rdx
+    and rax, -NP_ARENA_CHUNK
+    lea rcx, [rdx+NP_RESET_KEEP+NP_ARENA_CHUNK-1]
+    and rcx, -NP_ARENA_CHUNK
+    mov rdx, rax
+    sub rdx, rcx
+    jbe reset_done
+    mov r8d, 4000h
+    sub rsp, 40
+    call qword ptr [__imp_VirtualFree]
+    add rsp, 40
+reset_done:
     ret
 neper_mem_reset ENDP
 
@@ -644,8 +698,7 @@ neper_mem_reset_fill PROC
     pop rdi
     mov rcx, r9
 reset_fill_store:
-    mov [rcx+16], rdx
-    ret
+    jmp neper_mem_reset
 neper_mem_reset_fill ENDP
 
 neper_mem_stats PROC

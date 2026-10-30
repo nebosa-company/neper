@@ -65,3 +65,6 @@ web_csp
 web_page_csp
 web_shell
 gpu_ftz_ops
+mem_heap
+mem_pages
+mem_trim

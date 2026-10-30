@@ -31,7 +31,8 @@ expected() {
     # imports four glibc extensions that libSystem lacks (dyld binds all or none) and then reads its own ELF header; wasm_net and
     # wasm_release are the wasm32-wasi suite's (they need that target's sockets and its --release build); hfa_return needs the shared object cc builds from its cabi.c
     # and is the Linux twin of macos_hfa_return. os_window_resize is the Windows host's (user32), the twin of macos_window_resize.
-    net_ssh|x_tds_integrated|gpu_vulkan_raw|gpu_fault_unchecked|freestanding|os_syscall|extern_many|wasm_net|wasm_release|hfa_return|os_window_resize) echo skip ;;
+    # import_touch and mem_commit_refused are a kernel32 import and a Windows job's commit limit.
+    net_ssh|x_tds_integrated|gpu_vulkan_raw|gpu_fault_unchecked|freestanding|os_syscall|extern_many|wasm_net|wasm_release|hfa_return|os_window_resize|import_touch|mem_commit_refused) echo skip ;;
     *) echo 0 ;;
   esac
 }

@@ -42973,3 +42973,53 @@ Checked: `link/arena_retry`, built with `--arena 1048576g` (a pebibyte, which no
 Cost, measured on Windows at 8 workers with a release compiler: nothing. Compiling sc1m peaks at 606 MB of working set and 946 MB of commit, against 606 and 943 at 32 GiB; the compiler building itself at 339 and 693 MB, against 338 and 695. A small program starts and exits in 5.4 to 5.7 ms at 1 TiB and 5.4 to 5.5 ms at 1 GiB, 41 runs each, twice. Stage 2 equals stage 3 at `-j 8` and `-j 1`.
 
 What stays: a program that really does run away commits until the operating system pushes back, and `--arena` is the hard cap (D5912). A program can no longer assume it got the size it asked for, so one that needs a minimum checks `mem.stats`. If even a mebibyte is refused the exit is still 111 with no message. Nothing here has filled more than this machine's RAM.
+
+## D5931 — A large `mem.reset` gives memory back
+
+An arena never gave memory back: `reset` moved an offset, and a spike stayed in RAM until the process ended. That is the one column where Go, Node and usually Rust and C++ were plainly better, and it matters most to the programs that run longest.
+
+`mem.reset` now hands pages back on its own when it frees a lot. A reset that frees 512 MiB or more gives back all but the first 128 MiB of what it freed, in whole mebibytes strictly inside what the arena held; anything less is one compare more than before and makes no system call. `e.mem`'s surface does not change and no program has to ask. Linux uses `MADV_DONTNEED`, Windows `MEM_DECOMMIT`, and macOS a fresh mapping over the range, since madvise there keeps the pages counted. A refusal is not an error: the memory stays where it was. wasm32 and NeperOS have nothing to give back.
+
+This is sound because of what the checker already refuses. A slice into a reset region is `E-SAFETY-0013`, and a debug build fills those bytes, so the bytes were gone by the language's rules before this change. `link/mem_trim` has to go around the checker on purpose, through `mem.view`, to see the zeroes. The range ends on a mebibyte inside the old offset, so an arena over a caller's buffer gives back nothing outside it, which the fixture checks.
+
+The first thresholds were wrong, and the measurement said so. At 128 MiB and 64 MiB, fifty rounds of 200 MiB went from 37 ms to 1,432 ms on Windows, and from about 50 ms to about 2,600 ms on Linux: thrashing, in a size ordinary programs reach. At 512 MiB and 128 MiB the same rounds take 48 and 54 ms. What remains is the worst case by construction: ten rounds of 600 MiB, touching one byte a page, take 23 ms before and about 1,000 to 1,400 ms now. That is about 100 ms a round, and a program that really fills 600 MiB a round spends that much writing it. A stack of resets each under 512 MiB gives nothing back; the fixed thresholds are stateless, since the arena's layout has no room for a high-water mark and D552 keeps it that way.
+
+Measured: after a 2 GiB spike and a reset, resident memory is 132 MiB on Windows and 129 MiB on Linux, from 2,051 and 2,048 before. 2,000 rounds of 4 MiB take the same 8 to 12 ms. The compiler builds itself at the same 339 MB and no slower.
+
+## D5932 — `e.mem.pages`: `ensure` answers before the page fault does
+
+With a 1 TiB ceiling `mem.Exhausted` almost never fires, so running out of real memory is the OOM killer on Linux and a crash on Windows. Rust has `try_reserve`. A commit-on-touch arena cannot answer at `alloc`, by design, since most of what it allocates is never written (D340).
+
+`pages.ensure(a, n)` asks ahead, and allocates nothing. On Windows it commits the bytes, a promise from the system that no later touch can fail, which is stronger than `try_reserve` on an overcommitting Linux. On Linux it checks `MemAvailable`, capped by the cgroup's room, and then populates the pages with `MADV_POPULATE_WRITE`, writing them one by one on a kernel older than 5.14. On macOS, which compresses and swaps rather than refuse, it answers against the machine's memory and writes them, which is the weakest of the three. `pages.discard(bytes)` is the explicit form of D5931 for what a reset does not cover, and `pages.reserve` is a range of its own, halved until the host gives it.
+
+The module is new rather than part of `e.os` or `e.mem`: `e.mem` stays free of the operating system, and `e.os`'s interface hash is in every host's goldens.
+
+## D5933 — `e.mem.heap`: one object at a time, checked at compile time
+
+An arena cannot free one object. `Pool`, `Slab` and `Buddy` could, over storage the program sized up front. With reserved ranges that sizing no longer costs anything, so `e.mem.heap` is the two together: an eighth of a range is a `Slab` for sizes up to 4 KiB, the rest a `Buddy` above that, and a freed block of 1 MiB or more goes back to the operating system through `pages.discard`.
+
+D1655 refused a general-purpose manager because a global heap would break D3, that no function allocates in secret. This one is not global. A `Heap` is a value that is passed, so a function that takes none allocates from none.
+
+A `Block` is a resource owed to `free`, and that is the part other languages' heaps do not have without a borrow checker: the checker refuses a block used after it was freed, freed twice or never freed, at no cost when the program runs, which `check/heap_use_after_free`, `check/heap_double_free` and `check/heap_leak` pin. `alloc` beside an `err` must be tested before the block is used.
+
+Two shapes were tried first and refused by what they would have cost. A `Heap` passed as `*Heap` made `free` of one block invalidate every other block's slice, by the rule that a call through a mutable pointer that returns no pointer changes the container (E-SAFETY-0014); that is why a `Heap` is a handle, passed by value. And `free(block: own []u8)` compiled a use after free without complaint, since `own` on a slice tracks nothing; hence the resource. A block in an array is tracked by element position rather than by index, so a program that keeps blocks in an array moves them through a slice it passes down, as `link/mem_heap` does, and keeps its own record of which are live.
+
+Measured: two gibibytes through 64 live slots in no stack order, sizes from one byte to a mebibyte, take about 50 ms with the peak under the fixture's 256 MB bound.
+
+## D5934 — A refused commit is asked again, and then called what it is
+
+On Windows a page is committed by the fault handler (D340), and when the system refused, the handler reported `fatal: access violation` and exit 139. So a program that ran out of memory was told it had a wild pointer, which is what the suite's intermittent failures looked like on a loaded machine (C221).
+
+A commit is often refused only for a moment: the pagefile is growing behind the request, or another process is exiting. The handler now asks again every 100 ms for two seconds, which is what Firefox found reduces its out-of-memory crashes on this system, and nothing of this runs unless the first answer was no. If the system still refuses, the process ends with `fatal: out of memory: the system refused to commit at 0x...` and status 137, as Linux's OOM killer leaves it. An access violation outside reserved memory is unchanged.
+
+`link/mem_commit_refused` runs in a job with a 256 MiB commit limit, the one way to make Windows refuse on demand (`tests/selfhost/job-commit-limit.ps1`): `pages.ensure` answers `mem.Exhausted` while the program can act on it, and writing on regardless ends with 137 after about two seconds.
+
+The wild-pointer report of those suite failures is not proved to have been commit failures; nothing recorded them at the time.
+
+## D5935 — The compiler touches `&slice[i]` given to an import
+
+A kernel call cannot fault a page in, so on Windows what it writes must be committed first. D428 put that on whoever writes the import, and the failure only appears in a release build, because a debug build's fill commits everything: the worst kind of bug to leave to a person.
+
+When an argument to an `@import` is `&slice[i]`, through a writable pointer, the length is in reach, and lowering now emits `os.touch` over the slice, on Windows only. `*const` parameters are not touched, so an input buffer costs nothing. That is the shape of the fifty such calls in `e.os` and of nearly every call anyone writes. `link/import_touch` reads into a fresh 8 MiB slice with `ReadFile` in a release build: the program failed before this and passes now. A pointer from anywhere else is still the program's to touch, as the spec says.
+
+Earlier notes described this rule as applying to buffers of 4 MiB or more. That was D340's rule; D428 replaced it, and it covered any size.

@@ -2963,4 +2963,9 @@ D5892	1474	Metal launches overlap: up to four in flight, one fault block each
 D5900	1021	The counter window is driven in Mobile Safari on an iPhone simulator
 D5901	1356	shell.Permission has NotDetermined; the macOS location permission can be asked for
 D5912	3080	The root arena's default ceiling is 32 GiB
-D5930	3717	A size the host refuses is halved, and the default ceiling is 1 TiB
+D5930	3718	A size the host refuses is halved, and the default ceiling is 1 TiB
+D5931	2320	A large `mem.reset` gives memory back
+D5932	1207	`e.mem.pages`: `ensure` answers before the page fault does
+D5933	1929	`e.mem.heap`: one object at a time, checked at compile time
+D5934	1335	A refused commit is asked again, and then called what it is
+D5935	1031	The compiler touches `&slice[i]` given to an import

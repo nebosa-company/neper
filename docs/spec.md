@@ -2076,11 +2076,23 @@ consequence of committing on touch: memory the kernel writes on the program's
 behalf must be committed already, since a kernel-mode write cannot fault its way to
 a commit and the call fails instead. `os.read` and `os.write` touch their buffers,
 every `e.os` function that hands a buffer to an imported call for writing touches it
-first through `os.touch(p, n)` -- a byte of each page read -- and a program's own
-buffer handed to an imported kernel call (`recv`, `ReadDirectoryChangesW`) must have
-been written or touched by the program first (D428; D340 had the runtime touch every
-allocation under four mebibytes as it was made, which made every page of every small
-pool resident whether written or not).
+first through `os.touch(p, n)` -- a byte of each page read -- and the compiler does the
+same for `&slice[i]` given to an imported function through a writable pointer (D5935).
+A pointer from anywhere else, handed to an imported kernel call, must have been written
+or touched by the program first (D428; D340 had the runtime touch every allocation
+under four mebibytes as it was made, which made every page of every small pool resident
+whether written or not).
+
+Memory goes back as well as out. A `reset` that frees 512 MiB or more hands back all but
+the first 128 MiB of what it freed, in whole mebibytes inside what the arena held; a
+smaller one is the one compare and makes no system call (D5931). The bytes past a reset
+were already gone: the checker refuses a slice into a region that was reset
+(E-SAFETY-0013), and a debug build fills them. `e.mem.pages` names what a program asks
+for itself: `discard` gives whole pages back, and `ensure` answers `mem.Exhausted` now
+for bytes the machine does not have, which a page fault would otherwise answer later by
+ending the process (D5932). On Windows a commit the system refuses is asked again for two
+seconds, and then the process ends with `fatal: out of memory` and status 137 (D5934).
+`e.mem.heap` frees objects one at a time, over a range of its own (D5933).
 
 An `Arena` is a cursor, not an independently copyable owner. Copying an `Arena`
 value is legal only to transfer it to a new binding after the old binding is no

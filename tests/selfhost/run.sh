@@ -505,6 +505,14 @@ mem_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$mem_view_written" = 'executable written' ]
 chmod +x "$test_build/mem-view-selfhost"
 "$test_build/mem-view-selfhost"
+# Memory going back (D5931, D5932, D5933): a large reset, `e.mem.pages`, and `e.mem.heap`, whose
+# blocks the checker holds to one free each.
+for mem_back in mem_trim mem_pages mem_heap; do
+    mem_back_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/$mem_back/src/main.e" "$repo" x64 linux "$test_build/$mem_back-selfhost")
+    [ "$mem_back_written" = 'executable written' ]
+    chmod +x "$test_build/$mem_back-selfhost"
+    "$test_build/$mem_back-selfhost"
+done
 # `mem.cast` is the only route between pointer types, and the only route to `*void`
 # at all. It must retype without moving: the address in is the address out.
 mem_cast_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mem_cast/src/main.e" "$repo" x64 linux "$test_build/mem-cast-selfhost")
@@ -7917,6 +7925,10 @@ eval_missing_status=0
 eval_missing=$($test_build/neper-self eval 'nope()' "$repo" x64 linux 2>&1) || eval_missing_status=$?
 [ "$eval_missing_status" -eq 1 ]
 case "$eval_missing" in *E-NAME-9999*) ;; *) printf '%s\n' "eval of an unknown name was not refused: $eval_missing" >&2; exit 1 ;; esac
+# A heap block is owed one free (D5933): a use after it, a second one and none at all are refused.
+check_protocol_diagnostic heap_use_after_free 'main.e:11:28: error[E-SAFETY-0001]'
+check_protocol_diagnostic heap_double_free 'main.e:11:15: error[E-SAFETY-0001]'
+check_protocol_diagnostic heap_leak 'main.e:10:5: error[E-SAFETY-0002]'
 check_protocol_diagnostic comptime_pointer_result 'main.e:9:15: error[E-COMPTIME-9999]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold'
 check_protocol_diagnostic comptime_slice_bounds 'main.e:7:9: error[E-COMPTIME-9999]: constant `BAD` cannot be evaluated at compile time: its call reached an index out of bounds'
 # `emit-executable --arena SIZE` (D225): the root arena is the size given. Twelve

@@ -487,6 +487,28 @@ if ($LASTEXITCODE -ne 0) { throw 'the folded hash is wrong for a nested slice or
 $memViewPath = Join-Path $testBuild 'mem-view-selfhost.exe'
 $memViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_view\src\main.e') $repo 'x64' 'windows' $memViewPath
 if ($LASTEXITCODE -ne 0 -or $memViewWritten -ne 'executable written') { throw 'mem.view executable emission failed' }
+# Memory going back (D5931, D5932, D5933): a large reset, `e.mem.pages`, and `e.mem.heap`, whose
+# blocks the checker holds to one free each.
+foreach ($memBack in 'mem_trim', 'mem_pages', 'mem_heap') {
+    $memBackPath = Join-Path $testBuild "$memBack-selfhost.exe"
+    $memBackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$memBack\src\main.e") $repo 'x64' 'windows' $memBackPath
+    if ($LASTEXITCODE -ne 0 -or $memBackWritten -ne 'executable written') { throw "$memBack executable emission failed" }
+    & $memBackPath
+    if ($LASTEXITCODE -ne 0) { throw "$memBack failed: exit $LASTEXITCODE" }
+}
+# A kernel call into a fresh slice works in a release build (D5935), where no debug fill hides it.
+$importTouchPath = Join-Path $testBuild 'import-touch-selfhost.exe'
+$importTouchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\import_touch\src\main.e') $repo 'x64' 'windows' $importTouchPath --release
+if ($LASTEXITCODE -ne 0 -or $importTouchWritten -ne 'executable written') { throw 'import_touch executable emission failed' }
+& $importTouchPath
+if ($LASTEXITCODE -ne 0) { throw "a kernel call into a fresh slice failed: exit $LASTEXITCODE" }
+# A commit the system refuses (D5934): `pages.ensure` says so in time, and writing on regardless
+# is `out of memory`, 137, after two seconds of asking, and not an access violation.
+$commitRefusedPath = Join-Path $testBuild 'mem-commit-refused-selfhost.exe'
+$commitRefusedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_commit_refused\src\main.e') $repo 'x64' 'windows' $commitRefusedPath --release
+if ($LASTEXITCODE -ne 0 -or $commitRefusedWritten -ne 'executable written') { throw 'mem_commit_refused executable emission failed' }
+$commitRefused = & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot 'job-commit-limit.ps1') -Program $commitRefusedPath -Megabytes 256
+if (($commitRefused -join "`n") -notmatch 'exit=137') { throw "a refused commit did not end as out of memory: $($commitRefused -join "`n")" }
 & $memViewPath
 if ($LASTEXITCODE -ne 0) { throw 'mem.view did not alias the arena storage it was given' }
 # `mem.cast` is the only route between pointer types, and the only route to `*void`
@@ -8192,6 +8214,12 @@ $evalFile = & $compiler eval 'layout_sum() + member_sum()' $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $evalFile -ne '1572') { throw "eval in a file's scope answered $evalFile" }
 $evalMissing = & $compiler eval 'nope()' $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($evalMissing -join "`n") -notmatch 'E-NAME-9999') { throw "eval of an unknown name was not refused: $($evalMissing -join "`n")" }
+# A heap block is owed one free (D5933): a use after it, a second one and none at all are refused.
+foreach ($case in @(@('heap_use_after_free', 'main\.e:11:28: error\[E-SAFETY-0001\]'), @('heap_double_free', 'main\.e:11:15: error\[E-SAFETY-0001\]'), @('heap_leak', 'main\.e:10:5: error\[E-SAFETY-0002\]'))) {
+    Require-Fixture "check/$($case[0])"
+    $heapRefused = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($heapRefused -join "`n") -notmatch $case[1]) { throw "$($case[0]) was not refused: $($heapRefused -join "`n")" }
+}
 Require-Fixture 'check/comptime_pointer_result'
 $comptimePointerResult = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_pointer_result\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimePointerResult -join "`n") -notmatch 'main\.e:9:15: error\[E-COMPTIME-9999\]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold') { throw "a pointer-valued constant was not refused: $($comptimePointerResult -join "`n")" }

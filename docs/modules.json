@@ -604,6 +604,8 @@
     "e.text.bytesize",
     "e.fmt.magic",
     "e.os.ident",
+    "e.mem.pages",
+    "e.mem.heap",
     "e.fmt.json5",
     "e.sync.flight",
     "e.log.rotate",
@@ -8650,6 +8652,31 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.mem",
+    "e.os"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.mem.pages",
+   "layer": 4,
+   "surface": "spec",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.os"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.mem.heap",
+   "layer": 5,
+   "surface": "spec",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.mem.pages",
     "e.os"
    ],
    "blocked_by": []
