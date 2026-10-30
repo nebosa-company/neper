@@ -737,14 +737,126 @@ fn next_terminals(g: *const Grammar, start: u32, prefix: []const u32, out: []u32
     ret (count, ok)
 }
 
+// Every PEG table is caller-provided, so check both its parallel arrays and
+// each reference before a matcher can index it. Expression nodes form a DAG;
+// recursive grammars go through RULE nodes, where the packrat memo can bound
+// the consuming recursion.
+fn peg_node_refs_valid(p: *const Peg, node: usize, depth: usize) -> bool {
+    if depth >= p.op.len { ret false }
+    let op = p.op[node]
+    if op == PEG_CHAR { ret p.a[node] <= 255u32 }
+    if op == PEG_RANGE { ret p.a[node] <= p.b[node] && p.b[node] <= 255u32 }
+    if op == PEG_ANY || op == PEG_EMPTY || op == PEG_RULE { ret true }
+    if op == PEG_SEQ || op == PEG_CHOICE {
+        ret peg_node_refs_valid(p, usize(p.a[node]), depth + 1usize) && peg_node_refs_valid(p, usize(p.b[node]), depth + 1usize)
+    }
+    if op == PEG_STAR || op == PEG_PLUS || op == PEG_OPT || op == PEG_NOT || op == PEG_AND {
+        ret peg_node_refs_valid(p, usize(p.a[node]), depth + 1usize)
+    }
+    ret false
+}
+
+fn peg_table_valid(p: *const Peg) -> bool {
+    if p.a.len != p.op.len || p.b.len != p.op.len { ret false }
+    var i = 0usize
+    while i < p.op.len {
+        let op = p.op[i]
+        if op == PEG_RULE && usize(p.a[i]) >= p.rules.len { ret false }
+        if op == PEG_SEQ || op == PEG_CHOICE {
+            if usize(p.a[i]) >= p.op.len || usize(p.b[i]) >= p.op.len { ret false }
+        }
+        if op == PEG_STAR || op == PEG_PLUS || op == PEG_OPT || op == PEG_NOT || op == PEG_AND {
+            if usize(p.a[i]) >= p.op.len { ret false }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < p.rules.len {
+        if usize(p.rules[i]) >= p.op.len { ret false }
+        i += 1usize
+    }
+    i = 0usize
+    while i < p.op.len {
+        if !peg_node_refs_valid(p, i, 0usize) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// The states are 0 (unseen), 1 (on the current left-edge walk), 2 (known
+// non-nullable), and 3 (known nullable). A return to state 1 is a direct or
+// indirect left-recursive rule, which packrat memoisation cannot resolve.
+fn peg_rule_left_info(p: *const Peg, rule: usize, states: []i64) -> (bool, bool) {
+    if states[rule] == 1i64 { ret (false, true) }
+    if states[rule] == 2i64 { ret (false, false) }
+    if states[rule] == 3i64 { ret (true, false) }
+    states[rule] = 1i64
+    let (nullable, recursive) = peg_node_left_info(p, usize(p.rules[rule]), states)
+    if recursive { ret (false, true) }
+    if nullable { states[rule] = 3i64 } else { states[rule] = 2i64 }
+    ret (nullable, false)
+}
+
+// Whether `node` can succeed without consuming text, and whether following
+// its left edge finds a rule already being evaluated.
+fn peg_node_left_info(p: *const Peg, node: usize, states: []i64) -> (bool, bool) {
+    let op = p.op[node]
+    if op == PEG_EMPTY { ret (true, false) }
+    if op == PEG_CHAR || op == PEG_RANGE || op == PEG_ANY { ret (false, false) }
+    if op == PEG_RULE {
+        let (nullable, recursive) = peg_rule_left_info(p, usize(p.a[node]), states)
+        ret (nullable, recursive)
+    }
+    if op == PEG_SEQ {
+        let (first_nullable, first_recursive) = peg_node_left_info(p, usize(p.a[node]), states)
+        if first_recursive || !first_nullable { ret (false, first_recursive) }
+        let (second_nullable, second_recursive) = peg_node_left_info(p, usize(p.b[node]), states)
+        ret (second_nullable, second_recursive)
+    }
+    if op == PEG_CHOICE {
+        let (first_nullable, first_recursive) = peg_node_left_info(p, usize(p.a[node]), states)
+        if first_recursive { ret (false, true) }
+        let (second_nullable, second_recursive) = peg_node_left_info(p, usize(p.b[node]), states)
+        ret (first_nullable || second_nullable, second_recursive)
+    }
+    if op == PEG_STAR || op == PEG_OPT || op == PEG_NOT || op == PEG_AND {
+        let (_, recursive) = peg_node_left_info(p, usize(p.a[node]), states)
+        ret (true, recursive)
+    }
+    if op == PEG_PLUS {
+        let (_, recursive) = peg_node_left_info(p, usize(p.a[node]), states)
+        ret (false, recursive)
+    }
+    ret (false, true)
+}
+
+fn peg_left_recursive(p: *const Peg, states: []i64) -> bool {
+    var i = 0usize
+    while i < p.rules.len {
+        let (_, recursive) = peg_rule_left_info(p, i, states)
+        if recursive { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
 // Packrat match of `rules[rule]` at the start of `text`; `memo.len >=
 // rules.len * (text.len + 1)`. Answers (length, matched).
-// ponytail: a left-recursive rule recurses forever; rewrite it with STAR.
 fn peg(p: *const Peg, rule: usize, text: str, memo: []i64) -> (usize, bool, err) {
     if rule >= p.rules.len { ret (0usize, false, Invalid) }
-    if memo.len < p.rules.len * (text.len + 1usize) { ret (0usize, false, TooSmall) }
+    if !peg_table_valid(p) { ret (0usize, false, Invalid) }
+    if text.len == 0usize -% 1usize { ret (0usize, false, TooSmall) }
+    let positions = text.len + 1usize
+    if p.rules.len > memo.len / positions { ret (0usize, false, TooSmall) }
+    let memo_needed = p.rules.len * positions
     var i = 0usize
-    while i < p.rules.len * (text.len + 1usize) {
+    while i < p.rules.len {
+        memo[i] = 0i64
+        i += 1usize
+    }
+    if peg_left_recursive(p, memo[..p.rules.len]) { ret (0usize, false, Invalid) }
+    i = 0usize
+    while i < memo_needed {
         memo[i] = -2i64
         i += 1usize
     }

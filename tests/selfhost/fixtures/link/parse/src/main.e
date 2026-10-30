@@ -55,6 +55,11 @@ fn malformed_grammar_rejected(g: *const parse.Grammar, chart: []u64, items: []pa
     ret next_problem == parse.Invalid
 }
 
+fn malformed_peg_rejected(p: *const parse.Peg, memo: []i64) -> bool {
+    let (_, _, problem) = parse.peg(p, 0usize, "", memo)
+    ret problem == parse.Invalid
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var tokens: [64]parse.Token = zero
 
@@ -272,6 +277,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let (_, _, peg_room) = parse.peg(&json_peg, 0usize, jsons[0usize], memo[..16usize])
     if peg_room != parse.TooSmall { os.exit(9i32) }
+
+    // 11: public PEG tables reject mismatched arrays, invalid references, and
+    // direct or indirect left recursion before matching can trap or recurse.
+    let malformed_peg_op = [1]u8 { 1u8 }
+    let malformed_peg_zero = [1]u32 { 0u32 }
+    var malformed_peg_empty: [0]u32 = zero
+    let malformed_peg_root = [1]u32 { 0u32 }
+    let malformed_peg_shape = parse.Peg { op: malformed_peg_op[..], a: malformed_peg_empty[..], b: malformed_peg_zero[..], rules: malformed_peg_root[..] }
+    let invalid_child_op = [1]u8 { 4u8 }
+    let invalid_child_a = [1]u32 { 1u32 }
+    let invalid_child = parse.Peg { op: invalid_child_op[..], a: invalid_child_a[..], b: malformed_peg_zero[..], rules: malformed_peg_root[..] }
+    let invalid_rule_op = [1]u8 { 11u8 }
+    let invalid_rule_a = [1]u32 { 1u32 }
+    let invalid_rule = parse.Peg { op: invalid_rule_op[..], a: invalid_rule_a[..], b: malformed_peg_zero[..], rules: malformed_peg_root[..] }
+    let direct_rule_a = [1]u32 { 0u32 }
+    let direct_left = parse.Peg { op: invalid_rule_op[..], a: direct_rule_a[..], b: malformed_peg_zero[..], rules: malformed_peg_root[..] }
+    let indirect_op = [2]u8 { 11u8, 11u8 }
+    let indirect_a = [2]u32 { 1u32, 0u32 }
+    let indirect_b = [2]u32 { 0u32, 0u32 }
+    let indirect_rules = [2]u32 { 0u32, 1u32 }
+    let indirect_left = parse.Peg { op: indirect_op[..], a: indirect_a[..], b: indirect_b[..], rules: indirect_rules[..] }
+    if !malformed_peg_rejected(&malformed_peg_shape, memo[..]) { os.exit(11i32) }
+    if !malformed_peg_rejected(&invalid_child, memo[..]) { os.exit(11i32) }
+    if !malformed_peg_rejected(&invalid_rule, memo[..]) { os.exit(11i32) }
+    if !malformed_peg_rejected(&direct_left, memo[..]) { os.exit(11i32) }
+    if !malformed_peg_rejected(&indirect_left, memo[..]) { os.exit(11i32) }
 
     try io.print("parse ok\n")
     ret ok
