@@ -30,6 +30,9 @@ const TAB: u8 = 9u8
 const QUOTE: u8 = 34u8
 const CR: u8 = 13u8
 const LF: u8 = 10u8
+const BOM_FIRST: u8 = 239u8
+const BOM_SECOND: u8 = 187u8
+const BOM_THIRD: u8 = 191u8
 
 // Zero means the default for both limits, the way a zero `Options` does in `e.fmt.json`: a
 // caller who has not thought about the bound is asking for a reasonable one, not for none.
@@ -42,7 +45,7 @@ const DEFAULT_ROW_LIMIT: usize = 65536usize
 // many reads as it needs.
 const INPUT_CAPACITY: usize = 4096usize
 
-type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool, source_ended: bool }
+type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool, source_ended: bool, bom_checked: bool, pending: [2]u8, pending_at: usize, pending_len: usize, last_pending: bool }
 
 fn csv() -> Dialect {
     ret Dialect { delimiter: COMMA, quote: QUOTE, crlf: false, header: false }
@@ -62,9 +65,9 @@ fn usable(dialect: Dialect) -> bool {
     ret true
 }
 
-// One byte, or `false` at the end of the source. Every byte a record is built from comes
-// from here and from nowhere else, which is what makes `unread` below a subtraction.
-fn take(s: *ReaderState) -> (u8, bool, err) {
+// One byte from the source, or `false` at its end. `take` below is the record reader's
+// version: it adds the leading-BOM rule and any bytes it has to put back.
+fn source_take(s: *ReaderState) -> (u8, bool, err) {
     if s.input_at == s.input_len {
         if s.source_ended { ret (0u8, false, ok) }
         let (count, read_error) = io.read(&s.source, s.input)
@@ -86,9 +89,60 @@ fn take(s: *ReaderState) -> (u8, bool, err) {
     ret (byte, true, ok)
 }
 
+// One byte for the record reader. A UTF-8 BOM belongs to the stream, rather than to its first
+// CSV field, so only the exact three-byte prefix is skipped. The two-byte pending queue keeps
+// a near match intact even when a source splits those bytes across reads.
+fn take(s: *ReaderState) -> (u8, bool, err) {
+    if s.pending_at < s.pending_len {
+        let byte = s.pending[s.pending_at]
+        s.pending_at += 1usize
+        s.last_pending = true
+        ret (byte, true, ok)
+    }
+    s.last_pending = false
+    if s.bom_checked {
+        let (byte, more, take_error) = source_take(s)
+        ret (byte, more, take_error)
+    }
+    s.bom_checked = true
+    let (first, first_more, first_error) = source_take(s)
+    if first_error != ok { ret (0u8, false, first_error) }
+    if !first_more || first != BOM_FIRST { ret (first, first_more, ok) }
+    let (second, second_more, second_error) = source_take(s)
+    if second_error != ok { ret (0u8, false, second_error) }
+    if !second_more { ret (first, true, ok) }
+    if second != BOM_SECOND {
+        s.pending[0usize] = second
+        s.pending_at = 0usize
+        s.pending_len = 1usize
+        ret (first, true, ok)
+    }
+    let (third, third_more, third_error) = source_take(s)
+    if third_error != ok { ret (0u8, false, third_error) }
+    if !third_more {
+        s.pending[0usize] = second
+        s.pending_at = 0usize
+        s.pending_len = 1usize
+        ret (first, true, ok)
+    }
+    if third != BOM_THIRD {
+        s.pending[0usize] = second
+        s.pending[1usize] = third
+        s.pending_at = 0usize
+        s.pending_len = 2usize
+        ret (first, true, ok)
+    }
+    let (byte, more, take_error) = take(s)
+    ret (byte, more, take_error)
+}
+
 // The one byte of lookahead a CRLF needs. It is only ever called on a byte `take` just
-// returned, so the position it goes back to is still inside the buffer that byte came from.
+// returned, which can be in the source buffer or in the BOM check's pending bytes.
 fn unread(s: *ReaderState) {
+    if s.last_pending {
+        s.pending_at -= 1usize
+        ret
+    }
     s.input_at -= 1usize
 }
 
@@ -236,6 +290,10 @@ fn reader(a: *mem.Arena, source: io.Reader, dialect: Dialect, field_limit: usize
     state[0usize].fields = table
     state[0usize].ended = false
     state[0usize].source_ended = false
+    state[0usize].bom_checked = false
+    state[0usize].pending_at = 0usize
+    state[0usize].pending_len = 0usize
+    state[0usize].last_pending = false
     // A caller who said the first record is a header is asking not to be handed it. Reading
     // it here rather than on the first `reader_next_err` keeps that out of the loop, and a
     // caller who wants the header asks for a dialect that does not claim one.

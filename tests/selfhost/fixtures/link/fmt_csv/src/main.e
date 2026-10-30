@@ -92,6 +92,24 @@ fn main(a: *mem.Arena) -> err {
     try expect_row(&final_reader, final_expected[..])
     try expect_end(&final_reader)
 
+    // A leading UTF-8 BOM is stream metadata, not field data. The quote after it still opens
+    // the first field, even when the source splits the three BOM bytes into separate reads.
+    let bom_steps: [3]support.ReadStep = [3]support.ReadStep{
+        support.ReadStep { bytes: "\xEF", failure: ok },
+        support.ReadStep { bytes: "\xBB", failure: ok },
+        support.ReadStep { bytes: "\xBF\"first\",second\n", failure: io.End },
+    }
+    var (bom_script, bom_script_error) = support.scripted_reader(a, bom_steps[..])
+    if bom_script_error != ok { ret bom_script_error }
+    let (bom_handle, bom_handle_error) = csv.reader(a, support.reader(&bom_script), csv.csv(), 0usize, 0usize)
+    if bom_handle_error != ok { ret bom_handle_error }
+    var bom_reader = bom_handle
+    var bom_expected: [2]str = zero
+    bom_expected[0usize] = "first"
+    bom_expected[1usize] = "second"
+    try expect_row(&bom_reader, bom_expected[..])
+    try expect_end(&bom_reader)
+
     // --- A doubled quote is one quote of data; a quote that is not at the start of a field
     // is data as it stands. Both are what the field ends up holding, not how it was spelled.
     var quotes_state = source_over("\"he said \"\"hi\"\"\",plain\"quote,\"\"\n")
