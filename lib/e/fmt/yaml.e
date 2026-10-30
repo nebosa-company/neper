@@ -106,11 +106,37 @@ fn strip_comment(text: str) -> str {
     ret str.trim_end(text)
 }
 
+// YAML's presentation stream is UTF-8, but valid UTF-8 is not enough: C0/DEL and
+// most C1 scalars must be escaped. Physical CR/LF line breaks remain legal here.
+fn is_yaml_printable(scalar: u32) -> bool {
+    if scalar == 9u32 || scalar == 10u32 || scalar == 13u32 { ret true }
+    if scalar >= 32u32 && scalar <= 126u32 { ret true }
+    if scalar == 133u32 { ret true }
+    if scalar >= 160u32 && scalar <= 55295u32 { ret true }
+    if scalar >= 57344u32 && scalar <= 65533u32 { ret true }
+    ret scalar >= 65536u32 && scalar <= 1114111u32
+}
+
+fn valid_yaml_presentation(text: str) -> bool {
+    var at = 0usize
+    while at < text.len {
+        let (decoded, decode_error) = utf8.decode(text, at)
+        if decode_error != ok || !is_yaml_printable(decoded.scalar) { ret false }
+        at += usize(decoded.width)
+    }
+    ret true
+}
+
 fn split_lines(a: *mem.Arena, source: str) -> ([]Line, err) {
     var count = 1usize
     var i = 0usize
     while i < source.len {
-        if source[i] == 10u8 { count += 1usize }
+        if source[i] == 10u8 { count += 1usize } else {
+            if source[i] == 13u8 {
+                count += 1usize
+                if i + 1usize < source.len && source[i + 1usize] == 10u8 { i += 1usize }
+            }
+        }
         i += 1usize
     }
     let (lines, lines_error) = mem.alloc[Line](a, count)
@@ -119,14 +145,15 @@ fn split_lines(a: *mem.Arena, source: str) -> ([]Line, err) {
     var at = 0usize
     while at <= source.len {
         var stop = at
-        while stop < source.len && source[stop] != 10u8 { stop += 1usize }
+        while stop < source.len && source[stop] != 10u8 && source[stop] != 13u8 { stop += 1usize }
         var raw = source[at..stop]
-        if raw.len > 0usize && raw[raw.len - 1usize] == 13u8 { raw = raw[..raw.len - 1usize] }
         var indent = 0usize
         while indent < raw.len && raw[indent] == 32u8 { indent += 1usize }
         lines[used] = Line { indent: indent, text: strip_comment(raw[indent..]), raw: raw }
         used += 1usize
+        if stop >= source.len { break }
         at = stop + 1usize
+        if source[stop] == 13u8 && at < source.len && source[at] == 10u8 { at += 1usize }
     }
     ret (lines[..used], ok)
 }
@@ -816,6 +843,7 @@ fn key_end(text: str) -> (usize, bool) {
 
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Value, err) {
     if !utf8.validate(source) { ret (zero, Invalid) }
+    if !valid_yaml_presentation(source) { ret (zero, Invalid) }
     let (lines, lines_error) = split_lines(a, source)
     if lines_error != ok { ret (zero, lines_error) }
     var effective = options
@@ -883,10 +911,12 @@ fn needs_quotes(text: str) -> bool {
     var i = 0usize
     while i < text.len {
         let c = text[i]
-        if c < 32u8 || c == 127u8 || c == 34u8 || c == 92u8 { ret true }
+        let (decoded, decode_error) = utf8.decode(text, i)
+        if decode_error != ok || !is_yaml_printable(decoded.scalar) { ret true }
+        if c == 34u8 || c == 92u8 { ret true }
         if c == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { ret true }
         if c == 35u8 && i > 0usize && text[i - 1usize] == 32u8 { ret true }
-        i += 1usize
+        i += usize(decoded.width)
     }
     ret false
 }
@@ -901,6 +931,35 @@ fn write_hex_escape(writer: *io.Writer, byte: u8) -> err {
     ret io.write_all(writer, escaped[..])
 }
 
+fn write_unicode_escape(writer: *io.Writer, scalar: u32) -> err {
+    if scalar <= 255u32 { ret write_hex_escape(writer, u8(scalar)) }
+    let digits = "0123456789abcdef"
+    if scalar <= 65535u32 {
+        var escaped: [6]u8 = zero
+        escaped[0usize] = 92u8
+        escaped[1usize] = 117u8
+        var at = 2usize
+        var shift = 12u32
+        while at < escaped.len {
+            escaped[at] = digits[usize((scalar >> shift) & 15u32)]
+            shift -= 4u32
+            at += 1usize
+        }
+        ret io.write_all(writer, escaped[..])
+    }
+    var escaped: [10]u8 = zero
+    escaped[0usize] = 92u8
+    escaped[1usize] = 85u8
+    var at = 2usize
+    var shift = 28u32
+    while at < escaped.len {
+        escaped[at] = digits[usize((scalar >> shift) & 15u32)]
+        shift -= 4u32
+        at += 1usize
+    }
+    ret io.write_all(writer, escaped[..])
+}
+
 fn write_string(writer: *io.Writer, text: str) -> err {
     if !utf8.validate(text) { ret Invalid }
     if !needs_quotes(text) { ret io.write_all(writer, text) }
@@ -909,6 +968,9 @@ fn write_string(writer: *io.Writer, text: str) -> err {
     var i = 0usize
     while i < text.len {
         let c = text[i]
+        let (decoded, decode_error) = utf8.decode(text, i)
+        if decode_error != ok { ret Invalid }
+        let width = usize(decoded.width)
         var escape = ""
         if c == 34u8 { escape = "\\\"" }
         if c == 92u8 { escape = "\\\\" }
@@ -918,13 +980,15 @@ fn write_string(writer: *io.Writer, text: str) -> err {
         if escape.len > 0usize {
             try io.write_all(writer, text[run..i])
             try io.write_all(writer, escape)
-            run = i + 1usize
-        } else if c < 32u8 || c == 127u8 {
-            try io.write_all(writer, text[run..i])
-            try write_hex_escape(writer, c)
-            run = i + 1usize
+            run = i + width
+        } else {
+            if !is_yaml_printable(decoded.scalar) {
+                try io.write_all(writer, text[run..i])
+                try write_unicode_escape(writer, decoded.scalar)
+                run = i + width
+            }
         }
-        i += 1usize
+        i += width
     }
     try io.write_all(writer, text[run..])
     ret io.write_all(writer, "\"")

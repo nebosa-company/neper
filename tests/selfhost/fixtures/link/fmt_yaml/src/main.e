@@ -323,6 +323,47 @@ fn issue_150_regressions(a: *mem.Arena) -> err {
     ret ok
 }
 
+fn issue_1571_regressions(a: *mem.Arena) -> err {
+    // Bare CR and CRLF are both YAML line breaks, not scalar content.
+    let (cr_doc, cr_error) = yaml.parse(a, "a: 1\rb: 2\r", options(4u16, false))
+    if cr_error != ok { os.exit(520i32) }
+    let cr_pairs = mapping_of(cr_doc, 521i32)
+    let (cr_a, has_cr_a) = lookup(cr_pairs, "a")
+    let (cr_b, has_cr_b) = lookup(cr_pairs, "b")
+    if cr_pairs.len != 2usize || !has_cr_a || !has_cr_b || integer_of(cr_a, 522i32) != 1i64 || integer_of(cr_b, 523i32) != 2i64 { os.exit(524i32) }
+
+    // Raw presentation controls are rejected, while their double-quote escapes stay legal.
+    var raw_soh: [7]u8 = zero
+    raw_soh[0usize] = 120u8
+    raw_soh[1usize] = 58u8
+    raw_soh[2usize] = 32u8
+    raw_soh[3usize] = 34u8
+    raw_soh[4usize] = 1u8
+    raw_soh[5usize] = 34u8
+    raw_soh[6usize] = 10u8
+    let (_, raw_soh_error) = yaml.parse(a, raw_soh[..], options(4u16, false))
+    if raw_soh_error != yaml.Invalid { os.exit(525i32) }
+    let (escaped_doc, escaped_error) = yaml.parse(a, "x: \"\\x01\"\n", options(4u16, false))
+    if escaped_error != ok { os.exit(526i32) }
+    let (escaped_soh, has_escaped_soh) = lookup(mapping_of(escaped_doc, 527i32), "x")
+    if !has_escaped_soh || !str.eq(text_of(escaped_soh, 528i32), "\x01") { os.exit(529i32) }
+
+    // U+0080 is valid UTF-8 but outside YAML's raw printable set.  Escape it and
+    // verify that re-reading the emitted document preserves the scalar.
+    var c1_value = yaml.Value { String: "\xc2\x80" }
+    var c1_output: [32]u8 = zero
+    var c1_state = io.SliceWriter { data: c1_output[..], off: 0usize }
+    var c1_sink = io.slice_writer(&c1_state)
+    if yaml.write(&c1_sink, &c1_value, 2u8) != ok { os.exit(530i32) }
+    let c1_text = c1_output[..c1_state.off]
+    if !str.eq(c1_text, "\"\\x80\"\n") { os.exit(531i32) }
+    let (c1_again, c1_error) = yaml.parse(a, c1_text, options(4u16, false))
+    if c1_error != ok || !str.eq(text_of(c1_again, 532i32), "\xc2\x80") { os.exit(533i32) }
+    let (_, raw_c1_error) = yaml.parse(a, "x: \"\xc2\x80\"\n", options(4u16, false))
+    if raw_c1_error != yaml.Invalid { os.exit(534i32) }
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let doc = "--- # the document\nname: neper   # a comment\nport: 8080\nratio: 0.75\nhex: 0x1f\noct: 0o17\nneg: -12\nbig: 1e3\ninf: -.inf\nempty:\ntilde: ~\nyes: true\nno: False\nquoted: \"a\\tb\\u00e9\\\"q\\\"\"\nsingle: 'it''s'\nplainish: 12ab\nlist:\n  - one\n  - 2\n  - [x, y, {k: v}]\n  - key: inner\n    other: 3\n  -\n    - deep\nflow: {a: 1, b: [true, null], c: \"s, s\"}\nliteral: |\n  line one\n  line two\n\nfolded: >-\n  folded\n  text\n\n  gap\nnested:\n  child:\n    leaf: end\n"
     let (root, e1) = yaml.parse(a, doc, options(8u16, false))
@@ -469,5 +510,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (control_again, control_error) = yaml.parse(a, control_text, options(4u16, false))
     if control_error != ok || !str.eq(text_of(control_again, 95), controls[..]) { os.exit(96) }
     if issue_150_regressions(a) != ok { os.exit(172) }
+    if issue_1571_regressions(a) != ok { os.exit(535i32) }
     ret ok
 }
