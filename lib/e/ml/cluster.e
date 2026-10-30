@@ -617,8 +617,13 @@ fn optics(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, order
 // open cluster. Answers the count.
 fn optics_cut(order: []const usize, reachability: []const f64, core: []const f64, n: usize, eps: f64, labels: []usize) -> (usize, err) {
     if order.len < n || reachability.len < n || core.len < n || labels.len < n { ret (0usize, TooSmall) }
-    var clusters = 0usize
     var i = 0usize
+    while i < n {
+        if order[i] >= n { ret (0usize, Invalid) }
+        i += 1usize
+    }
+    var clusters = 0usize
+    i = 0usize
     while i < n {
         let s = order[i]
         if reachability[s] > eps && core[s] <= eps { clusters += 1usize }

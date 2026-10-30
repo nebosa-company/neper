@@ -271,6 +271,16 @@ fn check_density() {
         i += 1usize
     }
     if labels[29usize] != density.NOISE { os.exit(6i32) }
+    var edge_order: [1]usize = zero
+    var edge_reach: [1]f64 = zero
+    var edge_core: [1]f64 = zero
+    var edge_labels: [1]usize = zero
+    edge_order[0usize] = 1usize
+    let (_, invalid_cut_error) = cluster.optics_cut(edge_order[..], edge_reach[..], edge_core[..], 1usize, 0.0f64, edge_labels[..])
+    if invalid_cut_error != cluster.Invalid { os.exit(6i32) }
+    edge_order[0usize] = 0usize
+    let (_, valid_cut_error) = cluster.optics_cut(edge_order[..], edge_reach[..], edge_core[..], 1usize, 0.0f64, edge_labels[..])
+    if valid_cut_error != ok { os.exit(6i32) }
 }
 
 // 7: BIRCH with branching 3 and threshold 1 over wide blobs.
