@@ -228,6 +228,63 @@ fn string_of(raw: str) -> (str, bool) {
     ret (raw[1usize..raw.len - 1usize], true)
 }
 
+// Compare a JSON string token with UTF-8 text without allocating. Claims and the
+// `alg` header are semantic strings, so their JSON escape spelling must not affect
+// the comparison.
+fn string_equals(raw: str, expected: str) -> (bool, err) {
+    if raw.len < 2usize || raw[0usize] != 34u8 || raw[raw.len - 1usize] != 34u8 { ret (false, Malformed) }
+    var at = 1usize
+    var matched = 0usize
+    while at < raw.len - 1usize {
+        if raw[at] != 92u8 {
+            if matched >= expected.len || raw[at] != expected[matched] { ret (false, ok) }
+            at += 1usize
+            matched += 1usize
+            continue
+        }
+        at += 1usize
+        if at >= raw.len - 1usize { ret (false, Malformed) }
+        let escaped = raw[at]
+        at += 1usize
+        if escaped == 117u8 {
+            let (high, high_error) = escape_hex(raw, at)
+            if high_error != ok { ret (false, high_error) }
+            at += 4usize
+            var scalar = high
+            if high >= 55296u32 && high <= 56319u32 {
+                if raw.len - at < 6usize || raw[at] != 92u8 || raw[at + 1usize] != 117u8 { ret (false, Malformed) }
+                let (low, low_error) = escape_hex(raw, at + 2usize)
+                if low_error != ok || low < 56320u32 || low > 57343u32 { ret (false, Malformed) }
+                scalar = 65536u32 + (high - 55296u32) * 1024u32 + low - 56320u32
+                at += 6usize
+            } else if high >= 56320u32 && high <= 57343u32 {
+                ret (false, Malformed)
+            }
+            var encoded: [4]u8 = zero
+            let (width, encode_error) = utf8.encode(scalar, encoded[0usize..])
+            if encode_error != ok { ret (false, Malformed) }
+            var byte_at = 0usize
+            while byte_at < usize(width) {
+                if matched >= expected.len || encoded[byte_at] != expected[matched] { ret (false, ok) }
+                byte_at += 1usize
+                matched += 1usize
+            }
+            continue
+        }
+        var byte = 0u8
+        if escaped == 34u8 || escaped == 92u8 || escaped == 47u8 { byte = escaped
+        } else if escaped == 98u8 { byte = 8u8
+        } else if escaped == 102u8 { byte = 12u8
+        } else if escaped == 110u8 { byte = 10u8
+        } else if escaped == 114u8 { byte = 13u8
+        } else if escaped == 116u8 { byte = 9u8
+        } else { ret (false, Malformed) }
+        if matched >= expected.len || byte != expected[matched] { ret (false, ok) }
+        matched += 1usize
+    }
+    ret (matched == expected.len, ok)
+}
+
 // ponytail: NumericDate as whole seconds; `1.7e9` and fractions are refused as Malformed.
 fn time_of(raw: str) -> (i64, err) {
     let (value, e) = str.parse_i64(raw)
@@ -241,13 +298,23 @@ fn algorithm(header_json: str) -> (Alg, err) {
     let (raw, present, e) = member(header_json, "alg")
     if e != ok { ret (.None, e) }
     if !present { ret (.None, Malformed) }
-    let (name, is_string) = string_of(raw)
+    let (_, is_string) = string_of(raw)
     if !is_string { ret (.None, Malformed) }
-    if str.eq(name, "HS256") { ret (.HS256, ok) }
-    if str.eq(name, "HS384") { ret (.HS384, ok) }
-    if str.eq(name, "HS512") { ret (.HS512, ok) }
-    if str.eq(name, "EdDSA") { ret (.EdDSA, ok) }
-    if str.eq(name, "none") { ret (.None, ok) }
+    let (hs256, hs256_error) = string_equals(raw, "HS256")
+    if hs256_error != ok { ret (.None, hs256_error) }
+    if hs256 { ret (.HS256, ok) }
+    let (hs384, hs384_error) = string_equals(raw, "HS384")
+    if hs384_error != ok { ret (.None, hs384_error) }
+    if hs384 { ret (.HS384, ok) }
+    let (hs512, hs512_error) = string_equals(raw, "HS512")
+    if hs512_error != ok { ret (.None, hs512_error) }
+    if hs512 { ret (.HS512, ok) }
+    let (eddsa, eddsa_error) = string_equals(raw, "EdDSA")
+    if eddsa_error != ok { ret (.None, eddsa_error) }
+    if eddsa { ret (.EdDSA, ok) }
+    let (none, none_error) = string_equals(raw, "none")
+    if none_error != ok { ret (.None, none_error) }
+    if none { ret (.None, ok) }
     ret (.None, Unsupported)
 }
 
@@ -389,16 +456,21 @@ fn claims_check(payload_json: str, now: i64, issuer: str, audience: str, leeway:
         let (iss_raw, has_iss, iss_error) = member(payload_json, "iss")
         if iss_error != ok { ret iss_error }
         if !has_iss { ret WrongIssuer }
-        let (iss, is_string) = string_of(iss_raw)
-        if !is_string || !str.eq(iss, issuer) { ret WrongIssuer }
+        let (_, is_string) = string_of(iss_raw)
+        if !is_string { ret WrongIssuer }
+        let (matches, matches_error) = string_equals(iss_raw, issuer)
+        if matches_error != ok { ret matches_error }
+        if !matches { ret WrongIssuer }
     }
     if audience.len > 0usize {
         let (aud_raw, has_aud, aud_error) = member(payload_json, "aud")
         if aud_error != ok { ret aud_error }
         if !has_aud { ret WrongAudience }
-        let (aud, is_string) = string_of(aud_raw)
+        let (_, is_string) = string_of(aud_raw)
         if is_string {
-            if str.eq(aud, audience) { ret ok }
+            let (matches, matches_error) = string_equals(aud_raw, audience)
+            if matches_error != ok { ret matches_error }
+            if matches { ret ok }
             ret WrongAudience
         }
         if aud_raw.len < 2usize || aud_raw[0usize] != 91u8 { ret Malformed }
@@ -406,8 +478,12 @@ fn claims_check(payload_json: str, now: i64, issuer: str, audience: str, leeway:
         while i < aud_raw.len && aud_raw[i] != 93u8 {
             let (item_end, item_error) = skip_value(aud_raw, i, 1usize)
             if item_error != ok { ret item_error }
-            let (item, item_is_string) = string_of(aud_raw[i..item_end])
-            if item_is_string && str.eq(item, audience) { ret ok }
+            let (_, item_is_string) = string_of(aud_raw[i..item_end])
+            if item_is_string {
+                let (matches, matches_error) = string_equals(aud_raw[i..item_end], audience)
+                if matches_error != ok { ret matches_error }
+                if matches { ret ok }
+            }
             i = skip_space(aud_raw, item_end)
             if i < aud_raw.len && aud_raw[i] == 44u8 { i = skip_space(aud_raw, i + 1usize) }
         }

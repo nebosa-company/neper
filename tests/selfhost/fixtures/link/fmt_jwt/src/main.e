@@ -93,6 +93,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if none_hs_error != ok || none_as_hs { os.exit(3i32) }
     let (_, unknown) = jwt.algorithm("{\"alg\":\"RS256\"}")
     if unknown != jwt.Unsupported { os.exit(3i32) }
+    let (escaped_alg, escaped_alg_error) = jwt.algorithm("{\"alg\":\"\\u0048S256\"}")
+    if escaped_alg_error != ok || escaped_alg != .HS256 { os.exit(3i32) }
 
     // 4: EdDSA.
     let (public_bytes, public_error) = bytes.base64_decode(key_bytes[0..], "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg", .Url)
@@ -121,6 +123,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let claims2 = "{\"iss\":\"issuer.example\",\"aud\":\"svc-a\",\"exp\":1700000600,\"nbf\":1700000000}"
     if jwt.claims_check(claims2, 1700000300i64, "", "svc-a", 0i64) != ok { os.exit(5i32) }
     if jwt.claims_check(claims2, 1700000300i64, "", "svc-b", 0i64) != jwt.WrongAudience { os.exit(5i32) }
+    let escaped_claims = "{\"iss\":\"issuer\\u002dexample\",\"aud\":[\"svc\\u002da\",\"svc\\u002db\"]}"
+    if jwt.claims_check(escaped_claims, 1700000300i64, "issuer-example", "svc-b", 0i64) != ok { os.exit(5i32) }
+    if jwt.claims_check("{\"iss\":\"caf\\u00e9\"}", 1700000300i64, "caf\xc3\xa9", "", 0i64) != ok { os.exit(5i32) }
     if jwt.claims_check("{\"exp\":\"soon\"}", 0i64, "", "", 0i64) != jwt.Malformed { os.exit(5i32) }
     if jwt.claims_check("{\"sub\":1", 0i64, "", "", 0i64) != jwt.Malformed { os.exit(5i32) }
     if jwt.claims_check("{\"\\u0065xp\":0}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(5i32) }
