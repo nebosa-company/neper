@@ -163,7 +163,9 @@ fn multinomial_predict(query: []const f64, d: usize, classes: usize, log_probabi
         var s = log_prior[c]
         var j = 0usize
         while j < d {
-            s += query[j] * log_probability[c * d + j]
+            // An unsmoothed absent feature has log probability -infinity, but
+            // its zero count contributes nothing rather than NaN (0 * -inf).
+            if query[j] != 0.0f64 { s += query[j] * log_probability[c * d + j] }
             j += 1usize
         }
         if c == 0usize || s > best_score {
