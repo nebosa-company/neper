@@ -39,6 +39,14 @@ fn within(w: u32, h: u32, options: DecodeOptions) -> err {
     ret ok
 }
 
+fn mask_is_contiguous(mask: u32) -> bool {
+    if mask == 0u32 { ret false }
+    var value = mask
+    while (value & 1u32) == 0u32 { value = value >> 1u32 }
+    while (value & 1u32) != 0u32 { value = value >> 1u32 }
+    ret value == 0u32
+}
+
 fn parse_header(d: []const u8) -> (Header, err) {
     var h: Header = zero
     if d.len < 26usize { ret (h, Invalid) }
@@ -112,11 +120,22 @@ fn parse_header(d: []const u8) -> (Header, err) {
             if size >= 56u32 && d.len >= 14usize + 56usize { h.masks[3] = le32(d, at + 12usize) }
             h.palette_at = 14usize + usize(size)
         }
+        var k = 0usize
+        while k < 3usize {
+            if !mask_is_contiguous(h.masks[k]) { ret (h, Invalid) }
+            k += 1usize
+        }
+        if h.masks[3] != 0u32 && !mask_is_contiguous(h.masks[3]) { ret (h, Invalid) }
         h.has_alpha_mask = h.masks[3] != 0u32
     } else {
         h.palette_at = 14usize + usize(size)
     }
     ret (h, ok)
+}
+
+fn alpha_of(h: Header) -> image.Alpha {
+    if h.has_alpha_mask { ret .Straight }
+    ret .Opaque
 }
 
 fn inspect(source: io.Reader) -> (image.Info, err) {
@@ -136,8 +155,7 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
     info.height = h.height
     info.format = .Rgba8
     info.frames = 1u32
-    info.alpha = .Opaque
-    if h.has_alpha_mask { info.alpha = .Straight }
+    info.alpha = alpha_of(h)
     ret (info, ok)
 }
 
@@ -164,9 +182,9 @@ fn bits_of(mask: u32) -> u32 {
 
 fn channel(pixel: u32, mask: u32, shift: u32, bits: u32) -> u8 {
     if mask == 0u32 || bits == 0u32 { ret 255u8 }
-    let v = (pixel & mask) >> shift
-    let top = (1u32 << bits) - 1u32
-    ret u8(v * 255u32 / top)
+    let v = u64((pixel & mask) >> shift)
+    let top = (1u64 << bits) - 1u64
+    ret u8(v * 255u64 / top)
 }
 
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err) {
@@ -179,7 +197,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
     if within_error != ok { ret (zero, within_error) }
     let w = usize(h.width)
     let ht = usize(h.height)
-    let (out, out_error) = image.allocate(a, h.width, h.height, .Rgba8, .Straight)
+    let (out, out_error) = image.allocate(a, h.width, h.height, .Rgba8, alpha_of(h))
     if out_error != ok { ret (zero, out_error) }
     let start = usize(h.data_offset)
     if start > d.len { ret (zero, Invalid) }
@@ -307,8 +325,6 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
         widths[k] = bits_of(masks[k])
         k += 1usize
     }
-    // a 32 bit BI_RGB pixel's fourth byte is unused, as in Pillow and the browsers
-    let alpha_used = false
     var row = 0usize
     while row < ht {
         var dst_row = row
@@ -351,7 +367,6 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
                     bb = u8(pixel & 255u32)
                     gg = u8((pixel >> 8u32) & 255u32)
                     rr = u8((pixel >> 16u32) & 255u32)
-                    if alpha_used { aa = u8((pixel >> 24u32) & 255u32) }
                 }
             }
             out.pixels[o] = rr

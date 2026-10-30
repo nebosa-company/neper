@@ -108,6 +108,27 @@ fn bmp_invalid(a: *mem.Arena, blob: []const u8) -> bool {
     ret failure == bmp.Invalid
 }
 
+fn bmp_header_invalid(a: *mem.Arena, blob: []const u8) -> bool {
+    let m = mem.mark(a)
+    var decoded = io.SliceReader { data: blob, off: 0usize }
+    let (_, decode_failure) = bmp.decode(a, io.slice_reader(&decoded), bmp.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64 })
+    var inspected = io.SliceReader { data: blob, off: 0usize }
+    let (_, inspect_failure) = bmp.inspect(io.slice_reader(&inspected))
+    mem.reset(a, m)
+    ret decode_failure == bmp.Invalid && inspect_failure == bmp.Invalid
+}
+
+fn bmp_alpha_matches(a: *mem.Arena, blob: []const u8, want: image.Alpha) -> bool {
+    let m = mem.mark(a)
+    var inspected = io.SliceReader { data: blob, off: 0usize }
+    let (info, inspect_failure) = bmp.inspect(io.slice_reader(&inspected))
+    var decoded = io.SliceReader { data: blob, off: 0usize }
+    let (decoded_image, decode_failure) = bmp.decode(a, io.slice_reader(&decoded), bmp.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64 })
+    let good = inspect_failure == ok && decode_failure == ok && info.alpha == want && decoded_image.alpha == want
+    mem.reset(a, m)
+    ret good
+}
+
 // ---- TIFF ------------------------------------------------------------------------------
 
 fn tiff_ok(a: *mem.Arena, blob: str, w: u32, h: u32, want: u32) -> bool {
@@ -355,6 +376,66 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ended_script_error != ok { die(180i32) }
     let (ended_info, ended_error) = bmp.inspect(support.reader(&ended_script))
     if ended_error != ok || ended_info.width != 1u32 || ended_info.height != 1u32 { die(181i32) }
+
+    // Bit-field channels must be contiguous, while a full-width component scales without overflow.
+    var bmp_bad_mask: [70]u8 = zero
+    bmp_bad_mask[0usize] = 66u8
+    bmp_bad_mask[1usize] = 77u8
+    bmp_bad_mask[2usize] = 70u8
+    bmp_bad_mask[10usize] = 66u8
+    bmp_bad_mask[14usize] = 40u8
+    bmp_bad_mask[18usize] = 1u8
+    bmp_bad_mask[22usize] = 1u8
+    bmp_bad_mask[26usize] = 1u8
+    bmp_bad_mask[28usize] = 32u8
+    bmp_bad_mask[30usize] = 3u8
+    bmp_bad_mask[34usize] = 4u8
+    bmp_bad_mask[54usize] = 1u8
+    bmp_bad_mask[57usize] = 128u8
+    bmp_bad_mask[59usize] = 255u8
+    bmp_bad_mask[64usize] = 255u8
+    bmp_bad_mask[66usize] = 255u8
+    if !bmp_header_invalid(a, bmp_bad_mask[..]) { die(185i32) }
+    var bmp_wide_mask = bmp_bad_mask
+    bmp_wide_mask[54usize] = 255u8
+    bmp_wide_mask[55usize] = 255u8
+    bmp_wide_mask[56usize] = 255u8
+    bmp_wide_mask[57usize] = 255u8
+    bmp_wide_mask[58usize] = 255u8
+    bmp_wide_mask[59usize] = 255u8
+    bmp_wide_mask[60usize] = 255u8
+    bmp_wide_mask[61usize] = 255u8
+    bmp_wide_mask[62usize] = 255u8
+    bmp_wide_mask[63usize] = 255u8
+    bmp_wide_mask[64usize] = 255u8
+    bmp_wide_mask[65usize] = 255u8
+    bmp_wide_mask[67usize] = 255u8
+    bmp_wide_mask[68usize] = 255u8
+    bmp_wide_mask[69usize] = 255u8
+    if !bmp_alpha_matches(a, bmp_wide_mask[..], .Opaque) { die(186i32) }
+
+    // Inspect and decode share alpha semantics: only an explicit alpha mask is straight alpha.
+    var bmp_alpha_mask: [74]u8 = zero
+    bmp_alpha_mask[0usize] = 66u8
+    bmp_alpha_mask[1usize] = 77u8
+    bmp_alpha_mask[2usize] = 74u8
+    bmp_alpha_mask[10usize] = 70u8
+    bmp_alpha_mask[14usize] = 40u8
+    bmp_alpha_mask[18usize] = 1u8
+    bmp_alpha_mask[22usize] = 1u8
+    bmp_alpha_mask[26usize] = 1u8
+    bmp_alpha_mask[28usize] = 32u8
+    bmp_alpha_mask[30usize] = 6u8
+    bmp_alpha_mask[34usize] = 4u8
+    bmp_alpha_mask[56usize] = 255u8
+    bmp_alpha_mask[59usize] = 255u8
+    bmp_alpha_mask[62usize] = 255u8
+    bmp_alpha_mask[69usize] = 255u8
+    bmp_alpha_mask[70usize] = 32u8
+    bmp_alpha_mask[71usize] = 64u8
+    bmp_alpha_mask[72usize] = 96u8
+    bmp_alpha_mask[73usize] = 128u8
+    if !bmp_alpha_matches(a, bmp_alpha_mask[..], .Straight) { die(187i32) }
 
     // An IFD0 offset beyond the block must be rejected before usize addition wraps.
     if !exif_tags_fail(a, "II*\x00\xff\xff\xff\xff") { die(124i32) }
