@@ -84,11 +84,13 @@ fn sqrt[F: type](z: Complex[F]) -> Complex[F] {
 fn pow[F: type](z: Complex[F], w: Complex[F]) -> Complex[F] {
     if z.re == zero_of[F]() && z.im == zero_of[F]() {
         if w.re == zero_of[F]() && w.im == zero_of[F]() { ret make[F](F(1.0f64), zero_of[F]()) }
-        // The reciprocal of zero has infinite magnitude. Handle a real
-        // negative exponent before the generic zero shortcut so 0^-n does
-        // not silently become zero.
+        // A zero base has a finite zero result only for positive real
+        // exponents. A real reciprocal is infinite; zero-real and non-real
+        // exponents have no finite principal value.
+        if w.re > zero_of[F]() { ret make[F](zero_of[F](), zero_of[F]()) }
         if w.im == zero_of[F]() && w.re < zero_of[F]() { ret make[F](F(1.0f64) / zero_of[F](), zero_of[F]()) }
-        ret make[F](zero_of[F](), zero_of[F]())
+        let invalid = zero_of[F]() / zero_of[F]()
+        ret make[F](invalid, invalid)
     }
     ret exp[F](mul[F](w, log[F](z)))
 }

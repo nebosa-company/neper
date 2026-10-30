@@ -47,6 +47,21 @@ fn main() {
     if inverse_zero.re != inverse_zero.re || inverse_zero.re <= 1.0e308 || inverse_zero.im != 0.0 { os.exit(17) }
     let inverse_zero32 = cx.pow[f32](cx.make[f32](0.0f32, 0.0f32), cx.make[f32](-1.0f32, 0.0f32))
     if inverse_zero32.re != inverse_zero32.re || inverse_zero32.re <= 1.0e30f32 || inverse_zero32.im != 0.0f32 { os.exit(17) }
+    // Near the real axis, the hyperbolic helpers must retain the tiny
+    // imaginary terms used by sin, cos, and tan rather than cancel them away.
+    let tiny_im = 0.000000000001f64
+    let near_axis_sin = cx.sin[f64](cx.make[f64](1.0, tiny_im))
+    let near_axis_cos = cx.cos[f64](cx.make[f64](1.0, tiny_im))
+    let near_axis_tan = cx.tan[f64](cx.make[f64](1.0, tiny_im))
+    if !near(near_axis_sin.im / tiny_im, 0.5403023058681398) { os.exit(19) }
+    if !near(near_axis_cos.im / tiny_im, -0.8414709848078965) { os.exit(19) }
+    if !near(near_axis_tan.im / tiny_im, 3.425518820814759) { os.exit(19) }
+    // 0^w with a non-real exponent or zero real exponent has no finite
+    // principal value; it must not be reported as a harmless zero.
+    let imaginary_zero_power = cx.pow[f64](cx.make[f64](0.0, 0.0), cx.make[f64](0.0, 1.0))
+    if imaginary_zero_power.re == imaginary_zero_power.re || imaginary_zero_power.im == imaginary_zero_power.im { os.exit(20) }
+    let nonreal_reciprocal = cx.pow[f64](cx.make[f64](0.0, 0.0), cx.make[f64](-1.0, 1.0))
+    if nonreal_reciprocal.re == nonreal_reciprocal.re || nonreal_reciprocal.im == nonreal_reciprocal.im { os.exit(20) }
     let big = cx.abs[f64](cx.make[f64](1.0e200, 1.0e200))
     if !near(big / 1.0e200, 1.4142135623730951) { os.exit(15) }
     // #1082: sinh/cosh at 710 remain finite, even though exp(710) does not.
