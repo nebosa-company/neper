@@ -280,6 +280,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_parse(parse_vectors_9()) != 0u8 { os.exit(50i32) }
     if run_parse(parse_vectors_10()) != 0u8 { os.exit(51i32) }
     if run_parse(parse_vectors_11()) != 0u8 { os.exit(52i32) }
+    let (_, punctuation_error) = parse.parse_date("2024@03#05!", false)
+    if punctuation_error != parse.Invalid { os.exit(53i32) }
     if run_durations(duration_vectors_0()) != 0u8 { os.exit(81i32) }
     if run_durations(duration_vectors_1()) != 0u8 { os.exit(82i32) }
     if run_durations(duration_vectors_2()) != 0u8 { os.exit(83i32) }
