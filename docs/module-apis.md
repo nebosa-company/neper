@@ -4271,8 +4271,8 @@ fn exponential_seeded(scores: []const f64, sensitivity: f64, epsilon: f64, r: *r
 fn report_noisy_max(scores: []const f64, sensitivity: f64, epsilon: f64) -> (usize, err)
 fn report_noisy_max_seeded(scores: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (usize, err)
 fn randomized_response(bit: bool, p: f64) -> (bool, err)
-fn randomized_response_seeded(bit: bool, p: f64, r: *rand.Pcg64) -> bool
-fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> f64
+fn randomized_response_seeded(bit: bool, p: f64, r: *rand.Pcg64) -> (bool, err)
+fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> (f64, err)
 fn compose_basic(epsilons: []const f64) -> f64
 fn compose_advanced(epsilon: f64, k: usize, delta_prime: f64) -> (f64, err)
 fn top_bit(x: u64) -> u64

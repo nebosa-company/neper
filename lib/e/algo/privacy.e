@@ -144,7 +144,7 @@ fn laplace_vector_seeded(values: []const f64, sensitivity: f64, epsilon: f64, r:
 // The classic analytic bound: `sigma = sensitivity * sqrt(2 ln(1.25 / delta)) / epsilon`
 // gives (epsilon, delta)-differential privacy for epsilon in (0, 1).
 fn gaussian_sigma(sensitivity: f64, epsilon: f64, delta: f64) -> (f64, err) {
-    if epsilon <= 0.0f64 || sensitivity <= 0.0f64 || delta <= 0.0f64 || delta >= 1.0f64 { ret (0.0f64, Invalid) }
+    if !(epsilon > 0.0f64 && epsilon < 1.0f64) || !(sensitivity > 0.0f64) || sensitivity - sensitivity != 0.0f64 || !(delta > 0.0f64 && delta < 1.0f64) { ret (0.0f64, Invalid) }
     ret (sensitivity * math.sqrt[f64](2.0f64 * math.log[f64](1.25f64 / delta)) / epsilon, ok)
 }
 
@@ -249,7 +249,12 @@ fn report_noisy_max_seeded(scores: []const f64, sensitivity: f64, epsilon: f64, 
 
 // Warner's randomized response: the truth with probability `p`, its negation
 // otherwise; `ln(p / (1 - p))`-differentially private.
+fn valid_response_probability(p: f64) -> bool {
+    ret p > 0.5f64 && p < 1.0f64
+}
+
 fn randomized_response(bit: bool, p: f64) -> (bool, err) {
+    if !valid_response_probability(p) { ret (false, Invalid) }
     let (u, e) = random_uniform()
     if e != ok { ret (false, e) }
     if u < p { ret (bit, ok) }
@@ -257,15 +262,17 @@ fn randomized_response(bit: bool, p: f64) -> (bool, err) {
 }
 
 // The deterministic variant for tests.
-fn randomized_response_seeded(bit: bool, p: f64, r: *rand.Pcg64) -> bool {
-    if rand.pcg64_f64(r) < p { ret bit }
-    ret !bit
+fn randomized_response_seeded(bit: bool, p: f64, r: *rand.Pcg64) -> (bool, err) {
+    if !valid_response_probability(p) { ret (false, Invalid) }
+    if rand.pcg64_f64(r) < p { ret (bit, ok) }
+    ret (!bit, ok)
 }
 
 // The unbiased estimate of the true fraction of ones from `count_ones` responses
 // out of `n` collected with `randomized_response(_, p)`.
-fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> f64 {
-    ret (f64(count_ones) / f64(n) - (1.0f64 - p)) / (2.0f64 * p - 1.0f64)
+fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> (f64, err) {
+    if n == 0usize || count_ones > n || !valid_response_probability(p) { ret (0.0f64, Invalid) }
+    ret ((f64(count_ones) / f64(n) - (1.0f64 - p)) / (2.0f64 * p - 1.0f64), ok)
 }
 
 // Basic composition: the budgets add.
