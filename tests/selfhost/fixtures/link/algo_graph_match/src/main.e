@@ -89,6 +89,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if assignment[0usize] != 4usize || assignment[1usize] != 0usize || assignment[2usize] != 2usize || assignment[3usize] != 1usize || assignment[4usize] != 3usize { os.exit(2i32) }
     let (_, hungarian_room) = match.hungarian(costs5[..], 5usize, assignment[..], scratch[..20usize], used[..])
     if hungarian_room != match.TooSmall { os.exit(2i32) }
+    // A finite cost beyond the old 1e300 sentinel terminates, while nonfinite
+    // entries are refused before the augmenting loop.
+    var large_cost: [1]f64 = zero
+    large_cost[0usize] = 1.0e301f64
+    var one_assignment: [1]usize = zero
+    let (large_total, large_error) = match.hungarian(large_cost[..], 1usize, one_assignment[..], scratch[..], used[..])
+    if large_error != ok || large_total != 1.0e301f64 || one_assignment[0usize] != 0usize { os.exit(2i32) }
+    large_cost[0usize] = 0.0f64 / 0.0f64
+    let (_, nan_cost_error) = match.hungarian(large_cost[..], 1usize, one_assignment[..], scratch[..], used[..])
+    if nan_cost_error != match.Invalid { os.exit(2i32) }
+    large_cost[0usize] = 1.0f64 / 0.0f64
+    let (_, infinite_cost_error) = match.hungarian(large_cost[..], 1usize, one_assignment[..], scratch[..], used[..])
+    if infinite_cost_error != match.Invalid { os.exit(2i32) }
 
     // 3: stable marriage: the textbook 3x3 instance.
     // Proposers: A: X Y Z; B: Y X Z; C: X Y Z. Receivers: X: B A C; Y: A B C; Z: A B C.
