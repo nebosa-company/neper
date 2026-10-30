@@ -245,6 +245,11 @@ fn medoid_cost(x: []const f64, n: usize, d: usize, medoids: []const usize, k: us
 fn kmedoids(x: []const f64, n: usize, d: usize, k: usize, medoids: []usize, labels: []usize, max_iterations: u32) -> (u32, err) {
     if x.len < n * d || medoids.len < k || labels.len < n { ret (0u32, TooSmall) }
     if k == 0usize || n == 0usize { ret (0u32, Invalid) }
+    var initial = 0usize
+    while initial < k {
+        if medoids[initial] >= n { ret (0u32, Invalid) }
+        initial += 1usize
+    }
     var cost = medoid_cost(x, n, d, medoids, k)
     var iteration = 0u32
     var improved = true
