@@ -112,6 +112,8 @@ fn error_of_result(result: isize) -> err {
     if result == -12isize { ret OutOfMemory }
     if result == -13isize { ret Denied }
     if result == -17isize { ret Exists }
+    // EADDRINUSE: a socket name already belongs to another endpoint.
+    if result == -48isize { ret Exists }
     if result == -20isize { ret NotFound }
     if result == -60isize { ret Timeout }
     if result == -18isize { ret Unsupported }
@@ -131,7 +133,7 @@ fn error_kind_of(code: i32) -> ErrorKind {
     if code == 4i32 { ret .Interrupted }
     if code == 35i32 { ret .WouldBlock }
     if code == 12i32 { ret .OutOfMemory }
-    if code == 17i32 { ret .Exists }
+    if code == 17i32 || code == 48i32 { ret .Exists }
     if code == 22i32 || code == 45i32 || code == 78i32 || code == 18i32 { ret .Unsupported }
     if code == 60i32 { ret .Timeout }
     ret .Other
