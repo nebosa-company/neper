@@ -4,10 +4,9 @@
 //
 // The format has no standard, so every choice here is one. Two shape the rest:
 //
-// A comment starts a line and nothing else. `;` and `#` are ordinary bytes anywhere after the
-// first, including inside an unquoted value and after a closing quote. The alternative -- a
-// trailing comment -- means a value silently loses everything past a `;` someone meant as data,
-// and no spelling of the value can be read back without knowing which rule was in force.
+// A comment starts a line and nothing else. `;` and `#` are ordinary bytes inside an unquoted
+// value, rather than trailing-comment markers that would silently lose data. A quoted value ends
+// at its closing quote, so only whitespace may follow it on that line.
 //
 // `case_sensitive: false` **folds** the section and the key as they are stored, rather than
 // comparing loosely later. `get` takes no options and a `Document` carries none, so identity has
@@ -564,6 +563,28 @@ fn write_escaped(writer: *io.Writer, value: str) -> err {
     ret io.write_all(writer, "\"")
 }
 
+// These names are written as INI syntax, not as values, so quoting cannot make
+// them safe. Reject spellings that could create another line, section, or key.
+fn safe_key_name(name: str) -> bool {
+    if name.len == 0usize { ret false }
+    if name[0usize] == SEMI || name[0usize] == HASH || name[0usize] == LBRACKET { ret false }
+    var at = 0usize
+    while at < name.len {
+        if name[at] == 13u8 || name[at] == 10u8 || name[at] == 61u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn safe_section_name(name: str) -> bool {
+    var at = 0usize
+    while at < name.len {
+        if name[at] == 13u8 || name[at] == 10u8 || name[at] == 93u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 // Entries in the order they are held, with a header wherever the section changes. An entry whose
 // section is empty belongs before any header, which is where `parse` puts one.
 fn write(writer: *io.Writer, document: *const Document) -> err {
@@ -572,6 +593,10 @@ fn write(writer: *io.Writer, document: *const Document) -> err {
     var at = 0usize
     while at < document.entries.len {
         let entry = document.entries[at]
+        if !safe_section_name(entry.section) || !safe_key_name(entry.key) { ret Invalid }
+        // The root section has no syntax that can switch back from a named
+        // section. Reject an order that would change the entry on round-trip.
+        if entry.section.len == 0usize && started && current.len != 0usize { ret Invalid }
         if !started || !same_text(entry.section, current) {
             if entry.section.len != 0usize {
                 try io.write_all(writer, "[")
@@ -732,6 +757,7 @@ fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
 
 fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
     for f in meta.fields[T]() {
+        if !safe_key_name(f.name) { ret Invalid }
         var slot: f.ty = zero
         slot = meta.get[f, T](value)
         // A buffer per field, and an arena over it, so `e.str` does the rendering and this
