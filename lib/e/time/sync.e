@@ -63,7 +63,14 @@ fn marzullo(lows: []const i64, highs: []const i64, n: usize, scratch: []i64) -> 
 fn marzullo_estimate(lows: []const i64, highs: []const i64, n: usize, scratch: []i64) -> (i64, err) {
     let (lo, hi, _, e) = marzullo(lows, highs, n, scratch)
     if e != ok { ret (0i64, e) }
-    ret (lo + (hi - lo) / 2i64, ok)
+    // Preserve `lo + (hi - lo) / 2`'s floor midpoint without overflowing the difference.
+    var left = lo / 2i64
+    var right = hi / 2i64
+    if lo < 0i64 && lo % 2i64 != 0i64 { left -= 1i64 }
+    if hi < 0i64 && hi % 2i64 != 0i64 { right -= 1i64 }
+    let left_remainder = lo - left * 2i64
+    let right_remainder = hi - right * 2i64
+    ret (left + right + (left_remainder + right_remainder) / 2i64, ok)
 }
 
 // The master's step: `offsets[i]` is node i's clock minus the master's (the
