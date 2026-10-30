@@ -822,33 +822,35 @@ fn base64_encoder(alphabet: Base64Alphabet, padded: bool) -> Base64Encoder {
 }
 
 fn base64_encoder_update(enc: *Base64Encoder, dst: []u8, src: []const u8) -> (usize, err) {
+    var trial = *enc
     var pos = 0usize
     var out = 0usize
     // Complete the group held from last time first.
-    while enc.count != 0usize && enc.count < 3usize && pos < src.len {
-        enc.held[enc.count] = src[pos]
-        enc.count += 1usize
+    while trial.count != 0usize && trial.count < 3usize && pos < src.len {
+        trial.held[trial.count] = src[pos]
+        trial.count += 1usize
         pos += 1usize
     }
-    if enc.count == 3usize {
-        let (text, text_error) = base64_encode(dst, enc.held[..], enc.alphabet, true)
+    if trial.count == 3usize {
+        let (text, text_error) = base64_encode(dst, trial.held[..], trial.alphabet, true)
         if text_error != ok { ret (0usize, text_error) }
         out = text.len
-        enc.count = 0usize
+        trial.count = 0usize
     }
     // Then every whole group of the rest in one call, and hold what is left.
     let whole = (src.len - pos) / 3usize * 3usize
     if whole != 0usize {
-        let (text, text_error) = base64_encode(dst[out..], src[pos..pos + whole], enc.alphabet, true)
+        let (text, text_error) = base64_encode(dst[out..], src[pos..pos + whole], trial.alphabet, true)
         if text_error != ok { ret (0usize, text_error) }
         out += text.len
         pos += whole
     }
     while pos < src.len {
-        enc.held[enc.count] = src[pos]
-        enc.count += 1usize
+        trial.held[trial.count] = src[pos]
+        trial.count += 1usize
         pos += 1usize
     }
+    *enc = trial
     ret (out, ok)
 }
 
@@ -865,50 +867,54 @@ fn base64_decoder(alphabet: Base64Alphabet) -> Base64Decoder {
 }
 
 fn base64_decoder_update(dec: *Base64Decoder, dst: []u8, src: str) -> (usize, err) {
-    if dec.finished && src.len != 0usize { ret (0usize, Invalid) }
+    var trial = *dec
+    if trial.finished && src.len != 0usize { ret (0usize, Invalid) }
     var pos = 0usize
     var out = 0usize
-    while dec.count != 0usize && dec.count < 4usize && pos < src.len {
-        dec.held[dec.count] = src[pos]
-        dec.count += 1usize
+    while trial.count != 0usize && trial.count < 4usize && pos < src.len {
+        trial.held[trial.count] = src[pos]
+        trial.count += 1usize
         pos += 1usize
     }
-    if dec.count == 4usize {
-        let (data, data_error) = base64_decode(dst, dec.held[..], dec.alphabet)
+    if trial.count == 4usize {
+        let (data, data_error) = base64_decode(dst, trial.held[..], trial.alphabet)
         if data_error != ok { ret (0usize, data_error) }
         out = data.len
         var held_at = 0usize
         while held_at < 4usize {
-            if dec.held[held_at] == PAD { dec.finished = true }
+            if trial.held[held_at] == PAD { trial.finished = true }
             held_at += 1usize
         }
-        dec.count = 0usize
-        if dec.finished {
+        trial.count = 0usize
+        if trial.finished {
             if pos != src.len { ret (0usize, Invalid) }
+            *dec = trial
             ret (out, ok)
         }
     }
     let whole = (src.len - pos) / 4usize * 4usize
     if whole != 0usize {
-        let (data, data_error) = base64_decode(dst[out..], src[pos..pos + whole], dec.alphabet)
+        let (data, data_error) = base64_decode(dst[out..], src[pos..pos + whole], trial.alphabet)
         if data_error != ok { ret (0usize, data_error) }
         var whole_at = pos
         while whole_at < pos + whole {
-            if src[whole_at] == PAD { dec.finished = true }
+            if src[whole_at] == PAD { trial.finished = true }
             whole_at += 1usize
         }
         out += data.len
         pos += whole
-        if dec.finished {
+        if trial.finished {
             if pos != src.len { ret (0usize, Invalid) }
+            *dec = trial
             ret (out, ok)
         }
     }
     while pos < src.len {
-        dec.held[dec.count] = src[pos]
-        dec.count += 1usize
+        trial.held[trial.count] = src[pos]
+        trial.count += 1usize
         pos += 1usize
     }
+    *dec = trial
     ret (out, ok)
 }
 
