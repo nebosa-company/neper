@@ -316,6 +316,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, early_eoi_error) = jpeg.decode(a, reader_of(&state, truncated), options())
     if early_eoi_error != jpeg.Invalid { os.exit(155i32) }
 
+    // A sequential three-component frame may use separate scans, but EOI cannot
+    // arrive after only its first component.  Expand a valid grey frame's SOF
+    // while retaining its one-component SOS and entropy data.
+    let gray_data = gray_jpg()
+    var grey_sof = 0usize
+    while grey_sof + 3usize < gray_data.len && !(gray_data[grey_sof] == 255u8 && gray_data[grey_sof + 1usize] == 192u8) { grey_sof += 1usize }
+    if grey_sof + 12usize >= gray_data.len { os.exit(202i32) }
+    let grey_sof_length = usize(gray_data[grey_sof + 2usize]) * 256usize + usize(gray_data[grey_sof + 3usize])
+    if grey_sof_length != 11usize { os.exit(203i32) }
+    let grey_sof_end = grey_sof + 2usize + grey_sof_length
+    let (missing_components, missing_components_alloc) = mem.alloc[u8](a, gray_data.len + 6usize)
+    if missing_components_alloc != ok { os.exit(204i32) }
+    mem.copy[u8](missing_components[0..grey_sof + 9usize], gray_data[0..grey_sof + 9usize])
+    missing_components[grey_sof + 2usize] = 0u8
+    missing_components[grey_sof + 3usize] = 17u8
+    missing_components[grey_sof + 9usize] = 3u8
+    mem.copy[u8](missing_components[grey_sof + 10usize..grey_sof + 13usize], gray_data[grey_sof + 10usize..grey_sof + 13usize])
+    missing_components[grey_sof + 13usize] = 2u8
+    missing_components[grey_sof + 14usize] = 17u8
+    missing_components[grey_sof + 15usize] = 0u8
+    missing_components[grey_sof + 16usize] = 3u8
+    missing_components[grey_sof + 17usize] = 17u8
+    missing_components[grey_sof + 18usize] = 0u8
+    mem.copy[u8](missing_components[grey_sof + 19usize..], gray_data[grey_sof_end..])
+    let (_, missing_components_error) = jpeg.decode(a, reader_of(&state, missing_components), options())
+    if missing_components_error != jpeg.Invalid { os.exit(205i32) }
+
     try io.print("fmt jpeg ok\n")
     ret ok
 }

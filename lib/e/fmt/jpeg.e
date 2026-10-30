@@ -915,6 +915,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
     }
     // Every scan, up to EOI; the header walker stopped at the first SOS marker byte.
     var scans = 0usize
+    var components_seen: [4]bool = zero
     while true {
         let marker = u32(dec.data[dec.at - 1usize])
         if marker == 217u32 { break }
@@ -930,6 +931,11 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
         if decode_error != ok { ret (zero, decode_error) }
         let boundary_error = scan_boundary(&b)
         if boundary_error != ok { ret (zero, boundary_error) }
+        var member_at = 0usize
+        while member_at < scan.count {
+            components_seen[scan.members[member_at]] = true
+            member_at += 1usize
+        }
         scans += 1usize
         // Resume the marker walk after the entropy data.
         dec.at = b.at
@@ -937,6 +943,13 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
         if more_error != ok { ret (zero, more_error) }
     }
     if scans == 0usize { ret (zero, Invalid) }
+    if !f.progressive {
+        i = 0usize
+        while i < f.count {
+            if !components_seen[i] { ret (zero, Invalid) }
+            i += 1usize
+        }
+    }
     // Planes: dequantise and transform every block.
     var t: [64]f32 = zero
     cos_table(t[0..])
