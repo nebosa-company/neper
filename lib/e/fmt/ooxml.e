@@ -58,6 +58,18 @@ fn local(name: str) -> str {
     ret name
 }
 
+// Attribute names are qualified independently of element names. OOXML producers
+// may bind the WordprocessingML and relationship namespaces to any prefix, so
+// readers match the local part here too.
+fn local_attribute(element: *const xml.Node, name: str) -> (str, bool) {
+    var i = 0usize
+    while i < element.attributes.len {
+        if str.eq(local(element.attributes[i].name), name) { ret (element.attributes[i].value, true) }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
 fn open_package(a: *mem.Arena, data: []const u8) -> (zip.Archive, err) {
     let (cell, cell_error) = mem.alloc[Source](a, 1usize)
     if cell_error != ok { ret (zero, cell_error) }
@@ -160,7 +172,7 @@ fn collect_of(a: *mem.Arena, part: []const u8, para: str) -> (Collected, err) {
                     at += 1usize
                 }
                 if str.eq(name, "pStyle") {
-                    let (value, has_value) = xml.attribute(&nodes[n], "w:val")
+                    let (value, has_value) = local_attribute(&nodes[n], "val")
                     if has_value { style = value }
                 }
                 if str.eq(name, "numPr") { is_list = true }
@@ -313,7 +325,7 @@ fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err) {
     i = 0usize
     while i < nodes.len {
         if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "sheet") {
-            let (value, has_value) = xml.attribute(&nodes[i], "name")
+            let (value, has_value) = local_attribute(&nodes[i], "name")
             names[k] = value
             k += 1usize
         }
@@ -356,7 +368,7 @@ fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (Grid, err) {
     var i = 0usize
     while i < nodes.len {
         if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "c") {
-            let (reference, has_reference) = xml.attribute(&nodes[i], "r")
+            let (reference, has_reference) = local_attribute(&nodes[i], "r")
             let (col, row, valid) = cell_at(reference)
             if has_reference && valid && col < LIMIT_GRID_COLUMNS && row < LIMIT_GRID_ROWS {
                 if col + 1usize > columns { columns = col + 1usize }
@@ -376,16 +388,25 @@ fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (Grid, err) {
     var at = 0usize
     var live = false
     var kind_byte = 0u8
+    var is_inline = false
+    var inline_builder: str.Builder = zero
+    var inline_cell = 0usize
+    var has_inline_builder = false
     i = 0usize
     while i < nodes.len {
         if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "c") {
-            let (reference, has_reference) = xml.attribute(&nodes[i], "r")
+            if has_inline_builder {
+                cells[inline_cell] = str.done(&inline_builder)
+                has_inline_builder = false
+            }
+            let (reference, has_reference) = local_attribute(&nodes[i], "r")
             let (col, row, valid) = cell_at(reference)
             live = has_reference && valid && col < LIMIT_GRID_COLUMNS && row < LIMIT_GRID_ROWS
             at = row * columns + col
-            let (kind_text, has_kind) = xml.attribute(&nodes[i], "t")
+            let (kind_text, has_kind) = local_attribute(&nodes[i], "t")
             kind_byte = 0u8
             if has_kind && kind_text.len == 1usize { kind_byte = kind_text[0usize] }
+            is_inline = has_kind && str.eq(kind_text, "inlineStr")
         }
         if live && nodes[i].kind == .Text && usize(nodes[i].parent) < nodes.len {
             let owner = local(nodes[usize(nodes[i].parent)].name)
@@ -398,11 +419,24 @@ fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (Grid, err) {
                 if kind_byte == 98u8 {
                     if str.eq(shown, "1") { shown = "TRUE" } else { shown = "FALSE" }
                 }
-                cells[at] = shown
+                if is_inline && str.eq(owner, "t") {
+                    if !has_inline_builder {
+                        let (builder, inline_error) = str.builder(a, nodes[i].value.len)
+                        if inline_error != ok { ret (zero, inline_error) }
+                        inline_builder = builder
+                        inline_cell = at
+                        has_inline_builder = true
+                    }
+                    let pushed = str.push(&inline_builder, nodes[i].value)
+                    if pushed != ok { ret (zero, pushed) }
+                } else {
+                    cells[at] = shown
+                }
             }
         }
         i += 1usize
     }
+    if has_inline_builder { cells[inline_cell] = str.done(&inline_builder) }
     ret (Grid { rows: rows, columns: columns, cells: cells, after: 0usize }, ok)
 }
 
@@ -481,18 +515,27 @@ fn tables(a: *mem.Arena, data: []const u8) -> ([]Grid, err) {
         out[t] = Grid { rows: rows, columns: columns, cells: cells, after: afters[t] }
         t += 1usize
     }
-    // Pass 2: the text of each cell into its place.
+    // Pass 2: each top-level cell stays current until the next one, so one
+    // builder can append all of its runs in linear arena space.
     current = 0usize
     seen = 0usize
     var row = 0usize
     var column = 0usize
     var live = false
     var in_row = false
+    var cell_builder: str.Builder = zero
+    var builder_cell = 0usize
+    var building = false
+    var builder_has_text = false
     i = 0usize
     while i < nodes.len {
         if nodes[i].kind == .Element {
             let name = local(nodes[i].name)
             if str.eq(name, "tbl") && !inside_cell(nodes, i) {
+                if building {
+                    out[current].cells[builder_cell] = str.done(&cell_builder)
+                    building = false
+                }
                 current = seen
                 seen += 1usize
                 row = 0usize
@@ -500,29 +543,40 @@ fn tables(a: *mem.Arena, data: []const u8) -> ([]Grid, err) {
                 in_row = false
                 live = false
             } else if str.eq(name, "tr") && !inside_cell(nodes, i) && seen > 0usize {
+                if building {
+                    out[current].cells[builder_cell] = str.done(&cell_builder)
+                    building = false
+                }
                 if in_row { row += 1usize }
                 in_row = true
                 column = 0usize
                 live = false
             } else if str.eq(name, "tc") && !inside_cell(nodes, i) && seen > 0usize {
-                live = row < out[current].rows && column < out[current].columns
-                column += 1usize
-            } else if str.eq(name, "p") && live && seen > 0usize && inside_cell(nodes, i) {
-                let at_cell = row * out[current].columns + (column - 1usize)
-                if out[current].cells[at_cell].len > 0usize {
-                    let (joined, joined_error) = str.concat(a, out[current].cells[at_cell], " ")
-                    if joined_error != ok { ret (zero, joined_error) }
-                    out[current].cells[at_cell] = joined
+                if building {
+                    out[current].cells[builder_cell] = str.done(&cell_builder)
+                    building = false
                 }
+                live = row < out[current].rows && column < out[current].columns
+                let builder_at = row * out[current].columns + column
+                column += 1usize
+                builder_has_text = false
+                if live {
+                    let (made, cell_builder_error) = str.builder(a, 0usize)
+                    if cell_builder_error != ok { ret (zero, cell_builder_error) }
+                    cell_builder = made
+                    builder_cell = builder_at
+                    building = true
+                }
+            } else if str.eq(name, "p") && building && live && seen > 0usize && inside_cell(nodes, i) {
+                if builder_has_text { try str.push(&cell_builder, " ") }
             }
-        } else if nodes[i].kind == .Text && live && seen > 0usize && inside_cell(nodes, i) && usize(nodes[i].parent) < nodes.len && str.eq(local(nodes[usize(nodes[i].parent)].name), "t") && column > 0usize {
-            let at_cell = row * out[current].columns + (column - 1usize)
-            let (joined, joined_error) = str.concat(a, out[current].cells[at_cell], nodes[i].value)
-            if joined_error != ok { ret (zero, joined_error) }
-            out[current].cells[at_cell] = joined
+        } else if nodes[i].kind == .Text && building && live && seen > 0usize && inside_cell(nodes, i) && usize(nodes[i].parent) < nodes.len && str.eq(local(nodes[usize(nodes[i].parent)].name), "t") {
+            try str.push(&cell_builder, nodes[i].value)
+            if nodes[i].value.len > 0usize { builder_has_text = true }
         }
         i += 1usize
     }
+    if building { out[current].cells[builder_cell] = str.done(&cell_builder) }
     ret (out[0usize..table_count], ok)
 }
 
@@ -577,6 +631,7 @@ fn cell_flags(a: *mem.Arena, data: []const u8) -> ([]bool, err) {
 // (914400 to the inch; 0 when the part gives none), its part name and its bytes (a PNG or JPEG as stored).
 type Picture = struct { paragraph: usize, cx: usize, cy: usize, name: str, data: []const u8 }
 const LIMIT_PICTURES: usize = 8usize
+const LIMIT_BLIP_ATTEMPTS: usize = 64usize
 const LIMIT_PICTURE: u64 = 262144u64
 const LIMIT_SHAPES: usize = 64usize
 const NO_COLOR: u32 = 16777216u32
@@ -610,22 +665,51 @@ fn resolve_target(a: *mem.Arena, base: str, dest: str) -> str {
     ret out
 }
 
-// The dest of relationship `id` in the relationships part `rels_name`, resolved against `base`; "" when there is none.
-fn related_part(a: *mem.Arena, ar: *zip.Archive, rels_name: str, base: str, id: str) -> str {
+type Relationship = struct { id: str, target: str }
+
+// The relationships part parsed once into the IDs that can be used while
+// walking a document or slide. A malformed or missing part is simply empty,
+// matching the previous best-effort picture behavior.
+fn related_parts(a: *mem.Arena, ar: *zip.Archive, rels_name: str, base: str) -> []Relationship {
     let (index, found) = find(ar, rels_name)
-    if !found { ret "" }
+    if !found { ret zero }
     let (part, extract_error) = zip.extract(a, ar, index)
-    if extract_error != ok { ret "" }
+    if extract_error != ok { ret zero }
     let (doc, parse_error) = xml.parse(a, part)
-    if parse_error != ok { ret "" }
+    if parse_error != ok { ret zero }
     let nodes = doc.nodes
+    var count = 0usize
     var i = 0usize
     while i < nodes.len {
         if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "Relationship") {
-            let (rid, has_id) = xml.attribute(&nodes[i], "Id")
-            let (dest, has_dest) = xml.attribute(&nodes[i], "Target")
-            if has_id && has_dest && str.eq(rid, id) { ret resolve_target(a, base, dest) }
+            let (_, has_id) = local_attribute(&nodes[i], "Id")
+            let (_, has_dest) = local_attribute(&nodes[i], "Target")
+            if has_id && has_dest { count += 1usize }
         }
+        i += 1usize
+    }
+    let (out, out_error) = mem.alloc[Relationship](a, count + 1usize)
+    if out_error != ok { ret zero }
+    var written = 0usize
+    i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "Relationship") {
+            let (rid, has_id) = local_attribute(&nodes[i], "Id")
+            let (dest, has_dest) = local_attribute(&nodes[i], "Target")
+            if has_id && has_dest {
+                out[written] = Relationship { id: rid, target: resolve_target(a, base, dest) }
+                written += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret out[0usize..written]
+}
+
+fn relation_target(relations: []const Relationship, id: str) -> str {
+    var i = 0usize
+    while i < relations.len {
+        if str.eq(relations[i].id, id) { ret relations[i].target }
         i += 1usize
     }
     ret ""
@@ -643,7 +727,7 @@ fn part_bytes(a: *mem.Arena, ar: *zip.Archive, name: str) -> []const u8 {
 }
 
 fn number_attribute(node: *const xml.Node, name: str) -> usize {
-    let (text, has) = xml.attribute(node, name)
+    let (text, has) = local_attribute(node, name)
     if !has { ret 0usize }
     let (value, parse_error) = str.parse_u64(text)
     if parse_error != ok { ret 0usize }
@@ -663,6 +747,7 @@ fn pictures(a: *mem.Arena, data: []const u8) -> ([]Picture, err) {
     let (doc, parse_error) = xml.parse(a, part)
     if parse_error != ok { ret (zero, parse_error) }
     let nodes = doc.nodes
+    let relations = related_parts(a, &ar, "word/_rels/document.xml.rels", "word/")
     let (out, out_error) = mem.alloc[Picture](a, LIMIT_PICTURES)
     if out_error != ok { ret (zero, out_error) }
     var n = 0usize
@@ -670,8 +755,9 @@ fn pictures(a: *mem.Arena, data: []const u8) -> ([]Picture, err) {
     var seen_paragraphs = 0usize
     var cx = 0usize
     var cy = 0usize
+    var blip_attempts = 0usize
     var i = 0usize
-    while i < nodes.len && n < LIMIT_PICTURES {
+    while i < nodes.len && n < LIMIT_PICTURES && blip_attempts < LIMIT_BLIP_ATTEMPTS {
         if nodes[i].kind == .Element {
             let name = local(nodes[i].name)
             if str.eq(name, "p") {
@@ -683,9 +769,10 @@ fn pictures(a: *mem.Arena, data: []const u8) -> ([]Picture, err) {
                 cy = number_attribute(&nodes[i], "cy")
             }
             if str.eq(name, "blip") {
-                let (rid, has_rid) = xml.attribute(&nodes[i], "r:embed")
+                let (rid, has_rid) = local_attribute(&nodes[i], "embed")
                 if has_rid {
-                    let dest = related_part(a, &ar, "word/_rels/document.xml.rels", "word/", rid)
+                    blip_attempts += 1usize
+                    let dest = relation_target(relations, rid)
                     if dest.len > 0usize {
                         let bytes = part_bytes(a, &ar, dest)
                         if bytes.len > 0usize {
@@ -809,8 +896,10 @@ fn slide_layout(a: *mem.Arena, data: []const u8, number: usize) -> (SlideLayout,
     let r2 = str.push_usize(&rb, part_number)
     let r3 = str.push(&rb, ".xml.rels")
     let rels_name = str.done(&rb)
+    let relations = related_parts(a, &ar, rels_name, "ppt/slides/")
+    var blip_attempts = 0usize
     var i = 0usize
-    while i < nodes.len && shape_n < LIMIT_SHAPES {
+    while i < nodes.len && shape_n < LIMIT_SHAPES && blip_attempts < LIMIT_BLIP_ATTEMPTS {
         if nodes[i].kind == .Element {
             let name = local(nodes[i].name)
             let is_sp = str.eq(name, "sp")
@@ -840,12 +929,12 @@ fn slide_layout(a: *mem.Arena, data: []const u8, number: usize) -> (SlideLayout,
                             }
                         }
                         if str.eq(inner, "prstGeom") {
-                            let (prst, has_prst) = xml.attribute(&nodes[k], "prst")
+                            let (prst, has_prst) = local_attribute(&nodes[k], "prst")
                             if has_prst && str.eq(prst, "ellipse") { shape.kind = SHAPE_ELLIPSE }
                             if has_prst && str.eq(prst, "line") { shape.kind = SHAPE_LINE }
                         }
                         if str.eq(inner, "srgbClr") && !got_fill && has_ancestor(nodes, k, "spPr") && !has_ancestor(nodes, k, "ln") && !has_ancestor(nodes, k, "txBody") {
-                            let (hex, has_hex) = xml.attribute(&nodes[k], "val")
+                            let (hex, has_hex) = local_attribute(&nodes[k], "val")
                             if has_hex && hex.len == 6usize {
                                 var v = 0u32
                                 var d = 0usize
@@ -857,10 +946,11 @@ fn slide_layout(a: *mem.Arena, data: []const u8, number: usize) -> (SlideLayout,
                                 got_fill = true
                             }
                         }
-                        if str.eq(inner, "blip") && is_pic && pic_n < LIMIT_PICTURES {
-                            let (rid, has_rid) = xml.attribute(&nodes[k], "r:embed")
+                        if str.eq(inner, "blip") && is_pic && pic_n < LIMIT_PICTURES && blip_attempts < LIMIT_BLIP_ATTEMPTS {
+                            let (rid, has_rid) = local_attribute(&nodes[k], "embed")
                             if has_rid {
-                                let dest = related_part(a, &ar, rels_name, "ppt/slides/", rid)
+                                blip_attempts += 1usize
+                                let dest = relation_target(relations, rid)
                                 if dest.len > 0usize {
                                     let bytes = part_bytes(a, &ar, dest)
                                     if bytes.len > 0usize {

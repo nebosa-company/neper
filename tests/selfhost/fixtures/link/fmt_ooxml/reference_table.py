@@ -24,9 +24,13 @@ def tbl(*rows):
     return "<w:tbl>" + "".join(rows) + "</w:tbl>"
 
 
+def runs(count):
+    return "<w:p>" + "".join("<w:r><w:t>x</w:t></w:r>" for _ in range(count)) + "</w:p>"
+
+
 body = (p("Before") +
         tbl(tr(tc(p("Name")), tc(p("Qty")), tc(p("Note"))),
-            tr(tc(p("Tea")), tc(p("2")), tc(p("a"), p("b"))),
+            tr(tc(p("Tea")), tc(p("2")), tc(p("a"), p("b"), runs(8))),
             tr(tc(p("Only")))) +
         p("After") +
         tbl(tr(tc(p("outer"), tbl(tr(tc(p("inner"))))))))
