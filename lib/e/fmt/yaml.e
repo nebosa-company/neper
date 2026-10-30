@@ -199,7 +199,7 @@ fn resolve_plain(a: *mem.Arena, text: str) -> (Value, err) {
         if negative { inf = 0.0 - inf }
         ret (Value{ Float: inf }, ok)
     }
-    if str.eq(body, ".nan") || str.eq(body, ".NaN") || str.eq(body, ".NAN") { ret (Value{ Float: mem.bitcast[f64](9221120237041090560u64) }, ok) }
+    if from == 0usize && (str.eq(body, ".nan") || str.eq(body, ".NaN") || str.eq(body, ".NAN")) { ret (Value{ Float: mem.bitcast[f64](9221120237041090560u64) }, ok) }
     if from == 0usize && body.len > 2usize && body[0] == 48u8 && (body[1] == 120u8 || body[1] == 111u8) {
         var radix = 16u8
         if body[1] == 111u8 { radix = 8u8 }

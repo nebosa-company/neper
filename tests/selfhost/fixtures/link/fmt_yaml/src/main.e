@@ -277,6 +277,17 @@ fn issue_150_regressions(a: *mem.Arena) -> err {
     if !has_signed_hex || !str.eq(text_of(signed_hex, 159), "-0x1F") { os.exit(160) }
     if !has_signed_oct || !str.eq(text_of(signed_oct, 161), "-0o17") { os.exit(162) }
 
+    // Core schema permits a sign for `.inf`, but not for any spelling of `.nan`.
+    let (signed_nan_doc, signed_nan_error) = yaml.parse(a, "minus: -.nan\nplus: +.NaN\nplain: .nan\n", options(4u16, false))
+    if signed_nan_error != ok { os.exit(500i32) }
+    let signed_nan_pairs = mapping_of(signed_nan_doc, 501i32)
+    let (minus_nan, has_minus_nan) = lookup(signed_nan_pairs, "minus")
+    let (plus_nan, has_plus_nan) = lookup(signed_nan_pairs, "plus")
+    let (plain_nan, has_plain_nan) = lookup(signed_nan_pairs, "plain")
+    if !has_minus_nan || !str.eq(text_of(minus_nan, 502i32), "-.nan") { os.exit(503i32) }
+    if !has_plus_nan || !str.eq(text_of(plus_nan, 504i32), "+.NaN") { os.exit(505i32) }
+    if !has_plain_nan || mem.bitcast[u64](float_of(plain_nan, 506i32)) != 9221120237041090560u64 { os.exit(507i32) }
+
     let (plain_continuation, plain_continuation_error) = yaml.parse(a, "x: this is\n  continued\n", options(4u16, false))
     if plain_continuation_error != yaml.Unsupported { os.exit(163) }
     let (quoted_continuation, quoted_continuation_error) = yaml.parse(a, "x: \"a\n  b\"\n", options(4u16, false))
