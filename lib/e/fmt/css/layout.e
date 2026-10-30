@@ -908,6 +908,19 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
         append(l, parent_box, b)
         ret
     }
+    if n.namespace == .Html && str.eq(n.name, "img") && s.width.kind != .Px && s.height.kind != .Px {
+        // An image that did not load and has no size of its own shows its alt text inline, as the other browsers do.
+        let broken = l.measure.intrinsic(l.measure.ctx, node, s)
+        if broken.kind == 1u8 && !broken.has_width && !broken.has_height {
+            let (alt, has_alt) = dom.get_attribute(l.d, node, "alt")
+            if has_alt && alt.len > 0usize {
+                let ab = new_box(l, .Text, true, false, node, parent_node)
+                bx(l, ab).text = alt
+                append(l, parent_box, ab)
+                ret
+            }
+        }
+    }
     var inner: Inner = .Flow
     var inline_level = is_inline_level_display(s.display)
     var replaced = false
@@ -3690,6 +3703,47 @@ fn used_replaced_size(l: *Layout, b: u32, cbw: f64, cbh: f64) -> (f64, f64) {
         let hx = horizontal_extras(rb)
         let vx = vertical_extras(rb)
         if !known_h { h = maxf(0.0f64, (w + hx) / ratio - vx) } else if !known_w { w = maxf(0.0f64, (h + vx) * ratio - hx) }
+    }
+    if !known_w && !known_h && !ratio_forced && w > 0.0f64 && h > 0.0f64 {
+        // Neither size is set: the constraint violation table of CSS 2.1 10.4 picks the pair that keeps the natural ratio.
+        let max_w = clamp_width(l, b, 1.0e9f64, cbw)
+        let min_w = clamp_width(l, b, 0.0f64, cbw)
+        let max_h = clamp_height(l, b, 1.0e9f64, cbh)
+        let min_h = clamp_height(l, b, 0.0f64, cbh)
+        let over_w = w > max_w
+        let under_w = w < min_w
+        let over_h = h > max_h
+        let under_h = h < min_h
+        var rw = w
+        var rh = h
+        if over_w && over_h {
+            if max_w / w <= max_h / h { rw = max_w
+                rh = maxf(min_h, max_w * h / w) } else { rw = maxf(min_w, max_h * w / h)
+                rh = max_h }
+        } else if under_w && under_h {
+            if min_w / w <= min_h / h { rw = minf(max_w, min_h * w / h)
+                rh = min_h } else { rw = min_w
+                rh = minf(max_h, min_w * h / w) }
+        } else if under_w && over_h {
+            rw = min_w
+            rh = max_h
+        } else if over_w && under_h {
+            rw = max_w
+            rh = min_h
+        } else if over_w {
+            rw = max_w
+            rh = maxf(min_h, max_w * h / w)
+        } else if under_w {
+            rw = min_w
+            rh = minf(max_h, min_w * h / w)
+        } else if over_h {
+            rw = maxf(min_w, max_h * w / h)
+            rh = max_h
+        } else if under_h {
+            rw = minf(max_w, min_h * w / h)
+            rh = min_h
+        }
+        ret (rw, rh)
     }
     // min and max constraints, keeping the ratio when only one axis is constrained.
     let wc = clamp_width(l, b, w, cbw)
