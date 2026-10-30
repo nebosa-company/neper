@@ -34,8 +34,12 @@ type Rule = struct { has_dst: bool, std_offset: i32, dst_offset: i32, std_name: 
 type ZoneData = struct { name: str, transitions: []i64, type_of: []u8, offsets: []i32, daylight: []bool, abbreviations: []str, rule: Rule, has_rule: bool }
 type State = struct { version: str, zones: []ZoneData, zone_names: []str }
 
+fn be32_u(data: []const u8, at: usize) -> u32 {
+    ret (u32(data[at]) << 24u32) | (u32(data[at + 1usize]) << 16u32) | (u32(data[at + 2usize]) << 8u32) | u32(data[at + 3usize])
+}
+
 fn be32(data: []const u8, at: usize) -> i64 {
-    let raw = (u32(data[at]) << 24u32) | (u32(data[at + 1usize]) << 16u32) | (u32(data[at + 2usize]) << 8u32) | u32(data[at + 3usize])
+    let raw = be32_u(data, at)
     if raw >= 2147483648u32 { ret i64(raw) - 4294967296i64 }
     ret i64(raw)
 }
@@ -207,6 +211,32 @@ fn rule_offset(rule: Rule, seconds: i64) -> Offset {
 
 // --- TZif.
 
+// Adds `count * width` to a TZif block size without wrapping or passing its
+// enclosing byte limit.
+fn tzif_part(total: usize, count: usize, width: usize, limit: usize) -> (usize, bool) {
+    if total > limit || count > (limit - total) / width { ret (0usize, false) }
+    ret (total + count * width, true)
+}
+
+// The payload after one TZif header. Bound each component before combining it
+// so hostile 32-bit header counts cannot wrap an intermediate product or sum.
+fn tzif_block_size(timecnt: usize, typecnt: usize, charcnt: usize, leap: usize, isstd: usize, isut: usize, time_width: usize, leap_width: usize, limit: usize) -> (usize, bool) {
+    let (after_times, times_good) = tzif_part(0usize, timecnt, time_width, limit)
+    if !times_good { ret (0usize, false) }
+    let (after_indices, indices_good) = tzif_part(after_times, timecnt, 1usize, limit)
+    if !indices_good { ret (0usize, false) }
+    let (after_types, types_good) = tzif_part(after_indices, typecnt, 6usize, limit)
+    if !types_good { ret (0usize, false) }
+    let (after_chars, chars_good) = tzif_part(after_types, charcnt, 1usize, limit)
+    if !chars_good { ret (0usize, false) }
+    let (after_leaps, leaps_good) = tzif_part(after_chars, leap, leap_width, limit)
+    if !leaps_good { ret (0usize, false) }
+    let (after_standard, standard_good) = tzif_part(after_leaps, isstd, 1usize, limit)
+    if !standard_good { ret (0usize, false) }
+    let (final_size, final_good) = tzif_part(after_standard, isut, 1usize, limit)
+    ret (final_size, final_good)
+}
+
 fn parse_tzif(a: *mem.Arena, name: str, data: []const u8) -> (ZoneData, err) {
     var zone_data: ZoneData = zero
     zone_data.name = name
@@ -216,24 +246,27 @@ fn parse_tzif(a: *mem.Arena, name: str, data: []const u8) -> (ZoneData, err) {
     var wide = false
     if tzif_version >= 50u8 {
         // Skip the 32-bit block to the second header.
-        let v1_time = usize(be32(data, 32usize))
-        let v1_type = usize(be32(data, 36usize))
-        let v1_char = usize(be32(data, 40usize))
-        let v1_leap = usize(be32(data, 28usize))
-        let v1_isstd = usize(be32(data, 24usize))
-        let v1_isut = usize(be32(data, 20usize))
-        header = 44usize + v1_time * 5usize + v1_type * 6usize + v1_char + v1_leap * 8usize + v1_isstd + v1_isut
-        if header + 44usize > data.len { ret (zone_data, InvalidData) }
+        if data.len < 88usize { ret (zone_data, InvalidData) }
+        let v1_time = usize(be32_u(data, 32usize))
+        let v1_type = usize(be32_u(data, 36usize))
+        let v1_char = usize(be32_u(data, 40usize))
+        let v1_leap = usize(be32_u(data, 28usize))
+        let v1_isstd = usize(be32_u(data, 24usize))
+        let v1_isut = usize(be32_u(data, 20usize))
+        if v1_time > 100000usize || v1_type == 0usize || v1_type > 256usize { ret (zone_data, InvalidData) }
+        let (v1_block, v1_good) = tzif_block_size(v1_time, v1_type, v1_char, v1_leap, v1_isstd, v1_isut, 4usize, 8usize, data.len - 44usize)
+        if !v1_good || v1_block > data.len - 88usize { ret (zone_data, InvalidData) }
+        header = 44usize + v1_block
         if data[header] != 84u8 || data[header + 1usize] != 90u8 { ret (zone_data, InvalidData) }
         wide = true
     }
-    let isut = usize(be32(data, header + 20usize))
-    let isstd = usize(be32(data, header + 24usize))
-    let leap = usize(be32(data, header + 28usize))
-    let timecnt = usize(be32(data, header + 32usize))
-    let typecnt = usize(be32(data, header + 36usize))
-    let charcnt = usize(be32(data, header + 40usize))
-    if typecnt == 0usize || timecnt > 100000usize { ret (zone_data, InvalidData) }
+    let isut = usize(be32_u(data, header + 20usize))
+    let isstd = usize(be32_u(data, header + 24usize))
+    let leap = usize(be32_u(data, header + 28usize))
+    let timecnt = usize(be32_u(data, header + 32usize))
+    let typecnt = usize(be32_u(data, header + 36usize))
+    let charcnt = usize(be32_u(data, header + 40usize))
+    if typecnt == 0usize || typecnt > 256usize || timecnt > 100000usize { ret (zone_data, InvalidData) }
     var time_width = 4usize
     var leap_width = 8usize
     if wide {
@@ -241,9 +274,9 @@ fn parse_tzif(a: *mem.Arena, name: str, data: []const u8) -> (ZoneData, err) {
         leap_width = 12usize
     }
     let data_start = header + 44usize
+    let (block, block_good) = tzif_block_size(timecnt, typecnt, charcnt, leap, isstd, isut, time_width, leap_width, data.len - data_start)
+    if !block_good { ret (zone_data, InvalidData) }
     var at = data_start
-    let block = timecnt * time_width + timecnt + typecnt * 6usize + charcnt + leap * leap_width + isstd + isut
-    if at + block > data.len { ret (zone_data, InvalidData) }
     let (transitions, transitions_error) = mem.alloc[i64](a, timecnt)
     if transitions_error != ok { ret (zone_data, transitions_error) }
     var i = 0usize

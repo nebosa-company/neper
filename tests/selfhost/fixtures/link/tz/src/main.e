@@ -101,6 +101,27 @@ fn invalid_footer(a: *mem.Arena, footer: str, code: i32) {
     if load_error != tz.InvalidData { os.exit(code) }
 }
 
+// Header counts are unsigned. A high-bit count must be InvalidData, not a
+// signed narrowing trap or a wrapped block calculation.
+fn invalid_tzif_counts(a: *mem.Arena, code: i32) {
+    var pack: [512]u8 = zero
+    let length = footer_pack(pack[0..], "UTC0")
+    let first = 18usize
+    let start = mem.mark(a)
+    pack[first + 32usize] = 128u8
+    let (_, first_error) = tz.load(a, pack[0usize..length])
+    if first_error != tz.InvalidData || mem.mark(a) != start { os.exit(code) }
+    pack[first + 32usize] = 0u8
+    let second = first + 54usize
+    pack[second + 36usize] = 128u8
+    let (_, second_error) = tz.load(a, pack[0usize..length])
+    if second_error != tz.InvalidData || mem.mark(a) != start { os.exit(code) }
+    pack[second + 36usize] = 0u8
+    pack[second + 40usize] = 128u8
+    let (_, chars_error) = tz.load(a, pack[0usize..length])
+    if chars_error != tz.InvalidData || mem.mark(a) != start { os.exit(code) }
+}
+
 // A one-zone TZif v1 pack with two transition times. `second_time` is at most
 // the first time, so RFC 8536's required strict ascending order is violated.
 fn unordered_transition_pack(out: []u8, second_time: u8) -> usize {
@@ -305,6 +326,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     invalid_footer(a, "STD0DST,M1.1.7,M1.1.0", 71)
     invalid_footer(a, "STD0DST,M1.1.0/168,M1.1.0", 72)
     invalid_footer(a, "STD0DST,M999999999999999999999999999999.1.0,M1.1.0", 73)
+    invalid_tzif_counts(a, 82)
     var unordered_pack: [128]u8 = zero
     let unordered_length = unordered_transition_pack(unordered_pack[0..], 1u8)
     let (_, unordered_error) = tz.load(a, unordered_pack[0usize..unordered_length])
