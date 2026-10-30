@@ -371,6 +371,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var stray_break = cbor.decoder(raw[..stray_break_len])
     if cbor.skip(&stray_break) != cbor.Invalid { os.exit(61i32) }
 
+    // RFC 8949 core deterministic ordering compares encoded keys bytewise, not
+    // by the RFC 7049 length-first ordering. `0x18 0x64` must precede `0x20`.
+    var order_pairs: [2]cbor.Pair = zero
+    order_pairs[0usize] = cbor.Pair { key: cbor.Value{ Int: -1i64 }, value: cbor.Value{ Uint: 0u64 } }
+    order_pairs[1usize] = cbor.Pair { key: cbor.Value{ Uint: 100u64 }, value: cbor.Value{ Uint: 0u64 } }
+    let order_map = cbor.Value{ Map: order_pairs[0usize..] }
+    var order_storage: [8]u8 = zero
+    var order_encoder = cbor.encoder(order_storage[..])
+    if cbor.encode(&order_encoder, &order_map) != ok { os.exit(66i32) }
+    let ordered = cbor.encoded(&order_encoder)
+    if ordered.len != 6usize || ordered[0usize] != 162u8 || ordered[1usize] != 24u8 || ordered[2usize] != 100u8 || ordered[3usize] != 0u8 || ordered[4usize] != 32u8 || ordered[5usize] != 0u8 { os.exit(67i32) }
+
     try io.print("fmt cbor ok\n")
     ret ok
 }

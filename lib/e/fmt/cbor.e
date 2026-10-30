@@ -442,8 +442,8 @@ fn skip(d: *Decoder) -> err { ret skip_depth(d, 128u16) }
 //
 // `Value` is one item with its nesting. `encode` writes it in the preferred serialization of
 // RFC 8949 section 4.2: shortest heads, the shortest float that reads back exactly, no
-// indefinite lengths, and map keys in the order of their encodings (shorter first, then
-// bytewise). `decode` reads one back through the typed helpers above; its arrays, maps and
+// indefinite lengths, and map keys in bytewise lexicographic order of their encodings.
+// `decode` reads one back through the typed helpers above; its arrays, maps and
 // tagged items live in the arena, its strings borrow from the input.
 
 type Pair = struct { key: Value, value: Value }
@@ -489,13 +489,12 @@ fn encode_float_shortest(e: *Encoder, value: f64) -> err {
 }
 
 fn key_less(x: []const u8, y: []const u8) -> bool {
-    if x.len != y.len { ret x.len < y.len }
     var i = 0usize
-    while i < x.len {
+    while i < x.len && i < y.len {
         if x[i] != y[i] { ret x[i] < y[i] }
         i += 1usize
     }
-    ret false
+    ret x.len < y.len
 }
 
 fn reverse_bytes(dst: []u8, lo: usize, hi: usize) {
