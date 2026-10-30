@@ -163,6 +163,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
     mem.copy[u8](duplicate_iend[rgba8_png().len..], rgba8_png()[iend_at..])
     let (_, duplicate_iend_error) = png.decode(a, reader_of(&state, duplicate_iend), options())
     if duplicate_iend_error != png.Invalid { os.exit(230i32) }
+
+    // An unknown uppercase chunk is critical and must be rejected by both header
+    // inspection and decoding. Its zero-length chunk still has a valid CRC.
+    let sample = rgb8_png()
+    let idat_at = 33usize
+    let (critical_chunk, critical_chunk_alloc) = mem.alloc[u8](a, sample.len + 12usize)
+    if critical_chunk_alloc != ok { os.exit(231i32) }
+    mem.copy[u8](critical_chunk[..idat_at], sample[..idat_at])
+    png.put32(critical_chunk, idat_at, 0u32)
+    mem.copy[u8](critical_chunk[idat_at + 4usize..idat_at + 8usize], "FAIL")
+    png.put32(critical_chunk, idat_at + 8usize, png.crc32(critical_chunk[idat_at + 4usize..idat_at + 8usize]))
+    mem.copy[u8](critical_chunk[idat_at + 12usize..], sample[idat_at..])
+    let (_, critical_inspect_error) = png.inspect(reader_of(&state, critical_chunk))
+    if critical_inspect_error != png.Unsupported { os.exit(232i32) }
+    let (_, critical_decode_error) = png.decode(a, reader_of(&state, critical_chunk), options())
+    if critical_decode_error != png.Unsupported { os.exit(233i32) }
+
+    // IDAT chunks form one consecutive sequence. Splitting this valid stream and
+    // inserting an ancillary chunk used to decode because all IDAT bodies joined.
+    let idat_length = 46usize
+    let split_at = 6usize
+    let idat_body_at = idat_at + 8usize
+    let idat_end = idat_at + 12usize + idat_length
+    let (split_idat, split_idat_alloc) = mem.alloc[u8](a, sample.len + 24usize)
+    if split_idat_alloc != ok { os.exit(234i32) }
+    mem.copy[u8](split_idat[..idat_at], sample[..idat_at])
+    png.put32(split_idat, idat_at, u32(split_at))
+    mem.copy[u8](split_idat[idat_at + 4usize..idat_at + 8usize], "IDAT")
+    mem.copy[u8](split_idat[idat_at + 8usize..idat_at + 8usize + split_at], sample[idat_body_at..idat_body_at + split_at])
+    png.put32(split_idat, idat_at + 8usize + split_at, png.crc32(split_idat[idat_at + 4usize..idat_at + 8usize + split_at]))
+    let text_at = idat_at + 12usize + split_at
+    png.put32(split_idat, text_at, 0u32)
+    mem.copy[u8](split_idat[text_at + 4usize..text_at + 8usize], "tEXt")
+    png.put32(split_idat, text_at + 8usize, png.crc32(split_idat[text_at + 4usize..text_at + 8usize]))
+    let second_idat_at = text_at + 12usize
+    let remainder = idat_length - split_at
+    png.put32(split_idat, second_idat_at, u32(remainder))
+    mem.copy[u8](split_idat[second_idat_at + 4usize..second_idat_at + 8usize], "IDAT")
+    mem.copy[u8](split_idat[second_idat_at + 8usize..second_idat_at + 8usize + remainder], sample[idat_body_at + split_at..idat_body_at + idat_length])
+    png.put32(split_idat, second_idat_at + 8usize + remainder, png.crc32(split_idat[second_idat_at + 4usize..second_idat_at + 8usize + remainder]))
+    let suffix_at = second_idat_at + 12usize + remainder
+    mem.copy[u8](split_idat[suffix_at..], sample[idat_end..])
+    let (_, split_idat_error) = png.decode(a, reader_of(&state, split_idat), options())
+    if split_idat_error != png.Invalid { os.exit(235i32) }
+
     let (_, bounded_error) = png.decode(a, reader_of(&state, rgba8_png()), png.DecodeOptions { max_width: 8u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
     let (_, pixel_bounded_error) = png.decode(a, reader_of(&state, rgba8_png()), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 62u64, verify_crc: true })
     if bounded_error != png.TooLarge || pixel_bounded_error != png.TooLarge { os.exit(213i32) }
