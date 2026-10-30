@@ -150,6 +150,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var noise: [1]f64 = zero
     var w: [1]f64 = zero
     w[0usize] = 3.0f64
+    noise[0usize] = 3.0f64
+    if ode.euler_maruyama[Nothing](&nothing, decay, unit_diffusion, 0.0f64, w[..], 0.0f64 - 0.25f64, noise[..], scratch[..]) != ode.Invalid || w[0usize] != 3.0f64 { os.exit(6i32) }
+    noise[0usize] = 0.0f64
     if ode.euler_maruyama[Nothing](&nothing, zero_drift, unit_diffusion, 0.0f64, w[..], 0.25f64, noise[..], scratch[..]) != ok { os.exit(6i32) }
     if w[0usize] != 3.0f64 { os.exit(6i32) }
     var r = rand.pcg64(99u64, 7u64)

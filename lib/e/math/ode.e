@@ -10,6 +10,7 @@
 // caller too, sized as each declaration says.
 
 error TooSmall
+error Invalid
 
 // Whether scratch can hold `vectors` state vectors of `count` entries without
 // forming their product first.  The division is deliberate: a caller can pass
@@ -221,6 +222,7 @@ fn yoshida[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: 
 // `noise` the standard normal increments for this step (one per component);
 // `scratch.len >= 2 * y.len`.
 fn euler_maruyama[Ctx: type](ctx: *Ctx, drift: fn(*Ctx, f64, []const f64, []f64), diffusion: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, noise: []const f64, scratch: []f64) -> err {
+    if h < 0.0f64 { ret Invalid }
     let n = y.len
     if noise.len < n || !has_scratch(scratch.len, n, 2usize) { ret TooSmall }
     var a = scratch[..n]
