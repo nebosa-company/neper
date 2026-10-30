@@ -42,6 +42,7 @@ error HierarchyRequest
 error NotChild
 error Full
 error SyntaxError
+error InvalidCharacter
 
 type Dom = struct { a: *mem.Arena, nodes: []html.Node, used: usize, root: NodeId, quirks: u8, version: u64 }
 
@@ -437,7 +438,7 @@ fn set_text_content(d: *Dom, id: NodeId, data: str) -> err {
         d.version += 1u64
         ret ok
     }
-    if k == .Doctype { ret ok }
+    if k == .Doctype || id == d.root { ret ok }
     remove_children(d, id)
     if data.len > 0usize {
         let text = try create_text(d, data)
@@ -553,6 +554,16 @@ fn remove_attribute(d: *Dom, id: NodeId, name: str) -> err {
 
 fn is_class_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 12u8 || c == 13u8 }
 
+fn check_class_token(token: str) -> err {
+    if token.len == 0usize { ret SyntaxError }
+    var i = 0usize
+    while i < token.len {
+        if is_class_space(token[i]) { ret InvalidCharacter }
+        i += 1usize
+    }
+    ret ok
+}
+
 fn class_contains(d: *const Dom, id: NodeId, token: str) -> bool {
     let (value, found) = get_attribute(d, id, "class")
     if !found || token.len == 0usize { ret false }
@@ -567,7 +578,8 @@ fn class_contains(d: *const Dom, id: NodeId, token: str) -> bool {
 }
 
 fn class_add(d: *Dom, id: NodeId, token: str) -> err {
-    if token.len == 0usize || class_contains(d, id, token) { ret ok }
+    try check_class_token(token)
+    if class_contains(d, id, token) { ret ok }
     let (value, found) = get_attribute(d, id, "class")
     if !found || str.trim(value).len == 0usize { ret set_attribute(d, id, "class", token) }
     let joined = try str.concat(d.a, str.trim_end(value), " ")
@@ -576,6 +588,7 @@ fn class_add(d: *Dom, id: NodeId, token: str) -> err {
 }
 
 fn class_remove(d: *Dom, id: NodeId, token: str) -> err {
+    try check_class_token(token)
     if !class_contains(d, id, token) { ret ok }
     let (value, _) = get_attribute(d, id, "class")
     var b = try str.builder(d.a, value.len + 1usize)
@@ -597,6 +610,8 @@ fn class_remove(d: *Dom, id: NodeId, token: str) -> err {
 
 // Adds the token if absent, removes it if present; true when it is present afterwards.
 fn class_toggle(d: *Dom, id: NodeId, token: str) -> (bool, err) {
+    let token_error = check_class_token(token)
+    if token_error != ok { ret (false, token_error) }
     if class_contains(d, id, token) {
         let e = class_remove(d, id, token)
         ret (false, e)
@@ -762,7 +777,7 @@ fn compile_selectors(a: *mem.Arena, text: str) -> ([]const selector.RuleSelector
     if segments.len != chosen.len { ret (zero, SyntaxError) }
     var i = 0usize
     while i < chosen.len {
-        if !selector_known(chosen[i].selector) { ret (zero, SyntaxError) }
+        if chosen[i].has_pseudo || !selector_known(chosen[i].selector) { ret (zero, SyntaxError) }
         i += 1usize
     }
     ret (chosen, ok)

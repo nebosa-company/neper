@@ -46,6 +46,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4 != ok || up != app { os.exit(11) }
     let (_, bad) = dom.query_selector(a, &tree, app, "p[")
     if bad != dom.SyntaxError { os.exit(12) }
+    let (_, pseudo_query_error) = dom.query_selector(a, &tree, app, "p::before")
+    let (_, pseudo_all_error) = dom.query_selector_all(a, &tree, tree.root, "p::before", found[0..])
+    let (_, pseudo_matches_error) = dom.matches(a, &tree, hit, "p::before")
+    let (_, pseudo_closest_error) = dom.closest(a, &tree, hit, "p::before")
+    if pseudo_query_error != dom.SyntaxError || pseudo_all_error != dom.SyntaxError || pseudo_matches_error != dom.SyntaxError || pseudo_closest_error != dom.SyntaxError { os.exit(53) }
 
     // Creation, insertion, a live collection.
     let version = tree.version
@@ -90,6 +95,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dom.class_remove(&tree, app, "b") != ok || !same(attr(&tree, app, "class"), "a c") { os.exit(35) }
     let (present, e8) = dom.class_toggle(&tree, app, "a")
     if e8 != ok || present || !same(attr(&tree, app, "class"), "c") { os.exit(36) }
+    if dom.class_add(&tree, app, "") != dom.SyntaxError || dom.class_add(&tree, app, "c d") != dom.InvalidCharacter { os.exit(54) }
+    if dom.class_remove(&tree, app, "") != dom.SyntaxError || dom.class_remove(&tree, app, "\t") != dom.InvalidCharacter { os.exit(55) }
+    let (invalid_present, invalid_toggle_error) = dom.class_toggle(&tree, app, " ")
+    if invalid_present || invalid_toggle_error != dom.InvalidCharacter || !same(attr(&tree, app, "class"), "c") { os.exit(56) }
     var spans: [4]dom.NodeId = zero
     if dom.elements_by_tag(&tree, app, "span", spans[0..]) != 1usize { os.exit(37) }
     let (foo, has_foo, e9) = dom.dataset_get(a, &tree, spans[0usize], "fooBar")
@@ -103,6 +112,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dom.set_text_content(&tree, spans[0usize], "x<y") != ok { os.exit(42) }
     let (outer, e11) = dom.outer_html(a, &tree, spans[0usize])
     if e11 != ok || !same(outer, "<span data-baz-qux=\"2\">x&lt;y</span>") { os.exit(43) }
+    let root_version = tree.version
+    let root_first = dom.first_child(&tree, tree.root)
+    let root_children = dom.child_count(&tree, tree.root)
+    if dom.set_text_content(&tree, tree.root, "must not replace the document") != ok { os.exit(57) }
+    if tree.version != root_version || dom.first_child(&tree, tree.root) != root_first || dom.child_count(&tree, tree.root) != root_children { os.exit(58) }
     if dom.set_inner_html(&tree, spans[0usize], "<b>k</b>m", options()) != ok { os.exit(44) }
     let (inner, e12) = dom.inner_html(a, &tree, spans[0usize])
     if e12 != ok || !same(inner, "<b>k</b>m") { os.exit(45) }
