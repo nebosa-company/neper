@@ -184,7 +184,7 @@ fn fir(x: []const f64, taps: []const f64, out: []f64) -> err {
 fn iir(x: []const f64, b: []const f64, a: []const f64, out: []f64, state: []f64) -> err {
     var order = b.len
     if a.len > order { order = a.len }
-    if order == 0usize || a[0usize] == 0.0f64 { ret Invalid }
+    if order == 0usize || a.len == 0usize || a[0usize] == 0.0f64 { ret Invalid }
     if out.len < x.len || state.len + 1usize < order { ret TooSmall }
     order -= 1usize
     var z = state[..order]
@@ -284,6 +284,10 @@ fn biquad_peak(frequency: f64, q: f64, gain_db: f64, out: []f64) -> err { ret bi
 // A symmetric window of `n` samples (SciPy's `get_window(kind, n, fftbins=False)`).
 fn window(kind: Window, n: usize, out: []f64) -> err {
     if out.len < n { ret TooSmall }
+    if n == 1usize {
+        out[0usize] = 1.0f64
+        ret ok
+    }
     var i = 0usize
     while i < n {
         var phase = 0.0f64
@@ -312,6 +316,7 @@ fn design_windowed_sinc(taps: usize, cutoff: f64, kind: Window, out: []f64) -> e
         sum += out[i]
         i += 1usize
     }
+    if sum == 0.0f64 || !finite_f64(sum) { ret Invalid }
     i = 0usize
     while i < taps {
         out[i] = out[i] / sum
@@ -1152,7 +1157,7 @@ fn wiener(x: []const f64, noise_variance: f64, frame: usize, out: []f64, scratch
 // prediction error. `scratch.len >= order + 1`.
 fn levinson_durbin(r: []const f64, order: usize, out: []f64, scratch: []f64) -> (f64, err) {
     if r.len <= order || out.len <= order || scratch.len <= order { ret (0.0f64, TooSmall) }
-    if r[0usize] <= 0.0f64 { ret (0.0f64, Invalid) }
+    if !finite_f64(r[0usize]) || r[0usize] <= 0.0f64 { ret (0.0f64, Invalid) }
     var error_power = r[0usize]
     out[0usize] = 1.0f64
     var i = 1usize
@@ -1164,6 +1169,8 @@ fn levinson_durbin(r: []const f64, order: usize, out: []f64, scratch: []f64) -> 
             j += 1usize
         }
         let k = 0.0f64 - acc / error_power
+        let next_error = error_power * (1.0f64 - k * k)
+        if !finite_f64(k) || !finite_f64(next_error) || next_error <= 0.0f64 { ret (0.0f64, Invalid) }
         j = 1usize
         while j < i {
             scratch[j] = out[j] + k * out[i - j]
@@ -1175,7 +1182,7 @@ fn levinson_durbin(r: []const f64, order: usize, out: []f64, scratch: []f64) -> 
             j += 1usize
         }
         out[i] = k
-        error_power = error_power * (1.0f64 - k * k)
+        error_power = next_error
         i += 1usize
     }
     ret (error_power, ok)

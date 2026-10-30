@@ -75,6 +75,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dsp.window(.Hamming, 9usize, out[..]) != ok || !near(digest(out[..9usize]), -0.6247710818366455f64, 1.0e-9f64) { os.exit(3i32) }
     if dsp.window(.Blackman, 7usize, out[..]) != ok || !near(digest(out[..7usize]), -1.556845100896143f64, 1.0e-9f64) { os.exit(3i32) }
     if dsp.design_windowed_sinc(11usize, 0.3f64, .Hamming, out[..]) != ok || !near(digest(out[..11usize]), 0.1305567399543801f64, 1.0e-9f64) { os.exit(3i32) }
+    var singleton: [1]f64 = zero
+    if dsp.window(.Hann, 1usize, singleton[..]) != ok || singleton[0usize] != 1.0f64 { os.exit(3i32) }
+    if dsp.window(.Hamming, 1usize, singleton[..]) != ok || singleton[0usize] != 1.0f64 { os.exit(3i32) }
+    if dsp.window(.Blackman, 1usize, singleton[..]) != ok || singleton[0usize] != 1.0f64 { os.exit(3i32) }
+    if dsp.design_windowed_sinc(1usize, 0.3f64, .Hann, singleton[..]) != ok || singleton[0usize] != 1.0f64 { os.exit(3i32) }
+    var zero_sum: [2]f64 = zero
+    if dsp.design_windowed_sinc(2usize, 0.3f64, .Hann, zero_sum[..]) != dsp.Invalid { os.exit(3i32) }
 
     // 4: Butterworth and the IIR run.
     var b: [8]f64 = zero
@@ -82,6 +89,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dsp.design_butterworth(4usize, 0.3f64, b[..], den[..], scratch[..]) != ok { os.exit(4i32) }
     if !near(digest(b[..5usize]), -0.07331062690594391f64, 1.0e-9f64) || !near(digest(den[..5usize]), 0.05041740446820749f64, 1.0e-9f64) { os.exit(4i32) }
     if dsp.iir(x[..], b[..5usize], den[..5usize], out[..], scratch[..4usize]) != ok || !near(digest(out[..64usize]), 0.4778193074124202f64, 1.0e-9f64) { os.exit(4i32) }
+    var unit_numerator: [1]f64 = zero
+    unit_numerator[0usize] = 1.0f64
+    var no_denominator: [0]f64 = zero
+    var no_iir_state: [0]f64 = zero
+    if dsp.iir(x[..1usize], unit_numerator[..], no_denominator[..], out[..1usize], no_iir_state[..]) != dsp.Invalid { os.exit(4i32) }
     if dsp.design_butterworth(4usize, 1.5f64, b[..], den[..], scratch[..]) != dsp.Invalid { os.exit(4i32) }
 
     // 5: Chebyshev I.
@@ -181,6 +193,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 11: LPC and DTW.
     let (power, lpc_error) = dsp.lpc(x[..], 4usize, out[..], scratch[..])
     if lpc_error != ok || !near(digest(out[..5usize]), 1.0704717452651376f64, 1.0e-9f64) || !near(power, 23.09862265617159f64, 1.0e-8f64) { os.exit(11i32) }
+    var singular_r: [3]f64 = zero
+    singular_r[0usize] = 1.0f64
+    singular_r[1usize] = 1.0f64
+    singular_r[2usize] = 1.0f64
+    var singular_out: [3]f64 = zero
+    var singular_scratch: [3]f64 = zero
+    let (singular_power, singular_error) = dsp.levinson_durbin(singular_r[..], 2usize, singular_out[..], singular_scratch[..])
+    if singular_error != dsp.Invalid || singular_power != 0.0f64 { os.exit(11i32) }
     let (distance, dtw_error) = dsp.dtw(x[..10usize], x[10usize..22usize], big[..])
     if dtw_error != ok || !near(distance, 5.803094143047929f64, 1.0e-9f64) { os.exit(11i32) }
     var path_a: [24]usize = zero
