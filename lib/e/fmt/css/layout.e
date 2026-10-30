@@ -78,7 +78,8 @@ type Layout = struct {
     floats: list.List[FloatRec], tables: list.List[TableData],
     counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
     orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule],
-    sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64, cfrags: list.List[ColFrag]
+    sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64, cfrags: list.List[ColFrag],
+    mc_br: []const f64, mc_use: bool
 }
 
 // A column rule: a filled rectangle in the border box of multicol container `box` (see `layout_multicol`).
@@ -8807,9 +8808,113 @@ fn columns_for(l: *Layout, s: *const style.Style, cw: f64) -> Cols {
     ret out
 }
 
-fn column_of(y: f64, colh: f64) -> usize {
+fn column_of(l: *const Layout, y: f64, colh: f64) -> usize {
     if y <= 0.0f64 || colh <= 0.0f64 { ret 0usize }
-    ret usize((y + 0.01f64) / colh)
+    if !l.mc_use || l.mc_br.len == 0usize { ret usize((y + 0.01f64) / colh) }
+    // The columns start where whole lines and unbreakable boxes do (`mc_prepare`), not at multiples of the height.
+    let n = l.mc_br.len
+    if y + 0.01f64 >= l.mc_br[n - 1usize] { ret n - 1usize + usize((y + 0.01f64 - l.mc_br[n - 1usize]) / colh) }
+    var k = 0usize
+    while k + 1usize < n && l.mc_br[k + 1usize] <= y + 0.01f64 { k += 1usize }
+    ret k
+}
+
+// Where column `k` starts and ends in the one-column layout.
+fn col_start(l: *const Layout, k: usize, colh: f64) -> f64 {
+    if !l.mc_use || l.mc_br.len == 0usize { ret f64(k) * colh }
+    let n = l.mc_br.len
+    if k < n { ret l.mc_br[k] }
+    ret l.mc_br[n - 1usize] + f64(k - (n - 1usize)) * colh
+}
+
+fn col_end(l: *const Layout, k: usize, colh: f64) -> f64 {
+    if !l.mc_use || l.mc_br.len == 0usize { ret f64(k + 1usize) * colh }
+    if k + 1usize < l.mc_br.len { ret l.mc_br[k + 1usize] }
+    ret col_start(l, k, colh) + colh
+}
+
+// The tops and bottoms (pairs) of the things a column cannot split: lines and unbreakable boxes, in the one-column layout.
+fn collect_atoms(l: *Layout, b: u32, abs_y: f64, out: *list.List[f64]) {
+    let bb0 = &l.boxes.items[usize(b)]
+    let top = abs_y + bb0.border[0usize] + bb0.padding[0usize]
+    var li = 0usize
+    while li < usize(bb0.line_count) {
+        let ln = l.lines.items[usize(bb0.line_first) + li]
+        let p1 = list.push[f64](out, top + ln.y)
+        let p2 = list.push[f64](out, top + ln.y + ln.h)
+        li += 1usize
+    }
+    var kid = bb0.first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        let nxt = kb.next
+        if !kb.inline_level && kb.inner != .Marker && !(kb.positioned_out) {
+            let ks = st(l, kb.style)
+            if ks.position != .Absolute && ks.position != .Fixed {
+                let ky = abs_y + kb.y
+                if unbreakable(l, kid) {
+                    let p3 = list.push[f64](out, ky)
+                    let p4 = list.push[f64](out, ky + kb.h)
+                } else if kb.first != NONE || kb.line_count != 0u32 {
+                    collect_atoms(l, kid, ky, out)
+                }
+            }
+        }
+        kid = nxt
+    }
+}
+
+// Finds the column starts for height `colh`: a column ends before the first line or box that would cross its bottom.
+fn mc_prepare(l: *Layout, b: u32, origin: f64, colh: f64) {
+    l.mc_use = false
+    let (atoms0, ae) = list.init[f64](l.a, 256usize)
+    if ae != ok { ret }
+    var atoms = atoms0
+    collect_atoms(l, b, origin, &atoms)
+    // Insertion sort by top (already in order for ordinary flow, so this is one pass).
+    var i = 2usize
+    while i + 1usize < atoms.len {
+        var j = i
+        while j >= 2usize && atoms.items[j - 2usize] > atoms.items[j] {
+            let t0 = atoms.items[j]
+            let t1 = atoms.items[j + 1usize]
+            atoms.items[j] = atoms.items[j - 2usize]
+            atoms.items[j + 1usize] = atoms.items[j - 1usize]
+            atoms.items[j - 2usize] = t0
+            atoms.items[j - 1usize] = t1
+            j -= 2usize
+        }
+        i += 2usize
+    }
+    let (br0, be) = list.init[f64](l.a, 16usize)
+    if be != ok { ret }
+    var br = br0
+    let first = list.push[f64](&br, 0.0f64)
+    var cur = 0.0f64
+    var a = 0usize
+    while a + 1usize < atoms.len {
+        let t = atoms.items[a]
+        let bt = atoms.items[a + 1usize]
+        while t >= cur + colh + 0.5f64 && br.len < 4096usize {
+            cur += colh
+            let pc = list.push[f64](&br, cur)
+        }
+        if bt > cur + colh + 0.01f64 && t > cur + 0.01f64 {
+            cur = t
+            let pt = list.push[f64](&br, cur)
+        }
+        a += 2usize
+    }
+    l.mc_br = br.items[0usize..br.len]
+    l.mc_use = true
+}
+
+// `colify` over the column starts of height `colh` (none for a wrapping container, whose rows repeat the columns).
+fn colify_t(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -> usize {
+    if l.mc_count == 0usize { mc_prepare(l, b, abs_y, colh) }
+    let r = colify(l, b, abs_y, colh, stride, apply)
+    l.mc_use = false
+    ret r
 }
 
 fn unbreakable(l: *const Layout, b: u32) -> bool {
@@ -8828,6 +8933,7 @@ fn col_dx(l: *const Layout, k: usize, stride: f64) -> f64 {
 }
 
 fn col_dy(l: *const Layout, k: usize, colh: f64) -> f64 {
+    if l.mc_use && l.mc_count == 0usize { ret col_start(l, k, colh) }
     if l.mc_count > 0usize { ret f64(k) * colh - f64(k / l.mc_count) * (colh + l.mc_rgap) }
     ret f64(k) * colh
 }
@@ -8839,8 +8945,8 @@ fn record_col_frags(l: *Layout, kid: u32, ky: f64, k0: usize, k1: usize, colh: f
     kb.cf_count = 0u32
     var k = k0
     while k <= k1 {
-        let s0 = maxf(ky, f64(k) * colh)
-        let s1 = minf(ky + kb.h, f64(k + 1usize) * colh)
+        let s0 = maxf(ky, col_start(l, k, colh))
+        let s1 = minf(ky + kb.h, col_end(l, k, colh))
         if s1 > s0 + 0.01f64 {
             let pushed = list.push[ColFrag](&l.cfrags, ColFrag { dx: col_dx(l, k, stride), dy: s0 - col_dy(l, k, colh) - ky, h: s1 - s0 })
             l.boxes.items[usize(kid)].cf_count += 1u32
@@ -8860,7 +8966,7 @@ fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -
         var li = 0usize
         while li < usize(bb0.line_count) {
             let ln = l.lines.items[first + li]
-            let k = column_of(top + ln.y, colh)
+            let k = column_of(l, top + ln.y, colh)
             if k > maxk { maxk = k }
             if apply && k > 0usize {
                 let dx = col_dx(l, k, stride)
@@ -8892,8 +8998,8 @@ fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -
             let ks = st(l, kb.style)
             if ks.position != .Absolute && ks.position != .Fixed {
                 let ky = abs_y + kb.y
-                let k0 = column_of(ky, colh)
-                let k1 = column_of(ky + kb.h - 0.02f64, colh)
+                let k0 = column_of(l, ky, colh)
+                let k1 = column_of(l, ky + kb.h - 0.02f64, colh)
                 if k0 == k1 || unbreakable(l, kid) {
                     if k0 > maxk { maxk = k0 }
                     if apply { l.boxes.items[usize(kid)].cf_count = 0u32 }
@@ -8998,8 +9104,8 @@ fn colify_run(l: *Layout, first: u32, stop: u32, origin: f64, base: f64, colh: f
             let ks = st(l, kb.style)
             if ks.position != .Absolute && ks.position != .Fixed {
                 let ky = origin + kb.y - base
-                let k0 = column_of(ky, colh)
-                let k1 = column_of(ky + kb.h - 0.02f64, colh)
+                let k0 = column_of(l, ky, colh)
+                let k1 = column_of(l, ky + kb.h - 0.02f64, colh)
                 var k = k0
                 if k0 == k1 || unbreakable(l, kid) {
                     if k0 > maxk { maxk = k0 }
@@ -9111,7 +9217,7 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
         // Wrapping and balancing: as short as the columns of one row allow, no taller than `column-height`.
         var stepw = maxf(1.0f64, total / 64.0f64)
         var iterw = 0usize
-        while iterw < 80usize && colify(l, b, origin, colh, stride, false) >= cols.count && colh < col_fixed {
+        while iterw < 80usize && colify_t(l, b, origin, colh, stride, false) >= cols.count && colh < col_fixed {
             colh += stepw
             iterw += 1usize
         }
@@ -9120,16 +9226,22 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
         colh = ch
     } else {
         // Balance: the least column height under which everything fits in the available columns.
-        var step = maxf(1.0f64, total / 64.0f64)
-        var iter = 0usize
-        while iter < 80usize && colify(l, b, origin, colh, stride, false) >= cols.count && colh < total {
-            colh += step
-            iter += 1usize
+        // The shortest height found by bisection, so atomic lines end exactly on a column boundary.
+        if colify_t(l, b, origin, colh, stride, false) >= cols.count {
+            var lo = colh
+            var hi = total
+            var iter = 0usize
+            while iter < 40usize && hi - lo > 0.001f64 {
+                let mid = (lo + hi) / 2.0f64
+                if colify_t(l, b, origin, mid, stride, false) >= cols.count { lo = mid } else { hi = mid }
+                iter += 1usize
+            }
+            colh = hi
         }
         if colh > total { colh = total }
         if ch >= 0.0f64 && colh > ch { colh = ch }
     }
-    var used_k = colify(l, b, origin, colh, stride, false)
+    var used_k = colify_t(l, b, origin, colh, stride, false)
     var result_h = colh
     if col_wrap {
         let rows = used_k / cols.count + 1usize
@@ -9138,7 +9250,7 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
         l.mc_rgap = rgap
         result_h = f64(rows) * colh + f64(rows - 1usize) * rgap
     }
-    used_k = colify(l, b, origin, colh, stride, true)
+    used_k = colify_t(l, b, origin, colh, stride, true)
     l.mc_count = 0usize
     record_rules(l, b, cols, used_k + 1usize, 0.0f64, colh)
     ret result_h
@@ -9885,7 +9997,7 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (rules_made, e9r) = list.init[ColRule](a, 8usize)
     let (cfrags_made, e9c) = list.init[ColFrag](a, 8usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9r != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false, mc_count: 0usize, mc_rgap: 0.0f64, cfrags: cfrags_made }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false, mc_count: 0usize, mc_rgap: 0.0f64, cfrags: cfrags_made, mc_br: zero, mc_use: false }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))
