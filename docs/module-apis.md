@@ -29528,6 +29528,8 @@ fn bang_bang(measured: f64, setpoint: f64, hysteresis: f64, on: bool) -> bool
 fn feedforward(f: *Feedforward, setpoint: f64, measured: f64, dt: f64) -> f64
 fn sliding_mode(error_value: f64, error_rate: f64, c: f64, k: f64, boundary: f64) -> f64
 fn identity(out: []f64, n: usize)
+error Invalid
+error NoConvergence
 fn lqr(a: []const f64, b: []const f64, q: []const f64, r: []const f64, n: usize, m: usize, k: []f64, scratch: []f64, iterations: usize, tolerance: f64) -> (usize, err)
 fn characteristic(re: []const f64, im: []const f64, out: []f64, scratch: []f64) -> err
 fn pole_placement(a: []const f64, b: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, k: []f64, scratch: []f64) -> err
@@ -29539,7 +29541,7 @@ fn roll_from_accel(ay: f64, az: f64) -> f64
 fn pitch_from_accel(ax: f64, ay: f64, az: f64) -> f64
 fn complementary(angle: f64, rate: f64, measured: f64, dt: f64, alpha: f64) -> f64
 type Kalman = struct { angle: f64, bias: f64, p00: f64, p01: f64, p10: f64, p11: f64, q_angle: f64, q_bias: f64, r_measure: f64 }
-fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> Kalman
+fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> (Kalman, err)
 fn kalman_start(k: *Kalman, angle: f64)
 fn kalman_step(k: *Kalman, measured: f64, rate: f64, dt: f64) -> f64
 fn noise_bias(samples: []const f64) -> (f64, f64)
