@@ -13,6 +13,8 @@ const wait = FUNCTIONS.findIndex(([name]) => name === 'proc_wait')
 const groupClose = FUNCTIONS.findIndex(([name]) => name === 'proc_group_close')
 const open = FUNCTIONS.findIndex(([name]) => name === 'sock_open')
 const listen = FUNCTIONS.findIndex(([name]) => name === 'sock_listen')
+const accept = FUNCTIONS.findIndex(([name]) => name === 'sock_accept')
+const close = FUNCTIONS.findIndex(([name]) => name === 'sock_close')
 const pollOpen = FUNCTIONS.findIndex(([name]) => name === 'poll_open')
 const pollWait = FUNCTIONS.findIndex(([name]) => name === 'poll_wait')
 const pollWake = FUNCTIONS.findIndex(([name]) => name === 'poll_wake')
@@ -45,6 +47,20 @@ try {
   } finally {
     net.createServer = originalCreateServer
   }
+  // A blocking accept must wake if a second caller closes its listener. The
+  // direct host seam makes the close deterministic without a second Wasm module.
+  assert.equal(await host.call(open, [0, 0, 0]), 0, 'a second listener socket opens')
+  const blockedListener = host.view.getUint32(64, true)
+  host.socks.get(blockedListener).server = { close() {} }
+  let acceptSettled = false
+  const pendingAccept = host.call(accept, [blockedListener, 0, 0]).then((status) => {
+    acceptSettled = true
+    return status
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(acceptSettled, false, 'a listener with no connection blocks accept')
+  assert.equal(await host.call(close, [blockedListener]), 0, 'closing the waiting listener succeeds')
+  assert.equal(await pendingAccept, 8, 'the pending accept wakes with BADF after close')
   assert.equal(await host.call(pollOpen, []), 0, 'a host poller opens')
   const poller = host.view.getUint32(64, true)
   const originalSetTimeout = globalThis.setTimeout
