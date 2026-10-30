@@ -388,6 +388,10 @@ fn p_a(cx: *comb.Cx, off: usize) -> (usize, bool) {
     let (n, good) = comb.lit(cx, off, "a")
     ret (n, good)
 }
+fn p_a_node(cx: *comb.Cx, off: usize) -> (usize, bool) {
+    let (n, good) = comb.node(cx, off, 9u32, p_a)
+    ret (n, good)
+}
 fn p_b(cx: *comb.Cx, off: usize) -> (usize, bool) {
     let (n, good) = comb.lit(cx, off, "b")
     ret (n, good)
@@ -458,6 +462,12 @@ fn contracts() -> i32 {
     var cz = comb.context("a,a,a,", events[0..])
     let (e11, g11) = comb.separated1(&cz, 0usize, p_a, raw_comma)
     if !g11 || e11 != 5usize { ret 41i32 }
+    var node_list = comb.context("a,a,a,", events[0..])
+    let (node_list_end, node_list_good) = comb.separated1(&node_list, 0usize, p_a_node, raw_comma)
+    if !node_list_good || node_list_end != 5usize || node_list.count != 3usize { ret 57i32 }
+    if node_list.events[0].kind != 9u32 || node_list.events[0].start != 0usize || node_list.events[0].end != 1usize { ret 58i32 }
+    if node_list.events[1].kind != 9u32 || node_list.events[1].start != 2usize || node_list.events[1].end != 3usize { ret 59i32 }
+    if node_list.events[2].kind != 9u32 || node_list.events[2].start != 4usize || node_list.events[2].end != 5usize { ret 60i32 }
     let (e12, g12) = comb.separated0(&cz, 1usize, p_b, raw_comma)
     if !g12 || e12 != 1usize { ret 42i32 }
     let (e13, g13) = comb.separated1(&cz, 1usize, p_b, raw_comma)

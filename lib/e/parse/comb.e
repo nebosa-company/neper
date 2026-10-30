@@ -309,8 +309,26 @@ fn separated1(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: f
         cx.count = mark
         ret (off, false)
     }
-    let (next, more) = separated0(cx, off, item, sep)
-    ret (next, true)
+    var cur = first
+    while true {
+        let loop_mark = cx.count
+        let (after_sep, good_sep) = sep(cx, cur)
+        if !good_sep {
+            cx.count = loop_mark
+            break
+        }
+        let (after_item, good_item) = item(cx, after_sep)
+        if !good_item {
+            cx.count = loop_mark
+            break
+        }
+        if after_item == cur {
+            cx.count = loop_mark
+            break
+        }
+        cur = after_item
+    }
+    ret (cur, true)
 }
 
 // Exactly `n` repeats of `p`.
