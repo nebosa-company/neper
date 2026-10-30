@@ -213,14 +213,54 @@ fn custom(v: *View) -> widget.Custom {
     ret widget.Custom { ctx: mem.cast[*void](v), measure: measure_view, paint: paint_view, state: widget.bytes_of[u64](&v.revision) }
 }
 
-// The text of every laid-out fragment, one per line, for the conformance runner's `--text`.
+// `v` in decimal, for the fragment dump.
+fn int_text(a: *mem.Arena, v: i64) -> str {
+    var digits: [24]u8 = zero
+    var n = 0usize
+    var m = v
+    var neg = false
+    if m < 0i64 {
+        neg = true
+        m = 0i64 - m
+    }
+    if m == 0i64 {
+        digits[n] = 48u8
+        n += 1usize
+    }
+    while m > 0i64 {
+        digits[n] = u8(48i64 + m % 10i64)
+        n += 1usize
+        m = m / 10i64
+    }
+    if neg {
+        digits[n] = 45u8
+        n += 1usize
+    }
+    let (buf, be) = mem.alloc[u8](a, n + 1usize)
+    if be != ok { ret "" }
+    var i = 0usize
+    while i < n {
+        buf[i] = digits[n - 1usize - i]
+        i += 1usize
+    }
+    ret buf[0usize..n]
+}
+
+// The text of every laid-out fragment with its position (x,y), for the conformance runner's `--text`.
 fn fragment_text(v: *View) -> str {
     var out: str = ""
     var i = 0usize
     while i < v.lay.frags.len {
         let t = v.lay.frags.items[i].text
         if t.len > 0usize {
-            let (joined, je) = str.concat(v.arena, out, t)
+            let fx = int_text(v.arena, i64(v.lay.frags.items[i].x))
+            let fy = int_text(v.arena, i64(v.lay.frags.items[i].y))
+            let (p1, p1e) = str.concat(v.arena, out, fx)
+            let (p2, p2e) = str.concat(v.arena, p1, ",")
+            let (p3, p3e) = str.concat(v.arena, p2, fy)
+            let (p4, p4e) = str.concat(v.arena, p3, ":")
+            if p1e != ok || p2e != ok || p3e != ok || p4e != ok { ret out }
+            let (joined, je) = str.concat(v.arena, p4, t)
             if je != ok { ret out }
             let (line, le) = str.concat(v.arena, joined, " | ")
             if le != ok { ret out }
