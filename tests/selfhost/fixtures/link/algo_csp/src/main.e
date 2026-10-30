@@ -350,6 +350,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     three_pairs[5usize] = 2usize
     let (three, three_error) = csp.solve[Nothing](domains[..], 3usize, 3usize, three_pairs[..], &nothing, queens, assignment[..], saved[..], queue[..], queued[..])
     if three_error != ok || three { os.exit(2i32) }
+    // An isolated empty domain is unsatisfiable rather than a spurious MAC
+    // solution with an out-of-range assignment.
+    var empty_domain: [3]u8 = zero
+    var no_pairs: [0]usize = zero
+    var empty_assignment: [1]usize = zero
+    var empty_saved: [3]u8 = zero
+    var empty_queue: [0]usize = zero
+    var empty_queued: [0]u8 = zero
+    let (empty_solved, empty_error) = csp.solve[Nothing](empty_domain[..], 1usize, 3usize, no_pairs[..], &nothing, queens, empty_assignment[..], empty_saved[..], empty_queue[..], empty_queued[..])
+    if empty_error != ok || empty_solved { os.exit(2i32) }
     set_all(domains[..], 4usize, 4usize)
     let (found, discrepancies, lds_error) = csp.limited_discrepancy[Nothing](domains[..], 4usize, 4usize, all_pairs[..], &nothing, queens, 6usize, assignment[..])
     if lds_error != ok || !found || discrepancies == 0usize { os.exit(2i32) }
@@ -370,6 +380,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if domains[6usize] != 0u8 || domains[7usize] != 0u8 || domains[8usize] != 1u8 || domains[0usize] != 1u8 || domains[1usize] != 1u8 { os.exit(3i32) }
     domains[8usize] = 0u8
     if csp.all_different(domains[..], 3usize, vars[..], match_value[..], seen[..]) != csp.Unsatisfiable { os.exit(3i32) }
+    // The same Hall set must prune through a caller-sized value universe well
+    // beyond the old fixed 64-byte restore capacity.
+    var large_domains: [195]u8 = zero
+    set_all(large_domains[..], 3usize, 65usize)
+    var restricted = 2usize
+    while restricted < 65usize {
+        large_domains[restricted] = 0u8
+        large_domains[65usize + restricted] = 0u8
+        restricted += 1usize
+    }
+    var large_vars: [3]usize = zero
+    large_vars[1usize] = 1usize
+    large_vars[2usize] = 2usize
+    var large_match: [65]usize = zero
+    var large_seen: [65]u8 = zero
+    if csp.all_different(large_domains[..], 65usize, large_vars[..], large_match[..], large_seen[..]) != ok { os.exit(3i32) }
+    if large_domains[130usize] != 0u8 || large_domains[131usize] != 0u8 || large_domains[132usize] != 1u8 { os.exit(3i32) }
 
     // 4: element, table, cumulative.
     set_all(domains[..], 2usize, 4usize)
