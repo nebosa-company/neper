@@ -50,6 +50,8 @@ if fixed.abs(min_fx) != 2147483647i32 { ret 41i64 }
     if fixed.sin(49152i32) != -65536i32 { ret 21i64 }
     if fixed.cos(0i32) != 65536i32 { ret 22i64 }
     if fixed.cos(16384i32) != 0i32 { ret 23i64 }
+    // Phase shifting a high valid angle is still modular, not an overflowing add.
+    if fixed.cos(2147483647i32) != fixed.sin(16383i32) { ret 42i64 }
     // A whole turn later is the same angle, which is what masking the turns buys.
     if fixed.sin(16384i32 + 65536i32) != fixed.sin(16384i32) { ret 24i64 }
     // One twelfth of a turn is 30 degrees, whose sine is a half.
@@ -57,6 +59,8 @@ if fixed.abs(min_fx) != 2147483647i32 { ret 41i64 }
 
     // 3-4-5, so the length is exactly 5 and the unit vector is (0.6, 0.8).
     if fixed.length(196608i32, 262144i32) != 327680i32 { ret 26i64 }
+    // The unrepresentable vector magnitude saturates instead of overflowing its Q32 sum.
+    if fixed.length(min_fx, min_fx) != 2147483647i32 { ret 43i64 }
     let (unit_x, unit_y) = fixed.normalize(196608i32, 262144i32)
     if unit_x != 39321i32 || unit_y != 52428i32 { ret 27i64 }
     if fixed.length(0i32, 0i32) != 0i32 { ret 28i64 }
