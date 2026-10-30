@@ -202,7 +202,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if must_error_7 != ok || must_7 != 0usize { try report("doc-must-fault11-dotted", 7usize) }
     let (fault_7, fault_error_7) = soap.parse_fault(a, &env_7)
     if fault_error_7 != ok { try report("fault-error-fault11-dotted", 7usize) }
-    if fault_7.code != .Other { try report("fault-code-fault11-dotted", 7usize) }
+    if fault_7.code != .Sender { try report("fault-code-fault11-dotted", 7usize) }
     if !same(fault_7.code_text, "s:Client.Auth") { try report("fault-code-text-fault11-dotted", 7usize) }
     if !same(fault_7.reason, "a") { try report("fault-reason-fault11-dotted", 7usize) }
     if !same(fault_7.actor, "") { try report("fault-actor-fault11-dotted", 7usize) }
@@ -210,7 +210,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !same(fault_7.language, "") { try report("fault-lang-fault11-dotted", 7usize) }
     if (fault_7.detail != 4294967295u32) != false { try report("fault-detail-fault11-dotted", 7usize) }
     let typed_7 = soap.fault_error(fault_7.code)
-    if typed_7 != soap.OtherFault { try report("fault-typed-fault11-dotted", 7usize) }
+    if typed_7 != soap.Sender { try report("fault-typed-fault11-dotted", 7usize) }
+    let dotted_server = "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><s:Fault><faultcode>s:Server.Overloaded</faultcode><faultstring>down</faultstring></s:Fault></s:Body></s:Envelope>"
+    let (dotted_server_env, dotted_server_error) = soap.parse(a, dotted_server)
+    if dotted_server_error != ok { try report("fault-parse-fault11-dotted-server", 0usize) }
+    let (dotted_server_fault, dotted_server_fault_error) = soap.parse_fault(a, &dotted_server_env)
+    if dotted_server_fault_error != ok || dotted_server_fault.code != .Receiver || soap.fault_error(dotted_server_fault.code) != soap.Receiver { try report("fault-code-fault11-dotted-server", 0usize) }
+    let split_text = "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><s:Fault><faultcode>s:Client</faultcode><faultstring>a<![CDATA[b]]><!-- split -->c</faultstring></s:Fault></s:Body></s:Envelope>"
+    let (split_env, split_error) = soap.parse(a, split_text)
+    if split_error != ok { try report("fault-parse-split-text", 0usize) }
+    let (split_fault, split_fault_error) = soap.parse_fault(a, &split_env)
+    if split_fault_error != ok || !same(split_fault.reason, "abc") { try report("fault-split-text", 0usize) }
     let doc_8 = "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><s:Fault><faultcode>s:Client</faultcode></s:Fault></s:Body></s:Envelope>"
     let (env_8, err_8) = soap.parse(a, doc_8)
     if err_8 != ok || env_8.version != .Soap11 { try report("doc-version-fault11-incomplete", 8usize) }
@@ -712,6 +722,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if wd_3.operations[2usize].input_parts.len != 1usize { try report("wsdl-parts-count", 32usize) }
     if !same(wd_3.operations[2usize].input_parts[0usize].name, "body") || !same(wd_3.operations[2usize].input_parts[0usize].type_name, "") || !same(wd_3.operations[2usize].input_parts[0usize].element, "tns:Name") { try report("wsdl-part", 32usize) }
     if wd_3.operations[2usize].output_parts.len != 0usize { try report("wsdl-parts-count", 32usize) }
+    let wsdl_binding_choice = "<wsdl:definitions xmlns:wsdl=\"http://schemas.xmlsoap.org/wsdl/\" xmlns:s11=\"http://schemas.xmlsoap.org/wsdl/soap/\" xmlns:s12=\"http://schemas.xmlsoap.org/wsdl/soap12/\" xmlns:tns=\"urn:choice\"><wsdl:portType name=\"First\"><wsdl:operation name=\"Echo\"/></wsdl:portType><wsdl:portType name=\"Second\"><wsdl:operation name=\"Echo\"/></wsdl:portType><wsdl:binding name=\"First11\" type=\"tns:First\"><s11:binding style=\"rpc\"/><wsdl:operation name=\"Echo\"><s11:operation soapAction=\"urn:first\"/></wsdl:operation></wsdl:binding><wsdl:binding name=\"First12\" type=\"tns:First\"><s12:binding style=\"document\"/><wsdl:operation name=\"Echo\"><s12:operation soapAction=\"urn:wrong\"/></wsdl:operation></wsdl:binding><wsdl:binding name=\"Second12\" type=\"tns:Second\"><s12:binding style=\"document\"/><wsdl:operation name=\"Echo\"><s12:operation soapAction=\"urn:other\"/></wsdl:operation></wsdl:binding><wsdl:service><wsdl:port binding=\"tns:First11\"><s11:address location=\"http://choice.example/soap\"/></wsdl:port></wsdl:service></wsdl:definitions>"
+    let (choice, choice_error) = soap.wsdl_parse(a, wsdl_binding_choice)
+    if choice_error != ok || choice.soap != .Soap11 || !same(choice.location, "http://choice.example/soap") || choice.operations.len != 2usize { try report("wsdl-binding-choice", 0usize) }
+    if !same(choice.operations[0usize].name, "Echo") || !same(choice.operations[0usize].action, "urn:first") || !same(choice.operations[0usize].style, "rpc") { try report("wsdl-binding-choice", 1usize) }
+    if !same(choice.operations[1usize].name, "Echo") || !same(choice.operations[1usize].action, "") || !same(choice.operations[1usize].style, "document") { try report("wsdl-binding-choice", 2usize) }
     let (wsdl_none, wsdl_none_error) = soap.wsdl_parse(a, "<definitions xmlns=\"urn:other\"/>")
     if wsdl_none_error != soap.Invalid { try report("wsdl-not-wsdl", 0usize) }
     let (wsdl_empty, wsdl_empty_error) = soap.wsdl_parse(a, "<wsdl:definitions xmlns:wsdl=\"http://schemas.xmlsoap.org/wsdl/\" targetNamespace=\"urn:e\"/>")

@@ -4,6 +4,7 @@
 // `mustUnderstand`. A fault is data (`Fault`) and `fault_error` maps its code to a typed error.
 // Namespaces are resolved through the document's xmlns bindings, so any prefix works.
 
+use e.algo.hash
 use e.fmt.xml as xml
 use e.io
 use e.mem
@@ -121,8 +122,7 @@ fn simple_element(b: *Builder, name: str, value: str) -> err {
 }
 
 // The whole `<p:Fault>` inside an open body. 1.1: faultcode, faultstring, faultactor, detail. 1.2: Code
-// (with an optional Subcode), Reason/Text with xml:lang, Role, Detail. `detail` is text; a richer detail
-// is written by the caller around `fault_start`/`fault_end` instead. Refused: `DataEncodingUnknown` in
+// (with an optional Subcode), Reason/Text with xml:lang, Role, Detail. `detail` is text. Refused: `DataEncodingUnknown` in
 // 1.1 (it has no such code), `Other` (a code the caller names itself), or an empty reason.
 fn fault_write(b: *Builder, f: FaultOut) -> err {
     if f.code == .Other || f.reason.len == 0usize { ret Invalid }
@@ -247,19 +247,28 @@ fn next_sibling_element(d: *const xml.Document, id: xml.NodeId) -> xml.NodeId {
     ret next_element(d, node(d, id).next_sibling)
 }
 
-// The text of an element: its text children joined.
+// The text of an element: its text children joined in one arena allocation.
 fn element_text(a: *mem.Arena, d: *const xml.Document, id: xml.NodeId) -> (str, err) {
-    var out = ""
+    var total = 0usize
     var at = node(d, id).first_child
     while at != 4294967295u32 {
+        if node(d, at).kind == .Text { total += node(d, at).value.len }
+        at = node(d, at).next_sibling
+    }
+    if total == 0usize { ret ("", ok) }
+    let (out, out_error) = mem.alloc[u8](a, total)
+    if out_error != ok { ret ("", out_error) }
+    var filled = 0usize
+    at = node(d, id).first_child
+    while at != 4294967295u32 {
         if node(d, at).kind == .Text {
-            let (joined, join_error) = str.concat(a, out, node(d, at).value)
-            if join_error != ok { ret ("", join_error) }
-            out = joined
+            let value = node(d, at).value
+            mem.copy[u8](out[filled..filled + value.len], value)
+            filled += value.len
         }
         at = node(d, at).next_sibling
     }
-    ret (out, ok)
+    ret (out[0usize..filled], ok)
 }
 
 // An envelope from bytes. `NotSoap` when the root is not an Envelope, `VersionMismatch` when it is an
@@ -357,11 +366,22 @@ fn code_of(d: *const xml.Document, at: xml.NodeId, raw: str, v: Version) -> (Fau
     let (uri, resolve_error) = resolve(d, at, prefix)
     if resolve_error != ok { ret (FaultCode.Other, resolve_error) }
     if !str.eq(uri, namespace(v)) { ret (FaultCode.Other, ok) }
-    if str.eq(local, "VersionMismatch") { ret (FaultCode.VersionMismatch, ok) }
-    if str.eq(local, "MustUnderstand") { ret (FaultCode.MustUnderstand, ok) }
-    if v == .Soap12 && str.eq(local, "DataEncodingUnknown") { ret (FaultCode.DataEncodingUnknown, ok) }
-    if (v == .Soap11 && str.eq(local, "Client")) || (v == .Soap12 && str.eq(local, "Sender")) { ret (FaultCode.Sender, ok) }
-    if (v == .Soap11 && str.eq(local, "Server")) || (v == .Soap12 && str.eq(local, "Receiver")) { ret (FaultCode.Receiver, ok) }
+    var code = local
+    if v == .Soap11 {
+        var dot = 0usize
+        while dot < code.len {
+            if code[dot] == 46u8 {
+                code = code[0usize..dot]
+                break
+            }
+            dot += 1usize
+        }
+    }
+    if str.eq(code, "VersionMismatch") { ret (FaultCode.VersionMismatch, ok) }
+    if str.eq(code, "MustUnderstand") { ret (FaultCode.MustUnderstand, ok) }
+    if v == .Soap12 && str.eq(code, "DataEncodingUnknown") { ret (FaultCode.DataEncodingUnknown, ok) }
+    if (v == .Soap11 && str.eq(code, "Client")) || (v == .Soap12 && str.eq(code, "Sender")) { ret (FaultCode.Sender, ok) }
+    if (v == .Soap11 && str.eq(code, "Server")) || (v == .Soap12 && str.eq(code, "Receiver")) { ret (FaultCode.Receiver, ok) }
     ret (FaultCode.Other, ok)
 }
 
@@ -453,6 +473,11 @@ fn fault_error(code: FaultCode) -> err {
 type Part = struct { name: str, type_name: str, element: str }
 type Operation = struct { name: str, action: str, style: str, input: str, output: str, input_parts: []Part, output_parts: []Part }
 type Wsdl = struct { target_namespace: str, location: str, soap: Version, operations: []Operation }
+type Message = struct { name: str, parts: []Part }
+type NameSlot = struct { key: str, value: usize, occupied: bool }
+type NameIndex = struct { slots: []NameSlot }
+type PairSlot = struct { first: str, second: str, value: usize, occupied: bool }
+type PairIndex = struct { slots: []PairSlot }
 
 fn wsdl_namespace() -> str { ret "http://schemas.xmlsoap.org/wsdl/" }
 fn wsdl_soap11() -> str { ret "http://schemas.xmlsoap.org/wsdl/soap/" }
@@ -470,44 +495,145 @@ fn local_of(qname: str) -> str {
     ret local
 }
 
-fn collect_parts(a: *mem.Arena, d: *const xml.Document, definitions: xml.NodeId, message: str) -> ([]Part, err) {
+fn index_capacity(count: usize) -> usize {
+    var capacity = 2usize
+    while capacity / 2usize < count { capacity *= 2usize }
+    ret capacity
+}
+
+fn name_index(a: *mem.Arena, count: usize) -> (NameIndex, err) {
+    var out: NameIndex = zero
+    if count == 0usize { ret (out, ok) }
+    let (slots, slots_error) = mem.alloc[NameSlot](a, index_capacity(count))
+    if slots_error != ok { ret (out, slots_error) }
+    var at = 0usize
+    while at < slots.len {
+        slots[at] = NameSlot { key: "", value: 0usize, occupied: false }
+        at += 1usize
+    }
+    out.slots = slots
+    ret (out, ok)
+}
+
+fn name_slot(index: *const NameIndex, key: str) -> usize {
+    var at = usize(hash.fnv1a32(key)) & (index.slots.len - 1usize)
+    while index.slots[at].occupied && !str.eq(index.slots[at].key, key) {
+        at = (at + 1usize) & (index.slots.len - 1usize)
+    }
+    ret at
+}
+
+fn name_put(index: *NameIndex, key: str, value: usize) {
+    let at = name_slot(index, key)
+    index.slots[at] = NameSlot { key: key, value: value, occupied: true }
+}
+
+fn name_get(index: *const NameIndex, key: str) -> (usize, bool) {
+    if index.slots.len == 0usize { ret (0usize, false) }
+    let at = name_slot(index, key)
+    if !index.slots[at].occupied { ret (0usize, false) }
+    ret (index.slots[at].value, true)
+}
+
+fn pair_index(a: *mem.Arena, count: usize) -> (PairIndex, err) {
+    var out: PairIndex = zero
+    if count == 0usize { ret (out, ok) }
+    let (slots, slots_error) = mem.alloc[PairSlot](a, index_capacity(count))
+    if slots_error != ok { ret (out, slots_error) }
+    var at = 0usize
+    while at < slots.len {
+        slots[at] = PairSlot { first: "", second: "", value: 0usize, occupied: false }
+        at += 1usize
+    }
+    out.slots = slots
+    ret (out, ok)
+}
+
+fn pair_hash(first: str, second: str) -> u32 {
+    ret hash.fnv1a32(first) *% 16777619u32 ^ hash.fnv1a32(second)
+}
+
+fn pair_slot(index: *const PairIndex, first: str, second: str) -> usize {
+    var at = usize(pair_hash(first, second)) & (index.slots.len - 1usize)
+    while index.slots[at].occupied && (!str.eq(index.slots[at].first, first) || !str.eq(index.slots[at].second, second)) {
+        at = (at + 1usize) & (index.slots.len - 1usize)
+    }
+    ret at
+}
+
+fn pair_put(index: *PairIndex, first: str, second: str, value: usize) {
+    let at = pair_slot(index, first, second)
+    index.slots[at] = PairSlot { first: first, second: second, value: value, occupied: true }
+}
+
+fn pair_get(index: *const PairIndex, first: str, second: str) -> (usize, bool) {
+    if index.slots.len == 0usize { ret (0usize, false) }
+    let at = pair_slot(index, first, second)
+    if !index.slots[at].occupied { ret (0usize, false) }
+    ret (index.slots[at].value, true)
+}
+
+fn parts_of(a: *mem.Arena, d: *const xml.Document, message: xml.NodeId) -> ([]Part, err) {
     let ns = wsdl_namespace()
     var count = 0usize
-    var at = first_child_element(d, definitions)
+    var at = first_child_element(d, message)
     while at != 4294967295u32 {
-        if is_named(d, at, ns, "message") && str.eq(attr(d, at, "name"), message) {
-            var p = first_child_element(d, at)
-            while p != 4294967295u32 {
-                if is_named(d, p, ns, "part") { count += 1usize }
-                p = next_sibling_element(d, p)
-            }
-        }
+        if is_named(d, at, ns, "part") { count += 1usize }
         at = next_sibling_element(d, at)
     }
     if count == 0usize { ret (zero, ok) }
-    let (parts, alloc_error) = mem.alloc[Part](a, count)
-    if alloc_error != ok { ret (zero, alloc_error) }
+    let (parts, parts_error) = mem.alloc[Part](a, count)
+    if parts_error != ok { ret (zero, parts_error) }
     var used = 0usize
-    at = first_child_element(d, definitions)
+    at = first_child_element(d, message)
     while at != 4294967295u32 {
-        if is_named(d, at, ns, "message") && str.eq(attr(d, at, "name"), message) {
-            var p = first_child_element(d, at)
-            while p != 4294967295u32 {
-                if is_named(d, p, ns, "part") {
-                    parts[used] = Part { name: attr(d, p, "name"), type_name: attr(d, p, "type"), element: attr(d, p, "element") }
-                    used += 1usize
-                }
-                p = next_sibling_element(d, p)
-            }
+        if is_named(d, at, ns, "part") {
+            parts[used] = Part { name: attr(d, at, "name"), type_name: attr(d, at, "type"), element: attr(d, at, "element") }
+            used += 1usize
         }
         at = next_sibling_element(d, at)
     }
     ret (parts[..used], ok)
 }
 
-// The operations of a WSDL 1.1 document's port types joined with their SOAP binding (the soapAction and the
-// style, a binding default overridden per operation) and the message parts; the first SOAP port's address
-// is `location`. `Invalid` when the root is not wsdl:definitions or a port type operation lacks a name.
+fn messages_of(a: *mem.Arena, d: *const xml.Document, definitions: xml.NodeId) -> ([]Message, NameIndex, err) {
+    let ns = wsdl_namespace()
+    var count = 0usize
+    var at = first_child_element(d, definitions)
+    while at != 4294967295u32 {
+        if is_named(d, at, ns, "message") { count += 1usize }
+        at = next_sibling_element(d, at)
+    }
+    if count == 0usize { ret (zero, zero, ok) }
+    let (messages, messages_error) = mem.alloc[Message](a, count)
+    if messages_error != ok { ret (zero, zero, messages_error) }
+    var (by_name, index_error) = name_index(a, count)
+    if index_error != ok { ret (zero, zero, index_error) }
+    var used = 0usize
+    at = first_child_element(d, definitions)
+    while at != 4294967295u32 {
+        if is_named(d, at, ns, "message") {
+            let (parts, parts_error) = parts_of(a, d, at)
+            if parts_error != ok { ret (zero, zero, parts_error) }
+            let name = attr(d, at, "name")
+            messages[used] = Message { name: name, parts: parts }
+            name_put(&by_name, name, used)
+            used += 1usize
+        }
+        at = next_sibling_element(d, at)
+    }
+    ret (messages[..used], by_name, ok)
+}
+
+fn message_parts(messages: []const Message, by_name: *const NameIndex, name: str) -> []Part {
+    let (at, found) = name_get(by_name, name)
+    if !found { ret zero }
+    ret messages[at].parts
+}
+
+// The operations of WSDL 1.1 port types joined with the binding named by the first SOAP service port. Without
+// a SOAP service port, the first SOAP binding is used. Its action and style only apply to its declared port type.
+// Message and operation indexes keep parsing linear in the number of WSDL declarations.
 fn wsdl_parse(a: *mem.Arena, source: []const u8) -> (Wsdl, err) {
     let (d, parse_error) = xml.parse(a, source)
     if parse_error != ok { ret (zero, parse_error) }
@@ -515,6 +641,8 @@ fn wsdl_parse(a: *mem.Arena, source: []const u8) -> (Wsdl, err) {
     let ns = wsdl_namespace()
     var out: Wsdl = zero
     out.target_namespace = attr(&d, d.root, "targetNamespace")
+    let (messages, by_message, messages_error) = messages_of(a, &d, d.root)
+    if messages_error != ok { ret (zero, messages_error) }
     var count = 0usize
     var at = first_child_element(&d, d.root)
     while at != 4294967295u32 {
@@ -528,33 +656,35 @@ fn wsdl_parse(a: *mem.Arena, source: []const u8) -> (Wsdl, err) {
         at = next_sibling_element(&d, at)
     }
     if count == 0usize { ret (out, ok) }
-    let (operations, alloc_error) = mem.alloc[Operation](a, count)
-    if alloc_error != ok { ret (zero, alloc_error) }
+    let (operations, operations_error) = mem.alloc[Operation](a, count)
+    if operations_error != ok { ret (zero, operations_error) }
+    let (port_types, types_error) = mem.alloc[str](a, count)
+    if types_error != ok { ret (zero, types_error) }
+    let (operation_next, next_error) = mem.alloc[usize](a, count)
+    if next_error != ok { ret (zero, next_error) }
     var used = 0usize
     at = first_child_element(&d, d.root)
     while at != 4294967295u32 {
         if is_named(&d, at, ns, "portType") {
+            let port_type = attr(&d, at, "name")
             var op = first_child_element(&d, at)
             while op != 4294967295u32 {
                 if is_named(&d, op, ns, "operation") {
                     let name = attr(&d, op, "name")
                     if name.len == 0usize { ret (zero, Invalid) }
-                    var o: Operation = zero
-                    o.name = name
-                    o.style = "document"
+                    var operation: Operation = zero
+                    operation.name = name
+                    operation.style = "document"
                     var io_id = first_child_element(&d, op)
                     while io_id != 4294967295u32 {
-                        if is_named(&d, io_id, ns, "input") { o.input = local_of(attr(&d, io_id, "message")) }
-                        if is_named(&d, io_id, ns, "output") { o.output = local_of(attr(&d, io_id, "message")) }
+                        if is_named(&d, io_id, ns, "input") { operation.input = local_of(attr(&d, io_id, "message")) }
+                        if is_named(&d, io_id, ns, "output") { operation.output = local_of(attr(&d, io_id, "message")) }
                         io_id = next_sibling_element(&d, io_id)
                     }
-                    let (input_parts, input_error) = collect_parts(a, &d, d.root, o.input)
-                    if input_error != ok { ret (zero, input_error) }
-                    o.input_parts = input_parts
-                    let (output_parts, output_error) = collect_parts(a, &d, d.root, o.output)
-                    if output_error != ok { ret (zero, output_error) }
-                    o.output_parts = output_parts
-                    operations[used] = o
+                    operation.input_parts = message_parts(messages, &by_message, operation.input)
+                    operation.output_parts = message_parts(messages, &by_message, operation.output)
+                    operations[used] = operation
+                    port_types[used] = port_type
                     used += 1usize
                 }
                 op = next_sibling_element(&d, op)
@@ -562,59 +692,84 @@ fn wsdl_parse(a: *mem.Arena, source: []const u8) -> (Wsdl, err) {
         }
         at = next_sibling_element(&d, at)
     }
-    // Bindings: the binding-level style, then each operation's soapAction and style.
+    var (by_operation, operation_index_error) = pair_index(a, used)
+    if operation_index_error != ok { ret (zero, operation_index_error) }
+    var operation_at = 0usize
+    while operation_at < used {
+        let (prior, exists) = pair_get(&by_operation, port_types[operation_at], operations[operation_at].name)
+        if exists { operation_next[operation_at] = prior } else { operation_next[operation_at] = used }
+        pair_put(&by_operation, port_types[operation_at], operations[operation_at].name, operation_at)
+        operation_at += 1usize
+    }
+    // The first SOAP address identifies the binding the caller can actually reach.
+    var selected_binding = ""
     at = first_child_element(&d, d.root)
     while at != 4294967295u32 {
-        if is_named(&d, at, ns, "binding") {
-            var default_style = "document"
-            var version = Version.Soap11
-            var child = first_child_element(&d, at)
-            while child != 4294967295u32 {
-                let (child_uri, child_local, child_error) = expand(&d, child)
-                if child_error == ok && str.eq(child_local, "binding") && (str.eq(child_uri, wsdl_soap11()) || str.eq(child_uri, wsdl_soap12())) {
-                    if str.eq(child_uri, wsdl_soap12()) { version = .Soap12 }
-                    let style = attr(&d, child, "style")
-                    if style.len > 0usize { default_style = style }
-                    out.soap = version
-                }
-                if is_named(&d, child, ns, "operation") {
-                    let op_name = attr(&d, child, "name")
-                    var action = ""
-                    var style = default_style
-                    var inner = first_child_element(&d, child)
-                    while inner != 4294967295u32 {
-                        let (inner_uri, inner_local, inner_error) = expand(&d, inner)
-                        if inner_error == ok && str.eq(inner_local, "operation") && (str.eq(inner_uri, wsdl_soap11()) || str.eq(inner_uri, wsdl_soap12())) {
-                            action = attr(&d, inner, "soapAction")
-                            let op_style = attr(&d, inner, "style")
-                            if op_style.len > 0usize { style = op_style }
-                        }
-                        inner = next_sibling_element(&d, inner)
-                    }
-                    var k = 0usize
-                    while k < used {
-                        if str.eq(operations[k].name, op_name) {
-                            operations[k].action = action
-                            operations[k].style = style
-                        }
-                        k += 1usize
-                    }
-                }
-                child = next_sibling_element(&d, child)
-            }
-        }
         if is_named(&d, at, ns, "service") {
             var port = first_child_element(&d, at)
             while port != 4294967295u32 {
                 var inner = first_child_element(&d, port)
                 while inner != 4294967295u32 {
                     let (inner_uri, inner_local, inner_error) = expand(&d, inner)
-                    if inner_error == ok && str.eq(inner_local, "address") && (str.eq(inner_uri, wsdl_soap11()) || str.eq(inner_uri, wsdl_soap12())) && out.location.len == 0usize {
+                    if selected_binding.len == 0usize && inner_error == ok && str.eq(inner_local, "address") && (str.eq(inner_uri, wsdl_soap11()) || str.eq(inner_uri, wsdl_soap12())) {
+                        selected_binding = local_of(attr(&d, port, "binding"))
                         out.location = attr(&d, inner, "location")
                     }
                     inner = next_sibling_element(&d, inner)
                 }
                 port = next_sibling_element(&d, port)
+            }
+        }
+        at = next_sibling_element(&d, at)
+    }
+    var bound = false
+    at = first_child_element(&d, d.root)
+    while at != 4294967295u32 {
+        if is_named(&d, at, ns, "binding") && !bound && (selected_binding.len == 0usize || str.eq(attr(&d, at, "name"), selected_binding)) {
+            var default_style = "document"
+            var version = Version.Soap11
+            var soap_binding = false
+            var child = first_child_element(&d, at)
+            while child != 4294967295u32 {
+                let (child_uri, child_local, child_error) = expand(&d, child)
+                if child_error == ok && str.eq(child_local, "binding") && (str.eq(child_uri, wsdl_soap11()) || str.eq(child_uri, wsdl_soap12())) {
+                    soap_binding = true
+                    if str.eq(child_uri, wsdl_soap12()) { version = .Soap12 }
+                    let style = attr(&d, child, "style")
+                    if style.len > 0usize { default_style = style }
+                }
+                child = next_sibling_element(&d, child)
+            }
+            if soap_binding {
+                bound = true
+                out.soap = version
+                let binding_type = local_of(attr(&d, at, "type"))
+                child = first_child_element(&d, at)
+                while child != 4294967295u32 {
+                    if is_named(&d, child, ns, "operation") {
+                        let op_name = attr(&d, child, "name")
+                        var action = ""
+                        var style = default_style
+                        var inner = first_child_element(&d, child)
+                        while inner != 4294967295u32 {
+                            let (inner_uri, inner_local, inner_error) = expand(&d, inner)
+                            if inner_error == ok && str.eq(inner_local, "operation") && (str.eq(inner_uri, wsdl_soap11()) || str.eq(inner_uri, wsdl_soap12())) {
+                                action = attr(&d, inner, "soapAction")
+                                let op_style = attr(&d, inner, "style")
+                                if op_style.len > 0usize { style = op_style }
+                            }
+                            inner = next_sibling_element(&d, inner)
+                        }
+                        let (matched, found) = pair_get(&by_operation, binding_type, op_name)
+                        var operation_index = matched
+                        while found && operation_index < used {
+                            operations[operation_index].action = action
+                            operations[operation_index].style = style
+                            operation_index = operation_next[operation_index]
+                        }
+                    }
+                    child = next_sibling_element(&d, child)
+                }
             }
         }
         at = next_sibling_element(&d, at)
