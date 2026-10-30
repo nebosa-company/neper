@@ -4,6 +4,11 @@ use e.mem
 use e.os
 use e.gpu.metal as metal
 
+fn skip_no_metal() {
+    let (written, write_error) = os.write(os.stderr(), "NEPER_SKIP_NO_METAL\n")
+    os.exit(95i32)
+}
+
 fn main(a: *mem.Arena) -> err {
     var probes = 0usize
     var found = false
@@ -11,7 +16,7 @@ fn main(a: *mem.Arena) -> err {
         if metal.available() { found = true }
         probes += 1usize
     }
-    if !found { ret ok }
+    if !found { skip_no_metal() }
     var opened = 0usize
     while opened < 32usize {
         let (context, open_error) = metal.open(a)

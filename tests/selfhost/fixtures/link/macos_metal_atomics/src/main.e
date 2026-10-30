@@ -1,6 +1,6 @@
 // 32-bit relaxed atomics and workgroup memory through the MSL emitter (C193, D5840): every invocation adds to one device word and
 // to one workgroup word, a workgroup barrier, and the totals must be exact. The kernel is the program's own, written
-// as MSL by the compiler and run through `gpu.launch` on a Metal device. A machine with no Metal device says so and passes. macOS only.
+// as MSL by the compiler and run through `gpu.launch` on a Metal device. A machine with no Metal device reports a distinct skip. macOS only.
 use e.mem
 use e.os
 use e.gpu
@@ -25,11 +25,16 @@ fn ordered(words: []Atomic[u32]) {
     let before = gpu.atomic_add(&words[0usize], 1u32, .AcqRel, .Device)
 }
 
+fn skip_no_metal() {
+    let (written, write_error) = os.write(os.stderr(), "NEPER_SKIP_NO_METAL\n")
+    os.exit(95i32)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (found, found_error) = gpu.devices(a, .Metal, 4usize)
-    if found_error == gpu.Unsupported || found_error == gpu.NoDevice { os.exit(0i32) }
+    if found_error == gpu.Unsupported || found_error == gpu.NoDevice { skip_no_metal() }
     if found_error != ok { os.exit(1i32) }
-    if found.len == 0usize { os.exit(1i32) }
+    if found.len == 0usize { skip_no_metal() }
     let (dev, open_error) = gpu.open(a, .Metal, 0u32)
     if open_error != ok { os.exit(2i32) }
     let (q, q_error) = gpu.queue(dev)

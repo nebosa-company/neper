@@ -1,7 +1,7 @@
 // `e.gpu.metal` alone (D5231): a device, kernels compiled from MSL text at run time, shared buffers and dispatches, each answer
 // checked on the CPU. saxpy (y = 2 x + y over 1024 floats, four groups of 256) and a reversal of each group through threadgroup
 // memory and a barrier (the shared-memory path a kernel with `shared var` needs), then a kernel that does not compile, which must
-// answer CompileFailed and leave the device usable. A machine with no Metal device says so and passes. macOS only.
+// answer CompileFailed and leave the device usable. A machine with no Metal device reports a distinct skip. macOS only.
 use e.mem
 use e.os
 use e.gpu.metal as mtl
@@ -18,9 +18,14 @@ fn put(bytes: []u8, index: usize, value: f32) {
     let copied = os.raw_memcpy(mem.address_of(&bytes[index * 4usize]), mem.address_of(&holder[0usize]), 4usize)
 }
 
+fn skip_no_metal() {
+    let (written, write_error) = os.write(os.stderr(), "NEPER_SKIP_NO_METAL\n")
+    os.exit(95i32)
+}
+
 fn main(a: *mem.Arena) -> err {
     if !mtl.available() {
-        os.exit(0i32)
+        skip_no_metal()
     }
     let (context, open_error) = mtl.open(a)
     if open_error != ok { os.exit(2i32) }

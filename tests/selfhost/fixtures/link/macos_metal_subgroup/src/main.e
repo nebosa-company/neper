@@ -1,6 +1,6 @@
 // Subgroup collectives through the MSL emitter (C193, D5852): ids, vote, ballot, broadcast, shuffle and the integer and float
 // reductions over a full and a partial subgroup (a workgroup of 40), run on the CPU backend and on a Metal device, and the two
-// answers must be equal word for word. A machine with no Metal device says so and passes. macOS only.
+// answers must be equal word for word. A machine with no Metal device reports a distinct skip. macOS only.
 use e.mem
 use e.os
 use e.gpu
@@ -46,11 +46,16 @@ fn run(q: *gpu.Queue, a: []u32, b: []u64, c: []f32) -> err {
     ret ok
 }
 
+fn skip_no_metal() {
+    let (written, write_error) = os.write(os.stderr(), "NEPER_SKIP_NO_METAL\n")
+    os.exit(95i32)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (found, found_error) = gpu.devices(a, .Metal, 4usize)
-    if found_error == gpu.Unsupported || found_error == gpu.NoDevice { os.exit(0i32) }
+    if found_error == gpu.Unsupported || found_error == gpu.NoDevice { skip_no_metal() }
     if found_error != ok { os.exit(1i32) }
-    if found.len == 0usize { os.exit(1i32) }
+    if found.len == 0usize { skip_no_metal() }
     var cpu_a: [360]u32 = zero
     var cpu_b: [40]u64 = zero
     var cpu_c: [80]f32 = zero
