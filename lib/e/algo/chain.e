@@ -184,6 +184,12 @@ fn last_hash(chain: *const list.List[json.Value]) -> str {
 
 // Append an entry; answers the stored record, `entry` with its `prev` and `hash`.
 fn chain_append(a: *mem.Arena, chain: *list.List[json.Value], entry: json.Value) -> (json.Value, err) {
+    // `hash` and `prev` belong to the enclosing chain record.  Accepting them
+    // here would overwrite caller data and hash a different value from the one
+    // that `verify_chain` later reconstructs.
+    let (_, has_hash) = get(entry, "hash")
+    let (_, has_prev) = get(entry, "prev")
+    if has_hash || has_prev { ret (.Null, Invalid) }
     let prev = last_hash(chain)
     let (canonical, canonical_error) = canonical_json(a, entry)
     if canonical_error != ok { ret (.Null, canonical_error) }
@@ -566,7 +572,7 @@ fn field_history(a: *mem.Arena, revisions: []const json.Value, record_id: json.V
 // --- retention and export -------------------------------------------------------------------------------------------
 
 fn valid_window_days(days: f64) -> bool {
-    if days != days || days < 0.0f64 { ret false }
+    if days != days || days <= 0.0f64 { ret false }
     // Infinity minus itself is NaN, while every finite value subtracts to zero.
     ret days - days == 0.0f64
 }
@@ -630,7 +636,13 @@ fn apply_history_retention(a: *mem.Arena, chain: []const json.Value, plan: str, 
         let (stamp, is_text) = member_text(chain[at], "at")
         if is_text {
             let (ms, good) = parse_ms(stamp)
-            if good && f64(ms) >= cutoff { try list.push[json.Value](&kept, chain[at]) }
+            // A malformed timestamp is not reliable evidence that a revision
+            // is old.  Keep it rather than silently destroying audit data.
+            if !good || f64(ms) >= cutoff { try list.push[json.Value](&kept, chain[at]) }
+        } else {
+            // Entries without a timestamp are likewise indeterminate and must
+            // not be counted as purged merely because a retention pass ran.
+            try list.push[json.Value](&kept, chain[at])
         }
         at += 1usize
     }
