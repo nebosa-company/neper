@@ -50,6 +50,11 @@ fn main(a: *mem.Arena) -> err {
     if scratch_arena.off - scratch_mark != search_used { os.exit(27i32) }
     let (empty, empty_error) = grep.search(a, directory, "")
     if empty_error != grep.Invalid || empty.len != 0usize { os.exit(8i32) }
+    let (missing_search, missing_search_error) = grep.search(a, "grep-missing-d76", "needle")
+    let (missing_index, missing_index_error) = grep.build_index(a, "grep-missing-d76")
+    let missing_snapshot = grep.Index { root: "grep-missing-d76", trigrams: 0u32 }
+    let (missing_index_search, missing_index_search_error) = grep.search_index(a, missing_snapshot, "needle")
+    if missing_search.len != 0usize || missing_index.root.len != 0usize || missing_index_search.len != 0usize || missing_search_error != fs.NotFound || missing_index_error != fs.NotFound || missing_index_search_error != fs.NotFound { os.exit(28i32) }
     // An index records the trigram snapshot of the tree it saw. Replacing a
     // three-byte file with a six-byte one makes a stale index reject instead of
     // searching the changed tree under the old metadata.
