@@ -202,6 +202,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     default:
         os.exit(54)
     }
+    // An unbounded public exponent turns RSA verification into an input-sized loop.
+    var oversized_exponent: [16]u8 = [16]u8{ 48, 14, 2, 1, 3, 2, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0 }
+    let (_, oversized_exponent_error) = x509.rsa_public_key(oversized_exponent[0usize..])
+    if oversized_exponent_error != x509.InvalidCertificate { os.exit(60) }
     if x509.verify_signature(a, rsa, rsa) != ok { os.exit(55) }
     if x509.verify_signature(a, rsa, root) != x509.InvalidCertificate || x509.verify_signature(a, root, rsa) != x509.InvalidCertificate { os.exit(56) }
     // One bit of the signature changed.

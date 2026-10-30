@@ -218,7 +218,9 @@ fn rsa_public_key(der: []const u8) -> (RsaPublicKey, err) {
     if modulus_error != ok || exponent_error != ok || more_error != ok || has_more { ret (zero, InvalidCertificate) }
     let n = unsigned_integer(modulus.content)
     let e = unsigned_integer(exponent.content)
-    if n.len == 0usize || e.len == 0usize || modulus.content[0] >= 128u8 || exponent.content[0] >= 128u8 { ret (zero, InvalidCertificate) }
+    // A public exponent wider than 64 bits has no interoperable use and makes
+    // modular verification work proportional to attacker-controlled input size.
+    if n.len == 0usize || e.len == 0usize || e.len > 8usize || modulus.content[0] >= 128u8 || exponent.content[0] >= 128u8 { ret (zero, InvalidCertificate) }
     ret (RsaPublicKey { modulus: n, exponent: e }, ok)
 }
 
