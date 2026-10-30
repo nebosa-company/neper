@@ -5,8 +5,9 @@
 // `UnsupportedEncoding` and nothing is silently mis-encoded), `url_encode` (RFC 3986 percent-encoding: letters,
 // digits and `-_.~` stay, every other byte becomes `%XX`; unlike Go's query escape a space is `%20`, not `+`),
 // `json_encode`/`json_decode` (`e.fmt.json`), `yaml_encode`/`yaml_decode` (`e.fmt.yaml`) and `csv_decode` (RFC 4180
-// text with a header row to a list of objects whose values are all strings; a row whose column count differs from
-// the header's is `Ragged`, and text with no rows is an empty list).
+// text with a header row to a list of objects whose values are all strings; header fields must be unique, blank
+// records are ignored for multi-column input, a row whose column count differs from the header's is `Ragged`, and
+// text with no rows is an empty list).
 //
 // Results are in the caller's arena. Decoding base64 is as tolerant as `e.bytes`: padding is optional, anything
 // outside the alphabet is `BadBase64`.
@@ -17,6 +18,7 @@ use e.fmt.json as json
 use e.fmt.yaml as yaml
 use e.io
 use e.mem
+use e.str
 use e.text.utf8 as utf8
 
 error BadBase64
@@ -178,6 +180,11 @@ fn csv_decode(a: *mem.Arena, text: str) -> (json.Value, err) {
     while c < width {
         let (copied, copy_error) = copy_text(a, header_row.fields[c])
         if copy_error != ok { ret (none, copy_error) }
+        var previous = 0usize
+        while previous < c {
+            if str.eq(names[previous], copied) { ret (none, Invalid) }
+            previous += 1usize
+        }
         names[c] = copied
         c += 1usize
     }
@@ -192,31 +199,36 @@ fn csv_decode(a: *mem.Arena, text: str) -> (json.Value, err) {
         if !row_more {
             more = false
         } else {
-            if row.fields.len != width { ret (none, Ragged) }
-            if count == capacity {
-                var grown = capacity * 2usize
-                if grown == 0usize { grown = 8usize }
-                let (bigger, bigger_error) = mem.alloc[json.Value](a, grown)
-                if bigger_error != ok { ret (none, bigger_error) }
-                var k = 0usize
-                while k < count {
-                    bigger[k] = objects[k]
-                    k += 1usize
+            // Go's CSV reader, and therefore Terraform's csvdecode, ignores
+            // blank records. `e.fmt.csv` exposes one as a single empty field;
+            // retain that meaningful empty value for a one-column CSV.
+            if !(width > 1usize && row.fields.len == 1usize && row.fields[0usize].len == 0usize) {
+                if row.fields.len != width { ret (none, Ragged) }
+                if count == capacity {
+                    var grown = capacity * 2usize
+                    if grown == 0usize { grown = 8usize }
+                    let (bigger, bigger_error) = mem.alloc[json.Value](a, grown)
+                    if bigger_error != ok { ret (none, bigger_error) }
+                    var k = 0usize
+                    while k < count {
+                        bigger[k] = objects[k]
+                        k += 1usize
+                    }
+                    objects = bigger
+                    capacity = grown
                 }
-                objects = bigger
-                capacity = grown
+                let (members, members_error) = mem.alloc[json.Member](a, width)
+                if members_error != ok { ret (none, members_error) }
+                var f = 0usize
+                while f < width {
+                    let (value_text, value_error) = copy_text(a, row.fields[f])
+                    if value_error != ok { ret (none, value_error) }
+                    members[f] = json.Member { key: names[f], value: json.Value { String: value_text } }
+                    f += 1usize
+                }
+                objects[count] = json.Value { Object: members }
+                count += 1usize
             }
-            let (members, members_error) = mem.alloc[json.Member](a, width)
-            if members_error != ok { ret (none, members_error) }
-            var f = 0usize
-            while f < width {
-                let (value_text, value_error) = copy_text(a, row.fields[f])
-                if value_error != ok { ret (none, value_error) }
-                members[f] = json.Member { key: names[f], value: json.Value { String: value_text } }
-                f += 1usize
-            }
-            objects[count] = json.Value { Object: members }
-            count += 1usize
         }
     }
     ret (json.Value { Array: objects[0usize..count] }, ok)

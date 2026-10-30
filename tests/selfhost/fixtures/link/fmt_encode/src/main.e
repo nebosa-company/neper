@@ -293,6 +293,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // UTF-8 through to a JSON writer.
     let (_, invalid_csv_error) = encode.csv_decode(a, "key\n\xff\n")
     if invalid_csv_error != encode.Invalid { os.exit(106i32) }
+    let (blank_rows, blank_rows_error) = encode.csv_decode(a, "a,b\n1,2\n\n3,4\n\n")
+    if blank_rows_error != ok { os.exit(107i32) }
+    let (blank_rows_text, blank_rows_text_error) = encode.json_encode(a, blank_rows)
+    if blank_rows_text_error != ok || !same_text(blank_rows_text, "[{\"a\":\"1\",\"b\":\"2\"},{\"a\":\"3\",\"b\":\"4\"}]") { os.exit(108i32) }
+    let (one_column_blank, one_column_blank_error) = encode.csv_decode(a, "a\n\n")
+    if one_column_blank_error != ok { os.exit(109i32) }
+    let (one_column_blank_text, one_column_blank_text_error) = encode.json_encode(a, one_column_blank)
+    if one_column_blank_text_error != ok || !same_text(one_column_blank_text, "[{\"a\":\"\"}]") { os.exit(110i32) }
+    let (_, duplicate_header_error) = encode.csv_decode(a, "a,a\n1,2\n")
+    if duplicate_header_error != encode.Invalid { os.exit(111i32) }
     // YAML: a document decodes and encodes back to the same document.
     let (doc, doc_error) = encode.yaml_decode(a, "name: web\nports:\n  - 80\n  - 443\nenabled: true\n")
     if doc_error != ok { os.exit(100i32) }
