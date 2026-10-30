@@ -3706,7 +3706,13 @@ fn grid_paste_size(text: str) -> (usize, usize) {
             let (_, next, row_end) = paste_cell_span(text, at)
             cells += 1usize
             at = next
-            done = row_end || at >= text.len
+            done = row_end
+            // A trailing tab terminates one more empty cell, unlike a trailing
+            // line ending which only terminates the row.
+            if !done && at >= text.len {
+                cells += 1usize
+                done = true
+            }
         }
         rows += 1usize
         if cells > widest { widest = cells }
@@ -3730,6 +3736,9 @@ fn grid_paste_cell(text: str, at_row: usize, at_column: usize, out: []u8) -> (st
             c = 0usize
         }
     }
+    // `at` reaches the end immediately after a trailing tab, before its empty
+    // final cell can enter the loop above.
+    if text.len > 0usize && text[text.len - 1usize] == 9u8 && r == at_row && c == at_column { ret ("", true) }
     ret ("", false)
 }
 
