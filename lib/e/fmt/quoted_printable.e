@@ -80,7 +80,7 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
     var written = 0usize
     while written < dst.len {
         // Three bytes in hand decide every case; fewer only at the very end.
-        if s.end - s.start < 3usize && !s.ended {
+        while s.end - s.start < 3usize && !s.ended {
             let refill_error = refill(s)
             if refill_error != ok { ret (written, refill_error) }
         }

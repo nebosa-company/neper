@@ -131,6 +131,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if n != 3usize || got[0] != 120u8 || got[1] != 65u8 || got[2] != 121u8 { os.exit(11) }
 
+    // Three-byte quoted-printable decisions must survive a source that returns
+    // exactly one byte per read: an escaped byte, soft break, and hard CRLF.
+    let fragmented_steps: [9]support.ReadStep = [9]support.ReadStep{
+        support.ReadStep { bytes: "=", failure: ok },
+        support.ReadStep { bytes: "4", failure: ok },
+        support.ReadStep { bytes: "1", failure: ok },
+        support.ReadStep { bytes: "=", failure: ok },
+        support.ReadStep { bytes: "\r", failure: ok },
+        support.ReadStep { bytes: "\n", failure: ok },
+        support.ReadStep { bytes: "\r", failure: ok },
+        support.ReadStep { bytes: "\n", failure: ok },
+        support.ReadStep { bytes: "Z", failure: io.End },
+    }
+    var (fragmented_script, fragmented_script_error) = support.scripted_reader(a, fragmented_steps[..])
+    if fragmented_script_error != ok { os.exit(24) }
+    var fragmented_source = support.reader(&fragmented_script)
+    var fragmented_storage: [64]u8 = zero
+    var fragmented_reader = qp.reader(fragmented_storage[..], fragmented_source)
+    var fragmented_out: [8]u8 = zero
+    let (fragmented_count, fragmented_error) = qp.read(&fragmented_reader, fragmented_out[..])
+    if fragmented_count != 4usize || fragmented_error != io.End || !bytes_equal(fragmented_out[..4usize], "A\r\nZ") { os.exit(25) }
+
     // A source is allowed to return its final decoded bytes and End together.
     let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end", failure: io.End } }
     var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
