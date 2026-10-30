@@ -3871,12 +3871,14 @@ Aggregation, charts, KPIs and pivots over `e.algo.view`'s filter engine: `aggreg
 ```neper
 type Counter = struct { table: str, value: f64 }
 type KeyMinter = struct { counters: []Counter, count: usize }
+error Full
+error Invalid
 
-fn new_minter(a: *mem.Arena, capacity: usize) -> KeyMinter
+fn new_minter(a: *mem.Arena, capacity: usize) -> (KeyMinter, err)
 fn counter_of(m: *KeyMinter, table: str) -> f64
-fn set_counter(m: *KeyMinter, table: str, value: f64)
-fn mint(a: *mem.Arena, m: *KeyMinter, table: str, prefix: str) -> str
-fn reserve(m: *KeyMinter, table: str, through: f64)
+fn set_counter(m: *KeyMinter, table: str, value: f64) -> err
+fn mint(a: *mem.Arena, m: *KeyMinter, table: str, prefix: str) -> (str, err)
+fn reserve(m: *KeyMinter, table: str, through: f64) -> err
 fn prefix_for(a: *mem.Arena, name: str) -> str
 fn split_words(a: *mem.Arena, s: str) -> []const str
 fn first_units(a: *mem.Arena, s: str, n: usize) -> str
@@ -3944,7 +3946,7 @@ fn within_budget(a: *mem.Arena, name: str, measured_ms: f64) -> Budget
 fn percentile(a: *mem.Arena, values: []const f64, p: f64) -> (f64, bool)
 ```
 
-Record paging, row windows and the published limits: human-readable record keys (`INV-1042`) minted from per-table counters that only move forward, keyset pagination that stays O(page) at any depth with an opaque base64 cursor over the sort position and an id tie-break (V8's order for mixed-type comparisons), table duplication that rewrites a table's own links to point at the copy, the arithmetic of a windowed row list (spacers and the true ARIA row count), the row caps and latency budgets the product claims with `load_plan`, `within_budget` and nearest-rank `percentile`. Checked against appdor's own engine together with `e.algo.batch`.
+Record paging, row windows and the published limits: human-readable record keys (`INV-1042`) minted from per-table counters that only move forward, up to f64's largest exactly representable integer (minting beyond it and exceeding the configured table capacity return `Full`), keyset pagination that orders the supplied rows on each call in O(n log n) time with an opaque base64 cursor over the sort position and an id tie-break (V8's order for mixed-type comparisons), table duplication that rewrites a table's own links to point at the copy, the arithmetic of a windowed row list (spacers and the true ARIA row count), the row caps and latency budgets the product claims with `load_plan`, `within_budget` and nearest-rank `percentile`. Checked against appdor's own engine together with `e.algo.batch`.
 
 ### `e.algo.batch`
 

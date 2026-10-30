@@ -1,12 +1,12 @@
 // Record paging, row windows and the published limits (L033), after appdor's `src/grid-ops/records-engine.js`,
 // `src/grid/virtual-rows.js` and `src/performance/limits.js`: human-readable record keys minted from a per-table
-// counter that only moves forward (`INV-1042`), keyset (cursor) pagination that is O(page) at any depth with an
-// opaque base64 cursor over the sort position and an id tie-break, table duplication that rewrites a table's own
+// counter that only moves forward (`INV-1042`), keyset (cursor) pagination that orders the supplied rows afresh in
+// O(n log n) time with an opaque base64 cursor over the sort position and an id tie-break, table duplication that rewrites a table's own
 // links to point at the copy, the arithmetic of a windowed row list (top and bottom spacers, the ARIA row count),
 // the row caps and latency budgets the product claims, and nearest-rank percentiles.
 //
-// Rows are named `e.algo.formula` values read as JavaScript reads JSON; a missing field is `undefined` and compares
-// less than any present one.
+// Rows are named `e.algo.formula` values read as JavaScript reads JSON; a missing field is `undefined`, ordered
+// distinctly after `null` and before other present values.
 //
 // Differences from appdor's: an object-valued field is opaque (its keys are not read), so a cursor over such a field
 // carries `{}`; number formatting for the truncation notice knows `en` (the default) and `bg`.
@@ -22,16 +22,23 @@ use e.text.utf8 as utf8
 
 // --- record keys -----------------------------------------------------------------------------------------------
 
-// Per-table counters that only move forward, so a deleted record's key is never reused.
+// Per-table counters that only move forward, so a deleted record's key is never reused.  Counters stop at the
+// largest integer f64 represents exactly; callers must handle Full rather than minting a repeated key.
+error Full
+error Invalid
+
+fn max_counter() -> f64 { ret 9007199254740991.0f64 }
+
 type Counter = struct { table: str, value: f64 }
 
 type KeyMinter = struct { counters: []Counter, count: usize }
 
-fn new_minter(a: *mem.Arena, capacity: usize) -> KeyMinter {
+fn new_minter(a: *mem.Arena, capacity: usize) -> (KeyMinter, err) {
     var none: []Counter = zero
-    let (cells, e) = mem.alloc[Counter](a, capacity + 1usize)
-    if e != ok { ret KeyMinter { counters: none, count: 0usize } }
-    ret KeyMinter { counters: cells, count: 0usize }
+    if capacity == 0usize { ret (KeyMinter { counters: none, count: 0usize }, ok) }
+    let (cells, e) = mem.alloc[Counter](a, capacity)
+    if e != ok { ret (KeyMinter { counters: none, count: 0usize }, e) }
+    ret (KeyMinter { counters: cells, count: 0usize }, ok)
 }
 
 fn counter_of(m: *KeyMinter, table: str) -> f64 {
@@ -43,33 +50,35 @@ fn counter_of(m: *KeyMinter, table: str) -> f64 {
     ret 0.0f64
 }
 
-fn set_counter(m: *KeyMinter, table: str, value: f64) {
+fn set_counter(m: *KeyMinter, table: str, value: f64) -> err {
+    if value != value || value - value != 0.0f64 || value < 0.0f64 || value > max_counter() || math.floor[f64](value) != value { ret Invalid }
     var i = 0usize
     while i < m.count {
         if str.eq(m.counters[i].table, table) {
-            m.counters[i].value = value
-            ret
+            if value > m.counters[i].value { m.counters[i].value = value }
+            ret ok
         }
         i += 1usize
     }
-    if m.count < m.counters.len {
-        m.counters[m.count] = Counter { table: table, value: value }
-        m.count += 1usize
-    }
+    if m.count >= m.counters.len { ret Full }
+    m.counters[m.count] = Counter { table: table, value: value }
+    m.count += 1usize
+    ret ok
 }
 
 // The next key of a table: `PREFIX-n`, n one past the counter.
-fn mint(a: *mem.Arena, m: *KeyMinter, table: str, prefix: str) -> str {
-    let next = counter_of(m, table) + 1.0f64
-    set_counter(m, table, next)
-    ret f.join3(a, prefix, "-", f.number_text(a, next))
+fn mint(a: *mem.Arena, m: *KeyMinter, table: str, prefix: str) -> (str, err) {
+    let current = counter_of(m, table)
+    if current >= max_counter() { ret ("", Full) }
+    let next = current + 1.0f64
+    let set_error = set_counter(m, table, next)
+    if set_error != ok { ret ("", set_error) }
+    ret (f.join3(a, prefix, "-", f.number_text(a, next)), ok)
 }
 
 // Adopting imported keys: a later mint must not collide with them.
-fn reserve(m: *KeyMinter, table: str, through: f64) {
-    var current = counter_of(m, table)
-    if through > current { current = through }
-    set_counter(m, table, current)
+fn reserve(m: *KeyMinter, table: str, through: f64) -> err {
+    ret set_counter(m, table, through)
 }
 
 // A key prefix from a table name: "Sales Invoices" is "SI", a single word its first three letters, nothing `REC`.
@@ -185,7 +194,7 @@ fn parse_record_key(s: str) -> (str, f64, bool) {
         i += 1usize
     }
     let (n, parse_error) = str.parse_f64(s[dash + 1usize..s.len])
-    if parse_error != ok { ret ("", 0.0f64, false) }
+    if parse_error != ok || n > max_counter() { ret ("", 0.0f64, false) }
     ret (s[0usize..dash], n, true)
 }
 
@@ -257,9 +266,13 @@ fn compare_by(a: *mem.Arena, order: []const SortKey, x: []const f.Field, y: []co
         let bv = cell_at(y, s.field)
         if strict_equal(av, bv) { continue }
         var less = false
-        if is_nullish(av) {
+        if av.present && av.value.kind == .Blank {
             less = true
-        } else if is_nullish(bv) {
+        } else if bv.present && bv.value.kind == .Blank {
+            less = false
+        } else if !av.present {
+            less = true
+        } else if !bv.present {
             less = false
         } else {
             less = js_less(a, av, bv)
@@ -461,7 +474,8 @@ fn json_value(a: *mem.Arena, x: json.Value) -> f.Value {
 type Page = struct { valid: bool, reason: str, positions: []const usize, next_cursor: str, has_next_cursor: bool, has_more: bool }
 
 // Keyset pagination over already-filtered records: a page is everything strictly after the cursor position in
-// this sort order. The sort always ends with the id, so a page can neither skip nor repeat a row.
+// this sort order.  Each call sorts all supplied rows, so it costs O(n log n) plus the page copy; the sort always
+// ends with the id, so a page can neither skip nor repeat a row.
 fn paginate(a: *mem.Arena, rows: []const Row, sort: []const SortKey, limit: f64, cursor: str, has_cursor: bool) -> Page {
     var none: []const usize = zero
     let (order, oe) = mem.alloc[SortKey](a, sort.len + 1usize)
@@ -713,7 +727,9 @@ fn duplicate_table(a: *mem.Arena, table: Table, rows: []const Row, with_records:
         if str.eq(columns[c2].type_name, "link") && columns[c2].has_linked_table && str.eq(columns[c2].linked_table, table.id) { columns[c2].linked_table = copy_id }
         c2 += 1usize
     }
-    if has_minter { reserve(minter, copy_id, f64(rows.len)) }
+    // These literal `_r<n>` ids do not consume minted `PREFIX-n` keys.  If the optional minter cannot record the
+    // reservation, it remains unchanged and a later mint reports that failure instead of reusing a key.
+    if has_minter { let _ = reserve(minter, copy_id, f64(rows.len)) }
     ret Duplicate { table: Table { id: copy_id, name: copy_name, columns: columns[0usize..table.columns.len] }, rows: copies[0usize..rows.len], id_from: from_ids[0usize..rows.len], id_to: to_ids[0usize..rows.len] }
 }
 
@@ -912,6 +928,7 @@ fn within_budget(a: *mem.Arena, name: str, measured_ms: f64) -> Budget {
 
 // The nearest-rank percentile of finite measurements (`p` between 0 and 1); false for none.
 fn percentile(a: *mem.Arena, values: []const f64, p: f64) -> (f64, bool) {
+    if p != p { ret (0.0f64, false) }
     let (sorted, e) = mem.alloc[f64](a, values.len + 1usize)
     if e != ok { ret (0.0f64, false) }
     var n = 0usize
