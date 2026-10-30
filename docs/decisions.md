@@ -43393,3 +43393,14 @@ limits, failures and ordinary signed Bezout identities.
 junction that resolves outside the preopen is refused before `fs_mode`, `fs_chmod` or
 `sys_disk` uses it. The host passes the canonical path to the filesystem operation,
 so `chmod` cannot follow an in-tree link to a file outside the preopen.
+
+## D5920 — A failed presentation retires its acquisition, not its image serial
+
+`Frame.serial` counts successfully presented images, so abandoning a frame after a
+write or queue-sync error must leave the front image and serial unchanged. Each
+acquisition also carries its own id, which makes a retained failed frame stale after
+the next acquire even when that next frame names the same back image and serial.
+`gpu.abandon` retires a matching frame explicitly; `gpu.present` retires a matching
+frame on terminal errors without swapping it. The scene renderer commits its
+last-render comparison only after present succeeds, leaving a failed image write
+retryable. `gpu_present` and `gfx_scene` inject CPU queue faults to pin both paths.

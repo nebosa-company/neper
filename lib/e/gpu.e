@@ -79,7 +79,7 @@ type Image = struct { data: Buf[u32], width: u32, height: u32, format: Format }
 type SurfaceKind = enum u8 { Offscreen, Win32, X11, Wayland, Cocoa }
 type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
 type Target = struct { state: *void }
-type Frame = struct { image: Image, serial: u64 }
+type Frame = struct { image: Image, serial: u64, acquire_id: u64 }
 type Scope = enum u8 { Workgroup, Device }
 error NoDevice
 error AmbiguousDevice
@@ -164,7 +164,7 @@ fn heap_available(backend: Backend) -> bool {
 type QueueState = struct { device: *DeviceState, index: u32, staging_blocks: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
 // An offscreen target: two images, the front one presented, the back one acquired.
-type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquired: bool, closed: bool }
+type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquire_id: u64, acquired: bool, closed: bool }
 
 // The invocation ids of the launch on the calling thread.
 var gid: Id = zero
@@ -1707,7 +1707,7 @@ fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: For
         mem.reset(state.device.arena, target_mark)
         ret (zero, states_error)
     }
-    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquired: false, closed: false }
+    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquire_id: 0u64, acquired: false, closed: false }
     let images_error = target_images(&states[0usize], width, height)
     if images_error != ok {
         mem.reset(state.device.arena, target_mark)
@@ -1755,33 +1755,64 @@ fn resize(t: *Target, width: u32, height: u32) -> err {
 }
 
 // The back image, to draw the next frame into; one frame in flight, so a second
-// acquire before its present is `InvalidHandle`.
+// acquire before its present or abandonment is `InvalidHandle`.
 fn acquire(t: *Target) -> (Frame, err) {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state.queue.device)
     if state.acquired { ret (zero, InvalidHandle) }
+    state.acquire_id += 1u64
     state.acquired = true
-    ret (Frame { image: state.images[1usize - state.front], serial: state.serial }, ok)
+    ret (Frame { image: state.images[1usize - state.front], serial: state.serial, acquire_id: state.acquire_id }, ok)
+}
+
+fn frame_matches(state: *TargetState, frame: Frame) -> bool {
+    let expected = state.images[1usize - state.front]
+    ret state.acquired && frame.serial == state.serial && frame.acquire_id == state.acquire_id && frame.image.data.owner == expected.data.owner && frame.image.data.slot == expected.data.slot && frame.image.data.generation == expected.data.generation
+}
+
+// Retires a valid frame without changing the last presented image or serial.
+fn abandon(t: *Target, frame: Frame) -> err {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret state_error }
+    defer unlock_state(state.queue.device)
+    if !frame_matches(state, frame) { ret InvalidHandle }
+    state.acquired = false
+    ret ok
 }
 
 // Orders the present behind every submission on `q`, swaps the images, and answers
-// the token of the work it waited for. A frame that is not the acquired one is stale.
+// the token of the work it waited for. A rejected valid frame is retired; an invalid
+// or stale frame cannot retire the current acquisition.
 fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state.queue.device)
+    if !frame_matches(state, frame) { ret (zero, InvalidHandle) }
     let raw_presenter = mem.cast[*QueueState](q.state)
-    if mem.address_of(raw_presenter) == 0usize { ret (zero, InvalidHandle) }
-    if mem.address_of(raw_presenter.device) != mem.address_of(state.queue.device) { ret (zero, WrongDevice) }
+    if mem.address_of(raw_presenter) == 0usize {
+        state.acquired = false
+        ret (zero, InvalidHandle)
+    }
+    if mem.address_of(raw_presenter.device) != mem.address_of(state.queue.device) {
+        state.acquired = false
+        ret (zero, WrongDevice)
+    }
     let (presenter, presenter_error) = queue_state(q)
-    if presenter_error != ok { ret (zero, presenter_error) }
+    if presenter_error != ok {
+        state.acquired = false
+        ret (zero, presenter_error)
+    }
     defer unlock_state(presenter.device)
-    if presenter.device.owner != state.queue.device.owner { ret (zero, WrongDevice) }
-    let expected = state.images[1usize - state.front]
-    if !state.acquired || frame.serial != state.serial || frame.image.data.owner != expected.data.owner || frame.image.data.slot != expected.data.slot || frame.image.data.generation != expected.data.generation { ret (zero, InvalidHandle) }
+    if presenter.device.owner != state.queue.device.owner {
+        state.acquired = false
+        ret (zero, WrongDevice)
+    }
     let sync_error = sync(q)
-    if sync_error != ok { ret (zero, sync_error) }
+    if sync_error != ok {
+        state.acquired = false
+        ret (zero, sync_error)
+    }
     state.front = 1usize - state.front
     state.serial += 1u64
     state.acquired = false

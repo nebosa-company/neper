@@ -2996,3 +2996,4 @@ D5914	2685	f16 and bf16 in GLSL, word-equal to the CPU's
 D5915	1243	Presenter ownership ends at fallback, replacement and window close
 D5916	1245	GL dispatch follows the current context, not the process
 D5919	387	WASI permission paths stay inside a preopen
+D5920	737	A failed presentation retires its acquisition, not its image serial

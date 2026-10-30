@@ -3449,6 +3449,16 @@ fn changed_box(r: *Renderer) -> (usize, usize, usize, usize) {
     ret (s.changed_x0, s.changed_y0, s.changed_x1, s.changed_y1)
 }
 
+fn commit_render(s: *RendererState, slot: usize, width: usize, height: usize, scale: f32) {
+    if s.has_last && s.retiring && s.last_scene != slot { s.scenes[s.last_scene].live = false }
+    s.retiring = false
+    s.has_last = true
+    s.last_scene = slot
+    s.last_width = width
+    s.last_height = height
+    s.last_scale = scale
+}
+
 fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Size, scale: f32) -> err {
     let (s, state_error) = renderer_state(r)
     if state_error != ok { ret state_error }
@@ -3517,15 +3527,10 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
         }
         k += 1usize
     }
-    // The last rendered scene has been compared against; this one takes its place.
-    if s.has_last && s.retiring && s.last_scene != slot { s.scenes[s.last_scene].live = false }
-    s.retiring = false
-    s.has_last = true
-    s.last_scene = slot
-    s.last_width = width
-    s.last_height = height
-    s.last_scale = scale
-    if !changed { ret ok }
+    if !changed {
+        commit_render(s, slot, width, height, scale)
+        ret ok
+    }
     let (frame, acquire_error) = gpu.acquire(target_state.target)
     if acquire_error != ok { ret from_gpu(acquire_error) }
     // Each box of the canvas as packed pixels in the frame's channel order.
@@ -3565,11 +3570,17 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     }
     if wy1 > height { wy1 = height }
     let write_error = gpu.write_image(s.queue, frame.image, 0u32, u32(wy0), u32(width), u32(wy1 - wy0), s.pixels[wy0 * width..wy1 * width])
-    if write_error != ok { ret from_gpu(write_error) }
+    if write_error != ok {
+        let abandon_error = gpu.abandon(target_state.target, frame)
+        if abandon_error != ok { ret from_gpu(abandon_error) }
+        ret from_gpu(write_error)
+    }
     s.wrote_y0 = wy0
     s.wrote_y1 = wy1
     let (shown, present_error) = gpu.present(s.queue, target_state.target, frame)
     if present_error != ok { ret from_gpu(present_error) }
+    // Keep the previous scene comparison until its pixels have actually presented.
+    commit_render(s, slot, width, height, scale)
     ret ok
 }
 
