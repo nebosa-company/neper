@@ -37,6 +37,7 @@ type WriterState = struct {
     staging: []u8,
     started: bool,
     finished: bool,
+    failed: bool,
     adler_a: u32,
     adler_b: u32,
 }
@@ -231,6 +232,7 @@ fn writer(storage: []u8, sink: io.Writer, level: deflate.Level) -> (Writer, err)
     s.sink = sink
     s.started = false
     s.finished = false
+    s.failed = false
     s.adler_a = 1u32
     s.adler_b = 0u32
     var w: Writer = zero
@@ -244,7 +246,9 @@ fn start(s: *WriterState) -> err {
     var header: [2]u8 = zero
     header[0] = 120u8
     header[1] = 156u8
-    ret io.write_all(&s.sink, header[0..])
+    let header_error = io.write_all(&s.sink, header[0..])
+    if header_error != ok { s.failed = true }
+    ret header_error
 }
 
 // Runs the encoder over `src` until it asks for input, draining the staging buffer.
@@ -252,9 +256,18 @@ fn pump(s: *WriterState, src: []const u8, last: bool) -> err {
     var at = 0usize
     while true {
         let (consumed, written, status, encode_error) = deflate.encode(&s.encoder, src[at..], s.staging, last)
-        if encode_error != ok { ret encode_error }
+        if encode_error != ok {
+            s.failed = true
+            ret encode_error
+        }
         at += consumed
-        if written > 0usize { try io.write_all(&s.sink, s.staging[..written]) }
+        if written > 0usize {
+            let write_error = io.write_all(&s.sink, s.staging[..written])
+            if write_error != ok {
+                s.failed = true
+                ret write_error
+            }
+        }
         if status == .Finished { ret ok }
         if status == .NeedInput && at == src.len { ret ok }
     }
@@ -262,7 +275,7 @@ fn pump(s: *WriterState, src: []const u8, last: bool) -> err {
 
 fn write(sink_writer: *Writer, src: []const u8) -> (usize, err) {
     let s = mem.cast[*WriterState](sink_writer.state)
-    if s.finished { ret (0usize, Invalid) }
+    if s.finished || s.failed { ret (0usize, Invalid) }
     let start_error = start(s)
     if start_error != ok { ret (0usize, start_error) }
     let pump_error = pump(s, src, false)
@@ -276,6 +289,7 @@ fn write(sink_writer: *Writer, src: []const u8) -> (usize, err) {
 fn finish(sink_writer: *Writer) -> err {
     let s = mem.cast[*WriterState](sink_writer.state)
     if s.finished { ret ok }
+    if s.failed { ret Invalid }
     try start(s)
     var none: [1]u8 = zero
     try pump(s, none[0..0], true)
@@ -285,7 +299,16 @@ fn finish(sink_writer: *Writer) -> err {
     trailer[1] = u8((checksum >> 16u32) & 255u32)
     trailer[2] = u8((checksum >> 8u32) & 255u32)
     trailer[3] = u8(checksum & 255u32)
-    try io.write_all(&s.sink, trailer[0..])
+    let trailer_error = io.write_all(&s.sink, trailer[0..])
+    if trailer_error != ok {
+        s.failed = true
+        ret trailer_error
+    }
+    let flush_error = io.flush(&s.sink)
+    if flush_error != ok {
+        s.failed = true
+        ret flush_error
+    }
     s.finished = true
-    ret io.flush(&s.sink)
+    ret ok
 }

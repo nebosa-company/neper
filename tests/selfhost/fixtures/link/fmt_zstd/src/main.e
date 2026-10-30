@@ -12,6 +12,31 @@ use e.str
 use e.test.support
 use e.fmt.zstd as zstd
 
+error SinkFailed
+
+type FailingSink = struct { data: []u8, off: usize, writes: usize, fail_write: usize, fail_flush: bool }
+
+fn failing_write(ctx: *void, src: []const u8) -> (usize, err) {
+    let sink = mem.cast[*FailingSink](ctx)
+    sink.writes += 1usize
+    var count = src.len
+    if sink.fail_write != 0usize && sink.writes == sink.fail_write {
+        if count > 1usize { count = 1usize }
+        if count > 0usize { mem.copy[u8](sink.data[sink.off..sink.off + count], src[..count]) }
+        sink.off += count
+        ret (count, SinkFailed)
+    }
+    mem.copy[u8](sink.data[sink.off..sink.off + count], src)
+    sink.off += count
+    ret (count, ok)
+}
+
+fn failing_flush(ctx: *void) -> err {
+    let sink = mem.cast[*FailingSink](ctx)
+    if sink.fail_flush { ret SinkFailed }
+    ret ok
+}
+
 fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err) {
     let words = bytes / 8usize + 1usize
     let (taken, taken_error) = mem.alloc[u64](a, words)
@@ -191,5 +216,55 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     let (none, e20) = zstd.reader_storage(0usize)
     if e20 != zstd.Invalid { os.exit(26) }
+
+    // A short raw-block write plus an error has consumed the writer's input,
+    // so the writer must become terminal rather than emit a second frame later.
+    let (failure_input, failure_input_error) = mem.alloc[u8](a, 131072usize)
+    if failure_input_error != ok { os.exit(36) }
+    var failure_at = 0usize
+    while failure_at < failure_input.len {
+        failure_input[failure_at] = 65u8
+        failure_at += 1usize
+    }
+    let (failure_bytes, failure_bytes_error) = mem.alloc[u8](a, 4096usize)
+    if failure_bytes_error != ok { os.exit(37) }
+    var failed_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 3usize, fail_flush: false }
+    let (failed_storage, failed_storage_error) = aligned(a, zstd.writer_storage(.Balanced))
+    if failed_storage_error != ok { os.exit(38) }
+    let (failed_writer0, failed_writer_error) = zstd.writer(failed_storage, io.Writer { ctx: mem.cast[*void](&failed_sink), write: failing_write, flush: failing_flush }, .Balanced)
+    if failed_writer_error != ok { os.exit(39) }
+    var failed_writer = failed_writer0
+    let (_, failed_write_error) = zstd.write(&failed_writer, failure_input)
+    if failed_write_error != SinkFailed { os.exit(40) }
+    let failed_off = failed_sink.off
+    let (retry_count, retry_error) = zstd.write(&failed_writer, "retry")
+    if retry_count != 0usize || retry_error != zstd.Invalid || zstd.finish(&failed_writer) != zstd.Invalid || failed_sink.off != failed_off { os.exit(41) }
+
+    // A short checksum write is also terminal: a later finish cannot append it.
+    var trailer_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 4usize, fail_flush: false }
+    let (trailer_storage, trailer_storage_error) = aligned(a, zstd.writer_storage(.Balanced))
+    if trailer_storage_error != ok { os.exit(42) }
+    let (trailer_writer0, trailer_writer_error) = zstd.writer(trailer_storage, io.Writer { ctx: mem.cast[*void](&trailer_sink), write: failing_write, flush: failing_flush }, .Balanced)
+    if trailer_writer_error != ok { os.exit(43) }
+    var trailer_writer = trailer_writer0
+    let (_, trailer_write_error) = zstd.write(&trailer_writer, "trailer")
+    if trailer_write_error != ok || zstd.finish(&trailer_writer) != SinkFailed || trailer_sink.writes != 4usize { os.exit(44) }
+    let trailer_off = trailer_sink.off
+    let (after_trailer_count, after_trailer_error) = zstd.write(&trailer_writer, "retry")
+    if after_trailer_count != 0usize || after_trailer_error != zstd.Invalid || zstd.finish(&trailer_writer) != zstd.Invalid || trailer_sink.off != trailer_off { os.exit(45) }
+
+    // A flush failure happens after the frame checksum was written; it still may
+    // not make a later finish look successful or append a second checksum.
+    var flush_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 0usize, fail_flush: true }
+    let (flush_storage, flush_storage_error) = aligned(a, zstd.writer_storage(.Balanced))
+    if flush_storage_error != ok { os.exit(46) }
+    let (flush_writer0, flush_writer_error) = zstd.writer(flush_storage, io.Writer { ctx: mem.cast[*void](&flush_sink), write: failing_write, flush: failing_flush }, .Balanced)
+    if flush_writer_error != ok { os.exit(47) }
+    var flush_writer = flush_writer0
+    let (_, flush_write_error) = zstd.write(&flush_writer, "flush")
+    if flush_write_error != ok || zstd.finish(&flush_writer) != SinkFailed { os.exit(48) }
+    let flush_off = flush_sink.off
+    let (after_flush_count, after_flush_error) = zstd.write(&flush_writer, "retry")
+    if after_flush_count != 0usize || after_flush_error != zstd.Invalid || zstd.finish(&flush_writer) != zstd.Invalid || flush_sink.off != flush_off { os.exit(49) }
     ret ok
 }

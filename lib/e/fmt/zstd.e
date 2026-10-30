@@ -1053,7 +1053,7 @@ fn read(r: *Reader, dst: []u8) -> (usize, err) {
 
 // --- The writer: raw blocks in one frame with a checksum.
 
-type WriterState = struct { sink: io.Writer, buffer: []u8, buffered: usize, started: bool, finished: bool, hash: Xxh64 }
+type WriterState = struct { sink: io.Writer, buffer: []u8, buffered: usize, started: bool, finished: bool, failed: bool, hash: Xxh64 }
 
 fn writer_storage(level: Level) -> usize {
     ret mem.size_of[WriterState]() + 8usize + BLOCK_MAX
@@ -1070,6 +1070,7 @@ fn writer(storage: []u8, sink: io.Writer, level: Level) -> (Writer, err) {
     s.sink = sink
     s.started = false
     s.finished = false
+    s.failed = false
     s.hash = xxh64_init()
     var w: Writer = zero
     w.state = mem.cast[*void](s)
@@ -1081,7 +1082,9 @@ fn start_writer(s: *WriterState) -> err {
     if s.started { ret ok }
     s.started = true
     var header: [6]u8 = [6]u8{ 40, 181, 47, 253, 4, 56 }
-    ret io.write_all(&s.sink, header[0..])
+    let header_error = io.write_all(&s.sink, header[0..])
+    if header_error != ok { s.failed = true }
+    ret header_error
 }
 
 fn flush_block(s: *WriterState, last: bool) -> err {
@@ -1092,8 +1095,16 @@ fn flush_block(s: *WriterState, last: bool) -> err {
     header[0] = u8(raw & 255usize)
     header[1] = u8((raw >> 8u32) & 255usize)
     header[2] = u8((raw >> 16u32) & 255usize)
-    try io.write_all(&s.sink, header[0..])
-    try io.write_all(&s.sink, s.buffer[..s.buffered])
+    let header_error = io.write_all(&s.sink, header[0..])
+    if header_error != ok {
+        s.failed = true
+        ret header_error
+    }
+    let data_error = io.write_all(&s.sink, s.buffer[..s.buffered])
+    if data_error != ok {
+        s.failed = true
+        ret data_error
+    }
     xxh64_update(&s.hash, s.buffer[..s.buffered])
     s.buffered = 0usize
     ret ok
@@ -1101,7 +1112,7 @@ fn flush_block(s: *WriterState, last: bool) -> err {
 
 fn write(w: *Writer, src: []const u8) -> (usize, err) {
     let s = mem.cast[*WriterState](w.state)
-    if s.finished { ret (0usize, Invalid) }
+    if s.finished || s.failed { ret (0usize, Invalid) }
     var at = 0usize
     while at < src.len {
         var take_count = BLOCK_MAX - s.buffered
@@ -1120,6 +1131,7 @@ fn write(w: *Writer, src: []const u8) -> (usize, err) {
 fn finish(w: *Writer) -> err {
     let s = mem.cast[*WriterState](w.state)
     if s.finished { ret ok }
+    if s.failed { ret Invalid }
     try flush_block(s, true)
     let sum = u32(xxh64_done(&s.hash) & 4294967295u64)
     var trailer: [4]u8 = zero
@@ -1127,9 +1139,18 @@ fn finish(w: *Writer) -> err {
     trailer[1] = u8((sum >> 8u32) & 255u32)
     trailer[2] = u8((sum >> 16u32) & 255u32)
     trailer[3] = u8(sum >> 24u32)
-    try io.write_all(&s.sink, trailer[0..])
+    let trailer_error = io.write_all(&s.sink, trailer[0..])
+    if trailer_error != ok {
+        s.failed = true
+        ret trailer_error
+    }
+    let flush_error = io.flush(&s.sink)
+    if flush_error != ok {
+        s.failed = true
+        ret flush_error
+    }
     s.finished = true
-    ret io.flush(&s.sink)
+    ret ok
 }
 
 // --- The planned name `encode`: a whole-buffer compressor producing one frame with
