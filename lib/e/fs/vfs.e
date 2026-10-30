@@ -277,7 +277,7 @@ fn mem_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err) {
     if !found { ret (nothing, fs.NotFound) }
     if m.nodes[at].kind == .Directory { ret (nothing, IsDirectory) }
     let size = m.nodes[at].size
-    if size > limit { ret (nothing, TooLarge) }
+    if limit != 0usize && size > limit { ret (nothing, TooLarge) }
     if size == 0usize { ret (nothing, ok) }
     let (out, out_error) = mem.alloc[u8](a, size)
     if out_error != ok { ret (nothing, out_error) }
@@ -432,7 +432,7 @@ fn append_file(a: *mem.Arena, v: *Vfs, path: str, data: []const u8, limit: usize
     let (old, read_error) = read_file(a, v, path, limit)
     if read_error != ok && read_error != fs.NotFound { ret read_error }
     let total = old.len + data.len
-    if total > limit { ret TooLarge }
+    if limit != 0usize && total > limit { ret TooLarge }
     if total == 0usize { ret write_file(a, v, path, data) }
     let (joined, joined_error) = mem.alloc[u8](a, total)
     if joined_error != ok { ret joined_error }

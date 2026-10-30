@@ -2303,6 +2303,21 @@ fn sub_scenarios(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
+// A zero limit means no cap, matching e.fs.read_file across memory-backed layers.
+fn zero_limit_scenarios(a: *mem.Arena) -> i32 {
+    let (memory, memory_error) = vfs.mem_new(a, 4usize)
+    if memory_error != ok { ret 1i32 }
+    var store = memory
+    var view = vfs.mem_vfs(&store)
+    if !put(a, &view, "/note", "one") { ret 2i32 }
+    let (before, before_error) = vfs.read_file(a, &view, "/note", 0usize)
+    if before_error != ok || !same(before, "one") { ret 3i32 }
+    if vfs.append_file(a, &view, "/note", " two", 0usize) != ok { ret 4i32 }
+    let (after, after_error) = vfs.read_file(a, &view, "/note", 0usize)
+    if after_error != ok || !same(after, "one two") { ret 5i32 }
+    ret 0i32
+}
+
 // The differential run: an Overlay over a random lower against a plain Mem copy of it.
 fn pick_name(r: u64) -> str {
     let n = r % 6u64
@@ -2506,6 +2521,8 @@ fn host_scenarios(a: *mem.Arena) -> i32 {
             if inner_error != ok || read_error != ok || !same(bytes, "on disk") { code = 14i32 }
         }
     }
+    if code == 0i32 && vfs.append_file(a, &hv, "/d/f.txt", "!", 0usize) != ok { code = 15i32 }
+    if code == 0i32 && !reads(a, &hv, "/d/f.txt", "on disk!") { code = 16i32 }
     if code == 0i32 && vfs.write_file(a, &hv, "/../escape.txt", "x") != fs.Invalid { code = 20i32 }
     if code == 0i32 && vfs.write_file(a, &hv, "d/../../escape.txt", "x") != fs.Invalid { code = 21i32 }
     if code == 0i32 && vfs.write_file(a, &hv, "/d\\..\\x", "x") != fs.Invalid { code = 22i32 }
@@ -2628,6 +2645,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     code = sub_scenarios(a)
     if code != 0i32 {
         report("sub", code)
+        os.exit(12i32)
+    }
+    code = zero_limit_scenarios(a)
+    if code != 0i32 {
+        report("zero limit", code)
         os.exit(12i32)
     }
     var seed = 1u64
