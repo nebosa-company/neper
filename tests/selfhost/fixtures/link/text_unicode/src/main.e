@@ -157,7 +157,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (end_108, more_end_108) = unicode.graphemes_next(&it_106)
     if more_end_108 { os.exit(108) }
     var it_109 = unicode.graphemes("")
-    let (end_97, more_end_97) = unicode.graphemes_next(&it_97)
-    if more_end_97 { os.exit(97) }
+    let (end_109, more_end_109) = unicode.graphemes_next(&it_109)
+    if more_end_109 || end_109.len != 0usize { os.exit(109) }
     ret ok
 }
