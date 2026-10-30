@@ -137,3 +137,12 @@ printf 'fixtures %s\n' "${#names[@]}"
 # structured walk, or the dispatch loop for an irreducible function.
 cat "$out"/*.wasm.build 2> /dev/null | awk '/^wasm functions /{ f += $3; s += $5; d += $7; i += $9 } END { printf "functions %d structured %d dispatch %d irreducible %d\n", f, s, d, i }' FS='[ ,()]+'
 grep -h '^dispatch ' "$out"/*.wasm.build 2> /dev/null | sort | uniq -c | sort -rn | head -20
+bad=
+for results in "$out/results.tsv" "$out/results-second.tsv"; do
+    [ -f "$results" ] || continue
+    if grep -qE '	(fail|invalid|refused|stderr-differs|skipped)	' "$results"; then
+        printf 'unexpected wasm sweep verdicts in %s\n' "$results" >&2
+        bad=1
+    fi
+done
+[ -z "$bad" ]
