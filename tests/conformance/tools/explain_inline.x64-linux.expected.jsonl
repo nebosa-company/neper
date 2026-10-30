@@ -112,6 +112,7 @@
 {"record":"inline","symbol":"e.os.window_title","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.os.window_visible","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.os.window_cursor","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_on_resize","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.window_native","decision":"not-a-candidate","reason":"more than one result","pass":1}
 {"record":"inline","symbol":"e.os.clipboard_text","decision":"not-a-candidate","reason":"more than one result","pass":1}
 {"record":"inline","symbol":"e.os.set_clipboard_text","decision":"inlinable","reason":"at or under the cap","pass":1}
@@ -247,6 +248,7 @@
 {"record":"inline","symbol":"e.os.x_resource","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.x_simple","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.window_cursor","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_on_resize","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.set_clipboard_text","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.d_put","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.d_pad","decision":"rejected","reason":"its body is over the cap","pass":2}

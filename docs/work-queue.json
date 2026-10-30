@@ -15,26 +15,125 @@
       "evidence": "Opened by D2143 when C103 closed D2119 stage 1. Acceptance (D2119 stage 2): the same microkernel boots as an Android Virtualization Framework guest that crosvm starts with the Linux arm64 boot protocol -- device tree in x0, GICv3, PSCI 1.0, an ns16550 serial console, and virtio console, block and vsock over PCI -- first under crosvm, then on a retail Pixel via `adb shell vm run` as a non-protected VM. Device addresses are read from the device tree, never hard-coded; the virtio-pci transport already serves both. Done (D2144): the ns16550/8250 console -- neperos/src/ns16550.e drives the 8250 (THR at 0, LSR at 5 bit 5), the kernel picks it vs PL011 from the stdout uart node's `compatible` (ns16550a for crosvm, arm,pl011 for virt), base and reg-shift from the device tree; console_write and the console server's device_write dispatch by a boot-set flag. Written to crosvm's actual source (aarch64/src/fdt.rs: compatible ns16550a, reg=<addr size>, no reg-shift => shift 0) and regression-verified under QEMU virt (the tree selects PL011, all stage-1 marks pass, ns16550 path inert). Also extracted crosvm's aarch64 memory map from source (RAM 0x80000000, GIC/PCI bases). BLOCKER confirmed (D2144): crosvm is built and runs in this WSL but is KVM-only with no CPU emulation, and the host is x86-64, so it cannot run the aarch64 kernel (rejected as a bad bzImage). Verifying the crosvm/AVF boot -- and the remaining pieces, a virtio-vsock driver and the crosvm memory-map boot -- needs an aarch64 host (a Pixel via adb, or an aarch64 Linux box with KVM); surfaced to the user as a resource decision. Advanced (D2145): the EL0 user window moved to the top of the 39-bit space (index 511, VA 0x7FC0000000) so it no longer collides with crosvm's RAM at 0x80000000, which would otherwise have unmapped the kernel from every user space on the first trap; QEMU-verified -- kernel boots, every EL0 server runs, isolation holds (thread W faults at 0x7FC0040000, X at kernel RAM 0x40000000, Q at ECAM 0x4010000000). The chosen aarch64 host is an AWS Graviton bare-metal instance (only *.metal exposes /dev/kvm for crosvm's KVM backend); the account's configured AWS credentials are invalid and await refresh. The kernel image already carries a valid arm64 Image header. VERIFIED ON REAL HARDWARE (D2146, AWS a1.metal Graviton bare-metal with /dev/kvm): the kernel boots under crosvm/KVM, reads crosvm's DTB (RAM 0x80000000, GICv3, ns16550 at 0x3f8), turns the MMU on and runs the whole EL0/capability suite -- D2145 confirmed, thread W faults at the relocated window 0x7FC0040000. Two crosvm-vs-QEMU gaps found and fixed: crosvm's PCI host is CAM (pci-host-cam-generic, shifts bus<<16/slot<<11/fn<<8) not ECAM, now detected by compatible with a cam flag in pci.Host; and a virtio device's BAR is the one its capabilities name (BAR0 on crosvm, pre-assigned; BAR4 on QEMU, guest-assigned), now discovered and mapped at its real size instead of a hard-coded BAR4/64KB. All three drivers then run under crosvm: entropy returns 8 bytes, block reads/writes sector 0, console writes a virtio-console port; QEMU's ECAM path unchanged (stage-1 boot still green). D2147 then closed the last crosvm functional gap: the EL0 page mappings were global (missing the nG bit), so on a real Cortex-A72 (not QEMU's interpreter) a thread's USER_BASE TLB entry served another thread after the ASID-only context switch, making the console-server client read a neighbour's 0xCD poison and a round-printer re-run. Marking the EL0 leaf descriptors non-global fixed it; the WHOLE stage-2 demo now runs clean under crosvm/KVM on AWS a1.metal -- all three virtio drivers, the capability/isolation threads, `console server up` over the P->K server, `all threads done` and a PSCI power-off with exit 0 -- and QEMU's stage-1 boot is byte-unchanged. D2149 added the virtio-vsock driver (EL0 server T): vsock_connect sets up the three queues (rx/tx/event), reads the guest CID from device config (passed via a new aux slot 5), transmits a STREAM REQUEST to host CID 2, and reads the reply. Verified on AWS a1.metal under crosvm `--vsock cid=3` over /dev/vhost-vsock -- no listener gave op 3 (RST), a Python AF_VSOCK listener on port 1234 gave op 2 (RESPONSE) with the host logging the accept from (3, 1024), a full round trip. QEMU has no vsock device so T is skipped and stage 1 is unchanged. The whole crosvm device list (console, block, vsock over PCI) is now done. Remaining before score 1: the same kernel on a retail Pixel via `adb shell vm run`. NeperOS stages 3 (bare-metal Pixel 6) and 4 follow (D2119)."
     },
     {
-      "id": "C178",
-      "category": "compiler",
-      "group": "Back end",
-      "order": 178,
-      "title": "AAPCS64: an extern fn that returns an HFA of three or four doubles (CGRect, NSRect)",
-      "score": 0,
+      "id": "C185",
+      "category": "library",
+      "group": "macOS",
+      "order": 185,
+      "title": "macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)",
+      "score": 0.9,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Found on 2026-10-23 by the macOS window probe: `extern fn f(r: usize, s: usize) -> CGRect` with CGRect = struct { x: f64, y: f64, w: f64, h: f64 } stops aarch64 lowering with `cannot lower main: construct is not implemented in self-hosted lowering` at the call (x64 compiles it, through the memory-returned slot). A two-double struct, a double, a BOOL and a C string all return correctly on both Mac architectures; AppKit hands window and view sizes back as NSRect, so the window code reads them through KVC (`valueForKey:` then `NSValue getValue:`) until this is fixed. Where it stops: `lower.e` `c_result_type` already names a 3- or 4-member HFA `return-hfa-N-W` (D2124) and `codegen_a64.e` `pack_hfa` / `hfa_pair` pack the members into at most the two eightbytes x0 and x1 hold; a four-double HFA comes back in v0-v3, four eightbytes, which the result model (one value, or a pair) has no room for. Plan: give a call whose result is a 3- or 4-member HFA a result slot, as a C return slot is for a struct returned in memory: lowering allocates it and passes nothing, the call selection stores v0-v3 into it after the call, and the value is read from the slot. Acceptance: (1) a fixture `macos_hfa_return` calls CoreGraphics `CGRectMake`, `CGRectInset` and `CGRectUnion` through `@import` for aarch64-macos and x64-macos and checks every member, and passes on a Mac in the corpus; (2) an aarch64-linux fixture returns 3- and 4-member double HFAs and a 4-member float HFA from a C shared object built by cc, run under the aarch64 test environment; (3) x64 and the 2-member case are byte-identical to before; (4) the window code reads sizes by a direct rect-returning call and the KVC workaround is deleted."
+      "evidence": "Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleURLTypes, a copy of the program as its executable), register it with lsregister -f and make it the default handler (LSSetDefaultRoleHandlerForContentType / LSSetDefaultHandlerForURLScheme); dissociate removes it. The shell target is the NSApp delegate and the GURL Apple event handler; application:openURLs: (file URLs become File activations by path) and application:openFiles: feed activation_poll. tests/macos/probe/open_events.e: open on a file of the registered type and on a registered URL start the registered copy, which receives both and the parent reads them back, on aarch64 and x64; ui_activation passes with associations on; the corpus is 1105 pass. Open: a double-click in Finder and a link in a browser are what a person does and are untested (C192), and the bundle holds a copy of the program, so it is stale after the program is rebuilt (register again). Done when a real Finder open is checked."
     },
     {
-      "id": "C179",
+      "id": "C186",
       "category": "library",
-      "group": "e.os",
-      "order": 179,
-      "title": "macOS kqueue poller loses a read wakeup for one of two loopback datagram sockets",
-      "score": 0,
+      "group": "macOS",
+      "order": 186,
+      "title": "macOS permissions: camera, microphone and location status and request",
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Found on 2026-10-24 by tests/macos/probe/poller_flake.e on macos-14 runners: two UDP sockets registered with EVFILT_READ before one datagram is sent to each; the poller reports the first and never the second in five 200 ms waits, 0.7% to 7% of rounds on both archs. A fresh queue holding only the missing socket reports it at once, and so does re-adding the same filter to the original queue (that wait then reports both), so the datagram arrived and the knote was not activated. Why: not found. The corpus fixtures os_poller and async tolerate it only by waiting; a fix must not re-add from a registry of fds (a closed and reused fd would be registered by mistake) -- try EV_RECEIPT, kevent64, or re-adding only on a timed-out wait of the fd the caller named. Done when poller_flake reports 0 misses of 300 on both archs."
+      "evidence": "Built 2026-10-25 (D5218): permission_status reads AVCaptureDevice authorizationStatusForMediaType (camera, microphone) and CLLocationManager authorizationStatus (location); a status that is not decided or is restricted is Unavailable because shell.Permission has no not-determined state. permission_request asks for the camera and microphone through AVCaptureDevice requestAccessForMediaType with a global Objective-C block (isa from dlsym _NSConcreteGlobalBlock, BLOCK_IS_GLOBAL, an @cc invoke), only when a capture device exists, and waits for the answer (up to five minutes). tests/macos/probe/permissions.e on the runners: camera unavailable, microphone granted, location unavailable, requests return at once, no crash; ui_permissions passes and the corpus is 1105. D5901: shell.Permission has NotDetermined on every host (macOS answers it) and the location request is built (requestWhenInUseAuthorization, then the status polled for a minute); the runners' answers did not change. Open: a real prompt on a Mac, for the camera and the location, which only a person can answer (C192). Done when those are checked."
+    },
+    {
+      "id": "C187",
+      "category": "library",
+      "group": "macOS",
+      "order": 187,
+      "title": "macOS biometrics (LocalAuthentication) and the photo picker (PHPicker)",
+      "score": 0.5,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-10-25 (D5220): biometrics through LocalAuthentication, capabilities().biometrics is LAContext canEvaluatePolicy for Touch ID asked at every call (true only where enrolled), permission_status(Biometric) is Granted there, and biometric_verify shows the system sheet through evaluatePolicy:localizedReason:reply: with a hand-built global block and waits up to a minute; without biometrics it answers Unsupported. The photo picker is the open panel narrowed to image extensions (png, jpg, jpeg, gif, heic, tiff, bmp, webp), several files on request; PHPicker (the Photos library) is a SwiftUI view this library cannot present. ui_permissions now follows what the host offers (the fixture used to require biometrics to be off everywhere). tests/macos/probe/biometrics_photos.e on the runners: no biometrics, verify is Unsupported, the picker is shown and dismissed (Cancelled); the corpus is 1105. Open: a real Touch ID sheet and a confirmed photo selection need a person and a Mac with Touch ID (C192); Photos-library access (PHPicker) is not done. Done when those are checked."
+    },
+    {
+      "id": "C188",
+      "category": "library",
+      "group": "macOS",
+      "order": 188,
+      "title": "macOS print dialogs: NSPrintPanel and the page setup panel over the PDF printer",
+      "score": 0.7,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "Built 2026-10-25 (D5219): print_dialog runs NSPrintPanel modally over a copy of the shared NSPrintInfo with the page range preset to the caller's minimum and maximum, copies and range shown, and returns a Printer (the virtual PDF printer of D5212) carrying the chosen range and copies; page_setup_dialog runs NSPageLayout and returns paper and margins in hundredths of a millimetre (points converted). tests/macos/probe/print_dialogs.e shows both on the runners and dismisses them from the run loop: both answer Cancelled on aarch64 and x64, the screenshot shows the print panel with range 1 to 9; ui_print passes and the corpus is 1105. Open: a confirmed OK (range, copies and the paper and margin values read back) needs a person (C192); a printer other than PDF picked in the panel is ignored, so real printing (NSPrintOperation drawing into a view) is still a design of its own. Done when a confirmed dialog is checked and the real-printer question is decided."
+    },
+    {
+      "id": "C189",
+      "category": "library",
+      "group": "macOS",
+      "order": 189,
+      "title": "macOS notices through UNUserNotificationCenter: removal, replacement and actions",
+      "score": 0.4,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-10-25 (D5221), the center path unverified: for a program with a bundle identifier (shell.bundled()), notice_publish and notice_update ask UNUserNotificationCenter for alert and sound authorization once (requestAuthorizationWithOptions with a hand-built global block, waiting up to a minute) and post a request whose identifier is neper-<id> (the same id again replaces it); notice_remove removes the delivered and pending request; the capability notice_remove is true once the center has authorized the program. A program with no bundle, or one that was not authorized, keeps osascript banners and Unsupported removal. tests/macos/probe/un_notices.e on the runners (a registered association bundle started with open): bundled detection works and the program runs through publish, count, remove, count and ends, but the runner never authorizes the center, so the banner went through osascript, the delivered count stayed 0 and removal was refused; the corpus is 1105. Open: the center path itself (post, replace, remove, getDelivered) has never run, because nothing here can answer the authorization prompt (C192); action buttons (UNNotificationAction categories and a delegate for responses) are not built. Done when a real authorized run posts, replaces and removes, and actions are decided."
+    },
+    {
+      "id": "C190",
+      "category": "library",
+      "group": "macOS",
+      "order": 190,
+      "title": "macOS window system: accessibility, input methods, close veto, live resize, Retina",
+      "score": 0.75,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Done 2026-10-25 and 2026-10-26 (live resize, D5856: os.window_on_resize registers a handler the window delegate's windowDidResize: calls from AppKit's tracking loop with the new pixel size; macos_window_resize on aarch64 and x64 resizes a window from code, which takes the same path; Unsupported on the other hosts): the close button is a request answered through a window delegate (D5222, macos_window_close); the published accessibility tree is NSAccessibilityElements under the content view (D5223, macos_accessibility); input methods commit text (D5229, macos_text_input). The content view's class (NeperTextView, made at run time over the view's own class) answers the text input protocol: insertText:replacementRange: turns committed text, from an NSString or an NSAttributedString, into Text events; setMarkedText, unmarkText, hasMarkedText, markedRange and selectedRange hold a composition's state (marked text is not shown, since a window event has no preedit kind: that is an API change for every host); firstRectForCharacterRange answers a point in the window's top left for the candidate window; doCommandBySelector: is ignored; the view accepts first responder, so the window has an input context. A key with an input method selected (its source id has \"inputmethod\" in it) goes through interpretKeyEvents:, a plain layout's key keeps its own characters as before (a synthetic key event does not come back from the input context synchronously, so the layout path stays direct). macos_text_input calls the input method's methods by hand: an accented letter and a kana become Text events, marked text produces none, committing clears the mark; aarch64 and x64, corpus 1109. Not done: a real input method composing Japanese, Chinese or Korean and its candidate window's place (C192); preedit display; focus, set-value and selection requests, tables, relations and live regions in the accessibility elements, and a real VoiceOver reading the tree (C192); native-resolution checks on a real Retina display (C192). A Retina scale change between displays needs no delegate method: every poll re-reads backingScaleFactor and the content size in pixels, so moving a window to a display of another scale shows up as a Resize with the new pixel size, and window_metrics reports the new scale_percent. Still to see on a real Mac: a drag of an edge by a person repainting smoothly through the handler."
+    },
+    {
+      "id": "C191",
+      "category": "tooling",
+      "group": "macOS",
+      "order": 191,
+      "title": "macOS application bundles and distribution: a bundle command, icon, code signing, notarization",
+      "score": 0.75,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-10-25 (D5224) and extended 2026-10-26 (D5855): scripts/macos-bundle.sh, run on a Mac, makes NAME.app from a program built for macOS: Contents/Info.plist (bundle id, name, version, NSHighResolutionCapable, LSUIElement with --agent, camera, microphone and location usage descriptions, URL schemes and document extensions on request), Contents/MacOS/NAME, Contents/Resources/NAME.icns from a png (sips and iconutil), an ad-hoc signature verified with codesign --verify --deep --strict (or --sign IDENTITY with the hardened runtime), NAME.zip (ditto) with --zip and NAME.dmg (hdiutil, verified) with --dmg. The macos-corpus job runs it on os_poller with an icon and checks plutil, the bundle id, the URL scheme and extension keys, the zip, the dmg and that the program inside the bundle runs, on aarch64 and x64 (BUNDLE PASS). D5876: --entitlements and --notarize PROFILE (notarytool submit --wait, staple, spctl) are written and unrun. Not done: running a Developer ID signature and notarization, which need an Apple developer identity this repository does not have; a neper command that calls the script; Info.plist entitlements. Done when a notarized bundle has been built and opened on a clean Mac."
+    },
+    {
+      "id": "C192",
+      "category": "library",
+      "group": "macOS",
+      "order": 192,
+      "title": "macOS verification on real hardware: what the CI runners cannot do",
+      "score": 0.2,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "The checklist is a program, written 2026-10-25 (D5228) and compiled for both architectures but never run: tests/macos/manual/main.e. Build it on the Mac (neper-self emit-executable tests/macos/manual/main.e . aarch64 macos manual; x64 on an Intel Mac) and run ./manual from a Terminal: it goes through one check at a time, says what to do, waits where a person is needed, and writes PASS, FAIL or skipped lines to ~/neper-manual-results.txt. It covers: the window's Retina scale, a menu-bar icon's left and right click, a pop-up menu choice, a global shortcut press (Control-Option-Shift-F12), the Open panel with two files and the Save panel's name and .txt, a drop from Finder, the clipboard in TextEdit, a notice banner, a Dock menu task and the 50% badge, Finder starting a program for an associated file, the print panel's range and copies, the camera permission, Touch ID where enrolled, the screen capture size, and VoiceOver reading a published tree and pressing its button. Not covered by it (a program cannot drive them): a real pointer drag out of a window into Finder, a notarized bundle opened on a clean Mac (C191), live resize while dragging an edge and IME composition (C190), a Metal or MoltenVK device run (C193). Done when it has been run on an Apple-silicon Mac and an Intel Mac and its results are recorded here."
+    },
+    {
+      "id": "C193",
+      "category": "compiler",
+      "group": "macOS",
+      "order": 193,
+      "title": "macOS GPU: a Metal backend for e.gpu (the Vulkan fixtures cannot run on a Mac)",
+      "score": 0.95,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Phase 1 done 2026-10-25 (D5231): e.gpu.metal, the runtime alone. Phase 2 2026-10-26: src/msl.e, the MSL emitter (D5838; kernel as a switch state machine over heap offsets that reconverges by lowest block, precise::divide/sqrt, fast math off, D5840 32-bit relaxed atomics, D5852 subgroups) and e.gpu's Metal backend (D5839): on a macOS target a kernel's K$spirv carries MSL, Backend.Metal opens a device with a 256 MiB shared heap, buffers are heap ranges, launch_metal runs the SPIR-V launch ABI over it, faults come back through the fault block. Verified on Metal on aarch64 and x64: macos_metal_emitted, macos_metal_exact, macos_gpu_metal, macos_metal_atomics, macos_metal_subgroup (every word equal to the CPU backend's); the emitter's saxpy, loops and exact float are pinned in tests/conformance/msl; the full macOS corpus passes (1130/1130 on both). D5853: a heap larger than 256 MiB read back wrong on the runners. D5892: up to four launches in flight with their own fault blocks (the CPU queues ahead of the GPU; the GPU still runs them in order). D5878: up to four 256 MiB heaps, about 1 GiB of buffers (a single buffer still under 256 MiB). D5875: gpu.launch on Metal commits without waiting (the next call into the device finishes it and reports the fault), so the CPU can work while the GPU runs. Remaining: stronger atomic orders (Metal 3.1 has no fence), 64-bit atomics and subgroup operations on 64-bit values, switch and helper calls (SPIR-V has neither), the Windows and Linux suites for the shared compiler change."
+    },
+    {
+      "id": "C194",
+      "category": "library",
+      "group": "macOS",
+      "order": 194,
+      "title": "macOS corpus: the fixtures that are only reported (extern_many, freestanding, os_syscall, x_tds_integrated, gpu_*)",
+      "score": 0.7,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Done 2026-10-25 (D5225): the Mac corpus asserts every fixture that can run on a Mac (1108 pass, 0 fail, 0 info) and skips seven with the reason a Mac has by nature, as SKIP lines counted apart in the TOTAL: extern_many (four glibc extensions libSystem lacks, then it reads its own ELF header), freestanding and os_syscall (an ELF image, Linux system call numbers), gpu_vulkan_raw and gpu_fault_unchecked (Vulkan, which a Mac does not have; a Metal backend is C193), x_tds_integrated (SSPI, Windows), net_ssh (driven by the workflow's SSH step, reported as its SSH line). gpu_reshape is now asserted at 50, the sum its own comment gives. Open: Mac counterparts of the ELF and system-call fixtures (a Mach-O header check and BSD system call numbers) would turn three skips into asserted tests; ui_collections4_v2 failed once on x64 under Rosetta (exit 190, a gesture timing check at 50 ms after a release) and passed on rerun, so it is timing-sensitive on a loaded runner. Done when the three Mac counterparts exist or are decided against."
+    },
+    {
+      "id": "C195",
+      "category": "library",
+      "group": "macOS",
+      "order": 195,
+      "title": "macOS shell polish: drag files and images out, session restore, Dock overlay image",
+      "score": 0.7,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Built 2026-10-25 (D5226): drag_start now drags files (each path as an NSURL file URL, one dragging item per file, up to 16) and images (TIFF data under public.tiff) as well as text and bytes; taskbar_overlay draws the overlay into the lower right quarter of the program's own Dock icon (the first icon is kept so a second overlay replaces the first, and a picture with no area puts the system's back). tests/macos/probe/polish.e on the runners: the overlay is seen in the Dock screenshot over the folder icon, replaced and cleared without error, and a drag of two files and an image out of a window ends Cancelled when a mouse up is posted, on aarch64 and x64; ui_drag_drop and ui_taskbar pass and the corpus is 1108. Not done: session restore (restart_register) stays Unsupported, because a launchd job with KeepAlive starts at once and a Mac restores a program's windows through the system's own saved state, which is not a command line to register; promised files (a file made at the drop's destination) and a real pointer drag with the files landing in Finder (C192)."
     },
     {
       "id": "C107",
@@ -1014,6 +1113,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Plan docs/browser-progress.html. Needs L170; individual gap rows may start earlier when nothing blocks them. Acceptance: every tracker row with track gap or core is done or explicitly deferred with a decision: Shadow DOM and custom elements (6.16), Workers and Service Workers (6.18, 6.19), contenteditable and Selection (6.11, 6.12), process isolation and OS sandbox (8.1 to 8.3, N.6), DevTools (7.13), WebAssembly (5.17), vertical writing modes (2.16, N.5), audio (3.19), backdrop-filter and blend modes (N.3), colour emoji and CFF (N.4), HSTS and clickjacking protections (4.15, 4.16), fuzzing (8.4). Not yet: all of it."
+    },
+    {
+      "id": "C213",
+      "category": "library",
+      "group": "WebAssembly",
+      "order": 213,
+      "title": "e.ui in a browser: a real phone's virtual keyboard and IME",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Android Chrome checked by hand (D5890, D5891: suggestion replacement, touch hold, drag selection, toolbar); iPhone simulator (iOS 17.5 Mobile Safari, .github/workflows/ios-sim.yml, D5900) passes typing, Backspace and the hold toolbar; a real iPhone and a composing keyboard are still unchecked. Needs a device. Prepared: `node scripts/serve-wasm.mjs --isolated --host 0.0.0.0` and open /tests/wasm/browser/phone_probe.html on the phone (a plain field that logs key, composition, paste, visualViewport and scroll events; Report copies the log) to answer checks 1-5 before touching ui_counter. D5821 lists what the mobile preset did and did not show (synthetic composition events, the textarea at 16 px not scrolling or zooming). Serve tests/wasm/browser/ui_counter.html over HTTPS or a LAN address with scripts/serve-wasm.mjs --isolated (a secure context is needed for crossOriginIsolated and the clipboard) and check on iOS Safari and Android Chrome: (1) tapping the Name field opens the keyboard and neither zooms nor scrolls the page; (2) typed letters, Backspace and Enter arrive once each; (3) composition with a CJK keyboard (pinyin or kana) delivers the committed text once, with no duplicate after compositionend and none while composing; (4) the clipboard: paste from the system menu reaches the program, and Ctrl+C in the program writes navigator.clipboard, with the permission prompt answered either way; (5) visualViewport resizes when the keyboard opens and the canvas stays usable (decide whether the window follows it); (6) a physical keyboard on a tablet still works. Fix what fails in lib/wasm/window.js; window_visible is separate."
     },
     {
       "id": "L173",

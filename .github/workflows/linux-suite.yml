@@ -1,0 +1,158 @@
+name: linux-suite
+# The Linux side of the suites, which do not finish on a developer's Windows machine (run.ps1 trips on PowerShell's
+# stderr handling; the Linux build exhausts WSL's memory). Two jobs, both manual:
+#   wasm   the wasm32-wasi checks on their own: the compiler built as neper.wasm against the native one, the
+#          curated fixtures plain and with --threads (D5651).
+#   suite  tests/selfhost/run.sh whole, which includes the whole wasm32-wasi block.
+# `only` picks one job; empty runs both.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "wasm, suite, or empty for both"
+        required: false
+        default: ""
+      names:
+        description: "wasm job only: sweep just these fixtures (space separated) instead of the curated list"
+        required: false
+        default: ""
+      refresh:
+        description: "yes: refresh the x64-linux tool goldens that differ only in their snapshot hash; all: refresh whatever differs; the changes are saved as an artifact"
+        required: false
+        default: ""
+jobs:
+  wasm:
+    if: ${{ inputs.only == '' || inputs.only == 'wasm' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Bootstrap compiler
+        run: sh scripts/build-bootstrap.sh
+      - name: Self-hosted compiler
+        run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: Stage 2 and stage 3
+        run: |
+          build/linux/neper-self emit-executable src/main.e . x64 linux build/linux/stage2 --arena 1g
+          chmod +x build/linux/stage2
+          build/linux/stage2 emit-executable src/main.e . x64 linux build/linux/stage3 --arena 1g
+          cmp build/linux/stage2 build/linux/stage3 && echo "stage 2 == stage 3"
+      - name: neper.wasm against the native compiler
+        run: |
+          free -m; node --version; ulimit -a | head -20
+          NEPER_COMPILER=$PWD/build/linux/stage2 bash scripts/wasm-compiler.sh
+      - name: Named fixtures (the `names` input), plain and threaded; prints the verdict table and the exit codes
+        if: ${{ inputs.names != '' }}
+        run: |
+          export NEPER_COMPILER=$PWD/build/linux/stage2
+          for mode in "" "--threads"; do
+            bash scripts/wasm-sweep.sh $mode -j 2 ${{ inputs.names }} || true
+            for n in ${{ inputs.names }}; do grep -h "^$n	" build/wasm-sweep/results.tsv; done
+          done
+      - name: wasm sweep, plain and threaded (the fixtures that need no window, device or foreign library)
+        if: ${{ inputs.names == '' }}
+        run: |
+          export NEPER_COMPILER=$PWD/build/linux/stage2
+          names="wasm_basics wasm_ops wasm_flow wasm_irreducible wasm_mask wasm_atomics wasm_reserve wasm_address fs_basics os_clock_random os_environment os_wait_timeout os_process os_group os_socket os_resolve async_io net wasm_net"
+          clean() { ! grep -qP '\t(fail|invalid|refused|stderr-differs|skipped)\t' build/wasm-sweep/results.tsv; }
+          bash scripts/wasm-sweep.sh -j 2 $names
+          clean
+          bash scripts/wasm-sweep.sh --threads -j 2 $names os_pipe_threads wasm_threads net_pop3 net_smtp net_tls
+          clean
+  probe:
+    # A node segmentation fault (exit 139) came up in about one run of eight in `wasm`; this repeats one compile with
+    # different Worker stack sizes to see what it depends on.
+    if: ${{ inputs.only == 'probe' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bootstrap compiler
+        run: sh scripts/build-bootstrap.sh
+      - name: Self-hosted compiler
+        run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: neper.wasm
+        run: build/linux/neper-self emit-executable src/main.e . wasm32 wasi build/linux/neper.wasm
+      - name: Probe script
+        run: |
+          cat > /tmp/probe.sh <<'SH'
+          label=$1
+          bad=0
+          for i in $(seq 1 30); do
+            node --no-warnings lib/wasm/run-wasm.mjs build/linux/neper.wasm emit-executable tests/selfhost/fixtures/link/wasm_reserve/src/main.e . x64 linux /tmp/out.$i > /tmp/log.$i 2>&1
+            status=$?
+            if [ $status -ne 0 ]; then bad=$((bad+1)); echo "[$label] run $i exit $status"; fi
+          done
+          echo "RESULT [$label] node $(node --version): $bad failures of 30"
+          SH
+          uname -r
+      - name: Node as installed
+        run: bash /tmp/probe.sh default || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.1
+      - name: Node 22.23.1
+        run: bash /tmp/probe.sh n22.23.1 || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+      - name: Node 24.19.0
+        run: bash /tmp/probe.sh n24.19.0 || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Node 20 (the wasm host needs Node 22 for some features; this only compiles)
+        run: bash /tmp/probe.sh n20 || true
+  suite:
+    if: ${{ inputs.only == '' || inputs.only == 'suite' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: SQL Server 2025 Developer edition (x.microsoft.tds talks to it; ACCEPT_EULA=Y accepts Microsoft's license terms)
+        run: |
+          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --batch --yes --no-tty --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+          curl -sSL https://packages.microsoft.com/config/ubuntu/24.04/mssql-server-2025.list | sudo tee /etc/apt/sources.list.d/mssql-server-2025.list
+          curl -sSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo env ACCEPT_EULA=Y apt-get install -y mssql-server msodbcsql18 unixodbc
+          bash tests/selfhost/sqlserver.sh setup || { echo "setup failed, forcing the server down and trying once more"; sudo pkill -9 -x sqlservr || true; sudo systemctl stop mssql-server || true; sleep 10; bash tests/selfhost/sqlserver.sh setup; }
+      - name: Scripts are executable (they were committed from Windows)
+        run: chmod +x scripts/*.sh tests/selfhost/*.sh
+      - name: Python packages the fixtures drive (net_ssh talks to an asyncssh server)
+        run: python3 -m pip install --user asyncssh
+      - name: Database servers and client libraries (tests/selfhost/db_servers.sh starts throwaway servers from these)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql mysql-server unixodbc odbc-postgresql libpq5 libmysqlclient21 xvfb xauth mesa-vulkan-drivers libvulkan1 vulkan-tools valgrind
+          ls -d /usr/lib/postgresql/*/bin /usr/sbin/mysqld /usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so
+      - name: Whole suite (traced, and the last commands it ran are printed when it stops)
+        env:
+          NEPER_REFRESH_GOLDENS: ${{ inputs.refresh == 'yes' && '1' || (inputs.refresh == 'all' && 'all' || '') }}
+        run: |
+          status=0
+          Xvfb :99 -screen 0 1280x1024x24 -ac > /tmp/xvfb.log 2>&1 &
+          export DISPLAY=:99
+          sleep 3
+          bash -x tests/selfhost/run.sh 2> /tmp/suite-trace.log || status=$?
+          if [ "$status" -ne 0 ]; then echo "---- the last commands the suite ran ----"; tail -n 120 /tmp/suite-trace.log | cut -c1-300; fi
+          exit $status
+      - name: The goldens the suite refreshed
+        if: ${{ always() && inputs.refresh != '' }}
+        run: |
+          git --no-pager diff --stat -- tests docs
+          git --no-pager diff -- tests docs > /tmp/refreshed-goldens.patch
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.refresh != '' }}
+        with:
+          name: refreshed-goldens
+          path: /tmp/refreshed-goldens.patch

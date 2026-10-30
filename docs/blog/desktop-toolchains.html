@@ -340,7 +340,7 @@
       <div class="tiles three">
         <div class="tile"><h3>Android</h3><p>On x86_64 and AArch64, as a distinct target and not an alias for Linux. The aim is to write the APK itself (binary manifest, aligned native library, signature) with no Android Studio, SDK, NDK, Gradle or Java.</p></div>
         <div class="tile"><h3>iOS</h3><p>First step: compile to arm64 iOS Mach-O objects on Windows. The final link, app bundle, signing and upload stay in Apple's toolchain, because iOS has no unsigned path. So "nothing to install" would hold for compiling, not for the App Store. The language specification currently excludes iOS.</p></div>
-        <div class="tile"><h3>WebAssembly</h3><p>Today Neper can run WebAssembly: <code>e.wasm</code> is an interpreter for the 2.0 core format. Compiling Neper programs to WebAssembly is a goal with no design document yet.</p></div>
+        <div class="tile"><h3>WebAssembly</h3><p>Neper compiles to WebAssembly now: <code>wasm32-wasi</code>, written by its own emitter, with the compiler itself running as a module. <a href="neper-webassembly.html">The post about it</a> has the numbers and the limits. <code>e.wasm</code>, the interpreter for the 2.0 core format, is separate.</p></div>
       </div>
       <p>FreeBSD is evaluated as a candidate and not scheduled. Each of these is a distinct target with its own binary rules, not a relabelled Linux or macOS build, and we will report them here as we measure them, not before.</p>
 

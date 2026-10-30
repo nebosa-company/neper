@@ -5500,6 +5500,14 @@ fn decode_function(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payloa
         c.parameters[item.first_parameter + at].own = usize(bytes[next + at]) == 1usize
         at += 1usize
     }
+    // (D5700) A kernel's facts as its entry recorded them: a launch in a module built
+    // now reads them as it would had the kernel's module been checked again.
+    if item.gpu {
+        let (shared_total, shared_error) = binary.read_u32(bytes, next - 12usize)
+        if shared_error != ok { ret InvalidArtifact }
+        let caps = usize(bytes[next - 19usize]) + usize(bytes[next - 18usize]) * 256usize
+        check.set_kernel_fact(c, c.function_count, 0usize, caps + shared_total * 65536usize)
+    }
     var generic: check.FunctionGeneric = zero
     generic.first_comptime = c.comptime_parameter_count
     c.functions[c.function_count] = item

@@ -11,6 +11,7 @@ use e.os
 use check
 use graph
 use nir
+use platform
 use parse
 use resolve
 use syntax
@@ -361,6 +362,7 @@ fn count_nodes(a: *mem.Arena, g: *graph.Graph) -> (graph.FrontCounts, err) {
 
 // The host by the shape of its current directory, as the driver tells it (D348).
 fn host_name(a: *mem.Arena) -> str {
+    if platform.triple().len != 0usize { ret "WASI wasm32" }
     let (cwd, cwd_error) = os.current_dir(a)
     if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 { ret "Linux x64" }
     ret "Windows x64"

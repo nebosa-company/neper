@@ -23,6 +23,9 @@ ONE_HOST = {
     "x_tds_integrated": "ps1",
     "os_atspi": "sh",
     "os_window_buttons": "sh",
+    "os_window_resize": "ps1",
+    "import_touch": "ps1",
+    "mem_commit_refused": "ps1",
 }
 
 failures = []

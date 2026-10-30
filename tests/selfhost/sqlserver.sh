@@ -42,6 +42,12 @@ stop_server() {
         running || return 0
         sleep 1
     done
+    # A server still starting up can ignore SIGTERM for minutes (a loaded CI runner): kill it, and fail only if even that does not stop it.
+    sudo -n pkill -KILL -x sqlservr || true
+    for _ in $(seq 1 30); do
+        running || return 0
+        sleep 1
+    done
     echo "sqlserver.sh: SQL Server did not stop" >&2
     return 1
 }

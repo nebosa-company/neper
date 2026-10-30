@@ -87,6 +87,13 @@ fn main(a: *mem.Arena) -> err {
         ret ok
     }
 
+    // A WebAssembly module (`\0asm`, version 1) has no loader and no program headers: its imports are what a host
+    // supplies, and the compiler refuses a library the target does not have. The self-read worked, which is the point.
+    if bytes[0usize] == 0u8 && bytes[1usize] == 97u8 && bytes[2usize] == 115u8 && bytes[3usize] == 109u8 {
+        if bytes[4usize] != 1u8 { os.exit(35i32) }
+        ret ok
+    }
+
     // --- An ELF, and its own program headers.
     if bytes[0usize] != 127u8 { os.exit(30i32) }
     if bytes[1usize] != 69u8 { os.exit(31i32) }

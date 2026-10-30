@@ -1448,6 +1448,7 @@ type AccessibleNode = struct { id: u32, parent: u32, has_parent: bool, role: u8,
 | `fn window_cursor(w: Window, shape: CursorShape) -> err` | the cursor over the client area |
 | `fn window_capture(w: Window, on: bool) -> err` | pointer capture: every pointer event goes to this window until released |
 | `fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err` | draws `width * height` BGRA8 pixels, row-major from the top, at the client's origin through the host's software path; a short `pixels` is `Unsupported` |
+| `fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err` | calls `handler` with the window and its new client size in physical pixels each time it is resized, from inside the platform's own resize loop, so a program can repaint while an edge is dragged; `Unsupported` where the host's poll already sees each size (Linux, NeperOS and WASI; macOS and Windows have it) |
 | `fn window_native(w: Window) -> (usize, usize, err)` | the native handle and its context, for a `gpu.Surface` (section 10, Presentation) |
 | `fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)` | the displays, the primary first, into `a`; zero `limit` is `Unsupported` |
 | `fn clipboard_text(a: *mem.Arena) -> (str, err)` | the clipboard's text as UTF-8 into `a`, empty when it holds none |
@@ -1769,8 +1770,8 @@ Both branches must parse and type-check, so dead configurations cannot rot.
 
 `target` is a builtin comptime namespace: it needs no `use` and cannot be shadowed
 (§2). `target.arch` is a `target.Arch`, an enum with members `.X64`, `.Aarch64`,
-`.X86`, `.Spv`, `.Ptx`; `target.os` is a `target.Os` with members `.Windows`,
-`.Linux`, `.Macos`, `.Neperos` (the NeperOS microkernel, `os.neperos.e`, D4704), and `.None` on the GPU targets — one member per `e.os`
+`.X86`, `.Spv`, `.Ptx`, `.Wasm32` (D5622); `target.os` is a `target.Os` with members `.Windows`,
+`.Linux`, `.Macos`, `.Neperos` (the NeperOS microkernel, `os.neperos.e`, D4704), `.Wasi` (WebAssembly System Interface, `os.wasi.e`, D5622), and `.None` on the GPU targets — one member per `e.os`
 target (§5), so an Android host is deferred with its `os.android.e` (§17).
 
 `when` is a **statement**, legal only inside a function body. It cannot wrap a
@@ -2061,7 +2062,9 @@ fn process(input: str, out: *mem.Arena) -> err {
 
 `mark`/`reset` give you scoped deallocation without per-object bookkeeping. A
 program's root arena is a block reserved from the OS at startup; its size is **1
-GiB** unless the link option `--arena SIZE` (§13) raises or lowers it (D323, D340:
+TiB** unless the link option `--arena SIZE` (§13) raises or
+lowers it (D5912, D5930; a wasm32 module and a NeperOS image keep their own sizes), and
+the startup code halves a size the host refuses, down to a mebibyte (D323, D340:
 the block is reserved, and committed a chunk at a time as it is **touched**, so the
 size is a ceiling rather than a cost, and an allocation that is never written costs
 nothing on either host). The startup code obtains it through `e.os` (§5) before
@@ -2073,11 +2076,23 @@ consequence of committing on touch: memory the kernel writes on the program's
 behalf must be committed already, since a kernel-mode write cannot fault its way to
 a commit and the call fails instead. `os.read` and `os.write` touch their buffers,
 every `e.os` function that hands a buffer to an imported call for writing touches it
-first through `os.touch(p, n)` -- a byte of each page read -- and a program's own
-buffer handed to an imported kernel call (`recv`, `ReadDirectoryChangesW`) must have
-been written or touched by the program first (D428; D340 had the runtime touch every
-allocation under four mebibytes as it was made, which made every page of every small
-pool resident whether written or not).
+first through `os.touch(p, n)` -- a byte of each page read -- and the compiler does the
+same for `&slice[i]` given to an imported function through a writable pointer (D5935).
+A pointer from anywhere else, handed to an imported kernel call, must have been written
+or touched by the program first (D428; D340 had the runtime touch every allocation
+under four mebibytes as it was made, which made every page of every small pool resident
+whether written or not).
+
+Memory goes back as well as out. A `reset` that frees 512 MiB or more hands back all but
+the first 128 MiB of what it freed, in whole mebibytes inside what the arena held; a
+smaller one is the one compare and makes no system call (D5931). The bytes past a reset
+were already gone: the checker refuses a slice into a region that was reset
+(E-SAFETY-0013), and a debug build fills them. `e.mem.pages` names what a program asks
+for itself: `discard` gives whole pages back, and `ensure` answers `mem.Exhausted` now
+for bytes the machine does not have, which a page fault would otherwise answer later by
+ending the process (D5932). On Windows a commit the system refuses is asked again for two
+seconds, and then the process ends with `fatal: out of memory` and status 137 (D5934).
+`e.mem.heap` frees objects one at a time, over a range of its own (D5933).
 
 An `Arena` is a cursor, not an independently copyable owner. Copying an `Arena`
 value is legal only to transfer it to a new binding after the old binding is no
@@ -4238,7 +4253,7 @@ project's directory rather than module `main`. A repeated build keeps each modul
 whose source and dependencies are unchanged since its `.em`, and links nothing when
 every module is kept and the file at the output path is still the image the same
 command line wrote; the image is always the clean build's (§12). `--arena SIZE` sizes the root arena (§8; the default is
-1 GiB) — `SIZE` is an integer with an optional `K`, `M` or `G` suffix, in binary
+1 TiB) — `SIZE` is an integer with an optional `K`, `M` or `G` suffix, in binary
 units — `--target` defaults to the full host triple, `--linker` selects the linker
 (Linking, below), and `-j N` the worker count (§15). `--cpu LEVEL` selects the
 instruction level (Target CPU levels, below) and is given **at most once per target

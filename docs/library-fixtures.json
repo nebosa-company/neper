@@ -2461,8 +2461,10 @@
     "gpu_fault_unchecked",
     "gpu_float_modes",
     "gpu_frame_many",
+    "gpu_ftz_ops",
     "gpu_gaps",
     "gpu_inventory",
+    "gpu_launch_facts",
     "gpu_present",
     "gpu_reshape",
     "gpu_shared",
@@ -2476,6 +2478,9 @@
     "gpu_vulkan_loop",
     "gpu_vulkan_sync",
     "gpu_vulkan_types",
+    "macos_gpu_metal",
+    "macos_metal_atomics",
+    "macos_metal_subgroup",
     "text_math",
     "ui_a11y_controls",
     "ui_accessibility",
@@ -2576,7 +2581,8 @@
     "ui_transient",
     "ui_widget",
     "ui_window",
-    "ui_workspace"
+    "ui_workspace",
+    "wasm_irreducible"
    ]
   },
   {
@@ -2600,6 +2606,19 @@
    "pending": [],
    "fixtures": [
     "gpu_cuda"
+   ]
+  },
+  {
+   "module": "e.gpu.metal",
+   "milestone": "M3",
+   "schedule": "scheduled",
+   "catalogue": 0,
+   "delivered": 0,
+   "pending": [],
+   "fixtures": [
+    "macos_metal_emitted",
+    "macos_metal_exact",
+    "macos_metal_raw"
    ]
   },
   {
@@ -2671,7 +2690,9 @@
     "gfx_vision",
     "gpu_f64",
     "gpu_float_modes",
+    "gpu_ftz_ops",
     "gpu_vulkan_float",
+    "macos_metal_exact",
     "math_exact",
     "math_exp_log",
     "math_fft_filter_plan",
@@ -2695,7 +2716,8 @@
     "robot_plan",
     "text_tokenize",
     "ui_inputs3_v2",
-    "ui_theme"
+    "ui_theme",
+    "wasm_ops"
    ]
   },
   {
@@ -2749,7 +2771,8 @@
     "net_ssh",
     "net_tftp",
     "net_tls",
-    "net_zmtp"
+    "net_zmtp",
+    "wasm_net"
    ]
   },
   {
@@ -2861,7 +2884,9 @@
     "gpu_fault_bounds",
     "simd_lanes",
     "trap_align",
-    "trap_arithmetic"
+    "trap_arithmetic",
+    "wasm_mask",
+    "wasm_ops"
    ]
   },
   {
@@ -2877,6 +2902,7 @@
     "net_sp",
     "net_zmtp",
     "os_exit_threads",
+    "os_wait_timeout",
     "runtime_gaps",
     "sync_dataguard",
     "sync_flight",
@@ -2886,7 +2912,8 @@
     "sync_threads",
     "task_pool",
     "test_poll",
-    "thread_perturb"
+    "thread_perturb",
+    "wasm_threads"
    ]
   },
   {
@@ -3193,6 +3220,7 @@
     "net_tls",
     "net_tls_roots",
     "net_zmtp",
+    "os_wait_timeout",
     "proc_output",
     "sync_flight",
     "sync_semantics",

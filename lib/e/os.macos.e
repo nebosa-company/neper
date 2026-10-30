@@ -2050,7 +2050,12 @@ const NOTE_TRIGGER: u32 = 16777216u32
 const WAKE_IDENT: u64 = 1u64
 const POLL_BATCH: usize = 64usize
 
-type PollerState = struct { queue: usize }
+const POLL_TRACKED: usize = 32usize
+
+// What this poller registered, so a second registration of a handle answers Exists as epoll does
+// (EV_ADD silently replaces). flags: 1 read, 2 write, 0 a free slot. Handles past the 32nd go
+// untracked and keep kqueue's replace-on-register.
+type PollerState = struct { queue: usize, fds: [32]u64, tokens: [32]usize, flags: [32]u8 }
 
 // One change to the queue; an error from a delete (the filter was never added) is the caller's
 // to ignore, so the result is returned as it came.
@@ -2074,6 +2079,11 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
         ret (poller, OutOfMemory)
     }
     holder[0usize].queue = usize(queue)
+    var clear = 0usize
+    while clear < POLL_TRACKED {
+        holder[0usize].flags[clear] = 0u8
+        clear += 1usize
+    }
     // The wake is a user event, cleared as it is delivered.
     let added = poller_change(usize(queue), WAKE_IDENT, EVFILT_USER, EV_ADD | EV_CLEAR, 0u32, 0usize)
     if added < 0isize {
@@ -2084,22 +2094,71 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
     ret (poller, ok)
 }
 
+fn poller_slot(state: *PollerState, fd: u64) -> usize {
+    var at = 0usize
+    while at < POLL_TRACKED {
+        if state.flags[at] != 0u8 && state.fds[at] == fd { ret at }
+        at += 1usize
+    }
+    ret POLL_TRACKED
+}
+
 fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
     let state = mem.cast[*PollerState](p.state)
+    let fd = u64(handle.raw)
+    let known = poller_slot(state, fd)
+    if known < POLL_TRACKED {
+        // A closed descriptor leaves the kernel's table without telling this one, so the entry is
+        // only believed if the kernel still has the filter: deleting it proves that, and it goes
+        // straight back as it was.
+        var live = false
+        let had = state.flags[known]
+        let kept = state.tokens[known]
+        if had & 1u8 != 0u8 && poller_change(state.queue, fd, EVFILT_READ, EV_DELETE, 0u32, 0usize) >= 0isize {
+            live = true
+            let restored = poller_change(state.queue, fd, EVFILT_READ, EV_ADD, 0u32, kept)
+        }
+        if had & 2u8 != 0u8 && poller_change(state.queue, fd, EVFILT_WRITE, EV_DELETE, 0u32, 0usize) >= 0isize {
+            live = true
+            let restored = poller_change(state.queue, fd, EVFILT_WRITE, EV_ADD, 0u32, kept)
+        }
+        if live { ret Exists }
+        state.flags[known] = 0u8
+    }
+    var mark = 0u8
     // Level-triggered, as epoll is without EPOLLET: no EV_CLEAR.
     if interest.readable {
-        let added = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_ADD, 0u32, token)
+        let added = poller_change(state.queue, fd, EVFILT_READ, EV_ADD, 0u32, token)
         if added < 0isize { ret from_errno(added) }
+        mark = mark | 1u8
     }
     if interest.writable {
-        let added = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_ADD, 0u32, token)
+        let added = poller_change(state.queue, fd, EVFILT_WRITE, EV_ADD, 0u32, token)
         if added < 0isize { ret from_errno(added) }
+        mark = mark | 2u8
+    }
+    let free = poller_slot_free(state)
+    if free < POLL_TRACKED && mark != 0u8 {
+        state.fds[free] = fd
+        state.tokens[free] = token
+        state.flags[free] = mark
     }
     ret ok
 }
 
+fn poller_slot_free(state: *PollerState) -> usize {
+    var at = 0usize
+    while at < POLL_TRACKED {
+        if state.flags[at] == 0u8 { ret at }
+        at += 1usize
+    }
+    ret POLL_TRACKED
+}
+
 fn poller_unregister(p: Poller, handle: Handle) -> err {
     let state = mem.cast[*PollerState](p.state)
+    let known = poller_slot(state, u64(handle.raw))
+    if known < POLL_TRACKED { state.flags[known] = 0u8 }
     // Either filter may never have been added, so ENOENT from one is not a failure; both gone
     // is what the caller asked for.
     let read_removed = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_DELETE, 0u32, 0usize)
@@ -2493,15 +2552,28 @@ fn cocoa_read_text(string: usize, out: []u8) -> usize {
     ret length
 }
 
+// A rect an AppKit object answers for the selector `key` (`frame`, `bounds`, ...): called directly, it comes back in v0 to v3 on
+// arm64 (C178) and through memory, by `objc_msgSend_stret`, on x86-64.
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_rect_a64(receiver: usize, selector: usize) -> CgRect
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend_stret")
+extern fn msg_rect_x64(receiver: usize, selector: usize) -> CgRect
+
 fn cocoa_rect(object: usize, key: str) -> CgRect {
     var rect: CgRect = zero
-    let name = cocoa_text(key)
-    let boxed = msg1(object, cocoa_sel("valueForKey:\x00"), name)
-    cf_release(name)
-    if boxed != 0usize {
-        let copied = msg1(boxed, cocoa_sel("getValue:\x00"), mem.address_of(&rect))
+    if object == 0usize || key.len > 30usize { ret rect }
+    var name: [32]u8 = zero
+    var at = 0usize
+    while at < key.len {
+        name[at] = key[at]
+        at += 1usize
     }
-    ret rect
+    let selector = objc_sel_register(&name[0usize])
+    when target.arch == .Aarch64 {
+        ret msg_rect_a64(object, selector)
+    }
+    ret msg_rect_x64(object, selector)
 }
 
 fn cocoa_start() -> err {
@@ -2803,7 +2875,7 @@ fn cocoa_translate(event: usize) -> bool {
         if kind == 11usize { key.kind = .KeyUp }
         if kind == 10usize { key.repeat = msg_bool_ret(event, cocoa_sel("isARepeat\x00")) != 0u8 }
         cocoa_push(key)
-        if kind == 10usize { cocoa_text_events(window, modifiers, msg0(event, cocoa_sel("characters\x00"))) }
+        if kind == 10usize { cocoa_interpret(window, modifiers, event) }
         ret true
     }
     if kind == 12usize {
@@ -2891,6 +2963,254 @@ fn cocoa_pump(timeout_ns: i64) {
     objc_pool_pop(pool)
 }
 
+// Text input (D5229). A key is handed to the window's content view through `interpretKeyEvents:` and the view answers the
+// text input protocol, so the system's input methods work: a Japanese, Chinese or Korean composition ends in `insertText:` with
+// the committed text, which becomes Text events, where the raw keystrokes of the composition used to. The view's class,
+// `NeperTextView`, is made at run time over the content view's own class and set on every window. What the composition looks
+// like while it is going (the marked text) is not shown, since a window event has no such kind (a preedit event is an API change
+// for every host), and the candidate window is placed at the window's top left.
+type CocoaRange = struct { location: usize, length: usize }
+type CocoaTextImp = union { function: fn(usize, usize, usize, usize, usize) -> usize, bits: usize }
+type CocoaTextImp6 = union { function: fn(usize, usize, usize, usize, usize, usize), bits: usize }
+type CocoaTextImp2 = union { function: fn(usize, usize) -> usize, bits: usize }
+type CocoaRangeImp = union { function: extern fn(usize, usize) -> CocoaRange, bits: usize }
+type CocoaRectImp = union { function: extern fn(usize, usize, usize, usize, usize) -> CgRect, bits: usize }
+
+@import("/usr/lib/libobjc.A.dylib", "object_getClass")
+extern fn cocoa_get_class(object: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "object_setClass")
+extern fn cocoa_set_class(object: usize, class: usize) -> usize
+
+var cocoa_text_class: usize = zero
+var cocoa_marked: [16]bool = zero
+
+fn cocoa_view_slot(view: usize) -> usize {
+    var at = 0usize
+    while at < COCOA_TABLE {
+        if cocoa_windows[at] != 0usize && msg0(cocoa_windows[at], cocoa_sel("contentView\x00")) == view { ret at }
+        at += 1usize
+    }
+    ret COCOA_TABLE
+}
+
+// Committed text, from an NSString or an NSAttributedString.
+@cc(c)
+fn view_insert_text(this: usize, command: usize, string: usize, location: usize, length: usize) -> usize {
+    let slot = cocoa_view_slot(this)
+    if slot >= COCOA_TABLE { ret 0usize }
+    cocoa_marked[slot] = false
+    var plain = string
+    let attributed = msg1(string, cocoa_sel("respondsToSelector:\x00"), cocoa_sel("string\x00"))
+    if attributed & 255usize != 0usize { plain = msg0(string, cocoa_sel("string\x00")) }
+    var window: Window = zero
+    window.raw = cocoa_windows[slot]
+    cocoa_text_events(window, 0u8, plain)
+    ret 0usize
+}
+
+@cc(c)
+fn view_set_marked(this: usize, command: usize, string: usize, selected: usize, length: usize, replaced: usize) {
+    let slot = cocoa_view_slot(this)
+    if slot < COCOA_TABLE { cocoa_marked[slot] = true }
+}
+
+@cc(c)
+fn view_unmark(this: usize, command: usize) -> usize {
+    let slot = cocoa_view_slot(this)
+    if slot < COCOA_TABLE { cocoa_marked[slot] = false }
+    ret 0usize
+}
+
+@cc(c)
+fn view_has_marked(this: usize, command: usize) -> usize {
+    let slot = cocoa_view_slot(this)
+    if slot < COCOA_TABLE && cocoa_marked[slot] { ret 1usize }
+    ret 0usize
+}
+
+@cc(c)
+fn view_marked_range(this: usize, command: usize) -> CocoaRange {
+    // NSNotFound when nothing is marked.
+    ret CocoaRange { location: 9223372036854775807usize, length: 0usize }
+}
+
+@cc(c)
+fn view_selected_range(this: usize, command: usize) -> CocoaRange {
+    ret CocoaRange { location: 0usize, length: 0usize }
+}
+
+@cc(c)
+fn view_nothing(this: usize, command: usize) -> usize { ret 0usize }
+
+@cc(c)
+fn view_accepts_first(this: usize, command: usize) -> usize { ret 1usize }
+
+@cc(c)
+fn view_not_found(this: usize, command: usize, a: usize, b: usize, c: usize) -> usize { ret 9223372036854775807usize }
+
+@cc(c)
+fn view_substring(this: usize, command: usize, location: usize, length: usize, actual: usize) -> usize { ret 0usize }
+
+@cc(c)
+fn view_first_rect(this: usize, command: usize, location: usize, length: usize, actual: usize) -> CgRect {
+    // The candidate window goes at the screen's lower left corner of the window's content: a point in the window's frame.
+    let slot = cocoa_view_slot(this)
+    var rect: CgRect = zero
+    if slot < COCOA_TABLE {
+        let frame = cocoa_rect(cocoa_windows[slot], "frame")
+        rect = CgRect { x: frame.x + 20.0f64, y: frame.y + frame.h - 40.0f64, w: 1.0f64, h: 20.0f64 }
+    }
+    ret rect
+}
+
+fn cocoa_make_text_class(view: usize) -> usize {
+    if cocoa_text_class != 0usize { ret cocoa_text_class }
+    let name = "NeperTextView\x00"
+    let class = cocoa_class_pair(cocoa_get_class(view), &name[0usize], 0usize)
+    if class == 0usize { ret 0usize }
+    var insert: CocoaTextImp = zero
+    insert.function = view_insert_text
+    var marked: CocoaTextImp6 = zero
+    marked.function = view_set_marked
+    var unmark: CocoaTextImp2 = zero
+    unmark.function = view_unmark
+    var has: CocoaTextImp2 = zero
+    has.function = view_has_marked
+    var marked_range: CocoaRangeImp = zero
+    marked_range.function = view_marked_range
+    var selected_range: CocoaRangeImp = zero
+    selected_range.function = view_selected_range
+    var nothing: CocoaTextImp2 = zero
+    nothing.function = view_nothing
+    var not_found: CocoaTextImp = zero
+    not_found.function = view_not_found
+    var substring: CocoaTextImp = zero
+    substring.function = view_substring
+    var first: CocoaRectImp = zero
+    first.function = view_first_rect
+    let object_types = "v@:@\x00"
+    let one = cocoa_class_method(class, cocoa_sel("insertText:replacementRange:\x00"), insert.bits, &object_types[0usize])
+    let two = cocoa_class_method(class, cocoa_sel("setMarkedText:selectedRange:replacementRange:\x00"), marked.bits, &object_types[0usize])
+    let three = cocoa_class_method(class, cocoa_sel("unmarkText\x00"), unmark.bits, &object_types[0usize])
+    let four = cocoa_class_method(class, cocoa_sel("hasMarkedText\x00"), has.bits, &object_types[0usize])
+    let five = cocoa_class_method(class, cocoa_sel("markedRange\x00"), marked_range.bits, &object_types[0usize])
+    let six = cocoa_class_method(class, cocoa_sel("selectedRange\x00"), selected_range.bits, &object_types[0usize])
+    let seven = cocoa_class_method(class, cocoa_sel("validAttributesForMarkedText\x00"), nothing.bits, &object_types[0usize])
+    let eight = cocoa_class_method(class, cocoa_sel("attributedSubstringForProposedRange:actualRange:\x00"), substring.bits, &object_types[0usize])
+    let nine = cocoa_class_method(class, cocoa_sel("characterIndexForPoint:\x00"), not_found.bits, &object_types[0usize])
+    let ten = cocoa_class_method(class, cocoa_sel("firstRectForCharacterRange:actualRange:\x00"), first.bits, &object_types[0usize])
+    let eleven = cocoa_class_method(class, cocoa_sel("doCommandBySelector:\x00"), nothing.bits, &object_types[0usize])
+    var accepts: CocoaTextImp2 = zero
+    accepts.function = view_accepts_first
+    let twelve = cocoa_class_method(class, cocoa_sel("acceptsFirstResponder\x00"), accepts.bits, &object_types[0usize])
+    cocoa_class_register(class)
+    cocoa_text_class = class
+    ret class
+}
+
+// A key down. With an input method selected (its source id has "inputmethod" in it, as com.apple.inputmethod.Kotoeri.Japanese does)
+// the key goes to the view's input context through `interpretKeyEvents:`, which commits text with insertText:; with a plain keyboard
+// layout the key's own characters are the text, as before. Keys with a control or command modifier are shortcuts and carry no text.
+// ponytail: the layout path is not routed through the input context because synthetic key events (a runner has no one typing) do not
+// come back from it synchronously.
+fn cocoa_interpret(window: Window, modifiers: u8, event: usize) {
+    if modifiers & 10u8 != 0u8 { ret }
+    var use_input_method = false
+    let context = msg0(cocoa_class("NSTextInputContext\x00"), cocoa_sel("currentInputContext\x00"))
+    if context != 0usize {
+        let source = msg0(context, cocoa_sel("selectedKeyboardInputSource\x00"))
+        if source != 0usize {
+            var name: [96]u8 = zero
+            let length = cocoa_read_text(source, name[0usize..95usize])
+            var at = 0usize
+            while at + 11usize < length && at < 85usize {
+                if name[at] == 105u8 && name[at + 1usize] == 110u8 && name[at + 2usize] == 112u8 && name[at + 3usize] == 117u8 && name[at + 4usize] == 116u8 && name[at + 5usize] == 109u8 && name[at + 6usize] == 101u8 && name[at + 7usize] == 116u8 && name[at + 8usize] == 104u8 && name[at + 9usize] == 111u8 && name[at + 10usize] == 100u8 { use_input_method = true }
+                at += 1usize
+            }
+        }
+    }
+    if use_input_method {
+        let view = msg0(window.raw, cocoa_sel("contentView\x00"))
+        var one = event
+        let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&one), 1usize)
+        let interpreted = msg1(view, cocoa_sel("interpretKeyEvents:\x00"), list)
+    } else {
+        cocoa_text_events(window, modifiers, msg0(event, cocoa_sel("characters\x00")))
+    }
+}
+
+// The close button asks the window's delegate, and this delegate answers no and tells the program: a Close event is a request,
+// as it is on the other hosts, and the window stays until the program calls `window_close`. `[window close]` does not ask.
+@import("/usr/lib/libobjc.A.dylib", "objc_allocateClassPair")
+extern fn cocoa_class_pair(superclass: usize, name: *const u8, extra: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "class_addMethod")
+extern fn cocoa_class_method(class: usize, selector: usize, implementation: usize, types: *const u8) -> u8
+
+@import("/usr/lib/libobjc.A.dylib", "objc_registerClassPair")
+extern fn cocoa_class_register(class: usize)
+
+type CocoaShould = union { function: fn(usize, usize, usize) -> usize, bits: usize }
+
+var cocoa_delegate: usize = zero
+
+@cc(c)
+fn cocoa_should_close(this: usize, command: usize, sender: usize) -> usize {
+    var at = 0usize
+    while at < COCOA_TABLE {
+        if cocoa_windows[at] == sender {
+            var window: Window = zero
+            window.raw = sender
+            var event: WindowEvent = zero
+            event.window = window
+            event.kind = .Close
+            cocoa_push(event)
+        }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+// The handlers `window_on_resize` registered, one a window; AppKit calls `windowDidResize:` from inside its tracking loop while
+// an edge is dragged, where the poll model gets no turn, so the handler is where a program repaints live (D5856).
+type CocoaResizeHandler = union { function: fn(Window, u32, u32), bits: usize }
+type CocoaDidResize = union { function: fn(usize, usize, usize), bits: usize }
+var cocoa_resize_handlers: [16]usize = zero
+
+@cc(c)
+fn cocoa_did_resize(this: usize, command: usize, notification: usize) {
+    let window = msg0(notification, cocoa_sel("object\x00"))
+    let slot = cocoa_slot_of(window)
+    if slot >= COCOA_TABLE || cocoa_resize_handlers[slot] == 0usize { ret }
+    cocoa_scales[slot] = cocoa_scale_percent(window)
+    let (width, height) = cocoa_content_pixels(slot)
+    if width == 0u32 || height == 0u32 { ret }
+    var handler: CocoaResizeHandler = zero
+    handler.bits = cocoa_resize_handlers[slot]
+    var handle: Window = zero
+    handle.raw = window
+    handler.function(handle, width, height)
+}
+
+fn cocoa_make_delegate() -> usize {
+    if cocoa_delegate != 0usize { ret cocoa_delegate }
+    let name = "NeperWindowDelegate\x00"
+    let class = cocoa_class_pair(cocoa_class("NSObject\x00"), &name[0usize], 0usize)
+    if class == 0usize { ret 0usize }
+    var should: CocoaShould = zero
+    should.function = cocoa_should_close
+    let types = "c@:@\x00"
+    let added = cocoa_class_method(class, cocoa_sel("windowShouldClose:\x00"), should.bits, &types[0usize])
+    var resized: CocoaDidResize = zero
+    resized.function = cocoa_did_resize
+    let resize_types = "v@:@\x00"
+    let added_resize = cocoa_class_method(class, cocoa_sel("windowDidResize:\x00"), resized.bits, &resize_types[0usize])
+    cocoa_class_register(class)
+    cocoa_delegate = msg0(msg0(class, cocoa_sel("alloc\x00")), cocoa_sel("init\x00"))
+    ret cocoa_delegate
+}
+
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
     let started = cocoa_start()
@@ -2937,6 +3257,14 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
         let opaque = msg_flag(layer, cocoa_sel("setOpaque:\x00"), 1i32)
     }
     cocoa_windows[slot] = window
+    let delegate = cocoa_make_delegate()
+    if delegate != 0usize { let delegated = msg1(window, cocoa_sel("setDelegate:\x00"), delegate) }
+    let text_class = cocoa_make_text_class(msg0(window, cocoa_sel("contentView\x00")))
+    if text_class != 0usize {
+        let swapped = cocoa_set_class(msg0(window, cocoa_sel("contentView\x00")), text_class)
+        // The view takes the keys, so the system has a text input context for the window.
+        let responder = msg1(window, cocoa_sel("makeFirstResponder:\x00"), msg0(window, cocoa_sel("contentView\x00")))
+    }
     cocoa_layers[slot] = layer
     cocoa_scales[slot] = scale_percent
     cocoa_widths[slot] = options.width
@@ -2968,6 +3296,7 @@ fn window_close(w: Window) -> err {
     let released = msg0(window, cocoa_sel("release\x00"))
     cocoa_windows[slot] = 0usize
     cocoa_layers[slot] = 0usize
+    cocoa_resize_handlers[slot] = 0usize
     objc_pool_pop(pool)
     ret ok
 }
@@ -3081,6 +3410,16 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
 }
 
 // The view and the window, for a gpu surface of kind Cocoa.
+// Calls `handler` with the new client size in physical pixels each time the window is resized, including while an edge is dragged.
+fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    var holder: CocoaResizeHandler = zero
+    holder.function = handler
+    cocoa_resize_handlers[slot] = holder.bits
+    ret ok
+}
+
 fn window_native(w: Window) -> (usize, usize, err) {
     let slot = cocoa_slot(w)
     if slot >= COCOA_TABLE { ret (0usize, 0usize, NotFound) }
@@ -3189,9 +3528,242 @@ fn set_clipboard_text(value: str) -> err {
     ret ok
 }
 
-fn accessibility_listening(w: Window) -> bool { ret false }
-fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err { ret Unsupported }
+// Accessibility (D5223): the published tree becomes NSAccessibilityElements, which VoiceOver and the other assistive tools read
+// through the window's content view. The nodes arrive flat with parent ids, as on the other hosts; each becomes an element of
+// `NeperAXElement` (a subclass of NSAccessibilityElement made at run time, so that a press or a step can be answered) with its role
+// mapped to the NSAccessibility role, its label, value, hint, enabled and focused state and its frame in screen coordinates
+// (`bounds` are in the window's points from the top left; the screen's origin is the bottom left). The elements with no parent are
+// the view's accessibility children. What a tool asks for -- press, increment, decrement, focus -- is queued for
+// `accessibility_take`. `accessibility_listening` is whether VoiceOver is on, so nothing is built until someone is reading.
+const AX_NODES: usize = 256usize
+const AX_QUEUE: usize = 16usize
+type AxShould = union { function: fn(usize, usize) -> usize, bits: usize }
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_frame(receiver: usize, selector: usize, rect: CgRect) -> usize
+
+var ax_class: usize = zero
+var ax_view: usize = zero
+var ax_elements: [256]usize = zero
+var ax_ids: [256]u32 = zero
+var ax_generations: [256]u32 = zero
+var ax_count: usize = zero
+var ax_requests: [16]AccessibleRequest = zero
+var ax_head: usize = zero
+var ax_tail: usize = zero
+
+fn ax_push(element: usize, action: u8) {
+    var at = 0usize
+    while at < ax_count && ax_elements[at] != element { at += 1usize }
+    if at == ax_count { ret }
+    let next = (ax_tail + 1usize) % AX_QUEUE
+    if next == ax_head { ret }
+    ax_requests[ax_tail] = AccessibleRequest { id: ax_ids[at], generation: ax_generations[at], action: action, value: "" }
+    ax_tail = next
+}
+
+@cc(c)
+fn ax_press(this: usize, command: usize) -> usize {
+    ax_push(this, 1u8)
+    ret 1usize
+}
+
+@cc(c)
+fn ax_increment(this: usize, command: usize) -> usize {
+    ax_push(this, 2u8)
+    ret 1usize
+}
+
+@cc(c)
+fn ax_decrement(this: usize, command: usize) -> usize {
+    ax_push(this, 3u8)
+    ret 1usize
+}
+
+fn ax_make_class() -> usize {
+    if ax_class != 0usize { ret ax_class }
+    let name = "NeperAXElement\x00"
+    let class = cocoa_class_pair(cocoa_class("NSAccessibilityElement\x00"), &name[0usize], 0usize)
+    if class == 0usize { ret 0usize }
+    var press: AxShould = zero
+    press.function = ax_press
+    var up: AxShould = zero
+    up.function = ax_increment
+    var down: AxShould = zero
+    down.function = ax_decrement
+    let types = "c@:\x00"
+    let one = cocoa_class_method(class, cocoa_sel("accessibilityPerformPress\x00"), press.bits, &types[0usize])
+    let two = cocoa_class_method(class, cocoa_sel("accessibilityPerformIncrement\x00"), up.bits, &types[0usize])
+    let three = cocoa_class_method(class, cocoa_sel("accessibilityPerformDecrement\x00"), down.bits, &types[0usize])
+    cocoa_class_register(class)
+    ax_class = class
+    ret class
+}
+
+// The NSAccessibility role of a node's role number (the order of `e.ui.accessibility.Role`).
+fn ax_role(role: u8) -> str {
+    if role == 3u8 { ret "AXButton" }
+    if role == 4u8 || role == 18u8 { ret "AXCheckBox" }
+    if role == 5u8 || role == 19u8 { ret "AXRadioButton" }
+    if role == 6u8 || role == 26u8 || role == 36u8 { ret "AXStaticText" }
+    if role == 7u8 { ret "AXTextField" }
+    if role == 8u8 { ret "AXImage" }
+    if role == 9u8 { ret "AXLink" }
+    if role == 10u8 || role == 35u8 { ret "AXList" }
+    if role == 12u8 { ret "AXTable" }
+    if role == 13u8 || role == 11u8 || role == 29u8 { ret "AXRow" }
+    if role == 14u8 || role == 31u8 || role == 32u8 { ret "AXCell" }
+    if role == 15u8 { ret "AXSlider" }
+    if role == 16u8 { ret "AXProgressIndicator" }
+    if role == 17u8 { ret "AXScrollBar" }
+    if role == 20u8 { ret "AXTabGroup" }
+    if role == 21u8 { ret "AXMenu" }
+    if role == 22u8 || role == 37u8 || role == 42u8 { ret "AXMenuItem" }
+    if role == 25u8 { ret "AXHeading" }
+    if role == 27u8 { ret "AXHelpTag" }
+    if role == 28u8 || role == 43u8 { ret "AXOutline" }
+    if role == 30u8 { ret "AXGrid" }
+    if role == 33u8 { ret "AXSplitter" }
+    if role == 38u8 { ret "AXComboBox" }
+    if role == 41u8 { ret "AXMenuBar" }
+    if role == 44u8 { ret "AXIncrementor" }
+    ret "AXGroup"
+}
+
+fn ax_text(text: str) -> usize {
+    ret cocoa_text(text)
+}
+
+fn accessibility_listening(w: Window) -> bool {
+    if cocoa_slot(w) >= COCOA_TABLE { ret false }
+    if cocoa_start() != ok { ret false }
+    let workspace = msg0(cocoa_class("NSWorkspace\x00"), cocoa_sel("sharedWorkspace\x00"))
+    ret msg_bool_ret(workspace, cocoa_sel("isVoiceOverEnabled\x00")) != 0u8
+}
+
+fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret NotFound }
+    let started = cocoa_start()
+    if started != ok { ret started }
+    let class = ax_make_class()
+    if class == 0usize { ret Failed }
+    let pool = objc_pool_push()
+    let window = cocoa_windows[slot]
+    let view = msg0(window, cocoa_sel("contentView\x00"))
+    // The last tree is let go of; the new one is built whole.
+    var at = 0usize
+    while at < ax_count {
+        let dropped = msg0(ax_elements[at], cocoa_sel("release\x00"))
+        at += 1usize
+    }
+    ax_count = 0usize
+    let frame = cocoa_rect(window, "frame")
+    let content = cocoa_rect(view, "frame")
+    var count = 0usize
+    while count < nodes.len && count < AX_NODES {
+        let node = nodes[count]
+        let element = msg0(msg0(class, cocoa_sel("alloc\x00")), cocoa_sel("init\x00"))
+        ax_elements[count] = element
+        ax_ids[count] = node.id
+        ax_generations[count] = node.generation
+        let role = ax_text(ax_role(node.role))
+        let set_role = msg1(element, cocoa_sel("setAccessibilityRole:\x00"), role)
+        cf_release(role)
+        if node.label.len != 0usize {
+            let label = ax_text(node.label)
+            let set_label = msg1(element, cocoa_sel("setAccessibilityLabel:\x00"), label)
+            cf_release(label)
+        }
+        if node.value.len != 0usize {
+            let value = ax_text(node.value)
+            let set_value = msg1(element, cocoa_sel("setAccessibilityValue:\x00"), value)
+            cf_release(value)
+        }
+        if node.hint.len != 0usize {
+            let hint = ax_text(node.hint)
+            let set_hint = msg1(element, cocoa_sel("setAccessibilityHelp:\x00"), hint)
+            cf_release(hint)
+        }
+        var enabled = 1i32
+        if node.flags & 1u16 != 0u16 { enabled = 0i32 }
+        let set_enabled = msg_flag(element, cocoa_sel("setAccessibilityEnabled:\x00"), enabled)
+        var focused = 0i32
+        if node.flags & 2u16 != 0u16 { focused = 1i32 }
+        let set_focused = msg_flag(element, cocoa_sel("setAccessibilityFocused:\x00"), focused)
+        let area = CgRect { x: frame.x + content.x + f64(node.x), y: frame.y + content.y + content.h - f64(node.y) - f64(node.height), w: f64(node.width), h: f64(node.height) }
+        let set_frame = msg_frame(element, cocoa_sel("setAccessibilityFrame:\x00"), area)
+        count += 1usize
+    }
+    ax_count = count
+    // Parents and children: a node whose parent is published hangs from it, any other from the view.
+    var index = 0usize
+    while index < count {
+        let node = nodes[index]
+        var parent_at = 0usize
+        var found = false
+        if node.has_parent {
+            while parent_at < count && !found {
+                if nodes[parent_at].id == node.parent && nodes[parent_at].generation == node.parent_generation { found = true } else { parent_at += 1usize }
+            }
+        }
+        if found {
+            let set_parent = msg1(ax_elements[index], cocoa_sel("setAccessibilityParent:\x00"), ax_elements[parent_at])
+        } else {
+            let set_parent = msg1(ax_elements[index], cocoa_sel("setAccessibilityParent:\x00"), view)
+        }
+        index += 1usize
+    }
+    // Each element's children, in the published order, as an array; the roots become the view's.
+    index = 0usize
+    while index < count {
+        var kids: [256]usize = zero
+        var kid_count = 0usize
+        var scan = 0usize
+        while scan < count {
+            if nodes[scan].has_parent && nodes[scan].parent == nodes[index].id && nodes[scan].parent_generation == nodes[index].generation {
+                kids[kid_count] = ax_elements[scan]
+                kid_count += 1usize
+            }
+            scan += 1usize
+        }
+        if kid_count != 0usize {
+            let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&kids[0usize]), kid_count)
+            let set_children = msg1(ax_elements[index], cocoa_sel("setAccessibilityChildren:\x00"), list)
+        }
+        index += 1usize
+    }
+    var tops: [256]usize = zero
+    var top_count = 0usize
+    index = 0usize
+    while index < count {
+        var has_parent_published = false
+        var scan = 0usize
+        if nodes[index].has_parent {
+            while scan < count && !has_parent_published {
+                if nodes[scan].id == nodes[index].parent && nodes[scan].generation == nodes[index].parent_generation { has_parent_published = true }
+                scan += 1usize
+            }
+        }
+        if !has_parent_published {
+            tops[top_count] = ax_elements[index]
+            top_count += 1usize
+        }
+        index += 1usize
+    }
+    if top_count != 0usize {
+        let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&tops[0usize]), top_count)
+        let set_children = msg1(view, cocoa_sel("setAccessibilityChildren:\x00"), list)
+    }
+    ax_view = view
+    objc_pool_pop(pool)
+    ret ok
+}
+
 fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
     var request: AccessibleRequest = zero
-    ret (request, false)
+    if ax_count != 0usize { cocoa_pump(0i64) }
+    if ax_head == ax_tail { ret (request, false) }
+    request = ax_requests[ax_head]
+    ax_head = (ax_head + 1usize) % AX_QUEUE
+    ret (request, true)
 }

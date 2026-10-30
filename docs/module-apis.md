@@ -12367,6 +12367,7 @@ fn window_visible(w: Window, value: bool) -> err
 fn window_cursor(w: Window, shape: CursorShape) -> err
 fn window_capture(w: Window, on: bool) -> err
 fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err
+fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err
 fn window_native(w: Window) -> (usize, usize, err)
 fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)
 fn clipboard_text(a: *mem.Arena) -> (str, err)
@@ -12555,7 +12556,7 @@ type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFi
 type ActivationKind = enum u8 { Launch, File, Url }
 type Activation = struct { kind: ActivationKind, payload: str, args: []const str }
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
-type Permission = enum u8 { Granted, Denied, Unavailable }
+type Permission = enum u8 { Granted, Denied, Unavailable, NotDetermined }
 type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
 type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
 type PrintPage = struct { width: u32, height: u32, dpi_x: u32, dpi_y: u32 }
@@ -25055,6 +25056,7 @@ fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: [
 fn column_rule_of(l: *Layout, s: *const style.Style) -> (f64, u32, bool)
 fn edge_of(l: *const Layout, b: u32, side: usize, prio: u8) -> Edge
 fn edge_wins(a: Edge, b: Edge) -> bool
+fn fixed_block_size(l: *const Layout, b: u32) -> f64
 fn flex_baseline(l: *const Layout, b: u32) -> (bool, f64)
 fn frame_side(code: u8, i: usize) -> usize
 fn gaps_of(tr: []GTrack, n: usize, gap: f64) -> f64
@@ -25078,6 +25080,7 @@ fn line_clamp_count(s: *const style.Style) -> usize
 fn mode_code(s: *const style.Style) -> u8
 fn order_items(l: *Layout, b: u32)
 fn orphan_display(l: *const Layout, parent: u32) -> style.Display
+fn orthogonal_room(l: *const Layout, c: u32, pch: f64) -> f64
 fn overflow_propagated(l: *const Layout, b: u32) -> bool
 fn put_edge(arr: []Edge, at: usize, e: Edge)
 fn ratio_height(l: *const Layout, b: u32, cw: f64) -> (f64, bool)
@@ -25102,6 +25105,8 @@ fn trim_flags(l: *Layout, p: u32) -> u8
 fn va_edge_owner(l: *const Layout, b: u32, cont: u32) -> u32
 fn visible_tracks(tr: []GTrack, from: usize, to: usize) -> usize
 fn wrap_orphan_table_parts(l: *Layout, b: u32)
+fn fixed_block_size(l: *const Layout, b: u32) -> f64
+fn orthogonal_room(l: *const Layout, c: u32, pch: f64) -> f64
 ```
 
 ### `e.fmt.css.geom`
@@ -28735,6 +28740,32 @@ fn mac_address(a: *mem.Arena) -> (str, err)
 ```
 
 Who and where this process is: `hostname`, `user_name`, `locale_name` (a BCP 47 tag) and `time_zone_id`, per-target variants only (`ident.windows.e`, `ident.linux.e`). Windows reads kernel32/advapi32 (`GetComputerNameExW` DNS host name, `GetUserNameW`, `GetUserDefaultLocaleName`, `GetDynamicTimeZoneInformation`'s `TimeZoneKeyName`, a Windows id that `e.tz.winzones` maps to IANA); Linux reads `/proc/sys/kernel/hostname` and the environment (`USER`/`LOGNAME`; `LC_ALL`/`LC_MESSAGES`/`LANG` rewritten `de_DE.UTF-8` to `de-DE`, `C`/`POSIX` unset; `TZ` then `/etc/timezone`), so the user, locale and zone may answer `NotFound` there. `mac_address` is the hardware address of the uplink as `aa:bb:cc:dd:ee:ff` (Windows: `GetAdaptersInfo`, the first IPv4 adapter with a gateway, else with an address, else any, loopback and tunnels skipped; Linux: the first non-loopback interface of `/proc/net/dev` with a non-zero `/sys/class/net/<name>/address`), `NotFound` when none. Results are arena-owned. Not here: the user database (`getpwuid`), or the full locale-variable cascade.
+
+### `e.mem.pages`
+
+```neper
+fn discard(bytes: []u8) -> err
+fn ensure(a: *mem.Arena, n: usize) -> err
+fn reserve(capacity: usize) -> ([]u8, err)
+fn release(bytes: []u8) -> err
+```
+
+An arena's pages and the operating system (D5932). `discard` gives the whole pages inside `bytes` back; they read as zero or as they were, the slice stays usable, and a refusal is not an error. `ensure` answers `mem.Exhausted` when the arena's next `n` bytes are not there, the answer a page fault would otherwise give later as the end of the process, and allocates nothing: on Windows it commits them, which no later touch can fail; on Linux it checks what is available, capped by the cgroup, and populates them; on macOS it answers against the machine's memory and writes them. `reserve` is a range of its own, halved until the host gives it, charged as it is touched. On a wasm32 module and NeperOS `discard` has nothing to give back, `ensure` answers only for the ceiling and `reserve` is `os.Unsupported`.
+
+### `e.mem.heap`
+
+```neper
+type Heap = struct { state: *State }
+type Block = resource(free) struct { state: *State, bytes: []u8 }
+fn over(storage: []u8) -> (Heap, err)
+fn open(capacity: usize) -> (Heap, err)
+fn close(h: Heap) -> err
+fn alloc(h: Heap, size: usize) -> (Block, err)
+fn bytes(block: *const Block) -> []u8
+fn free(block: own Block)
+```
+
+Objects freed one at a time, for what an arena's stack of lifetimes does not fit (D5933). Not global: nothing reaches a heap unless it is passed, so a function that takes none allocates from none. A `Block` is a resource owed to `free`, so the checker refuses one never freed, freed twice or used after it was freed, at no cost when the program runs. Up to 4 KiB comes from a `Slab` and above that from a `Buddy`, both over a range that is only addresses until written; a freed block of 1 MiB or more goes back to the operating system. One thread's, as an arena is. Not here: moving a block, or giving back the pages of small blocks.
 
 ### `e.fmt.json5`
 

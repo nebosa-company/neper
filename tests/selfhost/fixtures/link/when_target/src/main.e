@@ -55,6 +55,8 @@ fn os_code(current: target.Os) -> i32 {
         ret 4i32
     case .Neperos:
         ret 5i32
+    case .Wasi:
+        ret 6i32
     }
 }
 

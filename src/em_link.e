@@ -10,6 +10,7 @@ use codegen_a64
 use em
 use emit_x64
 use lookup
+use platform
 use nir
 
 error InvalidInput
@@ -723,7 +724,8 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     // The workers (D333): as many as the artifacts up to eight, or fewer under `-j`.
     var worker_count = artifacts.len
     if worker_count > 8usize { worker_count = 8usize }
-    if jobs != 0usize && jobs < worker_count { worker_count = jobs }
+    let most = platform.jobs(jobs)
+    if most != 0usize && most < worker_count { worker_count = most }
     if worker_count == 0usize { worker_count = 1usize }
     let (workers, workers_error) = mem.alloc[LinkWorker](a, worker_count)
     if workers_error != ok { ret workers_error }

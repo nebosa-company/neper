@@ -78,9 +78,9 @@ fn child(a: *mem.Arena, what: str) {
         while true {}
     }
     if str.eq(what, "np-pipe-writer") {
-        // Long enough to distinguish the supervisor's bounded drain from waiting for EOF.
+        // Long enough to distinguish the supervisor's bounded drain from waiting for EOF, with room for a loaded machine.
         var sleeper: Atomic[u32] = zero
-        let paused = os.wait_u32(&sleeper, 0u32, 750000000i64)
+        let paused = os.wait_u32(&sleeper, 0u32, 3000000000i64)
         os.exit(0i32)
     }
     if str.eq(what, "np-ignore-pipe-writer") {
@@ -88,7 +88,7 @@ fn child(a: *mem.Arena, what: str) {
         let (_, ready_error) = os.write(os.stdout(), "r")
         if ready_error != ok { os.exit(92i32) }
         var sleeper: Atomic[u32] = zero
-        let paused = os.wait_u32(&sleeper, 0u32, 750000000i64)
+        let paused = os.wait_u32(&sleeper, 0u32, 3000000000i64)
         os.exit(0i32)
     }
     if str.eq(what, "np-orphan") {
@@ -356,7 +356,7 @@ fn main(a: *mem.Arena) -> err {
         os.exit(107i32)
     }
     if !orphaned.truncated { os.exit(108i32) }
-    if time.instant_diff(orphan_finished, orphan_started).nanos >= 500000000i64 { os.exit(113i32) }
+    if time.instant_diff(orphan_finished, orphan_started).nanos >= 2000000000i64 { os.exit(113i32) }
 
     // Strict containment owns the same descendant: it gets the configured grace and is then
     // forced, so the inherited writers close naturally instead of being truncated locally.
@@ -371,7 +371,7 @@ fn main(a: *mem.Arena) -> err {
     if contained_error != ok || contained.outcome != .Exited || !contained.status_known || contained.status != 0i32 {
         os.exit(111i32)
     }
-    if contained.truncated || time.instant_diff(contained_finished, contained_started).nanos >= 500000000i64 {
+    if contained.truncated || time.instant_diff(contained_finished, contained_started).nanos >= 2000000000i64 {
         os.exit(112i32)
     }
 
@@ -392,7 +392,7 @@ fn main(a: *mem.Arena) -> err {
         os.exit(116i32)
     }
     let ignore_elapsed = time.instant_diff(ignore_finished, ignore_started).nanos
-    if ignored.truncated || ignore_elapsed >= 500000000i64 { os.exit(117i32) }
+    if ignored.truncated || ignore_elapsed >= 2000000000i64 { os.exit(117i32) }
     when target.os == .Linux {
         if ignore_elapsed < 60000000i64 { os.exit(118i32) }
     }

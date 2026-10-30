@@ -484,7 +484,7 @@ type Builder = struct {
     explain_count: usize,
     explain_overflow: bool,
     // `--arena` (D225): the root arena's size the linker patches into the image, or
-    // zero for the runtime's default.
+    // zero for `root_arena_bytes`'s default.
     arena_bytes: usize,
     // The path every instruction emitted is stamped with: the function's, or the
     // callee's while its body is being copied in.
@@ -618,6 +618,14 @@ type Builder = struct {
     block_active: bool,
     // aarch64-macos: the C calling convention puts a variadic call's variadic arguments on the stack.
     apple_variadic: bool,
+}
+
+// (D5912, D5930) The root arena's size a linker patches in. Without `--arena` it is a ceiling,
+// not a cost: the arena is reserved and committed as it is touched (D340), and the startup
+// halves a size the host refuses.
+fn root_arena_bytes(builder: *Builder) -> usize {
+    if builder.arena_bytes != 0usize { ret builder.arena_bytes }
+    ret 1099511627776usize
 }
 
 // Given separately from `init` because `init` has eight callers and only one of them compiles a

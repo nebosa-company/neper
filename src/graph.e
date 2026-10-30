@@ -5,6 +5,7 @@ use e.os
 use assets
 use lex
 use parse
+use platform
 use project
 use source
 use syntax
@@ -225,6 +226,8 @@ type Graph = struct {
     // and the name, for the E-MODULE diagnostics (D215).
     failure_import: str,
     has_import_failure: bool,
+    // The variants a refused `use` found for other targets only (D5682).
+    variant_note: str,
     // Dependency order (D304): `visit`'s post-order, so every module follows the ones
     // it imports and the root is last. Recorded when `order` has room.
     order: []usize,
@@ -317,22 +320,36 @@ type FrontCounts = struct {
 // What a worker allocated is added to `g.worker_bytes` when its phase ends, for
 // `--stats`.
 fn reserved_arena(a: *mem.Arena) -> (mem.Arena, err) {
-    var none: mem.Arena = zero
     // One page short of the root's capacity: the mark by which the runtime tells a
-    // reservation from the root, which it still commits to its offset.
-    let capacity = mem.stats(a).capacity - 4096usize
-    let (base, reserve_error) = os.reserve(capacity)
-    if reserve_error != ok { ret (none, reserve_error) }
-    // The host by the shape of its current directory (D348): `/` first is Linux.
-    let (cwd, cwd_error) = os.current_dir(a)
-    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
-        let commit_error = os.commit(base, capacity)
-        if commit_error != ok { ret (none, commit_error) }
+    // reservation from the root, which it still commits to its offset (less on wasi, D5640).
+    let (arena, arena_error) = reserve_arena(a, platform.reservation(mem.stats(a).capacity))
+    ret (arena, arena_error)
+}
+
+// (D5930) A size the host refuses is halved down to a mebibyte, as the root's is at startup:
+// a root that took all an address space holds leaves none for a worker of its size.
+fn reserve_arena(a: *mem.Arena, wanted: usize) -> (mem.Arena, err) {
+    var none: mem.Arena = zero
+    var capacity = wanted
+    var last: err = ok
+    while capacity >= 1048576usize {
+        let (base, reserve_error) = os.reserve(capacity)
+        last = reserve_error
+        if reserve_error == ok {
+            // The host by the shape of its current directory (D348): `/` first is Linux.
+            let (cwd, cwd_error) = os.current_dir(a)
+            if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
+                let commit_error = os.commit(base, capacity)
+                if commit_error != ok { ret (none, commit_error) }
+            }
+            var arena: mem.Arena = zero
+            arena.base = base
+            arena.cap = capacity
+            ret (arena, ok)
+        }
+        capacity = capacity / 2usize
     }
-    var arena: mem.Arena = zero
-    arena.base = base
-    arena.cap = capacity
-    ret (arena, ok)
+    ret (none, last)
 }
 
 // The bytes a worker's arena reached, rounded up to the runtime's chunk: what it
@@ -346,21 +363,11 @@ fn arena_touched(arena: *mem.Arena) -> usize {
 // (D1527) A reservation of its own, as `reserved_arena`, of a stated capacity: a
 // worker under `--memory-budget` is held to its share.
 fn reserved_arena_sized(a: *mem.Arena, wanted: usize) -> (mem.Arena, err) {
-    var none: mem.Arena = zero
     var capacity = wanted
     let root = mem.stats(a).capacity - 4096usize
     if capacity > root { capacity = root }
-    let (base, reserve_error) = os.reserve(capacity)
-    if reserve_error != ok { ret (none, reserve_error) }
-    let (cwd, cwd_error) = os.current_dir(a)
-    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
-        let commit_error = os.commit(base, capacity)
-        if commit_error != ok { ret (none, commit_error) }
-    }
-    var arena: mem.Arena = zero
-    arena.base = base
-    arena.cap = capacity
-    ret (arena, ok)
+    let (arena, arena_error) = reserve_arena(a, capacity)
+    ret (arena, arena_error)
 }
 
 // (D1669) The stack a worker thread is given. On Linux it is the mapping the thread runs
@@ -411,7 +418,8 @@ fn front_block(scratch: *mem.Arena, token_count: usize, tree: *parse.Tree) -> (m
 }
 
 fn worker_cap(g: *Graph, most: usize) -> usize {
-    if g.jobs != 0usize && g.jobs < most { ret g.jobs }
+    let jobs = platform.jobs(g.jobs)
+    if jobs != 0usize && jobs < most { ret jobs }
     ret most
 }
 
@@ -787,26 +795,33 @@ fn resolve_source(a: *mem.Arena, g: *Graph, name: str) -> (str, err) {
     var src_path = ""
     var has_lib = false
     var has_src = false
+    g.variant_note = ""
     if g.project.has_sources {
         let (candidate_lib, lib_error) = project.select_source(a, &g.listings, g.project.root, "lib", name, g.arch, g.os)
         if lib_error == ok {
             lib_path = candidate_lib
             has_lib = true
         } else {
-            if lib_error != project.ModuleNotFound { ret ("", lib_error) }
+            if lib_error == project.NoVariant { g.variant_note = candidate_lib }
+            if lib_error != project.ModuleNotFound && lib_error != project.NoVariant { ret ("", lib_error) }
         }
         let (candidate_src, src_error) = project.select_source(a, &g.listings, g.project.root, "src", name, g.arch, g.os)
         if src_error == ok {
             src_path = candidate_src
             has_src = true
         } else {
-            if src_error != project.ModuleNotFound { ret ("", src_error) }
+            if src_error == project.NoVariant && g.variant_note.len == 0usize { g.variant_note = candidate_src }
+            if src_error != project.ModuleNotFound && src_error != project.NoVariant { ret ("", src_error) }
         }
     }
     if has_lib && has_src { ret ("", DuplicateModule) }
     if has_lib { ret (lib_path, ok) }
     if has_src { ret (src_path, ok) }
     let (toolchain_path, toolchain_error) = project.select_source(a, &g.listings, g.toolchain_root, "lib", name, g.arch, g.os)
+    if toolchain_error == project.NoVariant && g.variant_note.len == 0usize { g.variant_note = toolchain_path }
+    if toolchain_error == project.ModuleNotFound || toolchain_error == project.NoVariant {
+        if g.variant_note.len > 0usize { ret ("", project.NoVariant) }
+    }
     if toolchain_error != ok { ret ("", toolchain_error) }
     ret (toolchain_path, ok)
 }
@@ -1317,8 +1332,7 @@ fn finish(g: *Graph) -> err {
     ret ok
 }
 
-fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, host_os: str, project_root: str) -> err {
-    try begin(a, g, root_path, toolchain_root, arch, host_os, project_root)
+fn load_waves(a: *mem.Arena, g: *Graph) -> err {
     while g.scanned < g.count {
         let wave_start = g.scanned
         let wave_end = g.count
@@ -1330,6 +1344,21 @@ fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str
         }
         try front_modules(a, g, g.list[0usize..wave_end - wave_start])
         try wave_imports(a, g, wave_start, wave_end)
+    }
+    ret ok
+}
+
+fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, host_os: str, project_root: str) -> err {
+    try begin(a, g, root_path, toolchain_root, arch, host_os, project_root)
+    try load_waves(a, g)
+    // A WebAssembly program has no runtime to carry `neper_os_write` and the rest: they
+    // are functions of the `e.os` variant, so it is in every graph (D5600).
+    if same(host_os, "wasi") && !has_module(g, "e.os") {
+        let (os_path, os_error) = resolve_source(a, g, "e.os")
+        if os_error != ok { ret os_error }
+        let (os_module, add_error) = add_module(a, g, "e.os", os_path)
+        if add_error != ok { ret add_error }
+        try load_waves(a, g)
     }
     ret finish(g)
 }

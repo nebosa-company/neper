@@ -13,17 +13,26 @@ runner=("$@")
 expected() {
   case "$1" in
     gpu_barrier_helper_occurrence|gpu_barrier_occurrence|gpu_divergence|release_build|trap_backtrace) echo 134 ;;
-    layout_attributes|incremental|incremental_deleted|incremental_fallback|incremental_layout|incremental_value|inline_nested|when_target) echo any ;;
-    gpu_reshape) echo any ;;
-    # What a bare Mac cannot give them: a server or arguments the real suite supplies (net*, x_tds_integrated), Vulkan
-    # (gpu_fault_unchecked, gpu_vulkan_raw), the ELF and Linux system calls they check (freestanding, os_syscall).
-    net|net_http|net_http_pool|net_ssh|net_tls|x_tds_integrated|gpu_fault_unchecked|gpu_vulkan_raw|freestanding|os_syscall) echo any ;;
-    # Imports four glibc extensions (memrchr, rawmemchr, strchrnul, strverscmp) that libSystem lacks; dyld binds all or none.
-    extern_many) echo any ;;
-    # The shell services (clipboard, notices, printing, permissions, activation, lifecycle, file access) answer Unsupported
-    # on macOS until there is a Cocoa implementation (D5199); these fixtures check them.
-    # Reads DejaVu Sans from /usr/share/fonts/truetype/dejavu, which a Mac does not have (exit 30).
-    ui_selection3_v2) echo any ;;
+    # The unedited sources' answers, which the same program gives on Windows (incremental 7, deleted 5, fallback 3, layout 7, value 8).
+    incremental|incremental_layout) echo 7 ;;
+    incremental_deleted) echo 5 ;;
+    incremental_fallback) echo 3 ;;
+    incremental_value) echo 8 ;;
+    # The linux suite's answers, which hold on a Mac too (layout_attributes, inline_nested), and `when_target`'s sum of the arms
+    # a Mac takes: 127 for the OS, plus 96 for its code and 8 more on x64.
+    layout_attributes) echo 35 ;;
+    inline_nested) echo 5 ;;
+    when_target) if [ "${runner[0]:-}" = arch ]; then echo 231; else echo 223; fi ;;
+    # Four workgroups of four, the buffer's sum (the fixture's own comment).
+    gpu_reshape) echo 50 ;;
+    # Skipped, each for a reason a Mac has by nature: net_ssh needs the server the workflow's SSH step starts and is reported as that
+    # step's SSH line; x_tds_integrated is SSPI (Windows); gpu_vulkan_raw and gpu_fault_unchecked call Vulkan, which a Mac does not
+    # have (a Metal backend is C193); freestanding and os_syscall check an ELF image and Linux system call numbers; extern_many
+    # imports four glibc extensions that libSystem lacks (dyld binds all or none) and then reads its own ELF header; wasm_net and
+    # wasm_release are the wasm32-wasi suite's (they need that target's sockets and its --release build); hfa_return needs the shared object cc builds from its cabi.c
+    # and is the Linux twin of macos_hfa_return. os_window_resize is the Windows host's (user32), the twin of macos_window_resize.
+    # import_touch and mem_commit_refused are a kernel32 import and a Windows job's commit limit.
+    net_ssh|x_tds_integrated|gpu_vulkan_raw|gpu_fault_unchecked|freestanding|os_syscall|extern_many|wasm_net|wasm_release|hfa_return|os_window_resize|import_touch|mem_commit_refused) echo skip ;;
     *) echo 0 ;;
   esac
 }
@@ -39,7 +48,7 @@ extra_args() {
   esac
 }
 
-pass=0; fail=0; info=0
+pass=0; fail=0; info=0; skipped=0
 for file in "$dir"/*; do
   name=$(basename "$file")
   chmod +x "$file"
@@ -57,7 +66,9 @@ for file in "$dir"/*; do
   code=$?
   seconds=$(( $(date +%s) - start ))
   want=$(expected "$name")
-  if [ "$want" = "any" ]; then
+  if [ "$want" = "skip" ]; then
+    skipped=$((skipped+1)); echo "SKIP $name $code ${seconds}s"
+  elif [ "$want" = "any" ]; then
     info=$((info+1)); echo "INFO $name $code ${seconds}s"
   elif [ "$code" -eq "$want" ]; then
     pass=$((pass+1)); echo "PASS $name $code ${seconds}s"
@@ -69,4 +80,4 @@ for file in "$dir"/*; do
   fi
   rm -rf "$scratch"
 done
-echo "TOTAL pass=$pass fail=$fail info=$info"
+echo "TOTAL pass=$pass fail=$fail info=$info skip=$skipped"

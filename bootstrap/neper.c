@@ -48,7 +48,7 @@
 /* ponytail: 265 fits dispatch today; split it if it grows rather than enlarging every Function. */
 #define MAX_LOCALS 400
 #define MAX_ARGS 32
-#define MAX_USES 256
+#define MAX_USES 384
 /* Program-wide string literals, held by pointer. Raised from 4096 (D361): the
    compiler's own JSON writers passed it, and the failure was an undefined label at
    assembly time rather than a message; now it is a message. */

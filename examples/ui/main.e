@@ -2405,6 +2405,7 @@ fn tray_pixels(pixels: []u32) {
 fn main(a: *mem.Arena, args: []str) -> err {
     var font_path = "C:/Windows/Fonts/segoeui.ttf"
     if target.os == .Linux { font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf" }
+    if target.os == .Wasi { font_path = "/jost-regular.ttf" }
     let (font_bytes, font_error) = fs.read_file(a, font_path, 16777216usize)
     if font_error != ok {
         try io.print("no UI font found\n")

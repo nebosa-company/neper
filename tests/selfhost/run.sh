@@ -505,6 +505,14 @@ mem_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$mem_view_written" = 'executable written' ]
 chmod +x "$test_build/mem-view-selfhost"
 "$test_build/mem-view-selfhost"
+# Memory going back (D5931, D5932, D5933): a large reset, `e.mem.pages`, and `e.mem.heap`, whose
+# blocks the checker holds to one free each.
+for mem_back in mem_trim mem_pages mem_heap; do
+    mem_back_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/$mem_back/src/main.e" "$repo" x64 linux "$test_build/$mem_back-selfhost")
+    [ "$mem_back_written" = 'executable written' ]
+    chmod +x "$test_build/$mem_back-selfhost"
+    "$test_build/$mem_back-selfhost"
+done
 # `mem.cast` is the only route between pointer types, and the only route to `*void`
 # at all. It must retype without moving: the address in is the address out.
 mem_cast_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mem_cast/src/main.e" "$repo" x64 linux "$test_build/mem-cast-selfhost")
@@ -5200,6 +5208,16 @@ saxpy_output=$("$test_build/saxpy-selfhost")
 loop_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" spv none "$test_build/loop.spv")
 [ "$loop_spirv_written" = 'spir-v written' ]
 cmp "$test_build/loop.spv" "$repo/tests/conformance/spirv/loop.spv"
+# (D5838) The MSL emitter's kernels, pinned byte for byte: saxpy, the loops and the exact float operations.
+msl_saxpy_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" msl none "$test_build/saxpy.metal")
+[ "$msl_saxpy_written" = 'msl written' ]
+cmp "$test_build/saxpy.metal" "$repo/tests/conformance/msl/saxpy.metal"
+msl_loop_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" msl none "$test_build/loop.metal")
+[ "$msl_loop_written" = 'msl written' ]
+cmp "$test_build/loop.metal" "$repo/tests/conformance/msl/loop.metal"
+msl_float_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float.e" "$repo" msl none "$test_build/float.metal")
+[ "$msl_float_written" = 'msl written' ]
+cmp "$test_build/float.metal" "$repo/tests/conformance/msl/float.metal"
 gpu_vulkan_loop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-loop-selfhost")
 [ "$gpu_vulkan_loop_written" = 'executable written' ]
 chmod +x "$test_build/gpu-vulkan-loop-selfhost"
@@ -6407,6 +6425,22 @@ struct_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$struct_written" = 'executable written' ]
 chmod +x "$struct_path"
 LD_LIBRARY_PATH="$test_build" "$struct_path"
+# Three- and four-member HFAs coming back from C (C178, D5854): v0-v3 on AAPCS64, stored by the call into its slot; the same
+# program on x86-64 takes the memory and register classes. The aarch64 build runs under qemu-user when it and a cross cc exist.
+hfa_dir="$test_build/hfa-return"
+mkdir -p "$hfa_dir/x64" "$hfa_dir/a64"
+${CC:-cc} -std=c99 -Wall -Wextra -O2 -fPIC -shared -o "$hfa_dir/x64/nepercabi" "$repo/tests/selfhost/fixtures/link/hfa_return/cabi.c"
+hfa_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/hfa_return/src/main.e" "$repo" x64 linux "$hfa_dir/hfa-x64")
+[ "$hfa_written" = 'executable written' ]
+chmod +x "$hfa_dir/hfa-x64"
+LD_LIBRARY_PATH="$hfa_dir/x64" "$hfa_dir/hfa-x64"
+hfa_a64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/hfa_return/src/main.e" "$repo" aarch64 linux "$hfa_dir/hfa-a64")
+[ "$hfa_a64_written" = 'executable written' ]
+if command -v qemu-aarch64 >/dev/null 2>&1 && command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then
+    aarch64-linux-gnu-gcc -std=c99 -Wall -Wextra -O2 -fPIC -shared -o "$hfa_dir/a64/nepercabi" "$repo/tests/selfhost/fixtures/link/hfa_return/cabi.c"
+    chmod +x "$hfa_dir/hfa-a64"
+    QEMU_LD_PREFIX=/usr/aarch64-linux-gnu LD_LIBRARY_PATH="$hfa_dir/a64" qemu-aarch64 "$hfa_dir/hfa-a64"
+fi
 # Over a struct by value a function type's convention is part of it (D1676): a neper `fn`
 # is refused where an `extern fn(Key)` is expected, spelled whole so the two differ.
 require_fixture check/extern_fn_convention
@@ -7220,6 +7254,32 @@ device_edit_perturb_written=$($test_build/neper-self emit-executable "$device_ed
 [ "$device_edit_perturb_written" = 'executable written' ]
 cmp "$test_build/gpu-device-edit-clean" "$test_build/gpu-device-edit-j1"
 cmp "$test_build/gpu-device-edit-clean" "$test_build/gpu-device-edit-perturb"
+# A launch carries its kernel's requirements whoever checked the kernel (D5700): another
+# worker, or in a warm build the kernel module's Interface. One image hot and clean at
+# one worker, and at every worker count, for `gpu_launch_facts` and for `gpu_tensor`,
+# whose launches are in generic instances its `main` makes.
+launch_facts_fixture="$repo/tests/selfhost/fixtures/link/gpu_launch_facts"
+launch_facts_scratch="$test_build/gpu-launch-facts-scratch"
+rm -rf "$launch_facts_scratch"
+mkdir -p "$launch_facts_scratch/src"
+cp "$launch_facts_fixture"/src/*.e "$launch_facts_scratch/src/"
+launch_facts_main="$launch_facts_scratch/src/main.e"
+[ "$($test_build/neper-self emit-executable "$launch_facts_main" "$repo" x64 linux "$test_build/gpu-launch-facts-hot" --incremental -j 1 2>/dev/null)" = 'executable written' ]
+cp "$launch_facts_fixture/edits/main_body.e" "$launch_facts_main"
+[ "$($test_build/neper-self emit-executable "$launch_facts_main" "$repo" x64 linux "$test_build/gpu-launch-facts-hot" --incremental -j 1 2>/dev/null)" = 'executable written' ]
+[ "$($test_build/neper-self emit-executable "$launch_facts_main" "$repo" x64 linux "$test_build/gpu-launch-facts-j1" -j 1 2>/dev/null)" = 'executable written' ]
+cmp "$test_build/gpu-launch-facts-hot" "$test_build/gpu-launch-facts-j1"
+chmod +x "$test_build/gpu-launch-facts-j1"
+"$test_build/gpu-launch-facts-j1" | grep -q '^gpu launch facts ok again$'
+launch_tensor="$repo/tests/selfhost/fixtures/link/gpu_tensor/src/main.e"
+[ "$($test_build/neper-self emit-executable "$launch_tensor" "$repo" x64 linux "$test_build/gpu-tensor-j1" -j 1 2>/dev/null)" = 'executable written' ]
+for launch_facts_jobs in '-j 2' '-j 3 --perturb' '-j 8' ''; do
+    launch_facts_tag=$(echo "$launch_facts_jobs" | tr -d ' ')
+    [ "$($test_build/neper-self emit-executable "$launch_facts_main" "$repo" x64 linux "$test_build/gpu-launch-facts$launch_facts_tag" $launch_facts_jobs 2>/dev/null)" = 'executable written' ]
+    cmp "$test_build/gpu-launch-facts-j1" "$test_build/gpu-launch-facts$launch_facts_tag"
+    [ "$($test_build/neper-self emit-executable "$launch_tensor" "$repo" x64 linux "$test_build/gpu-tensor$launch_facts_tag" $launch_facts_jobs 2>/dev/null)" = 'executable written' ]
+    cmp "$test_build/gpu-tensor-j1" "$test_build/gpu-tensor$launch_facts_tag"
+done
 # (D1667) The counts a cold build takes as each block goes back are a warm no-edit
 # build's, on a program whose `@gpus` and `@tests` rows are not zero.
 front_scratch="$test_build/front-counts"
@@ -7865,6 +7925,10 @@ eval_missing_status=0
 eval_missing=$($test_build/neper-self eval 'nope()' "$repo" x64 linux 2>&1) || eval_missing_status=$?
 [ "$eval_missing_status" -eq 1 ]
 case "$eval_missing" in *E-NAME-9999*) ;; *) printf '%s\n' "eval of an unknown name was not refused: $eval_missing" >&2; exit 1 ;; esac
+# A heap block is owed one free (D5933): a use after it, a second one and none at all are refused.
+check_protocol_diagnostic heap_use_after_free 'main.e:11:28: error[E-SAFETY-0001]'
+check_protocol_diagnostic heap_double_free 'main.e:11:15: error[E-SAFETY-0001]'
+check_protocol_diagnostic heap_leak 'main.e:10:5: error[E-SAFETY-0002]'
 check_protocol_diagnostic comptime_pointer_result 'main.e:9:15: error[E-COMPTIME-9999]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold'
 check_protocol_diagnostic comptime_slice_bounds 'main.e:7:9: error[E-COMPTIME-9999]: constant `BAD` cannot be evaluated at compile time: its call reached an index out of bounds'
 # `emit-executable --arena SIZE` (D225): the root arena is the size given. Twelve
@@ -7883,6 +7947,14 @@ arena_small_output=$("$arena_small_path" 2>&1) || arena_small_status=$?
 [ "$arena_small_status" -eq 1 ]
 case "$arena_small_output" in *'error: e.mem.Exhausted'*) ;; *) printf '%s
 ' "an arena of eight mebibytes held twelve: $arena_small_output" >&2; exit 1 ;; esac
+# A ceiling the host will not reserve is halved until it will (D5930): a pebibyte starts, and so
+# does a program under an address-space limit it does not fit.
+arena_retry_path="$test_build/arena-retry-selfhost"
+arena_retry_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/arena_retry/src/main.e" "$repo" x64 linux "$arena_retry_path" --arena 1048576g)
+[ "$arena_retry_written" = 'executable written' ]
+chmod +x "$arena_retry_path"
+"$arena_retry_path"
+(ulimit -v 8000000; "$arena_retry_path")
 # docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
 # conformance corpus, byte for byte, with the exit status the result record carries.
 conformance_root="$repo/tests/conformance"
@@ -8085,7 +8157,7 @@ for closer_case in 'accept safety_resource_closer 0' 'reject safety_cleanup_posi
 done
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
-for reject_project in module_cycle module_variants safety_opaque; do
+for reject_project in module_cycle module_variants module_variants_other safety_opaque; do
     reject_project_status=0
     $test_build/neper-self check-file "$conformance_root/reject/$reject_project/src/main.e" "$repo" x64 linux --json > "$test_build/conformance-reject-$reject_project.jsonl" || reject_project_status=$?
     [ "$reject_project_status" -eq 1 ]
@@ -8445,7 +8517,7 @@ cmp -s "$fmt_actual" "$conformance_root/tools/fmt.expected.jsonl" || { printf '%
 # The format corpus (D255): each `format/<name>.e` is a non-canonical source and
 # `format/<name>.expected.e` what `fmt` makes of it, byte for byte; the canonical side
 # passes `--check`, which pins idempotence.
-for format_case in layout types raw_strings ret_grouping; do
+for format_case in layout types raw_strings ret_grouping import_attribute; do
     "$test_build/neper-self" fmt-file "$conformance_root/format/$format_case.e" > "$test_build/conformance-format-$format_case.e"
     cmp -s "$test_build/conformance-format-$format_case.e" "$conformance_root/format/$format_case.expected.e" || { printf '%s
 ' "fmt on format/$format_case.e differs from the conformance corpus" >&2; exit 1; }
@@ -8696,7 +8768,7 @@ cmp -s "$test_build/conformance-tools-index-syntax.jsonl" "$conformance_root/too
 # `uses-file --json` (D362): every resolved use of one function.
 uses_actual="$test_build/conformance-tools-uses.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file explain.e "$repo" x64 linux --json --symbol explain.same > "$uses_actual")
-cmp -s "$uses_actual" "$conformance_root/tools/uses.expected.jsonl" || { printf '%s\n' "uses-file --json differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$uses_actual" "$conformance_root/tools/uses.x64-linux.expected.jsonl" || { printf '%s\n' "uses-file --json differs from the conformance corpus" >&2; exit 1; }
 # `explain-file --json` (D359): every dispatch and instantiation the checker decided.
 explain_actual="$test_build/conformance-tools-explain.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self explain-file explain.e "$repo" x64 linux --json > "$explain_actual")
@@ -8820,7 +8892,7 @@ grep -q '"code":"E-TOOL-9999","message":"a precondition names a source root appl
 # Uses and a rename through an alias, past a same-spelled function and local (D509, H17).
 alias_fixture="$conformance_root/tools/uses_alias"
 (cd "$alias_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol deep.pick > "$test_build/conformance-tools-uses-alias.jsonl")
-cmp -s "$test_build/conformance-tools-uses-alias.jsonl" "$conformance_root/tools/uses_alias.expected.jsonl" || { echo "uses-file --json through an alias differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-uses-alias.jsonl" "$conformance_root/tools/uses_alias.x64-linux.expected.jsonl" || { echo "uses-file --json through an alias differs from the conformance corpus" >&2; exit 1; }
 [ "$(cd "$alias_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol other.pick | grep -c '"record":"use"')" -eq 2 ]
 (cd "$alias_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol deep.pick --to choose > "$test_build/conformance-tools-plan-rename-alias.jsonl")
 cmp -s "$test_build/conformance-tools-plan-rename-alias.jsonl" "$conformance_root/tools/plan_rename_alias.x64-linux.expected.jsonl" || { echo "plan-rename-file --json through an alias differs from the conformance corpus" >&2; exit 1; }
@@ -8884,7 +8956,7 @@ alias_status=0
 # A function only a constant reaches (D510, H17): its call in the initializer is a use the rename plan rewrites.
 comptime_fixture="$conformance_root/tools/uses_comptime"
 (cd "$comptime_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol main.twice > "$test_build/conformance-tools-uses-comptime.jsonl")
-cmp -s "$test_build/conformance-tools-uses-comptime.jsonl" "$conformance_root/tools/uses_comptime.expected.jsonl" || { echo "uses-file --json of a function only a constant reaches differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-uses-comptime.jsonl" "$conformance_root/tools/uses_comptime.x64-linux.expected.jsonl" || { echo "uses-file --json of a function only a constant reaches differs from the conformance corpus" >&2; exit 1; }
 (cd "$comptime_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol main.twice --to double > "$test_build/conformance-tools-plan-rename-comptime.jsonl")
 cmp -s "$test_build/conformance-tools-plan-rename-comptime.jsonl" "$conformance_root/tools/plan_rename_comptime.x64-linux.expected.jsonl" || { echo "plan-rename-file --json of a function only a constant reaches differs from the conformance corpus" >&2; exit 1; }
 rm -rf "$test_build/comptime-scratch"
@@ -8897,7 +8969,7 @@ comptime_status=0
 # A function taken as a value and called through it (D511, H17): value uses, the plan rewriting them.
 callback_fixture="$conformance_root/tools/uses_callback"
 (cd "$callback_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol main.twice > "$test_build/conformance-tools-uses-callback.jsonl")
-cmp -s "$test_build/conformance-tools-uses-callback.jsonl" "$conformance_root/tools/uses_callback.expected.jsonl" || { echo "uses-file --json of a callback differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-uses-callback.jsonl" "$conformance_root/tools/uses_callback.x64-linux.expected.jsonl" || { echo "uses-file --json of a callback differs from the conformance corpus" >&2; exit 1; }
 (cd "$callback_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol main.twice --to double > "$test_build/conformance-tools-plan-rename-callback.jsonl")
 cmp -s "$test_build/conformance-tools-plan-rename-callback.jsonl" "$conformance_root/tools/plan_rename_callback.x64-linux.expected.jsonl" || { echo "plan-rename-file --json of a callback differs from the conformance corpus" >&2; exit 1; }
 rm -rf "$test_build/callback-scratch"
@@ -10636,6 +10708,155 @@ while read -r extra_fixture; do
     chmod +x "$test_build/extra-$extra_fixture"
     (cd "$repo" && "$test_build/extra-$extra_fixture" > /dev/null) || { printf '%s\n' "a $extra_fixture check failed" >&2; exit 1; }
 done < "$repo/tests/selfhost/extra-fixtures.txt"
+# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by lib/wasm/run-wasm.mjs from the repo
+# root; `--release` drops the debug-only rows and keeps the bounds row; neper.wasm emits what this compiler emits.
+if command -v node >/dev/null 2>&1; then
+    wasm_build="$test_build/wasm"
+    rm -rf "$wasm_build"
+    mkdir -p "$wasm_build"
+    for wasm_fixture in wasm_basics wasm_ops wasm_flow wasm_reserve fs_basics os_clock_random os_environment os_wait_timeout wasm_address wasm_irreducible wasm_mask os_socket os_resolve async_io macos_poller_loss net wasm_net wasm_atomics; do
+        wasm_written=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")
+        [ "$wasm_written" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as WebAssembly" >&2; exit 1; }
+        (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
+        # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
+        case "$wasm_fixture" in
+            os_socket|os_resolve|macos_poller_loss|net|wasm_net) continue ;;
+        esac
+        (cd "$repo" && node --no-warnings lib/wasm/neper-host.js "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi through lib/wasm/neper-host.js" >&2; exit 1; }
+    done
+    # (D5671, D5672, C201) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
+    # and the seven instructions of the "wasm" library answer as a plain and as a threaded module should.
+    for wasm_fixture in wasm_basics wasm_atomics wasm_ops; do
+        [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a threaded WebAssembly module" >&2; exit 1; }
+        wasm_plain_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm")
+        wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.threads.wasm")
+        [ "$wasm_plain_output" = "$wasm_threads_output" ] || { printf '%s\n' "$wasm_fixture writes something else as a threaded module" >&2; exit 1; }
+    done
+    wasm_ops_source="$repo/tests/selfhost/fixtures/wasm/wasm_thread_ops/src/main.e"
+    "$test_build/neper-self" emit-executable "$wasm_ops_source" "$repo" wasm32 wasi "$wasm_build/thread_ops.wasm" > /dev/null
+    "$test_build/neper-self" emit-executable "$wasm_ops_source" "$repo" wasm32 wasi "$wasm_build/thread_ops.threads.wasm" --threads > /dev/null
+    wasm_plain_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/thread_ops.wasm")
+    [ "$wasm_plain_output" = "$(printf 'threads 0\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0')" ] || { printf '%s\n' "the plain module's thread instructions answered: $wasm_plain_output" >&2; exit 1; }
+    wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/thread_ops.threads.wasm")
+    [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
+    # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
+    # inotify watch hands events over differently).
+    "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/wasm/os_watch_modify/src/main.e" "$repo" wasm32 wasi "$wasm_build/os_watch_modify.wasm" > /dev/null
+    (cd "$repo" && timeout 60 node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/os_watch_modify.wasm" > /dev/null) || { printf '%s\n' 'os_watch_modify failed on wasm32-wasi' >&2; exit 1; }
+    # (D5673, D5674, C202) Threads under the thread host: wasm_threads built with --threads writes what the native build
+    # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
+    wasm_fixture=wasm_threads
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/wasm_threads.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "wasm_threads did not emit as a threaded WebAssembly module" >&2; exit 1; }
+    wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/wasm_threads.threads.wasm")
+    [ "$wasm_threads_output" = "$(printf 'atomic 8000\nmutex 8000\nids distinct\nmain id 1\na thread started a thread\ndetached\nwait timeout\ndetails per thread\n200 cycles\nmain returns')" ] || { printf '%s\n' "wasm_threads answered: $wasm_threads_output" >&2; exit 1; }
+    wasm_status=0
+    (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/wasm_threads.threads.wasm" exit > /dev/null) || wasm_status=$?
+    [ "$wasm_status" -eq 7 ] || { printf '%s\n' "wasm_threads exit answered $wasm_status, not 7" >&2; exit 1; }
+    # (D5750, C204) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
+    # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
+    for wasm_fixture in os_pipe_threads net_pop3; do
+        [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a threaded WebAssembly module" >&2; exit 1; }
+    done
+    wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/os_pipe_threads.threads.wasm")
+    [ "$wasm_threads_output" = "$(printf 'write then read\nempty probe would block\n300000 bytes across threads\nend of stream after close\na blocked reader woke')" ] || { printf '%s\n' "os_pipe_threads answered: $wasm_threads_output" >&2; exit 1; }
+    wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/net_pop3.threads.wasm")
+    [ "$wasm_threads_output" = 'net pop3 ok' ] || { printf '%s\n' "net_pop3 answered: $wasm_threads_output" >&2; exit 1; }
+    # (D5770, C205) Processes through neper_host: each fixture spawns its own image, which the runner starts again as a child (os_process:
+    # kill, a pipe handed to the child, wait_usage; os_group: environment, cwd, a group terminated), plain and threaded; proc_output
+    # (threads) adds e.proc's output, piped stdin, limits, deadlines and an orphan held by a process group.
+    for wasm_fixture in os_process os_group; do
+        [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.wasm")" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a WebAssembly module" >&2; exit 1; }
+        (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm") || { printf '%s\n' "$wasm_fixture failed as a WebAssembly module" >&2; exit 1; }
+    done
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/proc_output/src/main.e" "$repo" wasm32 wasi "$wasm_build/proc_output.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "proc_output did not emit as a threaded WebAssembly module" >&2; exit 1; }
+    (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/proc_output.threads.wasm") || { printf '%s\n' "proc_output failed as a threaded WebAssembly module" >&2; exit 1; }
+    # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
+    wasm_fallback=wasm_irreducible
+    wasm_forced=wasm_flow
+    wasm_stats=$(NEPER_WASM_STATS=1 "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fallback/src/main.e" "$repo" wasm32 wasi "$wasm_build/irreducible-stats.wasm" 2>&1)
+    case "$wasm_stats" in
+        *'dispatch 1 (irreducible 1)'*) ;;
+        *) printf '%s\n' "wasm_irreducible did not fall back to the dispatch loop: $wasm_stats" >&2; exit 1 ;;
+    esac
+    NEPER_WASM_STATS=dispatch "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_forced/src/main.e" "$repo" wasm32 wasi "$wasm_build/flow-dispatch.wasm" > /dev/null 2>&1
+    (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/flow-dispatch.wasm" > /dev/null) || { printf '%s\n' 'wasm_flow failed with every function on the dispatch loop' >&2; exit 1; }
+    wasm_release_source="$repo/tests/selfhost/fixtures/link/wasm_release/src/main.e"
+    [ "$("$test_build/neper-self" emit-executable "$wasm_release_source" "$repo" wasm32 wasi "$wasm_build/release-debug.wasm")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$wasm_release_source" "$repo" wasm32 wasi "$wasm_build/release.wasm" --release)" = 'executable written' ]
+    wasm_status=0
+    wasm_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/release-debug.wasm" 2>&1) || wasm_status=$?
+    [ "$wasm_status" -eq 134 ]
+    case "$wasm_output" in
+        *'main.e:14:19: trap[overflow]: u8 + overflows'*) ;;
+        *) printf '%s\n' "the release fixture did not trap in debug on wasm32-wasi: $wasm_output" >&2; exit 1 ;;
+    esac
+    wasm_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/release.wasm" 2>&1)
+    [ "$wasm_output" = '' ]
+    wasm_status=0
+    wasm_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/release.wasm" bounds 2>&1) || wasm_status=$?
+    [ "$wasm_status" -eq 134 ]
+    case "$wasm_output" in
+        *'main.e:35:9: trap[bounds]: index 8 out of bounds for len 8'*) ;;
+        *) printf '%s\n' "the bounds row did not trap in a wasm32-wasi release build: $wasm_output" >&2; exit 1 ;;
+    esac
+    for wasm_access in load store copy; do
+        wasm_status=0
+        wasm_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/wasm_address.wasm" "$wasm_access" 2>&1) || wasm_status=$?
+        [ "$wasm_status" -eq 134 ]
+        case "$wasm_output" in
+            *'trap[bounds]: address '*' is outside the 32-bit memory'*) ;;
+            *) printf '%s\n' "a $wasm_access through a pointer with high bits did not trap on wasm32-wasi: $wasm_output" >&2; exit 1 ;;
+        esac
+    done
+    wasm_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/release.wasm" address 2>&1)
+    [ "$wasm_output" = '' ]
+    # (C209, D5681) `neper run --target wasm32-wasi` from a toolchain with lib/wasm/ beside it runs the module under node and
+    # reports as a native run does; with no node it says what to install.
+    wasm_run=$(cd "$wasm_build" && NEPER_NODE= "$repo/build/linux/short/neper-self-short" run "$wasm_release_source" --target wasm32-wasi --release -o run_release.wasm -- bounds)
+    case "$wasm_run" in
+        *'"process_exit_code":134,'*'trap[bounds]: index 8 out of bounds for len 8'*) ;;
+        *) printf '%s\n' "neper run --target wasm32-wasi did not report the bounds trap: $wasm_run" >&2; exit 1 ;;
+    esac
+    wasm_status=0
+    wasm_run=$(cd "$wasm_build" && PATH=/nonexistent NEPER_NODE= "$repo/build/linux/short/neper-self-short" run "$wasm_release_source" --target wasm32-wasi -o run_release.wasm) || wasm_status=$?
+    case "$wasm_run" in
+        *'running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE'*) [ "$wasm_status" -eq 2 ] ;;
+        *) printf '%s\n' "neper run --target wasm32-wasi without node did not say what to install: $wasm_run" >&2; exit 1 ;;
+    esac
+    [ "$(wc -c < "$wasm_build/release.wasm")" -lt "$(wc -c < "$wasm_build/release-debug.wasm")" ]
+    # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/host_files/src/main.e" "$repo" wasm32 wasi "$wasm_build/host_files.wasm")" = 'executable written' ]
+    (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm" "$wasm_build/wasm_threads.threads.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
+    # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.wasm")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.threads.wasm" --threads)" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/examples/ui/main.e" "$repo" wasm32 wasi "$wasm_build/ui_gallery.wasm")" = 'executable written' ]
+    (cd "$repo" && node --no-warnings tests/wasm/window.mjs "$wasm_build/ui_counter.wasm" "$wasm_build/ui_counter.threads.wasm" "$wasm_build/ui_gallery.wasm") || { printf '%s\n' 'the lib/wasm/window.js check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/window_edits.mjs) || { printf '%s
+' 'the lib/wasm/window.js edit check failed' >&2; exit 1; }
+    # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
+    # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
+    wasm_null_source="$repo/tests/wasm/null_call/src/main.e"
+    [ "$("$test_build/neper-self" emit-executable "$wasm_null_source" "$repo" wasm32 wasi "$wasm_build/null_call.wasm" --source-map)" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$wasm_null_source" "$repo" wasm32 wasi "$wasm_build/null_call_plain.wasm")" = 'executable written' ]
+    [ -f "$wasm_build/null_call.wasm.map" ] && [ ! -f "$wasm_build/null_call_plain.wasm.map" ] || { printf '%s\n' 'the source map was not written exactly when asked for' >&2; exit 1; }
+    if command -v wasm-tools >/dev/null 2>&1; then wasm-tools validate "$wasm_build/null_call.wasm" || { printf '%s\n' 'the module with a source map does not validate' >&2; exit 1; }; fi
+    for wasm_runner in lib/wasm/run-wasm.mjs lib/wasm/neper-host.js; do
+        wasm_output=$(cd "$repo" && node --no-warnings "$wasm_runner" "$wasm_build/null_call.wasm" 2>&1) || true
+        wasm_first=$(printf '%s\n' "$wasm_output" | grep -m1 '^ *at ')
+        case "$wasm_first" in
+            *'main.fire'*'[src/main.e:13]'*) ;;
+            *) printf '%s\n' "$wasm_runner did not name the null call's line: $wasm_output" >&2; exit 1 ;;
+        esac
+        wasm_output=$(cd "$repo" && node --no-warnings "$wasm_runner" "$wasm_build/null_call_plain.wasm" 2>&1) || true
+        case "$wasm_output" in
+            *'[src/main.e:'*) printf '%s\n' "$wasm_runner named a line without a source map: $wasm_output" >&2; exit 1 ;;
+        esac
+    done
+    NEPER_COMPILER="$test_build/neper-self" "$repo/scripts/wasm-compiler.sh" || { printf '%s\n' 'neper.wasm emits something the native compiler does not' >&2; exit 1; }
+else
+    printf '%s\n' 'node is not on PATH: the wasm32-wasi checks were skipped'
+fi
 if [ "${NEPER_NEPEROS:-}" = 1 ]; then
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
 # finds its console, firmware and memory in the device tree, turns translation on, takes a

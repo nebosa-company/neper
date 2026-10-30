@@ -9,6 +9,7 @@ use decimal
 use graph
 use layout
 use lex
+use msl
 use nir
 use parse
 use resolve
@@ -3706,12 +3707,19 @@ fn c_result_type(crossing: Crossing, module_index: usize) -> check.Type {
 fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: usize, slot: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     let module_index = returned_type.module_index
     let u64_type = check.make_type(.Integer, "u64", module_index)
-    // An HFA's members arrive packed into eightbytes (D2124); three or four doubles would
-    // need more than the two a pair carries.
-    // ponytail: refused; an HFA of three or four f64 crossing back from C wants a third result.
+    // An HFA's members arrive packed into eightbytes (D2124); three or four doubles are stored by the call itself.
     var eightbytes = crossing.count
     if crossing.hfa != 0usize { eightbytes = (crossing.hfa * crossing.hfa_width + 7usize) / 8usize }
-    if eightbytes > 2usize { ret check.Unsupported }
+    if eightbytes > 2usize {
+        // The call stored the members into the slot (`c-hfa-slot`); only the address is left to hand on.
+        if crossing.hfa == 0usize { ret check.Unsupported }
+        let (big_address_instruction, big_address, big_address_error) = nir.emit(builder, .FieldAddress, returned_type, true, 0usize, token)
+        if big_address_error != ok { ret big_address_error }
+        try nir.add_operand(builder, big_address_instruction, slot)
+        results.values[0usize] = big_address
+        results.addresses[0usize] = true
+        ret ok
+    }
     var low = call_result
     var high = 0usize
     if eightbytes == 2usize {
@@ -4005,13 +4013,17 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
             function_ref = interned
         }
     }
+    // Three or four doubles come back in v0 to v3, more than the pair of eightbytes a call result holds: the call stores them into the
+    // slot itself (`c-hfa-slot`) and has no result of its own.
+    let big_hfa = returned.count != 0usize && returned.hfa != 0usize && (returned.hfa * returned.hfa_width + 7usize) / 8usize > 2usize
     var slot = 0usize
     if (return_layout.via_slot || returned.count != 0usize) && results.count != 0usize {
         let (slots_aligned, slots_error) = layout.align_up(return_layout.size, 8usize)
         if slots_error != ok { ret slots_error }
         var slots = slots_aligned / 8usize
         if slots == 0usize { slots = 1usize }
-        let slot_type = call_slot_type(c, call, return_layout.via_slot)
+        var slot_type = call_slot_type(c, call, return_layout.via_slot)
+        if big_hfa { slot_type = check.make_type(.Other, "c-hfa-slot", call.function.module_index) }
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, slot_type, true, slots, token)
         if stack_error != ok { ret stack_error }
         slot = stack
@@ -4043,6 +4055,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         }
     }
     if returned.count != 0usize { call_type = c_result_type(returned, call.function.module_index) }
+    if big_hfa { call_has_result = false }
     var call_opcode: nir.Opcode = .Call
     if call.indirect { call_opcode = .IndirectCall }
     let (instruction, call_result, emit_error) = nir.emit(builder, call_opcode, call_type, call_has_result, function_ref, token)
@@ -4051,7 +4064,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         let callee_operand_error = nir.add_operand(builder, instruction, callee)
         if callee_operand_error != ok { ret callee_operand_error }
     }
-    if return_layout.via_slot && results.count != 0usize {
+    if (return_layout.via_slot || big_hfa) && results.count != 0usize {
         let slot_operand_error = nir.add_operand(builder, instruction, slot)
         if slot_operand_error != ok { ret slot_operand_error }
     }
@@ -4120,6 +4133,54 @@ fn argument_can_change(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         at += 1usize
     }
     ret false
+}
+
+// (D5935) A kernel call cannot fault a page in, so on Windows what it writes must be committed
+// first (D428). When the argument is `&slice[i]` through a writable pointer the length is in
+// reach, and the slice is touched here, as `os.touch` would. A pointer from anywhere else, and
+// a loop that wants to touch once, are still the program's own to handle.
+fn touch_import_buffer(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, child_index: usize, parameter_type: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
+    if !windows_target(c) || parameter_type.kind != .Pointer || parameter_type.is_const { ret ok }
+    let node = tree.nodes[child_index]
+    if node.kind != .UnaryExpr || c.tokens[usize(node.token_start)].kind != .PunctAmp { ret ok }
+    let (place_index, has_place) = check.first_node_child(tree, node)
+    if !has_place || tree.nodes[place_index].kind != .BracketPostfix { ret ok }
+    let (slice_index, has_slice) = check.first_node_child(tree, tree.nodes[place_index])
+    if !has_slice { ret ok }
+    let slice_kind = tree.nodes[slice_index].kind
+    if slice_kind != .NameExpr && slice_kind != .FieldExpr { ret ok }
+    let (slice_type, slice_type_error) = check.check_expr(c, g, tree, module_index, slice_index, check.invalid_type())
+    if slice_type_error != ok || slice_type.kind != .Slice { ret ok }
+    let (element_type, element_type_error) = check.index_element_type(c, slice_type, module_index)
+    if element_type_error != ok { ret element_type_error }
+    let (element_info, element_info_error) = layout.type_info(c, element_type)
+    if element_info_error != ok { ret element_info_error }
+    let token = c.tokens[usize(node.token_start)]
+    let length_type = check.make_type(.Integer, "usize", module_index)
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let (base, base_type, base_error) = lower_expression(c, g, tree, module_index, slice_index, slice_type, builder, bindings, binding_count)
+    if base_error != ok { ret base_error }
+    let (pointer_load, pointer, pointer_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
+    if pointer_error != ok { ret pointer_error }
+    try nir.add_operand(builder, pointer_load, base)
+    let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, length_type, true, 8usize, token)
+    if length_address_error != ok { ret length_address_error }
+    try nir.add_operand(builder, length_address_instruction, base)
+    let (length_load, length, length_error) = nir.emit(builder, .Load, length_type, true, 8usize, token)
+    if length_error != ok { ret length_error }
+    try nir.add_operand(builder, length_load, length_address)
+    let (size_constant, size, size_error) = nir.emit(builder, .ConstInteger, length_type, true, element_info.size, token)
+    if size_error != ok { ret size_error }
+    let (product, bytes, bytes_error) = nir.emit(builder, .MultiplyWrap, length_type, true, 0usize, token)
+    if bytes_error != ok { ret bytes_error }
+    try nir.add_operand(builder, product, length)
+    try nir.add_operand(builder, product, size)
+    let (touch_ref, touch_ref_error) = nir.intern_function(builder, module_index, "neper_os_touch", 0usize)
+    if touch_ref_error != ok { ret touch_ref_error }
+    let (touch_call, touch_ignored, touch_error) = nir.emit(builder, .Call, zero, false, touch_ref, token)
+    if touch_error != ok { ret touch_error }
+    try nir.add_operand(builder, touch_call, pointer)
+    ret nir.add_operand(builder, touch_call, bytes)
 }
 
 fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, captured: bool, call_out: *check.CallInfo, callee_out: *usize, arguments: []usize, argument_count: *usize) -> err {
@@ -4218,6 +4279,9 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                 }
                 lowered += 1usize
                 if into_c {
+                    if call.function.import_library.len != 0usize && !variadic_extra {
+                        try touch_import_buffer(c, g, tree, module_index, child_index, parameter_type, builder, bindings, binding_count)
+                    }
                     var crossing_type = parameter_type
                     if variadic_extra { crossing_type = value_type }
                     try c_argument(c, &passing, crossing_type, value, builder, c.tokens[usize(node.token_start)], arguments, argument_count)
@@ -8713,7 +8777,18 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     if lowered == ok {
         var message = ""
         var checked = false
-        let (bytes, emit_error) = spirv.emit(c.arena, c, g, builder, signatures, at.function_count, &message, &checked)
+        // A Mac has no Vulkan driver: its `K$spirv` carries the kernel as MSL text (D5838) for the Metal launcher.
+        var emit_error = ok
+        var bytes: []u8 = zero
+        if check.same(g.os, "macos") {
+            let (text, text_error) = msl.emit(c.arena, c, g, builder, signatures, at.function_count, &message, &checked)
+            emit_error = text_error
+            bytes = text
+        } else {
+            let (words, words_error) = spirv.emit(c.arena, c, g, builder, signatures, at.function_count, &message, &checked)
+            emit_error = words_error
+            bytes = words
+        }
         if emit_error == ok {
             let (escaped, escaped_error) = hex_string(c.arena, bytes, checked, g.compiler_identity)
             if escaped_error != ok { ret escaped_error }

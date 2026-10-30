@@ -854,6 +854,7 @@ type Checker = struct {
     // (D1589) The `@gpu` options of the kernel being checked (`declaration_gpu_options`),
     // and this worker's kernels: pairs of the function index plus one and its inferred
     // capabilities with its `shared var` total from bit 16, for its Interface entry.
+    // After the bodies every worker holds every worker's (D5700).
     kernel_options: usize,
     kernel_facts: [128]usize,
     // The instance whose body is being checked (D543), for the request chain.
@@ -2870,20 +2871,22 @@ fn target_enum_value(c: *Checker, g: *graph.Graph, question: str) -> (usize, err
 }
 
 fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
-    var arch_members: [5]str = zero
+    var arch_members: [6]str = zero
     arch_members[0usize] = "X64"
     arch_members[1usize] = "Aarch64"
     arch_members[2usize] = "X86"
     arch_members[3usize] = "Spv"
     arch_members[4usize] = "Ptx"
+    arch_members[5usize] = "Wasm32"
     try seed_target_enum(c, "target.Arch", arch_members[..])
-    var os_members: [5]str = zero
+    var os_members: [6]str = zero
     os_members[0usize] = "Windows"
     os_members[1usize] = "Linux"
     os_members[2usize] = "Macos"
     os_members[3usize] = "None"
     // (D4704) NeperOS, last so no earlier member moves.
     os_members[4usize] = "Neperos"
+    os_members[5usize] = "Wasi"
     try seed_target_enum(c, "target.Os", os_members[..])
     let (memory_module, has_memory) = graph.find_module(g, "e.mem")
     if has_memory {
@@ -16149,8 +16152,8 @@ fn target_is(current: str, member: str) -> bool {
 }
 
 fn known_target_member(question: str, member: str) -> bool {
-    if same(question, "arch") { ret same(member, "X64") || same(member, "Aarch64") || same(member, "X86") || same(member, "Spv") || same(member, "Ptx") }
-    ret same(member, "Windows") || same(member, "Linux") || same(member, "Macos") || same(member, "None") || same(member, "Neperos")
+    if same(question, "arch") { ret same(member, "X64") || same(member, "Aarch64") || same(member, "X86") || same(member, "Spv") || same(member, "Ptx") || same(member, "Wasm32") }
+    ret same(member, "Windows") || same(member, "Linux") || same(member, "Macos") || same(member, "None") || same(member, "Neperos") || same(member, "Wasi")
 }
 
 fn when_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
@@ -16344,10 +16347,22 @@ fn set_kernel_fact(c: *Checker, function_index: usize, keep: usize, add: usize) 
         if c.kernel_facts[at] == 0usize && free == c.kernel_facts.len { free = at }
         at += 2usize
     }
-    // ponytail: a worker holding more than 64 kernels records the rest with none.
+    // ponytail: a program of more than 64 kernels records the rest with none, and which
+    // ones can follow the worker count. Inline because a crew holds nine checkers by
+    // value and 1024 entries overflowed a stack (D5700); an arena table per fork if needed.
     if free == c.kernel_facts.len { ret }
     c.kernel_facts[free] = function_index + 1usize
     c.kernel_facts[free + 1usize] = add
+}
+
+// (D5700) Another worker's kernels into this one's table: a launcher lowered here may
+// launch a kernel another worker checked, and must read what one worker would have.
+fn adopt_kernel_facts(c: *Checker, from: *Checker) {
+    var at = 0usize
+    while at + 1usize < from.kernel_facts.len {
+        if from.kernel_facts[at] != 0usize { set_kernel_fact(c, from.kernel_facts[at] - 1usize, 18446744073709551615usize, from.kernel_facts[at + 1usize]) }
+        at += 2usize
+    }
 }
 
 // (D1589) The capabilities a type needs on the device (section 10's table): 8-, 16-

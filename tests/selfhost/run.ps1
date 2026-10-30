@@ -487,6 +487,28 @@ if ($LASTEXITCODE -ne 0) { throw 'the folded hash is wrong for a nested slice or
 $memViewPath = Join-Path $testBuild 'mem-view-selfhost.exe'
 $memViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_view\src\main.e') $repo 'x64' 'windows' $memViewPath
 if ($LASTEXITCODE -ne 0 -or $memViewWritten -ne 'executable written') { throw 'mem.view executable emission failed' }
+# Memory going back (D5931, D5932, D5933): a large reset, `e.mem.pages`, and `e.mem.heap`, whose
+# blocks the checker holds to one free each.
+foreach ($memBack in 'mem_trim', 'mem_pages', 'mem_heap') {
+    $memBackPath = Join-Path $testBuild "$memBack-selfhost.exe"
+    $memBackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$memBack\src\main.e") $repo 'x64' 'windows' $memBackPath
+    if ($LASTEXITCODE -ne 0 -or $memBackWritten -ne 'executable written') { throw "$memBack executable emission failed" }
+    & $memBackPath
+    if ($LASTEXITCODE -ne 0) { throw "$memBack failed: exit $LASTEXITCODE" }
+}
+# A kernel call into a fresh slice works in a release build (D5935), where no debug fill hides it.
+$importTouchPath = Join-Path $testBuild 'import-touch-selfhost.exe'
+$importTouchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\import_touch\src\main.e') $repo 'x64' 'windows' $importTouchPath --release
+if ($LASTEXITCODE -ne 0 -or $importTouchWritten -ne 'executable written') { throw 'import_touch executable emission failed' }
+& $importTouchPath
+if ($LASTEXITCODE -ne 0) { throw "a kernel call into a fresh slice failed: exit $LASTEXITCODE" }
+# A commit the system refuses (D5934): `pages.ensure` says so in time, and writing on regardless
+# is `out of memory`, 137, after two seconds of asking, and not an access violation.
+$commitRefusedPath = Join-Path $testBuild 'mem-commit-refused-selfhost.exe'
+$commitRefusedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_commit_refused\src\main.e') $repo 'x64' 'windows' $commitRefusedPath --release
+if ($LASTEXITCODE -ne 0 -or $commitRefusedWritten -ne 'executable written') { throw 'mem_commit_refused executable emission failed' }
+$commitRefused = & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot 'job-commit-limit.ps1') -Program $commitRefusedPath -Megabytes 256
+if (($commitRefused -join "`n") -notmatch 'exit=137') { throw "a refused commit did not end as out of memory: $($commitRefused -join "`n")" }
 & $memViewPath
 if ($LASTEXITCODE -ne 0) { throw 'mem.view did not alias the arena storage it was given' }
 # `mem.cast` is the only route between pointer types, and the only route to `*void`
@@ -5710,6 +5732,19 @@ $loopSpirv = Join-Path $testBuild 'loop.spv'
 $loopSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\loop.e') $repo 'spv' 'none' $loopSpirv
 if ($LASTEXITCODE -ne 0 -or $loopSpirvWritten -ne 'spir-v written') { throw 'loop SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $loopSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\loop.spv')).Hash) { throw 'the loop SPIR-V module differs from the conformance corpus' }
+# (D5838) The MSL emitter's kernels, pinned byte for byte: saxpy, the loops and the exact float operations.
+$mslSaxpy = Join-Path $testBuild 'saxpy.metal'
+$mslSaxpyWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'msl' 'none' $mslSaxpy
+if ($LASTEXITCODE -ne 0 -or $mslSaxpyWritten -ne 'msl written') { throw 'saxpy MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslSaxpy).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\saxpy.metal')).Hash) { throw 'the saxpy MSL differs from the conformance corpus' }
+$mslLoop = Join-Path $testBuild 'loop.metal'
+$mslLoopWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\loop.e') $repo 'msl' 'none' $mslLoop
+if ($LASTEXITCODE -ne 0 -or $mslLoopWritten -ne 'msl written') { throw 'loop MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslLoop).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\loop.metal')).Hash) { throw 'the loop MSL differs from the conformance corpus' }
+$mslFloat = Join-Path $testBuild 'float.metal'
+$mslFloatWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\float.e') $repo 'msl' 'none' $mslFloat
+if ($LASTEXITCODE -ne 0 -or $mslFloatWritten -ne 'msl written') { throw 'float MSL emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mslFloat).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\msl\float.metal')).Hash) { throw 'the float MSL differs from the conformance corpus' }
 $gpuVulkanLoopPath = Join-Path $testBuild 'gpu-vulkan-loop-selfhost.exe'
 $gpuVulkanLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $gpuVulkanLoopPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { throw 'gpu_vulkan_loop emission failed' }
@@ -6052,6 +6087,12 @@ $osUiaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $osUiaWritten -ne 'executable written') { throw 'os_uia emission failed' }
 $osUiaOutput = & $osUiaPath
 if ($LASTEXITCODE -ne 0 -or $osUiaOutput -ne 'os uia ok') { throw "the UI Automation provider answered wrongly: exit $LASTEXITCODE" }
+# `window_on_resize` (D5856): the handler runs from the window procedure with the new client size, here by resizing from code.
+$osWindowResizePath = Join-Path $testBuild 'os-window-resize-selfhost.exe'
+$osWindowResizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_window_resize\src\main.e') $repo 'x64' 'windows' $osWindowResizePath
+if ($LASTEXITCODE -ne 0 -or $osWindowResizeWritten -ne 'executable written') { throw 'os_window_resize emission failed' }
+& $osWindowResizePath
+if ($LASTEXITCODE -ne 0) { throw "window_on_resize answered wrongly: exit $LASTEXITCODE" }
 # `e.gfx.scene` (D796): the CPU reference renderer over an offscreen target -- fills,
 # an anti-aliased edge, clips, a gradient, a stroke, an image, a glyph, a layer, a
 # rotation -- checked pixel by pixel, and the refusals.
@@ -6897,6 +6938,20 @@ $structWritten = & $compiler emit-executable (Join-Path $structFixture 'src\main
 if ($LASTEXITCODE -ne 0 -or $structWritten -ne 'executable written') { throw "struct-by-value extern executable emission failed: $structWritten" }
 $structRun = & $structPath 2>&1
 if ($LASTEXITCODE -ne 0) { throw "a struct crossed the C ABI wrongly: $structRun" }
+# Three- and four-member HFAs coming back from C (C178, D5854), against a DLL cl builds from the fixture's cabi.c: Win64 returns
+# them through a hidden pointer. The AAPCS64 build is only emitted here; run.sh runs it under qemu-aarch64.
+$hfaFixture = Join-Path $PSScriptRoot 'fixtures\link\hfa_return'
+$hfaDir = Join-Path $testBuild 'hfa-return'
+New-Item -ItemType Directory -Force -Path $hfaDir | Out-Null
+cmd.exe /d /s /c ('call "{0}" -arch=x64 -host_arch=x64 >nul && cl /nologo /W4 /O2 /LD /Fo:"{1}" /Fe:"{2}" "{3}"' -f $vsDevCmd, (Join-Path $hfaDir 'nepercabi.obj'), (Join-Path $hfaDir 'nepercabi.dll'), (Join-Path $hfaFixture 'cabi.c')) | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the hfa_return C library did not build' }
+$hfaPath = Join-Path $hfaDir 'hfa-return.exe'
+$hfaWritten = & $compiler emit-executable (Join-Path $hfaFixture 'src\main.e') $repo 'x64' 'windows' $hfaPath
+if ($LASTEXITCODE -ne 0 -or $hfaWritten -ne 'executable written') { throw "hfa_return executable emission failed: $hfaWritten" }
+$hfaRun = & $hfaPath 2>&1
+if ($LASTEXITCODE -ne 0) { throw "an HFA came back from C wrongly: exit $LASTEXITCODE, $hfaRun" }
+$hfaA64Written = & $compiler emit-executable (Join-Path $hfaFixture 'src\main.e') $repo 'aarch64' 'linux' (Join-Path $hfaDir 'hfa-a64')
+if ($LASTEXITCODE -ne 0 -or $hfaA64Written -ne 'executable written') { throw "hfa_return aarch64 emission failed: $hfaA64Written" }
 # Over a struct by value a function type's convention is part of it (D1676): a neper `fn`
 # is refused where an `extern fn(Key)` is expected, spelled whole so the two differ.
 Require-Fixture 'check/extern_fn_convention'
@@ -7346,6 +7401,41 @@ $deviceEditPerturbWritten = & $compiler emit-executable $deviceEditHotMain $repo
 if ($LASTEXITCODE -ne 0 -or $deviceEditPerturbWritten -ne 'executable written') { throw 'the device edit fixture did not build under -j 3 --perturb' }
 foreach ($deviceEditVariant in @($deviceEditSerialExe, $deviceEditPerturbExe)) {
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditVariant).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditCleanExe).Hash) { throw "the device edit fixture's image depends on the crew's schedule: $deviceEditVariant" }
+}
+# A launch carries its kernel's requirements whoever checked the kernel (D5700): another
+# worker, or in a warm build the kernel module's Interface. One image hot and clean at
+# one worker, and at every worker count, for `gpu_launch_facts` and for `gpu_tensor`,
+# whose launches are in generic instances its `main` makes.
+$launchFactsFixture = Join-Path $PSScriptRoot 'fixtures\link\gpu_launch_facts'
+$launchFactsScratch = Join-Path $testBuild 'gpu-launch-facts-scratch'
+if (Test-Path -LiteralPath $launchFactsScratch) { Remove-Item -LiteralPath $launchFactsScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $launchFactsScratch 'src') | Out-Null
+Copy-Item (Join-Path $launchFactsFixture 'src\*.e') (Join-Path $launchFactsScratch 'src')
+$launchFactsMain = Join-Path $launchFactsScratch 'src\main.e'
+$launchFactsHotExe = Join-Path $testBuild 'gpu-launch-facts-hot.exe'
+$launchFactsSerialExe = Join-Path $testBuild 'gpu-launch-facts-j1.exe'
+$launchFactsWritten = & $compiler emit-executable $launchFactsMain $repo 'x64' 'windows' $launchFactsHotExe --incremental -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw 'the launch facts fixture did not build hot' }
+Copy-Item (Join-Path $launchFactsFixture 'edits\main_body.e') $launchFactsMain
+$launchFactsWritten = & $compiler emit-executable $launchFactsMain $repo 'x64' 'windows' $launchFactsHotExe --incremental -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw 'the launch facts fixture did not rebuild hot after the edit' }
+$launchFactsWritten = & $compiler emit-executable $launchFactsMain $repo 'x64' 'windows' $launchFactsSerialExe -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw 'the launch facts fixture did not build under -j 1' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $launchFactsHotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $launchFactsSerialExe).Hash) { throw "a warm build's launch is not the clean build's: the kernel's facts were not read from its Interface" }
+$launchFactsOutput = & $launchFactsSerialExe
+if ($LASTEXITCODE -ne 0 -or $launchFactsOutput -ne 'gpu launch facts ok again') { throw "the launch facts fixture answered wrongly: exit $LASTEXITCODE $launchFactsOutput" }
+$launchTensor = Join-Path $PSScriptRoot 'fixtures\link\gpu_tensor\src\main.e'
+$launchTensorSerialExe = Join-Path $testBuild 'gpu-tensor-j1.exe'
+$launchFactsWritten = & $compiler emit-executable $launchTensor $repo 'x64' 'windows' $launchTensorSerialExe -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw 'gpu_tensor did not build under -j 1' }
+foreach ($launchFactsJobs in @(@('-j', '2'), @('-j', '3', '--perturb'), @('-j', '8'), @())) {
+    $launchFactsTag = $launchFactsJobs -join ''
+    foreach ($launchFactsPair in @(@($launchFactsMain, $launchFactsSerialExe, 'gpu-launch-facts'), @($launchTensor, $launchTensorSerialExe, 'gpu-tensor'))) {
+        $launchFactsExe = Join-Path $testBuild "$($launchFactsPair[2])$launchFactsTag.exe"
+        $launchFactsWritten = & $compiler emit-executable $launchFactsPair[0] $repo 'x64' 'windows' $launchFactsExe @launchFactsJobs 2>$null
+        if ($LASTEXITCODE -ne 0 -or $launchFactsWritten -ne 'executable written') { throw "$($launchFactsPair[2]) did not build under '$launchFactsJobs'" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $launchFactsExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $launchFactsPair[1]).Hash) { throw "$($launchFactsPair[2])'s image depends on the worker count: '$launchFactsJobs'" }
+    }
 }
 # (D1667) The counts a cold build takes as each block goes back are a warm no-edit
 # build's, on a program whose `@gpus` and `@tests` rows are not zero.
@@ -8124,6 +8214,12 @@ $evalFile = & $compiler eval 'layout_sum() + member_sum()' $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $evalFile -ne '1572') { throw "eval in a file's scope answered $evalFile" }
 $evalMissing = & $compiler eval 'nope()' $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($evalMissing -join "`n") -notmatch 'E-NAME-9999') { throw "eval of an unknown name was not refused: $($evalMissing -join "`n")" }
+# A heap block is owed one free (D5933): a use after it, a second one and none at all are refused.
+foreach ($case in @(@('heap_use_after_free', 'main\.e:11:28: error\[E-SAFETY-0001\]'), @('heap_double_free', 'main\.e:11:15: error\[E-SAFETY-0001\]'), @('heap_leak', 'main\.e:10:5: error\[E-SAFETY-0002\]'))) {
+    Require-Fixture "check/$($case[0])"
+    $heapRefused = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($heapRefused -join "`n") -notmatch $case[1]) { throw "$($case[0]) was not refused: $($heapRefused -join "`n")" }
+}
 Require-Fixture 'check/comptime_pointer_result'
 $comptimePointerResult = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_pointer_result\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimePointerResult -join "`n") -notmatch 'main\.e:9:15: error\[E-COMPTIME-9999\]: constant `WHERE` cannot be evaluated at compile time: its call reached a pointer as its value, which a constant cannot hold') { throw "a pointer-valued constant was not refused: $($comptimePointerResult -join "`n")" }
@@ -8145,6 +8241,12 @@ $arenaSmallWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $arenaSmallWritten -ne 'executable written') { throw 'arena size fixture emission with --arena failed' }
 $arenaSmallOutput = & $arenaSmallPath 2>&1
 if ($LASTEXITCODE -ne 1 -or ($arenaSmallOutput -join "`n") -notmatch 'error: e\.mem\.Exhausted') { throw "an arena of eight mebibytes held twelve: exit $LASTEXITCODE, $($arenaSmallOutput -join "`n")" }
+# A ceiling the host will not reserve is halved until it will (D5930): a pebibyte starts.
+$arenaRetryPath = Join-Path $testBuild 'arena-retry-selfhost.exe'
+$arenaRetryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\arena_retry\src\main.e') $repo 'x64' 'windows' $arenaRetryPath --arena 1048576g
+if ($LASTEXITCODE -ne 0 -or $arenaRetryWritten -ne 'executable written') { throw 'arena retry fixture emission failed' }
+& $arenaRetryPath
+if ($LASTEXITCODE -ne 0) { throw "a ceiling the host refuses did not start: exit $LASTEXITCODE" }
 # docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
 # conformance corpus, byte for byte, with the exit status the result record carries.
 $conformanceRoot = Join-Path $repo 'tests\conformance'
@@ -8363,7 +8465,7 @@ foreach ($closerCase in @(@('accept', 'safety_resource_closer', 0), @('reject', 
 }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
-foreach ($rejectProject in @('module_cycle', 'module_variants', 'safety_opaque')) {
+foreach ($rejectProject in @('module_cycle', 'module_variants', 'module_variants_other', 'safety_opaque')) {
     $rejectProjectActual = Join-Path $testBuild "conformance-reject-$rejectProject.jsonl"
     cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot "reject\$rejectProject\src\main.e")`" `"$repo`" x64 windows --json > `"$rejectProjectActual`""
     if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/$rejectProject exited $LASTEXITCODE, not 1" }
@@ -8751,7 +8853,7 @@ $aliasFixture = Join-Path $conformanceRoot 'tools\uses_alias'
 $aliasUsesActual = Join-Path $testBuild 'conformance-tools-uses-alias.jsonl'
 cmd /c "cd /d `"$aliasFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol deep.pick > `"$aliasUsesActual`""
 if ($LASTEXITCODE -ne 0) { throw 'uses-file --json through an alias failed' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $aliasUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_alias.expected.jsonl')).Hash) { throw 'uses-file --json through an alias differs from the conformance corpus' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $aliasUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_alias.x64-windows.expected.jsonl')).Hash) { throw 'uses-file --json through an alias differs from the conformance corpus' }
 $aliasOther = cmd /c "cd /d `"$aliasFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol other.pick"
 if ($LASTEXITCODE -ne 0 -or ($aliasOther | Where-Object { $_ -match '"record":"use"' }).Count -ne 2) { throw 'the same-spelled function of the other module does not have its own two uses' }
 $aliasPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-alias.jsonl'
@@ -8821,7 +8923,7 @@ $comptimeFixture = Join-Path $conformanceRoot 'tools\uses_comptime'
 $comptimeUsesActual = Join-Path $testBuild 'conformance-tools-uses-comptime.jsonl'
 cmd /c "cd /d `"$comptimeFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol main.twice > `"$comptimeUsesActual`""
 if ($LASTEXITCODE -ne 0) { throw 'uses-file --json of a function only a constant reaches failed' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $comptimeUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_comptime.expected.jsonl')).Hash) { throw 'uses-file --json of a function only a constant reaches differs from the conformance corpus' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $comptimeUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_comptime.x64-windows.expected.jsonl')).Hash) { throw 'uses-file --json of a function only a constant reaches differs from the conformance corpus' }
 $comptimePlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-comptime.jsonl'
 cmd /c "cd /d `"$comptimeFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol main.twice --to double > `"$comptimePlanActual`""
 if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json of a function only a constant reaches failed' }
@@ -8843,7 +8945,7 @@ $callbackFixture = Join-Path $conformanceRoot 'tools\uses_callback'
 $callbackUsesActual = Join-Path $testBuild 'conformance-tools-uses-callback.jsonl'
 cmd /c "cd /d `"$callbackFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol main.twice > `"$callbackUsesActual`""
 if ($LASTEXITCODE -ne 0) { throw 'uses-file --json of a callback failed' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $callbackUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_callback.expected.jsonl')).Hash) { throw 'uses-file --json of a callback differs from the conformance corpus' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $callbackUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_callback.x64-windows.expected.jsonl')).Hash) { throw 'uses-file --json of a callback differs from the conformance corpus' }
 $callbackPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-callback.jsonl'
 cmd /c "cd /d `"$callbackFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol main.twice --to double > `"$callbackPlanActual`""
 if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json of a callback failed' }
@@ -9331,7 +9433,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexSyntaxActual).Hash -ne (G
 $usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""
 if ($LASTEXITCODE -ne 0) { throw "uses-file --json failed" }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $usesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses.expected.jsonl')).Hash) { throw "uses-file --json differs from the conformance corpus" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $usesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses.x64-windows.expected.jsonl')).Hash) { throw "uses-file --json differs from the conformance corpus" }
 # `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
 $disActual = Join-Path $testBuild 'conformance-tools-dis.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json > `"$disActual`""
@@ -9360,7 +9462,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtActual).Hash -ne (Get-FileH
 # The format corpus (D255): each `format/<name>.e` is a non-canonical source and
 # `format/<name>.expected.e` what `fmt` makes of it, byte for byte; the canonical side
 # passes `--check`, which pins idempotence.
-foreach ($formatCase in @('layout', 'types', 'raw_strings', 'ret_grouping')) {
+foreach ($formatCase in @('layout', 'types', 'raw_strings', 'ret_grouping', 'import_attribute')) {
     $formatActual = Join-Path $testBuild "conformance-format-$formatCase.e"
     cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot "format/$formatCase.e")`" > `"$formatActual`""
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $formatActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "format/$formatCase.expected.e")).Hash) { throw "fmt on format/$formatCase.e differs from the conformance corpus" }
@@ -10946,6 +11048,175 @@ foreach ($extraFixture in (Get-Content (Join-Path $PSScriptRoot 'extra-fixtures.
     Push-Location $repo
     try { & $extraPath | Out-Null } finally { Pop-Location }
     if ($LASTEXITCODE -ne 0) { throw "a $extraFixture check failed: exit $LASTEXITCODE" }
+}
+# (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by lib/wasm/run-wasm.mjs from the repo
+# root; `--release` drops the debug-only rows and keeps the bounds row; neper.wasm emits what this compiler emits.
+$wasmNode = Get-Command node -ErrorAction SilentlyContinue
+if ($wasmNode) {
+    $wasmBuild = Join-Path $testBuild 'wasm'
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $wasmBuild
+    New-Item -ItemType Directory -Force -Path $wasmBuild | Out-Null
+    $wasmRunner = Join-Path $repo 'lib\wasm\run-wasm.mjs'
+    # A trap writes to standard error, which -ErrorAction Stop would turn into a terminating error.
+    function Invoke-Wasm([string]$module, [string[]]$arguments, [string]$runner = $wasmRunner) {
+        Push-Location $repo
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $text = (& node --no-warnings $runner $module @arguments 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $previous; Pop-Location }
+        return @{ Status = $LASTEXITCODE; Output = $text }
+    }
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_ops', 'wasm_flow', 'wasm_reserve', 'fs_basics', 'os_clock_random', 'os_environment', 'os_wait_timeout', 'wasm_address', 'wasm_irreducible', 'wasm_mask', 'os_socket', 'os_resolve', 'async_io', 'macos_poller_loss', 'net', 'wasm_net', 'wasm_atomics') {
+        $wasmPath = Join-Path $wasmBuild "$wasmFixture.wasm"
+        $wasmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPath
+        if ($LASTEXITCODE -ne 0 -or $wasmWritten -ne 'executable written') { throw "$wasmFixture did not emit as WebAssembly" }
+        $wasmRun = Invoke-Wasm $wasmPath @()
+        if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+        # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
+        if ($wasmFixture -in 'os_socket', 'os_resolve', 'macos_poller_loss', 'net', 'wasm_net') { continue }
+        $wasmRun = Invoke-Wasm $wasmPath @() (Join-Path $repo 'lib\wasm\neper-host.js')
+        if ($wasmRun.Status -ne 0) { throw "a $wasmFixture check failed on wasm32-wasi through lib/wasm/neper-host.js: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    }
+    # (D5671, D5672, C201) --threads: the threaded module shape runs on one thread and writes what the plain module writes,
+    # and the seven instructions of the "wasm" library answer as a plain and as a threaded module should.
+    foreach ($wasmFixture in 'wasm_basics', 'wasm_atomics', 'wasm_ops') {
+        $wasmThreadsPath = Join-Path $wasmBuild "$wasmFixture.threads.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmThreadsPath --threads) -ne 'executable written') { throw "$wasmFixture did not emit as a threaded WebAssembly module" }
+        $wasmPlainRun = Invoke-Wasm (Join-Path $wasmBuild "$wasmFixture.wasm") @()
+        $wasmThreadsRun = Invoke-Wasm $wasmThreadsPath @()
+        if ($wasmThreadsRun.Status -ne 0 -or $wasmPlainRun.Output -ne $wasmThreadsRun.Output) { throw "$wasmFixture writes something else as a threaded module: exit $($wasmThreadsRun.Status) $($wasmThreadsRun.Output)" }
+    }
+    $wasmOpsSource = Join-Path $PSScriptRoot 'fixtures\wasm\wasm_thread_ops\src\main.e'
+    $wasmOpsPlain = Join-Path $wasmBuild 'thread_ops.wasm'
+    $wasmOpsThreads = Join-Path $wasmBuild 'thread_ops.threads.wasm'
+    if ((& $compiler emit-executable $wasmOpsSource $repo 'wasm32' 'wasi' $wasmOpsPlain) -ne 'executable written') { throw 'wasm_thread_ops did not emit as WebAssembly' }
+    if ((& $compiler emit-executable $wasmOpsSource $repo 'wasm32' 'wasi' $wasmOpsThreads --threads) -ne 'executable written') { throw 'wasm_thread_ops did not emit as a threaded WebAssembly module' }
+    $wasmRun = Invoke-Wasm $wasmOpsPlain @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 0`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0") { throw "the plain module's thread instructions answered: $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmOpsThreads @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
+    # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
+    # inotify watch hands events over differently).
+    $wasmWatch = Join-Path $wasmBuild 'os_watch_modify.wasm'
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\wasm\os_watch_modify\src\main.e') $repo 'wasm32' 'wasi' $wasmWatch) -ne 'executable written') { throw 'os_watch_modify did not emit as WebAssembly' }
+    $wasmRun = Invoke-Wasm $wasmWatch @()
+    if ($wasmRun.Status -ne 0) { throw "os_watch_modify failed on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    # (D5673, D5674, C202) Threads under the thread host: wasm_threads built with --threads writes what the native build
+    # writes (output pinned here), and a thread's os.exit(7) while main joins it is the status.
+    $wasmThreadsPath = Join-Path $wasmBuild 'wasm_threads.threads.wasm'
+    $wasmFixture = 'wasm_threads'
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmThreadsPath --threads) -ne 'executable written') { throw 'wasm_threads did not emit as a threaded WebAssembly module' }
+    $wasmRun = Invoke-Wasm $wasmThreadsPath @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "atomic 8000`nmutex 8000`nids distinct`nmain id 1`na thread started a thread`ndetached`nwait timeout`ndetails per thread`n200 cycles`nmain returns") { throw "wasm_threads answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmThreadsPath @('exit')
+    if ($wasmRun.Status -ne 7) { throw "wasm_threads exit answered $($wasmRun.Status), not 7" }
+    # (D5750, C204) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
+    # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
+    foreach ($wasmFixture in 'os_pipe_threads', 'net_pop3') {
+        $wasmPipePath = Join-Path $wasmBuild "$wasmFixture.threads.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmPipePath --threads) -ne 'executable written') { throw "$wasmFixture did not emit as a threaded WebAssembly module" }
+        $wasmRun = Invoke-Wasm $wasmPipePath @()
+        $wasmWant = if ($wasmFixture -eq 'net_pop3') { 'net pop3 ok' } else { "write then read`nempty probe would block`n300000 bytes across threads`nend of stream after close`na blocked reader woke" }
+        if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne $wasmWant) { throw "$wasmFixture answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    }
+    # (D5770, C205) Processes through neper_host: each fixture spawns its own image, which the runner starts again as a child (os_process:
+    # kill, a pipe handed to the child, wait_usage; os_group: environment, cwd, a group terminated). proc_output is not run here: its
+    # last checks hold an orphan in a process group, which taskkill /T cannot reach once the group's leader has exited (run.sh runs it).
+    foreach ($wasmFixture in 'os_process', 'os_group') {
+        $wasmProcPath = Join-Path $wasmBuild "$wasmFixture.wasm"
+        if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmProcPath) -ne 'executable written') { throw "$wasmFixture did not emit as a WebAssembly module" }
+        $wasmRun = Invoke-Wasm $wasmProcPath @()
+        if ($wasmRun.Status -ne 0) { throw "$wasmFixture answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    }
+    # The dispatch loop wasm_irreducible needs (a barrier kernel's graph is irreducible; D5635), and every function of wasm_flow forced onto it.
+    $wasmFallback = 'wasm_irreducible'
+    $wasmForced = 'wasm_flow'
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $env:NEPER_WASM_STATS = '1'
+    try { $wasmStats = (& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFallback\src\main.e") $repo 'wasm32' 'wasi' (Join-Path $wasmBuild 'irreducible-stats.wasm') 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { Remove-Item Env:NEPER_WASM_STATS }
+    $env:NEPER_WASM_STATS = 'dispatch'
+    try { & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmForced\src\main.e") $repo 'wasm32' 'wasi' (Join-Path $wasmBuild 'flow-dispatch.wasm') 2>&1 | Out-Null } finally { Remove-Item Env:NEPER_WASM_STATS }
+    $ErrorActionPreference = $previousPreference
+    if ($wasmStats -notmatch [regex]::Escape('dispatch 1 (irreducible 1)')) { throw "wasm_irreducible did not fall back to the dispatch loop: $wasmStats" }
+    $wasmRun = Invoke-Wasm (Join-Path $wasmBuild 'flow-dispatch.wasm') @()
+    if ($wasmRun.Status -ne 0) { throw "wasm_flow failed with every function on the dispatch loop: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    $wasmReleaseSource = Join-Path $PSScriptRoot 'fixtures\link\wasm_release\src\main.e'
+    $wasmDebugPath = Join-Path $wasmBuild 'release-debug.wasm'
+    $wasmReleasePath = Join-Path $wasmBuild 'release.wasm'
+    if ((& $compiler emit-executable $wasmReleaseSource $repo 'wasm32' 'wasi' $wasmDebugPath) -ne 'executable written') { throw 'the release fixture did not emit as WebAssembly' }
+    if ((& $compiler emit-executable $wasmReleaseSource $repo 'wasm32' 'wasi' $wasmReleasePath --release) -ne 'executable written') { throw 'the release fixture did not emit as WebAssembly with --release' }
+    $wasmRun = Invoke-Wasm $wasmDebugPath @()
+    if ($wasmRun.Status -ne 134 -or $wasmRun.Output -notmatch [regex]::Escape('main.e:14:19: trap[overflow]: u8 + overflows')) { throw "the release fixture did not trap in debug on wasm32-wasi: $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmReleasePath @()
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the release fixture failed with --release on wasm32-wasi: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    $wasmRun = Invoke-Wasm $wasmReleasePath @('bounds')
+    if ($wasmRun.Status -ne 134 -or $wasmRun.Output -notmatch [regex]::Escape('main.e:35:9: trap[bounds]: index 8 out of bounds for len 8')) { throw "the bounds row did not trap in a wasm32-wasi release build: $($wasmRun.Output)" }
+    foreach ($wasmAccess in 'load', 'store', 'copy') {
+        $wasmRun = Invoke-Wasm (Join-Path $wasmBuild 'wasm_address.wasm') @($wasmAccess)
+        if ($wasmRun.Status -ne 134 -or $wasmRun.Output -notmatch 'trap\[bounds\]: address \d+ is outside the 32-bit memory') { throw "a $wasmAccess through a pointer with high bits did not trap on wasm32-wasi: $($wasmRun.Output)" }
+    }
+    $wasmRun = Invoke-Wasm $wasmReleasePath @('address')
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne '') { throw "the 32-bit address row was not left out of the wasm32-wasi release build: exit $($wasmRun.Status) $($wasmRun.Output)" }
+    # (C209, D5681) `neper run --target wasm32-wasi` from a toolchain with lib\wasm beside it runs the module under node and
+    # reports as a native run does; with no node it says what to install.
+    $env:NEPER_NODE = ''
+    $wasmRunPath = Join-Path $wasmBuild 'run_release.wasm'
+    $wasmRunText = (cmd /c "`"$shortCompiler`" run `"$wasmReleaseSource`" --target wasm32-wasi --release -o `"$wasmRunPath`" -- bounds") -join "`n"
+    if ($wasmRunText -notmatch '"process_exit_code":134,' -or $wasmRunText -notmatch [regex]::Escape('trap[bounds]: index 8 out of bounds for len 8')) { throw "neper run --target wasm32-wasi did not report the bounds trap: $wasmRunText" }
+    $previousPath = $env:PATH
+    $env:PATH = Join-Path $env:SystemRoot 'System32'
+    try { $wasmRunText = (cmd /c "`"$shortCompiler`" run `"$wasmReleaseSource`" --target wasm32-wasi -o `"$wasmRunPath`"") -join "`n"; $wasmRunStatus = $LASTEXITCODE } finally { $env:PATH = $previousPath }
+    if ($wasmRunStatus -ne 2 -or $wasmRunText -notmatch [regex]::Escape('running a wasm32-wasi module needs Node.js: node on PATH, or NEPER_NODE')) { throw "neper run --target wasm32-wasi without node did not say what to install: $wasmRunText" }
+    if ((Get-Item $wasmReleasePath).Length -ge (Get-Item $wasmDebugPath).Length) { throw 'the wasm32-wasi release module is not smaller than the debug one' }
+    # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
+    $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'
+    if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
+    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath) (Join-Path $repo 'tests\wasm\host.mjs')
+    if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
+    # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
+    $wasmCounterPath = Join-Path $wasmBuild 'ui_counter.wasm'
+    $wasmCounterThreads = Join-Path $wasmBuild 'ui_counter.threads.wasm'
+    $wasmCounterSource = Join-Path $repo 'tests\wasm\browser\ui_counter\src\main.e'
+    if ((& $compiler emit-executable $wasmCounterSource $repo 'wasm32' 'wasi' $wasmCounterPath) -ne 'executable written') { throw 'ui_counter did not emit as WebAssembly' }
+    if ((& $compiler emit-executable $wasmCounterSource $repo 'wasm32' 'wasi' $wasmCounterThreads --threads) -ne 'executable written') { throw 'ui_counter did not emit as a threaded WebAssembly module' }
+    $wasmGalleryPath = Join-Path $wasmBuild 'ui_gallery.wasm'
+    if ((& $compiler emit-executable (Join-Path $repo 'examples\ui\main.e') $repo 'wasm32' 'wasi' $wasmGalleryPath) -ne 'executable written') { throw 'examples/ui did not emit as WebAssembly' }
+    $wasmWindow = Invoke-Wasm $wasmCounterPath @($wasmCounterThreads, $wasmGalleryPath) (Join-Path $repo 'tests\wasm\window.mjs')
+    if ($wasmWindow.Status -ne 0) { throw "the lib/wasm/window.js check failed: $($wasmWindow.Output)" }
+    $wasmEdits = Invoke-Wasm (Join-Path $repo 'tests\wasm\window_edits.mjs') @() (Join-Path $repo 'tests\wasm\window_edits.mjs')
+    if ($wasmEdits.Status -ne 0) { throw "the lib/wasm/window.js edit check failed: $($wasmEdits.Output)" }
+    # (C211, D5683) --source-map: a null function value called two frames deep ends in the engine's error, and each runner
+    # names the call's line in the first frame from OUT.map; without the flag there is no map and no line.
+    $wasmNullSource = Join-Path $repo 'tests\wasm\null_call\src\main.e'
+    $wasmNullPath = Join-Path $wasmBuild 'null_call.wasm'
+    $wasmNullPlain = Join-Path $wasmBuild 'null_call_plain.wasm'
+    if ((& $compiler emit-executable $wasmNullSource $repo 'wasm32' 'wasi' $wasmNullPath '--source-map') -ne 'executable written') { throw 'null_call did not emit with a source map' }
+    if ((& $compiler emit-executable $wasmNullSource $repo 'wasm32' 'wasi' $wasmNullPlain) -ne 'executable written') { throw 'null_call did not emit' }
+    if (-not (Test-Path "$wasmNullPath.map") -or (Test-Path "$wasmNullPlain.map")) { throw 'the source map was not written exactly when asked for' }
+    if (Get-Command wasm-tools -ErrorAction SilentlyContinue) {
+        & wasm-tools validate $wasmNullPath
+        if ($LASTEXITCODE -ne 0) { throw 'the module with a source map does not validate' }
+    }
+    foreach ($wasmNullRunner in $wasmRunner, (Join-Path $repo 'lib\wasm\neper-host.js')) {
+        $wasmRun = Invoke-Wasm $wasmNullPath @() $wasmNullRunner
+        $wasmFirst = ($wasmRun.Output -split "`n" | Where-Object { $_ -match '^\s*at ' } | Select-Object -First 1)
+        if ($wasmFirst -notmatch 'main\.fire.*\[src/main\.e:13\]') { throw "$wasmNullRunner did not name the null call's line: $($wasmRun.Output)" }
+        $wasmRun = Invoke-Wasm $wasmNullPlain @() $wasmNullRunner
+        if ($wasmRun.Output -match '\[src/main\.e:') { throw "$wasmNullRunner named a line without a source map: $($wasmRun.Output)" }
+    }
+    # scripts/wasm-compiler.sh is bash: Git's, never WSL's, which cannot read a Windows path.
+    $wasmGit = Get-Command git -ErrorAction SilentlyContinue
+    $wasmBash = $null
+    if ($wasmGit) { $wasmBash = Join-Path (Split-Path -Parent (Split-Path -Parent $wasmGit.Source)) 'bin\bash.exe' }
+    if ($wasmBash -and (Test-Path -LiteralPath $wasmBash)) {
+        $env:NEPER_COMPILER = $compiler
+        try { & $wasmBash (Join-Path $repo 'scripts/wasm-compiler.sh') } finally { Remove-Item Env:NEPER_COMPILER }
+        if ($LASTEXITCODE -ne 0) { throw 'neper.wasm emits something the native compiler does not' }
+    } else {
+        Write-Host 'Git Bash was not found: the neper.wasm differential was skipped'
+    }
+} else {
+    Write-Host 'node is not on PATH: the wasm32-wasi checks were skipped'
 }
 if ($env:NEPER_NEPEROS -eq '1') {
 # (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it

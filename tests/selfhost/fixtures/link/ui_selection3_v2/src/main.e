@@ -87,6 +87,9 @@ fn frame(h: *testing.Harness, a: *mem.Arena, f: *mem.Arena, t: *const control.Th
 fn main(a: *mem.Arena, args: []str) -> err {
     var font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
     if os.NATIVE_SEPARATOR == 92u8 { font_path = "C:/Windows/Fonts/segoeui.ttf" }
+    when target.os == .Macos {
+        font_path = "/System/Library/Fonts/Supplemental/Arial.ttf"
+    }
     let (font_bytes, font_error) = fs.read_file(a, font_path, 16777216usize)
     if font_error != ok { os.exit(30i32) }
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
