@@ -24,10 +24,10 @@
 // Where the CELT layer is involved the worst sample is within 1.53e-5 of full
 // scale of libopus, which is half a step of the fixture's 16-bit reference.
 //
-// Section 4.5 is not here: packet loss concealment, redundancy frames (a hybrid
-// packet that signals one answers `Unsupported`) and the cross-faded mode
-// transitions.  A mid-stream mode or bandwidth change re-initialises the LP
-// state instead, so the first frame after a switch is not bit-exact.
+// Section 4.5 is not here: packet loss concealment, redundancy frames (a frame
+// that signals one answers `Unsupported`) and the cross-faded mode transitions.
+// A mid-stream mode or bandwidth change re-initialises the LP state instead, so
+// the first frame after a switch is not bit-exact.
 //
 // Every static table is generated from the RFC's own tables by the fixture's
 // reference script and emitted below as a byte string.
@@ -376,6 +376,11 @@ fn range_decode_uint(r: *Range, ft_in: u32) -> u32 {
 fn range_tell(r: *const Range) -> i32 {
     ret r.total_bits - ilog32(r.rng)
 }
+
+// `read_byte` and `read_byte_from_end` synthesize zeroes after their input so
+// decoding can continue long enough to report a malformed packet.  Consumers
+// that finish a frame must compare the exact coding budget before accepting it.
+fn range_within(r: *const Range, bits: i32) -> bool { ret range_tell(r) <= bits }
 
 fn range_tell_frac(r: *const Range) -> i32 {
     let nbits = r.total_bits << u32(BITRES)
@@ -1966,7 +1971,8 @@ fn celt_decode_frame(d: *Decoder, r: *Range, out: []f32, lm: i32, c: usize) -> e
             i += 1usize
         }
     }
-    var total_bits = i32(length) * 8i32
+    let frame_bits = i32(length) * 8i32
+    var total_bits = frame_bits
     var tell = range_tell(r)
     var silence = false
     if tell >= total_bits {
@@ -2090,6 +2096,10 @@ fn celt_decode_frame(d: *Decoder, r: *Range, out: []f32, lm: i32, c: usize) -> e
     var anti_on = 0u32
     if anti_rsv > 0i32 { anti_on = range_decode_raw_bits(r, 1u32) }
     unquant_energy_finalise(d, r, start, bend, i32(length) * 8i32 - range_tell(r), c)
+    // Every entropy-coded field has been read at this point.  A range decoder
+    // can otherwise manufacture bits beyond a truncated frame and turn them
+    // into arbitrary audio state.
+    if !range_within(r, frame_bits) { ret Invalid }
     if anti_on != 0u32 { anti_collapse(d, xs, lm, c, 960usize, start, bend) }
 
     let band_e = d.band_e
@@ -2098,7 +2108,11 @@ fn celt_decode_frame(d: *Decoder, r: *Range, out: []f32, lm: i32, c: usize) -> e
         i = 0usize
         while i < NBANDS {
             var v = 0.0f32
-            if i >= start && i < bend { v = f32(math.exp2[f64](f64(old[i + ch * NBANDS] + emeans(i)))) }
+            if i >= start && i < bend {
+                var log_energy = old[i + ch * NBANDS] + emeans(i)
+                if log_energy != log_energy || log_energy > 32.0f32 { log_energy = 32.0f32 }
+                v = f32(math.exp2[f64](f64(log_energy)))
+            }
             band_e[i + ch * NBANDS] = v
             i += 1usize
         }
@@ -2341,9 +2355,9 @@ fn decode(d: *Decoder, packet: []const u8, rate: u32, out: []f32) -> (usize, err
 // decoder delay -- to what CELT wrote, sample for sample.
 //
 // ponytail: section 4.5's packet loss concealment, redundancy frames and mode
-// transitions are not here.  A hybrid frame that signals redundancy answers
-// `Unsupported`; a mid-stream mode change re-initialises the LP state instead of
-// cross-fading, so the first frame after a switch is not bit-exact.
+// transitions are not here.  Frames that signal redundancy answer `Unsupported`;
+// a mid-stream mode change re-initialises the LP state instead of cross-fading,
+// so the first frame after a switch is not bit-exact.
 fn decode_lp(d: *Decoder, frames: []Frame, count: usize, toc: u8, rate: u32, out: []f32) -> (usize, err) {
     let mode = packet_mode(toc)
     let bw = packet_bandwidth(toc)
@@ -2396,6 +2410,10 @@ fn decode_lp(d: *Decoder, frames: []Frame, count: usize, toc: u8, rate: u32, out
             d.band_start = 0usize
             if ce != ok { ret (base, ce) }
         } else {
+            // SILK-only redundancy has no explicit flag: sufficient bits after
+            // the SILK payload imply the same feature that the hybrid branch
+            // rejects above.  Do not silently discard its trailing frame.
+            if range_tell(&r) + 17i32 <= i32(frames[fi].data.len) * 8i32 { ret (base, Unsupported) }
             var z = 0usize
             while z < per * cc {
                 out[base * cc + z] = 0.0f32
