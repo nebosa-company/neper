@@ -134,7 +134,9 @@ fn parse_decimal(s: str) -> (u64, bool) {
     var i = 0usize
     while i < s.len {
         if s[i] < 48u8 || s[i] > 57u8 { ret (0u64, false) }
-        v = v * 10u64 + u64(s[i] - 48u8)
+        let digit = u64(s[i] - 48u8)
+        if v > (18446744073709551615u64 - digit) / 10u64 { ret (0u64, false) }
+        v = v * 10u64 + digit
         i += 1usize
     }
     ret (v, true)

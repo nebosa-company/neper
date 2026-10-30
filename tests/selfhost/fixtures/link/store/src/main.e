@@ -116,7 +116,7 @@ fn vectors() -> [100]VKey {
 }
 
 // ---- the in-process server behind the HTTP transport ----
-type Server = struct { kv: store.MemoryStore, requests: u32, last_target: str }
+type Server = struct { kv: store.MemoryStore, requests: u32, last_target: str, decimal_mode: u8, decimal_headers: [1]http.Header }
 
 fn hexval(c: u8) -> u8 {
     if c >= 97u8 { ret c - 87u8 }
@@ -161,6 +161,18 @@ fn serve(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response,
     let prefix = "/bucket/"
     if !str.starts_with(req.target, prefix) { ret (reply(a, 400u16, none[0usize..0usize], ""), ok) }
     let rest = req.target[prefix.len..]
+    // Controlled malformed-size replies exercise the HTTP store's response parser.
+    if (s.decimal_mode == 1u8 || s.decimal_mode == 2u8) && req.method == .Head {
+        var decimal = "18446744073709551615"
+        if s.decimal_mode == 2u8 { decimal = "18446744073709551616" }
+        s.decimal_headers[0usize] = http.Header{ name: "Content-Length", value: decimal }
+        ret (reply(a, 200u16, s.decimal_headers[0usize..1usize], ""), ok)
+    }
+    if (s.decimal_mode == 3u8 || s.decimal_mode == 4u8) && req.method == .Get && str.starts_with(rest, "?prefix=") {
+        var decimal_body = "decimal\t18446744073709551615\n"
+        if s.decimal_mode == 4u8 { decimal_body = "decimal\t18446744073709551616\n" }
+        ret (reply(a, 200u16, none[0usize..0usize], decimal_body), ok)
+    }
     var kv = store.memory_store(&s.kv)
     if req.method == .Get && str.starts_with(rest, "?prefix=") {
         let (p, pe) = decode(a, rest[8usize..])
@@ -348,7 +360,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 3. HTTP through the in-process server
     let (kv0, kve) = store.memory(a, 64usize)
     if kve != ok { os.exit(130i32) }
-    var server = Server{ kv: kv0, requests: 0u32, last_target: "" }
+    var server = Server{ kv: kv0, requests: 0u32, last_target: "", decimal_mode: 0u8, decimal_headers: zero }
     var hs = sh.HttpStore{ transport: sh.Transport{ ctx: mem.cast[*void](&server), send: serve }, host: "objects.test", base: "/bucket" }
     var hst = sh.http_store(&hs)
     let c3 = store.conformance(&hst, a)
@@ -359,6 +371,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var entries: [4]store.Entry = zero
     let (n, ln) = store.list(&hst, a, "q/\xc3\xbc", entries[0usize..4usize])
     if ln != ok || n != 1usize || !str.eq(server.last_target, "/bucket/?prefix=q/%C3%BC") { os.exit(134i32) }
+    // #377: HTTP size fields accept the u64 limit and reject the next value in
+    // both a HEAD Content-Length and a listing entry.
+    server.decimal_mode = 1u8
+    let (head_max, head_max_error) = store.stat(&hst, a, "decimal")
+    if head_max_error != ok || head_max != 18446744073709551615u64 { os.exit(135i32) }
+    server.decimal_mode = 2u8
+    let (_, head_overflow_error) = store.stat(&hst, a, "decimal")
+    if head_overflow_error != store.Failed { os.exit(136i32) }
+    var decimal_entries: [1]store.Entry = zero
+    server.decimal_mode = 3u8
+    let (decimal_count, decimal_error) = store.list(&hst, a, "", decimal_entries[..])
+    if decimal_error != ok || decimal_count != 1usize || decimal_entries[0usize].size != 18446744073709551615u64 { os.exit(137i32) }
+    server.decimal_mode = 4u8
+    let (_, list_overflow_error) = store.list(&hst, a, "", decimal_entries[..])
+    if list_overflow_error != store.Failed { os.exit(138i32) }
+    server.decimal_mode = 0u8
     // 4. keys: validity and the HTTP encoding against Python
     let table = vectors()
     var i = 0usize
