@@ -65,5 +65,11 @@ fn main(a: *mem.Arena) -> err {
     let nan = 0.0f64 / 0.0f64
     if test.near(nan, nan, 1.0f64, 1.0f64, "nan") != test.Failed { os.exit(47i32) }
     if test.near(nan, 1.0f64, 1.0f64, 1.0f64, "nan against a number") != test.Failed { os.exit(48i32) }
+    // Equal infinities are exactly near; opposite infinities are not near even
+    // with a positive relative tolerance (infinity <= infinity is not useful).
+    let positive_inf = 1.0f64 / 0.0f64
+    let negative_inf = 0.0f64 - positive_inf
+    if test.near(positive_inf, positive_inf, 0.0f64, 0.0f64, "equal infinity") != ok { os.exit(53i32) }
+    if test.near(positive_inf, negative_inf, 0.0f64, 1.0f64, "opposite infinities") != test.Failed { os.exit(54i32) }
     ret ok
 }

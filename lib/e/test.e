@@ -36,6 +36,13 @@ fn eq[T: type](a: T, b: T, msg: str) -> err {
 // magnitude. A NaN on either side is near nothing, which the comparisons say on their own. The
 // magnitudes are taken inline because the fence is the whole surface and admits no helper.
 fn near(a: f64, b: f64, abs: f64, rel: f64, msg: str) -> err {
+    // Equal infinities are equal values, but a NaN and an unmatched infinity
+    // cannot be near anything under either tolerance.
+    if a == b { ret ok }
+    if a != a || b != b || a - a != 0.0f64 || b - b != 0.0f64 {
+        current.message = msg
+        ret Failed
+    }
     var gap = a - b
     if gap < 0.0f64 { gap = -gap }
     if gap <= abs { ret ok }
