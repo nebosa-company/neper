@@ -71,7 +71,7 @@ fn merge_at(m: *Merge, now: u64) -> u64 {
     var any = false
     var i = 0usize
     while i < m.marks.len {
-        if m.last[i] +% m.idle > now {
+        if now -% m.last[i] < m.idle {
             if !any || m.marks[i] < lowest { lowest = m.marks[i] }
             any = true
         }

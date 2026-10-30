@@ -126,6 +126,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_source) = stream.merge_update(&m, 3usize, 0u64, now)
     if bad_source != stream.Invalid { os.exit(3i32) }
 
+    // Idleness is elapsed time modulo u64: a source updated four ticks before
+    // the maximum timestamp is still active after its deadline wraps.
+    var wrap_marks: [1]u64 = zero
+    var wrap_last: [1]u64 = zero
+    let (wrap0, wrap_error) = stream.merge(wrap_marks[..], wrap_last[..], 10u64)
+    if wrap_error != ok { os.exit(3i32) }
+    var wrap = wrap0
+    wrap.marks[0usize] = 7u64
+    wrap.last[0usize] = 18446744073709551610u64
+    if stream.merge_at(&wrap, 18446744073709551614u64) != 7u64 { os.exit(3i32) }
+
     // 4: sliding assignment and the argument checks.
     var starts: [4]u64 = zero
     let (n, starts_error) = stream.sliding_windows(175u64, 100u64, 30u64, starts[..])
