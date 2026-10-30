@@ -627,13 +627,11 @@ fn parse(a: *mem.Arena, der: []const u8, password: str) -> (Store, err) {
 // ---- writing ----
 
 fn begin(dst: []u8, at: usize, tag: u8, total: usize) -> (usize, err) {
-    var header = 2usize
-    if total >= 128usize {
-        header = 3usize
-        if total >= 256usize { header = 4usize }
-        if total >= 65536usize { header = 5usize }
-    }
-    if at + header + total > dst.len { ret (at, TooSmall) }
+    let header = 1usize + asn1.length_len(total)
+    if at > dst.len { ret (at, TooSmall) }
+    let remaining = dst.len - at
+    if header > remaining { ret (at, TooSmall) }
+    if total > remaining - header { ret (at, TooSmall) }
     ret (asn1.put_header(dst, at, tag, total), ok)
 }
 

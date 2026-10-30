@@ -7,6 +7,7 @@ use e.io
 use e.mem
 use e.os
 use e.crypto.cms
+use e.crypto.pkcs12
 use e.crypto.sign
 use e.crypto.x509
 
@@ -58,6 +59,22 @@ fn cert_hex_0() -> str {
 }
 
 var cert_store: [2048]u8 = zero
+var der_length_boundary: [16777222]u8 = zero
+
+// Both writers must reject a buffer one byte shorter than the six-byte DER header
+// required when the content reaches 2^24 bytes.
+fn der_length_boundaries() -> u8 {
+    let (_, cms_short) = cms.begin(der_length_boundary[0usize..16777221usize], 0usize, 48u8, 16777216usize)
+    if cms_short != cms.TooSmall { ret 1u8 }
+    let (cms_at, cms_error) = cms.begin(der_length_boundary[0usize..], 0usize, 48u8, 16777216usize)
+    if cms_error != ok || cms_at != 6usize { ret 2u8 }
+    if der_length_boundary[0usize] != 48u8 || der_length_boundary[1usize] != 132u8 || der_length_boundary[2usize] != 1u8 || der_length_boundary[3usize] != 0u8 || der_length_boundary[4usize] != 0u8 || der_length_boundary[5usize] != 0u8 { ret 3u8 }
+    let (_, pkcs12_short) = pkcs12.begin(der_length_boundary[0usize..16777221usize], 0usize, 48u8, 16777216usize)
+    if pkcs12_short != pkcs12.TooSmall { ret 4u8 }
+    let (pkcs12_at, pkcs12_error) = pkcs12.begin(der_length_boundary[0usize..], 0usize, 48u8, 16777216usize)
+    if pkcs12_error != ok || pkcs12_at != 6usize { ret 5u8 }
+    ret 0u8
+}
 
 fn cert_bytes() -> []const u8 {
     let n = unhex(cert_hex_0(), cert_store[0usize..2048usize])
@@ -469,6 +486,7 @@ fn mandatory_attribute_regressions(a: *mem.Arena) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    if der_length_boundaries() != 0u8 { os.exit(107i32) }
     // the embedded certificate parses and its issuer-and-serial matching is exercised below
     let (c, c_error) = x509.parse(a, cert_bytes())
     if c_error != ok { os.exit(101i32) }
