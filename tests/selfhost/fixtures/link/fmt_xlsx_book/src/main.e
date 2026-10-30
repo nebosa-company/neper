@@ -9,6 +9,7 @@ use e.str
 use e.fmt.xlsx as xlsx
 use e.fmt.xlsx.book as book
 use e.fmt.ooxml as ooxml
+use e.fmt.xml as xml
 use e.fmt.zip as zip
 use e.fmt.zip.write as zipw
 
@@ -202,6 +203,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if sparse_store_error != ok { os.exit(167) }
     let (sparse, sparse_error) = book.decode(a, sparse_bytes)
     if sparse_error != book.TooLarge { os.exit(168) }
+    // Sparse far-right cells under the row cap must still fail before the
+    // decoder materializes more than its bounded dense cell budget.
+    let (issue_82_sparse_builder0, issue_82_sparse_builder_error) = str.builder(a, 0usize)
+    if issue_82_sparse_builder_error != ok { os.exit(182) }
+    var issue_82_sparse_builder = issue_82_sparse_builder0
+    if str.push(&issue_82_sparse_builder, "<worksheet><sheetData>") != ok { os.exit(183) }
+    var issue_82_sparse_row = 0usize
+    while issue_82_sparse_row < 65usize {
+        if str.push(&issue_82_sparse_builder, "<row r=\"") != ok || str.push_usize(&issue_82_sparse_builder, issue_82_sparse_row + 1usize) != ok || str.push(&issue_82_sparse_builder, "\"><c r=\"XFD") != ok || str.push_usize(&issue_82_sparse_builder, issue_82_sparse_row + 1usize) != ok || str.push(&issue_82_sparse_builder, "\"/></row>") != ok { os.exit(184) }
+        issue_82_sparse_row += 1usize
+    }
+    if str.push(&issue_82_sparse_builder, "</sheetData></worksheet>") != ok { os.exit(185) }
+    let (_, issue_82_sparse_error) = book.read_sheet(a, str.done(&issue_82_sparse_builder), zero, zero)
+    if issue_82_sparse_error != book.TooLarge { os.exit(186) }
+    // Integer formatting must range-check before narrowing a large finite f64.
+    let (issue_82_number_builder0, issue_82_number_builder_error) = str.builder(a, 0usize)
+    if issue_82_number_builder_error != ok { os.exit(187) }
+    var issue_82_number_builder = issue_82_number_builder0
+    if book.push_number(&issue_82_number_builder, 1.0e30f64) != ok { os.exit(188) }
+    if str.done(&issue_82_number_builder).len == 0usize { os.exit(189) }
+    // Serial fractions are time-only values, not fictitious 1899 calendar dates,
+    // and must survive an encode/decode cycle.
+    let issue_82_time = book.date_from_serial(0.5f64)
+    if issue_82_time.kind != .Date || issue_82_time.year != 0i64 || issue_82_time.month != 0u32 || issue_82_time.day != 0u32 || issue_82_time.hour != 12u32 || issue_82_time.minute != 0u32 || issue_82_time.second != 0u32 { os.exit(190) }
+    if !str.eq(xlsx.normalize_cell(a, issue_82_time), "12:00:00") { os.exit(191) }
+    let issue_82_time_row = [1]xlsx.Cell{ issue_82_time }
+    let issue_82_time_grid = [1][]const xlsx.Cell{ issue_82_time_row[0usize..] }
+    let issue_82_time_sheets = [1]xlsx.Sheet{ xlsx.Sheet { name: "Time", grid: issue_82_time_grid[0usize..] } }
+    let (issue_82_time_bytes, issue_82_time_encode_error) = book.encode(a, issue_82_time_sheets[0usize..], zero)
+    if issue_82_time_encode_error != ok { os.exit(192) }
+    let (issue_82_time_back, issue_82_time_decode_error) = book.decode(a, issue_82_time_bytes)
+    if issue_82_time_decode_error != ok || issue_82_time_back.len != 1usize || issue_82_time_back[0usize].grid.len != 1usize || issue_82_time_back[0usize].grid[0usize].len != 1usize { os.exit(193) }
+    let issue_82_time_cell = issue_82_time_back[0usize].grid[0usize][0usize]
+    if issue_82_time_cell.kind != .Date || issue_82_time_cell.year != 0i64 || issue_82_time_cell.month != 0u32 || issue_82_time_cell.day != 0u32 || issue_82_time_cell.hour != 12u32 || issue_82_time_cell.minute != 0u32 || issue_82_time_cell.second != 0u32 { os.exit(194) }
+    // The custom number-format lookup records all matching IDs once, including
+    // a time-only custom format alongside non-date formats.
+    let issue_82_style_xml = "<styleSheet><numFmts><numFmt numFmtId=\"164\" formatCode=\"0.00\"/><numFmt numFmtId=\"165\" formatCode=\"h:mm\"/></numFmts><cellXfs><xf numFmtId=\"165\"/><xf numFmtId=\"164\"/><xf numFmtId=\"20\"/></cellXfs></styleSheet>"
+    let (issue_82_style_doc, issue_82_style_parse_error) = xml.parse(a, issue_82_style_xml)
+    if issue_82_style_parse_error != ok { os.exit(195) }
+    let (issue_82_style_flags, issue_82_style_error) = book.date_styles(a, issue_82_style_doc.nodes)
+    if issue_82_style_error != ok || issue_82_style_flags.len != 3usize || !issue_82_style_flags[0usize] || issue_82_style_flags[1usize] || !issue_82_style_flags[2usize] { os.exit(196) }
     let (nb, nb_error) = book.decode(a, "PK\x03\x04\x14\x00\x00\x00\x00\x00\xe0\x0dL]\x86Vk\x02\x11\x00\x00\x00\x11\x00\x00\x00\x09\x00\x00\x00hello.txtno workbook here\x0aPK\x01\x02\x14\x00\x14\x00\x00\x00\x00\x00\xe0\x0dL]\x86Vk\x02\x11\x00\x00\x00\x11\x00\x00\x00\x09\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00hello.txtPK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x007\x00\x00\x008\x00\x00\x00\x00\x00")
     if nb_error != book.NoWorkbook { os.exit(78) }
     let (nj, nj_error) = book.decode(a, "\x01\x02\x03\x04\x05\x06\x07\x08")

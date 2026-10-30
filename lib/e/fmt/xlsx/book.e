@@ -49,6 +49,9 @@ type Shared = struct { slots: []u32, strings: []str, unique: usize, references: 
 const MAX_ROWS: usize = 1048576usize
 const MAX_DECODE_ROWS: usize = 65536usize
 const MAX_COLUMNS: usize = 16384usize
+// The decoder materializes rows, so keep their total allocated cell slots bounded
+// even when a sparse worksheet names far-right columns.
+const MAX_DECODE_CELLS: usize = 1048576usize
 const MAX_TEXT_POINTS: usize = 32767usize
 const MAX_NAME_POINTS: usize = 31usize
 const MAX_SHEETS: usize = 255usize
@@ -110,6 +113,9 @@ fn month_days(year: i64, month: u32) -> u32 {
 
 // The Excel day serial of a date and whether it is representable (1900-01-01 .. 9999-12-31).
 fn serial_days(year: i64, month: u32, day: u32) -> (i64, bool) {
+    // Excel serials below one are time-only values. Keep their deliberately
+    // absent date as zero components so decode can round-trip them.
+    if year == 0i64 && month == 0u32 && day == 0u32 { ret (0i64, true) }
     if year < 1900i64 || year > 9999i64 || month < 1u32 || month > 12u32 || day < 1u32 { ret (0i64, false) }
     if day > month_days(year, month) { ret (0i64, false) }
     let days = days_from_civil(year, month, day) + 25569i64
@@ -161,7 +167,7 @@ fn push_ref(b: *str.Builder, column: usize, row: usize) -> err {
 
 // A number as the shortest text that reads back: whole values without a point.
 fn push_number(b: *str.Builder, v: f64) -> err {
-    if v == f64(i64(v)) && v < 1000000000000000.0f64 && v > -1000000000000000.0f64 {
+    if v < 1000000000000000.0f64 && v > -1000000000000000.0f64 && v == f64(i64(v)) {
         ret str.push_i64(b, i64(v))
     }
     ret str.push_f64(b, v)
@@ -648,13 +654,78 @@ fn builtin_date_format(id: u64) -> bool {
 // Per cell-format index: whether the format shows a date.
 fn date_styles(a: *mem.Arena, nodes: []const xml.Node) -> ([]bool, err) {
     var xf_count = 0usize
+    var format_count = 0usize
     var i = 0usize
     while i < nodes.len {
         if is_element(nodes, i, "xf") && usize(nodes[i].parent) < nodes.len && is_element(nodes, usize(nodes[i].parent), "cellXfs") { xf_count += 1usize }
+        if is_element(nodes, i, "numFmt") {
+            let (_, has_id) = attr(&nodes[i], "numFmtId")
+            let (_, has_code) = attr(&nodes[i], "formatCode")
+            if has_id && has_code { format_count += 1usize }
+        }
         i += 1usize
     }
     let (flags, flags_error) = mem.alloc[bool](a, xf_count + 1usize)
     if flags_error != ok { ret (zero, flags_error) }
+    if format_count == 0usize {
+        i = 0usize
+        while i < xf_count {
+            flags[i] = false
+            i += 1usize
+        }
+    } else {
+        var slots_len = 1usize
+        while slots_len < format_count * 2usize { slots_len *= 2usize }
+        let (ids, ids_error) = mem.alloc[str](a, slots_len)
+        if ids_error != ok { ret (zero, ids_error) }
+        let (date_ids, date_ids_error) = mem.alloc[bool](a, slots_len)
+        if date_ids_error != ok { ret (zero, date_ids_error) }
+        i = 0usize
+        while i < slots_len {
+            ids[i] = ""
+            date_ids[i] = false
+            i += 1usize
+        }
+        let mask = slots_len - 1usize
+        i = 0usize
+        while i < nodes.len {
+            if is_element(nodes, i, "numFmt") {
+                let (format_id, has_id) = attr(&nodes[i], "numFmtId")
+                let (format_code, has_code) = attr(&nodes[i], "formatCode")
+                if has_id && has_code {
+                    var slot = usize(hash.fnv1a32(format_id)) & mask
+                    while ids[slot].len > 0usize && !str.eq(ids[slot], format_id) { slot = (slot + 1usize) & mask }
+                    if ids[slot].len == 0usize { ids[slot] = format_id }
+                    if code_is_date(format_code) { date_ids[slot] = true }
+                }
+            }
+            i += 1usize
+        }
+        var k = 0usize
+        i = 0usize
+        while i < nodes.len {
+            if is_element(nodes, i, "xf") && usize(nodes[i].parent) < nodes.len && is_element(nodes, usize(nodes[i].parent), "cellXfs") {
+                var date = false
+                let (id_text, has_id) = attr(&nodes[i], "numFmtId")
+                if has_id {
+                    let (id, id_error) = str.parse_u64(id_text)
+                    if id_error == ok {
+                        if builtin_date_format(id) {
+                            date = true
+                        } else {
+                            var slot = usize(hash.fnv1a32(id_text)) & mask
+                            while ids[slot].len > 0usize && !str.eq(ids[slot], id_text) { slot = (slot + 1usize) & mask }
+                            if ids[slot].len > 0usize { date = date_ids[slot] }
+                        }
+                    }
+                }
+                flags[k] = date
+                k += 1usize
+            }
+            i += 1usize
+        }
+        ret (flags[0usize..xf_count], ok)
+    }
     var k = 0usize
     i = 0usize
     while i < nodes.len {
@@ -665,15 +736,6 @@ fn date_styles(a: *mem.Arena, nodes: []const xml.Node) -> ([]bool, err) {
                 let (id, id_error) = str.parse_u64(id_text)
                 if id_error == ok {
                     if builtin_date_format(id) { date = true }
-                    var j = 0usize
-                    while j < nodes.len && !date {
-                        if is_element(nodes, j, "numFmt") {
-                            let (fid_text, has_fid) = attr(&nodes[j], "numFmtId")
-                            let (code, has_code) = attr(&nodes[j], "formatCode")
-                            if has_fid && has_code && str.eq(fid_text, id_text) && code_is_date(code) { date = true }
-                        }
-                        j += 1usize
-                    }
                 }
             }
             flags[k] = date
@@ -747,6 +809,9 @@ fn date_from_serial(serial: f64) -> xlsx.Cell {
         whole += 1i64
     }
     if whole == 60i64 || whole >= 2958466i64 { ret xlsx.bad_date_cell() }
+    if whole == 0i64 {
+        ret xlsx.date_cell(0i64, 0u32, 0u32, u32(seconds / 3600i64), u32((seconds / 60i64) % 60i64), u32(seconds % 60i64))
+    }
     var days = whole
     if whole < 60i64 { days = whole + 1i64 }
     let (year, month, dom) = civil_from_days(days - 25569i64)
@@ -838,6 +903,16 @@ fn read_sheet(a: *mem.Arena, part: []const u8, sst_table: []const str, dates: []
     i = 0usize
     while i < k {
         if raws[i].column + 1usize > widths[raws[i].row] { widths[raws[i].row] = raws[i].column + 1usize }
+        i += 1usize
+    }
+    // Each row allocation includes one sentinel slot. Bound those slots as well
+    // as the populated widths before materializing a sparse worksheet densely.
+    var allocated_cells = max_row
+    if allocated_cells > MAX_DECODE_CELLS { ret (zero, TooLarge) }
+    i = 0usize
+    while i < max_row {
+        if widths[i] > MAX_DECODE_CELLS - allocated_cells { ret (zero, TooLarge) }
+        allocated_cells += widths[i]
         i += 1usize
     }
     let (grid, grid_error) = mem.alloc[[]const xlsx.Cell](a, max_row)

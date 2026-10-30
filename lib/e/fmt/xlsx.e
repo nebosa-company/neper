@@ -134,9 +134,10 @@ fn pad2(a: *mem.Arena, n: u32) -> str {
 fn normalize_cell(a: *mem.Arena, c: Cell) -> str {
     if c.kind == .Empty || c.kind == .BadDate { ret "" }
     if c.kind == .Date {
+        let clock = f.join(a, f.join(a, f.join(a, pad2(a, c.hour), ":"), f.join(a, pad2(a, c.minute), ":")), pad2(a, c.second))
+        if c.year == 0i64 && c.month == 0u32 && c.day == 0u32 { ret clock }
         let day = f.join(a, f.join(a, f.join(a, f.number_text(a, f64(c.year)), "-"), f.join(a, pad2(a, c.month), "-")), pad2(a, c.day))
         if c.hour == 0u32 && c.minute == 0u32 && c.second == 0u32 { ret day }
-        let clock = f.join(a, f.join(a, f.join(a, pad2(a, c.hour), ":"), f.join(a, pad2(a, c.minute), ":")), pad2(a, c.second))
         ret f.join(a, f.join(a, day, " "), clock)
     }
     if c.kind == .Bool {
