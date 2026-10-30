@@ -1,8 +1,9 @@
 // `e.fmt.lzw`: round trips in both bit orders and at two literal widths, a 20 KB
 // stream that fills the 12-bit table and clears mid-way, the empty and one-byte
-// inputs, the width check and the output limit -- and the encoder's bytes matched by
-// length and FNV-1a against an independent Python encoder (reference.py beside
-// this fixture). Every check has its own exit code.
+// inputs, literal validation, truncation rejection, the final width transition and
+// the output limit -- and the encoder's bytes matched by length and FNV-1a against
+// an independent Python encoder (reference.py beside this fixture). Every check has
+// its own exit code.
 use e.os
 use e.mem
 use e.io
@@ -60,7 +61,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let text = "TOBEORNOTTOBEORTOBEORNOT#TOBEORNOTTOBEORTOBEORNOT"
     roundtrip(a, .LeastSignificant, 8u8, text, 10i32, 32usize, 10312578086233058210u64)
     roundtrip(a, .MostSignificant, 8u8, text, 20i32, 32usize, 16459588534279055608u64)
-    // A clean source end can accompany the last byte that completes a data code.
+    // Missing an End code is truncation, even if the preceding byte completed all
+    // data codes and the reader has already produced their output.
     let ended_text = "ABCDEFG"
     let (ended_needed, ended_needed_error) = lzw.storage_required(8u8)
     if ended_needed_error != ok { os.exit(90i32) }
@@ -84,13 +86,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var ended_reader = ended_reader0
     var ended_decoded: [16]u8 = zero
     var ended_total = 0usize
+    var ended_invalid = false
     while true {
         let (ended_count, ended_read_error) = lzw.read(&ended_reader, ended_decoded[ended_total..])
         ended_total += ended_count
-        if ended_read_error == io.End { break }
+        if ended_read_error == lzw.Invalid {
+            ended_invalid = true
+            break
+        }
         if ended_read_error != ok || ended_total > ended_text.len { os.exit(97i32) }
     }
-    if !bytes_equal(ended_decoded[..ended_total], ended_text) { os.exit(98i32) }
+    if !ended_invalid || !bytes_equal(ended_decoded[..ended_total], ended_text) { os.exit(98i32) }
+    // The same rule covers a source that ends in the middle of the End code.
+    var partial_source: io.SliceReader = zero
+    partial_source.data = ended_encoded[..ended_sink.off - 1usize]
+    let (partial_reader0, partial_reader_error) = lzw.reader(ended_reader_storage, io.slice_reader(&partial_source), .LeastSignificant, 8u8, 1048576u64)
+    if partial_reader_error != ok { os.exit(99i32) }
+    var partial_reader = partial_reader0
+    var partial_decoded: [16]u8 = zero
+    let (_, partial_error) = lzw.read(&partial_reader, partial_decoded[..])
+    if partial_error != lzw.Invalid { os.exit(100i32) }
     // GIF-style 2-bit literals: pixels 0..3.
     var pixels: [400]u8 = zero
     var i = 0usize
@@ -99,6 +114,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     roundtrip(a, .LeastSignificant, 2u8, pixels[0..], 30i32, 50usize, 11038684279154566379u64)
+    // The smallest supported alphabet retains the same code-width discipline.
+    let binary: [2]u8 = [2]u8{ 0u8, 1u8 }
+    roundtrip(a, .LeastSignificant, 1u8, binary[..], 31i32, 0usize, 0u64)
+    roundtrip(a, .MostSignificant, 1u8, binary[..], 41i32, 0usize, 0u64)
+    let one_binary: [1]u8 = [1]u8{ 1u8 }
+    roundtrip(a, .LeastSignificant, 1u8, one_binary[..], 42i32, 0usize, 0u64)
+    // A value outside the configured literal alphabet is refused before Clear or
+    // data reaches the sink.
+    let (literal_storage, literal_storage_error) = mem.alloc[u8](a, ended_needed)
+    if literal_storage_error != ok { os.exit(101i32) }
+    var literal_bytes: [16]u8 = zero
+    var literal_sink: io.SliceWriter = zero
+    literal_sink.data = literal_bytes[..]
+    let (literal_writer0, literal_writer_error) = lzw.writer(literal_storage, io.slice_writer(&literal_sink), .LeastSignificant, 2u8)
+    if literal_writer_error != ok { os.exit(102i32) }
+    var literal_writer = literal_writer0
+    let bad_literal: [1]u8 = [1]u8{ 5u8 }
+    let (literal_count, literal_error) = lzw.write(&literal_writer, bad_literal[..])
+    if literal_count != 0usize || literal_error != lzw.Invalid || literal_sink.off != 0usize { os.exit(103i32) }
+    // 255 unique literals add the entry that widens the reader immediately before
+    // End. Both bit orders must encode that End at the widened width.
+    var width_edge: [255]u8 = zero
+    i = 0usize
+    while i < width_edge.len {
+        width_edge[i] = u8(i)
+        i += 1usize
+    }
+    roundtrip(a, .LeastSignificant, 8u8, width_edge[..], 104i32, 0usize, 0u64)
+    roundtrip(a, .MostSignificant, 8u8, width_edge[..], 114i32, 0usize, 0u64)
     // Enough distinct pairs to fill the 12-bit table and force a clear mid-stream.
     let (long, long_error) = mem.alloc[u8](a, 20000usize)
     if long_error != ok { os.exit(1) }

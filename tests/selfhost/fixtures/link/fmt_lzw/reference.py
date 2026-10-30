@@ -47,6 +47,12 @@ def encode(data, width, lsb):
             current = b
     if current is not None:
         emit(current)
+        # The decoder adds its final entry before it reads End, except when
+        # current is the first literal after Clear.
+        if nxt > end + 1 and nxt < 4096:
+            nxt += 1
+            if nxt > (1 << code_width) and code_width < 12:
+                code_width += 1
     emit(end)
     if nbits > 0:
         if lsb:
@@ -62,7 +68,9 @@ long = bytearray()
 for i in range(20000):
     state = (state * 1103515245 + 12345) & 0xFFFFFFFF
     long.append((state >> 16) & 255)
+edge = bytes(range(255))
+binary = bytes((0, 1))
 import hashlib
-for name, data, width, lsb in [("text_lsb", text, 8, True), ("text_msb", text, 8, False), ("pixels", pixels, 2, True), ("long_lsb", bytes(long), 8, True), ("long_msb", bytes(long), 8, False)]:
+for name, data, width, lsb in [("text_lsb", text, 8, True), ("text_msb", text, 8, False), ("pixels", pixels, 2, True), ("binary", binary, 1, True), ("edge_lsb", edge, 8, True), ("edge_msb", edge, 8, False), ("long_lsb", bytes(long), 8, True), ("long_msb", bytes(long), 8, False)]:
     enc = encode(data, width, lsb)
     print(name, len(enc), hashlib.sha256(enc).hexdigest()[:16])
