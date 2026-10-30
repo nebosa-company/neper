@@ -59,6 +59,8 @@ const O_CREAT: usize = 512usize
 const O_EXCL: usize = 2048usize
 const O_DIRECTORY: usize = 1048576usize
 const O_CLOEXEC: usize = 16777216usize
+const F_GETFD: usize = 1usize
+const FD_CLOEXEC: usize = 1usize
 const F_GETPATH: usize = 50usize
 const DIRECTORY_MODE: usize = 511usize
 const PERMISSION_MASK: u32 = 4095u32
@@ -1347,6 +1349,7 @@ const SIGTERM: usize = 15usize
 const SPAWN_LIST_MAX: usize = 1024usize
 const EXEC_FAILED: usize = 127usize
 const POSIX_SPAWN_SETPGROUP: i16 = 2i16
+const POSIX_SPAWN_CLOEXEC_DEFAULT: i16 = 16384i16
 
 type ProcUsage = struct { exit_code: i32, peak_memory: usize }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
@@ -1479,6 +1482,9 @@ extern fn raw_spawn_actions_destroy(actions: *usize) -> i32
 @import("c", "posix_spawn_file_actions_adddup2")
 extern fn raw_spawn_actions_dup2(actions: *usize, source: i32, destination: i32) -> i32
 
+@import("c", "posix_spawn_file_actions_addinherit_np")
+extern fn raw_spawn_actions_inherit(actions: *usize, descriptor: i32) -> i32
+
 // `addchdir_np` has been in macOS since 10.15, before this target's 11.0 deployment floor.
 @import("c", "posix_spawn_file_actions_addchdir_np")
 extern fn raw_spawn_actions_chdir(actions: *usize, directory: usize) -> i32
@@ -1544,8 +1550,8 @@ fn spawn_inner(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (Proc, er
     var slot = 0usize
     while slot < 3usize {
         let wanted = stdio_raw(options.stdio, slot)
-        // A zero Stdio field leaves this child descriptor inherited. It is not a request to
-        // duplicate the parent's stdin onto stdout or stderr.
+        // CLOEXEC_DEFAULT makes file actions the child's descriptor allowlist. Preserve an
+        // untouched standard descriptor only when it was inheritable before this spawn.
         if wanted != 0usize && wanted != slot {
             let bound = raw_spawn_actions_dup2(&actions, i32(wanted), i32(slot))
             if bound != 0i32 {
@@ -1553,8 +1559,37 @@ fn spawn_inner(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (Proc, er
                 let ignored = raw_spawn_actions_destroy(&actions)
                 ret (child, failure)
             }
+        } else {
+            let descriptor_flags = syscall(SYS_FCNTL, slot, F_GETFD, 0usize, 0usize, 0usize, 0usize)
+            if descriptor_flags < 0isize {
+                // A closed standard descriptor stays closed, as it did before CLOEXEC_DEFAULT.
+                if descriptor_flags != -9isize {
+                    let failure = from_errno(descriptor_flags)
+                    let ignored = raw_spawn_actions_destroy(&actions)
+                    ret (child, failure)
+                }
+            } else if usize(descriptor_flags) & FD_CLOEXEC == 0usize {
+                let inherit_result = raw_spawn_actions_inherit(&actions, i32(slot))
+                if inherit_result != 0i32 {
+                    let failure = from_spawn_status(inherit_result)
+                    let ignored = raw_spawn_actions_destroy(&actions)
+                    ret (child, failure)
+                }
+            }
         }
         slot += 1usize
+    }
+
+    var inherit_at = 0usize
+    while inherit_at < options.stdio.inherit.len {
+        let handle = options.stdio.inherit[inherit_at]
+        let inherit_result = raw_spawn_actions_inherit(&actions, i32(handle.raw))
+        if inherit_result != 0i32 {
+            let failure = from_spawn_status(inherit_result)
+            let ignored = raw_spawn_actions_destroy(&actions)
+            ret (child, failure)
+        }
+        inherit_at += 1usize
     }
 
     var attributes = 0usize
@@ -1564,14 +1599,16 @@ fn spawn_inner(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (Proc, er
         let ignored = raw_spawn_actions_destroy(&actions)
         ret (child, failure)
     }
+    var spawn_flags = POSIX_SPAWN_CLOEXEC_DEFAULT
+    if grouped { spawn_flags = spawn_flags | POSIX_SPAWN_SETPGROUP }
+    let flags = raw_spawn_attributes_flags(&attributes, spawn_flags)
+    if flags != 0i32 {
+        let failure = from_spawn_status(flags)
+        let ignored_attributes = raw_spawn_attributes_destroy(&attributes)
+        let ignored_actions = raw_spawn_actions_destroy(&actions)
+        ret (child, failure)
+    }
     if grouped {
-        let flags = raw_spawn_attributes_flags(&attributes, POSIX_SPAWN_SETPGROUP)
-        if flags != 0i32 {
-            let failure = from_spawn_status(flags)
-            let ignored_attributes = raw_spawn_attributes_destroy(&attributes)
-            let ignored_actions = raw_spawn_actions_destroy(&actions)
-            ret (child, failure)
-        }
         let group = raw_spawn_attributes_pgroup(&attributes, 0i32)
         if group != 0i32 {
             let failure = from_spawn_status(group)
@@ -1628,7 +1665,8 @@ fn kill(p: Proc) -> err {
 }
 
 // pipe(2) answers with two descriptors; the runtime's syscall stores them to the slots the
-// first argument names. macOS has no pipe2, so they are not close-on-exec.
+// first argument names. macOS has no pipe2, so fcntl marks them after creation. Spawn attributes
+// use CLOEXEC_DEFAULT so a concurrent posix_spawn cannot inherit either descriptor in that window.
 fn pipe() -> (File, File, err) {
     var reading: File = zero
     var writing: File = zero
@@ -1637,12 +1675,24 @@ fn pipe() -> (File, File, err) {
     if result < 0isize { ret (reading, writing, from_errno(result)) }
     reading.raw = usize(pair[0usize])
     writing.raw = usize(pair[1usize])
-    // Close-on-exec as on Linux (pipe2 there): a child must not hold the other end of its own pipe, or its stdin
-    // never reaches end of file. macOS has no pipe2, so it is a second call, and a fork between them can leak.
     let marked_read = syscall(SYS_FCNTL, reading.raw, F_SETFD, 1usize, 0usize, 0usize, 0usize)
-    if marked_read < 0isize { ret (reading, writing, from_errno(marked_read)) }
+    if marked_read < 0isize {
+        let failure = from_errno(marked_read)
+        let ignored_read = syscall(SYS_CLOSE, reading.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        let ignored_write = syscall(SYS_CLOSE, writing.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        reading.raw = 0usize
+        writing.raw = 0usize
+        ret (reading, writing, failure)
+    }
     let marked_write = syscall(SYS_FCNTL, writing.raw, F_SETFD, 1usize, 0usize, 0usize, 0usize)
-    if marked_write < 0isize { ret (reading, writing, from_errno(marked_write)) }
+    if marked_write < 0isize {
+        let failure = from_errno(marked_write)
+        let ignored_read = syscall(SYS_CLOSE, reading.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        let ignored_write = syscall(SYS_CLOSE, writing.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        reading.raw = 0usize
+        writing.raw = 0usize
+        ret (reading, writing, failure)
+    }
     ret (reading, writing, ok)
 }
 
@@ -1988,10 +2038,13 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
 
 // A descriptor that is close-on-exec and never raises SIGPIPE: Darwin's socket and accept take
 // no flags for either, so both are set after the fact.
-fn socket_prepare(descriptor: usize) {
+fn socket_prepare(descriptor: usize) -> err {
     let marked = syscall(SYS_FCNTL, descriptor, F_SETFD, 1usize, 0usize, 0usize, 0usize)
+    if marked < 0isize { ret from_errno(marked) }
     var on: i32 = 1i32
     let quiet = syscall(SYS_SETSOCKOPT, descriptor, SOL_SOCKET, SO_NOSIGPIPE, mem.address_of(&on), 4usize, 0usize)
+    if quiet < 0isize { ret from_errno(quiet) }
+    ret ok
 }
 
 fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
@@ -2000,7 +2053,11 @@ fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
     if kind == .Datagram { type_bits = SOCK_DGRAM }
     let descriptor = syscall(SYS_SOCKET, family_value(family), type_bits, 0usize, 0usize, 0usize, 0usize)
     if descriptor < 0isize { ret (socket, from_errno(descriptor)) }
-    socket_prepare(usize(descriptor))
+    let prepare_error = socket_prepare(usize(descriptor))
+    if prepare_error != ok {
+        let ignored = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (socket, prepare_error)
+    }
     socket.raw = usize(descriptor)
     ret (socket, ok)
 }
@@ -2068,7 +2125,11 @@ fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
     var length = u32(RAW_IP6_SIZE)
     let descriptor = syscall(SYS_ACCEPT, s.raw, mem.address_of(&raw), mem.address_of(&length), 0usize, 0usize, 0usize)
     if descriptor < 0isize { ret (accepted, peer, from_errno(descriptor)) }
-    socket_prepare(usize(descriptor))
+    let prepare_error = socket_prepare(usize(descriptor))
+    if prepare_error != ok {
+        let ignored = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (accepted, peer, prepare_error)
+    }
     accepted.raw = usize(descriptor)
     ret (accepted, decode_address(raw), ok)
 }
