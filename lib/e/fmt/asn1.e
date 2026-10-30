@@ -121,23 +121,27 @@ fn is_universal(value: Value, number: u32, constructed: bool) -> bool {
     ret value.tag.class == .Universal && value.tag.number == number && value.tag.constructed == constructed
 }
 
-// A DER INTEGER as a signed 64-bit value; minimal encoding required.
-fn integer_of(value: Value) -> (i64, err) {
+// A DER INTEGER as either a signed value or the leading-zero form of an unsigned u64;
+// minimal encoding is required in both cases.
+fn integer_of(value: Value) -> (i64, u64, bool, err) {
     let c = value.content
-    if c.len == 0usize { ret (0i64, NonCanonical) }
+    if c.len == 0usize { ret (0i64, 0u64, true, NonCanonical) }
     if c.len > 1usize {
-        if c[0] == 0u8 && c[1] & 128u8 == 0u8 { ret (0i64, NonCanonical) }
-        if c[0] == 255u8 && c[1] & 128u8 != 0u8 { ret (0i64, NonCanonical) }
+        if c[0] == 0u8 && c[1] & 128u8 == 0u8 { ret (0i64, 0u64, true, NonCanonical) }
+        if c[0] == 255u8 && c[1] & 128u8 != 0u8 { ret (0i64, 0u64, true, NonCanonical) }
     }
-    if c.len > 8usize { ret (0i64, TooLarge) }
+    if c.len > 9usize || (c.len == 9usize && (c[0usize] != 0u8 || c[1usize] & 128u8 == 0u8)) { ret (0i64, 0u64, true, TooLarge) }
     var acc = 0u64
-    if c[0] & 128u8 != 0u8 { acc = 18446744073709551615u64 }
+    var signed = c.len != 9usize
+    if signed && c[0] & 128u8 != 0u8 { acc = 18446744073709551615u64 }
     var i = 0usize
+    if !signed { i = 1usize }
     while i < c.len {
         acc = (acc << 8u32) | u64(c[i])
         i += 1usize
     }
-    ret (mem.bitcast[i64](acc), ok)
+    if signed { ret (mem.bitcast[i64](acc), 0u64, true, ok) }
+    ret (0i64, acc, false, ok)
 }
 
 // Decide the target range before narrowing an INTEGER: direct casts trap in debug and wrap in
@@ -213,9 +217,9 @@ fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err
         } else {
         if meta.kind[f.ty]() == .Int {
             if !is_universal(field, 2u32, false) { ret (out, Invalid) }
-            let (number, number_error) = integer_of(field)
+            let (signed, unsigned, is_signed, number_error) = integer_of(field)
             if number_error != ok { ret (out, number_error) }
-            let (slot, slot_error) = integer_into[f.ty](number, 0u64, true)
+            let (slot, slot_error) = integer_into[f.ty](signed, unsigned, is_signed)
             if slot_error != ok { ret (out, slot_error) }
             meta.set[f, T](&out, slot)
         } else {
@@ -241,6 +245,37 @@ fn integer_len(value: i64) -> usize {
     ret count
 }
 
+// The minimal positive INTEGER byte count for an unsigned value. A leading zero
+// keeps the high bit from making the DER value negative.
+fn unsigned_integer_len(value: u64) -> usize {
+    var count = 1usize
+    var remaining = value >> 8u32
+    while remaining > 0u64 {
+        remaining = remaining >> 8u32
+        count += 1usize
+    }
+    if (value >> u32((count - 1usize) * 8usize)) & 128u64 != 0u64 { count += 1usize }
+    ret count
+}
+
+fn put_unsigned_integer(dst: []u8, at: usize, value: u64) -> usize {
+    let count = unsigned_integer_len(value)
+    var out = at
+    var bytes = count
+    if count == 9usize {
+        dst[out] = 0u8
+        out += 1usize
+        bytes = 8usize
+    }
+    var i = bytes
+    while i > 0usize {
+        i -= 1usize
+        dst[out] = u8((value >> u32(i * 8usize)) & 255u64)
+        out += 1usize
+    }
+    ret out
+}
+
 fn length_len(length: usize) -> usize {
     if length < 128usize { ret 1usize }
     var count = 1usize
@@ -264,7 +299,11 @@ fn contents_len[T: type](value: *const T) -> usize {
         if meta.kind[f.ty]() == .Bool {
             content = 1usize
         } else {
+        if meta.signed[f.ty]() {
             content = integer_len(i64(slot))
+        } else {
+            content = unsigned_integer_len(u64(slot))
+        }
         }
         }
         total += 1usize + length_len(content) + content
@@ -331,14 +370,20 @@ fn encode[T: type](dst: []u8, value: *const T) -> ([]u8, err) {
             if slot { dst[at] = 255u8 } else { dst[at] = 0u8 }
             at += 1usize
         } else {
-            let number = i64(slot)
-            let count = integer_len(number)
-            at = put_header(dst, at, 2u8, count)
-            var i = count
-            while i > 0usize {
-                i -= 1usize
-                dst[at] = u8((number >> u32(i * 8usize)) & 255i64)
-                at += 1usize
+            if meta.signed[f.ty]() {
+                let number = i64(slot)
+                let count = integer_len(number)
+                at = put_header(dst, at, 2u8, count)
+                var i = count
+                while i > 0usize {
+                    i -= 1usize
+                    dst[at] = u8((number >> u32(i * 8usize)) & 255i64)
+                    at += 1usize
+                }
+            } else {
+                let number = u64(slot)
+                at = put_header(dst, at, 2u8, unsigned_integer_len(number))
+                at = put_unsigned_integer(dst, at, number)
             }
         }
         }
@@ -535,8 +580,8 @@ fn bytes_less(x: []const u8, y: []const u8) -> bool {
 
 // The encodings in `dst[start..end]` sorted as octet strings (X.690 11.6), which is the DER
 // order of a SET OF and, for single-byte tags, the tag order of a SET as well.
-// ponytail: a bubble sort that re-walks the members with the reader after every swap, so it is
-// O(n^2) walks; a SET is a few members long and this keeps the caller's storage the only storage.
+// Bubble-sort passes keep the reader moving after each adjacent swap, so each pass walks each
+// member once. This is O(n^2) walks rather than restarting the walk for every inversion.
 fn sort_set(dst: []u8, start: usize, end: usize) {
     var swapped = true
     while swapped {
@@ -551,15 +596,20 @@ fn sort_set(dst: []u8, start: usize, end: usize) {
             let member_end = start + r.off
             let member_start = member_end - member.encoded.len
             if has_previous && bytes_less(dst[member_start..member_end], dst[previous_start..previous_end]) {
+                let member_len = member_end - member_start
                 reverse_bytes(dst, previous_start, previous_end)
                 reverse_bytes(dst, member_start, member_end)
                 reverse_bytes(dst, previous_start, member_end)
+                // The larger prior member has moved right. Keep it as the comparison
+                // predecessor so this pass bubbles it forward instead of restarting.
+                previous_start += member_len
+                previous_end = member_end
                 swapped = true
-                break
+            } else {
+                previous_start = member_start
+                previous_end = member_end
             }
             has_previous = true
-            previous_start = member_start
-            previous_end = member_end
         }
     }
 }

@@ -11,6 +11,7 @@ type Record = struct { count: i32, flag: bool, name: str, delta: i64 }
 type Wide = struct { data: []const u8 }
 type NarrowSigned = struct { value: i8 }
 type NarrowUnsigned = struct { value: u8 }
+type WideUnsigned = struct { value: u64 }
 
 fn same(a: []const u8, b: []const u8) -> bool {
     if a.len != b.len { ret false }
@@ -84,6 +85,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if wide_encoded[1] != 129u8 || wide_encoded[2] != 203u8 || wide_encoded[4] != 129u8 || wide_encoded[5] != 200u8 { os.exit(18) }
     let (wide_back, e13) = asn1.decode[Wide](a, wide_encoded, 4u16)
     if e13 != ok || wide_back.data.len != 200usize || wide_back.data[199] != 199u8 { os.exit(19) }
+    // An unsigned u64 above i64::MAX has a leading zero in DER so it stays
+    // positive, and must round-trip through the typed codec unchanged.
+    let largest_unsigned = WideUnsigned { value: 18446744073709551615u64 }
+    let largest_unsigned_want: [13]u8 = [13]u8{ 48u8, 11u8, 2u8, 9u8, 0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8 }
+    var largest_unsigned_out: [32]u8 = zero
+    let (largest_unsigned_der, largest_unsigned_error) = asn1.encode[WideUnsigned](largest_unsigned_out[..], &largest_unsigned)
+    if largest_unsigned_error != ok || !same(largest_unsigned_der, largest_unsigned_want[..]) { os.exit(47) }
+    let (largest_unsigned_back, largest_unsigned_back_error) = asn1.decode[WideUnsigned](a, largest_unsigned_der, 4u16)
+    if largest_unsigned_back_error != ok || largest_unsigned_back.value != largest_unsigned.value { os.exit(48) }
     // The first OBJECT IDENTIFIER subidentifier can exceed u32 even though every exposed arc
     // fits in u32. It must round-trip rather than wrapping to a different OID.
     let huge_arcs: [2]u32 = [2]u32{ 2u32, 4294967295u32 }
@@ -135,6 +145,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     default:
         os.exit(39)
     }
+    // A reversed 256-member SET exercises repeated adjacent movement. Each pass
+    // must keep scanning after a swap; DER output is lexicographically sorted.
+    var reverse_members: [256]asn1.Item = zero
+    var reverse_index = 0usize
+    while reverse_index < reverse_members.len {
+        reverse_members[reverse_index] = asn1.Item{ Integer: i64(255usize - reverse_index) }
+        reverse_index += 1usize
+    }
+    let reverse_set = asn1.Item{ Set: reverse_members[..] }
+    var reverse_set_out: [1024]u8 = zero
+    let (reverse_set_der, reverse_set_error) = asn1.der_encode(reverse_set_out[..], &reverse_set)
+    if reverse_set_error != ok { os.exit(49) }
+    var reverse_set_reader = asn1.reader(reverse_set_der, 4u16)
+    let (reverse_set_value, reverse_set_present, reverse_set_read_error) = asn1.reader_next_err(&reverse_set_reader)
+    if reverse_set_read_error != ok || !reverse_set_present || reverse_set_value.tag.number != 17u32 { os.exit(50) }
+    let (reverse_set_children0, reverse_set_children_error) = asn1.children(reverse_set_value, 4u16)
+    if reverse_set_children_error != ok { os.exit(51) }
+    var reverse_set_children = reverse_set_children0
+    reverse_index = 0usize
+    while reverse_index < reverse_members.len {
+        let (member, member_present, member_error) = asn1.reader_next_err(&reverse_set_children)
+        if member_error != ok || !member_present || member.tag.number != 2u32 { os.exit(52) }
+        var decoded_number = 0usize
+        var byte_index = 0usize
+        while byte_index < member.content.len {
+            decoded_number = (decoded_number << 8u32) | usize(member.content[byte_index])
+            byte_index += 1usize
+        }
+        if decoded_number != reverse_index { os.exit(53) }
+        reverse_index += 1usize
+    }
+    let (reverse_set_extra, reverse_set_has_extra, reverse_set_extra_error) = asn1.reader_next_err(&reverse_set_children)
+    if reverse_set_extra_error != ok || reverse_set_has_extra { os.exit(54) }
     // Refusals.
     let long_zero: [4]u8 = [4]u8{ 4, 129, 2, 104 }
     var r2 = asn1.reader(long_zero[0..], 4u16)
