@@ -18,6 +18,10 @@ fn fake_egl_make_current(display: usize, draw: usize, read: usize, context_value
     ret 1u32
 }
 
+fn fake_egl_initialize(display: usize) -> u32 {
+    ret 1u32
+}
+
 fn fake_egl_destroy_surface(display: usize, surface: usize) -> u32 {
     counts.surface += 1usize
     ret 1u32
@@ -62,6 +66,7 @@ fn check_egl() -> i32 {
         destroy_context: fake_egl_destroy_context,
         terminate: fake_egl_terminate,
     }
+    if eglcontext.initialize_with(11usize, fake_egl_initialize) != ok { ret 10i32 }
     eglcontext.release_with(&partial, releaser)
     if counts.unbound != 1usize || counts.surface != 1usize || counts.egl_contexts != 1usize || counts.terminated != 1usize { ret 1i32 }
     if partial.display != egl.NO_DISPLAY || partial.config != 0usize || partial.context != egl.NO_CONTEXT || partial.surface != egl.NO_SURFACE || partial.initialized || partial.live { ret 2i32 }

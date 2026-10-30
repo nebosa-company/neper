@@ -3703,6 +3703,12 @@ $khronosLoadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $khronosLoadWritten -ne 'executable written') { throw 'x.khronos.gl loader fixture emission failed' }
 & $khronosLoadPath
 if ($LASTEXITCODE -ne 0) { throw "the GL loader answered wrongly: exit $LASTEXITCODE" }
+# The EGL mock fixture checks pbuffer config compatibility and shared display lifetime without a driver.
+$khronosEglMockPath = Join-Path $testBuild 'x-khronos-egl-context-mock-selfhost.exe'
+$khronosEglMockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_egl_context_mock\src\main.e') $repo 'x64' 'windows' $khronosEglMockPath
+if ($LASTEXITCODE -ne 0 -or $khronosEglMockWritten -ne 'executable written') { throw 'x_khronos_egl_context_mock emission failed' }
+& $khronosEglMockPath
+if ($LASTEXITCODE -ne 0) { throw "the EGL mock regressions answered wrongly: exit $LASTEXITCODE" }
 # Partial EGL/WGL construction unwinds display, context, surface, HDC and hidden-window state through injected releasers.
 $khronosCleanupPath = Join-Path $testBuild 'x-khronos-context-cleanup-selfhost.exe'
 $khronosCleanupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_context_cleanup\src\main.e') $repo 'x64' 'windows' $khronosCleanupPath

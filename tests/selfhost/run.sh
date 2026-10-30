@@ -3289,6 +3289,11 @@ khronos_load_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$khronos_load_written" = 'executable written' ]
 chmod +x "$test_build/x-khronos-gl-load-selfhost"
 "$test_build/x-khronos-gl-load-selfhost"
+# The EGL mock fixture checks pbuffer config compatibility and shared display lifetime without a driver.
+khronos_egl_mock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_egl_context_mock/src/main.e" "$repo" x64 linux "$test_build/x-khronos-egl-context-mock-selfhost")
+[ "$khronos_egl_mock_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-egl-context-mock-selfhost"
+"$test_build/x-khronos-egl-context-mock-selfhost"
 # `x.khronos.context` (D5880, D5886): headless GL 3.3/4.3 and GLES 3.0/3.1 on Mesa's surfaceless
 # EGL, drawn, read back (llvmpipe's whole image against its golden hash) and computed on; then a
 # context on an os window through a second Xlib connection; then examples/gl_triangle for 3
