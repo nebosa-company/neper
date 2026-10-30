@@ -30,6 +30,16 @@ try {
     '36893488147419107328 36893488147419099136 36893488147419099136',
     'total, free, and used bytes preserve u64 precision',
   )
+  data.fill(0xa5, 1024, 1056)
+  const ipv6 = Buffer.from('::1')
+  data.set(ipv6, 128)
+  assert.equal(await host.resolve(ipv6.length, 443, 1, 1), 0, 'the IPv6 lookup succeeds')
+  const ipv4 = Buffer.from('127.0.0.1')
+  data.set(ipv4, 128)
+  assert.equal(await host.resolve(ipv4.length, 443, 0, 1), 0, 'the IPv4 lookup succeeds')
+  assert.equal(data[1024], 0, 'the reused record is IPv4')
+  assert.deepEqual([...data.subarray(1032, 1036)], [127, 0, 0, 1], 'the IPv4 bytes replace the IPv6 address')
+  for (let at = 1036; at < 1056; at++) assert.equal(data[at], 0, 'the IPv4 tail and record padding are cleared')
 } finally {
   context.preopens = savedPreopens
   host.closeAll()
