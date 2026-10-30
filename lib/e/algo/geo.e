@@ -170,8 +170,10 @@ fn s2_level(id: u64) -> u32 {
 
 fn s2_face(id: u64) -> u32 { ret u32(id >> 61u32) }
 
-// The ancestor at `level` (which must not exceed the id's own level).
+// The ancestor at `level`; a level above the S2 maximum answers the invalid
+// zero cell instead of underflowing the shift count.
 fn s2_parent(id: u64, level: u32) -> u64 {
+    if level > max_level() { ret 0u64 }
     let new_lsb = 1u64 << (2u32 * (max_level() - level))
     ret (id & (0u64 -% new_lsb)) | new_lsb
 }
@@ -272,7 +274,11 @@ fn haversine_m(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
     let p2 = radians(lat2)
     let sdp = math.sin[f64]((p2 - p1) / 2.0f64)
     let sdl = math.sin[f64](radians(lng2 - lng1) / 2.0f64)
-    let a = sdp * sdp + math.cos[f64](p1) * math.cos[f64](p2) * sdl * sdl
+    var a = sdp * sdp + math.cos[f64](p1) * math.cos[f64](p2) * sdl * sdl
+    // Rounding can nudge an antipodal result just outside the mathematical
+    // [0, 1] interval, which would otherwise take sqrt of a negative value.
+    if a < 0.0f64 { a = 0.0f64 }
+    if a > 1.0f64 { a = 1.0f64 }
     ret 2.0f64 * earth_radius_m() * math.atan2[f64](math.sqrt[f64](a), math.sqrt[f64](1.0f64 - a))
 }
 

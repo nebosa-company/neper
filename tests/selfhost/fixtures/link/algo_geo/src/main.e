@@ -32,14 +32,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (checked_london, checked_error) = geo.s2_cell_checked(51.5074f64, -0.1278f64, 30u32)
     let (bad_lat, bad_lat_error) = geo.s2_cell_checked(100.0f64, 0.0f64, 30u32)
     let (bad_lng, bad_lng_error) = geo.s2_cell_checked(0.0f64, 181.0f64, 30u32)
+    let (bad_level, bad_level_error) = geo.s2_cell_checked(0.0f64, 0.0f64, 31u32)
     let nan = mem.bitcast[f64](9221120237041090560u64)
     let (bad_nan, bad_nan_error) = geo.s2_cell_checked(nan, 0.0f64, 30u32)
-    if checked_error != ok || checked_london != ids[12usize] || bad_lat != 0u64 || bad_lng != 0u64 || bad_nan != 0u64 || bad_lat_error != geo.Invalid || bad_lng_error != geo.Invalid || bad_nan_error != geo.Invalid || geo.s2_cell(100.0f64, 0.0f64, 30u32) != 0u64 { os.exit(1i32) }
+    if checked_error != ok || checked_london != ids[12usize] || bad_lat != 0u64 || bad_lng != 0u64 || bad_level != 0u64 || bad_nan != 0u64 || bad_lat_error != geo.Invalid || bad_lng_error != geo.Invalid || bad_level_error != geo.Invalid || bad_nan_error != geo.Invalid || geo.s2_cell(100.0f64, 0.0f64, 30u32) != 0u64 || geo.s2_cell(0.0f64, 0.0f64, 31u32) != 0u64 { os.exit(1i32) }
 
     // 2: level, face, parent, children, contains, range of London at level 10.
     let london = ids[14usize]
     if london != 5221366315540807680u64 || geo.s2_level(london) != 10u32 || geo.s2_face(london) != 2u32 { os.exit(2i32) }
     if geo.s2_parent(london, 4u32) != 5219671968122404864u64 { os.exit(2i32) }
+    if geo.s2_parent(london, 31u32) != 0u64 { os.exit(2i32) }
     if geo.s2_parent(ids[12usize], 10u32) != london { os.exit(2i32) }
     var kids: [4]u64 = zero
     geo.s2_children(london, kids[..])
@@ -94,6 +96,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 6: haversine and bearing London-Paris.
     let d = geo.haversine_m(51.5074f64, -0.1278f64, 48.8566f64, 2.3522f64)
     if !close(d, 343556.5348808832f64, 1.0f64) { os.exit(6i32) }
+    let antipodal = geo.haversine_m(-45.0f64, 0.0f64, 45.0f64, 180.0f64)
+    if antipodal != antipodal || !close(antipodal, geo.earth_radius_m() * 3.141592653589793f64, 1.0f64) { os.exit(6i32) }
     if !close(geo.bearing_deg(51.5074f64, -0.1278f64, 48.8566f64, 2.3522f64), 148.11561687105336f64, 1.0e-9f64) { os.exit(6i32) }
 
     try io.print("algo geo ok\n")
