@@ -105,18 +105,28 @@ fn beam_insert(ids: []u32, dists: []f64, count: usize, cap: usize, candidate: u3
 // those link back while they have room. `scratch` needs `4 ef + n` floats
 // and `visited.len >= n`.
 fn graph_build(a: *mem.Arena, x: []const f64, n: usize, d: usize, m: usize, ef: usize, scratch: []f64, visited: []u32) -> (Graph, err) {
-    if x.len < n * d || scratch.len < 4usize * ef + n || visited.len < n { ret (zero, TooSmall) }
     if n == 0usize || m == 0usize || ef == 0usize || n > 4000000000usize { ret (zero, Invalid) }
+    let maximum = 0usize -% 1usize
+    if d != 0usize && n > maximum / d { ret (zero, Invalid) }
+    if ef > (maximum - n) / 4usize || m > maximum / 2usize { ret (zero, Invalid) }
+    let values = n * d
+    let scratch_needed = 4usize * ef + n
+    let links_per_point = 2usize * m
+    if n > maximum / links_per_point { ret (zero, Invalid) }
+    let neighbour_slots = n * links_per_point
+    // Base offsets are retained as u32 in Graph.
+    if n > 1usize && n - 1usize > 4294967295usize / links_per_point { ret (zero, Invalid) }
+    if x.len < values || scratch.len < scratch_needed || visited.len < n { ret (zero, TooSmall) }
     let (first, first_error) = mem.alloc[u32](a, n)
     if first_error != ok { ret (zero, first_error) }
     let (count, count_error) = mem.alloc[u32](a, n)
     if count_error != ok { ret (zero, count_error) }
-    let (neighbours, neighbours_error) = mem.alloc[u32](a, n * 2usize * m)
+    let (neighbours, neighbours_error) = mem.alloc[u32](a, neighbour_slots)
     if neighbours_error != ok { ret (zero, neighbours_error) }
     var g = Graph { first: first, count: count, neighbours: neighbours, m: m, n: 0usize }
     var i = 0usize
     while i < n {
-        first[i] = u32(i * 2usize * m)
+        first[i] = u32(i * links_per_point)
         count[i] = 0u32
         i += 1usize
     }

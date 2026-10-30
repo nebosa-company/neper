@@ -49,6 +49,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var scratch: [256]f64 = zero
     var visited: [40]u32 = zero
+    let maximum = 0usize -% 1usize
+    let (_, maximum_m_error) = ann.graph_build(a, cloud[..1usize], 1usize, 1usize, maximum, 1usize, scratch[..5usize], visited[..1usize])
+    if maximum_m_error != ann.Invalid { os.exit(2i32) }
+    let (_, maximum_ef_error) = ann.graph_build(a, cloud[..1usize], 1usize, 1usize, 1usize, maximum, scratch[..0usize], visited[..1usize])
+    if maximum_ef_error != ann.Invalid { os.exit(2i32) }
     let (g, build_error) = ann.graph_build(a, cloud[..], 40usize, 2usize, 5usize, 12usize, scratch[..], visited[..])
     if build_error != ok || g.n != 40usize { os.exit(2i32) }
     var ids: [12]f64 = zero
@@ -145,7 +150,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if train_invalid != ann.Invalid { os.exit(3i32) }
 
     // 4: constructor geometry must fail before any overflow or allocation.
-    let maximum = 18446744073709551615usize
     let (_, maximum_level_error) = ann.hnsw(a, 1usize, 1usize, 1usize, maximum)
     if maximum_level_error != ann.Invalid { os.exit(4i32) }
     let (_, near_maximum_level_error) = ann.hnsw(a, 1usize, 1usize, 1usize, maximum - 1usize)
