@@ -580,8 +580,8 @@ fn parse_private_key(der: []const u8) -> (sign.Ed25519SecretKey, err) {
     var parts = parts0
     let (version, has_version, version_error) = asn1.reader_next_err(&parts)
     if version_error != ok || !has_version || !asn1.is_universal(version, 2u32, false) { ret (out, InvalidCertificate) }
-    let (version_number, integer_error) = asn1.integer_of(version)
-    if integer_error != ok || version_number != 0i64 { ret (out, InvalidCertificate) }
+    let (version_number, _, version_signed, integer_error) = asn1.integer_of(version)
+    if integer_error != ok || !version_signed || version_number != 0i64 { ret (out, InvalidCertificate) }
     let (algorithm, has_algorithm, algorithm_error) = asn1.reader_next_err(&parts)
     if algorithm_error != ok || !has_algorithm || !asn1.is_universal(algorithm, 16u32, true) { ret (out, InvalidCertificate) }
     let (algorithm_parts0, algorithm_parts_error) = asn1.children(algorithm, 8u16)

@@ -446,8 +446,8 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
                     }
                     if has_constraint {
                         if constraint.tag.class != .Universal || constraint.tag.number != 2u32 || constraint.tag.constructed { ret (zero, InvalidCertificate) }
-                        let (distance, distance_error) = asn1.integer_of(constraint)
-                        if distance_error != ok || distance < 0i64 || distance > 65535i64 || !certificate.is_ca { ret (zero, InvalidCertificate) }
+                        let (distance, _, distance_signed, distance_error) = asn1.integer_of(constraint)
+                        if distance_error != ok || !distance_signed || distance < 0i64 || distance > 65535i64 || !certificate.is_ca { ret (zero, InvalidCertificate) }
                         certificate.has_path_len = true
                         certificate.path_len = u16(distance)
                         let (_, has_constraint_tail, constraint_tail_error) = asn1.reader_next_err(&flags)
