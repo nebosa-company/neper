@@ -70,6 +70,27 @@ fn host_style() -> path.Style {
     ret .Posix
 }
 
+// `e.os` checks this before every rooted operation, but `make_dirs_at` has to know it
+// before it creates its first parent. Keep the host spelling rules here so normalising
+// a later `..` cannot turn an unsafe input into a different, apparently safe path.
+fn rooted_relative_path_ok(path_text: str, style: path.Style) -> bool {
+    if path_text.len == 0usize { ret false }
+    if path.root_length(path_text, style) != 0usize { ret false }
+    if style == .Windows && path_text.len >= 2usize && path_text[1usize] == 58u8 { ret false }
+    var start = 0usize
+    var at = 0usize
+    while at < path_text.len {
+        if path_text[at] == 0u8 { ret false }
+        if path.is_separator(path_text[at], style) {
+            if at == start + 2usize && path_text[start] == 46u8 && path_text[start + 1usize] == 46u8 { ret false }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    if at == start + 2usize && path_text[start] == 46u8 && path_text[start + 1usize] == 46u8 { ret false }
+    ret true
+}
+
 fn same_path(left: str, right: str) -> bool {
     if left.len != right.len { ret false }
     var at = 0usize
@@ -353,17 +374,29 @@ fn stat_at(a: *mem.Arena, r: *const Root, relative_path: str) -> (Entry, err) {
     ret (entry, ok)
 }
 
-// Create each parent relative to the already opened root. An existing component is left
-// for the final rooted open to validate; no path joined to the root is checked and reused.
+// Validate and normalise before creating any parent. An existing component is left for
+// the final rooted open to validate; no path joined to the root is checked and reused.
 fn make_dirs_at(a: *mem.Arena, r: *const Root, relative_path: str) -> err {
+    let style = host_style()
+    if !rooted_relative_path_ok(relative_path, style) { ret Denied }
+    let checkpoint = mem.mark(a)
+    let (normalized, normalize_error) = path.normalize(a, relative_path, style)
+    if normalize_error != ok {
+        mem.reset(a, checkpoint)
+        ret normalize_error
+    }
     var at = 0usize
-    while at <= relative_path.len {
-        if at == relative_path.len || relative_path[at] == 47u8 {
-            let step_error = os.mkdir_at(a, r.dir, relative_path[0usize..at])
-            if step_error != ok && step_error != os.Exists { ret from_os(step_error) }
+    while at <= normalized.len {
+        if at == normalized.len || path.is_separator(normalized[at], style) {
+            let step_error = os.mkdir_at(a, r.dir, normalized[0usize..at])
+            if step_error != ok && step_error != os.Exists {
+                mem.reset(a, checkpoint)
+                ret from_os(step_error)
+            }
         }
         at += 1usize
     }
+    mem.reset(a, checkpoint)
     ret ok
 }
 
