@@ -361,6 +361,18 @@ fn issue_1571_regressions(a: *mem.Arena) -> err {
     if c1_error != ok || !str.eq(text_of(c1_again, 532i32), "\xc2\x80") { os.exit(533i32) }
     let (_, raw_c1_error) = yaml.parse(a, "x: \"\xc2\x80\"\n", options(4u16, false))
     if raw_c1_error != yaml.Invalid { os.exit(534i32) }
+
+    // Line breaks are YAML-printable but cannot be emitted as an unquoted plain
+    // scalar: quote them and preserve the parser round trip.
+    var line_break_value = yaml.Value { String: "one\ntwo" }
+    var line_break_output: [32]u8 = zero
+    var line_break_state = io.SliceWriter { data: line_break_output[..], off: 0usize }
+    var line_break_sink = io.slice_writer(&line_break_state)
+    if yaml.write(&line_break_sink, &line_break_value, 2u8) != ok { os.exit(536i32) }
+    let line_break_text = line_break_output[..line_break_state.off]
+    if !str.eq(line_break_text, "\"one\\ntwo\"\n") { os.exit(537i32) }
+    let (line_break_again, line_break_error) = yaml.parse(a, line_break_text, options(4u16, false))
+    if line_break_error != ok || !str.eq(text_of(line_break_again, 538i32), "one\ntwo") { os.exit(539i32) }
     ret ok
 }
 

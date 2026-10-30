@@ -913,6 +913,9 @@ fn needs_quotes(text: str) -> bool {
         let c = text[i]
         let (decoded, decode_error) = utf8.decode(text, i)
         if decode_error != ok || !is_yaml_printable(decoded.scalar) { ret true }
+        // Presentation characters are not all legal in a plain scalar. Preserve
+        // line breaks and tabs through the quoted escape path.
+        if c == 9u8 || c == 10u8 || c == 13u8 { ret true }
         if c == 34u8 || c == 92u8 { ret true }
         if c == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { ret true }
         if c == 35u8 && i > 0usize && text[i - 1usize] == 32u8 { ret true }
