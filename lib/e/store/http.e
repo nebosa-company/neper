@@ -72,7 +72,9 @@ fn target_of(a: *mem.Arena, h: *HttpStore, key: str, listing: bool) -> (str, err
     let (b0, be) = str.builder(a, h.base.len + key.len * 3usize + 16usize)
     if be != ok { ret ("", be) }
     var b = b0
-    try str.push(&b, h.base)
+    var base_len = h.base.len
+    while base_len > 0usize && h.base[base_len - 1usize] == 47u8 { base_len -= 1usize }
+    try str.push(&b, h.base[0usize..base_len])
     try str.push_byte(&b, 47u8)
     if listing {
         try str.push(&b, "?prefix=")

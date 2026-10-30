@@ -117,6 +117,7 @@ fn vectors() -> [100]VKey {
 
 // ---- the in-process server behind the HTTP transport ----
 type Server = struct { kv: store.MemoryStore, requests: u32, last_target: str, decimal_mode: u8, decimal_headers: [1]http.Header }
+type TargetCapture = struct { target: str }
 
 fn hexval(c: u8) -> u8 {
     if c >= 97u8 { ret c - 87u8 }
@@ -151,6 +152,13 @@ fn reply(a: *mem.Arena, status: u16, headers: []const http.Header, body: []const
     r.headers = headers
     r.body = body
     ret r
+}
+
+fn capture_target(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err) {
+    let capture = mem.cast[*TargetCapture](ctx)
+    capture.target = req.target
+    var none: [1]http.Header = zero
+    ret (reply(a, 200u16, none[0usize..0usize], ""), ok)
 }
 
 fn serve(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err) {
@@ -366,6 +374,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let c3 = store.conformance(&hst, a)
     if c3 != 0u32 { os.exit(i32(130u32 + c3)) }
     if server.requests < 30u32 { os.exit(131i32) }
+    var target_capture = TargetCapture{ target: "" }
+    var trailing_base = sh.HttpStore{ transport: sh.Transport{ ctx: mem.cast[*void](&target_capture), send: capture_target }, host: "objects.test", base: "/bucket/" }
+    var trailing_store = sh.http_store(&trailing_base)
+    if store.put(&trailing_store, a, "key", "v") != ok || !str.eq(target_capture.target, "/bucket/key") { os.exit(170i32) }
+    var root_base = sh.HttpStore{ transport: sh.Transport{ ctx: mem.cast[*void](&target_capture), send: capture_target }, host: "objects.test", base: "/" }
+    var root_store = sh.http_store(&root_base)
+    if store.put(&root_store, a, "key", "v") != ok || !str.eq(target_capture.target, "/key") { os.exit(171i32) }
     if store.put(&hst, a, "q/\xc3\xbc x%.txt", "v") != ok { os.exit(132i32) }
     if !str.eq(server.last_target, "/bucket/q/%C3%BC%20x%25.txt") { os.exit(133i32) }
     var entries: [4]store.Entry = zero
