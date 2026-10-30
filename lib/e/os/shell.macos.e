@@ -2144,7 +2144,8 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
     address.port = instance_port(id)
     let (opened, open_error) = os.socket_open(.Ip4, .Datagram)
     if open_error != ok { ret (false, Failed) }
-    if os.socket_bind(opened, address) == ok {
+    let bind_error = os.socket_bind(opened, address)
+    if bind_error == ok {
         let (poller, poller_error) = os.poller_open(a)
         if poller_error != ok {
             let closed = os.socket_close(opened)
@@ -2162,6 +2163,12 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
         instance_held = true
         instance_storage = storage
         ret (true, ok)
+    }
+    // Only an occupied address proves another instance owns this id.  Permission,
+    // descriptor and resource failures cannot receive the forwarded activation.
+    if bind_error != os.Exists {
+        let closed = os.socket_close(opened)
+        ret (false, bind_error)
     }
     // Taken: hand the complete command line to whoever has it.  Each argument
     // is length-prefixed so embedded line feeds survive, and a command that

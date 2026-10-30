@@ -109,6 +109,18 @@ fn main(a: *mem.Arena) -> err {
     let (receiver_port, receiver_bind_error) = bind_ephemeral(receiver)
     if receiver_bind_error != ok { os.exit(41i32) }
 
+    // A second datagram endpoint cannot take the held loopback address.  The
+    // platform error normalizes to `Exists`, including Darwin's EADDRINUSE.
+    let (contender, contender_error) = os.socket_open(.Ip4, .Datagram)
+    if contender_error != ok { os.exit(52i32) }
+    var held_address = loopback()
+    held_address.port = receiver_port
+    if os.socket_bind(contender, held_address) != os.Exists {
+        let closed = os.socket_close(contender)
+        os.exit(53i32)
+    }
+    if os.socket_close(contender) != ok { os.exit(54i32) }
+
     let (sender, sender_error) = os.socket_open(.Ip4, .Datagram)
     if sender_error != ok { os.exit(42i32) }
     // The sender is bound too, so it has a port for the receiver to see.
