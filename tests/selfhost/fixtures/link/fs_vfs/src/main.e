@@ -2582,6 +2582,23 @@ fn host_trace(a: *mem.Arena, number: i32) -> i32 {
     ret code
 }
 
+// A drive root stays rooted for both the VFS root and every child; the join also
+// avoids a doubled separator for POSIX root and slash-form Windows roots.
+fn host_drive_root_scenarios(a: *mem.Arena) -> i32 {
+    var slash = vfs.host_new("C:/")
+    let (_, slash_root, slash_root_error) = vfs.host_path(&slash, a, "/")
+    let (_, slash_child, slash_child_error) = vfs.host_path(&slash, a, "/child")
+    if slash_root_error != ok || slash_child_error != ok || !same(slash_root, "C:/") || !same(slash_child, "C:/child") { ret 1i32 }
+    var backslash = vfs.host_new("C:\\")
+    let (_, backslash_root, backslash_root_error) = vfs.host_path(&backslash, a, "/")
+    let (_, backslash_child, backslash_child_error) = vfs.host_path(&backslash, a, "/child")
+    if backslash_root_error != ok || backslash_child_error != ok || !same(backslash_root, "C:\\") || !same(backslash_child, "C:\\child") { ret 2i32 }
+    var posix = vfs.host_new("/")
+    let (_, posix_child, posix_child_error) = vfs.host_path(&posix, a, "/child")
+    if posix_child_error != ok || !same(posix_child, "/child") { ret 3i32 }
+    ret 0i32
+}
+
 fn host_scenarios(a: *mem.Arena) -> i32 {
     let (root, setup) = host_dir(a, "neper_fs_vfs_scenario")
     if setup != 0i32 { ret setup }
@@ -2751,6 +2768,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     code = host_scenarios(a)
     if code != 0i32 {
         report("host", code)
+        os.exit(14i32)
+    }
+    code = host_drive_root_scenarios(a)
+    if code != 0i32 {
+        report("host drive root", code)
         os.exit(14i32)
     }
     try io.print("fs vfs ok\n")

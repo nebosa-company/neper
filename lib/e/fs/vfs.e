@@ -1020,11 +1020,18 @@ fn sub_vfs(s: *Sub) -> Vfs {
 
 // ---- Host ------------------------------------------------------------------------------
 
-// `root` is a real directory; a trailing separator is dropped.
+// A Windows drive root keeps its separator; other trailing separators are dropped.
+fn host_drive_root(root: str, n: usize) -> bool {
+    if n != 3usize || root[1usize] != 58u8 { ret false }
+    let letter = (root[0usize] >= 65u8 && root[0usize] <= 90u8) || (root[0usize] >= 97u8 && root[0usize] <= 122u8)
+    if !letter { ret false }
+    ret root[2usize] == 47u8 || root[2usize] == 92u8
+}
+
 fn host_new(root: str) -> Host {
     var h: Host = zero
     var n = root.len
-    while n > 1usize && (root[n - 1usize] == 47u8 || root[n - 1usize] == 92u8) { n -= 1usize }
+    while n > 1usize && (root[n - 1usize] == 47u8 || root[n - 1usize] == 92u8) && !host_drive_root(root, n) { n -= 1usize }
     h.root = root[..n]
     ret h
 }
@@ -1040,10 +1047,12 @@ fn host_path(h: *Host, a: *mem.Arena, path: str) -> (str, str, err) {
         i += 1usize
     }
     if is_root(p) { ret (p, h.root, ok) }
-    let (full, full_error) = mem.alloc[u8](a, h.root.len + p.len)
+    var skip_separator = 0usize
+    if h.root.len > 0usize && (h.root[h.root.len - 1usize] == 47u8 || h.root[h.root.len - 1usize] == 92u8) { skip_separator = 1usize }
+    let (full, full_error) = mem.alloc[u8](a, h.root.len + p.len - skip_separator)
     if full_error != ok { ret ("", "", full_error) }
     mem.copy[u8](full[..h.root.len], h.root)
-    mem.copy[u8](full[h.root.len..], p)
+    mem.copy[u8](full[h.root.len..], p[skip_separator..])
     ret (p, full, ok)
 }
 
