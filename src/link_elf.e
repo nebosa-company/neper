@@ -30,24 +30,24 @@ fn append_blob(output: *emit_x64.Buffer, bytes: str) -> err {
     ret ok
 }
 
-// `--arena` (D225): the startup stub carries the root arena's size as four 64-bit
-// immediates (D330; they were 32-bit, and so was the largest arena) -- the mapping's
-// length, two bounds and the arena's capacity -- at these offsets from its start.
+// The bytes of `append_startup`, and where in them `main`'s call is patched.
+const STARTUP_BYTES: usize = 247usize
+const STARTUP_MAIN_CALL: usize = 212usize
+
+// `--arena` (D225): the startup stub carries the root arena's size as one 64-bit
+// immediate (D330, D5930) at this offset from its start.
 fn patch_arena(output: *emit_x64.Buffer, startup: usize, arena_bytes: usize) -> err {
-    try patch_little_u64(output, startup + 7usize, arena_bytes)
-    try patch_little_u64(output, startup + 68usize, arena_bytes)
-    try patch_little_u64(output, startup + 126usize, arena_bytes)
-    ret patch_little_u64(output, startup + 194usize, arena_bytes)
+    ret patch_little_u64(output, startup + 5usize, arena_bytes)
 }
 
-// The stub ends the program with `exit_group` (231) once main returns, and on a
-// startup failure (D2113): syscall 60 ends only the calling thread, so a program
-// whose library had started threads -- Mesa's, after a Vulkan device -- kept running
-// after main returned. D246 had already moved `os.exit` to exit_group.
+// Assembled from startup_elf_x64.s. The stub ends the program with `exit_group` (231) once
+// main returns, and on a startup failure (D2113): syscall 60 ends only the calling thread, so
+// a program whose library had started threads -- Mesa's, after a Vulkan device -- kept
+// running after main returned. D246 had already moved `os.exit` to exit_group.
 fn append_startup(output: *emit_x64.Buffer) -> err {
-    try append_blob(output, "\x49\x89\xe4\x31\xff\x48\xbe\x00\x00\x00\x40\x00\x00\x00\x00\xba\x03\x00\x00\x00\x41\xba\x22\x40\x00\x00\x49\xc7\xc0\xff\xff\xff\xff\x45\x31\xc9\xb8\x09\x00\x00\x00\x0f\x05\x48\x85\xc0\x0f\x88\xc9\x00\x00\x00\x49\x89\xc5\x4d\x8b\x34\x24\x4c\x89\xf3\x48\xc1\xe3\x04\x48\xb8\x00\x00\x00\x40\x00\x00\x00\x00\x48\x39\xc3\x0f\x87\xa8\x00\x00\x00\x45\x31\xff")
-    try append_blob(output, "\x4d\x39\xf7\x73\x5b\x4f\x8b\x44\xfc\x08\x31\xc9\x41\x80\x3c\x08\x00\x74\x05\x48\xff\xc1\xeb\xf4\x48\x89\xd8\x48\x01\xc8\x0f\x82\x81\x00\x00\x00\x49\xbb\x00\x00\x00\x40\x00\x00\x00\x00\x4c\x39\xd8\x0f\x87\x6e\x00\x00\x00\x4d\x8d\x4c\x1d\x00\x4d\x89\xfa\x49\xc1\xe2\x04\x4f\x89\x4c\x15\x00\x4b\x89\x4c\x15\x08\x48\x89\xca\x4c\x89\xc6\x4c\x89\xcf\xf3\xa4\x48")
-    ret append_blob(output, "\x01\xd3\x49\xff\xc7\xeb\xa0\x48\x83\xec\x30\x4c\x89\x2c\x24\x48\xb8\x00\x00\x00\x40\x00\x00\x00\x00\x48\x89\x44\x24\x08\x48\x89\x5c\x24\x10\x4c\x89\x6c\x24\x18\x4c\x89\x74\x24\x20\x48\x8d\x3c\x24\x48\x8d\x74\x24\x18\xe8\x00\x00\x00\x00\x85\xc0\x40\x0f\x95\xc7\x40\x0f\xb6\xff\xb8\xe7\x00\x00\x00\x0f\x05\xbf\x6f\x00\x00\x00\xb8\xe7\x00\x00\x00\x0f\x05\x0f\x0b")
+    try append_blob(output, "\x49\x89\xe4\x48\xbd\x00\x00\x00\x40\x00\x00\x00\x00\x31\xff\x48\x89\xee\xba\x03\x00\x00\x00\x41\xba\x22\x40\x00\x00\x49\xc7\xc0\xff\xff\xff\xff\x45\x31\xc9\xb8\x09\x00\x00\x00\x0f\x05\x48\x85\xc0\x79\x11\x48\xd1\xed\x48\x81\xfd\x00\x00\x10\x00\x73\xce\xe9\xa5\x00\x00\x00\x49\x89\xc5\x4d\x8b\x34\x24\x4c\x89\xf3\x48\xc1\xe3\x04\x48\x39\xeb\x0f\x87\x8e\x00\x00\x00\x45\x31\xff\x4d\x39")
+    try append_blob(output, "\xf7\x73\x49\x4f\x8b\x44\xfc\x08\x31\xc9\x41\x80\x3c\x08\x00\x74\x05\x48\xff\xc1\xeb\xf4\x48\x89\xd8\x48\x01\xc8\x72\x6b\x48\x39\xe8\x77\x66\x4d\x8d\x4c\x1d\x00\x4d\x89\xfa\x49\xc1\xe2\x04\x4f\x89\x4c\x15\x00\x4b\x89\x4c\x15\x08\x48\x89\xca\x4c\x89\xc6\x4c\x89\xcf\xf3\xa4\x48\x01\xd3\x49\xff\xc7\xeb\xb2\x48\x83\xec\x30\x4c\x89\x2c\x24\x48\x89\x6c\x24\x08\x48\x89\x5c\x24\x10\x4c\x89")
+    ret append_blob(output, "\x6c\x24\x18\x4c\x89\x74\x24\x20\x31\xed\x48\x8d\x3c\x24\x48\x8d\x74\x24\x18\xe8\x00\x00\x00\x00\x85\xc0\x40\x0f\x95\xc7\x40\x0f\xb6\xff\xb8\xe7\x00\x00\x00\x0f\x05\xbf\x6f\x00\x00\x00\xb8\xe7\x00\x00\x00\x0f\x05\x0f\x0b")
 }
 
 // How much of the runtime a program needs: up to the end of the last function it reaches.
@@ -314,7 +314,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
     let base = 4194304usize
-    let startup_size = 267usize
+    let startup_size = STARTUP_BYTES
     let symbols = nir.import_symbol_total(builder)
 
     let phdr_offset = 64usize
@@ -468,7 +468,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try patch_dynamic_relocations(builder, output, rela_offset, got_address)
 
     let main_offset = machine_start + function_offsets[main_index]
-    try emit_x64.patch_relative32(output, code_offset + 232usize, main_offset)
+    try emit_x64.patch_relative32(output, code_offset + STARTUP_MAIN_CALL, main_offset)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         // A module-scope `var`, whose address is known once the writable segment is placed.
@@ -571,7 +571,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     // code out to 4096 cost an empty program half its size for nothing (D149). The address is
     // still the base plus the file offset, so every relocation below stays a file offset.
     let code_offset = 64usize + 56usize * segments
-    let startup_size = 267usize
+    let startup_size = STARTUP_BYTES
     try emit_x64.byte(output, 127usize)
     try emit_x64.byte(output, 69usize)
     try emit_x64.byte(output, 76usize)
@@ -628,7 +628,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     var table_file = 0usize
     try place_symbol_table(builder, output, machine, table_at, machine_start, relocations, relocation_count, &table_file)
     let main_offset = machine_start + function_offsets[main_index]
-    try emit_x64.patch_relative32(output, code_offset + 232usize, main_offset)
+    try emit_x64.patch_relative32(output, code_offset + STARTUP_MAIN_CALL, main_offset)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         // A module-scope `var`'s address depends on where the data segment lands, which is
@@ -1643,7 +1643,7 @@ fn self_test() -> err {
     // code, and the nine sections of D1581 follow it unloaded. Checking the segment size
     // keeps this test honest, and the machine code is checked where `write` puts it rather
     // than at a literal offset.
-    let machine_start = 120usize + 267usize
+    let machine_start = 120usize + STARTUP_BYTES
     let total = machine_start + machine.count
     if executable.count <= total || executable.bytes[60usize] != 11u8 || executable.bytes[62usize] != 8u8 { ret InvalidExecutable }
     if executable.bytes[0usize] != 127u8 || executable.bytes[16usize] != 2u8 || executable.bytes[18usize] != 62u8 || executable.bytes[24usize] != 120u8 || executable.bytes[25usize] != 0u8 || executable.bytes[26usize] != 64u8 { ret InvalidExecutable }

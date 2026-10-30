@@ -2,8 +2,8 @@
 // the runtime's default. An allocation of twelve mebibytes fits the default and not an
 // arena of eight, so the build with `--arena 8m` fails it -- `main` returns
 // `mem.Exhausted`, exit 1 -- and the build without succeeds, on both platforms.
-// (D5912) The default is a 32 GiB ceiling on a desktop host, so the build without
-// `--arena` must also report that capacity.
+// (D5912, D5930) The default is a 1 TiB ceiling, which a desktop host gives whole, so the
+// build without `--arena` must also report that capacity.
 use e.mem
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -11,6 +11,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if block_error != ok { ret block_error }
     block[12582911] = 7u8
     if block[12582911] != 7u8 { ret mem.Exhausted }
-    if mem.stats(a).capacity < 34359738368usize { ret mem.Exhausted }
+    if mem.stats(a).capacity < 1099511627776usize { ret mem.Exhausted }
     ret ok
 }

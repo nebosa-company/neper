@@ -2962,4 +2962,5 @@ D5891	1264	A touch hold selects a word, drags to extend, and offers a toolbar
 D5892	1474	Metal launches overlap: up to four in flight, one fault block each
 D5900	1021	The counter window is driven in Mobile Safari on an iPhone simulator
 D5901	1356	shell.Permission has NotDetermined; the macOS location permission can be asked for
-D5912	3079	The root arena's default ceiling is 32 GiB
+D5912	3080	The root arena's default ceiling is 32 GiB
+D5930	3267	A size the host refuses is halved, and the default ceiling is 1 TiB

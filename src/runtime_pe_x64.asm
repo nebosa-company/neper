@@ -55,13 +55,21 @@ neper_entry PROC
     push r15
     sub rsp, 96
 
+; A size the host refuses is halved down to a mebibyte (D5930).
+    mov rbx, qword ptr neper_arena_size
+entry_reserve:
     xor ecx, ecx
-    mov rdx, qword ptr neper_arena_size
+    mov rdx, rbx
     mov r8d, 2000h
     mov r9d, 4
     call qword ptr [__imp_VirtualAlloc]
     test rax, rax
-    jz entry_fail
+    jnz entry_reserved
+    shr rbx, 1
+    cmp rbx, 100000h
+    jae entry_reserve
+    jmp entry_fail
+entry_reserved:
     mov r12, rax
 
 ; The arena is committed as it is touched (D339): a vectored handler commits the chunk
@@ -75,8 +83,7 @@ neper_entry PROC
 
     lea r13, [rsp+48]
     mov [r13], r12
-    mov rax, qword ptr neper_arena_size
-    mov [r13+8], rax
+    mov [r13+8], rbx
     mov qword ptr [r13+16], 1000h
     lea r14, [rsp+72]
     mov [r14], r12

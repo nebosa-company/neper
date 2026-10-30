@@ -2061,9 +2061,10 @@ fn process(input: str, out: *mem.Arena) -> err {
 ```
 
 `mark`/`reset` give you scoped deallocation without per-object bookkeeping. A
-program's root arena is a block reserved from the OS at startup; its size is **32
-GiB** unless the link option `--arena SIZE` (§13) raises or
-lowers it (D5912; a wasm32 module and a NeperOS image keep their own sizes) (D323, D340:
+program's root arena is a block reserved from the OS at startup; its size is **1
+TiB** unless the link option `--arena SIZE` (§13) raises or
+lowers it (D5912, D5930; a wasm32 module and a NeperOS image keep their own sizes), and
+the startup code halves a size the host refuses, down to a mebibyte (D323, D340:
 the block is reserved, and committed a chunk at a time as it is **touched**, so the
 size is a ceiling rather than a cost, and an allocation that is never written costs
 nothing on either host). The startup code obtains it through `e.os` (§5) before
@@ -4240,7 +4241,7 @@ project's directory rather than module `main`. A repeated build keeps each modul
 whose source and dependencies are unchanged since its `.em`, and links nothing when
 every module is kept and the file at the output path is still the image the same
 command line wrote; the image is always the clean build's (§12). `--arena SIZE` sizes the root arena (§8; the default is
-32 GiB) — `SIZE` is an integer with an optional `K`, `M` or `G` suffix, in binary
+1 TiB) — `SIZE` is an integer with an optional `K`, `M` or `G` suffix, in binary
 units — `--target` defaults to the full host triple, `--linker` selects the linker
 (Linking, below), and `-j N` the worker count (§15). `--cpu LEVEL` selects the
 instruction level (Target CPU levels, below) and is given **at most once per target

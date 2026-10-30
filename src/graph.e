@@ -320,22 +320,36 @@ type FrontCounts = struct {
 // What a worker allocated is added to `g.worker_bytes` when its phase ends, for
 // `--stats`.
 fn reserved_arena(a: *mem.Arena) -> (mem.Arena, err) {
-    var none: mem.Arena = zero
     // One page short of the root's capacity: the mark by which the runtime tells a
     // reservation from the root, which it still commits to its offset (less on wasi, D5640).
-    let capacity = platform.reservation(mem.stats(a).capacity)
-    let (base, reserve_error) = os.reserve(capacity)
-    if reserve_error != ok { ret (none, reserve_error) }
-    // The host by the shape of its current directory (D348): `/` first is Linux.
-    let (cwd, cwd_error) = os.current_dir(a)
-    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
-        let commit_error = os.commit(base, capacity)
-        if commit_error != ok { ret (none, commit_error) }
+    let (arena, arena_error) = reserve_arena(a, platform.reservation(mem.stats(a).capacity))
+    ret (arena, arena_error)
+}
+
+// (D5930) A size the host refuses is halved down to a mebibyte, as the root's is at startup:
+// a root that took all an address space holds leaves none for a worker of its size.
+fn reserve_arena(a: *mem.Arena, wanted: usize) -> (mem.Arena, err) {
+    var none: mem.Arena = zero
+    var capacity = wanted
+    var last: err = ok
+    while capacity >= 1048576usize {
+        let (base, reserve_error) = os.reserve(capacity)
+        last = reserve_error
+        if reserve_error == ok {
+            // The host by the shape of its current directory (D348): `/` first is Linux.
+            let (cwd, cwd_error) = os.current_dir(a)
+            if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
+                let commit_error = os.commit(base, capacity)
+                if commit_error != ok { ret (none, commit_error) }
+            }
+            var arena: mem.Arena = zero
+            arena.base = base
+            arena.cap = capacity
+            ret (arena, ok)
+        }
+        capacity = capacity / 2usize
     }
-    var arena: mem.Arena = zero
-    arena.base = base
-    arena.cap = capacity
-    ret (arena, ok)
+    ret (none, last)
 }
 
 // The bytes a worker's arena reached, rounded up to the runtime's chunk: what it
@@ -349,21 +363,11 @@ fn arena_touched(arena: *mem.Arena) -> usize {
 // (D1527) A reservation of its own, as `reserved_arena`, of a stated capacity: a
 // worker under `--memory-budget` is held to its share.
 fn reserved_arena_sized(a: *mem.Arena, wanted: usize) -> (mem.Arena, err) {
-    var none: mem.Arena = zero
     var capacity = wanted
     let root = mem.stats(a).capacity - 4096usize
     if capacity > root { capacity = root }
-    let (base, reserve_error) = os.reserve(capacity)
-    if reserve_error != ok { ret (none, reserve_error) }
-    let (cwd, cwd_error) = os.current_dir(a)
-    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
-        let commit_error = os.commit(base, capacity)
-        if commit_error != ok { ret (none, commit_error) }
-    }
-    var arena: mem.Arena = zero
-    arena.base = base
-    arena.cap = capacity
-    ret (arena, ok)
+    let (arena, arena_error) = reserve_arena(a, capacity)
+    ret (arena, arena_error)
 }
 
 // (D1669) The stack a worker thread is given. On Linux it is the mapping the thread runs

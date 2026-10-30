@@ -15,11 +15,13 @@
 // The entry: the root arena mapped (its size the literal the linker patches), the
 // arguments copied into it as a table of slices, `main(&arena, &args)` called, and the
 // program ended with exit_group -- status 1 when main returned an error, 111 when the
-// arena could not be had. x29 is zero in main's caller: the end of the frame chain.
+// arena could not be had. A size the host refuses is halved down to a mebibyte (D5930).
+// x29 is zero in main's caller: the end of the frame chain.
 .global neper_start
 neper_start:
     mov x19, sp
     ldr x20, .Lstart_arena
+.Lstart_reserve:
     mov x0, #0
     mov x1, x20
     mov x2, #3
@@ -28,7 +30,12 @@ neper_start:
     mov x5, #0
     mov x8, #222
     svc #0
-    tbnz x0, #63, .Lstart_fail
+    tbz x0, #63, .Lstart_mapped
+    lsr x20, x20, #1
+    cmp x20, #0x100000
+    b.hs .Lstart_reserve
+    b .Lstart_fail
+.Lstart_mapped:
     mov x21, x0
     ldr x22, [x19]
     lsl x23, x22, #4

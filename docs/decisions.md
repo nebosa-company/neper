@@ -42955,3 +42955,21 @@ Considered and not done: chaining regions, so an exhausted arena reserves anothe
 What it costs: a runaway program is no longer stopped at 1 GiB. It commits until the OS pushes back (pagefile, OOM killer), as a C or Go program does; `--arena` is the hard cap. The compiler's workers each reserve the root's size less a page (D339), so `-j 8` reserves about 288 GiB of address space, free on a 47-bit host and inside a 39-bit one. The C bootstrap keeps its own default.
 
 Checked: `link/arena_size` now also requires the default build's capacity to be at least 32 GiB. It failed on the old compiler (exit 1) and passes on Windows and Linux x64, and the `--arena 8m` build is still refused. Against the old compiler, the images for x64 Windows, x64 and arm64 Linux and both macOS targets differ only in the arena word (and the Mach-O signature over it). A 64 GiB compiler built itself at a peak working set of 2.9 GB, the same as a 1 GiB one, and stage 2 equals stage 3 at `-j 8` and `-j 1`.
+
+## D5930 — A size the host refuses is halved, and the default ceiling is 1 TiB
+
+D5912 set the default to 32 GiB because 64 GiB would not start under valgrind, and left two holes: a default build stopped at 32 GiB on a machine with more RAM, and any limit on address space below the ceiling ended the program before `main` with a silent exit 111. Both come from one thing, a startup that treats a refused reservation as fatal.
+
+The startup now halves the size and asks again, down to a mebibyte, the smallest `--arena` takes, and the arena's capacity is what was granted. All five hosted entries do it: `runtime_pe_x64.asm`, `startup_elf_x64.s`, `runtime_elf_a64.s`, `runtime_macos_a64.s` and `runtime_macos_x64.s`. The x64 ELF stub existed only as bytes in `link_elf.e`, with four patched copies of the size; it now has a source file, keeps the size in `rbp` and has one immediate. An `--arena` size is treated the same way, because it is a ceiling and halving never exceeds it. A wasm32 module, a NeperOS image and the C bootstrap are unchanged.
+
+With that, nothing needs the default to be low, so it is 1 TiB. The value is not a limit a program should meet: it is more RAM than this project's machines have, an address space of 47 bits holds about a hundred of them, and a host that gives less gives what it has. Android needs no default of its own. The compiler's workers each reserve about the root's size, so `-j 8` asks for about 9 TiB of addresses, and a worker's reservation is halved the same way (`graph.reserve_arena`), since a root that took all of a smaller address space would leave none for its workers.
+
+Why not retry upward, or chain regions: the first has nothing to ask, and the second is the layout change D5912 refused.
+
+What was wrong in D5912's reasoning: valgrind's limit is its own. It puts its tool at `vStart = 0x1002000000` whatever the machine, which leaves a program about 64 GiB; this WSL2 kernel maps 1 TiB natively. So a program under valgrind now simply gets 32 GiB.
+
+Checked: `link/arena_retry`, built with `--arena 1048576g` (a pebibyte, which no 47-bit address space holds), failed with exit 111 and now starts on Windows x64, Linux x64 and Linux arm64 under qemu-aarch64; on Linux it also runs under `ulimit -v 8000000`, and under `ulimit -v 200000`. The same run under valgrind passes at the default. `link/arena_size` requires the default build to report 1 TiB. The macOS corpus takes a fixture's flags from an `emit-flags` file so that it builds the retry too.
+
+Cost, measured on Windows at 8 workers with a release compiler: nothing. Compiling sc1m peaks at 606 MB of working set and 946 MB of commit, against 606 and 943 at 32 GiB; the compiler building itself at 339 and 693 MB, against 338 and 695. A small program starts and exits in 5.4 to 5.7 ms at 1 TiB and 5.4 to 5.5 ms at 1 GiB, 41 runs each, twice. Stage 2 equals stage 3 at `-j 8` and `-j 1`.
+
+What stays: a program that really does run away commits until the operating system pushes back, and `--arena` is the hard cap (D5912). A program can no longer assume it got the size it asked for, so one that needs a minimum checks `mem.stats`. If even a mebibyte is refused the exit is still 111 with no message. Nothing here has filled more than this machine's RAM.

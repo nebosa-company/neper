@@ -7935,6 +7935,14 @@ arena_small_output=$("$arena_small_path" 2>&1) || arena_small_status=$?
 [ "$arena_small_status" -eq 1 ]
 case "$arena_small_output" in *'error: e.mem.Exhausted'*) ;; *) printf '%s
 ' "an arena of eight mebibytes held twelve: $arena_small_output" >&2; exit 1 ;; esac
+# A ceiling the host will not reserve is halved until it will (D5930): a pebibyte starts, and so
+# does a program under an address-space limit it does not fit.
+arena_retry_path="$test_build/arena-retry-selfhost"
+arena_retry_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/arena_retry/src/main.e" "$repo" x64 linux "$arena_retry_path" --arena 1048576g)
+[ "$arena_retry_written" = 'executable written' ]
+chmod +x "$arena_retry_path"
+"$arena_retry_path"
+(ulimit -v 8000000; "$arena_retry_path")
 # docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
 # conformance corpus, byte for byte, with the exit status the result record carries.
 conformance_root="$repo/tests/conformance"

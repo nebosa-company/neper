@@ -39,6 +39,8 @@ neper_start:
     mov x22, x0
     sub x19, x1, #8
     ldr x20, .Lstart_arena
+    // A size the host refuses is halved down to a mebibyte (D5930).
+.Lstart_reserve:
     mov x0, #0
     mov x1, x20
     mov x2, #3
@@ -46,7 +48,12 @@ neper_start:
     mov x4, #-1
     mov x5, #0
     sys 197
-    tbnz x0, #63, .Lstart_fail
+    tbz x0, #63, .Lstart_mapped
+    lsr x20, x20, #1
+    cmp x20, #0x100000
+    b.hs .Lstart_reserve
+    b .Lstart_fail
+.Lstart_mapped:
     mov x21, x0
     lsl x23, x22, #4
     cmp x23, x20

@@ -32,6 +32,8 @@ neper_start:
     mov r12, rdi
     mov r13, rsi
     mov r14, QWORD PTR [rip+.Lstart_arena]
+    # A size the host refuses is halved down to a mebibyte (D5930).
+.Lstart_reserve:
     xor edi, edi
     mov rsi, r14
     mov edx, 3
@@ -41,7 +43,12 @@ neper_start:
     mov eax, 0x20000c5
     darwin_syscall
     test rax, rax
-    js .Lstart_fail
+    jns .Lstart_mapped
+    shr r14, 1
+    cmp r14, 0x100000
+    jae .Lstart_reserve
+    jmp .Lstart_fail
+.Lstart_mapped:
     mov r15, rax
     mov rbx, r12
     shl rbx, 4

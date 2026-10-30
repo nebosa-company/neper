@@ -620,11 +620,12 @@ type Builder = struct {
     apple_variadic: bool,
 }
 
-// (D5912) The root arena's size a linker patches in. Without `--arena` it is a ceiling, not a
-// cost: the arena is reserved and committed as it is touched (D340).
+// (D5912, D5930) The root arena's size a linker patches in. Without `--arena` it is a ceiling,
+// not a cost: the arena is reserved and committed as it is touched (D340), and the startup
+// halves a size the host refuses.
 fn root_arena_bytes(builder: *Builder) -> usize {
     if builder.arena_bytes != 0usize { ret builder.arena_bytes }
-    ret 34359738368usize
+    ret 1099511627776usize
 }
 
 // Given separately from `init` because `init` has eight callers and only one of them compiles a

@@ -8213,6 +8213,12 @@ $arenaSmallWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $arenaSmallWritten -ne 'executable written') { throw 'arena size fixture emission with --arena failed' }
 $arenaSmallOutput = & $arenaSmallPath 2>&1
 if ($LASTEXITCODE -ne 1 -or ($arenaSmallOutput -join "`n") -notmatch 'error: e\.mem\.Exhausted') { throw "an arena of eight mebibytes held twelve: exit $LASTEXITCODE, $($arenaSmallOutput -join "`n")" }
+# A ceiling the host will not reserve is halved until it will (D5930): a pebibyte starts.
+$arenaRetryPath = Join-Path $testBuild 'arena-retry-selfhost.exe'
+$arenaRetryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\arena_retry\src\main.e') $repo 'x64' 'windows' $arenaRetryPath --arena 1048576g
+if ($LASTEXITCODE -ne 0 -or $arenaRetryWritten -ne 'executable written') { throw 'arena retry fixture emission failed' }
+& $arenaRetryPath
+if ($LASTEXITCODE -ne 0) { throw "a ceiling the host refuses did not start: exit $LASTEXITCODE" }
 # docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
 # conformance corpus, byte for byte, with the exit status the result record carries.
 $conformanceRoot = Join-Path $repo 'tests\conformance'
