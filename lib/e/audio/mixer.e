@@ -123,14 +123,17 @@ fn resample(a: *mem.Arena, src: audio.Frames, rate: u32) -> (audio.Frames, err) 
     if rate == 0u32 || src.format.rate == 0u32 || src.format.channels == 0u8 || src.count > audio.frames_in(src.format, src.bytes.len) { ret (zero, Unsupported) }
     let quotient = src.count / usize(src.format.rate)
     let remainder = src.count % usize(src.format.rate)
-    if quotient != 0usize && usize(rate) > 18446744073709551615usize / quotient { ret (zero, mem.Exhausted) }
+    let maximum = ~0usize
+    if quotient != 0usize && usize(rate) > maximum / quotient { ret (zero, mem.Exhausted) }
     var count = quotient * usize(rate)
-    let tail = (remainder * usize(rate)) / usize(src.format.rate)
-    if count > 18446744073709551615usize - tail { ret (zero, mem.Exhausted) }
+    let tail_wide = (u64(remainder) * u64(rate)) / u64(src.format.rate)
+    if tail_wide > u64(maximum) { ret (zero, mem.Exhausted) }
+    let tail = usize(tail_wide)
+    if count > maximum - tail { ret (zero, mem.Exhausted) }
     count += tail
     let format = audio.Format { rate: rate, channels: src.format.channels, sample: src.format.sample }
     let width = audio.frame_bytes(format)
-    if count != 0usize && width > 18446744073709551615usize / count { ret (zero, mem.Exhausted) }
+    if count != 0usize && width > maximum / count { ret (zero, mem.Exhausted) }
     let checkpoint = a.off
     let (bytes, allocation_error) = mem.alloc[u8](a, count * width)
     if allocation_error != ok { ret (zero, allocation_error) }

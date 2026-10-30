@@ -84,5 +84,15 @@ fn main(a: *mem.Arena) -> err {
     if down_error != ok || down.count != 1usize || down_zero_error != ok || down_zero != 65536000i32 { os.exit(17i32) }
     let (_, zero_rate_error) = mixer.resample(a, slow, 0u32)
     if zero_rate_error != mixer.Unsupported { os.exit(18i32) }
+    // The remainder term must be widened before multiplication on wasm32. The
+    // local arena is exactly full after the source allocation, so the normal
+    // outcome is exhaustion rather than an arithmetic trap or wrapped count.
+    var overflow_storage: [131070]u8 = zero
+    var overflow_arena = mem.arena_from(overflow_storage[..])
+    let (overflow_bytes, overflow_alloc_error) = mem.alloc[u8](&overflow_arena, 131070usize)
+    let overflow_format = audio.Format { rate: 65536u32, channels: 1u8, sample: .I16 }
+    let (overflow_source, overflow_source_error) = audio.view(overflow_bytes, overflow_format)
+    let (_, overflow_error) = mixer.resample(&overflow_arena, overflow_source, 65538u32)
+    if overflow_alloc_error != ok || overflow_source_error != ok || overflow_error != mem.Exhausted { os.exit(19i32) }
     ret ok
 }
