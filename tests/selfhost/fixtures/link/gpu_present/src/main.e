@@ -52,6 +52,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if open_error != ok { os.exit(1i32) }
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { os.exit(2i32) }
+    // A target is all-or-nothing: constrain the device arena just below a known
+    // target's total footprint so handle allocation fails after both images exist.
+    let target_mark = mem.mark(a)
+    let (probe, probe_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 1u32, 1u32, .Rgba8)
+    if probe_error != ok { os.exit(45i32) }
+    let target_used = mem.mark(a) - target_mark
+    if gpu.close_target(probe) != ok || target_used == 0usize { os.exit(46i32) }
+    mem.reset(a, target_mark)
+    let saved_cap = a.cap
+    a.cap = target_mark + target_used - 1usize
+    let (_, constrained_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 1u32, 1u32, .Rgba8)
+    a.cap = saved_cap
+    if constrained_error != mem.Exhausted || mem.mark(a) != target_mark { os.exit(47i32) }
+    let (recovered, recovered_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 1u32, 1u32, .Rgba8)
+    if recovered_error != ok || gpu.close_target(recovered) != ok { os.exit(48i32) }
+    mem.reset(a, target_mark)
     // An image: written in part from the host, read back whole.
     let (img, img_error) = gpu.image(q, 4u32, 3u32, .Rgba8)
     if img_error != ok || gpu.len(img.data) != 12usize || img.width != 4u32 { os.exit(3i32) }

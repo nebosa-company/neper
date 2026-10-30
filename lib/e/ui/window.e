@@ -122,16 +122,19 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
     }
     let (drawable, drawable_error) = scene.target_of(a, frames)
     if drawable_error != ok {
+        let released = gpu.close_target(frames)
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
     let (states, states_error) = mem.alloc[State](a, 1usize)
     if states_error != ok {
+        let released = gpu.close_target(frames)
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
     let (scratch, scratch_error) = mem.alloc[u32](a, usize(options.width) * usize(options.height))
     if scratch_error != ok {
+        let released = gpu.close_target(frames)
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }

@@ -1701,13 +1701,26 @@ fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: For
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state.device)
     if surface.kind != .Offscreen { ret (zero, Unsupported) }
+    let target_mark = mem.mark(state.device.arena)
     let (states, states_error) = mem.alloc[TargetState](state.device.arena, 1usize)
-    if states_error != ok { ret (zero, states_error) }
+    if states_error != ok {
+        mem.reset(state.device.arena, target_mark)
+        ret (zero, states_error)
+    }
     states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquired: false, closed: false }
     let images_error = target_images(&states[0usize], width, height)
-    if images_error != ok { ret (zero, images_error) }
+    if images_error != ok {
+        mem.reset(state.device.arena, target_mark)
+        ret (zero, images_error)
+    }
     let (handles, handles_error) = mem.alloc[Target](state.device.arena, 1usize)
-    if handles_error != ok { ret (zero, handles_error) }
+    if handles_error != ok {
+        var handle = Queue { state: mem.cast[*void](state) }
+        let abandoned_front = release_image(&handle, states[0usize].images[0usize])
+        let abandoned_back = release_image(&handle, states[0usize].images[1usize])
+        mem.reset(state.device.arena, target_mark)
+        ret (zero, handles_error)
+    }
     handles[0usize] = Target { state: mem.cast[*void](&states[0usize]) }
     ret (&handles[0usize], ok)
 }
