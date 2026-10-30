@@ -59,6 +59,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if n1 != text.len || !str.eq(out[..n1], text) { os.exit(5) }
     let (n2, e5) = inflate(storage, small, out, 5usize, 10000000u64)
     if e5 != ok || !str.eq(out[..n2], small_text) { os.exit(6) }
+    // Do not write past a caller-visible output limit, even when one large pull
+    // would otherwise decode several bytes.
+    var bounded_source = io.SliceReader { data: small, off: 0usize }
+    let (bounded0, bounded_error) = bzip2.reader(storage, io.slice_reader(&bounded_source), 1u64)
+    if bounded_error != ok { os.exit(18) }
+    var bounded = bounded0
+    var bounded_out: [8]u8 = zero
+    var bounded_at = 0usize
+    while bounded_at < bounded_out.len {
+        bounded_out[bounded_at] = 170u8
+        bounded_at += 1usize
+    }
+    let (bounded_count, bounded_read_error) = bzip2.read(&bounded, bounded_out[..])
+    if bounded_count != 1usize || bounded_read_error != bzip2.TooLarge || bounded_out[0usize] != small_text[0usize] || bounded_out[1usize] != 170u8 { os.exit(19) }
+    let (repeat_overflow_count, repeat_overflow_error) = bzip2.read(&bounded, bounded_out[..])
+    if repeat_overflow_count != 0usize || repeat_overflow_error != bzip2.TooLarge || bounded_out[1usize] != 170u8 { os.exit(20) }
+    // An exact-limit stream still completes normally and answers End afterward.
+    var exact_source = io.SliceReader { data: small, off: 0usize }
+    let (exact0, exact_open_error) = bzip2.reader(storage, io.slice_reader(&exact_source), u64(small_text.len))
+    if exact_open_error != ok { os.exit(21) }
+    var exact = exact0
+    let (exact_count, exact_read_error) = bzip2.read(&exact, out)
+    if exact_count != small_text.len || exact_read_error != ok || !str.eq(out[..exact_count], small_text) { os.exit(22) }
+    let (exact_end_count, exact_end_error) = bzip2.read(&exact, out)
+    if exact_end_count != 0usize || exact_end_error != io.End { os.exit(23) }
+    // The fifth symbol after a four-byte run is a zero-repeat control byte,
+    // not caller-visible output. An exact limit must still reach End.
+    let run_text = "aaaa"
+    let run_packed = "BZh11AY&SY\x88\x12\x33\xa6\x00\x00\x02A\x00@\x00 \x00 \x00!\x00\x82\x0b\x17rE8P\x90\x88\x12\x33\xa6"
+    let (run_count, run_error) = inflate(storage, run_packed, out, 32usize, u64(run_text.len))
+    if run_error != ok || run_count != run_text.len || !str.eq(out[..run_count], run_text) { os.exit(24) }
     let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: small, failure: io.End } }
     var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
     if final_script_error != ok { os.exit(17) }

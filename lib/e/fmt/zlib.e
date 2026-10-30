@@ -162,6 +162,7 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
         if flg & 32u8 != 0u8 { ret (0usize, Invalid) }
         s.stage = 1u32
     }
+    if s.stage == 4u32 { ret (0usize, deflate.TooLarge) }
     if s.stage == 3u32 { ret (0usize, io.End) }
     if dst.len == 0usize { ret (0usize, ok) }
     while s.stage == 1u32 {
@@ -171,13 +172,29 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
             if !more { s.source_ended = true }
         }
         // With the source gone the decoder is told so, and a truncated stream is its Invalid.
-        let (consumed, written, status, decode_error) = deflate.decode(&s.decoder, s.input[s.in_at..s.in_len], dst, s.source_ended)
+        // Keep a private byte for the exact-limit probe: a completed stream
+        // must still reach its trailer, while a further decoded byte is TooLarge
+        // without ever being exposed through the caller's destination.
+        var destination = dst
+        var overflow_probe: [1]u8 = zero
+        var probing = false
+        if s.produced >= s.output_limit {
+            destination = overflow_probe[..]
+            probing = true
+        } else {
+            let budget_left = s.output_limit - s.produced
+            if u64(destination.len) > budget_left { destination = destination[..usize(budget_left)] }
+        }
+        let (consumed, written, status, decode_error) = deflate.decode(&s.decoder, s.input[s.in_at..s.in_len], destination, s.source_ended)
         if decode_error != ok { ret (0usize, Invalid) }
         s.in_at += consumed
         if written > 0usize {
+            if probing {
+                s.stage = 4u32
+                ret (0usize, deflate.TooLarge)
+            }
             s.produced += u64(written)
-            if s.produced > s.output_limit { ret (0usize, deflate.TooLarge) }
-            let (a, b) = adler_update(s.adler_a, s.adler_b, dst[..written])
+            let (a, b) = adler_update(s.adler_a, s.adler_b, destination[..written])
             s.adler_a = a
             s.adler_b = b
         }

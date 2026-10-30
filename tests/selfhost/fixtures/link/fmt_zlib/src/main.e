@@ -5,6 +5,7 @@
 use e.os
 use e.mem
 use e.io
+use e.algo.deflate as deflate
 use e.fmt.zlib as zlib
 
 fn same(a: []const u8, b: []const u8) -> bool {
@@ -101,6 +102,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n1, e1) = inflate(storage, framed[0..], out, 1000000u64)
     if e1 != ok { os.exit(4) }
     if !same(out[..n1], text) { os.exit(5) }
+    // A limit is checked before the caller's bytes are exposed. The probe read
+    // sees the next decoded byte privately, leaving the sentinel intact.
+    var bounded_source = io.SliceReader { data: framed[..], off: 0usize }
+    let (bounded0, bounded_error) = zlib.reader(storage, io.slice_reader(&bounded_source), 1u64)
+    if bounded_error != ok { os.exit(24) }
+    var bounded = bounded0
+    var bounded_out: [8]u8 = zero
+    var bounded_at = 0usize
+    while bounded_at < bounded_out.len {
+        bounded_out[bounded_at] = 170u8
+        bounded_at += 1usize
+    }
+    let (bounded_count, bounded_read_error) = zlib.read(&bounded, bounded_out[..])
+    if bounded_count != 1usize || bounded_read_error != ok || bounded_out[0usize] != text[0usize] || bounded_out[1usize] != 170u8 { os.exit(25) }
+    let (overflow_count, overflow_error) = zlib.read(&bounded, bounded_out[..])
+    if overflow_count != 0usize || overflow_error != deflate.TooLarge || bounded_out[1usize] != 170u8 { os.exit(26) }
+    let (repeat_overflow_count, repeat_overflow_error) = zlib.read(&bounded, bounded_out[..])
+    if repeat_overflow_count != 0usize || repeat_overflow_error != deflate.TooLarge || bounded_out[1usize] != 170u8 { os.exit(27) }
+    // A valid stream whose output exactly fills the limit still reaches its trailer.
+    var exact_source = io.SliceReader { data: framed[..], off: 0usize }
+    let (exact0, exact_open_error) = zlib.reader(storage, io.slice_reader(&exact_source), u64(text.len))
+    if exact_open_error != ok { os.exit(28) }
+    var exact = exact0
+    let (exact_count, exact_read_error) = zlib.read(&exact, out)
+    if exact_count != text.len || exact_read_error != ok || !same(out[..exact_count], text) { os.exit(29) }
+    let (exact_end_count, exact_end_error) = zlib.read(&exact, out)
+    if exact_end_count != 0usize || exact_end_error != io.End { os.exit(30) }
     // Write and read back.
     let (packed, p_error) = mem.alloc[u8](a, 4096usize)
     if p_error != ok { os.exit(6) }
