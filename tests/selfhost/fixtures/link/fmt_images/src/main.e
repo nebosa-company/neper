@@ -206,6 +206,32 @@ fn gif_invalid(a: *mem.Arena, blob: str) -> bool {
     ret failure == gif.Invalid
 }
 
+fn gif_interlace_small(a: *mem.Arena) -> bool {
+    let m = mem.mark(a)
+    // The four source rows are delivered in GIF interlace order 0, 2, 1, 3.
+    // Their indices 1, 0, 1, 0 must therefore become red, red, black, black.
+    var s = io.SliceReader { data: "GIF89a\x01\x00\x04\x00\x80\x00\x00\x00\x00\x00\xff\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x04\x00\x40\x02\x03\x0c\x02\x05\x00\x3b", off: 0usize }
+    let (result, failure) = gif.decode(a, io.slice_reader(&s), gif_options())
+    let good = failure == ok && result.width == 1u32 && result.height == 4u32 && result.pixels[0usize] == 255u8 && result.pixels[4usize] == 255u8 && result.pixels[8usize] == 0u8 && result.pixels[12usize] == 0u8
+    mem.reset(a, m)
+    ret good
+}
+
+fn gif_first_frame_only(a: *mem.Arena) -> bool {
+    let m = mem.mark(a)
+    // Two 1x1 frames need eight output bytes together. `decode` needs only the
+    // first frame, so its four-byte budget remains sufficient.
+    let blob = "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x4c\x01\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x4c\x01\x00\x3b"
+    let limited = gif.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, max_frames: 0u32, max_bytes: 4u64 }
+    var first_reader = io.SliceReader { data: blob, off: 0usize }
+    let (result, first_failure) = gif.decode(a, io.slice_reader(&first_reader), limited)
+    var all_reader = io.SliceReader { data: blob, off: 0usize }
+    let (_, all_failure) = gif.decode_frames(a, io.slice_reader(&all_reader), limited)
+    let good = first_failure == ok && result.width == 1u32 && result.height == 1u32 && result.pixels[0usize] == 255u8 && all_failure == gif.TooLarge
+    mem.reset(a, m)
+    ret good
+}
+
 // ---- EXIF ------------------------------------------------------------------------------
 
 fn block_for(data: str, kind: u8) -> ([]const u8, err) {
@@ -445,6 +471,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !gif_missing_trailer(a, "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00") { die(113i32) }
     // A GIF image's LZW stream also requires its end-of-information code.
     if !gif_invalid(a, "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x01\x04\x00\x3b") { die(115i32) }
+    if !gif_interlace_small(a) { die(188i32) }
+    if !gif_first_frame_only(a) { die(189i32) }
     // TIFF LZW likewise needs its 257 end code after a complete strip.
     var tiff_lzw_without_eoi: [101]u8 = zero
     tiff_lzw_without_eoi[0usize] = 73u8
