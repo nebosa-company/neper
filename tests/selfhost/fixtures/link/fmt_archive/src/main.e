@@ -588,6 +588,67 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, overflow_error) = rar.open(a, overflow_vint[..], rar.default_limits())
     mem.reset(a, overflow_mark)
     if overflow_error != rar.Invalid { die(278i32) }
+    // A file-encryption record is stored in the file header's extra area, not
+    // in the common header flags. It must not be exposed as a stored file.
+    var encrypted_extra: [33]u8 = zero
+    encrypted_extra[0usize] = 82u8
+    encrypted_extra[1usize] = 97u8
+    encrypted_extra[2usize] = 114u8
+    encrypted_extra[3usize] = 33u8
+    encrypted_extra[4usize] = 26u8
+    encrypted_extra[5usize] = 7u8
+    encrypted_extra[6usize] = 1u8
+    encrypted_extra[12usize] = 13u8
+    encrypted_extra[13usize] = 2u8
+    encrypted_extra[14usize] = 3u8
+    encrypted_extra[15usize] = 2u8
+    encrypted_extra[22usize] = 1u8
+    encrypted_extra[23usize] = 120u8
+    encrypted_extra[24usize] = 1u8
+    encrypted_extra[25usize] = 1u8
+    let encrypted_file_crc = hash.crc32(encrypted_extra[12usize..26usize])
+    encrypted_extra[8usize] = u8(encrypted_file_crc & 255u32)
+    encrypted_extra[9usize] = u8((encrypted_file_crc >> 8u32) & 255u32)
+    encrypted_extra[10usize] = u8((encrypted_file_crc >> 16u32) & 255u32)
+    encrypted_extra[11usize] = u8((encrypted_file_crc >> 24u32) & 255u32)
+    encrypted_extra[30usize] = 2u8
+    encrypted_extra[31usize] = 5u8
+    let encrypted_end_crc = hash.crc32(encrypted_extra[30usize..33usize])
+    encrypted_extra[26usize] = u8(encrypted_end_crc & 255u32)
+    encrypted_extra[27usize] = u8((encrypted_end_crc >> 8u32) & 255u32)
+    encrypted_extra[28usize] = u8((encrypted_end_crc >> 16u32) & 255u32)
+    encrypted_extra[29usize] = u8((encrypted_end_crc >> 24u32) & 255u32)
+    let encrypted_mark = mem.mark(a)
+    let (_, encrypted_error) = rar.open(a, encrypted_extra[..], rar.default_limits())
+    mem.reset(a, encrypted_mark)
+    if encrypted_error != rar.Unsupported { die(279i32) }
+    // The continuation stream deliberately omits its tables. In a solid chain
+    // those tables, along with repeat state, belong to the whole chain.
+    if !rar_extract_is(a, "Rar\x21\x1a\x07\x01\x00\xc5\x1a32\x03\x01\x00\x00\xb0\xa4\x29\x81\x0f\x02\x02\r\x04\x01 \x8b\x9e\xd9\xd3\x80\x1b\x01\x01a\xc1\x91\n\x01\xff\x1bc\xffih\x84P\x00\xa8\x1cq\x2c\x0f\x02\x02\x04\x04\x01 \x31\xcf\xd0J\xc0\x1b\x01\x01b@\x1b\x01\x80\x19\xb2:5\x03\x05\x00\x00", 1u32, hash.crc32("B"), 1usize) { die(280i32) }
+    // Extracting unrelated compressed files reuses the chain cache; only the
+    // returned one-byte result may advance the caller's arena after the first.
+    let repeat_chains = "Rar\x21\x1a\x07\x01\x00\xc5\x1a32\x03\x01\x00\x00\xb0\xa4\x29\x81\x0f\x02\x02\r\x04\x01 \x8b\x9e\xd9\xd3\x80\x1b\x01\x01a\xc1\x91\n\x01\xff\x15\xab\xffmh\x84P@\tN\x17\xf3\x0f\x02\x02\r\x04\x01 \x31\xcf\xd0J\x80\x1b\x01\x01b\xc1\x91\n\x01\xff\x15\xb3\xffih\x84P@\xa1\x15\xd2k\x0f\x02\x02\r\x04\x01 \xa7\xff\xd7=\x80\x1b\x01\x01c\xc1\x91\n\x01\xff\x15\xbb\xffeh\x84P@\x19\xb2:5\x03\x05\x00\x00"
+    let repeat_mark = mem.mark(a)
+    let (repeat_archive, repeat_open_error) = rar.open(a, repeat_chains, rar.default_limits())
+    if repeat_open_error != ok {
+        die(281i32)
+    }
+    var repeated = repeat_archive
+    let (_, repeat_first_error) = rar.extract(a, &repeated, 0usize)
+    if repeat_first_error != ok {
+        die(281i32)
+    }
+    let second_start = a.off
+    let (_, repeat_second_error) = rar.extract(a, &repeated, 1usize)
+    if repeat_second_error != ok || a.off - second_start > 1usize {
+        die(281i32)
+    }
+    let third_start = a.off
+    let (_, repeat_third_error) = rar.extract(a, &repeated, 2usize)
+    if repeat_third_error != ok || a.off - third_start > 1usize {
+        die(281i32)
+    }
+    mem.reset(a, repeat_mark)
     try io.print("fmt archive ok\n")
     ret ok
 }
