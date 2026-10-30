@@ -1525,20 +1525,27 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     if made_error != ok { ret (initial_style(), false, made_error) }
     var declared = made
     var hints: []const cascade.Declaration = zero
-    if want < 0i64 { hints = cascade.presentational_hints(m, el) }
+    if want < 0i64 {
+        let (made_hints, hints_error) = cascade.presentational_hints(m, el)
+        if hints_error != ok { ret (initial_style(), false, hints_error) }
+        hints = made_hints
+    }
     var h = 0usize
     while h < hints.len {
         let pushed = list.push[cascade.Declared](&declared, cascade.Declared { declaration: hints[h], author: false, hint: true, specificity: 0i64, source: -1i64, has_layer: false, layer: 0i64, proximity: cascade.UNSCOPED })
+        if pushed != ok { ret (initial_style(), false, pushed) }
         h += 1usize
     }
     try gather(m, &declared, ua, el, stack, want)
     try gather(m, &declared, author, el, stack, want)
     let (style_text, has_style) = html.attribute(&m.doc.nodes[usize(el)], "style")
     if has_style && want < 0i64 {
-        let inline = cascade.inline_declarations(a, style_text)
+        let (inline, inline_error) = cascade.inline_declarations(a, style_text)
+        if inline_error != ok { ret (initial_style(), false, inline_error) }
         var k = 0usize
         while k < inline.len {
             let pushed = list.push[cascade.Declared](&declared, cascade.Declared { declaration: inline[k], author: true, hint: false, specificity: cascade.INLINE_SPECIFICITY, source: i64(k), has_layer: false, layer: 0i64, proximity: cascade.UNSCOPED })
+            if pushed != ok { ret (initial_style(), false, pushed) }
             k += 1usize
         }
     }
