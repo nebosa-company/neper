@@ -95,9 +95,13 @@ fn append_index(c: *Checker, n: usize, index: usize) -> (usize, err) {
 fn is_integer(v: *const json.Value) -> bool {
     let (n, is_number) = json.number_of(*v)
     if !is_number { ret false }
-    // ponytail: integral means an exact i64; an integral number past 2^63 is refused.
-    let (_, e) = json.number_i64(n)
-    ret e == ok
+    // `decompose` preserves the exact decimal spelling, trimming insignificant
+    // zeros into its power of ten.  An integral value therefore has no remaining
+    // negative power, regardless of whether its magnitude fits an integer type.
+    let (_, start, end, exponent, e) = json.decompose(n.lexeme)
+    if e != ok { ret false }
+    if start == end { ret true }
+    ret exponent >= 0i64
 }
 
 fn type_matches(name: str, v: *const json.Value) -> (bool, err) {
@@ -146,6 +150,7 @@ fn schema_usize(s: *const json.Value) -> (usize, err) {
     if !is_number { ret (0usize, Invalid) }
     let (v, e) = json.number_u64(n)
     if e != ok { ret (0usize, Invalid) }
+    if mem.size_of[usize]() == 4usize && v > 4294967295u64 { ret (0usize, Invalid) }
     ret (usize(v), ok)
 }
 

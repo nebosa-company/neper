@@ -31,6 +31,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !expect(a, "{\"type\":[\"string\",\"null\"]}", "true", false, "") { os.exit(4i32) }
     if !expect(a, "{\"type\":\"integer\"}", "1.0", true, "") { os.exit(5i32) }
     if !expect(a, "{\"type\":\"integer\"}", "1.5", false, "") { os.exit(6i32) }
+    if !expect(a, "{\"type\":\"integer\"}", "9007199254740993", true, "") { os.exit(70i32) }
+    if !expect(a, "{\"type\":\"integer\"}", "1e20", true, "") { os.exit(71i32) }
     if !expect(a, "{\"type\":\"number\"}", "-2.5e3", true, "") { os.exit(7i32) }
     if !expect(a, "{\"type\":\"boolean\"}", "0", false, "") { os.exit(8i32) }
     if !expect(a, "{\"enum\":[1,\"a\",null,[1,2]]}", "[1,2]", true, "") { os.exit(9i32) }
@@ -80,6 +82,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !expect(a, "false", "1", false, "") { os.exit(51i32) }
     if !expect(a, "{\"type\":\"object\",\"properties\":{\"tags\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"minLength\":1},\"uniqueItems\":true}},\"required\":[\"tags\"]}", "{\"tags\":[\"a\",\"b\",\"a\"]}", false, "/tags") { os.exit(52i32) }
     if !expect(a, "{\"type\":\"object\",\"properties\":{\"tags\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"minLength\":1},\"uniqueItems\":true}},\"required\":[\"tags\"]}", "{\"tags\":[\"a\",\"\"]}", false, "/tags/1") { os.exit(53i32) }
+
+    if mem.size_of[usize]() == 4usize {
+        if refuse(a, "{\"maxLength\":4294967296}", "\"\"") != schema.Invalid { os.exit(72i32) }
+        if refuse(a, "{\"maxItems\":4294967296}", "[]") != schema.Invalid { os.exit(73i32) }
+    } else {
+        if !expect(a, "{\"maxLength\":4294967296}", "\"\"", true, "") { os.exit(72i32) }
+        if !expect(a, "{\"maxItems\":4294967296}", "[]", true, "") { os.exit(73i32) }
+    }
 
     // Refusals: an unknown type name, a `$ref` outside `#/$defs/`, a missing definition, a
     // schema-valued `additionalProperties`, a bad pattern, a self-referential schema that
