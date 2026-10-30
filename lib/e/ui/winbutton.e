@@ -201,7 +201,7 @@ fn ring_edge_faced(d: *const Ring, which: usize) -> u32 {
 fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Ring](ctx)
     if d.dark { ret ring_paint_native(d, b, area) }
-    if d.dx != 0.0 || d.dy != 0.0 {
+    if d.dx != 0.0 || d.dy != 0.0 || d.dx2 != 0.0 || d.dy2 != 0.0 {
         ret ring_paint_shifted(d, b, area)
     }
     let w = f32(u32(area.width + 0.5))

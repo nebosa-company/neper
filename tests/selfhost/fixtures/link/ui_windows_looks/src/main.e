@@ -81,6 +81,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if re != ok { os.exit(5) }
     let (n4, e4) = painted(a, r, 75.0, 23.0)
     if e4 != ok || n4 == 0usize { os.exit(6) }
+    // A phase at the far edge is still a shifted ring: it must not fall back to
+    // the crisp painter merely because the near-edge phase is zero.
+    let (r_endpoint, endpoint_error) = winbutton.ring_node(a, 0u32, 0xFFFDFDFDu32, 75.0, 23.0, 0.0, 0.0, 0.5, 0.0, 0u32, false)
+    if endpoint_error != ok { os.exit(47) }
+    let (endpoint_count, endpoint_paint_error) = painted(a, r_endpoint, 75.0, 23.0)
+    if endpoint_paint_error != ok || endpoint_count == 0usize || endpoint_count == n4 { os.exit(48) }
     let (f, fe) = winbutton.focus_node(a, false, 75.0, 23.0, true)
     if fe != ok { os.exit(7) }
     let (n5, e5) = painted(a, f, 75.0, 23.0)
