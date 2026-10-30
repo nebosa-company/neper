@@ -99,7 +99,6 @@ fn decode_gb18030(a: *mem.Arena, bytes: []const u8) -> (str, err) {
                     i += 3usize
                 } else {
                     error_mark(&out)
-                    i += 1usize
                 }
             } else {
                 var cp = NONE_CP

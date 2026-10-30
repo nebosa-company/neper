@@ -38,6 +38,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.eq(decoded(a, "Big5", "\xa4\x40"), "\xe4\xb8\x80") { os.exit(9i32) }
     if !str.eq(decoded(a, "GBK", "\xb0\xa1"), "\xe5\x95\x8a") { os.exit(10i32) }
     if !str.eq(decoded(a, "gb18030", "\x81\x30\x81\x30"), "\xc2\x80") { os.exit(11i32) }
+    if !str.eq(decoded(a, "gb18030", "\x81\x30AB"), "\xef\xbf\xbd0AB") { os.exit(36i32) }
     if !str.eq(decoded(a, "EUC-KR", "\xb0\xa1"), "\xea\xb0\x80") { os.exit(12i32) }
     if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B$\x22\x1b(Bx"), "\xe3\x81\x82x") { os.exit(13i32) }
     // ISO-2022-JP's state machine rejects malformed bytes without treating them
