@@ -76,30 +76,49 @@ fn skip_space(p: *Parser) {
     while p.at < p.source.len && (p.source[p.at] == SPACE || p.source[p.at] == TAB) { p.at += 1usize }
 }
 
-fn skip_comment(p: *Parser) {
-    if peek(p) == HASH {
-        while p.at < p.source.len && p.source[p.at] != LF { p.at += 1usize }
+fn forbidden_comment_control(c: u8) -> bool {
+    ret (c < SPACE && c != TAB) || c == 127u8
+}
+
+fn skip_comment(p: *Parser) -> err {
+    if peek(p) != HASH { ret ok }
+    p.at += 1usize
+    while p.at < p.source.len {
+        let c = p.source[p.at]
+        // Leave a complete line ending for the caller to consume. A bare CR is
+        // a control character here, not a TOML newline.
+        if c == LF || (c == CR && peek_at(p, 1usize) == LF) { ret ok }
+        if forbidden_comment_control(c) { ret Invalid }
+        p.at += 1usize
     }
+    ret ok
 }
 
 // Whitespace, line endings and comments: what may lie between statements and between the
 // members of an array.
-fn skip_blank(p: *Parser) {
+fn skip_blank(p: *Parser) -> err {
     while p.at < p.source.len {
         let c = p.source[p.at]
-        if c == SPACE || c == TAB || c == LF || c == CR {
+        if c == SPACE || c == TAB || c == LF {
             p.at += 1usize
+        } else if c == CR && peek_at(p, 1usize) == LF {
+            p.at += 2usize
+        } else if c == CR {
+            ret Invalid
         } else if c == HASH {
-            skip_comment(p)
+            let comment_error = skip_comment(p)
+            if comment_error != ok { ret comment_error }
         } else {
             break
         }
     }
+    ret ok
 }
 
 fn expect_eol(p: *Parser) -> err {
     skip_space(p)
-    skip_comment(p)
+    let comment_error = skip_comment(p)
+    if comment_error != ok { ret comment_error }
     if p.at >= p.source.len { ret ok }
     if p.source[p.at] == LF {
         p.at += 1usize
@@ -176,11 +195,23 @@ fn escape(p: *Parser, multi: bool) -> err {
         // Only blanks may stand between the backslash and the line ending.
         var scan = p.at - 1usize
         while scan < p.source.len && (p.source[scan] == SPACE || p.source[scan] == TAB) { scan += 1usize }
-        if scan >= p.source.len || (p.source[scan] != LF && p.source[scan] != CR) { ret Invalid }
+        if scan >= p.source.len { ret Invalid }
+        if p.source[scan] == LF {
+            scan += 1usize
+        } else if p.source[scan] == CR && scan + 1usize < p.source.len && p.source[scan + 1usize] == LF {
+            scan += 2usize
+        } else {
+            ret Invalid
+        }
         while scan < p.source.len {
             let b = p.source[scan]
-            if b != SPACE && b != TAB && b != LF && b != CR { break }
-            scan += 1usize
+            if b == SPACE || b == TAB || b == LF {
+                scan += 1usize
+            } else if b == CR && scan + 1usize < p.source.len && p.source[scan + 1usize] == LF {
+                scan += 2usize
+            } else {
+                break
+            }
         }
         p.at = scan
         ret ok
@@ -228,6 +259,7 @@ fn multi_basic(p: *Parser) -> (str, err) {
             }
             break
         }
+        if c == CR && peek_at(p, 1usize) != LF { ret ("", Invalid) }
         if forbidden_raw_string_control(c) { ret ("", Invalid) }
         p.at += 1usize
         if c == BACKSLASH {
@@ -270,6 +302,7 @@ fn multi_literal(p: *Parser) -> (str, err) {
             p.at = stop
             ret (text, ok)
         }
+        if c == CR && peek_at(p, 1usize) != LF { ret ("", Invalid) }
         if forbidden_raw_string_control(c) { ret ("", Invalid) }
         p.at += 1usize
     }
@@ -596,11 +629,13 @@ fn parse(p: *Parser) -> (Event, err) {
     if p.depth > 0usize {
         let state = p.stack[p.depth - 1usize]
         if state == ARRAY_FIRST || state == ARRAY_MORE {
-            skip_blank(p)
+            let leading_blank_error = skip_blank(p)
+            if leading_blank_error != ok { ret (event, leading_blank_error) }
             if state == ARRAY_MORE {
                 if peek(p) == 44u8 {
                     p.at += 1usize
-                    skip_blank(p)
+                    let trailing_blank_error = skip_blank(p)
+                    if trailing_blank_error != ok { ret (event, trailing_blank_error) }
                 } else if peek(p) != 93u8 {
                     ret (event, Invalid)
                 }
@@ -656,7 +691,8 @@ fn parse(p: *Parser) -> (Event, err) {
         let eol_error = expect_eol(p)
         if eol_error != ok { ret (event, eol_error) }
     }
-    skip_blank(p)
+    let blank_error = skip_blank(p)
+    if blank_error != ok { ret (event, blank_error) }
     if p.at >= p.source.len {
         event.kind = .End
         ret (event, ok)

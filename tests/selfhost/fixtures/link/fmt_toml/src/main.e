@@ -303,6 +303,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if outcome("a = 12:30:::\n") != toml.Invalid { os.exit(52i32) }
     if outcome("a = 1979-05-27T07:32:00+99:00\n") != toml.Invalid { os.exit(53i32) }
 
+    // 54-57: only CRLF and LF are line endings, and comments may contain no raw
+    // control byte other than a tab.  A bare CR must not be quietly treated as
+    // whitespace or as a multi-line-string continuation.
+    if outcome("a = 1 # \x01\n") != toml.Invalid { os.exit(54i32) }
+    if outcome("a = [1\r, 2]\n") != toml.Invalid { os.exit(55i32) }
+    if outcome("a = \"\"\"x\ry\"\"\"\n") != toml.Invalid { os.exit(56i32) }
+    if outcome("a = \"\"\"x\\\ry\"\"\"\n") != toml.Invalid { os.exit(57i32) }
+
+    // 58: the corresponding CRLF forms remain valid.
+    if outcome("a = [\r\n  1,\r\n  2\r\n]\r\n") != ok { os.exit(58i32) }
+
     try io.print("fmt toml ok\n")
     ret ok
 }
