@@ -31,16 +31,16 @@ fn mul[F: type](a: Complex[F], b: Complex[F]) -> Complex[F] {
     ret make[F](a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re)
 }
 
-// Smith's algorithm: divide through by whichever part of `b` is larger.
+// Scale both operands by the largest divisor component before products can overflow.
 fn div[F: type](a: Complex[F], b: Complex[F]) -> Complex[F] {
-    if math.abs[F](b.re) >= math.abs[F](b.im) {
-        let ratio = b.im / b.re
-        let denominator = b.re + b.im * ratio
-        ret make[F]((a.re + a.im * ratio) / denominator, (a.im - a.re * ratio) / denominator)
-    }
-    let ratio = b.re / b.im
-    let denominator = b.im + b.re * ratio
-    ret make[F]((a.re * ratio + a.im) / denominator, (a.im * ratio - a.re) / denominator)
+    var scale = math.abs[F](b.re)
+    if math.abs[F](b.im) > scale { scale = math.abs[F](b.im) }
+    let ar = a.re / scale
+    let ai = a.im / scale
+    let br = b.re / scale
+    let bi = b.im / scale
+    let denominator = br * br + bi * bi
+    ret make[F]((ar * br + ai * bi) / denominator, (ai * br - ar * bi) / denominator)
 }
 
 fn neg[F: type](z: Complex[F]) -> Complex[F] { ret make[F](zero_of[F]() - z.re, zero_of[F]() - z.im) }
@@ -135,12 +135,33 @@ fn sinh_of[F: type](x: F) -> F {
     ret magnitude
 }
 
+// Multiplying an exact zero by an overflowing hyperbolic value would form NaN.
+// Compose the two signs with finite units instead, so the analytic signed zero stays.
+fn trigonometric_product[F: type](factor: F, hyperbolic: F) -> F {
+    if factor != zero_of[F]() { ret factor * hyperbolic }
+    let factor_sign = math.copysign[F](F(1.0f64), factor)
+    let hyperbolic_sign = math.copysign[F](F(1.0f64), hyperbolic)
+    ret math.copysign[F](zero_of[F](), factor_sign * hyperbolic_sign)
+}
+
+fn negative_trigonometric_product[F: type](factor: F, hyperbolic: F) -> F {
+    if factor != zero_of[F]() { ret zero_of[F]() - factor * hyperbolic }
+    let factor_sign = math.copysign[F](F(1.0f64), factor)
+    let hyperbolic_sign = math.copysign[F](F(1.0f64), hyperbolic)
+    ret math.copysign[F](zero_of[F](), zero_of[F]() - factor_sign * hyperbolic_sign)
+}
+
 fn sin[F: type](z: Complex[F]) -> Complex[F] {
-    ret make[F](math.sin[F](z.re) * cosh_of[F](z.im), math.cos[F](z.re) * sinh_of[F](z.im))
+    let sine = math.sin[F](z.re)
+    let cosine = math.cos[F](z.re)
+    ret make[F](trigonometric_product(sine, cosh_of[F](z.im)), trigonometric_product(cosine, sinh_of[F](z.im)))
 }
 
 fn cos[F: type](z: Complex[F]) -> Complex[F] {
-    ret make[F](math.cos[F](z.re) * cosh_of[F](z.im), zero_of[F]() - math.sin[F](z.re) * sinh_of[F](z.im))
+    ret make[F](
+        trigonometric_product(math.cos[F](z.re), cosh_of[F](z.im)),
+        negative_trigonometric_product(math.sin[F](z.re), sinh_of[F](z.im)),
+    )
 }
 
 fn tan[F: type](z: Complex[F]) -> Complex[F] { ret div[F](sin[F](z), cos[F](z)) }
