@@ -1,8 +1,10 @@
-# Writes src/main.e: an Ed25519 chain from the cryptography package -- a root, an
-# intermediate, a server leaf with DNS names and serverAuth, a leaf without extended
-# usage, an expired leaf, a leaf signed by an unknown CA -- with fixed dates, as DER
-# and as one PEM text, and the checks. Run from this directory after a change.
+# Writes src/main.e: a deterministic Ed25519 chain from the cryptography package -- a
+# root, an intermediate, a server leaf with DNS names and serverAuth, a leaf without
+# extended usage, an expired leaf, a leaf signed by an unknown CA -- with fixed dates,
+# as DER and as one PEM text. The fixed ECDSA/RSA/malformed-DER suffix is preserved.
 import datetime
+import sys
+from pathlib import Path
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -10,6 +12,11 @@ from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 UTC = datetime.timezone.utc
+FIXTURE = Path(__file__).with_name("src") / "main.e"
+PRESERVED_DER_START = "    let p256_root_der = "
+PRESERVED_DER_END = "    let pem_text = "
+MANUAL_SUFFIX_MARKER = "    // A P-384 key with an ecdsa-with-SHA384 self-signature (D2249): parsed as a P-384 key and verified."
+PRESERVED_DER_NAMES = ("p256_root", "p256_leaf", "p384_suffix")
 
 
 def key(seed):
@@ -222,65 +229,48 @@ BODY = '''    let (root, e1) = x509.parse(a, root_der)
     if e24 != ok || p256_chain.certificates.len != 2usize { os.exit(33) }
     let (p384_suffix, e25) = x509.parse(a, p384_suffix_der)
     if e25 != ok { os.exit(34) }
-    switch p384_suffix.public_key {
-    case .P384 as key:
-        if key.bytes[0] != 4u8 { os.exit(35) }
-    default:
-        os.exit(35)
-    }
-    if x509.verify_signature(a, p384_suffix, p384_suffix) != ok { os.exit(36) }
-    if x509.verify_signature(a, p384_suffix, p256_root) != x509.InvalidCertificate { os.exit(36) }
-    // Critical extensions and CA constraints fail closed.
-    let (unknown_critical, e26) = x509.parse(a, unknown_critical_der)
-    if e26 != ok || !unknown_critical.unhandled_critical { os.exit(37) }
-    let (bad_critical_chain, e27) = x509.verify(a, unknown_critical, options(roots[0..], intermediates[0..], "", .Any, 4u16))
-    if e27 != x509.InvalidCertificate { os.exit(38) }
-    let (bad_usage_mid, e28) = x509.parse(a, bad_usage_mid_der)
-    let (bad_usage_leaf, e29) = x509.parse(a, bad_usage_leaf_der)
-    if e28 != ok || e29 != ok || !bad_usage_mid.has_key_usage || bad_usage_mid.key_cert_sign { os.exit(39) }
-    var bad_usage_intermediates: [1]x509.Certificate = zero
-    bad_usage_intermediates[0] = bad_usage_mid
-    let (bad_usage_chain, e30) = x509.verify(a, bad_usage_leaf, options(roots[0..], bad_usage_intermediates[0..], "", .Any, 4u16))
-    if e30 != x509.UnknownAuthority { os.exit(40) }
-    let (zero_mid, e31) = x509.parse(a, zero_mid_der)
-    let (sub_mid, e32) = x509.parse(a, sub_mid_der)
-    let (deep_leaf, e33) = x509.parse(a, deep_leaf_der)
-    if e31 != ok || e32 != ok || e33 != ok || !zero_mid.has_path_len || zero_mid.path_len != 0u16 { os.exit(41) }
-    var deep_intermediates: [2]x509.Certificate = zero
-    deep_intermediates[0] = sub_mid
-    deep_intermediates[1] = zero_mid
-    let (deep_chain, e34) = x509.verify(a, deep_leaf, options(roots[0..], deep_intermediates[0..], "", .Any, 5u16))
-    if e34 != x509.UnknownAuthority { os.exit(42) }
-    // DNS name constraints apply to every descendant SAN.
-    let (constrained_mid, e35) = x509.parse(a, constrained_mid_der)
-    let (allowed_leaf, e36) = x509.parse(a, allowed_leaf_der)
-    let (outside_leaf, e37) = x509.parse(a, outside_leaf_der)
-    let (blocked_leaf, e38) = x509.parse(a, blocked_leaf_der)
-    if e35 != ok || e36 != ok || e37 != ok || e38 != ok { os.exit(43) }
-    if constrained_mid.permitted_dns.len != 1usize || !str.eq(constrained_mid.permitted_dns[0], ".allowed.example") { os.exit(44) }
-    if constrained_mid.excluded_dns.len != 1usize || !str.eq(constrained_mid.excluded_dns[0], "blocked.allowed.example") { os.exit(45) }
-    var constrained_intermediates: [1]x509.Certificate = zero
-    constrained_intermediates[0] = constrained_mid
-    let (allowed_chain, e39) = x509.verify(a, allowed_leaf, options(roots[0..], constrained_intermediates[0..], "www.allowed.example", .Any, 4u16))
-    if e39 != ok || allowed_chain.certificates.len != 3usize { os.exit(46) }
-    let (outside_chain, e40) = x509.verify(a, outside_leaf, options(roots[0..], constrained_intermediates[0..], "www.outside.example", .Any, 4u16))
-    if e40 != x509.NameMismatch { os.exit(47) }
-    let (blocked_chain, e41) = x509.verify(a, blocked_leaf, options(roots[0..], constrained_intermediates[0..], "blocked.allowed.example", .Any, 4u16))
-    if e41 != x509.NameMismatch { os.exit(48) }
-    // Wildcards cannot grant a hostname excluded by an ancestor constraint.
-    let (wildcard_leaf, e42) = x509.parse(a, wildcard_leaf_der)
-    let (safe_wildcard_leaf, e43) = x509.parse(a, safe_wildcard_leaf_der)
-    if e42 != ok || e43 != ok { os.exit(49) }
-    let (_, e44) = x509.verify(a, wildcard_leaf, options(roots[0..], constrained_intermediates[0..], "blocked.allowed.example", .Any, 4u16))
-    if e44 != x509.NameMismatch { os.exit(50) }
-    let (_, e45) = x509.verify(a, wildcard_leaf, options(roots[0..], constrained_intermediates[0..], "www.allowed.example", .Any, 4u16))
-    if e45 != x509.NameMismatch { os.exit(51) }
-    let (_, e46) = x509.verify(a, safe_wildcard_leaf, options(roots[0..], constrained_intermediates[0..], "www.safe.allowed.example", .Any, 4u16))
-    if e46 != ok { os.exit(52) }
-    ret ok
-}
 ''' % (start_ns, end_ns)
 
-parts = ["    let %s_der = %s" % (n, literal(d)) for n, d in der.items()] + ["    let pem_text = " + literal(pem_text)]
-open('src/main.e', 'w', encoding='utf-8', newline='\n').write(HEADER + "\n".join(parts) + "\n" + BODY)
-print({n: len(d) for n, d in der.items()})
+def preserved_der(source):
+    start = source.find(PRESERVED_DER_START)
+    end = source.find(PRESERVED_DER_END)
+    if start < 0 or end <= start:
+        raise RuntimeError("fixture is missing the preserved ECDSA certificate vectors")
+    return source[start:end].rstrip("\n")
+
+
+def manual_suffix(source):
+    at = source.find(MANUAL_SUFFIX_MARKER)
+    if at < 0:
+        raise RuntimeError("fixture is missing the preserved P-384/RSA regression suffix")
+    return source[at:]
+
+
+def render(source):
+    # OpenSSL ECDSA certificate signatures are randomized. Keep their checked-in
+    # vectors, along with the RSA and malformed-DER regressions, as one suffix so a
+    # generator run remains byte-stable and can never delete those checks.
+    parts = ["    let %s_der = %s" % (n, literal(d)) for n, d in der.items() if n not in PRESERVED_DER_NAMES]
+    parts.append(preserved_der(source))
+    parts.append("    let pem_text = " + literal(pem_text))
+    return HEADER + "\n".join(parts) + "\n" + BODY + manual_suffix(source)
+
+
+def main():
+    source = FIXTURE.read_text(encoding="utf-8")
+    generated = render(source)
+    if sys.argv[1:] == ["--check"]:
+        if source != generated:
+            print("crypto_x509 fixture is not current; run reference.py")
+            return 1
+        print("crypto_x509 reference ok")
+        return 0
+    if len(sys.argv) != 1:
+        print("usage: reference.py [--check]")
+        return 2
+    FIXTURE.write_text(generated, encoding="utf-8", newline="\n")
+    print({n: len(d) for n, d in der.items()})
+    return 0
+
+
+raise SystemExit(main())
