@@ -309,6 +309,11 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// Keep writeback's literal-IP policy aligned with e.net.ssrf's complete IPv4 range classifier.
+fn writeback_ssrf_ipv4_regressions() -> str {
+    ret "{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://100.64.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://100.64.0.1\\\"}\"}\n{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://192.0.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://192.0.0.1\\\"}\"}\n{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://198.18.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://198.18.0.1\\\"}\"}\n{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://224.0.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://224.0.0.1\\\"}\"}\n{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://240.0.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://240.0.0.1\\\"}\"}\n"
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
@@ -355,6 +360,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_42()) != 0u8 { os.exit(43i32) }
     if run_chunk(a, vectors_43()) != 0u8 { os.exit(44i32) }
     if run_chunk(a, vectors_44()) != 0u8 { os.exit(45i32) }
+    if run_chunk(a, writeback_ssrf_ipv4_regressions()) != 0u8 { os.exit(46i32) }
     try io.print("algo writeback ok")
     ret ok
 }

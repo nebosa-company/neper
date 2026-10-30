@@ -865,54 +865,16 @@ fn form_encode(a: *mem.Arena, s: str) -> str {
     ret str.done(&out)
 }
 
-fn is_digits(s: str) -> bool {
+// `parse_href` canonicalizes numeric hosts to dotted-decimal IPv4. Keep host-name
+// handling separate because `is_blocked_address` deliberately rejects non-addresses.
+fn is_ipv4_literal(s: str) -> bool {
     if s.len == 0usize { ret false }
     var at = 0usize
     while at < s.len {
-        if s[at] < 48u8 || s[at] > 57u8 { ret false }
+        if (s[at] < 48u8 || s[at] > 57u8) && s[at] != 46u8 { ret false }
         at += 1usize
     }
     ret true
-}
-
-fn small_number(s: str) -> i64 {
-    var n = 0i64
-    var at = 0usize
-    while at < s.len {
-        n = n * 10i64 + i64(s[at] - 48u8)
-        at += 1usize
-    }
-    ret n
-}
-
-// `{a}.{b}.{c}.{d}` of one to three digits each: the first two octets, or none.
-fn private_v4(host: str) -> bool {
-    var parts: [4]str = zero
-    var count = 0usize
-    var start = 0usize
-    var at = 0usize
-    while at <= host.len {
-        if at == host.len || host[at] == 46u8 {
-            if count >= 4usize { ret false }
-            parts[count] = host[start..at]
-            count += 1usize
-            start = at + 1usize
-        }
-        at += 1usize
-    }
-    if count != 4usize { ret false }
-    var k = 0usize
-    while k < 4usize {
-        if !is_digits(parts[k]) || parts[k].len > 3usize { ret false }
-        k += 1usize
-    }
-    let first = small_number(parts[0])
-    let second = small_number(parts[1])
-    if first == 10i64 || first == 127i64 || first == 0i64 { ret true }
-    if first == 169i64 && second == 254i64 { ret true }
-    if first == 172i64 && second >= 16i64 && second <= 31i64 { ret true }
-    if first == 192i64 && second == 168i64 { ret true }
-    ret false
 }
 
 // `{safe, reason}` for an outbound URL: http or https, not loopback, not a private or link-local address, not the cloud
@@ -927,8 +889,7 @@ fn is_safe_url(a: *mem.Arena, url: str) -> (bool, str) {
     if str.eq(host, "localhost") || str.ends_with(host, ".localhost") || str.eq(host, "::1") || str.starts_with(host, "127.") {
         ret (false, "loopback")
     }
-    if str.contains(host, ":") && ssrf.is_blocked_address(a, host) { ret (false, "private-network") }
-    if private_v4(host) { ret (false, "private-network") }
+    if (str.contains(host, ":") || is_ipv4_literal(host)) && ssrf.is_blocked_address(a, host) { ret (false, "private-network") }
     if str.eq(host, "metadata.google.internal") { ret (false, "metadata-endpoint") }
     if !str.contains(host, ".") && !str.contains(host, ":") { ret (false, "internal-hostname") }
     ret (true, "")
