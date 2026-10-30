@@ -134,7 +134,7 @@ fn collect(a: *mem.Arena, part: []const u8) -> (Parsed, err) {
                 }
                 if str.eq(name, "s") {
                     var spaces = 1usize
-                    let (c_text, has_c) = xml.attribute(&nodes[i], "text:c")
+                    let (c_text, has_c) = odf_attribute(&nodes[i], "c")
                     if has_c {
                         var c = 0usize
                         var k = 0usize
@@ -154,10 +154,10 @@ fn collect(a: *mem.Arena, part: []const u8) -> (Parsed, err) {
                 }
                 if str.eq(name, "p") || str.eq(name, "h") {
                     var style = ""
-                    let (named, has_named) = xml.attribute(&nodes[i], "text:style-name")
+                    let (named, has_named) = odf_attribute(&nodes[i], "style-name")
                     if has_named { style = named }
                     if str.eq(name, "h") {
-                        let (level, has_level) = xml.attribute(&nodes[i], "text:outline-level")
+                        let (level, has_level) = odf_attribute(&nodes[i], "outline-level")
                         if has_level { style = join(a, "Heading", level) } else { style = "Heading" }
                     }
                     styles[o] = style
@@ -269,8 +269,18 @@ fn odf_local(name: str) -> str {
     ret name
 }
 
+// Attribute prefixes, like element prefixes, are not significant to ODF.
+fn odf_attribute(node: *const xml.Node, name: str) -> (str, bool) {
+    var i = 0usize
+    while i < node.attributes.len {
+        if str.eq(odf_local(node.attributes[i].name), name) { ret (node.attributes[i].value, true) }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
 fn repeat_of(node: *const xml.Node, attribute: str) -> usize {
-    let (text, has) = xml.attribute(node, attribute)
+    let (text, has) = odf_attribute(node, attribute)
     if !has { ret 1usize }
     let (value, parse_error) = str.parse_u64(text)
     if parse_error != ok || value == 0u64 { ret 1usize }
@@ -364,8 +374,14 @@ fn walk_sheet(a: *mem.Arena, nodes: []const xml.Node, table: usize, fill: bool, 
     var started = false
     var cell_repeat = 1usize
     var cell_text = ""
+    var cell_value = ""
     var in_cell = false
     var last_paragraph = NO_OWNER
+    var cell_has_paragraph = false
+    var cell_has_content = false
+    var cell_builder: str.Builder = zero
+    var cell_builder_started = false
+    var cell_builder_failed = false
     var max_rows = 0usize
     var max_columns = 0usize
     var i = table + 1usize
@@ -378,6 +394,11 @@ fn walk_sheet(a: *mem.Arena, nodes: []const xml.Node, table: usize, fill: bool, 
             if is_row || is_cell {
                 // The cell before is finished.
                 if in_cell {
+                    if cell_has_paragraph {
+                        if fill {
+                            if cell_builder_started { cell_text = str.done(&cell_builder) } else { cell_text = "" }
+                        } else if cell_has_content { cell_text = "x" } else { cell_text = "" }
+                    } else { cell_text = cell_value }
                     emit_cell(fill, cells, columns, row, column, cell_repeat, row_repeat, cell_text, &max_rows, &max_columns)
                     column = advance_grid(column, cell_repeat, LIMIT_GRID_COLUMNS)
                     in_cell = false
@@ -386,40 +407,65 @@ fn walk_sheet(a: *mem.Arena, nodes: []const xml.Node, table: usize, fill: bool, 
             if is_row {
                 if started { row = advance_grid(row, row_repeat, LIMIT_GRID_ROWS) }
                 started = true
-                row_repeat = repeat_of(&nodes[i], "table:number-rows-repeated")
+                row_repeat = repeat_of(&nodes[i], "number-rows-repeated")
                 column = 0usize
             } else if is_cell {
                 in_cell = true
-                cell_repeat = repeat_of(&nodes[i], "table:number-columns-repeated")
+                cell_repeat = repeat_of(&nodes[i], "number-columns-repeated")
                 cell_text = ""
+                cell_value = ""
                 last_paragraph = NO_OWNER
+                cell_has_paragraph = false
+                cell_has_content = false
+                cell_builder_started = false
+                cell_builder_failed = false
                 // A number, date or boolean with no text paragraph shows its attribute.
-                let (value, has_value) = xml.attribute(&nodes[i], "office:value")
-                if has_value { cell_text = value }
-                let (date, has_date) = xml.attribute(&nodes[i], "office:date-value")
-                if has_date { cell_text = date }
-                let (flag, has_flag) = xml.attribute(&nodes[i], "office:boolean-value")
+                let (value, has_value) = odf_attribute(&nodes[i], "value")
+                if has_value { cell_value = value }
+                let (date, has_date) = odf_attribute(&nodes[i], "date-value")
+                if has_date { cell_value = date }
+                let (flag, has_flag) = odf_attribute(&nodes[i], "boolean-value")
                 if has_flag {
-                    if str.eq(flag, "true") { cell_text = "TRUE" } else { cell_text = "FALSE" }
+                    if str.eq(flag, "true") { cell_value = "TRUE" } else { cell_value = "FALSE" }
                 }
             }
         }
         if in_cell && nodes[i].kind == .Text {
             let owner = paragraph_of(nodes, i)
             if owner != NO_OWNER {
-                if last_paragraph == NO_OWNER {
-                    cell_text = nodes[i].value
-                } else if owner == last_paragraph {
-                    cell_text = join(a, cell_text, nodes[i].value)
-                } else {
-                    cell_text = join(a, join(a, cell_text, " "), nodes[i].value)
+                let separated = last_paragraph != NO_OWNER && owner != last_paragraph
+                if separated || nodes[i].value.len > 0usize { cell_has_content = true }
+                if !cell_has_paragraph {
+                    cell_has_paragraph = true
+                    if fill {
+                        let (made, builder_error) = str.builder(a, 0usize)
+                        if builder_error == ok {
+                            cell_builder = made
+                            cell_builder_started = true
+                        } else { cell_builder_failed = true }
+                    }
+                }
+                if fill && cell_builder_started && !cell_builder_failed {
+                    if separated {
+                        if str.push(&cell_builder, " ") != ok { cell_builder_failed = true }
+                    }
+                    if !cell_builder_failed {
+                        if str.push(&cell_builder, nodes[i].value) != ok { cell_builder_failed = true }
+                    }
                 }
                 last_paragraph = owner
             }
         }
         i += 1usize
     }
-    if in_cell { emit_cell(fill, cells, columns, row, column, cell_repeat, row_repeat, cell_text, &max_rows, &max_columns) }
+    if in_cell {
+        if cell_has_paragraph {
+            if fill {
+                if cell_builder_started { cell_text = str.done(&cell_builder) } else { cell_text = "" }
+            } else if cell_has_content { cell_text = "x" } else { cell_text = "" }
+        } else { cell_text = cell_value }
+        emit_cell(fill, cells, columns, row, column, cell_repeat, row_repeat, cell_text, &max_rows, &max_columns)
+    }
     *rows_out = max_rows
     *columns_out = max_columns
 }
@@ -480,7 +526,7 @@ fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err) {
     i = 0usize
     while i < nodes.len {
         if sheet_table(nodes, i) {
-            let (title, has_title) = xml.attribute(&nodes[i], "table:name")
+            let (title, has_title) = odf_attribute(&nodes[i], "name")
             names[n] = ""
             if has_title { names[n] = title }
             n += 1usize
