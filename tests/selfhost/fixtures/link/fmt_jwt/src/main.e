@@ -96,6 +96,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (escaped_alg, escaped_alg_error) = jwt.algorithm("{\"alg\":\"\\u0048S256\"}")
     if escaped_alg_error != ok || escaped_alg != .HS256 { os.exit(3i32) }
 
+    // 3b: no critical header extension is understood by this verifier.
+    let (crit_len, crit_sign_error) = jwt.sign_hs256("{\"alg\":\"HS256\",\"crit\":[\"b64\"],\"b64\":false}", payload_text(), hs_key(), buffer[..])
+    if crit_sign_error != ok { os.exit(31i32) }
+    let (_, crit_verify_error) = jwt.verify(buffer[0usize..crit_len], hs_key(), .HS256)
+    if crit_verify_error != jwt.Unsupported { os.exit(31i32) }
+
+    // 3c: the documented fixed verification header buffer reports TooSmall.
+    var large_header_token: [1373]u8 = zero
+    var large_at = 0usize
+    while large_at < 1367usize {
+        large_header_token[large_at] = 65u8
+        large_at += 1usize
+    }
+    large_header_token[large_at] = 46u8
+    large_header_token[large_at + 1usize] = 101u8
+    large_header_token[large_at + 2usize] = 51u8
+    large_header_token[large_at + 3usize] = 48u8
+    large_header_token[large_at + 4usize] = 46u8
+    large_header_token[large_at + 5usize] = 65u8
+    let (_, large_header_error) = jwt.verify(large_header_token[..], hs_key(), .HS256)
+    if large_header_error != jwt.TooSmall { os.exit(32i32) }
+
     // 4: EdDSA.
     let (public_bytes, public_error) = bytes.base64_decode(key_bytes[0..], "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg", .Url)
     if public_error != ok || public_bytes.len != 32usize { os.exit(4i32) }

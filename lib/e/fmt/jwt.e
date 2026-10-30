@@ -391,9 +391,11 @@ fn hmac_tag(alg: Alg, key: []const u8, message: []const u8) -> ([64]u8, usize) {
 
 // The header's `alg` must be `expected` and the signature must verify under `key`:
 // an HMAC secret for HS256/HS384/HS512, the 32 raw public key bytes for EdDSA.
-// `.None` is refused with Unsupported. A header the scanner cannot read, a bad
-// base64url segment or a signature of the wrong length is Malformed; a header
-// naming another algorithm, or a tag that differs, answers `false`.
+// `.None` is refused with Unsupported. `verify` has a fixed 1024-byte decoded
+// header buffer and returns TooSmall for a larger header. A header the scanner
+// cannot read, a bad base64url segment or a signature of the wrong length is
+// Malformed; a header naming another algorithm, or a tag that differs, answers
+// `false`.
 fn verify(token: str, key: []const u8, expected: Alg) -> (bool, err) {
     if expected == .None { ret (false, Unsupported) }
     let (parts, split_error) = split(token)
@@ -401,6 +403,9 @@ fn verify(token: str, key: []const u8, expected: Alg) -> (bool, err) {
     var header_buffer: [1024]u8 = zero
     let (header_json, header_error) = decode_segment(parts.header, header_buffer[0..])
     if header_error != ok { ret (false, header_error) }
+    let (_, has_crit, crit_error) = member(header_json, "crit")
+    if crit_error != ok { ret (false, crit_error) }
+    if has_crit { ret (false, Unsupported) }
     let (alg, alg_error) = algorithm(header_json)
     if alg_error == Malformed { ret (false, Malformed) }
     if alg_error != ok || alg != expected { ret (false, ok) }
