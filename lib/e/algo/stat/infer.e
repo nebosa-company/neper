@@ -112,7 +112,7 @@ fn chi_squared_independence(table: []const f64, rows: usize, cols: usize, yates:
     while r < rows {
         var c = 0usize
         while c < cols {
-            if table[r * cols + c] < 0.0f64 { ret (zero, Invalid) }
+            if !finite(table[r * cols + c]) || table[r * cols + c] < 0.0f64 { ret (zero, Invalid) }
             total += table[r * cols + c]
             c += 1usize
         }

@@ -283,6 +283,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, nan_t_error) = infer.sample_size_t(.OneSample, nan, 0.05f64, 0.8f64, true)
     let (_, nan_z_error) = infer.sample_size_z(.OneSample, nan, 0.05f64, 0.8f64, true)
     if nan_t_error != infer.Invalid || nan_z_error != infer.Invalid { os.exit(2i32) }
+    var table: [4]f64 = [4]f64{ 5.0f64, 4.0f64, 3.0f64, 2.0f64 }
+    var expected: [4]f64 = zero
+    table[0usize] = nan
+    let (_, nan_chi_error) = infer.chi_squared_independence(table[..], 2usize, 2usize, false, expected[..])
+    if nan_chi_error != infer.Invalid { os.exit(3i32) }
+    table[0usize] = mem.bitcast[f64](9218868437227405312u64)
+    let (_, inf_chi_error) = infer.chi_squared_independence(table[..], 2usize, 2usize, false, expected[..])
+    if inf_chi_error != infer.Invalid { os.exit(4i32) }
     try io.print("algo stat infer ok")
     ret ok
 }
