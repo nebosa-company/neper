@@ -216,6 +216,13 @@ fn main(a: *mem.Arena) -> err {
     payload[9usize] = 108u8
     payload[10usize] = 100u8
     if fs.write_file(a, "np-fs/one.txt", payload[..]) != ok { os.exit(30i32) }
+    // POSIX syscalls receive C strings, so a NUL in the caller's path must not
+    // turn a distinct Neper string into this existing file's name.
+    when target.os == .Linux || target.os == .Macos {
+        if fs.remove_file(a, "np-fs/one.txt\0suffix") != fs.Invalid { os.exit(293i32) }
+        let (nul_kept, nul_kept_error) = fs.exists(a, "np-fs/one.txt")
+        if nul_kept_error != ok || !nul_kept { os.exit(294i32) }
+    }
     let (read_back, read_error) = fs.read_file(a, "np-fs/one.txt", 0usize)
     if read_error != ok { os.exit(31i32) }
     if read_back.len != 11usize { os.exit(32i32) }
@@ -642,6 +649,29 @@ fn main(a: *mem.Arena) -> err {
     if fs.make_dirs_at(a, &root_holder, "at-made/nested") != ok { os.exit(311i32) }
     let (nested_entry, nested_entry_error) = fs.stat_at(a, &root_holder, "at-made/nested")
     if nested_entry_error != ok || nested_entry.kind != .Directory { os.exit(312i32) }
+
+    // Redundant separators name the same rooted directories, but the whole original
+    // path is screened before a safe-looking prefix is allowed to be created.
+    if fs.make_dirs_at(a, &root_holder, "one/") != ok { os.exit(313i32) }
+    let (trailing_entry, trailing_entry_error) = fs.stat_at(a, &root_holder, "one")
+    if trailing_entry_error != ok || trailing_entry.kind != .Directory { os.exit(314i32) }
+    if fs.make_dirs_at(a, &root_holder, "one//two") != ok { os.exit(315i32) }
+    let (repeated_entry, repeated_entry_error) = fs.stat_at(a, &root_holder, "one/two")
+    if repeated_entry_error != ok || repeated_entry.kind != .Directory { os.exit(316i32) }
+    if fs.make_dirs_at(a, &root_holder, "safe/../evil") != fs.Denied { os.exit(317i32) }
+    let (_, safe_error) = fs.stat_at(a, &root_holder, "safe")
+    if safe_error != fs.NotFound { os.exit(318i32) }
+    when target.os == .Windows {
+        if fs.make_dirs_at(a, &root_holder, "windows\\nested") != ok { os.exit(319i32) }
+        let (windows_entry, windows_entry_error) = fs.stat_at(a, &root_holder, "windows\\nested")
+        if windows_entry_error != ok || windows_entry.kind != .Directory { os.exit(320i32) }
+        if fs.remove_at(a, &root_holder, "windows\\nested", true) != ok { os.exit(321i32) }
+        if fs.remove_at(a, &root_holder, "windows", true) != ok { os.exit(322i32) }
+    }
+    if fs.remove_at(a, &root_holder, "one/two", true) != ok { os.exit(323i32) }
+    if fs.remove_at(a, &root_holder, "one", true) != ok { os.exit(324i32) }
+    if fs.remove_at(a, &root_holder, "at-made/nested", true) != ok { os.exit(325i32) }
+    if fs.remove_at(a, &root_holder, "at-made", true) != ok { os.exit(326i32) }
 
     // A name that would leave the root, and one that ignores it entirely.
     let (upward, upward_error) = fs.open_at(a, &root_holder, "../np-fs", root_flags, .NoSymlinks)

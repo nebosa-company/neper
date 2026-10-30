@@ -269,6 +269,12 @@ const FORMAT_SYMLINK: u32 = 40960u32
 // so every call that takes one copies it into the arena first. The caller marks the
 // arena and resets it, so the copy lasts exactly as long as the call.
 fn c_string(a: *mem.Arena, text: str) -> (usize, err) {
+    var scan = 0usize
+    while scan < text.len {
+        // Passing an interior NUL would make the kernel act on only the prefix.
+        if text[scan] == 0u8 { ret (0usize, Unsupported) }
+        scan += 1usize
+    }
     let (bytes, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
     if allocation_error != ok { ret (0usize, OutOfMemory) }
     var at = 0usize

@@ -248,6 +248,12 @@ fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail)
 fn stdin() -> File { ret File { raw: 0usize } }
 
 fn c_string(a: *mem.Arena, text: str) -> (usize, err) {
+    var scan = 0usize
+    while scan < text.len {
+        // Passing an interior NUL would make the kernel act on only the prefix.
+        if text[scan] == 0u8 { ret (0usize, Unsupported) }
+        scan += 1usize
+    }
     let (bytes, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
     if allocation_error != ok { ret (0usize, OutOfMemory) }
     var at = 0usize
