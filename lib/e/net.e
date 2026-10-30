@@ -185,7 +185,7 @@ fn parse_ip(s: str) -> (Address, err) {
 }
 
 fn put(dst: []u8, at: usize, byte: u8) -> (usize, bool) {
-    if at == dst.len { ret (at, false) }
+    if at >= dst.len { ret (at, false) }
     dst[at] = byte
     ret (at + 1usize, true)
 }

@@ -506,6 +506,7 @@ fn read_string(b: []const u8, at: *usize, scratch: []u8, used: *usize) -> (str, 
     if length > u64(b.len - *at) { ret ("", Compression) }
     let n = usize(length)
     let start = *used
+    if start > scratch.len { ret ("", TooSmall) }
     if huffman {
         let (written, e) = huffman_decode(b[*at..*at + n], scratch[start..])
         if e != ok { ret ("", e) }

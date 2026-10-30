@@ -43,6 +43,7 @@ fn server_new(calls: []Call, enc: h2.Table, dec: h2.Table, block: []u8, initial_
 }
 
 fn put_frame(dst: []u8, at: *usize, kind: u8, flags: u8, stream: u32, payload: []const u8) -> err {
+    if *at > dst.len { ret grpc.TooSmall }
     let (n, e) = h2.frame_encode(dst[*at..], kind, flags, stream, payload)
     if e != ok { ret grpc.TooSmall }
     *at += n

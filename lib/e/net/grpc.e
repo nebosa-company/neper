@@ -285,6 +285,7 @@ fn conn_new(streams: []Stream, enc: h2.Table, dec: h2.Table, block: []u8, initia
 }
 
 fn put_frame(dst: []u8, at: *usize, kind: u8, flags: u8, stream: u32, payload: []const u8) -> err {
+    if *at > dst.len { ret TooSmall }
     let (n, e) = h2.frame_encode(dst[*at..], kind, flags, stream, payload)
     if e != ok { ret TooSmall }
     *at += n

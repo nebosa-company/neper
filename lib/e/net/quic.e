@@ -100,6 +100,7 @@ fn varint_decode(src: []const u8) -> (u64, usize, err) {
 
 // Append a varint at `*at`.
 fn put_varint(dst: []u8, at: *usize, v: u64) -> err {
+    if *at > dst.len { ret TooSmall }
     let (n, e) = varint_encode(dst[*at..], v)
     if e != ok { ret e }
     *at = *at + n
