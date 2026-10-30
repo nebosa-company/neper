@@ -253,6 +253,8 @@ fn lfsr_next(r: *Lfsr) -> u32 {
 // and `scratch` each need `weights.len` slots. This duplicates
 // `e.algo.rand.dist.alias_build`, which cannot be imported from here because
 // `dist` imports this module.
+fn alias_finite(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
+
 fn alias_table(weights: []const f64, probability: []f64, alias: []usize, scratch: []usize) -> err {
     let n = weights.len
     if n == 0usize { ret Invalid }
@@ -260,11 +262,11 @@ fn alias_table(weights: []const f64, probability: []f64, alias: []usize, scratch
     var total = 0.0f64
     var i = 0usize
     while i < n {
-        if weights[i] < 0.0f64 { ret Invalid }
+        if !alias_finite(weights[i]) || weights[i] < 0.0f64 { ret Invalid }
         total += weights[i]
         i += 1usize
     }
-    if total <= 0.0f64 { ret Invalid }
+    if !alias_finite(total) || total <= 0.0f64 { ret Invalid }
     i = 0usize
     while i < n {
         probability[i] = weights[i] * f64(n) / total

@@ -235,6 +235,8 @@ fn importance_weight[Ctx: type](x: f64, ctx: *Ctx, target_density: fn(*Ctx, f64)
 
 // Walker's alias table over `weights` (any positive scale); both slices need
 // `weights.len` entries, and `scratch` as many too.
+fn alias_finite(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
+
 fn alias_build(weights: []const f64, probability: []f64, alias: []usize, scratch: []usize) -> (Alias, err) {
     let n = weights.len
     if n == 0usize { ret (zero, Invalid) }
@@ -242,11 +244,11 @@ fn alias_build(weights: []const f64, probability: []f64, alias: []usize, scratch
     var total = 0.0f64
     var i = 0usize
     while i < n {
-        if weights[i] < 0.0f64 { ret (zero, Invalid) }
+        if !alias_finite(weights[i]) || weights[i] < 0.0f64 { ret (zero, Invalid) }
         total += weights[i]
         i += 1usize
     }
-    if total <= 0.0f64 { ret (zero, Invalid) }
+    if !alias_finite(total) || total <= 0.0f64 { ret (zero, Invalid) }
     i = 0usize
     while i < n {
         probability[i] = weights[i] * f64(n) / total
