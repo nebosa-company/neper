@@ -3543,9 +3543,20 @@ fn write_two(out: []u8, at: usize, value: i64) -> usize {
     ret at + 2usize
 }
 
+// Four decimal year digits for the picker range; preserve wider or signed years.
+fn write_year(out: []u8, at: usize, value: i64) -> usize {
+    if value < 0i64 || value >= 10000i64 { ret at + control.write_i64(out[at..out.len], value) }
+    if at + 4usize > out.len { ret at }
+    out[at] = u8(48i64 + value / 1000i64 % 10i64)
+    out[at + 1usize] = u8(48i64 + value / 100i64 % 10i64)
+    out[at + 2usize] = u8(48i64 + value / 10i64 % 10i64)
+    out[at + 3usize] = u8(48i64 + value % 10i64)
+    ret at + 4usize
+}
+
 // A date as `YYYY-MM-DD` into `out`; the length.
 fn write_date(out: []u8, d: time.Date) -> usize {
-    let year_len = control.write_i64(out, i64(d.year))
+    let year_len = write_year(out, 0usize, i64(d.year))
     if year_len == 0usize || year_len + 6usize > out.len { ret 0usize }
     out[year_len] = 45u8
     var at = write_two(out, year_len + 1usize, i64(d.month))
@@ -3582,7 +3593,7 @@ fn write_date_in(out: []u8, d: time.Date, language: str) -> usize {
     if out.len < 12usize { ret 0usize }
     let form = date_form(language)
     if form.order == 2u8 {
-        var at = control.write_i64(out, i64(d.year))
+        var at = write_year(out, 0usize, i64(d.year))
         out[at] = form.separator
         at = write_two(out, at + 1usize, i64(d.month))
         out[at] = form.separator
@@ -3601,7 +3612,7 @@ fn write_date_in(out: []u8, d: time.Date, language: str) -> usize {
     }
     out[at] = form.separator
     at += 1usize
-    ret at + control.write_i64(out[at..out.len], i64(d.year))
+    ret write_year(out, at, i64(d.year))
 }
 
 // (D1231) The hint that names the locale's form: "mm/dd/yyyy", "dd.mm.yyyy",

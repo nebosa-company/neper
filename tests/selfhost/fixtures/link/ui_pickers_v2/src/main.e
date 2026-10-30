@@ -808,6 +808,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !mem.eq[u8](date_bytes[0usize..date_len], "2026/09/05") { os.exit(76i32) }
     date_len = overlay.write_date_in(date_bytes, release, "")
     if !mem.eq[u8](date_bytes[0usize..date_len], "2026-09-05") { os.exit(77i32) }
+    let year_one = time.Date { year: 1i32, month: 1u8, day: 2u8 }
+    let year_ninety_nine = time.Date { year: 99i32, month: 1u8, day: 2u8 }
+    let year_nine_ninety_nine = time.Date { year: 999i32, month: 1u8, day: 2u8 }
+    let year_thousand = time.Date { year: 1000i32, month: 1u8, day: 2u8 }
+    date_len = overlay.write_date(date_bytes, year_one)
+    if !mem.eq[u8](date_bytes[0usize..date_len], "0001-01-02") { os.exit(901i32) }
+    date_len = overlay.write_date_in(date_bytes, year_ninety_nine, "en-US")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "1/2/0099") { os.exit(902i32) }
+    date_len = overlay.write_date_in(date_bytes, year_nine_ninety_nine, "de-DE")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "02.01.0999") { os.exit(903i32) }
+    date_len = overlay.write_date_in(date_bytes, year_thousand, "ja-JP")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "1000/01/02") { os.exit(904i32) }
     let today_date = time.Date { year: 2026i32, month: 9u8, day: 25u8 }
     let (us_date, us_ok) = overlay.parse_date("9/5/2026", "en-US", today_date)
     let (gb_date, gb_ok) = overlay.parse_date("5/9/2026", "en-GB", today_date)
