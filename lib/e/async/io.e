@@ -198,7 +198,7 @@ fn attempt(r: *Record, ready: bool, failed: bool) {
     if settle_control(r) { ret }
     if !ready && (r.kind == .Accept || r.kind == .Connect) { ret }
     if r.kind == .Read {
-        let (got, read_error) = r.reader.read(r.reader.ctx, r.dst)
+        let (got, read_error) = io.read(&r.reader, r.dst)
         r.bytes = got
         if read_error != ok { settle(r, .Failed, read_error) } else { settle(r, .Succeeded, ok) }
         ret

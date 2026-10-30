@@ -14,6 +14,7 @@ use e.time
 const MINIMUM_I64: i64 = 0i64 - 9223372036854775807i64 - 1i64
 
 type PartialWriter = struct { token: *cancel.Token, calls: usize }
+type IdleReader = struct { requested: usize }
 
 fn partial_write(ctx: *void, src: []const u8) -> (usize, err) {
     let writer_state = mem.cast[*PartialWriter](ctx)
@@ -23,6 +24,12 @@ fn partial_write(ctx: *void, src: []const u8) -> (usize, err) {
         ret (2usize, ok)
     }
     ret (src.len, ok)
+}
+
+fn idle_read(ctx: *void, dst: []u8) -> (usize, err) {
+    let reader_state = mem.cast[*IdleReader](ctx)
+    reader_state.requested += dst.len
+    ret (0usize, ok)
 }
 
 fn loopback() -> os.SocketAddress {
@@ -106,6 +113,20 @@ fn partial_write_cancellation(a: *mem.Arena, loop: *async.Loop) -> i32 {
     ret 0i32
 }
 
+fn zero_progress_read(a: *mem.Arena, loop: *async.Loop, control: cancel.Control) -> i32 {
+    var reader_state = IdleReader { requested: 0usize }
+    let source = io.Reader { ctx: mem.cast[*void](&reader_state), read: idle_read }
+    var buffer: [1]u8 = zero
+    let (reading, read_error) = aio.read(a, loop, source, buffer[..], control)
+    if read_error != ok { ret 62i32 }
+    var read_op = reading
+    let (_, wait_error) = aio.wait[usize](loop, &read_op)
+    if wait_error != io.NoProgress { ret 63i32 }
+    let read_progress = aio.progress[usize](&read_op)
+    if aio.state[usize](&read_op) != .Failed || read_progress.bytes != 0u64 || !read_progress.known || reader_state.requested != 1usize { ret 64i32 }
+    ret 0i32
+}
+
 fn wait_any_pending_connect(a: *mem.Arena, loop: *async.Loop, control: cancel.Control) -> i32 {
     let (connect_record, record_error) = aio.new_record(a, loop, control, .Connect)
     if record_error != ok { ret 40i32 }
@@ -186,6 +207,8 @@ fn main(a: *mem.Arena) -> err {
     var token = cancel.token()
     let free = cancel.Control { token: &token, deadline: time.Instant { nanos: 0i64 }, has_deadline: false }
 
+    let zero_progress_code = zero_progress_read(a, &loop, free)
+    if zero_progress_code != 0i32 { os.exit(zero_progress_code) }
     let partial_write_code = partial_write_cancellation(a, &loop)
     if partial_write_code != 0i32 { os.exit(partial_write_code) }
     let pending_connect_code = wait_any_pending_connect(a, &loop, free)
