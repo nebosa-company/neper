@@ -354,13 +354,13 @@ fn subframe(b: *Bits, out: []i64, block: usize, width_in: u32) -> err {
             if order == 1usize {
                 p = out[i - 1usize]
             } else if order == 2usize {
-                p = 2i64 * out[i - 1usize] - out[i - 2usize]
+                p = 2i64 *% out[i - 1usize] -% out[i - 2usize]
             } else if order == 3usize {
-                p = 3i64 * out[i - 1usize] - 3i64 * out[i - 2usize] + out[i - 3usize]
+                p = 3i64 *% out[i - 1usize] -% 3i64 *% out[i - 2usize] +% out[i - 3usize]
             } else if order == 4usize {
-                p = 4i64 * out[i - 1usize] - 6i64 * out[i - 2usize] + 4i64 * out[i - 3usize] - out[i - 4usize]
+                p = 4i64 *% out[i - 1usize] -% 6i64 *% out[i - 2usize] +% 4i64 *% out[i - 3usize] -% out[i - 4usize]
             }
-            out[i] = p + out[i]
+            out[i] = p +% out[i]
             i += 1usize
         }
     } else if kind >= 32u32 {
@@ -393,7 +393,7 @@ fn subframe(b: *Bits, out: []i64, block: usize, width_in: u32) -> err {
                 acc = acc +% coefs[j] *% out[i - 1usize - j]
                 j += 1usize
             }
-            out[i] = (acc >> u32(shift)) + out[i]
+            out[i] = (acc >> u32(shift)) +% out[i]
             i += 1usize
         }
     } else {
@@ -402,11 +402,28 @@ fn subframe(b: *Bits, out: []i64, block: usize, width_in: u32) -> err {
     if wasted > 0u32 {
         var i = 0usize
         while i < block {
-            out[i] = out[i] << wasted
+            out[i] = out[i] *% (1i64 << wasted)
             i += 1usize
         }
     }
     ret ok
+}
+
+// Decoders reconstruct in i64 because fixed and LPC predictors can briefly
+// exceed the stored sample width.  Reject a stream before narrowing when its
+// reconstructed value cannot be represented by that width.
+fn sample_fits(value: i64, bits: u32) -> bool {
+    let limit = 1i64 << (bits - 1u32)
+    ret value >= -limit && value < limit
+}
+
+fn samples_fit(values: []const i64, bits: u32) -> bool {
+    var i = 0usize
+    while i < values.len {
+        if !sample_fits(values[i], bits) { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 // ------------------------------------------------------------------ frames
@@ -430,6 +447,7 @@ fn decode_frame(d: *Decoder, out: []i32, scratch: []i64) -> (usize, err) {
         if (h.assignment == .LeftSide && ch == 1usize) || (h.assignment == .RightSide && ch == 0usize) || (h.assignment == .MidSide && ch == 1usize) { width += 1u32 }
         let e = subframe(&b, scratch[ch * block..(ch + 1usize) * block], block, width)
         if e != ok { ret (0usize, e) }
+        if !samples_fit(scratch[ch * block..(ch + 1usize) * block], width) { ret (0usize, Malformed) }
         ch += 1usize
     }
     align(&b)
@@ -442,7 +460,9 @@ fn decode_frame(d: *Decoder, out: []i32, scratch: []i64) -> (usize, err) {
         while i < block {
             ch = 0usize
             while ch < channels {
-                out[i * channels + ch] = i32(scratch[ch * block + i])
+                let value = scratch[ch * block + i]
+                if !sample_fits(value, h.bits) { ret (0usize, Malformed) }
+                out[i * channels + ch] = i32.trunc(value)
                 ch += 1usize
             }
             i += 1usize
@@ -464,8 +484,9 @@ fn decode_frame(d: *Decoder, out: []i32, scratch: []i64) -> (usize, err) {
                 left = (mid + y) >> 1u32
                 right = (mid - y) >> 1u32
             }
-            out[i * 2usize] = i32(left)
-            out[i * 2usize + 1usize] = i32(right)
+            if !sample_fits(left, h.bits) || !sample_fits(right, h.bits) { ret (0usize, Malformed) }
+            out[i * 2usize] = i32.trunc(left)
+            out[i * 2usize + 1usize] = i32.trunc(right)
             i += 1usize
         }
     }
