@@ -188,5 +188,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // `done` does not flush, so every byte is either drained or still held.
     if drained.calls == 0usize { ret Failed }
     if drained.bytes + leftover.len != 200usize { ret Failed }
+
+    // A flushing builder may deliberately reserve no buffer. Once its arena is
+    // full, it must write through rather than surface `mem.Exhausted`.
+    var sealed_storage: [1]u8 = zero
+    var sealed = mem.arena_from(sealed_storage[..])
+    let (_, seal_error) = mem.alloc[u8](&sealed, 1usize)
+    if seal_error != ok { ret seal_error }
+    var direct = Drained { bytes: 0usize, calls: 0usize }
+    let direct_sink = str.Sink { ctx: mem.cast[*void](&direct), write: record_x }
+    var (zero_buffer, zero_buffer_error) = str.builder_to(&sealed, 0usize, direct_sink)
+    if zero_buffer_error != ok { ret zero_buffer_error }
+    try str.push(&zero_buffer, "xxx")
+    try str.push(&zero_buffer, "xx")
+    if direct.calls != 2usize || direct.bytes != 5usize { ret Failed }
     ret ok
 }

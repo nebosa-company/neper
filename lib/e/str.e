@@ -103,7 +103,11 @@ fn push(b: *Builder, s: str) -> err {
         // A builder with no sink stops here; one with a sink drains what it holds and
         // carries on, which is why a push on a flushing builder never reports
         // `mem.Exhausted` and why a push larger than the buffer streams through.
-        if !b.flushing || b.len == 0usize { ret grow_error }
+        if !b.flushing { ret grow_error }
+        // A zero-capacity flushing builder (or an emptied builder whose arena is
+        // full) has no buffered bytes to drain. Write the remaining input directly
+        // so streaming builders never turn an arena-exhaustion retry into failure.
+        if b.len == 0usize { ret b.sink.write(b.sink.ctx, s[written..]) }
         try b.sink.write(b.sink.ctx, mem.view(b.arena, b.start, b.len))
         b.len = 0usize
     }
