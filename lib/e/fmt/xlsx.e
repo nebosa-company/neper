@@ -11,13 +11,15 @@
 //
 // ponytail: a cell reference with more than 12 letters or 18 digits overflows i64 where JavaScript loses precision.
 //
-// Memory: the arena is retained; every table lives in it.
+// Memory: the arena is retained; every table lives in it and is capped at 1,048,576 data cells.
 
 use e.algo.formula as f
 use e.algo.formula.text as tx
 use e.mem
 use e.str
 use e.text.utf8 as utf8
+
+error TooLarge
 
 type Kind = enum u8 { Empty, Text, Number, Bool, Date, BadDate }
 
@@ -43,6 +45,7 @@ type FormulaCell = struct { reference: str, has_formula: bool, formula: str }
 type Description = struct { names: []const str, chosen: str, has_chosen: bool, ignored: []const str, needs_choice: bool }
 
 const HEADER_SCAN_ROWS: usize = 10usize
+const MAX_TABLE_CELLS: usize = 1048576usize
 
 fn empty_cell() -> Cell {
     ret Cell { kind: .Empty, text: "", number: 0.0f64, flag: false, year: 0i64, month: 0u32, day: 0u32, hour: 0u32, minute: 0u32, second: 0u32 }
@@ -197,38 +200,31 @@ fn last_filled_text(row: []const str) -> usize {
     ret 0usize
 }
 
+fn header_used(out: []const str, candidate: str) -> bool {
+    var i = 0usize
+    while i < out.len {
+        if str.eq(out[i], candidate) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
 // Empty and duplicate headings named deterministically: a blank is `Column N`, a repeat `name 2`, `name 3`.
 fn resolve_headers(a: *mem.Arena, raw: []const str, width: usize) -> ([]str, err) {
     let (out, oe) = mem.alloc[str](a, width + 1usize)
     if oe != ok { ret (zero, oe) }
-    let (seen_names, se) = mem.alloc[str](a, width + 1usize)
-    if se != ok { ret (zero, se) }
-    let (seen_counts, ce) = mem.alloc[usize](a, width + 1usize)
-    if ce != ok { ret (zero, ce) }
-    var seen = 0usize
     var i = 0usize
     while i < width {
         var name = ""
         if i < raw.len { name = js_trim(raw[i]) }
         if name.len == 0usize { name = f.join(a, "Column ", f.number_text(a, f64(i + 1usize))) }
-        var at = seen
-        var k = 0usize
-        while k < seen {
-            if str.eq(seen_names[k], name) {
-                at = k
-                break
-            }
-            k += 1usize
+        var candidate = name
+        var suffix = 1usize
+        while header_used(out[0usize..i], candidate) {
+            suffix += 1usize
+            candidate = f.join(a, f.join(a, name, " "), f.number_text(a, f64(suffix)))
         }
-        if at < seen {
-            seen_counts[at] += 1usize
-            name = f.join(a, f.join(a, name, " "), f.number_text(a, f64(seen_counts[at])))
-        } else {
-            seen_names[seen] = name
-            seen_counts[seen] = 1usize
-            seen += 1usize
-        }
-        out[i] = name
+        out[i] = candidate
         i += 1usize
     }
     ret (out[0usize..width], ok)
@@ -253,6 +249,7 @@ fn sheet_to_table(a: *mem.Arena, grid: []const []const Cell, pin: i64) -> (Table
         header_row = detect_header_row(a, grid)
     }
     let head_cells = grid[header_row]
+    if head_cells.len > MAX_TABLE_CELLS { ret (table, TooLarge) }
     let (header_text, he) = mem.alloc[str](a, head_cells.len + 1usize)
     if he != ok { ret (table, he) }
     var i = 0usize
@@ -265,6 +262,7 @@ fn sheet_to_table(a: *mem.Arena, grid: []const []const Cell, pin: i64) -> (Table
     var width = last_filled_text(headers_raw)
     i = 0usize
     while i < data.len {
+        if data[i].len > MAX_TABLE_CELLS { ret (table, TooLarge) }
         let w = last_filled(a, data[i])
         if w > width { width = w }
         i += 1usize
@@ -274,6 +272,7 @@ fn sheet_to_table(a: *mem.Arena, grid: []const []const Cell, pin: i64) -> (Table
         table.skipped_rows = header_row
         ret (table, ok)
     }
+    if width > MAX_TABLE_CELLS || data.len > MAX_TABLE_CELLS / width { ret (table, TooLarge) }
     let (headers, re) = resolve_headers(a, headers_raw, width)
     if re != ok { ret (table, re) }
     var renamed_count = 0usize
@@ -365,6 +364,7 @@ fn parse_cell_ref(ref: str) -> (i64, i64, bool) {
         } else {
             break
         }
+        if letters >= 12usize { ret (0i64, 0i64, false) }
         column = column * 26i64 + v
         letters += 1usize
         at += 1usize
