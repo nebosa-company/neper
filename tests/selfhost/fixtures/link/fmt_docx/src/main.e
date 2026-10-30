@@ -169,5 +169,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let oversized_image = [1]docx.Block{ docx.image(docx.Image { data: oversized_png[0..], width_emu: 0u32, height_emu: 0u32, alt: "" }) }
     let (_, oversized_error) = docx.encode(a, oversized_image[0..], docx.default_meta())
     if oversized_error != docx.BadImage { os.exit(43) }
+    // UTF-8 alone is not enough: XML 1.0 excludes both terminal BMP noncharacters.
+    let bad_noncharacter_runs = [1]docx.Run{ docx.run("bad\xef\xbf\xbe") }
+    let bad_noncharacter_blocks = [1]docx.Block{ docx.paragraph(docx.para(.Normal, bad_noncharacter_runs[0..])) }
+    let (_, bad_noncharacter_error) = docx.encode(a, bad_noncharacter_blocks[0..], docx.default_meta())
+    if bad_noncharacter_error != docx.BadText { os.exit(51) }
+    let bad_noncharacter_image = [1]docx.Block{ docx.image(docx.Image { data: img13, width_emu: 0u32, height_emu: 0u32, alt: "bad\xef\xbf\xbf" }) }
+    let (_, bad_noncharacter_image_error) = docx.encode(a, bad_noncharacter_image[0..], docx.default_meta())
+    if bad_noncharacter_image_error != docx.BadImage { os.exit(52) }
+    let (_, bad_noncharacter_meta_error) = docx.encode(a, no_blocks[0..0], docx.Meta { title: "bad\xef\xbf\xbf", creator: "", created: "", page: .A4 })
+    if bad_noncharacter_meta_error != docx.BadMeta { os.exit(53) }
+    // Attribute whitespace must use character references so an XML parser preserves it.
+    let escaped_alt_image = [1]docx.Block{ docx.image(docx.Image { data: img13, width_emu: 0u32, height_emu: 0u32, alt: "tab\x09line\x0abreak" }) }
+    let (escaped_alt, escaped_alt_error) = docx.encode(a, escaped_alt_image[0..], docx.default_meta())
+    if escaped_alt_error != ok { os.exit(54) }
+    if !str.contains(escaped_alt, "descr=\"tab&#9;line&#10;break\"") { os.exit(55) }
     ret ok
 }

@@ -81,12 +81,15 @@ fn default_meta() -> Meta {
 // ---- helpers -----------------------------------------------------------------------------
 
 fn clean(s: str) -> bool {
-    if !utf8.validate(s) { ret false }
-    var i = 0usize
-    while i < s.len {
-        let c = s[i]
-        if c < 32u8 && c != 9u8 && c != 10u8 { ret false }
-        i += 1usize
+    var at = 0usize
+    while at < s.len {
+        let (decoded, decode_error) = utf8.decode(s, at)
+        if decode_error != ok { ret false }
+        let scalar = decoded.scalar
+        if scalar < 32u32 && scalar != 9u32 && scalar != 10u32 { ret false }
+        // U+FFFE and U+FFFF are outside XML 1.0's Char production.
+        if scalar == 65534u32 || scalar == 65535u32 { ret false }
+        at += usize(decoded.width)
     }
     ret true
 }
@@ -116,6 +119,10 @@ fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err {
             rep = "&lt;"
         } else if c == 62u8 {
             rep = "&gt;"
+        } else if attribute && c == 9u8 {
+            rep = "&#9;"
+        } else if attribute && c == 10u8 {
+            rep = "&#10;"
         } else if attribute && c == 34u8 {
             rep = "&quot;"
         }
