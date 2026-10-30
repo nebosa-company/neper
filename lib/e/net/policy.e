@@ -1400,7 +1400,7 @@ fn no_cors_response_block_reason(a: *mem.Arena, document_origin: str, has_docume
 
 // --- cookie jar ------------------------------------------------------------------------------------------------
 
-type Cookie = struct { name: str, value: str, domain: str, path: str, has_partition: bool, partition: str, has_expires: bool, expires_ms: i64, secure: bool, http_only: bool, same_site: u8, created_ms: i64 }
+type Cookie = struct { name: str, value: str, domain: str, host_only: bool, path: str, has_partition: bool, partition: str, has_expires: bool, expires_ms: i64, secure: bool, http_only: bool, same_site: u8, created_ms: i64 }
 
 type CookieJar = struct { cookies: []Cookie, count: usize, block_third_party: bool }
 
@@ -1433,6 +1433,13 @@ fn domain_matches(a: *mem.Arena, host: str, domain: str) -> bool {
     let d = lower(a, domain)
     if str.eq(h, d) { ret true }
     ret str.ends_with(h, join(a, ".", d))
+}
+
+// A cookie without a Domain attribute is scoped to precisely the response host;
+// a domain cookie also covers its subdomains.
+fn cookie_domain_matches(a: *mem.Arena, host: str, c: Cookie) -> bool {
+    if !c.host_only { ret domain_matches(a, host, c.domain) }
+    ret str.eq(lower(a, host), lower(a, c.domain))
 }
 
 // Last two labels of a host (IP literals and short hosts as they are).
@@ -1612,6 +1619,7 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
     if name.len == 0usize { ret }
     if name.len + value.len > 4096usize { ret }
     var domain = request.host
+    var host_only = true
     var path = default_cookie_path(request.path)
     var secure = false
     var http_only = false
@@ -1649,7 +1657,10 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
                 has_domain_attr = true
                 var d = lower(a, trim(attr[7usize..]))
                 if str.starts_with(d, ".") { d = d[1usize..] }
-                if domain_matches(a, request.host, d) { domain = d }
+                if domain_matches(a, request.host, d) {
+                    domain = d
+                    host_only = false
+                }
             } else if str.starts_with(low, "path=") {
                 let p = trim(attr[5usize..])
                 if str.starts_with(p, "/") {
@@ -1662,8 +1673,15 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
                     has_expires = true
                     if secs <= 0i64 {
                         expires_ms = 0i64
+                    } else if secs > 9223372036854775807i64 / 1000i64 {
+                        expires_ms = 9223372036854775807i64
                     } else {
-                        expires_ms = now_ms + secs * 1000i64
+                        let millis = secs * 1000i64
+                        if now_ms > 9223372036854775807i64 - millis {
+                            expires_ms = 9223372036854775807i64
+                        } else {
+                            expires_ms = now_ms + millis
+                        }
                     }
                 }
             } else if str.starts_with(low, "expires=") {
@@ -1693,6 +1711,7 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
         name: name,
         value: value,
         domain: domain,
+        host_only: host_only,
         path: path,
         has_partition: partitioned,
         partition: partition_key,
@@ -1791,7 +1810,7 @@ fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool,
         } else if j.block_third_party && third_party {
             continue
         }
-        if !domain_matches(a, u.host, c.domain) { continue }
+        if !cookie_domain_matches(a, u.host, c) { continue }
         if !cookie_path_matches(u.path, c.path) { continue }
         if c.secure && !str.eq(u.scheme, "https") { continue }
         if !same_site_allowed(c.same_site, is_top_level) { continue }
@@ -1807,7 +1826,7 @@ fn jar_clear(j: *CookieJar) { j.count = 0usize }
 fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str) {
     var i = 0usize
     while i < j.count {
-        if domain_matches(a, origin_host, j.cookies[i].domain) {
+        if cookie_domain_matches(a, origin_host, j.cookies[i]) {
             jar_remove_at(j, i)
             continue
         }

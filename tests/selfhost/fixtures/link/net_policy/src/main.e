@@ -677,6 +677,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !default_child.present || !str.eq(default_child.value, "sid=default") { os.exit(83i32) }
     let default_sibling = policy.jar_cookie_header(a, &default_jar, "https://example.com/admin", true, "", false, 1800000000000i64)
     if default_sibling.present { os.exit(84i32) }
+    // A cookie with no Domain attribute is host-only, whereas an explicit Domain
+    // attribute also covers matching subdomains.
+    var scope_jar = policy.new_cookie_jar(a, false)
+    policy.jar_process_response(a, &scope_jar, "https://example.com/", "host=only; Path=/", "", false, 1800000000000i64)
+    let scope_root = policy.jar_cookie_header(a, &scope_jar, "https://example.com/", true, "", false, 1800000000000i64)
+    if !scope_root.present || !str.eq(scope_root.value, "host=only") { os.exit(100i32) }
+    let scope_child = policy.jar_cookie_header(a, &scope_jar, "https://sub.example.com/", true, "", false, 1800000000000i64)
+    if scope_child.present { os.exit(101i32) }
+    policy.jar_process_response(a, &scope_jar, "https://example.com/", "domain=wide; Domain=example.com; Path=/", "", false, 1800000000000i64)
+    let domain_child = policy.jar_cookie_header(a, &scope_jar, "https://sub.example.com/", true, "", false, 1800000000000i64)
+    if !domain_child.present || !str.eq(domain_child.value, "domain=wide") { os.exit(102i32) }
+    // A remote maximum Max-Age saturates rather than overflowing milliseconds.
+    var max_age_jar = policy.new_cookie_jar(a, false)
+    policy.jar_process_response(a, &max_age_jar, "https://example.com/", "far=1; Max-Age=9223372036854775807; Path=/", "", false, 1800000000000i64)
+    let far_cookie = policy.jar_cookie_header(a, &max_age_jar, "https://example.com/", true, "", false, 1800000000000i64)
+    if !far_cookie.present || !str.eq(far_cookie.value, "far=1") { os.exit(103i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
