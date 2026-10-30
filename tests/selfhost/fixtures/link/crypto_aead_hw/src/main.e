@@ -266,5 +266,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if p != 0i32 { os.exit(p) }
     let code = lengths_checked(a)
     if code != 0i32 { os.exit(code) }
+    var nonce: [12]u8 = zero
+    var output: [16]u8 = zero
+    var sealed: [16]u8 = zero
+    var empty_key: []u8 = zero
+    var key_20: [20]u8 = zero
+    let (_, empty_seal_error) = aead.gcm_seal(output[..], empty_key, nonce, empty_key, empty_key)
+    let (_, empty_open_error) = aead.gcm_open(output[..], empty_key, nonce, empty_key, sealed[..])
+    let (_, key_20_seal_error) = aead.gcm_seal(output[..], key_20[..], nonce, empty_key, empty_key)
+    let (_, key_20_open_error) = aead.gcm_open(output[..], key_20[..], nonce, empty_key, sealed[..])
+    if empty_seal_error != aead.InvalidKey || empty_open_error != aead.InvalidKey || key_20_seal_error != aead.InvalidKey || key_20_open_error != aead.InvalidKey { os.exit(110i32) }
     ret ok
 }

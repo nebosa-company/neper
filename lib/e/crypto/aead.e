@@ -896,6 +896,7 @@ fn gcm_open_hw(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, seale
 }
 
 fn gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err) {
+    if key.len != 16usize && key.len != 24usize && key.len != 32usize { ret (0usize, InvalidKey) }
     if dst.len < plain.len + 16usize { ret (0usize, TooSmall) }
     if gcm_seal_hw(dst, key, nonce, aad, plain) { ret (plain.len + 16usize, ok) }
     let (written, seal_error) = gcm_seal_portable(dst, key, nonce, aad, plain)
@@ -903,6 +904,7 @@ fn gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: [
 }
 
 fn gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) {
+    if key.len != 16usize && key.len != 24usize && key.len != 32usize { ret (0usize, InvalidKey) }
     if sealed.len < 16usize { ret (0usize, Authentication) }
     if dst.len < sealed.len - 16usize { ret (0usize, TooSmall) }
     let (present, authentic) = gcm_open_hw(dst, key, nonce, aad, sealed)
