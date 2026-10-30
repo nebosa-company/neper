@@ -1649,7 +1649,7 @@ fn self_test() -> err {
     if executable.bytes[0usize] != 127u8 || executable.bytes[16usize] != 2u8 || executable.bytes[18usize] != 62u8 || executable.bytes[24usize] != 120u8 || executable.bytes[25usize] != 0u8 || executable.bytes[26usize] != 64u8 { ret InvalidExecutable }
     if executable.bytes[64usize] != 1u8 || executable.bytes[68usize] != 5u8 { ret InvalidExecutable }
     if executable.bytes[96usize] != u8(total % 256usize) || executable.bytes[97usize] != u8((total / 256usize) % 256usize) { ret InvalidExecutable }
-    if executable.bytes[120usize] != 73u8 || executable.bytes[351usize] != 232u8 { ret InvalidExecutable }
+    if executable.bytes[120usize] != 73u8 || executable.bytes[119usize + STARTUP_MAIN_CALL] != 232u8 { ret InvalidExecutable }
     if executable.bytes[machine_start] != 195u8 { ret InvalidExecutable }
     ret ok
 }
