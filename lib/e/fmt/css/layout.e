@@ -761,22 +761,38 @@ fn list_ordinal(l: *Layout, node: u32) -> i64 {
                 let (n, good) = str.parse_i64(sv)
                 if good == ok { start = n }
             }
+            if reversed {
+                var total = 0i64
+                var k2 = l.d.nodes[usize(parent)].first_child
+                while k2 != html.NONE {
+                    if l.d.nodes[usize(k2)].kind == .Element && l.styles[usize(k2)].display == .ListItem { total += 1i64 }
+                    k2 = l.d.nodes[usize(k2)].next_sibling
+                }
+                if !has_start_attr(l, parent) { start = total }
+            }
+            var ordinal = start
+            var prior = l.d.nodes[usize(parent)].first_child
+            while prior != html.NONE && prior != node {
+                if l.d.nodes[usize(prior)].kind == .Element && l.styles[usize(prior)].display == .ListItem {
+                    let (prior_value, has_prior_value) = dom.get_attribute(l.d, prior, "value")
+                    if has_prior_value {
+                        let (n, good) = str.parse_i64(prior_value)
+                        if good == ok { ordinal = n }
+                    }
+                    if reversed {
+                        ordinal -= 1i64
+                    } else {
+                        ordinal += 1i64
+                    }
+                }
+                prior = l.d.nodes[usize(prior)].next_sibling
+            }
+            ret ordinal
         }
         var kid = l.d.nodes[usize(parent)].first_child
         while kid != html.NONE && kid != node {
             if l.d.nodes[usize(kid)].kind == .Element && l.styles[usize(kid)].display == .ListItem { count += 1i64 }
             kid = l.d.nodes[usize(kid)].next_sibling
-        }
-        if reversed {
-            var total = 0i64
-            var k2 = l.d.nodes[usize(parent)].first_child
-            while k2 != html.NONE {
-                if l.d.nodes[usize(k2)].kind == .Element && l.styles[usize(k2)].display == .ListItem { total += 1i64 }
-                k2 = l.d.nodes[usize(k2)].next_sibling
-            }
-            var first = total
-            if has_start_attr(l, parent) { first = start }
-            ret first - count
         }
     }
     ret start + count

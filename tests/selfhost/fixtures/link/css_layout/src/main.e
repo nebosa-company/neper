@@ -120,6 +120,19 @@ fn box_of(pg: *const Page, id: str) -> u32 {
     ret u32(pg.lay.boxes.len)
 }
 
+// The ordinal stored on the list marker for the element with `id`.
+fn marker_ordinal(pg: *const Page, id: str) -> (u32, bool) {
+    let node = dom.get_element_by_id(&pg.tree, pg.tree.root, id)
+    if node == html.NONE { ret (0u32, false) }
+    var i = 0usize
+    while i < pg.lay.boxes.len {
+        let b = &pg.lay.boxes.items[i]
+        if b.inner == layout.Inner.Marker && b.node == node { ret (b.aux, true) }
+        i += 1usize
+    }
+    ret (0u32, false)
+}
+
 fn is_rect(r: Rect, x: f64, y: f64, w: f64, h: f64) -> bool {
     ret r.found && near(r.x, x) && near(r.y, y) && near(r.w, w) && near(r.h, h)
 }
@@ -251,6 +264,14 @@ fn css_issue_regressions(a: *mem.Arena) {
     // signed-negation overflow during grid placement.
     let (p1192, ok1192) = build(a, "<div style=\"display:grid;grid-template-columns:[foo] 50px [foo] 50px [foo]\"><div id=a style=\"grid-column:foo -2147483648;height:10px\"></div></div>", "")
     if !ok1192 || !is_rect(rect_of(p1192, "a"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(170) }
+
+    // #540: a preceding explicit list-item value resets the following marker.
+    let (p540, ok540) = build(a, "<ol><li value=5>first</li><li id=next>second</li></ol>", "")
+    let (ordinal540, found540) = marker_ordinal(p540, "next")
+    if !ok540 || !found540 || ordinal540 != 6u32 { os.exit(172) }
+    let (p540_reversed, ok540_reversed) = build(a, "<ol reversed start=10><li value=5>first</li><li id=next>second</li></ol>", "")
+    let (ordinal540_reversed, found540_reversed) = marker_ordinal(p540_reversed, "next")
+    if !ok540_reversed || !found540_reversed || ordinal540_reversed != 4u32 { os.exit(173) }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
