@@ -300,7 +300,7 @@ fn interpolate(a: *mem.Arena, entries: []Entry, external: []const Entry, overrid
                     if flush_error != ok { ret flush_error }
                     let (found, present) = lookup_value(entries, i, external, override, name)
                     var piece = found
-                    if !present && has_default { piece = fallback }
+                    if has_default && (!present || found.len == 0usize) { piece = fallback }
                     let piece_error = str.push(&b, piece)
                     if piece_error != ok { ret piece_error }
                     at = after
