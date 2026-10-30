@@ -74,6 +74,11 @@ const bad = capture()
 assert.equal((await run(new Uint8Array([0, 1, 2, 3]), { stdout: bad.stdout, stderr: bad.stderr })).exitCode, 125)
 assert.notEqual(bad.got.stderr, '')
 
+// The host's file positions are JavaScript Numbers. A raw guest must not make
+// a valid i64 offset silently round when it crosses that representation's limit.
+const seekPastSafeInteger = new Uint8Array([0,97,115,109,1,0,0,0,1,29,4,96,9,127,127,127,127,127,126,126,127,127,1,127,96,4,127,126,127,127,1,127,96,1,127,0,96,0,0,2,104,3,22,119,97,115,105,95,115,110,97,112,115,104,111,116,95,112,114,101,118,105,101,119,49,9,112,97,116,104,95,111,112,101,110,0,0,22,119,97,115,105,95,115,110,97,112,115,104,111,116,95,112,114,101,118,105,101,119,49,7,102,100,95,115,101,101,107,0,1,22,119,97,115,105,95,115,110,97,112,115,104,111,116,95,112,114,101,118,105,101,119,49,9,112,114,111,99,95,101,120,105,116,0,2,3,2,1,3,5,3,1,0,1,7,19,2,6,109,101,109,111,114,121,2,0,6,95,115,116,97,114,116,0,3,10,47,1,45,0,65,3,65,0,65,0,65,1,65,1,66,0,66,0,65,0,65,8,16,0,26,65,8,40,2,0,66,129,128,128,128,128,128,128,16,65,0,65,16,16,1,16,2,11,11,7,1,0,65,0,11,1,102])
+assert.equal((await run(seekPastSafeInteger, { files: { '/f': 'x' }, stdout() {}, stderr() {} })).exitCode, 28, 'fd_seek rejects an unrepresentable offset')
+
 // threads (C207, D5679): the calling thread is the host and every wasm thread a Worker; both ways of answering a
 // request (Atomics.waitAsync, and a ping message where it is missing), exit from a thread, two runs at once, and
 // the one thing a compiled module cannot do (its memory limits are read from bytes)
