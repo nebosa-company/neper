@@ -898,7 +898,7 @@ fn atan2_64(y: f64, x: f64) -> f64 {
             ret 0.0f64 - 3.0f64 * k(PIO4_HI) - k(ATAN_LO_2)
         }
         if m == 0u32 { ret 0.0f64 }
-        if m == 1u32 { ret 0.0f64 - 0.0f64 }
+        if m == 1u32 { ret k(9223372036854775808u64) }
         if m == 2u32 { ret k(PI) + k(PI_LO) }
         ret 0.0f64 - k(PI) - k(PI_LO)
     }
@@ -1546,7 +1546,7 @@ fn pow64(x: f64, y: f64) -> f64 {
     } else {
         if (j & 2147483647i64) >= 1083231232i64 {
             // z <= -1075: underflow, with the same edge.
-            if ((j + 1064317952i64) | i64(i)) != 0i64 { ret s * 0.0f64 }
+            if ((j + 1064252416i64) | i64(i)) != 0i64 { ret s * 0.0f64 }
             if p_l <= z - p_h { ret s * 0.0f64 }
         }
     }
