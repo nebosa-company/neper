@@ -486,6 +486,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     header[20usize] = 2u8
     let (_, header_unknown_error) = elf.parse_header(header[..])
     if header_unknown_error != elf.Invalid { os.exit(22i32) }
+
+    // A PE32+ by-name thunk still encodes an RVA.  Values outside that range
+    // must be rejected rather than narrowed before resolving its hint/name.
+    var wide_thunk_data: [64]u8 = zero
+    wide_thunk_data[33usize] = 16u8
+    wide_thunk_data[36usize] = 1u8
+    var wide_thunk_image: pe.Image = zero
+    wide_thunk_image.plus = true
+    wide_thunk_image.size_of_headers = 64u32
+    var wide_thunk_import: pe.Import = zero
+    wide_thunk_import.first_thunk = 32u32
+    let (_, _, _, _, wide_thunk_error) = pe.import_thunk(wide_thunk_data[..], wide_thunk_image, wide_thunk_import, 0usize)
+    if wide_thunk_error != pe.Invalid { os.exit(23i32) }
+
+    // Export ordinals are externally visible u32 values; adding a file-controlled
+    // base must not wrap a non-zero ordinal back into the low range.
+    var ordinal_data: [64]u8 = zero
+    ordinal_data[0usize] = 16u8
+    ordinal_data[8usize] = 1u8
+    ordinal_data[16usize] = 120u8
+    var ordinal_image: pe.Image = zero
+    ordinal_image.size_of_headers = 64u32
+    var ordinal_exports: pe.Exports = zero
+    ordinal_exports.ordinal_base = 4294967295u32
+    ordinal_exports.name_count = 1u32
+    ordinal_exports.name_table = 0u32
+    ordinal_exports.ordinal_table = 8u32
+    let (_, _, ordinal_error) = pe.export_name(ordinal_data[..], ordinal_image, ordinal_exports, 0usize)
+    if ordinal_error != pe.Invalid { os.exit(24i32) }
+
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
