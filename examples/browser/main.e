@@ -1,7 +1,8 @@
 // The Neper browser: a window with a tab strip, back / forward / reload buttons, an omnibox, a bookmark toggle and the page, over
 // `e.web.shell` (tabs, session history, omnibox rules, about: pages, bookmarks) and `e.web.page` (the engine). `browser [URL]`
 // opens URL (default about:blank). The profile (bookmarks and visit log) is `neper-browser.profile` in the working directory,
-// read at start and written on exit.
+// read at start and written on exit. Build with `--arena 4g`: each tab reserves 128 MB and the TLS chain check allocates from
+// the same arena, so the default one fails every https page as "not private" or "could not be loaded".
 use e.fs
 use e.gfx.paint
 use e.gpu
