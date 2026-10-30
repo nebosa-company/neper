@@ -10,16 +10,24 @@
 // writer emits block style, quoting a string that would otherwise read as another
 // type; the typed codec follows the other codecs, a struct being a mapping of its
 // fields.
+// Plain and quoted scalar continuations are Unsupported; flow collections are
+// single-line.
+// Block collections are limited to 256 entries and flow collections to 64; both
+// report TooLarge. A zero max_depth means 16, and larger requests are capped at 16
+// so the fixed parser frames stay within a bounded stack.
 use e.io
 use e.mem
 use e.meta
 use e.str
+use e.text.utf8 as utf8
 
 type Pair = struct { key: Value, value: Value }
 type Value = union enum u8 { Null, Bool: bool, Integer: i64, Float: f64, String: str, Sequence: []const Value, Mapping: []const Pair }
 type Options = struct { max_depth: u16, allow_duplicate_keys: bool }
+const MAX_DEPTH: u16 = 16u16
 error Invalid
 error TooDeep
+error TooLarge
 error DuplicateKey
 error Unsupported
 
@@ -41,6 +49,8 @@ fn is_blank(text: str) -> bool {
 // and outside quotes.
 fn strip_comment(text: str) -> str {
     var quote = 0u8
+    var scalar_start = true
+    var flow_depth = 0usize
     var i = 0usize
     while i < text.len {
         let c = text[i]
@@ -50,13 +60,45 @@ fn strip_comment(text: str) -> str {
             if quote == 34u8 && c == 92u8 && i + 1usize < text.len {
                 i += 1usize
             } else {
-                if c == quote { quote = 0u8 }
+                if quote == 39u8 && c == 39u8 && i + 1usize < text.len && text[i + 1usize] == 39u8 {
+                    i += 1usize
+                } else {
+                    if c == quote {
+                        quote = 0u8
+                        scalar_start = false
+                    }
+                }
             }
         } else {
-            if c == 34u8 || c == 39u8 {
+            if scalar_start && (c == 34u8 || c == 39u8) {
                 quote = c
             } else {
                 if c == 35u8 && (i == 0usize || text[i - 1usize] == 32u8 || text[i - 1usize] == 9u8) { ret str.trim_end(text[..i]) }
+                if scalar_start && (c == 91u8 || c == 123u8) {
+                    flow_depth += 1usize
+                    scalar_start = true
+                } else {
+                if flow_depth > 0usize && (c == 93u8 || c == 125u8) {
+                    flow_depth -= 1usize
+                    scalar_start = false
+                } else {
+                if flow_depth > 0usize && c == 44u8 {
+                    scalar_start = true
+                } else {
+                if c == 58u8 && ((i + 1usize == text.len || text[i + 1usize] == 32u8 || text[i + 1usize] == 9u8) || flow_depth > 0usize) {
+                    scalar_start = true
+                } else {
+                if scalar_start && c == 45u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8 || text[i + 1usize] == 9u8) {
+                    scalar_start = true
+                } else {
+                if c != 32u8 && c != 9u8 {
+                    scalar_start = false
+                }
+                }
+                }
+                }
+                }
+                }
             }
         }
         i += 1usize
@@ -82,7 +124,6 @@ fn split_lines(a: *mem.Arena, source: str) -> ([]Line, err) {
         if raw.len > 0usize && raw[raw.len - 1usize] == 13u8 { raw = raw[..raw.len - 1usize] }
         var indent = 0usize
         while indent < raw.len && raw[indent] == 32u8 { indent += 1usize }
-        if indent < raw.len && raw[indent] == 9u8 { ret (zero, Invalid) }
         lines[used] = Line { indent: indent, text: strip_comment(raw[indent..]), raw: raw }
         used += 1usize
         at = stop + 1usize
@@ -102,8 +143,47 @@ fn all_digits(text: str, from: usize) -> bool {
     ret true
 }
 
+fn parse_plain_float(a: *mem.Arena, text: str, from: usize, has_point: bool, point_at: usize, exponent_at: usize) -> (f64, err) {
+    var normalize = text.len > 0usize && text[0] == 43u8
+    if has_point && (point_at == from || point_at + 1usize == exponent_at) { normalize = true }
+    if has_point && point_at + 1usize == text.len { normalize = true }
+    var probe = 0usize
+    while probe < text.len {
+        if text[probe] == 69u8 { normalize = true }
+        probe += 1usize
+    }
+    if !normalize {
+        let (number, number_error) = str.parse_f64(text)
+        ret (number, number_error)
+    }
+    let (out, out_error) = mem.alloc[u8](a, text.len + 2usize)
+    if out_error != ok { ret (0.0, out_error) }
+    var used = 0usize
+    var i = 0usize
+    while i < text.len {
+        if i == point_at && has_point && point_at == from {
+            out[used] = 48u8
+            used += 1usize
+        }
+        if i == 0usize && text[i] == 43u8 {
+            i += 1usize
+            continue
+        }
+        let c = text[i]
+        if c == 69u8 { out[used] = 101u8 } else { out[used] = c }
+        used += 1usize
+        if has_point && c == 46u8 && (i + 1usize == text.len || i + 1usize == exponent_at) {
+            out[used] = 48u8
+            used += 1usize
+        }
+        i += 1usize
+    }
+    let (number, number_error) = str.parse_f64(out[..used])
+    ret (number, number_error)
+}
+
 // A plain scalar by the core schema: null, bool, integer, float, else a string.
-fn resolve_plain(text: str) -> (Value, err) {
+fn resolve_plain(a: *mem.Arena, text: str) -> (Value, err) {
     if text.len == 0usize || str.eq(text, "~") || str.eq(text, "null") || str.eq(text, "Null") || str.eq(text, "NULL") { ret (.Null, ok) }
     if str.eq(text, "true") || str.eq(text, "True") || str.eq(text, "TRUE") { ret (Value{ Bool: true }, ok) }
     if str.eq(text, "false") || str.eq(text, "False") || str.eq(text, "FALSE") { ret (Value{ Bool: false }, ok) }
@@ -120,7 +200,7 @@ fn resolve_plain(text: str) -> (Value, err) {
         ret (Value{ Float: inf }, ok)
     }
     if str.eq(body, ".nan") || str.eq(body, ".NaN") || str.eq(body, ".NAN") { ret (Value{ Float: mem.bitcast[f64](9221120237041090560u64) }, ok) }
-    if body.len > 2usize && body[0] == 48u8 && (body[1] == 120u8 || body[1] == 111u8) {
+    if from == 0usize && body.len > 2usize && body[0] == 48u8 && (body[1] == 120u8 || body[1] == 111u8) {
         var radix = 16u8
         if body[1] == 111u8 { radix = 8u8 }
         let (magnitude, radix_error) = str.parse_u64_radix(body[2usize..], radix)
@@ -132,28 +212,35 @@ fn resolve_plain(text: str) -> (Value, err) {
         ret (Value{ String: text }, ok)
     }
     if all_digits(body, 0usize) {
-        let (number, number_error) = str.parse_i64(text)
+        var decimal = text
+        if text[0] == 43u8 { decimal = body }
+        let (number, number_error) = str.parse_i64(decimal)
         if number_error == ok { ret (Value{ Integer: number }, ok) }
         ret (Value{ String: text }, ok)
     }
     // A float has digits with a point or an exponent and nothing else.
-    var digits = 0usize
+    var mantissa_digits = 0usize
+    var exponent_digits = 0usize
     var points = 0usize
     var exponents = 0usize
+    var point_at = 0usize
+    var exponent_at = text.len
     var shape_ok = body.len > 0usize
     var i = 0usize
     while i < body.len {
         let c = body[i]
         if str.is_ascii_digit(c) {
-            digits += 1usize
+            if exponents == 0usize { mantissa_digits += 1usize } else { exponent_digits += 1usize }
         } else {
         if c == 46u8 {
             points += 1usize
+            point_at = from + i
             if exponents > 0usize { shape_ok = false }
         } else {
         if c == 101u8 || c == 69u8 {
             exponents += 1usize
-            if digits == 0usize || i + 1usize >= body.len { shape_ok = false }
+            exponent_at = from + i
+            if mantissa_digits == 0usize || i + 1usize >= body.len { shape_ok = false }
             if i + 1usize < body.len && (body[i + 1usize] == 43u8 || body[i + 1usize] == 45u8) { i += 1usize }
         } else {
             shape_ok = false
@@ -162,9 +249,11 @@ fn resolve_plain(text: str) -> (Value, err) {
         }
         i += 1usize
     }
-    if shape_ok && digits > 0usize && points <= 1usize && exponents <= 1usize && (points == 1usize || exponents == 1usize) {
-        let (number, number_error) = str.parse_f64(text)
+    if exponents > 0usize && exponent_digits == 0usize { shape_ok = false }
+    if shape_ok && mantissa_digits > 0usize && points <= 1usize && exponents <= 1usize && (points == 1usize || exponents == 1usize) {
+        let (number, number_error) = parse_plain_float(a, text, from, points == 1usize, point_at, exponent_at)
         if number_error == ok { ret (Value{ Float: number }, ok) }
+        if number_error == mem.Exhausted { ret (zero, number_error) }
     }
     ret (Value{ String: text }, ok)
 }
@@ -203,7 +292,17 @@ fn push_utf8(out: []u8, at: usize, scalar: u32) -> usize {
 fn unescape_double(a: *mem.Arena, body: str) -> (str, err) {
     let (slash, has_slash) = str.find(body, "\\")
     if !has_slash { ret (body, ok) }
-    let (out, out_error) = mem.alloc[u8](a, body.len)
+    var capacity = body.len
+    var scan = 0usize
+    while scan + 1usize < body.len {
+        if body[scan] == 92u8 && (body[scan + 1usize] == 76u8 || body[scan + 1usize] == 80u8) {
+            capacity += 1usize
+            scan += 2usize
+        } else {
+            scan += 1usize
+        }
+    }
+    let (out, out_error) = mem.alloc[u8](a, capacity)
     if out_error != ok { ret ("", out_error) }
     var used = 0usize
     var i = 0usize
@@ -219,10 +318,31 @@ fn unescape_double(a: *mem.Arena, body: str) -> (str, err) {
         if i >= body.len { ret ("", Invalid) }
         let e = body[i]
         i += 1usize
+        if e == 97u8 { out[used] = 7u8 } else {
+        if e == 98u8 { out[used] = 8u8 } else {
+        if e == 102u8 { out[used] = 12u8 } else {
+        if e == 101u8 { out[used] = 27u8 } else {
+        if e == 118u8 { out[used] = 11u8 } else {
         if e == 110u8 { out[used] = 10u8 } else {
         if e == 116u8 { out[used] = 9u8 } else {
         if e == 114u8 { out[used] = 13u8 } else {
         if e == 48u8 { out[used] = 0u8 } else {
+        if e == 78u8 {
+            used = push_utf8(out, used, 133u32)
+            continue
+        } else {
+        if e == 95u8 {
+            used = push_utf8(out, used, 160u32)
+            continue
+        } else {
+        if e == 76u8 {
+            used = push_utf8(out, used, 8232u32)
+            continue
+        } else {
+        if e == 80u8 {
+            used = push_utf8(out, used, 8233u32)
+            continue
+        } else {
         if e == 34u8 || e == 92u8 || e == 47u8 || e == 32u8 { out[used] = e } else {
         if e == 120u8 || e == 117u8 || e == 85u8 {
             var width = 2usize
@@ -243,6 +363,15 @@ fn unescape_double(a: *mem.Arena, body: str) -> (str, err) {
             continue
         } else {
             ret ("", Invalid)
+        }
+        }
+        }
+        }
+        }
+        }
+        }
+        }
+        }
         }
         }
         }
@@ -317,7 +446,7 @@ fn scalar_value(a: *mem.Arena, text: str) -> (Value, err) {
     }
     if trimmed.len > 0usize && (trimmed[0] == 38u8 || trimmed[0] == 42u8 || trimmed[0] == 33u8 || trimmed[0] == 37u8) { ret (zero, Unsupported) }
     if trimmed.len > 0usize && (trimmed[0] == 34u8 || trimmed[0] == 39u8) { ret (zero, Invalid) }
-    let (resolved, resolve_error) = resolve_plain(trimmed)
+    let (resolved, resolve_error) = resolve_plain(a, trimmed)
     ret (resolved, resolve_error)
 }
 
@@ -339,7 +468,7 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
                 at += 1usize
                 break
             }
-            if count == 64usize { ret (zero, at, Invalid) }
+            if count == 64usize { ret (zero, at, TooLarge) }
             let (item, after, item_error) = flow_value(p, text, at, depth + 1usize)
             if item_error != ok { ret (zero, at, item_error) }
             items[count] = item
@@ -365,7 +494,7 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
                 at += 1usize
                 break
             }
-            if count == 64usize { ret (zero, at, Invalid) }
+            if count == 64usize { ret (zero, at, TooLarge) }
             let (key, after_key, key_error) = flow_value(p, text, at, depth + 1usize)
             if key_error != ok { ret (zero, at, key_error) }
             at = after_key
@@ -422,9 +551,51 @@ fn same_key(a: Value, b: Value) -> bool {
         default:
             ret false
         }
+    case .Float as x:
+        switch b {
+        case .Float as y:
+            ret x == y || (x != x && y != y)
+        default:
+            ret false
+        }
     case .Null:
         switch b {
         case .Null:
+            ret true
+        default:
+            ret false
+        }
+    case .Sequence as x:
+        switch b {
+        case .Sequence as y:
+            if x.len != y.len { ret false }
+            var i = 0usize
+            while i < x.len {
+                if !same_key(x[i], y[i]) { ret false }
+                i += 1usize
+            }
+            ret true
+        default:
+            ret false
+        }
+    case .Mapping as x:
+        switch b {
+        case .Mapping as y:
+            if x.len != y.len { ret false }
+            var i = 0usize
+            while i < x.len {
+                var matched = false
+                var j = 0usize
+                while j < y.len {
+                    if same_key(x[i].key, y[j].key) && same_key(x[i].value, y[j].value) {
+                        matched = true
+                        break
+                    }
+                    j += 1usize
+                }
+                if !matched { ret false }
+                i += 1usize
+            }
             ret true
         default:
             ret false
@@ -444,6 +615,16 @@ fn has_key(pairs: []const Pair, key: Value) -> bool {
 }
 
 // --- Block structure.
+
+fn has_indent_tab(line: Line) -> bool {
+    ret line.indent < line.raw.len && line.raw[line.indent] == 9u8
+}
+
+fn has_indented_continuation(p: *Parser, parent_indent: usize) -> bool {
+    var probe = p.at
+    while probe < p.lines.len && is_blank(p.lines[probe].text) { probe += 1usize }
+    ret probe < p.lines.len && p.lines[probe].indent > parent_indent
+}
 
 // Skips blank lines; false at the end.
 fn skip_blank(p: *Parser) -> bool {
@@ -469,6 +650,10 @@ fn parse_inline_or_below(p: *Parser, rest: str, parent_indent: usize, depth: usi
             ret (flow, ok)
         }
         let (scalar, scalar_error) = scalar_value(p.a, trimmed)
+        if scalar_error == Invalid && (trimmed[0] == 34u8 || trimmed[0] == 39u8) && has_indented_continuation(p, parent_indent) {
+            ret (zero, Unsupported)
+        }
+        if scalar_error == ok && has_indented_continuation(p, parent_indent) { ret (zero, Unsupported) }
         ret (scalar, scalar_error)
     }
     p.at += 1usize
@@ -548,19 +733,21 @@ fn parse_node(p: *Parser, indent: usize, depth: usize) -> (Value, err) {
     if depth > usize(p.options.max_depth) { ret (zero, TooDeep) }
     if !skip_blank(p) { ret (.Null, ok) }
     let first = p.lines[p.at]
+    if has_indent_tab(first) { ret (zero, Invalid) }
     if first.indent != indent { ret (zero, Invalid) }
     if first.text.len > 0usize && first.text[0] == 45u8 && (first.text.len == 1usize || first.text[1] == 32u8) {
         // A sequence at this indent.
         var items: [256]Value = zero
         var count = 0usize
         while skip_blank(p) && p.lines[p.at].indent == indent && p.lines[p.at].text.len > 0usize && p.lines[p.at].text[0] == 45u8 && (p.lines[p.at].text.len == 1usize || p.lines[p.at].text[1] == 32u8) {
-            if count == 256usize { ret (zero, Invalid) }
+            if has_indent_tab(p.lines[p.at]) { ret (zero, Invalid) }
+            if count == 256usize { ret (zero, TooLarge) }
             let text = p.lines[p.at].text
             var rest = ""
             if text.len > 1usize { rest = text[2usize..] }
             let trimmed = str.trim(rest)
             let nested_sequence = trimmed.len > 0usize && trimmed[0] == 45u8 && (trimmed.len == 1usize || trimmed[1] == 32u8)
-            if trimmed.len > 0usize && trimmed[0] != 91u8 && trimmed[0] != 123u8 && trimmed[0] != 124u8 && trimmed[0] != 62u8 && trimmed[0] != 34u8 && trimmed[0] != 39u8 {
+            if trimmed.len > 0usize && trimmed[0] != 91u8 && trimmed[0] != 123u8 && trimmed[0] != 124u8 && trimmed[0] != 62u8 {
                 let (colon, has_colon) = key_end(trimmed)
                 if has_colon || nested_sequence {
                     // The item is a mapping or sequence whose first entry sits on this line.
@@ -588,10 +775,11 @@ fn parse_node(p: *Parser, indent: usize, depth: usize) -> (Value, err) {
         var pairs: [256]Pair = zero
         var count = 0usize
         while skip_blank(p) && p.lines[p.at].indent == indent {
+            if has_indent_tab(p.lines[p.at]) { ret (zero, Invalid) }
             let text = p.lines[p.at].text
             let (key_stop, is_entry) = key_end(text)
             if !is_entry { ret (zero, Invalid) }
-            if count == 256usize { ret (zero, Invalid) }
+            if count == 256usize { ret (zero, TooLarge) }
             let (key, key_error) = scalar_value(p.a, text[..key_stop])
             if key_error != ok { ret (zero, key_error) }
             var rest = ""
@@ -627,9 +815,12 @@ fn key_end(text: str) -> (usize, bool) {
 }
 
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Value, err) {
+    if !utf8.validate(source) { ret (zero, Invalid) }
     let (lines, lines_error) = split_lines(a, source)
     if lines_error != ok { ret (zero, lines_error) }
-    var p = Parser { a: a, lines: lines, at: 0usize, options: options }
+    var effective = options
+    if effective.max_depth == 0u16 || effective.max_depth > MAX_DEPTH { effective.max_depth = MAX_DEPTH }
+    var p = Parser { a: a, lines: lines, at: 0usize, options: effective }
     // Directives and a second document are beyond the subset; one `---` is allowed.
     var i = 0usize
     var markers = 0usize
@@ -642,7 +833,15 @@ fn parse(a: *mem.Arena, source: str, options: Options) -> (Value, err) {
                 if markers > 1usize || i > 0usize && has_content(lines[..i]) { ret (zero, Unsupported) }
                 lines[i] = Line { indent: 0usize, text: str.trim(text[3usize..]), raw: lines[i].raw }
             }
-            if str.eq(text, "...") { ret (zero, Unsupported) }
+            if str.eq(text, "...") {
+                var after = i + 1usize
+                while after < lines.len {
+                    if !is_blank(lines[after].text) { ret (zero, Unsupported) }
+                    after += 1usize
+                }
+                lines[i] = Line { indent: 0usize, text: "", raw: lines[i].raw }
+                break
+            }
         }
         i += 1usize
     }
@@ -666,7 +865,10 @@ fn has_content(lines: []const Line) -> bool {
 
 fn needs_quotes(text: str) -> bool {
     if text.len == 0usize { ret true }
-    let (resolved, resolve_error) = resolve_plain(text)
+    var scratch: [1024]u8 = zero
+    var arena = mem.arena_from(scratch[0..])
+    let (resolved, resolve_error) = resolve_plain(&arena, text)
+    if resolve_error != ok { ret true }
     var stays_text = false
     switch resolved {
     case .String as same:
@@ -700,6 +902,7 @@ fn write_hex_escape(writer: *io.Writer, byte: u8) -> err {
 }
 
 fn write_string(writer: *io.Writer, text: str) -> err {
+    if !utf8.validate(text) { ret Invalid }
     if !needs_quotes(text) { ret io.write_all(writer, text) }
     try io.write_all(writer, "\"")
     var run = 0usize
@@ -725,6 +928,16 @@ fn write_string(writer: *io.Writer, text: str) -> err {
     }
     try io.write_all(writer, text[run..])
     ret io.write_all(writer, "\"")
+}
+
+fn write_u64(writer: *io.Writer, value: u64) -> err {
+    var scratch: [32]u8 = zero
+    var arena = mem.arena_from(scratch[0..])
+    let (builder0, builder_error) = str.builder(&arena, 20usize)
+    if builder_error != ok { ret builder_error }
+    var builder = builder0
+    try str.push_u64(&builder, value)
+    ret io.write_all(writer, str.done(&builder))
 }
 
 fn write_scalar(writer: *io.Writer, value: *const Value) -> err {
@@ -980,10 +1193,7 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
                 let item: Value = Value{ Integer: i64(slot) }
                 try write_scalar(writer, &item)
             } else {
-                let unsigned = u64(slot)
-                if unsigned > 9223372036854775807u64 { ret Invalid }
-                let item: Value = Value{ Integer: i64(unsigned) }
-                try write_scalar(writer, &item)
+                try write_u64(writer, u64(slot))
             }
         } else {
         if meta.kind[f.ty]() == .Float {
