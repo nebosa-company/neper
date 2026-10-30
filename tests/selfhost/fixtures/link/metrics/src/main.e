@@ -23,6 +23,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     metrics.histogram_observe(&h, 3.0)
     metrics.histogram_observe(&h, 10.0)
     metrics.histogram_observe(&h, 11.0)
+    // A bad external measurement must not change a bucket or poison the sum.
+    metrics.histogram_observe(&h, mem.bitcast[f64](9221120237041090560u64))
+    metrics.histogram_observe(&h, mem.bitcast[f64](9218868437227405312u64))
     let (s, e2) = metrics.histogram_snapshot(a, &h)
     if e2 != ok || s.count != 5u64 || s.sum != 25.5 || s.buckets.len != 4usize { os.exit(4) }
     if s.buckets[0] != 2u64 || s.buckets[1] != 3u64 || s.buckets[2] != 4u64 || s.buckets[3] != 5u64 { os.exit(5) }
