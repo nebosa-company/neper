@@ -393,6 +393,17 @@ fn make_dirs_at(a: *mem.Arena, r: *const Root, relative_path: str) -> err {
                 mem.reset(a, checkpoint)
                 ret from_os(step_error)
             }
+            if step_error == os.Exists {
+                let (info, stat_error) = os.stat_at(a, r.dir, normalized[0usize..at])
+                if stat_error != ok {
+                    mem.reset(a, checkpoint)
+                    ret from_os(stat_error)
+                }
+                if info.kind != .Dir {
+                    mem.reset(a, checkpoint)
+                    ret Exists
+                }
+            }
         }
         at += 1usize
     }
@@ -677,6 +688,7 @@ fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err {
     // source before its reads. A host with no identity leaves `file_id` zero.
     let (source_info, source_info_error) = os.stat(a, src)
     if source_info_error != ok { ret from_os(source_info_error) }
+    if source_info.kind != .File { ret Invalid }
     if same_path(src, dst) { ret Invalid }
     let (destination_info, destination_info_error) = os.stat(a, dst)
     if destination_info_error == ok && source_info.file_id != 0u64 && source_info.file_id == destination_info.file_id && source_info.file_volume == destination_info.file_volume { ret Invalid }

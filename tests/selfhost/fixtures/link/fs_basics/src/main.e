@@ -44,6 +44,7 @@ fn clear(a: *mem.Arena) {
     let one = fs.remove_file(a, "np-fs/one.txt")
     let two = fs.remove_file(a, "np-fs/two.txt")
     let copy = fs.remove_file(a, "np-fs/copy.txt")
+    let directory_copy = fs.remove_file(a, "np-fs/directory-copy.txt")
     let copy_alias = fs.remove_file(a, "np-fs/copy-alias.txt")
     let link = fs.remove_file(a, "np-fs/link.txt")
     let from_file = fs.remove_file(a, "np-fs/from.txt")
@@ -646,6 +647,7 @@ fn main(a: *mem.Arena) -> err {
     // re-resolved path, including on WASI where these operations have their own host calls.
     let (root_entry, root_entry_error) = fs.stat_at(a, &root_holder, "one.txt")
     if root_entry_error != ok || root_entry.kind != .File || root_entry.size != 11u64 { os.exit(310i32) }
+    if fs.make_dirs_at(a, &root_holder, "one.txt") != fs.Exists { os.exit(327i32) }
     if fs.make_dirs_at(a, &root_holder, "at-made/nested") != ok { os.exit(311i32) }
     let (nested_entry, nested_entry_error) = fs.stat_at(a, &root_holder, "at-made/nested")
     if nested_entry_error != ok || nested_entry.kind != .Directory { os.exit(312i32) }
@@ -781,6 +783,15 @@ fn main(a: *mem.Arena) -> err {
     // Copy through a buffer smaller than the file, so the loop runs more than once.
     if fs.write_file(a, "np-fs/one.txt", payload[..]) != ok { os.exit(44i32) }
     var scratch: [4]u8 = zero
+    if fs.write_file(a, "np-fs/directory-copy.txt", shorter[..]) != ok { os.exit(328i32) }
+    if fs.copy_file(a, "np-fs/deep", "np-fs/directory-copy.txt", scratch[..]) != fs.Invalid { os.exit(329i32) }
+    let (directory_copy, directory_copy_error) = fs.read_file(a, "np-fs/directory-copy.txt", 0usize)
+    if directory_copy_error != ok || directory_copy.len != shorter.len { os.exit(330i32) }
+    at = 0usize
+    while at < shorter.len {
+        if directory_copy[at] != shorter[at] { os.exit(331i32) }
+        at += 1usize
+    }
     if fs.copy_file(a, "np-fs/one.txt", "np-fs/copy.txt", scratch[..]) != ok { os.exit(45i32) }
     let (copied, copied_error) = fs.read_file(a, "np-fs/copy.txt", 0usize)
     if copied_error != ok { os.exit(46i32) }
