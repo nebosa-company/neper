@@ -16,7 +16,7 @@ fn count_events(a: *mem.Arena, data: []const u8) -> usize {
             more = false
         } else {
             at = after
-            n += 1usize
+            if ev.dispatch { n += 1usize }
         }
     }
     ret n
@@ -99,11 +99,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ev_odd_2.has_id { os.exit(39) }
     if ev_odd_2.has_retry { os.exit(40) }
     at_odd = after_odd_2
+    let (ev_odd_retry, after_odd_retry, whole_odd_retry, err_odd_retry) = sse.next(a, odd[0..], at_odd)
+    if err_odd_retry != ok || !whole_odd_retry || ev_odd_retry.dispatch { os.exit(41) }
+    if !ev_odd_retry.has_retry || ev_odd_retry.retry != 15i64 || ev_odd_retry.has_id { os.exit(42) }
+    at_odd = after_odd_retry
     let (ev_odd_3, after_odd_3, whole_odd_3, err_odd_3) = sse.next(a, odd[0..], at_odd)
-    if err_odd_3 != ok || !whole_odd_3 { os.exit(41) }
-    if !str.eq(ev_odd_3.kind, "") || !str.eq(ev_odd_3.data, "kept") { os.exit(42) }
-    if !ev_odd_3.has_id || !str.eq(ev_odd_3.id, "") { os.exit(43) }
-    if ev_odd_3.has_retry { os.exit(44) }
+    if err_odd_3 != ok || !whole_odd_3 || !ev_odd_3.dispatch { os.exit(43) }
+    if !str.eq(ev_odd_3.kind, "") || !str.eq(ev_odd_3.data, "kept") { os.exit(44) }
+    if !ev_odd_3.has_id || !str.eq(ev_odd_3.id, "") { os.exit(45) }
+    if ev_odd_3.has_retry { os.exit(46) }
     at_odd = after_odd_3
     let (ev_odd_end, after_odd_end, whole_odd_end, err_odd_end) = sse.next(a, odd[0..], at_odd)
     if whole_odd_end { os.exit(45) }
@@ -113,5 +117,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if count_events(a, odd[0..p_odd]) != usize(counts_odd[p_odd]) { os.exit(46) }
         p_odd += 1usize
     }
+    let state_only = "id: 42\nretry: 3000\n\n"
+    let (state_event, state_after, state_whole, state_error) = sse.next(a, state_only, 0usize)
+    if state_error != ok || !state_whole || state_after != state_only.len || state_event.dispatch { os.exit(53) }
+    if !state_event.has_id || !str.eq(state_event.id, "42") || !state_event.has_retry || state_event.retry != 3000i64 { os.exit(54) }
     ret ok
 }

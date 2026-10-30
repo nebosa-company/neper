@@ -4,7 +4,8 @@
 // bytes from `at` and calls again when more arrive). Lines end in LF, CR or CRLF; a line starting with `:` is a
 // comment; `event`, `data`, `id` and `retry` are the fields (one optional space after the colon is dropped, other
 // field names ignored); several `data` lines are joined with LF; an `id` containing NUL is ignored and `retry` must be
-// digits only. An event with no `data` line is not dispatched. A UTF-8 byte order mark at the very start of the
+// digits only. An event with no `data` line is not dispatched (`Event.dispatch` is false), but an `id` or `retry`
+// update is still returned so the caller can retain its stream state. A UTF-8 byte order mark at the very start of the
 // stream is the caller's to skip (`skip_bom`). An event of more than 128 data lines, or a gathered event of more than
 // a megabyte, is `TooLarge`.
 //
@@ -17,7 +18,7 @@ error TooLarge
 const MAX_EVENT: usize = 1048576usize
 const MAX_LINES: usize = 128usize
 
-type Event = struct { kind: str, data: str, id: str, has_id: bool, retry: i64, has_retry: bool }
+type Event = struct { kind: str, data: str, id: str, has_id: bool, retry: i64, has_retry: bool, dispatch: bool }
 
 // The position after a UTF-8 byte order mark at the start of `data`, else 0.
 fn skip_bom(data: []const u8) -> usize {
@@ -51,8 +52,8 @@ fn has_nul(s: str) -> bool {
     ret false
 }
 
-// The next dispatched event of `data` from `at`: the event, the position after it, whether a whole event was there,
-// and an error. Comments and events without data are skipped over.
+// The next complete event record of `data` from `at`: the event, the position after it, whether a whole record was
+// there, and an error. Records with no data are returned only when they update `id` or `retry`; then `dispatch` is false.
 fn next(a: *mem.Arena, data: []const u8, at: usize) -> (Event, usize, bool, err) {
     var ev: Event = zero
     var pos = at
@@ -71,9 +72,9 @@ fn next(a: *mem.Arena, data: []const u8, at: usize) -> (Event, usize, bool, err)
         if !complete { ret (ev, at, false, ok) }
         if after - at > MAX_EVENT { ret (ev, at, false, TooLarge) }
         if stop == pos {
-            // A blank line dispatches what has been gathered, when there is data; otherwise it only resets.
+            // A blank line dispatches data, or exposes an id/retry state update even without data.
             pos = after
-            if lines > 0usize {
+            if lines > 0usize || has_id || has_retry {
                 scanning = false
             } else {
                 kind = ""
@@ -163,5 +164,6 @@ fn next(a: *mem.Arena, data: []const u8, at: usize) -> (Event, usize, bool, err)
     ev.has_id = has_id
     ev.retry = retry
     ev.has_retry = has_retry
+    ev.dispatch = lines > 0usize
     ret (ev, pos, true, ok)
 }
