@@ -188,6 +188,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (ninth, ninth_error) = fb.vector_at[u8](buf, inv, 9usize)
     if ninth_error != ok || ninth != 9u8 { os.exit(5i32) }
 
+    // FlatBuffers strings are UTF-8 and have an in-buffer NUL terminator.
+    // Mutating the Python fixture keeps the table and field offsets real.
+    var missing_nul: [164]u8 = zero
+    mem.copy[u8](missing_nul[..], buf)
+    let (name_slot, name_slot_error) = fb.field_offset(missing_nul[..], root, 3usize)
+    let (name_start, name_start_error) = fb.uoffset(missing_nul[..], name_slot)
+    let (name_len, name_len_error) = fb.load[u32](missing_nul[..], name_start)
+    if name_slot_error != ok || name_start_error != ok || name_len_error != ok { os.exit(12i32) }
+    missing_nul[name_start + 4usize + usize(name_len)] = 1u8
+    let (_, missing_nul_error) = fb.get_string(missing_nul[..], root, 3usize)
+    if missing_nul_error != fb.Invalid { os.exit(12i32) }
+    var invalid_utf8: [164]u8 = zero
+    mem.copy[u8](invalid_utf8[..], buf)
+    invalid_utf8[name_start + 4usize] = 128u8
+    let (_, invalid_utf8_error) = fb.get_string(invalid_utf8[..], root, 3usize)
+    if invalid_utf8_error != fb.Invalid { os.exit(12i32) }
+    // A vector-of-strings also receives `string_at` validation.
+    var invalid_vector_string: [10]u8 = zero
+    invalid_vector_string[0usize] = 4u8
+    invalid_vector_string[4usize] = 1u8
+    invalid_vector_string[8usize] = 128u8
+    let string_vector = fb.Vector { at: 0usize, len: 1usize }
+    let (_, invalid_vector_string_error) = fb.vector_string_at(invalid_vector_string[..], string_vector, 0usize)
+    if invalid_vector_string_error != fb.Invalid { os.exit(12i32) }
+
     // 6: the Neper builder's Monster reads back to the same values.
     var storage: [256]u8 = zero
     let (built, build_error) = build_monster(storage[..])

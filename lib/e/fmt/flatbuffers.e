@@ -14,6 +14,7 @@
 
 use e.bytes as raw
 use e.mem
+use e.text.utf8
 
 type Vector = struct { at: usize, len: usize }
 type Builder = struct { buf: []u8, head: usize, minalign: usize, slots: [64]usize, slot_count: usize, table_end: usize, vector_count: usize }
@@ -153,7 +154,10 @@ fn string_at(buf: []const u8, at: usize) -> (str, err) {
     if e != ok { ret ("", e) }
     let start = at + 4usize
     if usize(n) >= buf.len - start { ret ("", Invalid) }
-    ret (buf[start..start + usize(n)], ok)
+    if buf[start + usize(n)] != 0u8 { ret ("", Invalid) }
+    let text = buf[start..start + usize(n)]
+    if !utf8.validate(text) { ret ("", Invalid) }
+    ret (text, ok)
 }
 
 // A string field, empty when absent.
