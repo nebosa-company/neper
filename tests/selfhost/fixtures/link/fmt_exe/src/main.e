@@ -516,6 +516,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, _, ordinal_error) = pe.export_name(ordinal_data[..], ordinal_image, ordinal_exports, 0usize)
     if ordinal_error != pe.Invalid { os.exit(24i32) }
 
+    // All ELF table walks must reject an offset whose selected entry would wrap
+    // before attempting to cast it to a host index.
+    var overflow_elf_header: elf.Header = zero
+    overflow_elf_header.class = 2u8
+    overflow_elf_header.phentsize = 56u16
+    overflow_elf_header.phnum = 2u16
+    overflow_elf_header.phoff = 18446744073709551608u64
+    let (_, segment_overflow_error) = elf.segment(header[..], overflow_elf_header, 1usize)
+    if segment_overflow_error != elf.Truncated { os.exit(25i32) }
+    overflow_elf_header.shentsize = 64u16
+    overflow_elf_header.shnum = 2u16
+    overflow_elf_header.shoff = 18446744073709551608u64
+    let (_, section_overflow_error) = elf.section(header[..], overflow_elf_header, 1usize)
+    if section_overflow_error != elf.Truncated { os.exit(26i32) }
+    var symbol_table: elf.Section = zero
+    symbol_table.entsize = 24u64
+    symbol_table.size = 48u64
+    symbol_table.offset = 18446744073709551608u64
+    let (_, symbol_overflow_error) = elf.symbol(header[..], overflow_elf_header, symbol_table, 1usize)
+    if symbol_overflow_error != elf.Truncated { os.exit(27i32) }
+    var dynamic_table: elf.Section = zero
+    dynamic_table.size = 32u64
+    dynamic_table.offset = 18446744073709551608u64
+    let (_, dynamic_overflow_error) = elf.dynamic(header[..], overflow_elf_header, dynamic_table, 1usize)
+    if dynamic_overflow_error != elf.Truncated { os.exit(28i32) }
+
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
