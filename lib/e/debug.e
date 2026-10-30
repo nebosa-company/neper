@@ -160,12 +160,14 @@ fn parse_name(s: str, at: usize, o: *Out) -> (usize, str, err) {
     ret (after, name, ok)
 }
 
-// One type at `at`, rendered; answers the position after it.
-fn parse_type(s: str, at: usize, o: *Out) -> (usize, err) {
+// One type at `at`, rendered; answers the position after it.  Bound nested
+// qualifiers so malformed symbol text cannot consume the native call stack.
+fn parse_type(s: str, at: usize, o: *Out, depth: usize) -> (usize, err) {
+    if depth >= 64usize { ret (at, Unsupported) }
     if at >= s.len { ret (at, Malformed) }
     let c = s[at]
     if c == 80u8 || c == 82u8 || c == 79u8 || c == 75u8 || c == 86u8 {
-        let (after, inner_error) = parse_type(s, at + 1usize, o)
+        let (after, inner_error) = parse_type(s, at + 1usize, o, depth + 1usize)
         if inner_error != ok { ret (after, inner_error) }
         var suffix = "*"
         if c == 82u8 { suffix = "&" }
@@ -210,7 +212,7 @@ fn demangle(symbol: str, dst: []u8) -> (str, err) {
             let comma_error = emit(&o, ", ")
             if comma_error != ok { ret ("", comma_error) }
         }
-        let (after, type_error) = parse_type(symbol, p, &o)
+        let (after, type_error) = parse_type(symbol, p, &o, 0usize)
         if type_error != ok { ret ("", type_error) }
         p = after
         count += 1usize

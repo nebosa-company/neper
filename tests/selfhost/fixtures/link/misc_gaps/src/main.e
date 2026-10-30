@@ -343,6 +343,19 @@ fn check_demangle() -> i32 {
     if invalid_ctor_error != debug.Malformed { ret 10i32 }
     let (_, invalid_dtor_error) = debug.demangle("_ZN3FooD3Ev", dst[0..])
     if invalid_dtor_error != debug.Malformed { ret 10i32 }
+    var deep_type: [69]u8 = zero
+    deep_type[0usize] = 95u8
+    deep_type[1usize] = 90u8
+    deep_type[2usize] = 49u8
+    deep_type[3usize] = 102u8
+    var deep_at = 4usize
+    while deep_at < 68usize {
+        deep_type[deep_at] = 80u8
+        deep_at += 1usize
+    }
+    deep_type[68usize] = 105u8
+    let (_, deep_type_error) = debug.demangle(deep_type[..], dst[0..])
+    if deep_type_error != debug.Unsupported { ret 10i32 }
     ret 0i32
 }
 
