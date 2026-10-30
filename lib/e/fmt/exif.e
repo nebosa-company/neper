@@ -62,7 +62,7 @@ fn block_of_jpeg(d: []const u8) -> ([]const u8, err) {
         }
         let length = (usize(d[at + 2usize]) << 8u32) | usize(d[at + 3usize])
         if length < 2usize || at + 2usize + length > d.len { ret (nothing, Invalid) }
-        if marker == 225u8 && begins(d, at + 4usize, "Exif\x00\x00") {
+        if marker == 225u8 && length >= 8usize && begins(d, at + 4usize, "Exif\x00\x00") {
             ret (d[at + 10usize..at + 2usize + length], ok)
         }
         at += 2usize + length
@@ -94,7 +94,7 @@ fn block_of_webp(d: []const u8) -> ([]const u8, err) {
         if begins(d, at, "EXIF") {
             var start = at + 8usize
             // some writers keep the "Exif\0\0" prefix of the JPEG form
-            if begins(d, start, "Exif\x00\x00") { start += 6usize }
+            if length >= 6usize && begins(d, start, "Exif\x00\x00") { start += 6usize }
             ret (d[start..at + 8usize + length], ok)
         }
         at += 8usize + length + (length & 1usize)
