@@ -581,12 +581,12 @@ fn get_value(a: *mem.Arena, buf: []const u8, at: *usize, little: bool, sig: str,
                 let kn = complete_len(element, 1usize, 0u32, 1u32)
                 let probe_pad = skip_pad(buf, &probe, 8usize)
                 if probe_pad != ok { ret (none, probe_pad) }
-                let (k, ke) = skip_value(buf, &probe, little, element[1usize..1usize + kn], end)
+                let (k, ke) = skip_value_depth(buf, &probe, little, element[1usize..1usize + kn], end, depth + 1u32)
                 if ke != ok { ret (none, ke) }
-                let (v, ve) = skip_value(buf, &probe, little, element[1usize + kn..element.len - 1usize], end)
+                let (v, ve) = skip_value_depth(buf, &probe, little, element[1usize + kn..element.len - 1usize], end, depth + 1u32)
                 if ve != ok { ret (none, ve) }
             } else {
-                let (s, se) = skip_value(buf, &probe, little, element, end)
+                let (s, se) = skip_value_depth(buf, &probe, little, element, end, depth + 1u32)
                 if se != ok { ret (none, se) }
             }
             if probe == before { ret (none, Invalid) }
@@ -626,6 +626,12 @@ fn get_value(a: *mem.Arena, buf: []const u8, at: *usize, little: bool, sig: str,
 
 // Advance `*at` past one value without building it (used to count array elements); `limit` bounds the read.
 fn skip_value(buf: []const u8, at: *usize, little: bool, sig: str, limit: usize) -> (bool, err) {
+    let (skipped, skip_error) = skip_value_depth(buf, at, little, sig, limit, 0u32)
+    ret (skipped, skip_error)
+}
+
+fn skip_value_depth(buf: []const u8, at: *usize, little: bool, sig: str, limit: usize, depth: u32) -> (bool, err) {
+    if depth > 64u32 { ret (false, TooLarge) }
     let c = sig[0usize]
     if c == 121u8 {
         if *at >= limit { ret (false, Truncated) }
@@ -674,7 +680,7 @@ fn skip_value(buf: []const u8, at: *usize, little: bool, sig: str, limit: usize)
         let s: str = buf[*at + 1usize..*at + 1usize + n]
         *at += n + 2usize
         if s.len == 0usize || complete_len(s, 0usize, 0u32, 0u32) != s.len { ret (false, Invalid) }
-        let (r, e) = skip_value(buf, at, little, s, limit)
+        let (r, e) = skip_value_depth(buf, at, little, s, limit, depth + 1u32)
         ret (r, e)
     }
     if c == 40u8 {
@@ -684,7 +690,7 @@ fn skip_value(buf: []const u8, at: *usize, little: bool, sig: str, limit: usize)
         while i < sig.len - 1usize {
             let n = complete_len(sig, i, 0u32, 1u32)
             if n == 0usize { ret (false, Invalid) }
-            let (r, re) = skip_value(buf, at, little, sig[i..i + n], limit)
+            let (r, re) = skip_value_depth(buf, at, little, sig[i..i + n], limit, depth + 1u32)
             if re != ok { ret (false, re) }
             i += n
         }
@@ -730,8 +736,8 @@ fn message_encode(dst: []u8, m: *const Message) -> (usize, err) {
     if !valid_signature(m.signature) { ret (0usize, Invalid) }
     var at = 0usize
     var e = put_byte(dst, &at, 108u8)
-    if !m.little { dst[0usize] = 66u8 }
     if e != ok { ret (0usize, e) }
+    if !m.little { dst[0usize] = 66u8 }
     e = put_byte(dst, &at, m.kind)
     if e != ok { ret (0usize, e) }
     e = put_byte(dst, &at, m.flags)
@@ -1215,10 +1221,11 @@ fn parse_address(text: str, out: []u8) -> (Address, err) {
             var d = 0usize
             while d < value.len {
                 if value[d] < 48u8 || value[d] > 57u8 { ret (a, Invalid) }
-                port = port * 10u32 + u32(value[d] - 48u8)
+                let digit = u32(value[d] - 48u8)
+                if port > 6553u32 || (port == 6553u32 && digit > 5u32) { ret (a, Invalid) }
+                port = port * 10u32 + digit
                 d += 1usize
             }
-            if port > 65535u32 { ret (a, Invalid) }
             a.port = u16(port)
         }
         if j >= text.len || text[j] == 59u8 { break }

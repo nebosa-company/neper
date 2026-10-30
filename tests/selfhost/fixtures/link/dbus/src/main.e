@@ -574,6 +574,37 @@ fn auth_address_regressions() -> bool {
     ret true
 }
 
+fn message_safety_regressions() -> bool {
+    // A chain of variants is valid wire framing but must hit the same nesting
+    // bound while skip_value counts array members or skips unknown fields.
+    var nested: [200]u8 = zero
+    var level = 0usize
+    while level < 65usize {
+        let base = level * 3usize
+        nested[base] = 1u8
+        nested[base + 1usize] = 118u8
+        level += 1usize
+    }
+    let leaf = 65usize * 3usize
+    nested[leaf] = 1u8
+    nested[leaf + 1usize] = 121u8
+    nested[leaf + 3usize] = 7u8
+    var nested_at = 0usize
+    let (_, nested_error) = dbus.skip_value(nested[0usize..leaf + 4usize], &nested_at, true, "v", leaf + 4usize)
+    if nested_error != dbus.TooLarge { ret false }
+
+    var big_endian = dbus.message(dbus.METHOD_CALL, 1u32)
+    big_endian.little = false
+    var one_byte: [1]u8 = zero
+    let (_, encode_error) = dbus.message_encode(one_byte[0usize..0usize], &big_endian)
+    if encode_error != dbus.TooSmall { ret false }
+
+    var address_out: [128]u8 = zero
+    let (_, port_error) = dbus.parse_address("tcp:host=h,port=4294967376", address_out[0usize..])
+    if port_error != dbus.Invalid { ret false }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(100i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(101i32) }
@@ -600,6 +631,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_22()) != 0u8 { os.exit(122i32) }
     if !serial_wrap_regression() { os.exit(123i32) }
     if !auth_address_regressions() { os.exit(190i32) }
+    if !message_safety_regressions() { os.exit(191i32) }
     try io.print("dbus ok")
     ret ok
 }
