@@ -153,6 +153,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !found_usage { os.exit(58) }
     let (_, invalid_usage_error) = x509.parse(a, invalid_key_usage[0usize..bad_usage_mid_der.len])
     if invalid_usage_error != x509.InvalidCertificate { os.exit(59) }
+    // RFC 5280 permits each extension OID only once.  Copy the leaf's
+    // BasicConstraints extension into its extension sequence and update the
+    // enclosing DER lengths; parsing does not need the now-stale signature.
+    if leaf_der.len != 321usize { os.exit(61) }
+    var duplicate_at = 0usize
+    var found_extensions = false
+    while duplicate_at + 4usize <= leaf_der.len {
+        if leaf_der[duplicate_at] == 163u8 && leaf_der[duplicate_at + 1usize] == 76u8 && leaf_der[duplicate_at + 2usize] == 48u8 && leaf_der[duplicate_at + 3usize] == 74u8 {
+            found_extensions = true
+            break
+        }
+        duplicate_at += 1usize
+    }
+    if !found_extensions { os.exit(61) }
+    let extension_begin = duplicate_at + 4usize
+    let basic_size = 2usize + usize(leaf_der[extension_begin + 1usize])
+    let extension_end = extension_begin + usize(leaf_der[duplicate_at + 3usize])
+    if basic_size != 14usize || extension_end >= leaf_der.len { os.exit(61) }
+    var duplicate_extensions: [335]u8 = zero
+    mem.copy[u8](duplicate_extensions[0usize..extension_end], leaf_der[0usize..extension_end])
+    mem.copy[u8](duplicate_extensions[extension_end..extension_end + basic_size], leaf_der[extension_begin..extension_begin + basic_size])
+    mem.copy[u8](duplicate_extensions[extension_end + basic_size..], leaf_der[extension_end..])
+    duplicate_extensions[3usize] = 75u8
+    duplicate_extensions[6usize] = 254u8
+    duplicate_extensions[duplicate_at + 1usize] = 90u8
+    duplicate_extensions[duplicate_at + 3usize] = 88u8
+    let (_, duplicate_basic_error) = x509.parse(a, duplicate_extensions[0usize..])
+    if duplicate_basic_error != x509.InvalidCertificate { os.exit(62) }
+    // The rule includes extension OIDs unknown to this implementation, not
+    // merely the parsed profile extensions.
+    var duplicate_unknown: [335]u8 = zero
+    mem.copy[u8](duplicate_unknown[0usize..], duplicate_extensions[0usize..])
+    let first_unknown_oid = extension_begin + 4usize
+    let second_unknown_oid = extension_end + 4usize
+    duplicate_unknown[first_unknown_oid] = 42u8
+    duplicate_unknown[first_unknown_oid + 1usize] = 3u8
+    duplicate_unknown[first_unknown_oid + 2usize] = 4u8
+    duplicate_unknown[second_unknown_oid] = 42u8
+    duplicate_unknown[second_unknown_oid + 1usize] = 3u8
+    duplicate_unknown[second_unknown_oid + 2usize] = 4u8
+    let (_, duplicate_unknown_error) = x509.parse(a, duplicate_unknown[0usize..])
+    if duplicate_unknown_error != x509.InvalidCertificate { os.exit(63) }
     var bad_usage_intermediates: [1]x509.Certificate = zero
     bad_usage_intermediates[0] = bad_usage_mid
     let (bad_usage_chain, e30) = x509.verify(a, bad_usage_leaf, options(roots[0..], bad_usage_intermediates[0..], "", .Any, 4u16))
