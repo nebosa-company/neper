@@ -1873,6 +1873,7 @@ fn parse_type_declaration(p: *Parser) -> err {
             try require(p, .PunctRParen)
         }
         try skip_soft(p)
+        if p.current.kind != .KwStruct && p.current.kind != .KwUnion { ret InvalidSyntax }
     }
     if p.current.kind == .KwStruct {
         let rhs_start = p.token_index
