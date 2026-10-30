@@ -242,7 +242,7 @@ fn stats(p: *const Pool) -> (usize, usize, usize, usize) {
 
 // How many connections to create (via `reserve` + `attach`) to reach `min_idle`.
 fn warm(p: *const Pool) -> usize {
-    let idle = count(p, FREE)
+    let idle = count(p, FREE) + count(p, PENDING)
     let room = count(p, CLOSED)
     if idle >= p.min_idle { ret 0usize }
     let need = p.min_idle - idle
