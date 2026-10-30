@@ -16,11 +16,11 @@
 //                CommonMark parse); the first heading as the title
 //   Csv, Tsv     rows by lines, fields tab separated
 //   Mail         the text/plain body (text/html reduced to text when there is none), quoted-
-//                printable and base64 decoded, Latin-1 to UTF-8; Subject and From
+//                printable and base64 decoded, Latin-1/Windows-1251/Windows-1252 to UTF-8; Subject and From
 //   VCard        one line per card: name, organisation, telephone numbers, e-mail addresses
 //   Text         the bytes as UTF-8 without a byte-order mark
 //
-// Not here: OCR and handwriting, encodings other than UTF-8 and Latin-1, encrypted or
+// Not here: OCR and handwriting, encodings other than UTF-8, Latin-1, Windows-1251 and Windows-1252, encrypted or
 // object-stream PDFs (`NoPages`), legacy binary Office formats, archives, images and audio
 // (`Unsupported`), and the wiring into the L034 indexing pipeline.
 //
@@ -99,6 +99,15 @@ fn valid_utf8(s: str) -> bool {
     ret true
 }
 
+fn has_nul(s: str) -> bool {
+    var at = 0usize
+    while at < s.len {
+        if s[at] == 0u8 { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn strip_bom(s: str) -> str {
     if s.len >= 3usize && s[0usize] == 239u8 && s[1usize] == 187u8 && s[2usize] == 191u8 { ret s[3usize..s.len] }
     ret s
@@ -130,6 +139,133 @@ fn latin1_to_utf8(a: *mem.Arena, s: str) -> (str, err) {
         i += 1usize
     }
     ret (out[0usize..at], ok)
+}
+
+fn windows1252_scalar(c: u8) -> u32 {
+    if c == 128u8 { ret 8364u32 }
+    if c == 130u8 { ret 8218u32 }
+    if c == 131u8 { ret 402u32 }
+    if c == 132u8 { ret 8222u32 }
+    if c == 133u8 { ret 8230u32 }
+    if c == 134u8 { ret 8224u32 }
+    if c == 135u8 { ret 8225u32 }
+    if c == 136u8 { ret 710u32 }
+    if c == 137u8 { ret 8240u32 }
+    if c == 138u8 { ret 352u32 }
+    if c == 139u8 { ret 8249u32 }
+    if c == 140u8 { ret 338u32 }
+    if c == 142u8 { ret 381u32 }
+    if c == 145u8 { ret 8216u32 }
+    if c == 146u8 { ret 8217u32 }
+    if c == 147u8 { ret 8220u32 }
+    if c == 148u8 { ret 8221u32 }
+    if c == 149u8 { ret 8226u32 }
+    if c == 150u8 { ret 8211u32 }
+    if c == 151u8 { ret 8212u32 }
+    if c == 152u8 { ret 732u32 }
+    if c == 153u8 { ret 8482u32 }
+    if c == 154u8 { ret 353u32 }
+    if c == 155u8 { ret 8250u32 }
+    if c == 156u8 { ret 339u32 }
+    if c == 158u8 { ret 382u32 }
+    if c == 159u8 { ret 376u32 }
+    ret u32(c)
+}
+
+fn windows1252_to_utf8(a: *mem.Arena, s: str) -> (str, err) {
+    let (out, out_error) = mem.alloc[u8](a, s.len * 3usize + 1usize)
+    if out_error != ok { ret ("", out_error) }
+    var at = 0usize
+    var used = 0usize
+    while at < s.len {
+        let (width, encode_error) = utf8.encode(windows1252_scalar(s[at]), out[used..out.len])
+        if encode_error != ok { ret ("", encode_error) }
+        used += usize(width)
+        at += 1usize
+    }
+    ret (out[0usize..used], ok)
+}
+
+fn windows1251_scalar(c: u8) -> u32 {
+    if c >= 192u8 { ret 1040u32 + u32(c - 192u8) }
+    if c == 128u8 { ret 1026u32 }
+    if c == 129u8 { ret 1027u32 }
+    if c == 130u8 { ret 8218u32 }
+    if c == 131u8 { ret 1107u32 }
+    if c == 132u8 { ret 8222u32 }
+    if c == 133u8 { ret 8230u32 }
+    if c == 134u8 { ret 8224u32 }
+    if c == 135u8 { ret 8225u32 }
+    if c == 136u8 { ret 8364u32 }
+    if c == 137u8 { ret 8240u32 }
+    if c == 138u8 { ret 1033u32 }
+    if c == 139u8 { ret 8249u32 }
+    if c == 140u8 { ret 1034u32 }
+    if c == 141u8 { ret 1036u32 }
+    if c == 142u8 { ret 1035u32 }
+    if c == 143u8 { ret 1039u32 }
+    if c == 144u8 { ret 1106u32 }
+    if c == 145u8 { ret 8216u32 }
+    if c == 146u8 { ret 8217u32 }
+    if c == 147u8 { ret 8220u32 }
+    if c == 148u8 { ret 8221u32 }
+    if c == 149u8 { ret 8226u32 }
+    if c == 150u8 { ret 8211u32 }
+    if c == 151u8 { ret 8212u32 }
+    if c == 153u8 { ret 8482u32 }
+    if c == 154u8 { ret 1113u32 }
+    if c == 155u8 { ret 8250u32 }
+    if c == 156u8 { ret 1114u32 }
+    if c == 157u8 { ret 1116u32 }
+    if c == 158u8 { ret 1115u32 }
+    if c == 159u8 { ret 1119u32 }
+    if c == 160u8 { ret 160u32 }
+    if c == 161u8 { ret 1038u32 }
+    if c == 162u8 { ret 1118u32 }
+    if c == 163u8 { ret 1032u32 }
+    if c == 164u8 { ret 164u32 }
+    if c == 165u8 { ret 1168u32 }
+    if c == 166u8 { ret 166u32 }
+    if c == 167u8 { ret 167u32 }
+    if c == 168u8 { ret 1025u32 }
+    if c == 169u8 { ret 169u32 }
+    if c == 170u8 { ret 1028u32 }
+    if c == 171u8 { ret 171u32 }
+    if c == 172u8 { ret 172u32 }
+    if c == 173u8 { ret 173u32 }
+    if c == 174u8 { ret 174u32 }
+    if c == 175u8 { ret 1031u32 }
+    if c == 176u8 { ret 176u32 }
+    if c == 177u8 { ret 177u32 }
+    if c == 178u8 { ret 1030u32 }
+    if c == 179u8 { ret 1110u32 }
+    if c == 180u8 { ret 1169u32 }
+    if c == 181u8 { ret 181u32 }
+    if c == 182u8 { ret 182u32 }
+    if c == 183u8 { ret 183u32 }
+    if c == 184u8 { ret 1105u32 }
+    if c == 185u8 { ret 8470u32 }
+    if c == 186u8 { ret 1108u32 }
+    if c == 187u8 { ret 187u32 }
+    if c == 188u8 { ret 1112u32 }
+    if c == 189u8 { ret 1029u32 }
+    if c == 190u8 { ret 1109u32 }
+    if c == 191u8 { ret 1111u32 }
+    ret u32(c)
+}
+
+fn windows1251_to_utf8(a: *mem.Arena, s: str) -> (str, err) {
+    let (out, out_error) = mem.alloc[u8](a, s.len * 3usize + 1usize)
+    if out_error != ok { ret ("", out_error) }
+    var at = 0usize
+    var used = 0usize
+    while at < s.len {
+        let (width, encode_error) = utf8.encode(windows1251_scalar(s[at]), out[used..out.len])
+        if encode_error != ok { ret ("", encode_error) }
+        used += usize(width)
+        at += 1usize
+    }
+    ret (out[0usize..used], ok)
 }
 
 // The text of `parts` joined by `sep`.
@@ -169,11 +305,16 @@ fn detect_zip(a: *mem.Arena, data: []const u8) -> Format {
     if find_entry(&ar, "ppt/presentation.xml") || has_slide(&ar) { ret .Pptx }
     let (index, has_mimetype) = ooxml.find(&ar, "mimetype")
     if has_mimetype {
-        let (kind, kind_error) = zip.extract(a, &ar, index)
-        if kind_error == ok {
-            if str.starts_with(kind, "application/vnd.oasis.opendocument.text") { ret .Odt }
-            if str.starts_with(kind, "application/vnd.oasis.opendocument.presentation") { ret .Odp }
-            if str.starts_with(kind, "application/vnd.oasis.opendocument.spreadsheet") { ret .Ods }
+        let listed = zip.entries(&ar)
+        // `mimetype` is a short ODF discriminator. Avoid allocating an attacker-sized
+        // member merely to inspect its fixed prefix.
+        if index < listed.len && listed[index].size <= 128u64 {
+            let (kind, kind_error) = zip.extract(a, &ar, index)
+            if kind_error == ok {
+                if str.starts_with(kind, "application/vnd.oasis.opendocument.text") { ret .Odt }
+                if str.starts_with(kind, "application/vnd.oasis.opendocument.presentation") { ret .Odp }
+                if str.starts_with(kind, "application/vnd.oasis.opendocument.spreadsheet") { ret .Ods }
+            }
         }
     }
     ret .Unknown
@@ -183,24 +324,7 @@ fn looks_like_mail(s: str) -> bool {
     ret starts_fold(s, 0usize, "from:") || starts_fold(s, 0usize, "subject:") || starts_fold(s, 0usize, "received:") || starts_fold(s, 0usize, "message-id:") || starts_fold(s, 0usize, "mime-version:") || starts_fold(s, 0usize, "return-path:") || starts_fold(s, 0usize, "date:") || starts_fold(s, 0usize, "to:")
 }
 
-// The format of `data`; `name` is the file name (or "") and breaks ties among text formats.
-fn detect(a: *mem.Arena, data: []const u8, name: str) -> Format {
-    if data.len == 0usize { ret .Unknown }
-    var head = 0usize
-    while head < data.len && head < 1024usize && head < data.len {
-        if data[head] == 37u8 && head + 5usize <= data.len && data[head + 1usize] == 80u8 && data[head + 2usize] == 68u8 && data[head + 3usize] == 70u8 && data[head + 4usize] == 45u8 { ret .Pdf }
-        head += 1usize
-    }
-    if data.len >= 4usize && data[0usize] == 80u8 && data[1usize] == 75u8 && data[2usize] == 3u8 && data[3usize] == 4u8 { ret detect_zip(a, data) }
-    if !valid_utf8(strip_bom(data)) { ret .Unknown }
-    let text = strip_bom(data)
-    let start = skip_space(text, 0usize)
-    if starts_fold(text, start, "<!doctype html") || starts_fold(text, start, "<html") { ret .Html }
-    if starts_fold(text, start, "<?xml") {
-        if has_extension(name, ".html") || has_extension(name, ".xhtml") || has_extension(name, ".htm") { ret .Html }
-        ret .Xml
-    }
-    if starts_fold(text, start, "begin:vcard") { ret .VCard }
+fn extension_format(name: str) -> Format {
     if has_extension(name, ".html") || has_extension(name, ".htm") || has_extension(name, ".xhtml") { ret .Html }
     if has_extension(name, ".xml") || has_extension(name, ".svg") || has_extension(name, ".rss") || has_extension(name, ".atom") { ret .Xml }
     if has_extension(name, ".json") { ret .Json }
@@ -209,6 +333,30 @@ fn detect(a: *mem.Arena, data: []const u8, name: str) -> Format {
     if has_extension(name, ".eml") { ret .Mail }
     if has_extension(name, ".vcf") { ret .VCard }
     if has_extension(name, ".txt") || has_extension(name, ".log") { ret .Text }
+    ret .Unknown
+}
+
+// The format of `data`; `name` is the file name (or "") and breaks ties among text formats.
+fn detect(a: *mem.Arena, data: []const u8, name: str) -> Format {
+    if data.len == 0usize { ret .Unknown }
+    if data.len >= 5usize && data[0usize] == 37u8 && data[1usize] == 80u8 && data[2usize] == 68u8 && data[3usize] == 70u8 && data[4usize] == 45u8 { ret .Pdf }
+    if data.len >= 4usize && data[0usize] == 80u8 && data[1usize] == 75u8 && data[2usize] == 3u8 && data[3usize] == 4u8 { ret detect_zip(a, data) }
+    let text = strip_bom(data)
+    let named = extension_format(name)
+    if !valid_utf8(text) {
+        if has_nul(text) { ret .Unknown }
+        if named != .Unknown { ret named }
+        if looks_like_mail(text) { ret .Mail }
+        ret .Unknown
+    }
+    let start = skip_space(text, 0usize)
+    if starts_fold(text, start, "<!doctype html") || starts_fold(text, start, "<html") { ret .Html }
+    if starts_fold(text, start, "<?xml") {
+        if has_extension(name, ".html") || has_extension(name, ".xhtml") || has_extension(name, ".htm") { ret .Html }
+        ret .Xml
+    }
+    if starts_fold(text, start, "begin:vcard") { ret .VCard }
+    if named != .Unknown { ret named }
     if start < text.len && (text[start] == 123u8 || text[start] == 91u8) {
         let options = json.Options { allow_duplicate_keys: true, max_depth: 64u16 }
         let (value, parse_error) = json.parse(a, text, options)
@@ -311,125 +459,264 @@ fn slides_text(a: *mem.Arena, slides: []const ooxml.Slide) -> (str, err) {
     ret (all, all_error)
 }
 
-fn read_pdf_string(a: *mem.Arena, data: []const u8, key: str) -> (str, err) {
-    // `/Key <FEFF...>` (UTF-16BE) or `/Key (literal)`, the first of them in the file.
-    let (at, found) = str.find(data, key)
-    if !found { ret ("", ok) }
-    var i = at + key.len
-    while i < data.len && is_space(data[i]) { i += 1usize }
-    if i >= data.len { ret ("", ok) }
-    if data[i] == 60u8 {
-        i += 1usize
-        let (out, out_error) = mem.alloc[u8](a, 1024usize)
-        if out_error != ok { ret ("", out_error) }
-        var used = 0usize
-        var units = 0usize
-        var pending: [2]u32 = zero
-        var high = 0u32
-        var count = 0usize
-        var nibbles = 0usize
-        var value = 0u32
-        var started = false
-        while i < data.len && data[i] != 62u8 {
-            let c = data[i]
-            var d = 255u32
-            if c >= 48u8 && c <= 57u8 { d = u32(c - 48u8) } else if c >= 65u8 && c <= 70u8 { d = u32(c - 55u8) } else if c >= 97u8 && c <= 102u8 { d = u32(c - 87u8) }
-            if d != 255u32 {
-                value = (value << 4u32) | d
-                nibbles += 1usize
-                if nibbles == 4usize {
-                    nibbles = 0usize
-                    if !started {
-                        started = true
-                        if value != 65279u32 { ret ("", ok) }
-                    } else if value >= 55296u32 && value < 56320u32 {
-                        high = value
-                    } else {
-                        var code = value
-                        if value >= 56320u32 && value < 57344u32 && high != 0u32 { code = 65536u32 + ((high - 55296u32) << 10u32) + (value - 56320u32) }
-                        high = 0u32
-                        if used + 4usize > out.len { break }
-                        if code < 128u32 {
-                            out[used] = u8(code)
-                            used += 1usize
-                        } else if code < 2048u32 {
-                            out[used] = u8(192u32 | (code >> 6u32))
-                            out[used + 1usize] = u8(128u32 | (code & 63u32))
-                            used += 2usize
-                        } else if code < 65536u32 {
-                            out[used] = u8(224u32 | (code >> 12u32))
-                            out[used + 1usize] = u8(128u32 | ((code >> 6u32) & 63u32))
-                            out[used + 2usize] = u8(128u32 | (code & 63u32))
-                            used += 3usize
-                        } else {
-                            out[used] = u8(240u32 | (code >> 18u32))
-                            out[used + 1usize] = u8(128u32 | ((code >> 12u32) & 63u32))
-                            out[used + 2usize] = u8(128u32 | ((code >> 6u32) & 63u32))
-                            out[used + 3usize] = u8(128u32 | (code & 63u32))
-                            used += 4usize
-                        }
-                    }
-                    value = 0u32
-                }
-            }
-            i += 1usize
-        }
-        ret (out[0usize..used], ok)
+fn pdf_digit(c: u8) -> bool {
+    ret c >= 48u8 && c <= 57u8
+}
+
+fn pdf_delimiter(c: u8) -> bool {
+    ret is_space(c) || c == 40u8 || c == 41u8 || c == 60u8 || c == 62u8 || c == 91u8 || c == 93u8 || c == 123u8 || c == 125u8 || c == 47u8 || c == 37u8
+}
+
+// A bounded unsigned PDF number. Object and generation ids beyond this reader's
+// object limits are not useful metadata and must not overflow while being skipped.
+fn pdf_number(data: []const u8, from: usize, until: usize) -> (usize, usize, bool) {
+    var at = from
+    while at < until && is_space(data[at]) { at += 1usize }
+    if at >= until || !pdf_digit(data[at]) { ret (0usize, from, false) }
+    var value = 0usize
+    while at < until && pdf_digit(data[at]) {
+        let digit = usize(data[at] - 48u8)
+        if value > (999999999usize - digit) / 10usize { ret (0usize, from, false) }
+        value = value * 10usize + digit
+        at += 1usize
     }
-    if data[i] == 40u8 {
+    ret (value, at, true)
+}
+
+fn pdf_word_at(data: []const u8, at: usize, until: usize, word: str) -> bool {
+    if at + word.len > until { ret false }
+    var i = 0usize
+    while i < word.len {
+        if data[at + i] != word[i] { ret false }
         i += 1usize
-        let (out, out_error) = mem.alloc[u8](a, 1024usize * 2usize)
-        if out_error != ok { ret ("", out_error) }
-        var used = 0usize
-        var depth = 1usize
-        while i < data.len && depth > 0usize && used + 2usize < out.len {
-            let c = data[i]
-            if c == 92u8 && i + 1usize < data.len {
-                i += 1usize
-                let e = data[i]
-                var literal = e
-                if e == 110u8 { literal = 10u8 } else if e == 114u8 { literal = 13u8 } else if e == 116u8 { literal = 9u8 }
-                if e >= 48u8 && e <= 55u8 {
-                    var v = u32(e - 48u8)
-                    var digits = 1usize
-                    while digits < 3usize && i + 1usize < data.len && data[i + 1usize] >= 48u8 && data[i + 1usize] <= 55u8 {
-                        i += 1usize
-                        v = v * 8u32 + u32(data[i] - 48u8)
-                        digits += 1usize
+    }
+    if at > 0usize && !pdf_delimiter(data[at - 1usize]) { ret false }
+    if at + word.len < until && !pdf_delimiter(data[at + word.len]) { ret false }
+    ret true
+}
+
+fn pdf_object_span(data: []const u8, wanted_number: usize, wanted_generation: usize) -> (usize, usize, bool) {
+    var at = 0usize
+    while at < data.len {
+        if pdf_digit(data[at]) && (at == 0usize || !pdf_digit(data[at - 1usize])) {
+            let (number, after_number, have_number) = pdf_number(data, at, data.len)
+            if have_number && number == wanted_number {
+                let (generation, after_generation, have_generation) = pdf_number(data, after_number, data.len)
+                if have_generation && generation == wanted_generation {
+                    var object_at = after_generation
+                    while object_at < data.len && is_space(data[object_at]) { object_at += 1usize }
+                    if pdf_word_at(data, object_at, data.len, "obj") {
+                        let content_start = object_at + 3usize
+                        let (content_end, found_end) = str.find_from(data, "endobj", content_start)
+                        if found_end { ret (content_start, content_end, true) }
                     }
-                    literal = u8(v & 255u32)
                 }
-                if literal < 128u8 {
-                    out[used] = literal
-                    used += 1usize
-                } else {
-                    out[used] = 192u8 | (literal >> 6u32)
-                    out[used + 1usize] = 128u8 | (literal & 63u8)
-                    used += 2usize
-                }
-            } else if c == 40u8 {
-                depth += 1usize
-                out[used] = c
-                used += 1usize
-            } else if c == 41u8 {
-                depth -= 1usize
-                if depth > 0usize {
-                    out[used] = c
-                    used += 1usize
-                }
-            } else if c < 128u8 {
-                out[used] = c
-                used += 1usize
-            } else {
-                out[used] = 192u8 | (c >> 6u32)
-                out[used + 1usize] = 128u8 | (c & 63u8)
-                used += 2usize
             }
-            i += 1usize
         }
-        ret (out[0usize..used], ok)
+        at += 1usize
+    }
+    ret (0usize, 0usize, false)
+}
+
+// The Info object referenced by the final trailer. It is intentionally a narrow
+// reader: page contents are parsed by e.fmt.pdf, while metadata only needs this
+// indirect dictionary span.
+fn pdf_info_span(data: []const u8) -> (usize, usize, bool) {
+    var trailer = data.len
+    var at = 0usize
+    while at < data.len {
+        let (found, have_found) = str.find_from(data, "trailer", at)
+        if !have_found { break }
+        if pdf_word_at(data, found, data.len, "trailer") { trailer = found + 7usize }
+        at = found + 1usize
+    }
+    if trailer == data.len { ret (0usize, 0usize, false) }
+    at = trailer
+    while at + 5usize <= data.len {
+        if pdf_word_at(data, at, data.len, "/Info") {
+            let (object_number, after_object, have_object) = pdf_number(data, at + 5usize, data.len)
+            if have_object {
+                let (generation, after_generation, have_generation) = pdf_number(data, after_object, data.len)
+                if have_generation {
+                    var r_at = after_generation
+                    while r_at < data.len && is_space(data[r_at]) { r_at += 1usize }
+                    if pdf_word_at(data, r_at, data.len, "R") {
+                        let (object_start, object_end, object_found) = pdf_object_span(data, object_number, generation)
+                        ret (object_start, object_end, object_found)
+                    }
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret (0usize, 0usize, false)
+}
+
+fn pdf_hex_digit(c: u8) -> u32 {
+    if c >= 48u8 && c <= 57u8 { ret u32(c - 48u8) }
+    if c >= 65u8 && c <= 70u8 { ret u32(c - 55u8) }
+    if c >= 97u8 && c <= 102u8 { ret u32(c - 87u8) }
+    ret 255u32
+}
+
+fn pdf_hex_bytes(a: *mem.Arena, data: []const u8, from: usize, until: usize) -> (str, err) {
+    let (out, out_error) = mem.alloc[u8](a, (until - from) / 2usize + 2usize)
+    if out_error != ok { ret ("", out_error) }
+    var at = from + 1usize
+    var used = 0usize
+    var high = 0u32
+    var have_high = false
+    while at < until && data[at] != 62u8 {
+        let digit = pdf_hex_digit(data[at])
+        if digit != 255u32 {
+            if have_high {
+                out[used] = u8(high * 16u32 + digit)
+                used += 1usize
+                have_high = false
+            } else {
+                high = digit
+                have_high = true
+            }
+        }
+        at += 1usize
+    }
+    if have_high {
+        out[used] = u8(high * 16u32)
+        used += 1usize
+    }
+    ret (out[0usize..used], ok)
+}
+
+fn pdf_literal_bytes(a: *mem.Arena, data: []const u8, from: usize, until: usize) -> (str, err) {
+    let (out, out_error) = mem.alloc[u8](a, until - from + 1usize)
+    if out_error != ok { ret ("", out_error) }
+    var at = from + 1usize
+    var used = 0usize
+    var depth = 1usize
+    while at < until && depth > 0usize {
+        let c = data[at]
+        if c == 92u8 && at + 1usize < until {
+            at += 1usize
+            let escaped = data[at]
+            if escaped == 10u8 {
+                at += 1usize
+                continue
+            }
+            if escaped == 13u8 {
+                if at + 1usize < until && data[at + 1usize] == 10u8 { at += 1usize }
+                at += 1usize
+                continue
+            }
+            var byte = escaped
+            if escaped == 110u8 { byte = 10u8 }
+            if escaped == 114u8 { byte = 13u8 }
+            if escaped == 116u8 { byte = 9u8 }
+            if escaped == 98u8 { byte = 8u8 }
+            if escaped == 102u8 { byte = 12u8 }
+            if escaped >= 48u8 && escaped <= 55u8 {
+                var value = u32(escaped - 48u8)
+                var digits = 1usize
+                while digits < 3usize && at + 1usize < until && data[at + 1usize] >= 48u8 && data[at + 1usize] <= 55u8 {
+                    at += 1usize
+                    value = value * 8u32 + u32(data[at] - 48u8)
+                    digits += 1usize
+                }
+                byte = u8(value & 255u32)
+            }
+            out[used] = byte
+            used += 1usize
+        } else if c == 40u8 {
+            depth += 1usize
+            out[used] = c
+            used += 1usize
+        } else if c == 41u8 {
+            depth -= 1usize
+            if depth > 0usize {
+                out[used] = c
+                used += 1usize
+            }
+        } else {
+            out[used] = c
+            used += 1usize
+        }
+        at += 1usize
+    }
+    ret (out[0usize..used], ok)
+}
+
+fn pdf_utf16be(a: *mem.Arena, raw: []const u8) -> (str, err) {
+    let (out, out_error) = mem.alloc[u8](a, raw.len * 2usize + 1usize)
+    if out_error != ok { ret ("", out_error) }
+    var at = 2usize
+    var used = 0usize
+    while at + 1usize < raw.len {
+        let unit = u32(raw[at]) * 256u32 + u32(raw[at + 1usize])
+        var scalar = unit
+        if unit >= 55296u32 && unit < 56320u32 {
+            if at + 3usize < raw.len {
+                let low = u32(raw[at + 2usize]) * 256u32 + u32(raw[at + 3usize])
+                if low >= 56320u32 && low < 57344u32 {
+                    scalar = 65536u32 + ((unit - 55296u32) << 10u32) + (low - 56320u32)
+                    at += 2usize
+                } else {
+                    scalar = 65533u32
+                }
+            } else {
+                scalar = 65533u32
+            }
+        } else if unit >= 56320u32 && unit < 57344u32 {
+            scalar = 65533u32
+        }
+        let (width, encode_error) = utf8.encode(scalar, out[used..out.len])
+        if encode_error != ok { ret ("", encode_error) }
+        used += usize(width)
+        at += 2usize
+    }
+    ret (out[0usize..used], ok)
+}
+
+fn pdf_text(a: *mem.Arena, raw: []const u8) -> (str, err) {
+    if raw.len >= 2usize && raw[0usize] == 254u8 && raw[1usize] == 255u8 {
+        let (text, text_error) = pdf_utf16be(a, raw)
+        ret (text, text_error)
+    }
+    let (text, text_error) = latin1_to_utf8(a, raw)
+    ret (text, text_error)
+}
+
+fn read_pdf_string(a: *mem.Arena, data: []const u8, from: usize, until: usize, key: str) -> (str, err) {
+    var at = from
+    while at + key.len <= until {
+        if pdf_word_at(data, at, until, key) {
+            var value_at = at + key.len
+            while value_at < until && is_space(data[value_at]) { value_at += 1usize }
+            if value_at < until && data[value_at] == 60u8 {
+                let (raw, raw_error) = pdf_hex_bytes(a, data, value_at, until)
+                if raw_error != ok { ret ("", raw_error) }
+                let (text, text_error) = pdf_text(a, raw)
+                ret (text, text_error)
+            }
+            if value_at < until && data[value_at] == 40u8 {
+                let (raw, raw_error) = pdf_literal_bytes(a, data, value_at, until)
+                if raw_error != ok { ret ("", raw_error) }
+                let (text, text_error) = pdf_text(a, raw)
+                ret (text, text_error)
+            }
+            ret ("", ok)
+        }
+        at += 1usize
     }
     ret ("", ok)
+}
+
+fn pdf_metadata(a: *mem.Arena, data: []const u8) -> (str, str, err) {
+    let (from, until, found) = pdf_info_span(data)
+    if !found { ret ("", "", ok) }
+    let (title, title_error) = read_pdf_string(a, data, from, until, "/Title")
+    if title_error != ok { ret ("", "", title_error) }
+    let (author, author_error) = read_pdf_string(a, data, from, until, "/Author")
+    if author_error != ok { ret ("", "", author_error) }
+    ret (title, author, ok)
 }
 
 fn html_skipped(name: str) -> bool {
@@ -464,7 +751,6 @@ fn flow_text(b: *str.Builder, f: *Flow, s: str) -> err {
     var i = 0usize
     while i < s.len {
         if is_space(s[i]) {
-            if s[i] == 10u8 && false { f.pending = 2u8 }
             if f.pending == 0u8 { f.pending = 1u8 }
             i += 1usize
             continue
@@ -562,8 +848,37 @@ fn xml_extract(a: *mem.Arena, source: []const u8) -> (Document, err) {
     ret (d, ok)
 }
 
+fn markdown_word(c: u8) -> bool {
+    ret (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || (c >= 48u8 && c <= 57u8) || c == 95u8
+}
+
+fn markdown_marker_slot(c: u8, count: usize) -> usize {
+    if count == 1usize && c == 42u8 { ret 0usize }
+    if count == 2usize && c == 42u8 { ret 1usize }
+    if count == 1usize && c == 126u8 { ret 2usize }
+    if count == 2usize && c == 126u8 { ret 3usize }
+    if count == 1usize && c == 96u8 { ret 4usize }
+    ret 5usize
+}
+
+fn markdown_marker_close(line: str, from: usize, marker: u8, count: usize) -> bool {
+    var at = from
+    while at < line.len {
+        if line[at] == marker {
+            var after = at
+            while after < line.len && line[after] == marker { after += 1usize }
+            if after - at == count && at > 0usize && markdown_word(line[at - 1usize]) && (after == line.len || !markdown_word(line[after])) { ret true }
+            at = after
+        } else {
+            at += 1usize
+        }
+    }
+    ret false
+}
+
 fn markdown_line(b: *str.Builder, line: str) -> err {
     var i = 0usize
+    var active: [5]bool = zero
     while i < line.len {
         let c = line[i]
         if c == 33u8 && i + 1usize < line.len && line[i + 1usize] == 91u8 {
@@ -584,7 +899,26 @@ fn markdown_line(b: *str.Builder, line: str) -> err {
             }
         }
         if c == 42u8 || c == 96u8 || c == 126u8 {
-            i += 1usize
+            var after = i
+            while after < line.len && line[after] == c { after += 1usize }
+            let count = after - i
+            let slot = markdown_marker_slot(c, count)
+            let opening = (i == 0usize || !markdown_word(line[i - 1usize])) && after < line.len && markdown_word(line[after])
+            let closing = i > 0usize && markdown_word(line[i - 1usize]) && (after == line.len || !markdown_word(line[after]))
+            if slot < active.len {
+                if active[slot] && closing {
+                    active[slot] = false
+                    i = after
+                    continue
+                }
+                if !active[slot] && opening && markdown_marker_close(line, after, c, count) {
+                    active[slot] = true
+                    i = after
+                    continue
+                }
+            }
+            try str.push(b, line[i..after])
+            i = after
             continue
         }
         if c == 60u8 && i + 1usize < line.len && (is_alpha(line[i + 1usize]) || line[i + 1usize] == 47u8) {
@@ -601,9 +935,10 @@ fn markdown_line(b: *str.Builder, line: str) -> err {
 }
 
 fn markdown_extract(a: *mem.Arena, source: str) -> (Document, err) {
-    var title = ""
     var (b, builder_error) = str.builder(a, source.len + 16usize)
     if builder_error != ok { ret (empty_document(.Markdown), builder_error) }
+    var title_start = 0usize
+    var title_len = 0usize
     var at = 0usize
     var first = true
     var in_fence = false
@@ -646,18 +981,22 @@ fn markdown_extract(a: *mem.Arena, source: str) -> (Document, err) {
         if !skip {
             if !first { try str.push(&b, "\n") }
             first = false
+            let content_start = b.len
             try markdown_line(&b, content)
-            if is_heading && title.len == 0usize {
-                // The title is the heading as written, markup and all removed the same way.
-                title = content
+            if is_heading && title_len == 0usize {
+                // Slice the same reduced bytes that went into the body; a second
+                // builder would displace this builder's arena claim.
+                title_start = content_start
+                title_len = b.len - content_start
             }
         }
         if end >= source.len { break }
         at = end + 1usize
     }
+    let text = str.done(&b)
     var d = empty_document(.Markdown)
-    d.text = str.done(&b)
-    d.title = title
+    d.text = text
+    d.title = text[title_start..title_start + title_len]
     ret (d, ok)
 }
 
@@ -701,8 +1040,24 @@ fn csv_extract(a: *mem.Arena, source: str) -> (Document, err) {
     ret (d, ok)
 }
 
+fn vcard_count(source: []const u8) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < source.len {
+        var end = at
+        while end < source.len && source[end] != 10u8 { end += 1usize }
+        var line_end = end
+        if line_end > at && source[line_end - 1usize] == 13u8 { line_end -= 1usize }
+        if line_end - at == 11usize && starts_fold(source, at, "begin:vcard") { count += 1usize }
+        if end >= source.len { break }
+        at = end + 1usize
+    }
+    ret count
+}
+
 fn vcard_extract(a: *mem.Arena, source: []const u8) -> (Document, err) {
-    let (cards, cards_error) = mem.alloc[vcard.Card](a, 256usize)
+    let expected = vcard_count(source)
+    let (cards, cards_error) = mem.alloc[vcard.Card](a, expected)
     if cards_error != ok { ret (empty_document(.VCard), cards_error) }
     let (count, parse_error) = vcard.parse(a, source, cards)
     if parse_error != ok { ret (empty_document(.VCard), Corrupt) }
@@ -742,6 +1097,8 @@ fn vcard_extract(a: *mem.Arena, source: []const u8) -> (Document, err) {
 
 // The header block and body of a message: split at the first blank line.
 fn split_message(s: str) -> (str, str) {
+    if s.len >= 2usize && s[0usize] == 13u8 && s[1usize] == 10u8 { ret ("", s[2usize..s.len]) }
+    if s.len >= 1usize && s[0usize] == 10u8 { ret ("", s[1usize..s.len]) }
     var i = 0usize
     while i < s.len {
         if s[i] == 10u8 {
@@ -763,7 +1120,11 @@ fn header_value(a: *mem.Arena, block: str, name: str) -> (str, bool, err) {
         if line_end > at && block[line_end - 1usize] == 13u8 { line_end -= 1usize }
         let matches = starts_fold(block, at, name) && at + name.len < line_end && block[at + name.len] == 58u8
         if matches {
-            var value = str.trim(block[at + name.len + 1usize..line_end])
+            var (b, builder_error) = str.builder(a, 0usize)
+            if builder_error != ok { ret ("", false, builder_error) }
+            let initial = str.trim(block[at + name.len + 1usize..line_end])
+            let initial_error = str.push(&b, initial)
+            if initial_error != ok { ret ("", false, initial_error) }
             // Continuation lines start with a space or a tab.
             var next = end + 1usize
             while next < block.len && (block[next] == 32u8 || block[next] == 9u8) {
@@ -771,14 +1132,18 @@ fn header_value(a: *mem.Arena, block: str, name: str) -> (str, bool, err) {
                 while e2 < block.len && block[e2] != 10u8 { e2 += 1usize }
                 var l2 = e2
                 if l2 > next && block[l2 - 1usize] == 13u8 { l2 -= 1usize }
-                let (joined, joined_error) = str.concat(a, value, " ")
-                if joined_error != ok { ret ("", false, joined_error) }
-                let (joined2, joined2_error) = str.concat(a, joined, str.trim(block[next..l2]))
-                if joined2_error != ok { ret ("", false, joined2_error) }
-                value = joined2
+                let continuation = str.trim(block[next..l2])
+                if continuation.len > 0usize {
+                    if b.len > 0usize {
+                        let space_error = str.push(&b, " ")
+                        if space_error != ok { ret ("", false, space_error) }
+                    }
+                    let continuation_error = str.push(&b, continuation)
+                    if continuation_error != ok { ret ("", false, continuation_error) }
+                }
                 next = e2 + 1usize
             }
-            ret (value, true, ok)
+            ret (str.done(&b), true, ok)
         }
         at = end + 1usize
     }
@@ -882,7 +1247,15 @@ fn decode_body(a: *mem.Arena, body: str, content_type: str, encoding: str) -> (s
         decoded = raw
     }
     let charset = parameter_of(content_type, "charset")
-    if !valid_utf8(decoded) || starts_fold(charset, 0usize, "iso-8859") || starts_fold(charset, 0usize, "windows-125") || starts_fold(charset, 0usize, "latin") {
+    if starts_fold(charset, 0usize, "windows-1252") {
+        let (utf, utf_error) = windows1252_to_utf8(a, decoded)
+        if utf_error != ok { ret ("", utf_error) }
+        decoded = utf
+    } else if starts_fold(charset, 0usize, "windows-1251") {
+        let (utf, utf_error) = windows1251_to_utf8(a, decoded)
+        if utf_error != ok { ret ("", utf_error) }
+        decoded = utf
+    } else if !valid_utf8(decoded) || starts_fold(charset, 0usize, "iso-8859") || starts_fold(charset, 0usize, "latin") {
         let (utf, utf_error) = latin1_to_utf8(a, decoded)
         if utf_error != ok { ret ("", utf_error) }
         decoded = utf
@@ -904,8 +1277,19 @@ fn entity_text(a: *mem.Arena, entity: str, depth: usize) -> (str, bool, err) {
         if boundary.len == 0usize { ret ("", false, ok) }
         let (marker, marker_error) = str.concat(a, "--", boundary)
         if marker_error != ok { ret ("", false, marker_error) }
-        var plain = ""
-        var have_plain = false
+        // Parse every nested part before joining: repeatedly concatenating `plain`
+        // retains a full copy of the prior text in the arena for every MIME part.
+        var part_slots = 0usize
+        var slot_at = 0usize
+        while slot_at < body.len {
+            let (boundary_at, have_boundary) = str.find_from(body, marker, slot_at)
+            if !have_boundary { break }
+            part_slots += 1usize
+            slot_at = boundary_at + marker.len
+        }
+        let (plain_parts, parts_error) = mem.alloc[str](a, part_slots + 1usize)
+        if parts_error != ok { ret ("", false, parts_error) }
+        var plain_count = 0usize
         var markup = ""
         var have_markup = false
         var at = 0usize
@@ -929,22 +1313,19 @@ fn entity_text(a: *mem.Arena, entity: str, depth: usize) -> (str, bool, err) {
                         markup = piece
                         have_markup = true
                     }
-                } else if !have_plain {
-                    plain = piece
-                    have_plain = true
                 } else {
-                    let (joined, joined_error) = str.concat(a, plain, "\n")
-                    if joined_error != ok { ret ("", false, joined_error) }
-                    let (joined2, joined2_error) = str.concat(a, joined, piece)
-                    if joined2_error != ok { ret ("", false, joined2_error) }
-                    plain = joined2
+                    plain_parts[plain_count] = piece
+                    plain_count += 1usize
                 }
             }
             if !has_next { break }
             at = next + marker.len
             if at + 1usize < body.len && body[at] == 45u8 && body[at + 1usize] == 45u8 { break }
         }
-        if have_plain { ret (plain, false, ok) }
+        if plain_count > 0usize {
+            let (plain, plain_error) = join(a, plain_parts[0usize..plain_count], "\n")
+            ret (plain, false, plain_error)
+        }
         ret (markup, have_markup, ok)
     }
     let (decoded, decode_error) = decode_body(a, body, kind, encoding)
@@ -1007,10 +1388,8 @@ fn extract_as(a: *mem.Arena, data: []const u8, format: Format) -> (Document, err
         if pages_error != ok { ret (empty_document(format), Corrupt) }
         let (text, text_error) = join(a, pages, "\n\n")
         if text_error != ok { ret (empty_document(format), text_error) }
-        let (title, title_error) = read_pdf_string(a, data, "/Title")
-        if title_error != ok { ret (empty_document(format), title_error) }
-        let (author, author_error) = read_pdf_string(a, data, "/Author")
-        if author_error != ok { ret (empty_document(format), author_error) }
+        let (title, author, metadata_error) = pdf_metadata(a, data)
+        if metadata_error != ok { ret (empty_document(format), metadata_error) }
         ret (Document { format: format, text: text, title: title, author: author, parts: pages.len }, ok)
     }
     if format == .Docx {
@@ -1072,7 +1451,7 @@ fn extract_as(a: *mem.Arena, data: []const u8, format: Format) -> (Document, err
                     if cell.kind == .Text {
                         try str.push(&b, cell.text)
                     } else if cell.kind == .Number {
-                        if cell.number == f64(i64(cell.number)) {
+                        if cell.number > -9.0e18 && cell.number < 9.0e18 && cell.number == f64(i64(cell.number)) {
                             try str.push_i64(&b, i64(cell.number))
                         } else {
                             try str.push_f64(&b, cell.number)
@@ -1103,11 +1482,6 @@ fn extract_as(a: *mem.Arena, data: []const u8, format: Format) -> (Document, err
     // The text formats: UTF-8, optionally with a byte-order mark.
     var source = strip_bom(data)
     if format == .Mail {
-        if !valid_utf8(source) {
-            let (utf, utf_error) = latin1_to_utf8(a, source)
-            if utf_error != ok { ret (empty_document(format), utf_error) }
-            source = utf
-        }
         let (tuple_value, tuple_error) = mail_extract(a, source)
         ret (tuple_value, tuple_error)
     }
@@ -1190,6 +1564,14 @@ fn json_emit(b: *str.Builder, v: *const json.Value, lines: *usize) -> err {
 fn extract(a: *mem.Arena, data: []const u8, name: str) -> (Document, err) {
     let format = detect(a, data, name)
     if format == .Unknown { ret (empty_document(.Unknown), Unsupported) }
-    let (d, extract_error) = extract_as(a, data, format)
+    var source = data
+    // `extract_as` keeps its explicit-API UTF-8 contract. The facade, however,
+    // promises Latin-1 handling for named text formats, so normalize once here.
+    if format != .Mail && format != .Pdf && format != .Docx && format != .Pptx && format != .Xlsx && format != .Odt && format != .Odp && format != .Ods && !valid_utf8(strip_bom(data)) {
+        let (utf, utf_error) = latin1_to_utf8(a, data)
+        if utf_error != ok { ret (empty_document(format), utf_error) }
+        source = utf
+    }
+    let (d, extract_error) = extract_as(a, source, format)
     ret (d, extract_error)
 }
