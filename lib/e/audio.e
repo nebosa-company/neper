@@ -6,13 +6,9 @@ use e.algo.rand
 use e.mem
 
 type SampleFormat = enum u8 { I16, I32, F32 }
-
 type Format = struct { rate: u32, channels: u8, sample: SampleFormat }
-
 type Frames = struct { bytes: []u8, format: Format, count: usize }
-
 error Unsupported
-
 error Truncated
 
 fn sample_bytes(s: SampleFormat) -> usize {
@@ -42,9 +38,7 @@ fn read_u16(bytes: []const u8, at: usize) -> u16 {
 }
 
 fn read_u32(bytes: []const u8, at: usize) -> u32 {
-    ret u32(bytes[at]) | (u32(bytes[at + 1usize]) << 8u32) | (u32(bytes[at + 2usize]) << 16u32) | (u32(
-        bytes[at + 3usize],
-    ) << 24u32)
+    ret u32(bytes[at]) | (u32(bytes[at + 1usize]) << 8u32) | (u32(bytes[at + 2usize]) << 16u32) | (u32(bytes[at + 3usize]) << 24u32)
 }
 
 fn write_u16(bytes: []u8, at: usize, value: u16) {
@@ -113,16 +107,10 @@ fn set_sample_i32(fr: *Frames, frame: usize, channel: u8, value: i32) -> err {
 
 fn convert(a: *mem.Arena, src: Frames, to: SampleFormat) -> (Frames, err) {
     let source_width = frame_bytes(src.format)
-    if src.format.rate == 0u32 || source_width == 0usize || src.count > frames_in(
-        src.format,
-        src.bytes.len,
-    ) { ret (zero, Truncated) }
+    if src.format.rate == 0u32 || source_width == 0usize || src.count > frames_in(src.format, src.bytes.len) { ret (zero, Truncated) }
     let target_format = Format { rate: src.format.rate, channels: src.format.channels, sample: to }
     let target_width = frame_bytes(target_format)
-    if src.count != 0usize && target_width > 18446744073709551615usize / src.count { ret (
-        zero,
-        mem.Exhausted,
-    ) }
+    if src.count != 0usize && target_width > 18446744073709551615usize / src.count { ret (zero, mem.Exhausted) }
     let start = mem.mark(a)
     let (bytes, allocation_error) = mem.alloc[u8](a, src.count * target_width)
     if allocation_error != ok {
@@ -161,6 +149,7 @@ fn silence(fr: *Frames) -> err {
     }
     ret ok
 }
+
 
 // --- Dither (#1899): quantising f32 samples to 16 bits with TPDF dither
 // from a caller `Pcg64` (two uniform draws in [0, 1) subtracted: a triangle
