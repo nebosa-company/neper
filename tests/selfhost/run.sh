@@ -2845,6 +2845,25 @@ crypto_noise_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$crypto_noise_written" = 'executable written' ]
 chmod +x "$test_build/crypto-noise-selfhost"
 "$test_build/crypto-noise-selfhost"
+# BLAKE2s constructor bounds are always-on traps, not debug-only bounds checks.
+for crypto_noise_mode in blake2s-output-0 blake2s-output-33; do
+    crypto_noise_status=0
+    crypto_noise_output=$("$test_build/crypto-noise-selfhost" "$crypto_noise_mode" 2>&1) || crypto_noise_status=$?
+    [ "$crypto_noise_status" -eq 134 ]
+    case "$crypto_noise_output" in
+        *'trap[unreachable]: blake2s output length must be 1..32'*) ;;
+        *) printf '%s\n' "crypto_noise did not reject $crypto_noise_mode: $crypto_noise_output" >&2; exit 1 ;;
+    esac
+done
+for crypto_noise_mode in blake2s-key-33 blake2s-key-65; do
+    crypto_noise_status=0
+    crypto_noise_output=$("$test_build/crypto-noise-selfhost" "$crypto_noise_mode" 2>&1) || crypto_noise_status=$?
+    [ "$crypto_noise_status" -eq 134 ]
+    case "$crypto_noise_output" in
+        *'trap[unreachable]: blake2s key length must be at most 32'*) ;;
+        *) printf '%s\n' "crypto_noise did not reject $crypto_noise_mode: $crypto_noise_output" >&2; exit 1 ;;
+    esac
+done
 # `e.fmt.brotli`: streams from the brotli package at qualities 0 to 11 including 29 dictionary references and multi-block texts decoded exactly; truncation, trailing bytes and short buffers reported (D878).
 fmt_brotli_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_brotli/src/main.e" "$repo" x64 linux "$test_build/fmt-brotli-selfhost")
 [ "$fmt_brotli_written" = 'executable written' ]

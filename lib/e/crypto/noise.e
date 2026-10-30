@@ -96,6 +96,12 @@ fn compress(s: *Blake2s, last: bool) {
 // A BLAKE2s state for `out_len` bytes (1..32) of digest; a non-empty `key` (at most 32
 // bytes) makes the keyed variant, which is BLAKE2s's own MAC.
 fn blake2s_init(out_len: usize, key: []const u8) -> Blake2s {
+    if out_len == 0usize || out_len > 32usize {
+        unreachable("blake2s output length must be 1..32")
+    }
+    if key.len > 32usize {
+        unreachable("blake2s key length must be at most 32")
+    }
     var s: Blake2s = zero
     var i = 0usize
     while i < 8usize {
@@ -132,6 +138,9 @@ fn blake2s_update(s: *Blake2s, bytes: []const u8) {
 
 // The digest in the first `out_len` bytes of the answer; the state is spent.
 fn blake2s_done(s: *Blake2s) -> [32]u8 {
+    if s.out_len == 0usize || s.out_len > 32usize {
+        unreachable("blake2s output length must be 1..32")
+    }
     s.t += u64(s.block_len)
     while s.block_len < 64usize {
         s.block[s.block_len] = 0u8
