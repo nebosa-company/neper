@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Neper memory video</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0c0e14; }
+  body { position: relative; color: #e1e2e9; font: 400 30px/1.35 "Segoe UI", system-ui, sans-serif; }
+  .mono { font-family: "Cascadia Code", Consolas, monospace; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .brand { position: absolute; left: 80px; top: 52px; display: flex; align-items: center; gap: 16px; font-weight: 600; font-size: 30px; letter-spacing: 1px; }
+  .brand img { width: 48px; height: 48px; }
+  .title { position: absolute; left: 80px; top: 130px; font: 600 64px/1.1 "Segoe UI", sans-serif; color: #fff; }
+  .title small { display: block; margin-top: 12px; font: 400 28px/1.3 "Segoe UI", sans-serif; color: #8d909e; }
+  #caption { position: absolute; left: 160px; right: 160px; bottom: 76px; text-align: center; font-size: 30px; line-height: 1.32; color: #fff; padding: 14px 30px; border-radius: 20px; background: #0c0e14cc; }
+  #foot { position: absolute; left: 80px; right: 80px; bottom: 26px; font-size: 20px; color: #8d909e; text-align: center; }
+  .panel { position: absolute; border: 2px solid #39475f; border-radius: 22px; background: #12141b; padding: 22px 30px; }
+  .term { font: 400 25px/1.5 "Cascadia Code", Consolas, monospace; white-space: pre; color: #e1e2e9; overflow: hidden; }
+  .term .p { color: #b3c5ff; } .term .ok { color: #7bd88f; } .term .bad { color: #ff8b8b; } .term .d { color: #8d909e; }
+  .box { position: absolute; border: 2px solid #39475f; border-radius: 18px; background: #12141b; padding: 18px 22px; text-align: center; opacity: 0; }
+  .box b { display: block; font: 600 46px "Cascadia Code", Consolas, monospace; color: #fff; }
+  .box span { display: block; font-size: 25px; color: #c3c6d5; margin-top: 4px; }
+  .box.n { border-color: #b3c5ff; background: #0f1b33; } .box.n b { color: #b3c5ff; }
+  .box.w { border-color: #ffb692; background: #2a1a12; } .box.w b { color: #ffb692; }
+  .chip { position: absolute; font: 600 32px "Cascadia Code", Consolas, monospace; border-radius: 999px; padding: 8px 26px; opacity: 0; white-space: nowrap; border: 2px solid #39475f; background: #12141b; color: #e1e2e9; }
+  .chip.good { border-color: #7bd88f; color: #7bd88f; }
+  .chip.bad { border-color: #ff8b8b; color: #ff8b8b; }
+  .chip.pick { border-color: #b3c5ff; background: #0f1b33; color: #b3c5ff; }
+  .big { position: absolute; font: 600 104px "Cascadia Code", Consolas, monospace; color: #b3c5ff; opacity: 0; white-space: nowrap; }
+  .lbl { position: absolute; font-size: 28px; color: #c3c6d5; white-space: nowrap; opacity: 0; }
+  .track { position: absolute; border: 2px solid #39475f; border-radius: 12px; background: #12141b; opacity: 0; overflow: hidden; }
+  .fill { position: absolute; left: 0; top: 0; bottom: 0; background: #b3c5ff; }
+  .fill.w { background: #ffb692; }
+  .mark { position: absolute; width: 4px; background: #ffb692; opacity: 0; }
+  .page { position: absolute; top: 0; bottom: 0; width: 8px; background: #7bd88f; opacity: 0; }
+  .row { position: absolute; left: 110px; font: 600 40px "Segoe UI", sans-serif; color: #e1e2e9; opacity: 0; white-space: nowrap; }
+  .row i { font-style: normal; color: #ffb692; margin-right: 24px; }
+  .row small { font: 400 30px "Segoe UI", sans-serif; color: #c3c6d5; }
+  .formula { font: 400 84px "Cambria Math", "STIX Two Math", Cambria, serif; color: #b3c5ff; }
+</style>
+</head>
+<body>
+<div class="brand"><img src="../../gtm/logo/neper-icon.svg" alt=""><span>NEPER</span></div>
+
+<div id="hook" class="scene">
+  <div class="title">Memory on demand<small>a program takes what it needs, on Windows, Linux and macOS</small></div>
+  <div class="box n" id="h1" style="left:80px;top:340px;width:560px;padding:44px 22px"><b style="font-size:72px">1 TiB</b><span>the default ceiling, no flag</span></div>
+  <div class="box n" id="h2" style="left:680px;top:340px;width:560px;padding:44px 22px"><b style="font-size:72px">3 MiB</b><span>what that costs at startup</span></div>
+  <div class="box n" id="h3" style="left:1280px;top:340px;width:560px;padding:44px 22px"><b style="font-size:72px">605 MB</b><span>a million-line build, at its peak</span></div>
+</div>
+
+<div id="reserve" class="scene">
+  <div class="title">Reserved is not allocated<small>what a program gets at startup</small></div>
+  <div class="panel term" id="rcode" style="left:80px;top:280px;width:1120px;height:88px;opacity:0"><span class="p">fn</span> main(a: *mem.Arena, args: []str) -&gt; err</div>
+  <div class="track" id="rbar" style="left:80px;top:420px;width:1760px;height:96px"><div id="rpages"></div></div>
+  <div class="lbl" id="rl1" style="left:80px;top:530px">one unbroken range of addresses: the arena's ceiling</div>
+  <div class="lbl" id="rl2" style="left:80px;top:580px;color:#7bd88f">green: pages the program wrote to, the only ones that cost RAM</div>
+  <div class="chip pick" id="rc1" style="left:80px;top:660px">a ceiling, not a cost</div>
+  <div class="box" id="rw" style="left:640px;top:640px;width:590px;padding:12px 18px"><span style="margin:0"><b style="font-size:27px;display:inline;font-family:'Segoe UI'">Windows:</b> a fault commits 1 MiB</span></div>
+  <div class="box" id="rx" style="left:1250px;top:640px;width:590px;padding:12px 18px"><span style="margin:0"><b style="font-size:27px;display:inline;font-family:'Segoe UI'">Linux:</b> a page on first touch</span></div>
+</div>
+
+<div id="grow" class="scene">
+  <div class="title">A program that grows<small>grow.e: no flag, six blocks of 256 MiB, every page written</small></div>
+  <div class="panel term" id="gterm" style="left:80px;top:280px;width:1180px;height:440px;font-size:24px"></div>
+  <div class="big" id="gbig" style="left:1300px;top:300px;font-size:84px">3 MiB</div>
+  <div class="lbl" id="gl" style="left:1300px;top:410px">peak RAM so far</div>
+  <div class="track" id="gbar" style="left:1300px;top:470px;width:540px;height:60px"><div class="fill" id="gfill"></div></div>
+  <div class="chip good" id="gc" style="left:1300px;top:620px">nothing moved</div>
+</div>
+
+<div id="touch" class="scene">
+  <div class="title">Allocating is not touching<small>sparse.e and frames.e, peak working set</small></div>
+  <div class="panel" id="ta" style="left:80px;top:280px;width:860px;height:440px;opacity:0"></div>
+  <div class="lbl" id="ta1" style="left:120px;top:300px;font-size:34px;color:#fff">16 GiB, 1,000 writes</div>
+  <div class="big" id="ta2" style="left:120px;top:360px;font-size:92px">16,384 MiB</div>
+  <div class="lbl" id="ta3" style="left:120px;top:486px">allocated</div>
+  <div class="big" id="ta4" style="left:120px;top:530px;font-size:92px;color:#7bd88f">7 MiB</div>
+  <div class="lbl" id="ta5" style="left:450px;top:560px">of RAM</div>
+  <div class="lbl" id="ta6" style="left:120px;top:660px;color:#ffb692">Windows charges 1,006 MB of commit</div>
+  <div class="panel" id="tb" style="left:980px;top:280px;width:860px;height:440px;opacity:0"></div>
+  <div class="lbl" id="tb1" style="left:1020px;top:300px;font-size:34px;color:#fff">10,000 frames, mark and reset</div>
+  <div class="big" id="tb2" style="left:1020px;top:360px;font-size:92px">10,000 MiB</div>
+  <div class="lbl" id="tb3" style="left:1020px;top:486px">allocated in total</div>
+  <div class="big" id="tb4" style="left:1020px;top:530px;font-size:92px;color:#7bd88f">4 MiB</div>
+  <div class="lbl" id="tb5" style="left:1350px;top:560px">of RAM</div>
+  <div class="lbl" id="tb6" style="left:1020px;top:660px;color:#c3c6d5">1 MB of commit</div>
+</div>
+
+<div id="back" class="scene">
+  <div class="title">Memory goes back<small>mem.reset, with nothing asked for and no background thread</small></div>
+  <div class="chip pick" id="b0" style="left:80px;top:275px">a reset that frees 512 MiB or more returns all but 128 MiB of it</div>
+  <div class="lbl" id="bl1" style="left:80px;top:370px;font-size:34px;color:#fff">after a 2 GiB spike</div>
+  <div class="track" id="bt1" style="left:80px;top:420px;width:1500px;height:80px"><div class="fill w" id="bf1"></div></div>
+  <div class="big" id="bn1" style="left:1610px;top:422px;font-size:50px;color:#ffb692">2,051 MiB</div>
+  <div class="lbl" id="bl2" style="left:80px;top:530px;font-size:34px;color:#fff">after mem.reset</div>
+  <div class="track" id="bt2" style="left:80px;top:580px;width:1500px;height:80px"><div class="fill" id="bf2" style="background:#7bd88f"></div></div>
+  <div class="big" id="bn2" style="left:1610px;top:582px;font-size:50px;color:#7bd88f">132 MiB</div>
+  <div class="chip good" id="bk3" style="left:80px;top:695px">a smaller reset: one compare, no system call</div>
+</div>
+
+<div id="heap" class="scene">
+  <div class="title">Freeing one object<small>e.mem.heap: a value you pass, not a global</small></div>
+  <div class="panel term" id="hp" style="left:80px;top:280px;width:1000px;height:400px;font-size:24px;opacity:0"><span class="d">// blocks free in any order</span>
+<span class="p">let</span> (a, a_error) = heap.alloc(h, 256usize)
+<span class="p">let</span> (b, b_error) = heap.alloc(h, 4096usize)
+...
+heap.free(a)
+<span class="p">let</span> bytes = heap.bytes(&amp;b)
+bytes[0usize] = 9u8
+heap.free(b)</div>
+  <div class="lbl" id="h0" style="left:1140px;top:285px;font-size:32px;color:#fff">these do not compile</div>
+  <div class="chip bad" id="h1e" style="left:1140px;top:340px">use after free</div>
+  <div class="chip bad" id="h2e" style="left:1140px;top:420px">double free</div>
+  <div class="chip bad" id="h3e" style="left:1140px;top:500px">never freed</div>
+  <div class="big" id="hb" style="left:1140px;top:590px;font-size:64px;color:#7bd88f">2 GiB, 50 ms</div>
+  <div class="lbl" id="hbl" style="left:1140px;top:680px;font-size:26px">64 live slots, freed in no stack order</div>
+</div>
+
+<div id="compiler" class="scene">
+  <div class="title">The compiler<small>sc1m, a release compiler, 8 workers</small></div>
+  <div class="box n" id="c1" style="left:80px;top:280px;width:860px;text-align:left"><b>920,554 lines</b><span>sc1m: 1,000 modules, 82,595 functions</span></div>
+  <div class="box n" id="c2" style="left:980px;top:280px;width:860px;text-align:left"><b>3.6 s</b><span>108474335, the expected answer</span></div>
+  <div class="lbl" id="c3" style="left:80px;top:460px;color:#ffb692;font-size:32px">4,423 MB of addresses reached by the arenas</div>
+  <div class="track" id="cb1" style="left:80px;top:510px;width:1760px;height:64px"><div class="fill w" id="cf1"></div></div>
+  <div class="lbl" id="c4" style="left:80px;top:600px;color:#7bd88f;font-size:32px">605 MB of RAM touched</div>
+  <div class="track" id="cb2" style="left:80px;top:650px;width:1760px;height:64px"><div class="fill" id="cf2" style="background:#7bd88f"></div></div>
+</div>
+
+<div id="debug" class="scene">
+  <div class="title">Touch everything<small>the compiler building itself, 8 workers</small></div>
+  <div class="lbl" id="d1" style="left:80px;top:300px;font-size:34px;color:#fff">release-built compiler</div>
+  <div class="track" id="db1" style="left:80px;top:350px;width:1500px;height:80px"><div class="fill" id="df1"></div></div>
+  <div class="big" id="dn1" style="left:1610px;top:352px;font-size:50px">339 MB</div>
+  <div class="lbl" id="d2" style="left:80px;top:480px;font-size:34px;color:#fff">debug-built compiler: every allocation filled</div>
+  <div class="track" id="db2" style="left:80px;top:530px;width:1500px;height:80px"><div class="fill w" id="df2"></div></div>
+  <div class="big" id="dn2" style="left:1610px;top:532px;font-size:50px;color:#ffb692">3,425 MB</div>
+  <div class="chip pick" id="d3" style="left:80px;top:670px">neper emit-executable src/main.e . x64 windows neper.exe --release</div>
+</div>
+
+<div id="why32" class="scene">
+  <div class="title">When the host says no<small>an arena cannot move, so it needs one unbroken range</small></div>
+  <div class="chip bad" id="w64" style="left:80px;top:280px">first try: 64 GiB, exit 111 under valgrind</div>
+  <div class="lbl" id="w0" style="left:80px;top:365px;font-size:32px;color:#fff">now: a refused size is halved, and asked for again</div>
+  <div class="chip bad" id="l1" style="left:80px;top:420px">1 TiB</div>
+  <div class="chip bad" id="l2" style="left:270px;top:420px">512</div>
+  <div class="chip bad" id="l3" style="left:410px;top:420px">256</div>
+  <div class="chip bad" id="l4" style="left:550px;top:420px">128</div>
+  <div class="chip bad" id="l5" style="left:690px;top:420px">64</div>
+  <div class="chip good" id="l6" style="left:810px;top:420px">32 GiB granted</div>
+  <div class="box n" id="b1" style="left:80px;top:530px;width:560px"><b>1 TiB</b><span>natively</span></div>
+  <div class="box n" id="b2" style="left:680px;top:530px;width:560px"><b>32 GiB</b><span>under valgrind</span></div>
+  <div class="box n" id="b3" style="left:1280px;top:530px;width:560px"><b>4 GiB</b><span>under ulimit -v 8000000</span></div>
+</div>
+
+<div id="runout" class="scene">
+  <div class="title">Running out is an answer<small>before the page fault, not after it</small></div>
+  <div class="panel term" id="rterm" style="left:80px;top:280px;width:1760px;height:180px;font-size:25px;opacity:0"><span class="p">if</span> pages.ensure(a, 512usize * GIB) == mem.Exhausted {
+    <span class="d">// shed the load, and keep running</span>
+}</div>
+  <div class="lbl" id="ru1" style="left:80px;top:490px;font-size:30px;color:#fff">a program that did not ask, on Windows: two seconds of retries, then</div>
+  <div class="panel term" id="rfatal" style="left:80px;top:540px;width:1760px;height:96px;font-size:25px;opacity:0"><span class="bad">fatal: out of memory: the system refused to commit at 0x000000014ff11087</span></div>
+  <div class="chip pick" id="ru2" style="left:80px;top:670px">exit 137, as Linux's OOM killer leaves it</div>
+</div>
+
+<div id="compare" class="scene">
+  <div class="title">How it compares<small>from documentation, not measured</small></div>
+  <table id="cmp" style="position:absolute;left:80px;top:270px;width:1760px;border-collapse:collapse;font-size:26px;opacity:0">
+    <tr id="cr0" style="color:#b3c5ff;font-weight:600"><td style="padding:14px 12px;width:340px"></td><td style="padding:14px 12px">Neper</td><td style="padding:14px 12px">Go</td><td style="padding:14px 12px">Rust</td><td style="padding:14px 12px">C++</td><td style="padding:14px 12px">Node.js</td></tr>
+    <tr id="cr1"><td style="padding:14px 12px;color:#c3c6d5">Pauses</td><td style="padding:14px 12px;color:#7bd88f">none</td><td style="padding:14px 12px">short</td><td style="padding:14px 12px;color:#7bd88f">none</td><td style="padding:14px 12px;color:#7bd88f">none</td><td style="padding:14px 12px">short</td></tr>
+    <tr id="cr2"><td style="padding:14px 12px;color:#c3c6d5">Use after free</td><td style="padding:14px 12px;color:#7bd88f">compile error</td><td style="padding:14px 12px">not possible</td><td style="padding:14px 12px;color:#7bd88f">compile error</td><td style="padding:14px 12px;color:#ffb692">undefined</td><td style="padding:14px 12px">not possible</td></tr>
+    <tr id="cr3"><td style="padding:14px 12px;color:#c3c6d5">Memory back to the OS</td><td style="padding:14px 12px">large reset or free</td><td style="padding:14px 12px">in the background</td><td style="padding:14px 12px">allocator's choice</td><td style="padding:14px 12px">allocator's choice</td><td style="padding:14px 12px">after collection</td></tr>
+    <tr id="cr4"><td style="padding:14px 12px;color:#c3c6d5">Asking before running out</td><td style="padding:14px 12px;color:#7bd88f">pages.ensure</td><td style="padding:14px 12px">no</td><td style="padding:14px 12px;color:#7bd88f">try_reserve</td><td style="padding:14px 12px">exception</td><td style="padding:14px 12px">no</td></tr>
+    <tr id="cr5"><td style="padding:14px 12px;color:#c3c6d5">Work for the programmer</td><td style="padding:14px 12px;color:#ffb692">pick arena or heap</td><td style="padding:14px 12px;color:#7bd88f">least</td><td style="padding:14px 12px">ownership</td><td style="padding:14px 12px">most</td><td style="padding:14px 12px;color:#7bd88f">least</td></tr>
+  </table>
+</div>
+
+<div id="limits" class="scene">
+  <div class="title">Where it stops</div>
+  <div class="row" id="r1" style="top:265px;font-size:36px"><i>✗</i>a runaway program commits until the OS pushes back <small>(--arena sets a hard cap)</small></div>
+  <div class="row" id="r2" style="top:360px;font-size:36px"><i>✗</i>repeated spikes past 512 MiB pay about 100 ms a round</div>
+  <div class="row" id="r3" style="top:455px;font-size:36px"><i>✗</i>a program may get less than it asked for: check mem.stats</div>
+  <div class="row" id="r4" style="top:550px;font-size:36px"><i>✗</i>a WebAssembly module has 4 GiB at most</div>
+  <div class="row" id="r5" style="top:645px;font-size:36px"><i>✗</i>the x64 macOS run was under Rosetta, on Apple Silicon</div>
+</div>
+
+<div id="close" class="scene">
+  <div style="position:absolute;left:0;right:0;top:250px;text-align:center"><img src="../../gtm/logo/neper-icon.svg" style="width:160px;height:160px" alt=""></div>
+  <div id="c1x" style="position:absolute;left:0;right:0;top:430px;text-align:center;font:600 72px 'Segoe UI',sans-serif;color:#fff">Ask for what you might need.</div>
+  <div id="c2x" style="position:absolute;left:0;right:0;top:525px;text-align:center;font:600 72px 'Segoe UI',sans-serif;color:#ffb692">Pay for what you touch.</div>
+  <div id="c5x" style="position:absolute;left:0;right:0;top:620px;text-align:center;font:600 72px 'Segoe UI',sans-serif;color:#7bd88f">Give it back.</div>
+  <div id="c3x" class="formula" style="position:absolute;left:0;right:0;top:735px;text-align:center;font-size:64px">e = lim<sub style="font-size:30px">n→∞</sub> (1 + n<sup style="font-size:34px">−1</sup>)<sup style="font-size:44px">n</sup></div>
+  <div id="c4x" class="mono" style="position:absolute;left:0;right:0;top:870px;text-align:center;font-size:34px;color:#8d909e">neper.dev</div>
+</div>
+
+<div id="caption"></div>
+<div id="foot"></div>
+
+<script>
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (p) => 1 - Math.pow(1 - clamp(p), 3);
+const prog = (t, a, d = 0.5) => clamp((t - a) / d);
+const $ = (id) => document.getElementById(id);
+function fadeIn(el, t, a, d = 0.5, rise = 18) { const p = ease(prog(t, a, d)); el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * rise}px)`; }
+function typed(text, t, a, cps) { return text.slice(0, Math.max(0, Math.floor((t - a) * cps))); }
+
+// Fixed positions for the pages a program writes, so every frame draws the same picture.
+const pageAt = [0.012, 0.021, 0.034, 0.047, 0.052, 0.071, 0.083, 0.094, 0.116, 0.128, 0.141, 0.163, 0.187, 0.204, 0.232, 0.251];
+const rp = $('rpages');
+pageAt.forEach((x) => { const d = document.createElement('div'); d.className = 'page'; d.style.left = (x * 1756) + 'px'; rp.appendChild(d); });
+
+const growLines = [
+  'start: ceiling 1048576 MiB, used 0 MiB, peak RAM 3 MiB',
+  'grew: ceiling 1048576 MiB, used 256 MiB, peak RAM 259 MiB',
+  'grew: ceiling 1048576 MiB, used 512 MiB, peak RAM 515 MiB',
+  'grew: ceiling 1048576 MiB, used 768 MiB, peak RAM 771 MiB',
+  'grew: ceiling 1048576 MiB, used 1024 MiB, peak RAM 1027 MiB',
+  'grew: ceiling 1048576 MiB, used 1280 MiB, peak RAM 1283 MiB',
+  'grew: ceiling 1048576 MiB, used 1536 MiB, peak RAM 1539 MiB',
+  'first byte is still 42',
+];
+const growPeak = [3, 259, 515, 771, 1027, 1283, 1539];
+
+function render(t, scenes) {
+  const cap = $('caption'), foot = $('foot');
+  let active = null;
+  scenes.forEach((sc) => {
+    const el = $(sc.id);
+    const lt = t - sc.start;
+    const fin = prog(lt, 0, 0.5), fout = 1 - prog(lt, sc.dur - 0.5, 0.5);
+    el.style.opacity = (lt >= 0 && lt < sc.dur) ? Math.min(fin, fout) : 0;
+    if (lt >= 0 && lt < sc.dur) { active = sc; sc.lt = lt; }
+  });
+  if (!active) return;
+  const lt = active.lt * (active.speed || 1), id = active.id;
+  cap.textContent = active.caption;
+  cap.style.opacity = id === 'close' ? 0 : ease(prog(lt, 0.5, 0.5));
+  foot.textContent = '';
+
+  if (id === 'hook') {
+    fadeIn($('h1'), lt, 9.2); fadeIn($('h2'), lt, 11.2); fadeIn($('h3'), lt, 13.4);
+    foot.textContent = 'Peak working set on Windows x64. The build is sc1m: 1,000 modules, 920,554 lines.';
+  }
+  if (id === 'reserve') {
+    fadeIn($('rcode'), lt, 0.8, 0.5);
+    fadeIn($('rbar'), lt, 2.8, 0.6); fadeIn($('rl1'), lt, 3.4, 0.5);
+    [...rp.children].forEach((d, i) => { d.style.opacity = ease(prog(lt, 6.6 + i * 0.2, 0.25)); });
+    fadeIn($('rl2'), lt, 7.2, 0.5);
+    fadeIn($('rc1'), lt, 11.0, 0.5); fadeIn($('rw'), lt, 11.6, 0.5); fadeIn($('rx'), lt, 12.2, 0.5);
+    foot.textContent = 'Not to scale: 3 MiB of 1 TiB is far too small to see.';
+  }
+  if (id === 'grow') {
+    let out = '<span class="p">$</span> ./grow.exe\n';
+    const a = 2.6, step = 1.2;
+    const shown = lt < a ? 0 : Math.min(growLines.length, 1 + Math.floor((lt - a) / step));
+    out += growLines.slice(0, Math.min(shown, 7)).join('\n');
+    if (lt > 10.4) out += '\n<span class="ok">' + growLines[7] + '</span>';
+    $('gterm').innerHTML = out;
+    const n = clamp(shown, 1, 7) - 1;
+    const prev = n === 0 ? growPeak[0] : growPeak[n - 1];
+    const v = prev + (growPeak[n] - prev) * ease(prog(lt, a + n * step, 0.8));
+    $('gbig').textContent = Math.round(v).toLocaleString('en-US') + ' MiB';
+    fadeIn($('gbig'), lt, 2.6, 0.5); fadeIn($('gl'), lt, 2.8, 0.5); fadeIn($('gbar'), lt, 2.8, 0.5);
+    $('gfill').style.width = (v / 1536 * 100) + '%';
+    fadeIn($('gc'), lt, 12.0, 0.5);
+    foot.textContent = 'Windows x64. On Linux the same program prints 1 MiB at the start and 1536 MiB at the end.';
+  }
+  if (id === 'touch') {
+    fadeIn($('ta'), lt, 1.8, 0.5); fadeIn($('ta1'), lt, 2.0); fadeIn($('ta2'), lt, 2.6); fadeIn($('ta3'), lt, 2.8);
+    fadeIn($('ta4'), lt, 5.4); fadeIn($('ta5'), lt, 5.6); fadeIn($('ta6'), lt, 8.0);
+    fadeIn($('tb'), lt, 11.0, 0.5); fadeIn($('tb1'), lt, 11.2); fadeIn($('tb2'), lt, 13.0); fadeIn($('tb3'), lt, 13.2);
+    fadeIn($('tb4'), lt, 15.0); fadeIn($('tb5'), lt, 15.2); fadeIn($('tb6'), lt, 15.6);
+    foot.textContent = 'Linux reports 3 MiB and 1 MiB. Commit is the charge against RAM plus pagefile, measured on Windows.';
+  }
+  if (id === 'compiler') {
+    fadeIn($('c1'), lt, 6.6); fadeIn($('c2'), lt, 8.2);
+    fadeIn($('c3'), lt, 9.6); fadeIn($('cb1'), lt, 9.8);
+    $('cf1').style.width = (ease(prog(lt, 10.2, 1.4)) * 100) + '%';
+    fadeIn($('c4'), lt, 13.0); fadeIn($('cb2'), lt, 13.2);
+    $('cf2').style.width = (ease(prog(lt, 13.6, 1.0)) * 605 / 4423 * 100) + '%';
+    foot.textContent = 'Three runs: 3.5, 3.6 and 3.7 s. Peak commit 940 MB. At one worker: 16 s and 504 MB.';
+  }
+  if (id === 'debug') {
+    fadeIn($('d1'), lt, 3.4); fadeIn($('db1'), lt, 3.4);
+    $('df1').style.width = (ease(prog(lt, 3.8, 0.8)) * 339 / 3425 * 100) + '%'; fadeIn($('dn1'), lt, 4.2);
+    fadeIn($('d2'), lt, 6.4); fadeIn($('db2'), lt, 6.4);
+    $('df2').style.width = (ease(prog(lt, 6.8, 1.0)) * 100) + '%'; fadeIn($('dn2'), lt, 7.4);
+    fadeIn($('d3'), lt, 9.6, 0.5, 10);
+    foot.textContent = 'Peak working set. Peak commit: 694 MB and 3,440 MB.';
+  }
+  if (id === 'why32') {
+    fadeIn($('w64'), lt, 4.0, 0.4, 10);
+    fadeIn($('w0'), lt, 11.0);
+    ['l1', 'l2', 'l3', 'l4', 'l5', 'l6'].forEach((c, i) => fadeIn($(c), lt, 11.8 + i * 0.5, 0.3, 10));
+    ['b1', 'b2', 'b3'].forEach((c, i) => fadeIn($(c), lt, 15.4 + i * 0.7, 0.5));
+    foot.textContent = 'Linux, valgrind 3.22. Natively a 64 GiB arena runs: valgrind leaves a program about 64 GiB on any machine.';
+  }
+  if (id === 'back') {
+    fadeIn($('b0'), lt, 3.0, 0.5, 10);
+    fadeIn($('bl1'), lt, 9.4); fadeIn($('bt1'), lt, 9.4);
+    $('bf1').style.width = (ease(prog(lt, 9.8, 0.9)) * 100) + '%'; fadeIn($('bn1'), lt, 10.3);
+    fadeIn($('bl2'), lt, 11.8); fadeIn($('bt2'), lt, 11.8);
+    $('bf2').style.width = (ease(prog(lt, 12.2, 0.8)) * 132 / 2051 * 100) + '%'; fadeIn($('bn2'), lt, 12.6);
+    fadeIn($('bk3'), lt, 15.0, 0.5, 10);
+    foot.textContent = 'Windows x64. On Linux, 2,048 and 129 MiB. Repeated spikes past 512 MiB pay for it; see the limits.';
+  }
+  if (id === 'heap') {
+    fadeIn($('hp'), lt, 1.0, 0.6);
+    fadeIn($('h0'), lt, 7.6);
+    fadeIn($('h1e'), lt, 8.0, 0.4, 10); fadeIn($('h2e'), lt, 9.8, 0.4, 10); fadeIn($('h3e'), lt, 11.0, 0.4, 10);
+    fadeIn($('hb'), lt, 13.2); fadeIn($('hbl'), lt, 13.8);
+  }
+  if (id === 'runout') {
+    fadeIn($('rterm'), lt, 2.0, 0.6);
+    fadeIn($('ru1'), lt, 7.6); fadeIn($('rfatal'), lt, 11.0, 0.6); fadeIn($('ru2'), lt, 12.8, 0.5, 10);
+    foot.textContent = 'Measured in a Windows job limited to 256 MiB of commit: 2.3 seconds, then exit 137.';
+  }
+  if (id === 'compare') {
+    $('cmp').style.opacity = ease(prog(lt, 0.4, 0.5));
+    ['cr1', 'cr2', 'cr3', 'cr4', 'cr5'].forEach((r, i) => { $(r).style.opacity = ease(prog(lt, [8.6, 5.0, 11.0, 12.0, 1.0][i], 0.5)); });
+    foot.textContent = 'The other columns come from how those systems are documented. The post has the full table.';
+  }
+  if (id === 'limits') {
+    [1.6, 7.6, 12.8, 15.2, 17.9].forEach((a, i) => fadeIn($('r' + (i + 1)), lt, a, 0.5, 14));
+  }
+  if (id === 'close') {
+    fadeIn($('c1x'), lt, 1.4); fadeIn($('c2x'), lt, 3.2); fadeIn($('c5x'), lt, 4.8); fadeIn($('c3x'), lt, 5.2, 0.8); fadeIn($('c4x'), lt, 5.6);
+  }
+  foot.style.opacity = foot.textContent ? 1 : 0;
+}
+</script>
+</body>
+</html>
