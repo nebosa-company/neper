@@ -1870,29 +1870,51 @@ fn fmt_is_unary(prev: lex.Kind, cur: lex.Kind) -> bool {
     ret !fmt_value_end(prev)
 }
 
+// Whether a byte span came from a raw-string token. The line-oriented passes must not
+// infer declarations, braces, or blank lines from data stored inside that token.
+fn fmt_marked(marks: []const u8, from: usize, to: usize) -> bool {
+    var at = from
+    while at < to {
+        if marks[at] != 0u8 { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 // A run of one or more blank lines collapses to one, and none survives right after a line
 // that ends in `{` or right before a line that is `}`; the file ends in exactly one newline.
-// A single pass over the raw bytes, into the same order in a second buffer.
-fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
+// Raw-string bytes are copied byte-for-byte with their marks, so a later line pass cannot
+// treat data in a multi-line raw string as source layout.
+fn fmt_collapse(raw: []const u8, raw_marks: []const u8, out: []u8, out_marks: []u8) -> usize {
     var written = 0usize
     var at = 0usize
     // Skip leading blank lines.
-    while at < raw.len && raw[at] == 10u8 { at += 1usize }
+    while at < raw.len && raw[at] == 10u8 && raw_marks[at] == 0u8 { at += 1usize }
     while at < raw.len {
         // Copy one line including its trailing newline (if any).
         var line_start = at
         while at < raw.len && raw[at] != 10u8 { at += 1usize }
         var line_end = at
         if at < raw.len { at += 1usize }
+        if fmt_marked(raw_marks, line_start, at) {
+            var raw_copy = line_start
+            while raw_copy < at {
+                out[written] = raw[raw_copy]
+                out_marks[written] = raw_marks[raw_copy]
+                written += 1usize
+                raw_copy += 1usize
+            }
+            continue
+        }
         // A blank line is empty between newlines.
         if line_end == line_start {
             // Look ahead past a run of blanks to the next non-blank line's first byte.
             var probe = at
-            while probe < raw.len && raw[probe] == 10u8 { probe += 1usize }
+            while probe < raw.len && raw[probe] == 10u8 && raw_marks[probe] == 0u8 { probe += 1usize }
             // Drop the blank(s) at end of file or before a `}` line, and after a `{` line.
-            let after_open = written >= 2usize && out[written - 2usize] == 123u8 && out[written - 1usize] == 10u8
+            let after_open = written >= 2usize && out[written - 2usize] == 123u8 && out[written - 1usize] == 10u8 && out_marks[written - 2usize] == 0u8 && out_marks[written - 1usize] == 0u8
             var before_close = false
-            if probe < raw.len {
+            if probe < raw.len && raw_marks[probe] == 0u8 {
                 var scan = probe
                 while scan < raw.len && raw[scan] == 32u8 { scan += 1usize }
                 if scan < raw.len && raw[scan] == 125u8 { before_close = true }
@@ -1901,6 +1923,7 @@ fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
                 at = probe
             } else {
                 out[written] = 10u8
+                out_marks[written] = 0u8
                 written += 1usize
                 at = probe
             }
@@ -1917,6 +1940,7 @@ fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
                 if fmt_starts_with(previous, "use ") && fmt_starts_with(raw[line_start..line_end], "use ") { leads = true }
                 if !leads {
                     out[written] = 10u8
+                    out_marks[written] = 0u8
                     written += 1usize
                 }
             }
@@ -1930,6 +1954,7 @@ fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
                 written = written - 1usize
                 if joins_else {
                     out[written] = 32u8
+                    out_marks[written] = 0u8
                     written += 1usize
                 }
                 line_start = content
@@ -1937,10 +1962,12 @@ fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
             var copy = line_start
             while copy < line_end {
                 out[written] = raw[copy]
+                out_marks[written] = raw_marks[copy]
                 written += 1usize
                 copy += 1usize
             }
             out[written] = 10u8
+            out_marks[written] = 0u8
             written += 1usize
         }
     }
@@ -1970,6 +1997,13 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
     if lex.validate(source) != ok { ret ("", InvalidSource) }
     let (raw_storage, raw_error) = mem.alloc[u8](a, source.len * 2usize + 4096usize)
     if raw_error != ok { ret ("", raw_error) }
+    let (raw_marks, marks_error) = mem.alloc[u8](a, raw_storage.len)
+    if marks_error != ok { ret ("", marks_error) }
+    var mark_at = 0usize
+    while mark_at < raw_marks.len {
+        raw_marks[mark_at] = 0u8
+        mark_at += 1usize
+    }
     var raw: Out = zero
     raw.bytes = raw_storage
     raw.absolute = ""
@@ -1977,15 +2011,17 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
     if scan_error != ok { ret ("", scan_error) }
     let (lists, lists_error) = fmt_list_plan(a, source, tokens[0usize..token_count])
     if lists_error != ok { ret ("", lists_error) }
-    let build_error = format_into(&raw, source, tokens[0usize..token_count], lists)
+    let build_error = format_into(&raw, source, tokens[0usize..token_count], lists, raw_marks)
     if build_error != ok { ret ("", build_error) }
     // The line pass inserts a blank before each declaration (D273): room for one per line.
     let (clean_storage, clean_error) = mem.alloc[u8](a, raw.count * 2usize + 16usize)
     if clean_error != ok { ret ("", clean_error) }
-    let clean_count = fmt_collapse(raw.bytes[0usize..raw.count], clean_storage)
-    let sort_error = fmt_sort_uses(a, clean_storage[0usize..clean_count])
+    let (clean_marks, clean_marks_error) = mem.alloc[u8](a, clean_storage.len)
+    if clean_marks_error != ok { ret ("", clean_marks_error) }
+    let clean_count = fmt_collapse(raw.bytes[0usize..raw.count], raw_marks[0usize..raw.count], clean_storage, clean_marks)
+    let sort_error = fmt_sort_uses(a, clean_storage[0usize..clean_count], clean_marks[0usize..clean_count])
     if sort_error != ok { ret ("", sort_error) }
-    let attribute_error = fmt_sort_attributes(a, clean_storage[0usize..clean_count])
+    let attribute_error = fmt_sort_attributes(a, clean_storage[0usize..clean_count], clean_marks[0usize..clean_count])
     if attribute_error != ok { ret ("", attribute_error) }
     // A layout that does not parse is no canonical layout (T006): the grammar ends a
     // statement at its line, so two on one line stay refused whatever the spacing.
@@ -2005,9 +2041,13 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
 // leading comment lines; a blank line or anything else ends it. Byte order of the whole
 // line is path-then-alias order, since the space before `as` sorts before a `.`.
 // ponytail: 256 leading imports is the cap; raise it when a module has more.
-fn fmt_sort_uses(a: *mem.Arena, page: []u8) -> err {
+fn fmt_sort_uses(a: *mem.Arena, page: []u8, marks: []const u8) -> err {
     var at = 0usize
     while at < page.len && page[at] == 47u8 && at + 1usize < page.len && page[at + 1usize] == 47u8 {
+        var comment_end = at
+        while comment_end < page.len && page[comment_end] != 10u8 { comment_end += 1usize }
+        if comment_end < page.len { comment_end += 1usize }
+        if fmt_marked(marks, at, comment_end) { ret ok }
         while at < page.len && page[at] != 10u8 { at += 1usize }
         if at < page.len { at += 1usize }
     }
@@ -2020,6 +2060,10 @@ fn fmt_sort_uses(a: *mem.Arena, page: []u8) -> err {
         while at < page.len && page[at] != 10u8 { at += 1usize }
         ends[count] = at
         if at < page.len { at += 1usize }
+        if fmt_marked(marks, starts[count], at) {
+            at = starts[count]
+            break
+        }
         count += 1usize
     }
     if count < 2usize { ret ok }
@@ -2062,9 +2106,16 @@ fn fmt_sort_uses(a: *mem.Arena, page: []u8) -> err {
 // Section 6: attribute lines are sorted by attribute name (D286). Each run of
 // consecutive lines beginning with `@` at the same indent is sorted in byte order of
 // the whole line, which orders by name first; a run is at most 16 attributes.
-fn fmt_sort_attributes(a: *mem.Arena, page: []u8) -> err {
+fn fmt_sort_attributes(a: *mem.Arena, page: []u8, marks: []const u8) -> err {
     var at = 0usize
     while at < page.len {
+        var protected_end = at
+        while protected_end < page.len && page[protected_end] != 10u8 { protected_end += 1usize }
+        if protected_end < page.len { protected_end += 1usize }
+        if fmt_marked(marks, at, protected_end) {
+            at = protected_end
+            continue
+        }
         // The next line, and whether it is an attribute line.
         var content = at
         while content < page.len && page[content] == 32u8 { content += 1usize }
@@ -2086,9 +2137,10 @@ fn fmt_sort_attributes(a: *mem.Arena, page: []u8) -> err {
                 starts[count] = scan
                 while probe < page.len && page[probe] != 10u8 { probe += 1usize }
                 ends[count] = probe
+                if probe < page.len { probe += 1usize }
+                if fmt_marked(marks, scan, probe) { break }
                 count += 1usize
                 scan = probe
-                if scan < page.len { scan += 1usize }
             }
             if count >= 2usize {
                 var order: [16]usize = zero
@@ -2278,7 +2330,7 @@ fn fmt_indent(raw: *Out, columns: usize) -> err {
 // string with the fewest `#` that keep its bytes (spec section 3, T006) -- the first count
 // whose closer, `"` and that many `#`, does not occur in the body -- and any other token
 // as it is spelled.
-fn fmt_token(raw: *Out, source: str, token: lex.Token, column: *usize) -> err {
+fn fmt_token(raw: *Out, source: str, token: lex.Token, column: *usize, marks: []u8) -> err {
     let spelled = lex.token_text(source, token)
     if token.kind != .RawString || spelled.len < 3usize {
         *column += spelled.len
@@ -2307,6 +2359,11 @@ fn fmt_token(raw: *Out, source: str, token: lex.Token, column: *usize) -> err {
         try byte(raw, 35u8)
         mark += 1usize
     }
+    var protected_at = raw.count - (3usize + 2usize * fewest + body.len)
+    while protected_at < raw.count {
+        marks[protected_at] = 1u8
+        protected_at += 1usize
+    }
     *column += 3usize + 2usize * fewest + body.len
     ret ok
 }
@@ -2325,7 +2382,7 @@ fn raw_closer_in(body: str, count: usize) -> bool {
     ret false
 }
 
-fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const usize) -> err {
+fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const usize, marks: []u8) -> err {
     var depth = 0usize
     var line_has_content = false
     var line_indent = 0usize
@@ -2402,7 +2459,7 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 column = owning
                 line_indent = owning
                 if token.kind == .PunctRBrace && depth > 0usize { depth = depth - 1usize }
-                try fmt_token(raw, source, token, &column)
+                try fmt_token(raw, source, token, &column, marks)
                 line_has_content = true
                 prev_unary = false
                 prev = token.kind
@@ -2421,7 +2478,7 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 try byte(raw, 32u8)
                 column += 1usize
             }
-            try fmt_token(raw, source, token, &column)
+            try fmt_token(raw, source, token, &column, marks)
             prev_unary = false
             prev = token.kind
             at += 1usize
@@ -2456,7 +2513,7 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
                 column += 1usize
             }
         }
-        try fmt_token(raw, source, token, &column)
+        try fmt_token(raw, source, token, &column, marks)
         if token.kind == .PunctLBrace { depth += 1usize }
         // A close brace mid-line (e.g. `{}` or `} else {`) still lowers the depth.
         if token.kind == .PunctRBrace && !at_line_start && depth > 0usize { depth = depth - 1usize }
@@ -7268,6 +7325,78 @@ fn manifest_after(document: str, key: str) -> str {
     ret document[from..end]
 }
 
+fn manifest_append(a: *mem.Arena, first: str, second: str) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, first.len + second.len)
+    if storage_error != ok { ret ("", storage_error) }
+    var at = 0usize
+    while at < first.len {
+        storage[at] = first[at]
+        at += 1usize
+    }
+    var right = 0usize
+    while right < second.len {
+        storage[at] = second[right]
+        at += 1usize
+        right += 1usize
+    }
+    ret (storage[0usize..at], ok)
+}
+
+fn manifest_write_all(file: os.File, bytes: []const u8) -> err {
+    var at = 0usize
+    while at < bytes.len {
+        let (written, write_error) = os.write(file, bytes[at..bytes.len])
+        if write_error != ok { ret write_error }
+        if written == 0usize { ret Capacity }
+        at += written
+    }
+    ret ok
+}
+
+// Publish through a uniquely-created sibling so a concurrent build or an interrupted
+// writer sees either the previous whole manifest or the next whole manifest, never a
+// truncated/interleaved one.
+fn manifest_publish(a: *mem.Arena, directory: str, manifest_path: str, bytes: []const u8) -> err {
+    let (prefix, prefix_error) = manifest_join(a, directory, ".build-manifest-stage-")
+    if prefix_error != ok { ret prefix_error }
+    var attempt = 0usize
+    while attempt < 16usize {
+        var random: [12]u8 = zero
+        let random_error = os.random(random[0usize..])
+        if random_error != ok { ret random_error }
+        var hex: [24]u8 = zero
+        var at = 0usize
+        while at < random.len {
+            hex[at * 2usize] = hex_digit(usize(random[at] >> 4u8))
+            hex[at * 2usize + 1usize] = hex_digit(usize(random[at] & 15u8))
+            at += 1usize
+        }
+        let (staged, staged_error) = manifest_append(a, prefix, hex[0usize..])
+        if staged_error != ok { ret staged_error }
+        let (file, open_error) = os.create_new_with_mode(a, staged, 420u32)
+        if open_error == os.Exists {
+            attempt += 1usize
+            continue
+        }
+        if open_error != ok { ret open_error }
+        let write_error = manifest_write_all(file, bytes)
+        let close_error = os.close(file)
+        if write_error != ok || close_error != ok {
+            let cleanup_error = os.remove_file(a, staged)
+            if cleanup_error != ok { ret cleanup_error }
+            if write_error != ok { ret write_error }
+            ret close_error
+        }
+        let publish_error = os.replace(a, staged, manifest_path, true, false)
+        if publish_error != ok {
+            let cleanup_error = os.remove_file(a, staged)
+            if cleanup_error != ok { ret cleanup_error }
+        }
+        ret publish_error
+    }
+    ret os.Exists
+}
+
 fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, unchecked: bool, artifact_path: str, packed: []const u8, reasons: []u8, image_unchanged: bool) -> err {
     var mode = "debug"
     if release_mode { mode = "release" }
@@ -7277,7 +7406,6 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     if mode_error != ok { ret mode_error }
     let (manifest_path, path_error) = manifest_join(a, mode_dir, "build-manifest.json")
     if path_error != ok { ret path_error }
-    let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
     let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
     if relative_error != ok { ret relative_error }
     // The image the build did not write is the one the last manifest hashed (D332):
@@ -7322,33 +7450,14 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
         // A read-only compiler installation still builds, but cannot authorize reuse.
         try text(&out, "}\n")
     }
-    // The file is opened once the text is ready (D345): every exit before this has
-    // nothing to close.
-    // `.neper/<mode>/` is made when it is missing (D287): each level once, an `Exists`
-    // answer meaning another build got there first. The open comes before hashing, so a
-    // root that cannot take the directory costs nothing but the error (D267).
-    var (file, open_error) = os.open(a, manifest_path, flags)
-    if open_error == os.NotFound {
-        let dot_made = os.mkdir(a, dot_dir)
-        if dot_made != ok && dot_made != os.Exists { ret dot_made }
-        let mode_made = os.mkdir(a, mode_dir)
-        if mode_made != ok && mode_made != os.Exists { ret mode_made }
-        let (retried, retry_error) = os.open(a, manifest_path, flags)
-        file = retried
-        open_error = retry_error
-    }
-    if open_error != ok { ret open_error }
-    var at = 0usize
-    var write_error = ok
-    while at < out.count && write_error == ok {
-        let (written, chunk_error) = os.write(file, out.bytes[at..out.count])
-        write_error = chunk_error
-        if written == 0usize && chunk_error == ok { write_error = Capacity }
-        at += written
-    }
-    let close_error = os.close(file)
-    if write_error != ok { ret write_error }
-    ret close_error
+    // `.neper/<mode>/` is made when it is missing (D287): an `Exists` answer
+    // means another build won the directory race. Only after both exist is a
+    // private sibling created and atomically published.
+    let dot_made = os.mkdir(a, dot_dir)
+    if dot_made != ok && dot_made != os.Exists { ret dot_made }
+    let mode_made = os.mkdir(a, mode_dir)
+    if mode_made != ok && mode_made != os.Exists { ret mode_made }
+    ret manifest_publish(a, mode_dir, manifest_path, out.bytes[0usize..out.count])
 }
 
 // The section 7 name of a test outcome: 0 passed, 1 failed, 2 crashed.
