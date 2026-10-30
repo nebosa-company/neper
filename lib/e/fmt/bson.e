@@ -4,8 +4,8 @@
 // only. The element tags carried are double (0x01), string (0x02), document (0x03),
 // array (0x04), binary (0x05), bool (0x08), null (0x0A), int32 (0x10) and int64
 // (0x12); any other tag is `Invalid`, so JavaScript, regex and the deprecated tags
-// never reach the value model. Array keys are not checked against their positions
-// on the way in and are written as "0", "1", ... on the way out.
+// never reach the value model. Array keys must be the sequential decimal positions
+// "0", "1", ... both on the wire and when written back out.
 use e.io
 use e.mem
 use e.meta
@@ -158,9 +158,14 @@ fn parse_value(a: *mem.Arena, source: []const u8, tag: u8, at: usize, limit: usi
     let (elements, elements_error) = parse_document(a, source, at, span, depth + 1u16, max_depth)
     if elements_error != ok { ret (none, 0usize, elements_error) }
     if tag == 3u8 { ret (Value{ Document: elements }, span, ok) }
+    var index = 0usize
+    while index < elements.len {
+        if !array_key_matches(elements[index].key, index) { ret (none, 0usize, Invalid) }
+        index += 1usize
+    }
     let (items, items_error) = mem.alloc[Value](a, elements.len)
     if items_error != ok { ret (none, 0usize, items_error) }
-    var index = 0usize
+    index = 0usize
     while index < elements.len {
         items[index] = elements[index].value
         index += 1usize
@@ -198,6 +203,18 @@ fn index_key(index: usize, out: []u8) -> []u8 {
         i += 1usize
     }
     ret out[0usize..digits]
+}
+
+fn array_key_matches(key: str, index: usize) -> bool {
+    var scratch: [20]u8 = zero
+    let expected = index_key(index, scratch[..])
+    if key.len != expected.len { ret false }
+    var at = 0usize
+    while at < key.len {
+        if key[at] != expected[at] { ret false }
+        at += 1usize
+    }
+    ret true
 }
 
 fn elements_size(elements: []const Element) -> (usize, err) {
@@ -295,6 +312,7 @@ fn tag_of(value: *const Value) -> u8 {
 }
 
 fn write_element(writer: *io.Writer, key: []const u8, value: *const Value) -> err {
+    if !valid_key(key) { ret Invalid }
     try write_byte(writer, tag_of(value))
     try io.write_all(writer, key)
     try write_byte(writer, 0u8)
@@ -513,6 +531,7 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
             total += 1usize
         } else {
         if meta.kind[f.ty]() == .Int {
+            if !meta.signed[f.ty]() && u64(slot) > 9223372036854775807u64 { ret TooLarge }
             total += 8usize
         } else {
         if meta.kind[f.ty]() == .Float {

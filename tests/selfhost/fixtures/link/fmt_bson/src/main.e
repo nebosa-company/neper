@@ -10,7 +10,9 @@ use e.fmt.bson as bson
 
 type Rec = struct { name: str, count: i32, ratio: f64, flag: bool }
 type NarrowInt = struct { number: i8 }
+type NarrowUnsigned = struct { number: u8 }
 type NarrowFloat = struct { number: f32 }
+type WideUnsigned = struct { number: u64 }
 
 fn same(a: []const u8, b: []const u8) -> bool {
     if a.len != b.len { ret false }
@@ -140,9 +142,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bad_key = bson.Value { Document: bad_key_elements[..] }
     let (_, bad_key_error) = bson.size(&bad_key)
     if bad_key_error != bson.Invalid { os.exit(37) }
+    var bad_key_state = io.SliceWriter { data: out_buffer[..], off: 0usize }
+    var bad_key_writer = io.slice_writer(&bad_key_state)
+    if bson.write(&bad_key_writer, &bad_key) != bson.Invalid || bad_key_state.off != 0usize { os.exit(48) }
     let too_wide_integer: [21]u8 = [21]u8{ 21u8, 0u8, 0u8, 0u8, 18u8, 110u8, 117u8, 109u8, 98u8, 101u8, 114u8, 0u8, 128u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8 }
     let (_, too_wide_integer_error) = bson.decode[NarrowInt](a, too_wide_integer[..], 4u16)
     if too_wide_integer_error != bson.Invalid { os.exit(38) }
+    let too_wide_unsigned: [17]u8 = [17]u8{ 17u8, 0u8, 0u8, 0u8, 16u8, 110u8, 117u8, 109u8, 98u8, 101u8, 114u8, 0u8, 44u8, 1u8, 0u8, 0u8, 0u8 }
+    let (_, too_wide_unsigned_error) = bson.decode[NarrowUnsigned](a, too_wide_unsigned[..], 4u16)
+    if too_wide_unsigned_error != bson.Invalid { os.exit(49) }
+    let negative_unsigned: [17]u8 = [17]u8{ 17u8, 0u8, 0u8, 0u8, 16u8, 110u8, 117u8, 109u8, 98u8, 101u8, 114u8, 0u8, 255u8, 255u8, 255u8, 255u8, 0u8 }
+    let (_, negative_unsigned_error) = bson.decode[NarrowUnsigned](a, negative_unsigned[..], 4u16)
+    if negative_unsigned_error != bson.Invalid { os.exit(50) }
     let too_wide_float: [21]u8 = [21]u8{ 21u8, 0u8, 0u8, 0u8, 1u8, 110u8, 117u8, 109u8, 98u8, 101u8, 114u8, 0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 239u8, 127u8, 0u8 }
     let (_, too_wide_float_error) = bson.decode[NarrowFloat](a, too_wide_float[..], 4u16)
     if too_wide_float_error != bson.Invalid { os.exit(39) }
@@ -170,5 +181,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     bad_old_binary[14usize] = 2u8
     let (_, bad_old_binary_error) = bson.parse(a, bad_old_binary[..], 4u16)
     if bad_old_binary_error != bson.Invalid { os.exit(47) }
+    let invalid_array_key: [20]u8 = [20]u8{ 20u8, 0u8, 0u8, 0u8, 4u8, 97u8, 0u8, 12u8, 0u8, 0u8, 0u8, 16u8, 49u8, 0u8, 1u8, 0u8, 0u8, 0u8, 0u8, 0u8 }
+    let (_, invalid_array_key_error) = bson.parse(a, invalid_array_key[..], 4u16)
+    if invalid_array_key_error != bson.Invalid { os.exit(51) }
+    let wide_unsigned = WideUnsigned { number: 9223372036854775808u64 }
+    var wide_unsigned_state = io.SliceWriter { data: out_buffer[..], off: 0usize }
+    var wide_unsigned_writer = io.slice_writer(&wide_unsigned_state)
+    if bson.encode[WideUnsigned](&wide_unsigned_writer, &wide_unsigned) != bson.TooLarge || wide_unsigned_state.off != 0usize { os.exit(52) }
     ret ok
 }
