@@ -2,9 +2,10 @@
 // (end marker, size unknown), the same stream with the header patched to the known
 // size (marker still trailing), a 4 KB LCG buffer with runs and repeats (FNV-pinned
 // against reference.py beside this fixture) from its alone stream, liblzma's raw
-// stream through `decode_raw`, three refusals (properties byte 225, a truncated
-// stream, a short destination), and the .xz container with a CRC32 check, with a
-// CRC64 check, and with a corrupted check. Every check has its own exit code.
+// stream through `decode_raw`, refusals for an early marker, invalid properties,
+// a truncated stream, a short destination and a reset LZMA2 chunk without fresh
+// properties, and the .xz container with a CRC32 check, with a CRC64 check, and
+// with a corrupted check. Every check has its own exit code.
 use e.algo.hash as hash
 use e.fmt.lzma as lzma
 use e.io
@@ -125,6 +126,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e3a != ok || !p3.has_size || p3.unpacked != 300u64 { os.exit(3i32) }
     let (n3, e3) = lzma.decode(scratch[..alone_text().len], out[..], probs[..])
     if e3 != ok || n3 != 300usize || !bytes_equal(out[..n3], text()) { os.exit(3i32) }
+    // A declared size is exact: the same trailing marker cannot end a 301-byte
+    // stream after producing only 300 bytes.
+    scratch[5usize] = 45u8
+    let (_, early_marker_error) = lzma.decode(scratch[..alone_text().len], out[..], probs[..])
+    if early_marker_error != lzma.Malformed { os.exit(21i32) }
 
     // 4: the LCG buffer matches reference.py and its alone stream decodes to it.
     let n = generate(expect[..], 4096usize)
@@ -153,6 +159,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e8 != lzma.TooSmall { os.exit(9i32) }
     let (_, e9) = lzma.decode(alone_text(), out[..], probs[..100usize])
     if e9 != lzma.TooSmall { os.exit(10i32) }
+    // Alone/raw LZMA permits lc + lp above LZMA2's four-bit bound. It is accepted
+    // as a property set and reaches the caller-provided probability-space check.
+    var wide_props: lzma.Props = zero
+    let wide_props_error = lzma.set_props_byte(&wide_props, 44u8)
+    wide_props.dict_size = 4096u32
+    let (_, wide_props_decode_error) = lzma.decode_raw(wide_props, raw_text()[..5usize], out[..], probs[..])
+    if wide_props_error != ok || wide_props.lc != 8u32 || wide_props.lp != 4u32 || wide_props_decode_error != lzma.TooSmall { os.exit(22i32) }
+
+    // A dictionary-reset uncompressed chunk must require properties again. The
+    // first LZMA2 chunk is the valid compressed chunk from xz_text; the following
+    // mode-0 chunk deliberately declares more output than `out` holds. Without the
+    // fresh-properties requirement it reaches TooSmall instead of refusing early.
+    let first_lzma2_chunk = xz_text()[24usize..81usize]
+    var reset_chunks: [96]u8 = zero
+    copy(reset_chunks[..first_lzma2_chunk.len], first_lzma2_chunk)
+    var reset_at = first_lzma2_chunk.len
+    reset_chunks[reset_at] = 1u8
+    reset_chunks[reset_at + 1usize] = 0u8
+    reset_chunks[reset_at + 2usize] = 0u8
+    reset_chunks[reset_at + 3usize] = 65u8
+    reset_at += 4usize
+    reset_chunks[reset_at] = 128u8
+    reset_chunks[reset_at + 1usize] = 32u8
+    reset_chunks[reset_at + 2usize] = 0u8
+    reset_chunks[reset_at + 3usize] = 0u8
+    reset_chunks[reset_at + 4usize] = 0u8
+    reset_chunks[reset_at + 5usize] = 0u8
+    let (_, _, reset_props_error) = lzma.lzma2(reset_chunks[..reset_at + 6usize], 0usize, out[..], 0usize, probs[..], 8388608u32)
+    if reset_props_error != lzma.Malformed { os.exit(23i32) }
 
     // 7: .xz with CRC32, with CRC64, and with a corrupted check.
     let (n10, e10) = lzma.decode_xz(xz_text(), out[..], probs[..])

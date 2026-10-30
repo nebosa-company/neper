@@ -66,7 +66,6 @@ fn set_props_byte(p: *Props, b: u8) -> err {
     v = v / 9u32
     p.lp = v % 5u32
     p.pb = v / 5u32
-    if p.lc + p.lp > 4u32 { ret Invalid }
     ret ok
 }
 
@@ -226,11 +225,17 @@ fn reset_probs(probs: []u16, lc: u32, lp: u32) {
 
 // Decodes symbols until `end_pos` is reached (with `has_size`, exactly, allowing a
 // trailing end marker) or until the end marker (without, `end_pos` is the buffer
-// end and running past it is TooSmall).
-fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool) -> err {
+// end and running past it is TooSmall). LZMA2 gives every chunk an exact output
+// length and forbids an end marker there.
+fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool, allow_marker: bool) -> err {
     while true {
         if d.bad { ret Malformed }
-        if has_size && d.pos == end_pos && d.code == 0u32 { ret ok }
+        if has_size && d.pos == end_pos && d.code == 0u32 {
+            // A size-bounded raw stream may carry its optional marker. LZMA2
+            // chunks instead must have consumed their exact range-coded payload.
+            if !allow_marker && d.at != d.end { ret Malformed }
+            ret ok
+        }
         let pos_state = (d.pos - d.start) & ((1usize << d.pb) - 1usize)
         if rc_bit(d, probs, IS_MATCH + usize(d.state) * 16usize + pos_state) == 0u32 {
             if d.pos == end_pos {
@@ -287,7 +292,10 @@ fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool) -> err {
             if d.state < 7u32 { d.state = 7u32 } else { d.state = 10u32 }
             d.rep0 = distance(d, probs, len)
             if d.rep0 == MARKER {
-                if d.code == 0u32 && !d.bad { ret ok }
+                if d.code == 0u32 && !d.bad && allow_marker {
+                    if has_size && d.pos != end_pos { ret Malformed }
+                    ret ok
+                }
                 ret Malformed
             }
             if d.pos == end_pos {
@@ -324,7 +332,7 @@ fn set_lz_props(d: *Lz, p: Props) {
 // TooSmall when `dst` or `probs` is short, Malformed on a bad stream or a missing
 // end marker when the size is unknown, Invalid for unusable properties.
 fn decode_raw(p: Props, src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
-    if p.lc > 8u32 || p.lp > 4u32 || p.pb > 4u32 || p.lc + p.lp > 4u32 { ret (0usize, Invalid) }
+    if p.lc > 8u32 || p.lp > 4u32 || p.pb > 4u32 { ret (0usize, Invalid) }
     if probs.len < probs_required(p.lc, p.lp) { ret (0usize, TooSmall) }
     if p.has_size && p.unpacked > u64(dst.len) { ret (0usize, TooSmall) }
     reset_probs(probs, p.lc, p.lp)
@@ -337,7 +345,7 @@ fn decode_raw(p: Props, src: []const u8, dst: []u8, probs: []u16) -> (usize, err
     if e != ok { ret (0usize, e) }
     var end_pos = dst.len
     if p.has_size { end_pos = usize(p.unpacked) }
-    let e2 = run(&d, probs, dst, end_pos, p.has_size)
+    let e2 = run(&d, probs, dst, end_pos, p.has_size, true)
     ret (d.pos, e2)
 }
 
@@ -420,6 +428,7 @@ fn lzma2(src: []const u8, at0: usize, dst: []u8, out: usize, probs: []u16, dict_
             if c == 1u32 {
                 d.start = d.pos
                 need_dict = false
+                need_props = true
             } else if need_dict {
                 ret (at, d.pos, Malformed)
             }
@@ -454,6 +463,7 @@ fn lzma2(src: []const u8, at0: usize, dst: []u8, out: usize, probs: []u16, dict_
                 var p: Props = zero
                 let e = set_props_byte(&p, src[at])
                 if e != ok { ret (at, d.pos, e) }
+                if p.lc + p.lp > 4u32 { ret (at, d.pos, Invalid) }
                 at += 1usize
                 p.dict_size = dict_size
                 set_lz_props(&d, p)
@@ -476,7 +486,7 @@ fn lzma2(src: []const u8, at0: usize, dst: []u8, out: usize, probs: []u16, dict_
             d.end = at + packed
             let e2 = rc_init(&d)
             if e2 != ok { ret (at, d.pos, e2) }
-            let e3 = run(&d, probs, dst, d.pos + unpacked, true)
+            let e3 = run(&d, probs, dst, d.pos + unpacked, true, false)
             if e3 != ok { ret (at, d.pos, e3) }
             if d.at != d.end { ret (at, d.pos, Malformed) }
             at = d.end
