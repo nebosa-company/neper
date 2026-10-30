@@ -45,6 +45,7 @@ error SyntaxError
 error InvalidCharacter
 
 type Dom = struct { a: *mem.Arena, nodes: []html.Node, used: usize, root: NodeId, quirks: u8, version: u64 }
+type DocumentSequence = struct { elements: usize, doctypes: usize, saw_element: bool }
 
 // --- Construction.
 
@@ -287,16 +288,70 @@ fn is_fragment(d: *const Dom, id: NodeId) -> bool {
     ret d.nodes[usize(id)].kind == .Document && id != d.root
 }
 
-fn check_insert(d: *const Dom, parent: NodeId, child: NodeId, before: NodeId) -> err {
+// Add one direct document child to `state`. Fragments are expanded by the caller.
+fn document_add_node(d: *const Dom, state: *DocumentSequence, id: NodeId) -> bool {
+    let kind = d.nodes[usize(id)].kind
+    if kind == .Comment { ret true }
+    if kind == .Element {
+        if state.elements != 0usize { ret false }
+        state.elements += 1usize
+        state.saw_element = true
+        ret true
+    }
+    if kind == .Doctype {
+        if state.doctypes != 0usize || state.saw_element { ret false }
+        state.doctypes += 1usize
+        ret true
+    }
+    ret false
+}
+
+// Add `child`'s prospective direct children to a document sequence.
+fn document_add(d: *const Dom, state: *DocumentSequence, child: NodeId) -> bool {
+    if !is_fragment(d, child) { ret document_add_node(d, state, child) }
+    var kid = d.nodes[usize(child)].first_child
+    while kid != NONE {
+        if !document_add_node(d, state, kid) { ret false }
+        kid = d.nodes[usize(kid)].next_sibling
+    }
+    ret true
+}
+
+// Check the root document's final child sequence without mutating it. `removed` is
+// omitted by replace_child; a moved `child` is omitted at its old position.
+fn document_insert_ok(d: *const Dom, parent: NodeId, child: NodeId, before: NodeId, removed: NodeId) -> bool {
+    if parent != d.root { ret true }
+    var state: DocumentSequence = zero
+    var inserted = false
+    var kid = d.nodes[usize(parent)].first_child
+    while kid != NONE {
+        if kid == before {
+            if !document_add(d, &state, child) { ret false }
+            inserted = true
+        }
+        if kid != child && kid != removed && !document_add_node(d, &state, kid) { ret false }
+        kid = d.nodes[usize(kid)].next_sibling
+    }
+    if !inserted && !document_add(d, &state, child) { ret false }
+    ret true
+}
+
+fn check_insert_excluding(d: *const Dom, parent: NodeId, child: NodeId, before: NodeId, removed: NodeId) -> err {
     let pk = d.nodes[usize(parent)].kind
     if pk != .Document && pk != .Element { ret HierarchyRequest }
     if contains(d, child, parent) { ret HierarchyRequest }
     if before != NONE && d.nodes[usize(before)].parent != parent { ret NotChild }
+    if child == before { ret ok }
     let ck = d.nodes[usize(child)].kind
-    if ck == .Doctype && !(pk == .Document) { ret HierarchyRequest }
+    if ck == .Doctype && parent != d.root { ret HierarchyRequest }
     if ck == .Text && parent == d.root { ret HierarchyRequest }
     if ck == .Document && child == d.root { ret HierarchyRequest }
+    if !document_insert_ok(d, parent, child, before, removed) { ret HierarchyRequest }
     ret ok
+}
+
+fn check_insert(d: *const Dom, parent: NodeId, child: NodeId, before: NodeId) -> err {
+    ret check_insert_excluding(d, parent, child, before, NONE)
 }
 
 // Inserts `child` (a node, or a fragment whose children move) under `parent` before `before`
@@ -347,7 +402,7 @@ fn replace_child(d: *Dom, parent: NodeId, new_child: NodeId, old_child: NodeId) 
     let after = d.nodes[usize(old_child)].next_sibling
     var anchor = after
     if anchor == new_child { anchor = d.nodes[usize(new_child)].next_sibling }
-    try check_insert(d, parent, new_child, anchor)
+    try check_insert_excluding(d, parent, new_child, anchor, old_child)
     unlink(d, old_child)
     try insert_before(d, parent, new_child, anchor)
     ret ok
