@@ -16,6 +16,7 @@ const listen = FUNCTIONS.findIndex(([name]) => name === 'sock_listen')
 const accept = FUNCTIONS.findIndex(([name]) => name === 'sock_accept')
 const close = FUNCTIONS.findIndex(([name]) => name === 'sock_close')
 const pollOpen = FUNCTIONS.findIndex(([name]) => name === 'poll_open')
+const pollCtl = FUNCTIONS.findIndex(([name]) => name === 'poll_ctl')
 const pollWait = FUNCTIONS.findIndex(([name]) => name === 'poll_wait')
 const pollWake = FUNCTIONS.findIndex(([name]) => name === 'poll_wake')
 const pipe = FUNCTIONS.findIndex(([name]) => name === 'pipe')
@@ -61,8 +62,30 @@ try {
   assert.equal(acceptSettled, false, 'a listener with no connection blocks accept')
   assert.equal(await host.call(close, [blockedListener]), 0, 'closing the waiting listener succeeds')
   assert.equal(await pendingAccept, 8, 'the pending accept wakes with BADF after close')
+
+  // Closing a watched socket must wake an infinite poll with that registration's
+  // closed event. Removing it after waking without retaining the event lets the
+  // resumed wait install another infinite waiter.
+  assert.equal(await host.call(open, [0, 0, 0]), 0, 'a watched socket opens')
+  const watchedSocket = host.view.getUint32(64, true)
   assert.equal(await host.call(pollOpen, []), 0, 'a host poller opens')
   const poller = host.view.getUint32(64, true)
+  assert.equal(await host.call(pollCtl, [poller, 0, watchedSocket, 0x4a11n, 1]), 0, 'the socket registers with the poller')
+  let closePollFinished = false
+  const closePoll = host.call(pollWait, [poller, 0, 1, -1n, 0]).then((status) => {
+    closePollFinished = true
+    return status
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(closePollFinished, false, 'the infinite poll begins waiting before its socket closes')
+  assert.equal(await host.call(close, [watchedSocket]), 0, 'closing the watched socket succeeds')
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(closePollFinished, true, 'closing the watched socket completes the infinite poll')
+  assert.equal(await closePoll, 0, 'the closed poll returns normally')
+  assert.equal(host.view.getUint32(64, true), 1, 'the closed poll reports one event')
+  assert.equal(host.view.getBigUint64(128, true), 0x4a11n, 'the closed poll preserves the registration token')
+  assert.equal(host.view.getUint32(136, true), 4, 'the closed poll reports the closed flag')
+
   const originalSetTimeout = globalThis.setTimeout
   const originalClearTimeout = globalThis.clearTimeout
   const timers = []
