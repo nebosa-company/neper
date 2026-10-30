@@ -228,6 +228,32 @@ fn main(a: *mem.Arena) -> err {
     let (exact_detail_bytes, exact_detail_error) = io.read_all_detail(a, &exact_detail, 6usize, &exact_detail_error_info)
     if exact_detail_error != ok || !str.eq(exact_detail_bytes, "detail") { ret Failed }
 
+    // A geometric growth must still consult EOF when the first claim has used the
+    // caller's entire arena. SliceReader returns its full final read with `ok`, so
+    // this exercises the subsequent EOF probe rather than the count-plus-End path.
+    var exact_capacity_input: [512]u8 = zero
+    exact_capacity_input[0usize] = 65u8
+    exact_capacity_input[511usize] = 90u8
+    var exact_capacity_storage: [512]u8 = zero
+    var exact_capacity_arena = mem.arena_from(exact_capacity_storage[..])
+    var exact_capacity_source = io.SliceReader { data: exact_capacity_input[..], off: 0usize }
+    var exact_capacity_reader = io.slice_reader(&exact_capacity_source)
+    let (exact_capacity_bytes, exact_capacity_error) = io.read_all(&exact_capacity_arena, &exact_capacity_reader, 1024usize)
+    if exact_capacity_error != ok || exact_capacity_bytes.len != 512usize { ret Failed }
+    if exact_capacity_bytes[0usize] != 65u8 || exact_capacity_bytes[511usize] != 90u8 { ret Failed }
+    if mem.mark(&exact_capacity_arena) != 512usize { ret Failed }
+
+    var exact_detail_capacity_storage: [512]u8 = zero
+    var exact_detail_capacity_arena = mem.arena_from(exact_detail_capacity_storage[..])
+    var exact_detail_capacity_source = io.SliceReader { data: exact_capacity_input[..], off: 0usize }
+    var exact_detail_capacity_reader = io.slice_detail_reader(&exact_detail_capacity_source)
+    var exact_detail_capacity_info: os.ErrorDetail = zero
+    exact_detail_capacity_info.native_code = 91i32
+    let (exact_detail_capacity_bytes, exact_detail_capacity_error) = io.read_all_detail(&exact_detail_capacity_arena, &exact_detail_capacity_reader, 1024usize, &exact_detail_capacity_info)
+    if exact_detail_capacity_error != ok || exact_detail_capacity_bytes.len != 512usize { ret Failed }
+    if exact_detail_capacity_bytes[0usize] != 65u8 || exact_detail_capacity_bytes[511usize] != 90u8 { ret Failed }
+    if mem.mark(&exact_detail_capacity_arena) != 512usize || exact_detail_capacity_info.native_code != 91i32 { ret Failed }
+
     // `read_until` stops after the delimiter and keeps it.
     var line_source = io.SliceReader { data: "first\nsecond\n", off: 0usize }
     var lines = io.slice_reader(&line_source)
@@ -339,6 +365,18 @@ fn main(a: *mem.Arena) -> err {
     let memory_write_error = io.write_all(&memory_sink, "direct")
     if memory_write_error != ok { ret Failed }
     if !str.eq(io.memory_bytes(&memory), "direct") { ret Failed }
+
+    // An allocation between writes is not part of the memory writer's output.
+    var (interleaved, interleaved_sink, interleaved_error) = io.memory_writer(a, 0usize)
+    if interleaved_error != ok { ret interleaved_error }
+    if io.write_all(&interleaved_sink, "a") != ok { ret Failed }
+    let (unrelated, unrelated_error) = mem.alloc[u8](a, 3usize)
+    if unrelated_error != ok { ret unrelated_error }
+    unrelated[0usize] = 120u8
+    unrelated[1usize] = 121u8
+    unrelated[2usize] = 122u8
+    if io.write_all(&interleaved_sink, "b") != ok { ret Failed }
+    if !str.eq(io.memory_bytes(&interleaved), "ab") { ret Failed }
 
     // Detail streams compose without changing success provenance.
     var detail_source_state = io.SliceReader { data: "detail copy", off: 0usize }

@@ -325,6 +325,21 @@ fn tee_writer(state: *TeeWriter, left: Writer, right: Writer) -> Writer {
 fn memory_write(ctx: *void, src: []const u8) -> (usize, err) {
     var state = mem.cast[*MemoryWriter](ctx)
     if state.backing != nil { state = state.backing }
+    if src.len == 0usize { ret (0usize, ok) }
+    let arena_mark = mem.mark(state.arena)
+    if arena_mark != state.start + state.len {
+        // A different allocation occupied the arena tail. Rehome the logical
+        // output before appending so those unrelated bytes never become output.
+        if src.len > 18446744073709551615usize - state.len { ret (0usize, mem.Exhausted) }
+        let total = state.len + src.len
+        let (relocated, relocation_error) = mem.alloc[u8](state.arena, total)
+        if relocation_error != ok { ret (0usize, relocation_error) }
+        mem.copy[u8](relocated[..state.len], mem.view(state.arena, state.start, state.len))
+        mem.copy[u8](relocated[state.len..], src)
+        state.start = arena_mark
+        state.len = total
+        ret (src.len, ok)
+    }
     let (claim, claim_error) = mem.alloc[u8](state.arena, src.len)
     if claim_error != ok { ret (0usize, claim_error) }
     var at = 0usize
@@ -513,6 +528,13 @@ fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err) {
             }
             let (extra, extra_error) = mem.alloc[u8](a, grow)
             if extra_error != ok {
+                // The current result can exactly fill the caller's arena. Before
+                // reporting that a further growth cannot fit, ask whether the
+                // source has actually ended; only an empty EOF probe keeps the
+                // completed prefix valid.
+                var probe: [1]u8 = zero
+                let (probe_count, probe_error) = read(r, probe[..])
+                if probe_count == 0usize && probe_error == End { break }
                 mem.reset(a, start)
                 ret (zero, extra_error)
             }
@@ -565,6 +587,11 @@ fn read_all_detail(a: *mem.Arena, r: *DetailReader, limit: usize, detail: *os.Er
             }
             let (extra, extra_error) = mem.alloc[u8](a, grow)
             if extra_error != ok {
+                // Match read_all: an exhausted caller arena is not an error when
+                // its completed prefix is the whole source.
+                var probe: [1]u8 = zero
+                let (probe_count, probe_error) = read_detail(r, probe[..], detail)
+                if probe_count == 0usize && probe_error == End { break }
                 mem.reset(a, start)
                 detail.kind = .OutOfMemory
                 detail.native_code = 0i32
