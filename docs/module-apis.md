@@ -8289,7 +8289,7 @@ fn rat_add(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_sub(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_mul(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_div(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
-fn rat_cmp(a: Rat, b: Rat) -> i32
+fn rat_cmp(a: Rat, b: Rat) -> (i32, err)
 fn rat_format(v: Rat, b: *str.Builder) -> err
 fn int_bits(v: Int) -> usize
 fn int_from_bytes_be(a: *mem.Arena, bytes: []const u8) -> (Int, err)

@@ -91,7 +91,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (builder3, _) = str.builder(a, 32usize)
     var mb = builder3
     if big.rat_format(minus_third, &mb) != ok || !text_equal(str.done(&mb), "-1/3") { os.exit(16) }
-    if big.rat_cmp(minus_third, sixth) >= 0i32 || big.rat_cmp(half, half) != 0i32 || big.rat_cmp(two_thirds, half) <= 0i32 { os.exit(17) }
+    let (less, less_error) = big.rat_cmp(minus_third, sixth)
+    let (same, same_error) = big.rat_cmp(half, half)
+    let (greater, greater_error) = big.rat_cmp(two_thirds, half)
+    if less_error != ok || same_error != ok || greater_error != ok || less >= 0i32 || same != 0i32 || greater <= 0i32 { os.exit(17) }
+    // Comparison must propagate temporary-product exhaustion rather than
+    // silently answering equal once the operands' arena is full.
+    var compare_storage: [4096]u8 = zero
+    var compare_arena = mem.arena_from(compare_storage[..])
+    let (compare_one_a, compare_one_a_error) = big.int_from_i64(&compare_arena, 1i64)
+    let (compare_two, compare_two_error) = big.int_from_i64(&compare_arena, 2i64)
+    let (compare_one_b, compare_one_b_error) = big.int_from_i64(&compare_arena, 1i64)
+    let (compare_three, compare_three_error) = big.int_from_i64(&compare_arena, 3i64)
+    let (compare_half, compare_half_error) = big.rat_make(&compare_arena, compare_one_a, compare_two)
+    let (compare_third, compare_third_error) = big.rat_make(&compare_arena, compare_one_b, compare_three)
+    if compare_one_a_error != ok || compare_two_error != ok || compare_one_b_error != ok || compare_three_error != ok || compare_half_error != ok || compare_third_error != ok { os.exit(19) }
+    let (_, fill_error) = mem.alloc[u8](&compare_arena, compare_arena.cap - compare_arena.off)
+    if fill_error != ok { os.exit(19) }
+    let (_, exhausted_error) = big.rat_cmp(compare_half, compare_third)
+    if exhausted_error != mem.Exhausted { os.exit(19) }
     let (_, r6) = big.rat_make(a, one, z)
     if r6 != big.DivideByZero { os.exit(18) }
     os.exit(0)
