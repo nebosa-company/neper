@@ -173,6 +173,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n7, e7) = trace.tracestate_set(messy, "c", "9", big[..])
     if e7 != ok || !str.eq(big[..n7], "c=9,a=1,b=2") { os.exit(7i32) }
 
+    // A malformed delimiter-free member must not hide later valid members.
+    let malformed = "bad,a=1,b=2"
+    let (v7b, g7b) = trace.tracestate_get(malformed, "b")
+    let (n7b, e7b) = trace.tracestate_set(malformed, "c", "3", big[..])
+    if !g7b || !str.eq(v7b, "2") || e7b != ok || !str.eq(big[..n7b], "c=3,a=1,b=2") { os.exit(7i32) }
+
     try io.print("trace ok\n")
     ret ok
 }

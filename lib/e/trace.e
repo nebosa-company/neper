@@ -184,9 +184,8 @@ fn tracestate_get(state: str, key: str) -> (str, bool) {
     var at = 0usize
     while at < state.len {
         let (k, v, next_at, found) = member(state, at)
-        if !found { ret ("", false) }
-        if str.eq(k, key) { ret (v, true) }
         at = next_at
+        if found && str.eq(k, key) { ret (v, true) }
     }
     ret ("", false)
 }
@@ -258,8 +257,8 @@ fn tracestate_set(state: str, key: str, value: str, out: []u8) -> (usize, err) {
     var at = 0usize
     while at < state.len && count < MAX_MEMBERS {
         let (k, v, next_at, found) = member(state, at)
-        if !found { break }
         at = next_at
+        if !found { continue }
         if !valid_tracestate_key(k) || !valid_tracestate_value(v) { ret (0usize, Invalid) }
         if str.eq(k, key) { continue }
         let (m1, f1) = append(out, n, ",")
