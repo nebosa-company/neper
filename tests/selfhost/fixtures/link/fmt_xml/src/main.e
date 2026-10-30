@@ -131,6 +131,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if xml.end(&w, "doc") != ok { os.exit(37) }
     if xml.end(&w, "doc") != xml.Invalid { os.exit(38) }
     if xml.comment(&w, "a--b") != xml.Invalid { os.exit(39) }
+    let comment_off = sink_state.off
+    if xml.comment(&w, "x-") != xml.Invalid || sink_state.off != comment_off { os.exit(78) }
     let written = buffer[..sink_state.off]
     if !str.eq(written, "<doc k=\"a&lt;b&quot;c\">x &amp; y &gt; z<!-- note --><inner></inner></doc>") { os.exit(40) }
     let (back0, e13) = open(a, written, true, 8u16)
@@ -189,6 +191,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if xml.start(&name_writer, "good", zero) != ok { os.exit(67) }
     let opened = name_state.off
     if xml.end(&name_writer, "1bad") != xml.Invalid || name_state.off != opened { os.exit(68) }
+    if xml.end(&name_writer, "other") != xml.Invalid || name_state.off != opened { os.exit(97) }
     if xml.end(&name_writer, "good") != ok { os.exit(69) }
     let options = xml.Options { max_depth: 8u16, preserve_comments: true }
     var input = io.SliceReader { data: "<a/>", off: 0usize }
@@ -219,6 +222,119 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e33 != xml.Invalid { os.exit(75) }
     let (_, e34) = count_events(a, "<a><![CDATA[\x01]]></a>", 8u16)
     if e34 != xml.Invalid { os.exit(76) }
+    let (zero_depth_count, zero_depth_error) = count_events(a, "<a><b/></a>", 0u16)
+    if zero_depth_error != ok || zero_depth_count != 4usize { os.exit(77) }
+    var zero_limit_input = io.SliceReader { data: "<a></a>", off: 0usize }
+    let (zero_limit_reader0, zero_limit_open_error) = xml.reader_with_limit(a, io.slice_reader(&zero_limit_input), xml.Options { max_depth: 0u16, preserve_comments: false }, 7usize)
+    if zero_limit_open_error != ok { os.exit(79) }
+    var zero_limit_reader = zero_limit_reader0
+    let (_, zero_limit_more, zero_limit_next_error) = xml.reader_next_err(&zero_limit_reader)
+    if zero_limit_next_error != ok || !zero_limit_more { os.exit(80) }
+    var attrs_buffer: [512]u8 = zero
+    let attrs64 = attributes_document(attrs_buffer[..], 64usize)
+    let (attrs64_count, attrs64_error) = count_events(a, attrs64, 8u16)
+    if attrs64_error != ok || attrs64_count != 2usize { os.exit(81) }
+    let attrs65 = attributes_document(attrs_buffer[..], 65usize)
+    let (_, attrs65_error) = count_events(a, attrs65, 8u16)
+    if attrs65_error != xml.TooLarge { os.exit(82) }
+    var too_many_attributes: [65]xml.Attribute = zero
+    var too_many_at = 0usize
+    while too_many_at < too_many_attributes.len {
+        too_many_attributes[too_many_at] = xml.Attribute { name: "a", value: "" }
+        too_many_at += 1usize
+    }
+    var too_many_buffer: [64]u8 = zero
+    var too_many_sink = io.SliceWriter { data: too_many_buffer[..], off: 0usize }
+    var too_many_writer = xml.writer(io.slice_writer(&too_many_sink))
+    if xml.start(&too_many_writer, "a", too_many_attributes[..]) != xml.TooLarge || too_many_sink.off != 0usize { os.exit(120) }
+    let (_, text_close_error) = count_events(a, "<a>]]></a>", 8u16)
+    if text_close_error != xml.Invalid { os.exit(83) }
+    let (text_ref_count, text_ref_error) = count_events(a, "<a>]]&gt;</a>", 8u16)
+    if text_ref_error != ok || text_ref_count != 3usize { os.exit(84) }
+    let (_, comment_body_error) = count_events(a, "<a><!--a--b--></a>", 8u16)
+    if comment_body_error != xml.Invalid { os.exit(85) }
+    let (_, comment_end_error) = count_events(a, "<a><!--x---></a>", 8u16)
+    if comment_end_error != xml.Invalid { os.exit(86) }
+    let (declaration_count, declaration_error) = count_events(a, "<?xml version=\"1.0\" encoding='UTF-8' standalone=\"yes\"?><a/>", 8u16)
+    if declaration_error != ok || declaration_count != 2usize { os.exit(87) }
+    let (_, declaration_empty_error) = count_events(a, "<?xml?><a/>", 8u16)
+    if declaration_empty_error != xml.Invalid { os.exit(88) }
+    let (_, declaration_version_error) = count_events(a, "<?xml version=\"1.1\"?><a/>", 8u16)
+    if declaration_version_error != xml.Invalid { os.exit(89) }
+    let (_, declaration_value_error) = count_events(a, "<?xml version=\"1.0\" standalone=\"maybe\"?><a/>", 8u16)
+    if declaration_value_error != xml.Invalid { os.exit(90) }
+    let (_, declaration_misplaced_error) = count_events(a, "<a><?xml version=\"1.0\"?></a>", 8u16)
+    if declaration_misplaced_error != xml.Invalid { os.exit(91) }
+    let (_, declaration_after_misc_error) = count_events(a, "<!--before--><?xml version=\"1.0\"?><a/>", 8u16)
+    if declaration_after_misc_error != xml.Invalid { os.exit(92) }
+    let (_, reserved_pi_error) = count_events(a, "<?XML data?><a/>", 8u16)
+    if reserved_pi_error != xml.Invalid { os.exit(93) }
+    let (_, pi_separator_error) = count_events(a, "<a><?pi=data?></a>", 8u16)
+    if pi_separator_error != xml.Invalid { os.exit(94) }
+    let line_doc = "<a v=\"a\tb\nc\r\nd\re&#10;&#9;&#13;\">x\r\ny\rz&#13;<![CDATA[c\r\nd]]></a>"
+    let (line_reader0, line_open_error) = open(a, line_doc, false, 8u16)
+    if line_open_error != ok { os.exit(95) }
+    var line_reader = line_reader0
+    let (line_start, line_start_more, line_start_error) = xml.reader_next_err(&line_reader)
+    if line_start_error != ok || !line_start_more { os.exit(96) }
+    switch line_start {
+    case .Start as element:
+        if !str.eq(element.attributes[0].value, "a b c d e\n\t\r") { os.exit(98) }
+    default:
+        os.exit(99)
+    }
+    let (line_text, line_text_more, line_text_error) = xml.reader_next_err(&line_reader)
+    if line_text_error != ok || !line_text_more { os.exit(100) }
+    switch line_text {
+    case .Text as value:
+        if !str.eq(value, "x\ny\nz\r") { os.exit(101) }
+    default:
+        os.exit(102)
+    }
+    let (line_cdata, line_cdata_more, line_cdata_error) = xml.reader_next_err(&line_reader)
+    if line_cdata_error != ok || !line_cdata_more { os.exit(103) }
+    switch line_cdata {
+    case .Text as value:
+        if !str.eq(value, "c\nd") { os.exit(104) }
+    default:
+        os.exit(105)
+    }
+    var whitespace_buffer: [256]u8 = zero
+    var whitespace_sink = io.SliceWriter { data: whitespace_buffer[..], off: 0usize }
+    var whitespace_writer = xml.writer(io.slice_writer(&whitespace_sink))
+    var whitespace_attribute: [1]xml.Attribute = zero
+    whitespace_attribute[0] = xml.Attribute { name: "space", value: "a\tb\nc\rd" }
+    if xml.start(&whitespace_writer, "ws", whitespace_attribute[..]) != ok { os.exit(106) }
+    if xml.text(&whitespace_writer, "x\r\ny\rz") != ok { os.exit(107) }
+    if xml.end(&whitespace_writer, "ws") != ok { os.exit(108) }
+    if !str.eq(whitespace_buffer[..whitespace_sink.off], "<ws space=\"a&#9;b&#10;c&#13;d\">x&#13;\ny&#13;z</ws>") { os.exit(109) }
+    let (whitespace_reader0, whitespace_open_error) = open(a, whitespace_buffer[..whitespace_sink.off], false, 8u16)
+    if whitespace_open_error != ok { os.exit(110) }
+    var whitespace_reader = whitespace_reader0
+    let (whitespace_start, whitespace_start_more, whitespace_start_error) = xml.reader_next_err(&whitespace_reader)
+    if whitespace_start_error != ok || !whitespace_start_more { os.exit(111) }
+    switch whitespace_start {
+    case .Start as element:
+        if !str.eq(element.attributes[0].value, "a\tb\nc\rd") { os.exit(112) }
+    default:
+        os.exit(113)
+    }
+    let (whitespace_text, whitespace_text_more, whitespace_text_error) = xml.reader_next_err(&whitespace_reader)
+    if whitespace_text_error != ok || !whitespace_text_more { os.exit(114) }
+    switch whitespace_text {
+    case .Text as value:
+        if !str.eq(value, "x\r\ny\rz") { os.exit(115) }
+    default:
+        os.exit(116)
+    }
+    var invalid_buffer: [64]u8 = zero
+    var invalid_sink = io.SliceWriter { data: invalid_buffer[..], off: 0usize }
+    var invalid_writer = xml.writer(io.slice_writer(&invalid_sink))
+    var invalid_attribute: [1]xml.Attribute = zero
+    invalid_attribute[0] = xml.Attribute { name: "bad", value: "\x01" }
+    if xml.start(&invalid_writer, "bad", invalid_attribute[..]) != xml.Invalid || invalid_sink.off != 0usize { os.exit(117) }
+    if xml.text(&invalid_writer, "\x01") != xml.Invalid || invalid_sink.off != 0usize { os.exit(118) }
+    if xml.comment(&invalid_writer, "\x0b") != xml.Invalid || invalid_sink.off != 0usize { os.exit(119) }
     ret ok
 }
 
@@ -229,4 +345,33 @@ fn endless(ctx: *void, dst: []u8) -> (usize, err) {
         at += 1usize
     }
     ret (dst.len, ok)
+}
+
+fn attributes_document(out: []u8, count: usize) -> str {
+    var at = 0usize
+    out[at] = 60u8
+    at += 1usize
+    out[at] = 97u8
+    at += 1usize
+    var index = 0usize
+    while index < count {
+        out[at] = 32u8
+        at += 1usize
+        out[at] = u8(97usize + index / 26usize)
+        at += 1usize
+        out[at] = u8(97usize + index % 26usize)
+        at += 1usize
+        out[at] = 61u8
+        at += 1usize
+        out[at] = 34u8
+        at += 1usize
+        out[at] = 34u8
+        at += 1usize
+        index += 1usize
+    }
+    out[at] = 47u8
+    at += 1usize
+    out[at] = 62u8
+    at += 1usize
+    ret out[..at]
 }
