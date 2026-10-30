@@ -36,6 +36,8 @@ error NoCertificate
 error TooSmall
 
 const DEPTH: u16 = 16u16
+const UTC_TIME_FIRST: i64 = -631152000i64
+const UTC_TIME_AFTER_LAST: i64 = 2524608000i64
 
 // ---- OIDs, as their content bytes ----
 
@@ -627,6 +629,7 @@ fn utc_time(seconds: i64, dst: []u8) -> str {
 // signed attributes with `signing_time` (Unix seconds, years 1950..2049). Detached unless
 // `attached`. The DER is written into `out`; its length is returned.
 fn sign_ed25519(a: *mem.Arena, content: []const u8, cert_der: []const u8, secret: sign.Ed25519SecretKey, attached: bool, signing_time: i64, out: []u8) -> (usize, err) {
+    if signing_time < UTC_TIME_FIRST || signing_time >= UTC_TIME_AFTER_LAST { ret (0usize, Invalid) }
     let mark = mem.mark(a)
     let (issuer, serial, cert_error) = issuer_and_serial(cert_der)
     if cert_error != ok { ret (0usize, cert_error) }

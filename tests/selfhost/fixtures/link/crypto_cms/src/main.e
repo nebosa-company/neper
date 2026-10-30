@@ -485,6 +485,24 @@ fn mandatory_attribute_regressions(a: *mem.Arena) -> err {
     ret ok
 }
 
+// CMS encodes signingTime as ASN.1 UTCTime, whose two-digit year form is
+// defined only for 1950 through 2049. The public signer must not silently
+// wrap adjacent dates into the opposite century.
+fn signing_time_boundaries() -> err {
+    var storage: [16384]u8 = zero
+    var a = mem.arena_from(storage[..])
+    var encoded: [4096]u8 = zero
+    let (_, before) = cms.sign_ed25519(&a, signed_content(), test_cert(), test_secret(), false, -631152001i64, encoded[..])
+    if before != cms.Invalid { ret cms.Invalid }
+    let (_, first) = cms.sign_ed25519(&a, signed_content(), test_cert(), test_secret(), false, -631152000i64, encoded[..])
+    if first != ok { ret first }
+    let (_, last) = cms.sign_ed25519(&a, signed_content(), test_cert(), test_secret(), false, 2524607999i64, encoded[..])
+    if last != ok { ret last }
+    let (_, after) = cms.sign_ed25519(&a, signed_content(), test_cert(), test_secret(), false, 2524608000i64, encoded[..])
+    if after != cms.Invalid { ret cms.Invalid }
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if der_length_boundaries() != 0u8 { os.exit(107i32) }
     // the embedded certificate parses and its issuer-and-serial matching is exercised below
@@ -504,6 +522,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var attributes_arena_storage: [65536]u8 = zero
     var attributes_arena = mem.arena_from(attributes_arena_storage[..])
     if mandatory_attribute_regressions(&attributes_arena) != ok { os.exit(106i32) }
+    if signing_time_boundaries() != ok { os.exit(108i32) }
     try io.print("crypto cms ok")
     ret ok
 }
