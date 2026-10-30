@@ -137,6 +137,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if r != 0usize { os.exit(48 + i32(r)) }
     r = utf8_fold_case()
     if r != 0usize { os.exit(60 + i32(r)) }
+    // vCard 2.1 quoted-printable fields decode before structured field splitting.
+    r = parse_case(a, "BEGIN:VCARD\nVERSION:2.1\nFN;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=E7=8E=8B=E5=B0=8F=E6=98=8E=\n=E5=90=8C\nN;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=E7=8E=8B=3B=E5=B0=8F\nORG;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=E5=85=AC=E5=8F=B8=3Bignored\nNOTE;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:one=0Atwo\nTEL;TYPE=CELL;ENCODING=QUOTED-PRINTABLE:=2B=31=32=33\nEND:VCARD\n", "\xE7\x8E\x8B\xE5\xB0\x8F\xE6\x98\x8E\xE5\x90\x8C|\xE7\x8E\x8B|\xE5\xB0\x8F|\xE5\x85\xAC\xE5\x8F\xB8|one~two|+123:cell|")
+    if r != 0usize { os.exit(64 + i32(r)) }
+    // An ordinary property ending in '=' is not a quoted-printable continuation.
+    r = parse_case(a, "BEGIN:VCARD\nNOTE:=\nFN:Plain\nEND:VCARD\n", "Plain||||=||")
+    if r != 0usize { os.exit(72 + i32(r)) }
+    // CHARSET applies after quoted-printable byte decoding.
+    r = parse_case(a, "BEGIN:VCARD\nFN;CHARSET=ISO-8859-1;ENCODING=QUOTED-PRINTABLE:Andr=E9\nEND:VCARD\n", "Andr\xC3\xA9||||||")
+    if r != 0usize { os.exit(76 + i32(r)) }
+    let (_, bad_qp_error) = vcard.parse(a, "BEGIN:VCARD\nFN;ENCODING=QUOTED-PRINTABLE:=XZ\nEND:VCARD\n", cards[0usize..4usize])
+    if bad_qp_error != vcard.Malformed { os.exit(80i32) }
+    let (_, bad_charset_error) = vcard.parse(a, "BEGIN:VCARD\nFN;CHARSET=unknown;ENCODING=QUOTED-PRINTABLE:=41\nEND:VCARD\n", cards[0usize..4usize])
+    if bad_charset_error != vcard.Malformed { os.exit(81i32) }
     let (none_count, none_error) = vcard.parse(a, "just text", cards[0usize..4usize])
     if none_error != vcard.Malformed { os.exit(56) }
     var malformed_cards: [1]vcard.Card = zero
