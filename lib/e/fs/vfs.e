@@ -657,7 +657,14 @@ fn overlay_settle(o: *Overlay, a: *mem.Arena, p: str) -> err {
     let (at, found) = mark_find(o, p)
     if !found { ret ok }
     let (e, lower_error) = stat(a, &o.lower, p)
-    if lower_error == ok && e.kind == .Directory {
+    if lower_error != ok {
+        if lower_error == fs.NotFound {
+            mark_clear(o, p)
+            ret ok
+        }
+        ret lower_error
+    }
+    if e.kind == .Directory {
         o.marks[at].opaque = true
         ret ok
     }

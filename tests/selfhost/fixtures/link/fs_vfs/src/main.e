@@ -2049,6 +2049,43 @@ fn build_lower(a: *mem.Arena, v: *vfs.Vfs) -> bool {
 }
 
 // Layering: copy-up of parent directories, whiteouts, opaque directories, composition.
+type DenyingLower = struct { inner: *vfs.Vfs, path: str, denied: bool }
+
+fn denying_stat(context: *void, a: *mem.Arena, path: str) -> (fs.Entry, err) {
+    var none: fs.Entry = zero
+    let state = mem.cast[*DenyingLower](context)
+    if state.denied && same(path, state.path) { ret (none, fs.Denied) }
+    let (entry, stat_error) = vfs.stat(a, state.inner, path)
+    ret (entry, stat_error)
+}
+
+fn denying_read(context: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err) {
+    let state = mem.cast[*DenyingLower](context)
+    let (bytes, read_error) = vfs.read_file(a, state.inner, path, limit)
+    ret (bytes, read_error)
+}
+
+fn denying_write(context: *void, a: *mem.Arena, path: str, data: []const u8) -> err {
+    let state = mem.cast[*DenyingLower](context)
+    ret vfs.write_file(a, state.inner, path, data)
+}
+
+fn denying_make_dir(context: *void, a: *mem.Arena, path: str) -> err {
+    let state = mem.cast[*DenyingLower](context)
+    ret vfs.make_dir(a, state.inner, path)
+}
+
+fn denying_remove(context: *void, a: *mem.Arena, path: str) -> err {
+    let state = mem.cast[*DenyingLower](context)
+    ret vfs.remove(a, state.inner, path)
+}
+
+fn denying_list(context: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err) {
+    let state = mem.cast[*DenyingLower](context)
+    let (entries, list_error) = vfs.list(a, state.inner, path)
+    ret (entries, list_error)
+}
+
 fn overlay_scenarios(a: *mem.Arena) -> i32 {
     let (lower, lower_error) = vfs.mem_new(a, 4usize)
     if lower_error != ok { ret 1i32 }
@@ -2185,6 +2222,49 @@ fn overlay_remove_exhaustion() -> i32 {
     if !reads(&work, &overlay_vfs, "/x", "upper") { ret 8i32 }
     if !reads(&work, &upper_vfs, "/x", "upper") { ret 9i32 }
     if !reads(&work, &lower_vfs, "/x", "lower") { ret 10i32 }
+    ret 0i32
+}
+
+// A lower stat failure after the upper directory was created must leave the whiteout
+// in place: otherwise lower children become visible through the new directory.
+fn overlay_settle_error() -> i32 {
+    var work_storage: [4096]u8 = zero
+    var work = mem.arena_from(work_storage[..])
+    var lower_storage: [2048]u8 = zero
+    var lower_arena = mem.arena_from(lower_storage[..])
+    var upper_storage: [2048]u8 = zero
+    var upper_arena = mem.arena_from(upper_storage[..])
+    var overlay_storage: [256]u8 = zero
+    var overlay_arena = mem.arena_from(overlay_storage[..])
+    let (lower, lower_error) = vfs.mem_new(&lower_arena, 4usize)
+    if lower_error != ok { ret 1i32 }
+    var lower_store = lower
+    var base_lower = vfs.mem_vfs(&lower_store)
+    if !dir(&work, &base_lower, "/hidden") { ret 2i32 }
+    var guarded = DenyingLower { inner: &base_lower, path: "/hidden", denied: false }
+    var lower_view = base_lower
+    lower_view.ctx = mem.cast[*void](&guarded)
+    lower_view.stat_fn = denying_stat
+    lower_view.read_fn = denying_read
+    lower_view.write_fn = denying_write
+    lower_view.make_dir_fn = denying_make_dir
+    lower_view.remove_fn = denying_remove
+    lower_view.list_fn = denying_list
+    let (upper, upper_error) = vfs.mem_new(&upper_arena, 4usize)
+    if upper_error != ok { ret 3i32 }
+    var upper_store = upper
+    var upper_view = vfs.mem_vfs(&upper_store)
+    let (overlay, overlay_error) = vfs.overlay_new(&overlay_arena, upper_view, lower_view, 2usize)
+    if overlay_error != ok { ret 4i32 }
+    var overlay_store = overlay
+    var overlay_view = vfs.overlay_vfs(&overlay_store)
+    if vfs.remove(&work, &overlay_view, "/hidden") != ok { ret 5i32 }
+    if !put(&work, &base_lower, "/hidden/lower", "lower") { ret 6i32 }
+    guarded.denied = true
+    if vfs.make_dir(&work, &overlay_view, "/hidden") != fs.Denied { ret 7i32 }
+    let (entries, list_error) = vfs.list(&work, &overlay_view, "/hidden")
+    if list_error != ok || entries.len != 0usize { ret 8i32 }
+    if !fails(&work, &overlay_view, "/hidden/lower", fs.NotFound) { ret 9i32 }
     ret 0i32
 }
 
@@ -2635,6 +2715,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     code = overlay_remove_exhaustion()
     if code != 0i32 {
         report("overlay exhaustion", code)
+        os.exit(10i32)
+    }
+    code = overlay_settle_error()
+    if code != 0i32 {
+        report("overlay settle", code)
         os.exit(10i32)
     }
     code = union_scenarios(a)
