@@ -43404,3 +43404,11 @@ the next acquire even when that next frame names the same back image and serial.
 frame on terminal errors without swapping it. The scene renderer commits its
 last-render comparison only after present succeeds, leaving a failed image write
 retryable. `gpu_present` and `gfx_scene` inject CPU queue faults to pin both paths.
+
+## D5921 — JMESPath function arguments require separators
+
+D2504's compatibility exception for comma-free function calls is retired. The
+parser now requires a comma between every pair of function arguments and rejects a
+trailing comma, matching the JMESPath grammar and python-jmespath. This prevents
+malformed untrusted expressions from changing their apparent arity or reaching the
+wrong function dispatch path.
