@@ -134,6 +134,11 @@ fn main(a: *mem.Arena) -> err {
     try check_relative(a, "/a/b/c", "/a/b", .Posix, "..")
     try check_relative(a, "/a/b", "/a/x/y", .Posix, "../x/y")
     try check_relative(a, "/a/b", "/a/b", .Posix, ".")
+    // Windows path identity is case-insensitive and accepts both separators.
+    try check_relative(a, "C:\\Users\\Alice", "c:\\users\\alice\\Docs", .Windows, "Docs")
+    try check_relative(a, "C:\\work\\base", "C:/work/target", .Windows, "..\\target")
+    // Posix remains byte-sensitive.
+    try check_relative(a, "/a/Case", "/a/case/file", .Posix, "../case/file")
     let (_, mixed_error) = path.relative(a, "/a", "b", .Posix)
     if mixed_error != path.Invalid { os.exit(70i32) }
 

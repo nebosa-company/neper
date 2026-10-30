@@ -231,7 +231,7 @@ fn relative(a: *mem.Arena, base: str, target_path: str, style: Style) -> (str, e
     let from_root = root_length(from_text, style)
     let to_root = root_length(to_text, style)
     if from_root != to_root { ret ("", Invalid) }
-    if !same_text(from_text[0usize..from_root], to_text[0usize..to_root]) { ret ("", Invalid) }
+    if !same_path_text(from_text[0usize..from_root], to_text[0usize..to_root], style) { ret ("", Invalid) }
     // Skip the components the two share.
     var from_at = from_root
     var to_at = to_root
@@ -239,7 +239,7 @@ fn relative(a: *mem.Arena, base: str, target_path: str, style: Style) -> (str, e
         let (from_component, from_next) = next_component(from_text, from_at, style)
         let (to_component, to_next) = next_component(to_text, to_at, style)
         if from_component.len == 0usize || to_component.len == 0usize { break }
-        if !same_text(from_component, to_component) { break }
+        if !same_path_text(from_component, to_component, style) { break }
         from_at = from_next
         to_at = to_next
     }
@@ -313,6 +313,28 @@ fn same_text(left: str, right: str) -> bool {
     var at = 0usize
     while at < left.len {
         if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Windows path identity folds ASCII case and accepts either spelling of a
+// separator; Posix retains byte-exact component identity.
+fn same_path_text(left: str, right: str, style: Style) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        let a = left[at]
+        let b = right[at]
+        if style == .Windows {
+            if is_separator(a, style) && is_separator(b, style) {
+                at += 1usize
+                continue
+            }
+            if fold_byte(a) != fold_byte(b) { ret false }
+        } else if a != b {
+            ret false
+        }
         at += 1usize
     }
     ret true
