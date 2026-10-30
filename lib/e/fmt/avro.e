@@ -13,6 +13,7 @@
 // name and size. `resolve` is the same test without data.
 use e.mem
 use e.str
+use e.text.utf8
 
 type Kind = enum u8 { Null, Boolean, Int, Long, Float, Double, Bytes, String, Record, Enum, Array, Map, Union, Fixed }
 type Schema = struct { kind: []Kind, name: []str, child_start: []usize, child_count: []usize, children: []u32, size: []usize, fallback: []str }
@@ -128,7 +129,9 @@ fn read_bytes(d: *Decoder) -> ([]const u8, err) {
 
 fn read_string(d: *Decoder) -> (str, err) {
     let (raw, raw_error) = read_bytes(d)
-    ret (raw, raw_error)
+    if raw_error != ok { ret (zero, raw_error) }
+    if !utf8.validate(raw) { ret (zero, Malformed) }
+    ret (raw, ok)
 }
 
 fn write_raw(o: *Sink, data: []const u8) -> err {

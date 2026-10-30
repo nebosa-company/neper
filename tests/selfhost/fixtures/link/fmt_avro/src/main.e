@@ -55,6 +55,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var d3 = avro.decoder(prims[13..])
     let (i1, e11) = avro.read_int(&d3)
     if e11 != ok || i1 != 5i32 { os.exit(8i32) }
+    // Avro strings are UTF-8, unlike byte strings.
+    let valid_text: [3]u8 = [3]u8{ 4u8, 104u8, 105u8 }
+    var d_valid_text = avro.decoder(valid_text[..])
+    let (decoded_text, decoded_text_error) = avro.read_string(&d_valid_text)
+    if decoded_text_error != ok || !str.eq(decoded_text, "hi") { os.exit(33i32) }
+    let invalid_text: [3]u8 = [3]u8{ 4u8, 195u8, 40u8 }
+    var d_invalid_text = avro.decoder(invalid_text[..])
+    let (_, invalid_text_error) = avro.read_string(&d_invalid_text)
+    if invalid_text_error != avro.Malformed { os.exit(34i32) }
     // Writer schema: 0 Rec, 1..7 fields, 8 tags item, 9 meta value, 10..12 symbols.
     var wk: [13]avro.Kind = zero
     var wname: [13]str = zero
