@@ -14,10 +14,21 @@ use e.mem
 use e.os
 
 type Weights = struct { unused: u8 }
+type FixedWeights = struct { value: f64 }
 
 fn weight_of(ctx: *Weights, e: graph.Edge[i64]) -> f64 { ret f64(e.value) }
 fn integer_weight(ctx: *Weights, e: graph.Edge[i64]) -> usize { ret usize(e.value) }
 fn no_heuristic(ctx: *Weights, node: graph.NodeId) -> f64 { ret 0.0f64 }
+fn fixed_weight(ctx: *FixedWeights, e: graph.Edge[f64]) -> f64 { ret ctx.value }
+fn fixed_no_heuristic(ctx: *FixedWeights, node: graph.NodeId) -> f64 { ret 0.0f64 }
+
+fn rejects_non_finite(a: *mem.Arena, g: *const graph.Graph[f64], supplied: f64) -> bool {
+    var fixed = FixedWeights { value: supplied }
+    let (_, bellman_error) = path.bellman_ford[f64, FixedWeights](a, g, 0u32, &fixed, fixed_weight)
+    let (_, floyd_error) = path.floyd_warshall[f64, FixedWeights](a, g, &fixed, fixed_weight)
+    let (_, johnson_error) = path.johnson[f64, FixedWeights](a, g, &fixed, fixed_weight)
+    ret bellman_error == algo.InvalidWeight && floyd_error == algo.InvalidWeight && johnson_error == algo.InvalidWeight
+}
 // A consistent heuristic for the grid-like graph below: distance to node 5 in hops times the
 // smallest weight (1).
 fn hops_to_five(ctx: *Weights, node: graph.NodeId) -> f64 {
@@ -135,6 +146,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ida_error != ok || !near(ida.cost, 13.0f64) || ida.nodes.len != 6usize || ida.nodes[1usize] != 2u32 { os.exit(4i32) }
     let (_, ida_none) = path.ida_star[i64, Weights](a, &g, 0u32, 6u32, 10usize, &w, weight_of, no_heuristic)
     if ida_none != path.NoPath { os.exit(4i32) }
+
+    // 4b: a finite cost above the former 1e300 sentinel remains reachable.
+    let (large0, large_error) = graph.builder[f64](a, 2usize, 1usize)
+    if large_error != ok { os.exit(18i32) }
+    var large = large0
+    if graph.add_directed[f64](&large, 0u32, 1u32, 0.0f64) != ok { os.exit(18i32) }
+    let (large_graph, large_graph_error) = graph.finish[f64](a, &large)
+    if large_graph_error != ok { os.exit(18i32) }
+    var large_weights = FixedWeights { value: 1.0e301f64 }
+    let (large_bellman, large_bellman_error) = path.bellman_ford[f64, FixedWeights](a, &large_graph, 0u32, &large_weights, fixed_weight)
+    let (large_floyd, large_floyd_error) = path.floyd_warshall[f64, FixedWeights](a, &large_graph, &large_weights, fixed_weight)
+    let (large_johnson, large_johnson_error) = path.johnson[f64, FixedWeights](a, &large_graph, &large_weights, fixed_weight)
+    let (large_astar, large_astar_error) = path.astar[f64, FixedWeights](a, &large_graph, 0u32, 1u32, &large_weights, fixed_weight, fixed_no_heuristic)
+    let (large_ida, large_ida_error) = path.ida_star[f64, FixedWeights](a, &large_graph, 0u32, 1u32, 1usize, &large_weights, fixed_weight, fixed_no_heuristic)
+    if large_bellman_error != ok || large_floyd_error != ok || large_johnson_error != ok || large_astar_error != ok || large_ida_error != ok { os.exit(18i32) }
+    if !near(large_bellman.distance[1usize], 1.0e301f64) || !near(large_floyd[1usize], 1.0e301f64) || !near(large_johnson[1usize], 1.0e301f64) || !near(large_astar.cost, 1.0e301f64) || !near(large_ida.cost, 1.0e301f64) { os.exit(18i32) }
+    let nan_weight = mem.bitcast[f64](9221120237041090560u64)
+    let positive_infinity = mem.bitcast[f64](9218868437227405312u64)
+    let negative_infinity = 0.0f64 - positive_infinity
+    if !rejects_non_finite(a, &large_graph, nan_weight) { os.exit(19i32) }
+    if !rejects_non_finite(a, &large_graph, positive_infinity) { os.exit(19i32) }
+    if !rejects_non_finite(a, &large_graph, negative_infinity) { os.exit(19i32) }
 
     // 5: fewest edges: 0 -> 2 -> 4 -> 5 or 0 -> 1 -> 3 -> 5 (3 edges).
     let (bi, bi_error) = path.bidirectional[i64](a, &g, 0u32, 5u32)
