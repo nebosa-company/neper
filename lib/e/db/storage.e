@@ -1019,14 +1019,28 @@ fn txn_lock_2pl(lt: *LockTable, txn: u32, key: u64, exclusive: bool) -> (bool, b
         i = 0usize
         while i < lt.n {
             if lt.keys[i] == key && lt.owners[i] != txn && (exclusive || lt.exclusive[i]) {
-                if lt.wait_n >= lt.waits.len { ret (false, false, Full) }
-                lt.waits[lt.wait_n] = dl.Edge { from: txn, to: lt.owners[i] }
-                lt.wait_n += 1usize
+                var wait_seen = false
+                var wait_index = 0usize
+                while wait_index < lt.wait_n {
+                    if lt.waits[wait_index].from == txn && lt.waits[wait_index].to == lt.owners[i] { wait_seen = true }
+                    wait_index += 1usize
+                }
+                if !wait_seen {
+                    if lt.wait_n >= lt.waits.len {
+                        lt.wait_n = before
+                        ret (false, false, Full)
+                    }
+                    lt.waits[lt.wait_n] = dl.Edge { from: txn, to: lt.owners[i] }
+                    lt.wait_n += 1usize
+                }
             }
             i += 1usize
         }
         let (cycle, _, e) = dl.wait_for_graph_cycle(lt.waits[..lt.wait_n], lt.txns, lt.scratch)
-        if e != ok { ret (false, false, e) }
+        if e != ok {
+            lt.wait_n = before
+            ret (false, false, e)
+        }
         if cycle {
             lt.wait_n = before
             ret (false, true, ok)

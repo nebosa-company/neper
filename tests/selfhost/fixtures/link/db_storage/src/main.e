@@ -387,6 +387,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, _, bad_txn) = storage.txn_lock_2pl(&lt, 3u32, 2u64, true)
     if bad_txn != storage.Invalid { os.exit(18i32) }
 
+    // Retrying one blocked request must retain, rather than duplicate, its edge.
+    var retry_keys: [2]u64 = zero
+    var retry_owners: [2]u32 = zero
+    var retry_exclusive: [2]bool = zero
+    var retry_waits: [1]dl.Edge = zero
+    var retry_scratch: [4]usize = zero
+    let (retry_table0, retry_table_error) = storage.lock_table(retry_keys[..], retry_owners[..], retry_exclusive[..], retry_waits[..], retry_scratch[..], 2usize)
+    if retry_table_error != ok { os.exit(18i32) }
+    var retry_table = retry_table0
+    let (retry_holder_granted, retry_holder_deadlock, retry_holder_error) = storage.txn_lock_2pl(&retry_table, 0u32, 7u64, true)
+    let (retry_first_granted, retry_first_deadlock, retry_first_error) = storage.txn_lock_2pl(&retry_table, 1u32, 7u64, true)
+    let (retry_again_granted, retry_again_deadlock, retry_again_error) = storage.txn_lock_2pl(&retry_table, 1u32, 7u64, true)
+    if retry_holder_error != ok || retry_first_error != ok || retry_again_error != ok { os.exit(18i32) }
+    if !retry_holder_granted || retry_holder_deadlock || retry_first_granted || retry_first_deadlock || retry_again_granted || retry_again_deadlock || retry_table.wait_n != 1usize { os.exit(18i32) }
+
     // 19: MVCC snapshots see committed versions only.
     var vkeys: [16]u64 = zero
     var vvals: [16]i64 = zero
