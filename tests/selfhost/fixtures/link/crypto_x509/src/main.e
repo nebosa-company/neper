@@ -138,6 +138,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (bad_usage_mid, e28) = x509.parse(a, bad_usage_mid_der)
     let (bad_usage_leaf, e29) = x509.parse(a, bad_usage_leaf_der)
     if e28 != ok || e29 != ok || !bad_usage_mid.has_key_usage || bad_usage_mid.key_cert_sign { os.exit(39) }
+    // KeyUsage's BIT STRING cannot declare unused bits without a payload octet.
+    var invalid_key_usage: [512]u8 = zero
+    mem.copy[u8](invalid_key_usage[0usize..bad_usage_mid_der.len], bad_usage_mid_der)
+    var usage_at = 0usize
+    var found_usage = false
+    while usage_at + 14usize < bad_usage_mid_der.len {
+        if invalid_key_usage[usage_at] == 48u8 && invalid_key_usage[usage_at + 1usize] == 13u8 && invalid_key_usage[usage_at + 2usize] == 6u8 && invalid_key_usage[usage_at + 3usize] == 3u8 && invalid_key_usage[usage_at + 4usize] == 85u8 && invalid_key_usage[usage_at + 5usize] == 29u8 && invalid_key_usage[usage_at + 6usize] == 15u8 && invalid_key_usage[usage_at + 7usize] == 1u8 && invalid_key_usage[usage_at + 8usize] == 1u8 && invalid_key_usage[usage_at + 9usize] == 255u8 && invalid_key_usage[usage_at + 10usize] == 4u8 && invalid_key_usage[usage_at + 11usize] == 3u8 && invalid_key_usage[usage_at + 12usize] == 3u8 && invalid_key_usage[usage_at + 13usize] == 1u8 && invalid_key_usage[usage_at + 14usize] == 0u8 {
+            invalid_key_usage[usage_at + 14usize] = 1u8
+            found_usage = true
+        }
+        usage_at += 1usize
+    }
+    if !found_usage { os.exit(58) }
+    let (_, invalid_usage_error) = x509.parse(a, invalid_key_usage[0usize..bad_usage_mid_der.len])
+    if invalid_usage_error != x509.InvalidCertificate { os.exit(59) }
     var bad_usage_intermediates: [1]x509.Certificate = zero
     bad_usage_intermediates[0] = bad_usage_mid
     let (bad_usage_chain, e30) = x509.verify(a, bad_usage_leaf, options(roots[0..], bad_usage_intermediates[0..], "", .Any, 4u16))

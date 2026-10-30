@@ -456,7 +456,7 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
                     handled = true
                     var encoded_bits = asn1.reader(payload.content, DEPTH)
                     let (bits, bits_error) = expect(&encoded_bits, 3u32, false)
-                    if bits_error != ok || bits.content.len == 0usize || bits.content[0] > 7u8 { ret (zero, InvalidCertificate) }
+                    if bits_error != ok || bits.content.len == 0usize || !asn1.bit_string_valid(bits.content[0usize], bits.content[1usize..]) { ret (zero, InvalidCertificate) }
                     let (_, has_bits_tail, bits_tail_error) = asn1.reader_next_err(&encoded_bits)
                     if bits_tail_error != ok || has_bits_tail { ret (zero, InvalidCertificate) }
                     certificate.has_key_usage = true

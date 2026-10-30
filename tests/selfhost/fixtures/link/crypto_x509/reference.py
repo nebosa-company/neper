@@ -173,8 +173,8 @@ BODY = '''    let (root, e1) = x509.parse(a, root_der)
     let (from_pem, e8) = x509.parse_pem(a, pem_text)
     if e8 != ok || from_pem.len != 2usize || !str.eq(from_pem[0].subject, root.subject) || !str.eq(from_pem[1].subject, mid.subject) { os.exit(13) }
     // Signatures.
-    if x509.verify_signature(mid, root) != ok || x509.verify_signature(leaf, mid) != ok || x509.verify_signature(root, root) != ok { os.exit(14) }
-    if x509.verify_signature(leaf, root) != x509.InvalidCertificate { os.exit(15) }
+    if x509.verify_signature(a, mid, root) != ok || x509.verify_signature(a, leaf, mid) != ok || x509.verify_signature(a, root, root) != ok { os.exit(14) }
+    if x509.verify_signature(a, leaf, root) != x509.InvalidCertificate { os.exit(15) }
     // Chains.
     var roots: [1]x509.Certificate = zero
     roots[0] = root
@@ -215,7 +215,7 @@ BODY = '''    let (root, e1) = x509.parse(a, root_der)
     default:
         os.exit(31)
     }
-    if x509.verify_signature(p256_leaf, p256_root) != ok || x509.verify_signature(p256_root, p256_root) != ok { os.exit(32) }
+    if x509.verify_signature(a, p256_leaf, p256_root) != ok || x509.verify_signature(a, p256_root, p256_root) != ok { os.exit(32) }
     var p256_roots: [1]x509.Certificate = zero
     p256_roots[0] = p256_root
     let (p256_chain, e24) = x509.verify(a, p256_leaf, options(p256_roots[0..], zero, "p256.example", .ServerAuth, 2u16))
