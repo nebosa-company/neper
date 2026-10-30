@@ -1215,7 +1215,7 @@ fn scrypt_verify(password: []const u8, phc: []const u8, scratch: []u8) -> (bool,
     let (after_dollar, dollar_ok) = phc_expect(phc, after_p_number, "$")
     if !dollar_ok { ret (false, Invalid) }
     if ln == 0u32 || r == 0u32 || p == 0u32 { ret (false, Invalid) }
-    if ln > 32u32 || r > 1024u32 || p > 1024u32 { ret (false, TooLarge) }
+    if ln >= 32u32 || r > 1024u32 || p > 1024u32 { ret (false, TooLarge) }
     let salt_end = phc_segment_end(phc, after_dollar)
     if salt_end >= phc.len { ret (false, Invalid) }
     if salt_end - after_dollar > 86usize { ret (false, TooLarge) }

@@ -339,7 +339,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !(scrypt_err("password", "$scrypt$ln=0,r=8,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.Invalid)) { os.exit(156i32) }
     if !(scrypt_err("password", "$scrypt$ln=4,r=0,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.Invalid)) { os.exit(157i32) }
     if !(scrypt_err("password", "$scrypt$ln=4,r=8,p=0$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.Invalid)) { os.exit(158i32) }
-    if !(scrypt_err("password", "$scrypt$ln=33,r=8,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooLarge)) { os.exit(159i32) }
+    if !(scrypt_err("password", "$scrypt$ln=32,r=8,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooLarge)) { os.exit(159i32) }
     if !(scrypt_err("password", "$scrypt$ln=4,r=1025,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooLarge)) { os.exit(160i32) }
     if !(scrypt_err("password", "$scrypt$ln=4,r=8,p=1025$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooLarge)) { os.exit(161i32) }
     if !(scrypt_err("password", "$scrypt$ln=30,r=8,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooSmall)) { os.exit(162i32) }
