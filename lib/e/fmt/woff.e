@@ -4,19 +4,28 @@
 // tag-sorted 16-byte directory entry per table and the tables padded to four bytes. Any short, inconsistent or
 // uncompressible input is `Invalid`; WOFF2 is `e.fmt.woff2`.
 //
-// ponytail: each table and the reconstructed sfnt are held to 64 MiB, where the reference allocates whatever the header claims.
+// ponytail: the complete reconstructed sfnt, including every inflated table, is held to 64 MiB,
+// where the reference allocates whatever the header claims.
 //
 // Memory: the arena is retained; the sfnt lives in it.
 
 use e.mem
 use e.algo.deflate as deflate
 use e.algo.hash as hash
+use e.algo.sort as sort
 
 error Invalid
 
 const LIMIT: usize = 67108864usize
 
 type Entry = struct { tag: u32, checksum: u32, data: []const u8 }
+type TagSort = struct {}
+
+fn compare_tag(ctx: *TagSort, left: Entry, right: Entry) -> i32 {
+    if left.tag < right.tag { ret -1i32 }
+    if left.tag > right.tag { ret 1i32 }
+    ret 0i32
+}
 
 fn be32(b: []const u8, at: usize) -> u32 {
     ret (u32(b[at]) << 24u32) | (u32(b[at + 1usize]) << 16u32) | (u32(b[at + 2usize]) << 8u32) | u32(b[at + 3usize])
@@ -51,6 +60,7 @@ fn inflate(a: *mem.Arena, window: []u8, raw: []const u8, want: usize) -> ([]u8, 
     if ie != ok || status != .Finished || written != want { ret (zero, Invalid) }
     var trailer: [8]u8 = zero
     let held = deflate.leftover(&d, trailer[0..])
+    if held > 4usize { ret (zero, Invalid) }
     var have = held
     var at = used
     while have < 4usize {
@@ -59,6 +69,9 @@ fn inflate(a: *mem.Arena, window: []u8, raw: []const u8, want: usize) -> ([]u8, 
         have += 1usize
         at += 1usize
     }
+    // `compLength` contains exactly one zlib stream, including its Adler-32;
+    // accepting a suffix would hide malformed table bytes from the caller.
+    if at != body.len { ret (zero, Invalid) }
     let expected = (u32(trailer[0]) << 24u32) | (u32(trailer[1]) << 16u32) | (u32(trailer[2]) << 8u32) | u32(trailer[3])
     if expected != hash.adler32(out[..want]) { ret (zero, Invalid) }
     ret (out[..want], ok)
@@ -115,18 +128,11 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
         p += 20usize
         i += 1usize
     }
-    // Insertion sort by tag: the sfnt directory is ordered.
-    i = 1usize
-    while i < count {
-        let cur = entries[i]
-        var j = i
-        while j > 0usize && entries[j - 1usize].tag > cur.tag {
-            entries[j] = entries[j - 1usize]
-            j -= 1usize
-        }
-        entries[j] = cur
-        i += 1usize
-    }
+    // WOFF input can arrive in any directory order, but sfnt requires tags in
+    // order. Use a stable merge sort rather than attacker-controlled O(n^2).
+    var tag_sort: TagSort = zero
+    let sort_error = sort.stable_in_place_by[Entry, TagSort](a, entries, &tag_sort, compare_tag)
+    if sort_error != ok { ret (zero, sort_error) }
     var search = 16usize
     var selector = 0usize
     while search * 2usize <= count * 16usize {

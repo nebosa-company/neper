@@ -393,6 +393,67 @@ fn rejects_limit_sized_sfnt(a: *mem.Arena) -> bool {
     ret failure == woff.Invalid
 }
 
+fn sorts_unsorted_directory(a: *mem.Arena) -> bool {
+    // WOFF may carry an unsorted directory. Reversing two raw tables must
+    // still produce tag-sorted sfnt output without quadratic insertion work.
+    var bad: [92]u8 = zero
+    bad[0usize] = 119u8
+    bad[1usize] = 79u8
+    bad[2usize] = 70u8
+    bad[3usize] = 70u8
+    bad[5usize] = 1u8
+    bad[13usize] = 2u8
+    bad[44usize] = 122u8
+    bad[45usize] = 122u8
+    bad[46usize] = 122u8
+    bad[47usize] = 122u8
+    bad[51usize] = 84u8
+    bad[55usize] = 4u8
+    bad[59usize] = 4u8
+    bad[64usize] = 97u8
+    bad[65usize] = 97u8
+    bad[66usize] = 97u8
+    bad[67usize] = 97u8
+    bad[71usize] = 88u8
+    bad[75usize] = 4u8
+    bad[79usize] = 4u8
+    let (sfnt, failure) = woff.to_sfnt(a, bad[..])
+    if failure != ok || sfnt.len < 44usize { ret false }
+    if sfnt[12usize] != 97u8 || sfnt[13usize] != 97u8 || sfnt[14usize] != 97u8 || sfnt[15usize] != 97u8 { ret false }
+    ret sfnt[28usize] == 122u8 && sfnt[29usize] == 122u8 && sfnt[30usize] == 122u8 && sfnt[31usize] == 122u8
+}
+
+fn rejects_trailing_compressed_byte(a: *mem.Arena) -> bool {
+    // A 16-byte table compressed as one zlib stream plus an extra byte. The
+    // extra byte is inside compLength, so it must not be silently ignored.
+    var bad: [76]u8 = zero
+    bad[0usize] = 119u8
+    bad[1usize] = 79u8
+    bad[2usize] = 70u8
+    bad[3usize] = 70u8
+    bad[5usize] = 1u8
+    bad[13usize] = 1u8
+    bad[44usize] = 116u8
+    bad[45usize] = 101u8
+    bad[46usize] = 115u8
+    bad[47usize] = 116u8
+    bad[51usize] = 64u8
+    bad[55usize] = 12u8
+    bad[59usize] = 16u8
+    bad[64usize] = 120u8
+    bad[65usize] = 156u8
+    bad[66usize] = 115u8
+    bad[67usize] = 116u8
+    bad[68usize] = 68u8
+    bad[69usize] = 5u8
+    bad[72usize] = 34u8
+    bad[73usize] = 152u8
+    bad[74usize] = 4u8
+    bad[75usize] = 17u8
+    let (_, failure) = woff.to_sfnt(a, bad[..])
+    ret failure == woff.Invalid
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
@@ -457,6 +518,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !rejects_expanded_uncompressed_table(a) { os.exit(61i32) }
     if !rejects_out_of_range_table_offset(a) { os.exit(62i32) }
     if !rejects_limit_sized_sfnt(a) { os.exit(63i32) }
+    if !sorts_unsorted_directory(a) { os.exit(64i32) }
+    if !rejects_trailing_compressed_byte(a) { os.exit(65i32) }
     try io.print("fmt woff ok")
     ret ok
 }
