@@ -178,6 +178,8 @@ const MAX_CIVIL_DAY: i64 = 106751i64
 const MIN_CIVIL_DAY: i64 = -106752i64
 const MAX_CIVIL_NANOS: i64 = 85636854775807i64
 const MIN_CIVIL_NANOS: i64 = 763145224192i64
+const TIMESTAMP_MAX: i64 = 9223372036854775807i64
+const TIMESTAMP_MIN: i64 = -9223372036854775807i64 - 1i64
 
 const ISO8601_LENGTH: usize = 30usize
 
@@ -443,7 +445,10 @@ fn parse_iso8601(s: str) -> (Timestamp, err) {
     if civil_error != ok { ret (Timestamp { nanos: 0i64 }, civil_error) }
     // The fields read were local to the offset given, so the offset comes back off to
     // leave the instant they name.
-    ret (Timestamp { nanos: civil.nanos - offset_minutes * NANOS_PER_MINUTE }, ok)
+    let offset = offset_minutes * NANOS_PER_MINUTE
+    if offset > 0i64 && civil.nanos < TIMESTAMP_MIN + offset { ret (Timestamp { nanos: 0i64 }, Invalid) }
+    if offset < 0i64 && civil.nanos > TIMESTAMP_MAX + offset { ret (Timestamp { nanos: 0i64 }, Invalid) }
+    ret (Timestamp { nanos: civil.nanos - offset }, ok)
 }
 
 // --- Half-open intervals over any i64 unit (nanos, days, ...): `[start, end)`.

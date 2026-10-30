@@ -52,5 +52,11 @@ fn main() {
     let too_early_time = time.Time { hour: 0u8, minute: 12u8, second: 43u8, nanos: 145224191u32 }
     let (_, too_early_error) = time.from_civil(too_early_date, too_early_time)
     if too_early_error != time.Invalid { os.exit(16) }
+    // A local civil endpoint can be valid while applying its explicit zone
+    // would put the resulting instant beyond the signed timestamp range.
+    let (_, too_late_zone_error) = time.parse_iso8601("2262-04-11T23:47:16.854775807-23:59")
+    if too_late_zone_error != time.Invalid { os.exit(17) }
+    let (_, too_early_zone_error) = time.parse_iso8601("1677-09-21T00:12:43.145224192+23:59")
+    if too_early_zone_error != time.Invalid { os.exit(18) }
     os.exit(0)
 }
