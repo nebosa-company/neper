@@ -6,9 +6,13 @@ use e.algo.rand
 use e.mem
 
 type SampleFormat = enum u8 { I16, I32, F32 }
+
 type Format = struct { rate: u32, channels: u8, sample: SampleFormat }
+
 type Frames = struct { bytes: []u8, format: Format, count: usize }
+
 error Unsupported
+
 error Truncated
 
 fn sample_bytes(s: SampleFormat) -> usize {
@@ -38,7 +42,9 @@ fn read_u16(bytes: []const u8, at: usize) -> u16 {
 }
 
 fn read_u32(bytes: []const u8, at: usize) -> u32 {
-    ret u32(bytes[at]) | (u32(bytes[at + 1usize]) << 8u32) | (u32(bytes[at + 2usize]) << 16u32) | (u32(bytes[at + 3usize]) << 24u32)
+    ret u32(bytes[at]) | (u32(bytes[at + 1usize]) << 8u32) | (u32(bytes[at + 2usize]) << 16u32) | (u32(
+        bytes[at + 3usize],
+    ) << 24u32)
 }
 
 fn write_u16(bytes: []u8, at: usize, value: u16) {
@@ -79,7 +85,7 @@ fn sample_i32(fr: Frames, frame: usize, channel: u8) -> (i32, err) {
     if !(value == value) { ret (0i32, Unsupported) }
     if value <= -1.0f32 { ret (-2147483647i32 - 1i32, ok) }
     if value >= 1.0f32 { ret (2147483647i32, ok) }
-    ret (i32(f64(value) * 2147483647.0), ok)
+    ret (i32(f64(value) * 2147483648.0), ok)
 }
 
 fn set_sample_i32(fr: *Frames, frame: usize, channel: u8, value: i32) -> err {
@@ -87,6 +93,9 @@ fn set_sample_i32(fr: *Frames, frame: usize, channel: u8, value: i32) -> err {
     if offset_error != ok { ret offset_error }
     if fr.format.sample == .I16 {
         var narrow = value / 65536i32
+        let remainder = value % 65536i32
+        if remainder >= 32768i32 { narrow += 1i32 }
+        if remainder <= -32768i32 { narrow -= 1i32 }
         if narrow < -32768i32 { narrow = -32768i32 }
         if narrow > 32767i32 { narrow = 32767i32 }
         write_u16(fr.bytes, offset, mem.bitcast[u16](i16(narrow)))
@@ -97,17 +106,23 @@ fn set_sample_i32(fr: *Frames, frame: usize, channel: u8, value: i32) -> err {
         ret ok
     }
     var normalized = -1.0f32
-    if value != (-2147483647i32 - 1i32) { normalized = f32(f64(value) / 2147483647.0) }
+    if value != (-2147483647i32 - 1i32) { normalized = f32(f64(value) / 2147483648.0) }
     write_u32(fr.bytes, offset, mem.bitcast[u32](normalized))
     ret ok
 }
 
 fn convert(a: *mem.Arena, src: Frames, to: SampleFormat) -> (Frames, err) {
     let source_width = frame_bytes(src.format)
-    if src.format.rate == 0u32 || source_width == 0usize || src.count > frames_in(src.format, src.bytes.len) { ret (zero, Truncated) }
+    if src.format.rate == 0u32 || source_width == 0usize || src.count > frames_in(
+        src.format,
+        src.bytes.len,
+    ) { ret (zero, Truncated) }
     let target_format = Format { rate: src.format.rate, channels: src.format.channels, sample: to }
     let target_width = frame_bytes(target_format)
-    if src.count != 0usize && target_width > 18446744073709551615usize / src.count { ret (zero, mem.Exhausted) }
+    if src.count != 0usize && target_width > 18446744073709551615usize / src.count { ret (
+        zero,
+        mem.Exhausted,
+    ) }
     let start = mem.mark(a)
     let (bytes, allocation_error) = mem.alloc[u8](a, src.count * target_width)
     if allocation_error != ok {
@@ -146,7 +161,6 @@ fn silence(fr: *Frames) -> err {
     }
     ret ok
 }
-
 
 // --- Dither (#1899): quantising f32 samples to 16 bits with TPDF dither
 // from a caller `Pcg64` (two uniform draws in [0, 1) subtracted: a triangle

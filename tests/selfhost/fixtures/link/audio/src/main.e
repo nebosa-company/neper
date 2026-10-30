@@ -47,5 +47,32 @@ fn main(a: *mem.Arena) -> err {
         if bytes[at] != 0u8 { os.exit(9i32) }
         at += 1usize
     }
+
+    // Every i16 code survives the exact power-of-two F32 representation.
+    let mono_format = audio.Format { rate: 48000u32, channels: 1u8, sample: .I16 }
+    var roundtrip_bytes: [2]u8 = zero
+    let (roundtrip_view, roundtrip_view_error) = audio.view(roundtrip_bytes[..], mono_format)
+    if roundtrip_view_error != ok { os.exit(10i32) }
+    var roundtrip = roundtrip_view
+    var input = -32768i32
+    while input <= 32767i32 {
+        if audio.set_sample_i32(&roundtrip, 0usize, 0u8, input * 65536i32) != ok { os.exit(10i32) }
+        let roundtrip_mark = mem.mark(a)
+        let (as_float, as_float_error) = audio.convert(a, roundtrip, .F32)
+        if as_float_error != ok {
+            mem.reset(a, roundtrip_mark)
+            os.exit(10i32)
+        }
+        let (as_i16, as_i16_error) = audio.convert(a, as_float, .I16)
+        let (roundtrip_value, roundtrip_value_error) = audio.sample_i32(as_i16, 0usize, 0u8)
+        mem.reset(a, roundtrip_mark)
+        if as_i16_error != ok || roundtrip_value_error != ok || roundtrip_value != input * 65536i32 { os.exit(10i32) }
+        input += 1i32
+    }
+    if audio.set_sample_i32(&roundtrip, 0usize, 0u8, 32768i32) != ok { os.exit(10i32) }
+    let (positive_half, positive_half_error) = audio.sample_i32(roundtrip, 0usize, 0u8)
+    if audio.set_sample_i32(&roundtrip, 0usize, 0u8, -32768i32) != ok { os.exit(10i32) }
+    let (negative_half, negative_half_error) = audio.sample_i32(roundtrip, 0usize, 0u8)
+    if positive_half_error != ok || negative_half_error != ok || positive_half != 65536i32 || negative_half != -65536i32 { os.exit(10i32) }
     ret ok
 }
