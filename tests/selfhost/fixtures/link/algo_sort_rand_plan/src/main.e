@@ -364,6 +364,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if h != 26429493u64 || !near(total, 149.0f64) { os.exit(23i32) }
 
+    // 24: zero-capacity sampling never touches a heap root or candidate slot.
+    var empty_items: [0]u64 = zero
+    var empty_keys: [0]f64 = zero
+    var empty_reservoir = rand.reservoir_weighted[u64](empty_items[..], empty_keys[..])
+    var zero_rng = rand.pcg64(15u64, 16u64)
+    rand.reservoir_weighted_offer[u64](&empty_reservoir, &zero_rng, 7u64, 1.0f64)
+    rand.reservoir_decayed_offer[u64](&empty_reservoir, &zero_rng, 8u64, 1.0f64, 1.0f64, 0.1f64)
+    if empty_reservoir.count != 0usize || rand.reservoir_weighted_sample[u64](&empty_reservoir).len != 0usize { os.exit(24i32) }
+    var no_chosen: [0]usize = zero
+    var no_adjusted: [0]f64 = zero
+    let (empty_threshold, empty_priority_error) = rand.priority_sample(&zero_rng, weights[..], no_chosen[..], no_adjusted[..])
+    if empty_priority_error != ok || empty_threshold != 0.0f64 { os.exit(24i32) }
+    let (_, empty_varopt_error) = rand.varopt_sample(&zero_rng, weights[..], 0usize, no_chosen[..], no_adjusted[..])
+    if empty_varopt_error != rand.Invalid { os.exit(24i32) }
+
     try io.print("algo sort rand plan ok\n")
     ret ok
 }

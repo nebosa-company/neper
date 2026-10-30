@@ -364,6 +364,8 @@ fn reservoir_weighted[T: type](items: []T, keys: []f64) -> WeightedReservoir[T] 
 // so a heavier item survives with probability proportional to its weight. A weight
 // of zero or less is never taken.
 fn reservoir_weighted_offer[T: type](s: *WeightedReservoir[T], r: *Pcg64, item: T, weight: f64) {
+    // An empty caller-provided reservoir has no heap root to compare against.
+    if s.keys.len == 0usize { ret }
     if weight <= 0.0f64 { ret }
     let key = math.pow[f64](pcg64_f64(r), 1.0f64 / weight)
     if s.count < s.keys.len {
@@ -423,6 +425,8 @@ fn reservoir_weighted_sample[T: type](s: *const WeightedReservoir[T]) -> []T { r
 // estimator of its weight; the answer is the threshold. `chosen` is in heap order.
 fn priority_sample(r: *Pcg64, weights: []const f64, chosen: []usize, adjusted: []f64) -> (f64, err) {
     let k = chosen.len
+    // A zero-sized sample is valid and has no retained or adjusted items.
+    if k == 0usize { ret (0.0f64, ok) }
     if adjusted.len < k { ret (0.0f64, TooSmall) }
     var count = 0usize
     var threshold = 0.0f64
@@ -491,7 +495,11 @@ fn priority_sample(r: *Pcg64, weights: []const f64, chosen: []usize, adjusted: [
 // over the `m` smallest, one of those `m` is dropped with probability `1 - w_i / t`,
 // and the survivors among them take the weight `t`. The answer is the threshold.
 fn varopt_sample(r: *Pcg64, weights: []const f64, k: usize, chosen: []usize, adjusted: []f64) -> (f64, err) {
-    if chosen.len < k + 1usize || adjusted.len < k + 1usize { ret (0.0f64, TooSmall) }
+    // VarOpt needs one retained item plus one candidate to derive a threshold;
+    // `k == 0` has no such sample and would index a nonexistent second slot.
+    if k == 0usize { ret (0.0f64, Invalid) }
+    // Spell the k + 1 requirement without allowing k + 1 to wrap at usize max.
+    if chosen.len <= k || adjusted.len <= k { ret (0.0f64, TooSmall) }
     var count = 0usize
     var threshold = 0.0f64
     var i = 0usize
