@@ -506,7 +506,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     rle_bad_index[62usize] = 1u8
     rle_bad_index[63usize] = 2u8
     if !bmp_invalid(a, rle_bad_index[..]) { die(121i32) }
-    // A DIB's declared size must be fully present and precede pixel data.
+    // A DIB's declared size must be fully present, and pixel data must follow it.
     var bmp_short_v5: [58]u8 = zero
     bmp_short_v5[0usize] = 66u8
     bmp_short_v5[1usize] = 77u8
@@ -518,6 +518,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     bmp_short_v5[26usize] = 1u8
     bmp_short_v5[28usize] = 24u8
     if !bmp_invalid(a, bmp_short_v5[..]) { die(119i32) }
+    // A complete V5 DIB cannot point its pixels back into its own header.
+    var bmp_pixels_in_v5_header: [138]u8 = zero
+    bmp_pixels_in_v5_header[0usize] = 66u8
+    bmp_pixels_in_v5_header[1usize] = 77u8
+    bmp_pixels_in_v5_header[2usize] = 138u8
+    bmp_pixels_in_v5_header[10usize] = 54u8
+    bmp_pixels_in_v5_header[14usize] = 124u8
+    bmp_pixels_in_v5_header[18usize] = 1u8
+    bmp_pixels_in_v5_header[22usize] = 1u8
+    bmp_pixels_in_v5_header[26usize] = 1u8
+    bmp_pixels_in_v5_header[28usize] = 24u8
+    bmp_pixels_in_v5_header[34usize] = 4u8
+    if !bmp_invalid(a, bmp_pixels_in_v5_header[..]) { die(182i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07")) { die(110i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07\x00\x00\x00\x00\x00\x00\x00\x02")) { die(111i32) }
     if !(qoi_invalid(a, "qoif\x00\x00\x00\x01\x00\x00\x00\x01\x04\x00\xff\x07\x07\x07\x07\x00\x00\x00\x00\x00\x00\x00\x01\x00")) { die(112i32) }

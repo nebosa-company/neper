@@ -76,6 +76,9 @@ fn parse_header(d: []const u8) -> (Header, err) {
     } else {
         ret (h, Unsupported)
     }
+    // Pixel bytes cannot overlap the declared DIB header, even when the complete
+    // extended header is present in the input.
+    if usize(h.data_offset) < 14usize + usize(size) { ret (h, Invalid) }
     if width_signed <= 0i32 || height_signed <= 0i32 { ret (h, Invalid) }
     h.width = u32(width_signed)
     h.height = u32(height_signed)
