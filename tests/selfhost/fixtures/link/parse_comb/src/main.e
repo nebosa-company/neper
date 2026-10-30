@@ -392,6 +392,10 @@ fn p_a_node(cx: *comb.Cx, off: usize) -> (usize, bool) {
     let (n, good) = comb.node(cx, off, 9u32, p_a)
     ret (n, good)
 }
+fn p_empty_node(cx: *comb.Cx, off: usize) -> (usize, bool) {
+    let (n, good) = comb.node(cx, off, 10u32, comb.eof)
+    ret (n, good)
+}
 fn p_b(cx: *comb.Cx, off: usize) -> (usize, bool) {
     let (n, good) = comb.lit(cx, off, "b")
     ret (n, good)
@@ -477,12 +481,47 @@ fn contracts() -> i32 {
     var zero_list = comb.context("", events[0..])
     let (zero_list_end, zero_list_good) = comb.separated0(&zero_list, 0usize, comb.eof, comb.eof)
     if !zero_list_good || zero_list_end != 0usize || zero_list.count != 0usize { ret 53i32 }
+    var zero_list_nodes = comb.context("", events[0..])
+    let (zero_list_nodes_end, zero_list_nodes_good) = comb.separated0(&zero_list_nodes, 0usize, p_empty_node, p_empty_node)
+    if !zero_list_nodes_good || zero_list_nodes_end != 0usize || zero_list_nodes.count != 1usize { ret 70i32 }
     var zero_left = comb.context("", events[0..])
     let (zero_left_end, zero_left_good) = comb.chainl1(&zero_left, 0usize, comb.eof, comb.eof, 0u32)
     if !zero_left_good || zero_left_end != 0usize || zero_left.count != 0usize { ret 54i32 }
+    var zero_left_nodes = comb.context("", events[0..])
+    let (zero_left_nodes_end, zero_left_nodes_good) = comb.chainl1(&zero_left_nodes, 0usize, p_empty_node, p_empty_node, 0u32)
+    if !zero_left_nodes_good || zero_left_nodes_end != 0usize || zero_left_nodes.count != 1usize { ret 71i32 }
     var zero_right = comb.context("", events[0..])
     let (zero_right_end, zero_right_good) = comb.chainr1(&zero_right, 0usize, comb.eof, comb.eof, 0u32)
     if !zero_right_good || zero_right_end != 0usize || zero_right.count != 0usize { ret 55i32 }
+    var zero_right_nodes = comb.context("", events[0..])
+    let (zero_right_nodes_end, zero_right_nodes_good) = comb.chainr1(&zero_right_nodes, 0usize, p_empty_node, p_empty_node, 0u32)
+    if !zero_right_nodes_good || zero_right_nodes_end != 0usize || zero_right_nodes.count != 1usize { ret 72i32 }
+    var zero_many = comb.context("", events[0..])
+    let (zero_many_end, zero_many_good) = comb.many0(&zero_many, 0usize, p_empty_node)
+    if !zero_many_good || zero_many_end != 0usize || zero_many.count != 0usize { ret 61i32 }
+    var zero_many_one = comb.context("", events[0..])
+    let (zero_many_one_end, zero_many_one_good) = comb.many1(&zero_many_one, 0usize, p_empty_node)
+    if !zero_many_one_good || zero_many_one_end != 0usize || zero_many_one.count != 1usize { ret 62i32 }
+    // `chainr1` folds its operator list from the tail of the event buffer, so it
+    // handles a long right-associated input without one host frame per operator.
+    var right_bytes: [2047]u8 = zero
+    var right_at = 0usize
+    var right_terms = 0usize
+    while right_terms < 1024usize {
+        right_bytes[right_at] = 97u8
+        right_at += 1usize
+        if right_terms + 1usize < 1024usize {
+            right_bytes[right_at] = 94u8
+            right_at += 1usize
+        }
+        right_terms += 1usize
+    }
+    var right_events: [1023]comb.Event = zero
+    var right_chain = comb.context(right_bytes[..right_at], right_events[..])
+    let (right_end, right_good) = comb.chainr1(&right_chain, 0usize, p_a, raw_caret, 42u32)
+    if !right_good || right_end != right_at || right_chain.count != 1023usize { ret 63i32 }
+    if right_chain.events[0].start != right_at - 2usize || right_chain.events[0].end != right_at - 1usize { ret 64i32 }
+    if right_chain.events[1022usize].start != 1usize || right_chain.events[1022usize].end != 2usize { ret 65i32 }
     let max_offset = 0usize -% 1usize
     let (offset_end, offset_good) = comb.lit(&zero_right, max_offset, "a")
     if offset_good || offset_end != max_offset { ret 56i32 }
@@ -494,7 +533,17 @@ fn contracts() -> i32 {
     var small: [1]comb.Event = zero
     var co = comb.context("aa", small[0..])
     let (e15, g15) = comb.many0(&co, 0usize, p_ac_node)
-    if !g15 || e15 != 1usize || co.count != 1usize || !co.overflow { ret 45i32 }
+    if g15 || e15 != 0usize || co.count != 0usize || !co.overflow { ret 45i32 }
+    var optional = comb.context("aa", small[0..])
+    let (_, filled) = p_a_node(&optional, 0usize)
+    if !filled { ret 66i32 }
+    let (optional_end, optional_good) = comb.opt(&optional, 1usize, p_a_node)
+    if optional_good || optional_end != 1usize || optional.count != 1usize || !optional.overflow { ret 67i32 }
+    var choice = comb.context("aa", small[0..])
+    let (_, choice_filled) = p_a_node(&choice, 0usize)
+    if !choice_filled { ret 68i32 }
+    let (choice_end, choice_good) = comb.choice2(&choice, 1usize, p_a_node, p_a)
+    if choice_good || choice_end != 1usize || choice.count != 1usize || !choice.overflow { ret 69i32 }
     // take_while, byte_range, one_of, none_of, any_byte, eof.
     var cb = comb.context("ab9", events[0..])
     let (e16, g16) = comb.take_while1(&cb, 0usize, is_digit, "digit")
