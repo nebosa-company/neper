@@ -88,6 +88,15 @@ fn round_trip(a: *mem.Arena, source: image.ConstImage, expected: str, expected_f
     ret 0i32
 }
 
+fn marker_from(data: str, wanted: u8, from: usize) -> usize {
+    var where = from
+    while where + 1usize < data.len {
+        if data[where] == 255u8 && data[where + 1usize] == wanted { ret where }
+        where += 1usize
+    }
+    ret data.len
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let c1 = check(a, baseline444_jpg(), baseline444_pixels(), 23u32, 17u32, .Rgba8, 3i32, 10i32)
     if c1 != 0i32 { os.exit(c1) }
@@ -108,6 +117,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ended_script_error != ok { os.exit(170i32) }
     let (ended_info, ended_error) = jpeg.inspect(support.reader(&ended_script))
     if ended_error != ok || ended_info.width != 23u32 || ended_info.height != 17u32 { os.exit(171i32) }
+
+    // APP14 and DRI may precede SOF. Their values must survive creation of the frame.
+    let original = baseline444_jpg()
+    let first_sof = marker_from(original, 192u8, 0usize)
+    if first_sof == original.len { os.exit(190i32) }
+    let (prefixed, prefixed_error) = mem.alloc[u8](a, original.len + 22usize)
+    if prefixed_error != ok { os.exit(191i32) }
+    mem.copy[u8](prefixed[..first_sof], original[..first_sof])
+    mem.copy[u8](prefixed[first_sof..first_sof + 16usize], "\xff\xee\x00\x0eAdobe\x00\x64\x00\x00\x00\x00\x00")
+    mem.copy[u8](prefixed[first_sof + 16usize..first_sof + 22usize], "\xff\xdd\x00\x04\x00\x02")
+    mem.copy[u8](prefixed[first_sof + 22usize..], original[first_sof..])
+    var prefixed_decoder: jpeg.Decoder = zero
+    prefixed_decoder.data = prefixed
+    let prefixed_header_error = jpeg.parse_headers(&prefixed_decoder)
+    if prefixed_header_error != ok || !prefixed_decoder.seen_frame || !prefixed_decoder.frame.has_adobe || prefixed_decoder.frame.adobe_transform != 0u32 || prefixed_decoder.frame.restart_interval != 2usize { os.exit(192i32) }
+
+    // A valid APP segment may be larger than the former fixed 64 KiB inspect buffer.
+    let (large_header, large_header_error) = mem.alloc[u8](a, 65560usize)
+    if large_header_error != ok { os.exit(193i32) }
+    large_header[0usize] = 255u8
+    large_header[1usize] = 216u8
+    large_header[2usize] = 255u8
+    large_header[3usize] = 225u8
+    large_header[4usize] = 255u8
+    large_header[5usize] = 255u8
+    var metadata_at = 6usize
+    while metadata_at < 65539usize {
+        large_header[metadata_at] = 0u8
+        metadata_at += 1usize
+    }
+    mem.copy[u8](large_header[65539usize..], "\xff\xc0\x00\x11\x08\x00\x01\x00\x01\x03\x01\x11\x00\x02\x11\x01\x03\x11\x01\xff\xd9")
+    var large_state: io.SliceReader = zero
+    let (large_info, large_error) = jpeg.inspect(reader_of(&large_state, large_header))
+    if large_error != ok || large_info.width != 1u32 || large_info.height != 1u32 || large_info.format != .Rgba8 { os.exit(194i32) }
 
     // Encoding: the libjpeg-decoded baseline 4:4:4 pixels as the source.
     let (rgba, rgba_error) = image.make_const(baseline444_pixels(), 23u32, 17u32, 92usize, .Rgba8, .Opaque)
@@ -134,6 +177,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if grey_error != ok { os.exit(120i32) }
     let r4 = round_trip(a, grey, gray_pixels(), .R8, 95u8, 24i32, 130i32)
     if r4 != 0i32 { os.exit(r4) }
+    var zero_quant: [64]u8 = zero
+    var standard_quant: [64]u8 = zero
+    jpeg.scaled_quant(jpeg.luma_quant(), 0u8, zero_quant[..])
+    jpeg.scaled_quant(jpeg.luma_quant(), 75u8, standard_quant[..])
+    i = 0usize
+    while i < zero_quant.len {
+        if zero_quant[i] != standard_quant[i] { os.exit(195i32) }
+        i += 1usize
+    }
 
     // Refusals.
     var state: io.SliceReader = zero
@@ -155,6 +207,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var component: jpeg.Component = zero
     component.coefficients = coefficients[..]
     if jpeg.decode_block(&entropy, &bad_frame, &scan, dc_tables[..], dc_tables[..], &component, 0usize) != jpeg.Invalid { os.exit(157i32) }
+    var overflow_counts: [16]u8 = zero
+    overflow_counts[0usize] = 1u8
+    var overflow_values: [1]u8 = zero
+    overflow_values[0usize] = 1u8
+    let (overflow_dc, overflow_dc_error) = jpeg.build_huffman(overflow_counts[..], overflow_values[..])
+    if overflow_dc_error != ok { os.exit(202i32) }
+    var overflow_tables: [1]jpeg.Huffman = zero
+    overflow_tables[0usize] = overflow_dc
+    var overflow_entropy = jpeg.Bits { data: "\x40", at: 0usize, cache: 0u32, count: 0u32, marker_hit: false }
+    var overflow_frame: jpeg.Frame = zero
+    var overflow_scan: jpeg.Scan = zero
+    var overflow_coefficients: [64]i32 = zero
+    var overflow_component: jpeg.Component = zero
+    overflow_component.predictor = 2147483647i32
+    overflow_component.coefficients = overflow_coefficients[..]
+    if jpeg.decode_block(&overflow_entropy, &overflow_frame, &overflow_scan, overflow_tables[..], overflow_tables[..], &overflow_component, 0usize) != jpeg.Invalid { os.exit(203i32) }
+    var huge_coefficients: [64]i32 = zero
+    huge_coefficients[0usize] = 2147483647i32
+    var huge_quant: [64]u8 = zero
+    i = 0usize
+    while i < huge_quant.len {
+        huge_quant[i] = 255u8
+        i += 1usize
+    }
+    var huge_table: [64]f32 = zero
+    jpeg.cos_table(huge_table[..])
+    var huge_pixels: [64]u8 = zero
+    jpeg.idct_block(huge_coefficients[..], 0usize, huge_quant[..], huge_table[..], huge_pixels[..], 0usize, 8usize)
+    i = 0usize
+    while i < huge_pixels.len {
+        if huge_pixels[i] != 255u8 { os.exit(204i32) }
+        i += 1usize
+    }
     let (_, bounded_error) = jpeg.decode(a, reader_of(&state, baseline444_jpg()), jpeg.DecodeOptions { max_width: 16u32, max_height: 0u32, max_pixels: 0u64 })
     if bounded_error != jpeg.TooLarge { os.exit(141i32) }
     let (scratch, scratch_alloc) = mem.alloc[u8](a, 4096usize)
@@ -166,6 +251,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (half_view, half_view_error) = image.make_const(halves.pixels, 2u32, 2u32, 16usize, .Rgba16Float, .Straight)
     if halves_error != ok || half_view_error != ok { os.exit(144i32) }
     if jpeg.encode(&w, half_view, jpeg.EncodeOptions { quality: 80u8, progressive: false }) != jpeg.Unsupported { os.exit(145i32) }
+
+    // Moving a real restart interval before SOF preserves restart decoding.
+    let restart_data = restarts_jpg()
+    let restart_sof = marker_from(restart_data, 192u8, 0usize)
+    let restart_dri = marker_from(restart_data, 221u8, restart_sof)
+    if restart_sof == restart_data.len || restart_dri == restart_data.len || restart_dri < restart_sof || restart_dri + 6usize > restart_data.len { os.exit(196i32) }
+    let (moved_restart, moved_restart_error) = mem.alloc[u8](a, restart_data.len)
+    if moved_restart_error != ok { os.exit(197i32) }
+    mem.copy[u8](moved_restart[..restart_sof], restart_data[..restart_sof])
+    mem.copy[u8](moved_restart[restart_sof..restart_sof + 6usize], restart_data[restart_dri..restart_dri + 6usize])
+    mem.copy[u8](moved_restart[restart_sof + 6usize..restart_dri + 6usize], restart_data[restart_sof..restart_dri])
+    mem.copy[u8](moved_restart[restart_dri + 6usize..], restart_data[restart_dri + 6usize..])
+    let (moved_image, moved_error) = jpeg.decode(a, reader_of(&state, moved_restart), options())
+    if moved_error != ok || worst(moved_image, restarts_pixels()) > 3i32 { os.exit(198i32) }
 
     let (hostile, hostile_error) = mem.alloc[u8](a, baseline444_jpg().len)
     if hostile_error != ok { os.exit(146i32) }
@@ -179,6 +278,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     hostile[sof + 8usize] = 1u8
     let (_, default_error) = jpeg.decode(a, reader_of(&state, hostile), options())
     if default_error != jpeg.TooLarge { os.exit(148i32) }
+    let (fractional, fractional_error) = mem.alloc[u8](a, baseline444_jpg().len)
+    if fractional_error != ok { os.exit(199i32) }
+    mem.copy[u8](fractional, baseline444_jpg())
+    let fractional_sof = marker_from(fractional, 192u8, 0usize)
+    if fractional_sof == fractional.len { os.exit(200i32) }
+    fractional[fractional_sof + 11usize] = 49u8
+    fractional[fractional_sof + 14usize] = 33u8
+    fractional[fractional_sof + 17usize] = 33u8
+    let (_, fractional_inspect_error) = jpeg.inspect(reader_of(&state, fractional))
+    let (_, fractional_decode_error) = jpeg.decode(a, reader_of(&state, fractional), options())
+    if fractional_inspect_error != jpeg.Unsupported || fractional_decode_error != jpeg.Unsupported { os.exit(201i32) }
     var frame: jpeg.Frame = zero
     frame.width = 16385usize
     frame.height = 1usize
