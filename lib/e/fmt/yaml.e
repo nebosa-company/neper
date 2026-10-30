@@ -45,8 +45,14 @@ fn is_blank(text: str) -> bool {
     ret true
 }
 
-// The content of a line up to a `#` that starts a comment: one preceded by a space
-// and outside quotes.
+// YAML permits both ASCII space and tab as inline separation. Tabs remain invalid
+// when they begin indentation; that is checked from the raw line separately.
+fn is_inline_space(byte: u8) -> bool {
+    ret byte == 32u8 || byte == 9u8
+}
+
+// The content of a line up to a `#` that starts a comment: one preceded by inline
+// separation and outside quotes.
 fn strip_comment(text: str) -> str {
     var quote = 0u8
     var scalar_start = true
@@ -453,7 +459,7 @@ fn scalar_end(text: str, at: usize, in_flow: bool) -> (usize, err) {
     while i < text.len {
         let c = text[i]
         if in_flow && (c == 44u8 || c == 93u8 || c == 125u8) { break }
-        if c == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { break }
+        if c == 58u8 && (i + 1usize == text.len || is_inline_space(text[i + 1usize])) { break }
         i += 1usize
     }
     ret (i, ok)
@@ -481,7 +487,7 @@ fn scalar_value(a: *mem.Arena, text: str) -> (Value, err) {
 
 fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usize, err) {
     var at = at_in
-    while at < text.len && text[at] == 32u8 { at += 1usize }
+    while at < text.len && is_inline_space(text[at]) { at += 1usize }
     if at >= text.len { ret (zero, at, Invalid) }
     if text[at] == 91u8 {
         if depth >= usize(p.options.max_depth) { ret (zero, at, TooDeep) }
@@ -489,7 +495,7 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
         var count = 0usize
         at += 1usize
         while true {
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             if at >= text.len { ret (zero, at, Invalid) }
             if text[at] == 93u8 {
                 at += 1usize
@@ -501,7 +507,7 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
             items[count] = item
             count += 1usize
             at = after
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             if at < text.len && text[at] == 44u8 { at += 1usize }
         }
         let (copy, copy_error) = mem.alloc[Value](p.a, count)
@@ -515,7 +521,7 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
         var count = 0usize
         at += 1usize
         while true {
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             if at >= text.len { ret (zero, at, Invalid) }
             if text[at] == 125u8 {
                 at += 1usize
@@ -525,11 +531,11 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
             let (key, after_key, key_error) = flow_value(p, text, at, depth + 1usize)
             if key_error != ok { ret (zero, at, key_error) }
             at = after_key
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             var value: Value = .Null
             if at < text.len && text[at] == 58u8 {
                 at += 1usize
-                while at < text.len && text[at] == 32u8 { at += 1usize }
+                while at < text.len && is_inline_space(text[at]) { at += 1usize }
                 if at < text.len && text[at] != 44u8 && text[at] != 125u8 {
                     let (parsed, after_value, value_error) = flow_value(p, text, at, depth + 1usize)
                     if value_error != ok { ret (zero, at, value_error) }
@@ -540,7 +546,7 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
             if !p.options.allow_duplicate_keys && has_key(pairs[..count], key) { ret (zero, at, DuplicateKey) }
             pairs[count] = Pair { key: key, value: value }
             count += 1usize
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             if at < text.len && text[at] == 44u8 { at += 1usize }
         }
         let (copy, copy_error) = mem.alloc[Pair](p.a, count)
@@ -762,18 +768,18 @@ fn parse_node(p: *Parser, indent: usize, depth: usize) -> (Value, err) {
     let first = p.lines[p.at]
     if has_indent_tab(first) { ret (zero, Invalid) }
     if first.indent != indent { ret (zero, Invalid) }
-    if first.text.len > 0usize && first.text[0] == 45u8 && (first.text.len == 1usize || first.text[1] == 32u8) {
+    if first.text.len > 0usize && first.text[0] == 45u8 && (first.text.len == 1usize || is_inline_space(first.text[1])) {
         // A sequence at this indent.
         var items: [256]Value = zero
         var count = 0usize
-        while skip_blank(p) && p.lines[p.at].indent == indent && p.lines[p.at].text.len > 0usize && p.lines[p.at].text[0] == 45u8 && (p.lines[p.at].text.len == 1usize || p.lines[p.at].text[1] == 32u8) {
+        while skip_blank(p) && p.lines[p.at].indent == indent && p.lines[p.at].text.len > 0usize && p.lines[p.at].text[0] == 45u8 && (p.lines[p.at].text.len == 1usize || is_inline_space(p.lines[p.at].text[1])) {
             if has_indent_tab(p.lines[p.at]) { ret (zero, Invalid) }
             if count == 256usize { ret (zero, TooLarge) }
             let text = p.lines[p.at].text
             var rest = ""
             if text.len > 1usize { rest = text[2usize..] }
             let trimmed = str.trim(rest)
-            let nested_sequence = trimmed.len > 0usize && trimmed[0] == 45u8 && (trimmed.len == 1usize || trimmed[1] == 32u8)
+            let nested_sequence = trimmed.len > 0usize && trimmed[0] == 45u8 && (trimmed.len == 1usize || is_inline_space(trimmed[1]))
             if trimmed.len > 0usize && trimmed[0] != 91u8 && trimmed[0] != 123u8 && trimmed[0] != 124u8 && trimmed[0] != 62u8 {
                 let (colon, has_colon) = key_end(trimmed)
                 if has_colon || nested_sequence {
@@ -829,15 +835,15 @@ fn parse_node(p: *Parser, indent: usize, depth: usize) -> (Value, err) {
 }
 
 // The end of a mapping key on a line: the `:` that ends it, outside quotes and
-// followed by a space or the end.
+// followed by inline separation or the end.
 fn key_end(text: str) -> (usize, bool) {
     if text.len == 0usize { ret (0usize, false) }
     if text[0] == 91u8 || text[0] == 123u8 { ret (0usize, false) }
     let (stop, stop_error) = scalar_end(text, 0usize, false)
     if stop_error != ok { ret (0usize, false) }
     var i = stop
-    while i < text.len && text[i] == 32u8 { i += 1usize }
-    if i < text.len && text[i] == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { ret (i, true) }
+    while i < text.len && is_inline_space(text[i]) { i += 1usize }
+    if i < text.len && text[i] == 58u8 && (i + 1usize == text.len || is_inline_space(text[i + 1usize])) { ret (i, true) }
     ret (0usize, false)
 }
 
@@ -905,7 +911,7 @@ fn needs_quotes(text: str) -> bool {
         stays_text = false
     }
     if !stays_text { ret true }
-    if text[0] == 32u8 || text[text.len - 1usize] == 32u8 { ret true }
+    if is_inline_space(text[0]) || is_inline_space(text[text.len - 1usize]) { ret true }
     let first = text[0]
     if first == 45u8 || first == 63u8 || first == 58u8 || first == 44u8 || first == 91u8 || first == 93u8 || first == 123u8 || first == 125u8 || first == 35u8 || first == 38u8 || first == 42u8 || first == 33u8 || first == 124u8 || first == 62u8 || first == 39u8 || first == 34u8 || first == 37u8 || first == 64u8 || first == 96u8 { ret true }
     var i = 0usize
@@ -917,8 +923,8 @@ fn needs_quotes(text: str) -> bool {
         // line breaks and tabs through the quoted escape path.
         if c == 9u8 || c == 10u8 || c == 13u8 { ret true }
         if c == 34u8 || c == 92u8 { ret true }
-        if c == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { ret true }
-        if c == 35u8 && i > 0usize && text[i - 1usize] == 32u8 { ret true }
+        if c == 58u8 && (i + 1usize == text.len || is_inline_space(text[i + 1usize])) { ret true }
+        if c == 35u8 && i > 0usize && is_inline_space(text[i - 1usize]) { ret true }
         i += usize(decoded.width)
     }
     ret false

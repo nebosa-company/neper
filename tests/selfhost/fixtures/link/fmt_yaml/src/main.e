@@ -323,6 +323,40 @@ fn issue_150_regressions(a: *mem.Arena) -> err {
     ret ok
 }
 
+fn issue_1570_regressions(a: *mem.Arena) -> err {
+    // YAML inline separation accepts a tab after a mapping colon or sequence dash,
+    // including a flow mapping. It is still invalid as indentation elsewhere.
+    let (tab_mapping, tab_mapping_error) = yaml.parse(a, "key:\tvalue\n", options(4u16, false))
+    if tab_mapping_error != ok { os.exit(540i32) }
+    let tab_mapping_pairs = mapping_of(tab_mapping, 541i32)
+    let (mapped_value, has_mapped_value) = lookup(tab_mapping_pairs, "key")
+    if tab_mapping_pairs.len != 1usize || !has_mapped_value || !str.eq(text_of(mapped_value, 542i32), "value") { os.exit(543i32) }
+
+    let (tab_sequence, tab_sequence_error) = yaml.parse(a, "-\tvalue\n", options(4u16, false))
+    if tab_sequence_error != ok { os.exit(544i32) }
+    let tab_items = sequence_of(tab_sequence, 545i32)
+    if tab_items.len != 1usize || !str.eq(text_of(tab_items[0usize], 546i32), "value") { os.exit(547i32) }
+
+    let (tab_flow, tab_flow_error) = yaml.parse(a, "{key:\tvalue}", options(4u16, false))
+    if tab_flow_error != ok { os.exit(548i32) }
+    let tab_flow_pairs = mapping_of(tab_flow, 549i32)
+    let (flow_value, has_flow_value) = lookup(tab_flow_pairs, "key")
+    if tab_flow_pairs.len != 1usize || !has_flow_value || !str.eq(text_of(flow_value, 550i32), "value") { os.exit(551i32) }
+
+    // A plain scalar containing a tab can expose a following # as a comment. Quote
+    // and escape it so writer output remains a parser round trip.
+    var tab_string = yaml.Value { String: "a\t#lost" }
+    var tab_output: [64]u8 = zero
+    var tab_state = io.SliceWriter { data: tab_output[..], off: 0usize }
+    var tab_sink = io.slice_writer(&tab_state)
+    if yaml.write(&tab_sink, &tab_string, 2u8) != ok { os.exit(552i32) }
+    let tab_text = tab_output[..tab_state.off]
+    if !str.eq(tab_text, "\"a\\t#lost\"\n") { os.exit(553i32) }
+    let (tab_again, tab_again_error) = yaml.parse(a, tab_text, options(4u16, false))
+    if tab_again_error != ok || !str.eq(text_of(tab_again, 554i32), "a\t#lost") { os.exit(555i32) }
+    ret ok
+}
+
 fn issue_1571_regressions(a: *mem.Arena) -> err {
     // Bare CR and CRLF are both YAML line breaks, not scalar content.
     let (cr_doc, cr_error) = yaml.parse(a, "a: 1\rb: 2\r", options(4u16, false))
@@ -522,6 +556,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (control_again, control_error) = yaml.parse(a, control_text, options(4u16, false))
     if control_error != ok || !str.eq(text_of(control_again, 95), controls[..]) { os.exit(96) }
     if issue_150_regressions(a) != ok { os.exit(172) }
+    if issue_1570_regressions(a) != ok { os.exit(556i32) }
     if issue_1571_regressions(a) != ok { os.exit(535i32) }
     ret ok
 }
