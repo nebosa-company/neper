@@ -263,6 +263,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var current: [3]u8 = zero
     let (best, knapsack_error) = combopt.knapsack_branch_and_bound(weights[..], values[..], 50.0f64, taken[..], order[..3usize], current[..])
     if knapsack_error != ok || best != 220.0f64 || taken[0usize] != 0u8 || taken[1usize] != 1u8 || taken[2usize] != 1u8 { os.exit(3i32) }
+    // A negative item must not lower the relaxation bound and prune the
+    // profitable choice; a zero-weight gain must work even at capacity zero.
+    var edge_weights: [2]f64 = zero
+    edge_weights[0usize] = 1.0f64
+    edge_weights[1usize] = 1.0f64
+    var edge_values: [2]f64 = zero
+    edge_values[0usize] = 5.0f64
+    edge_values[1usize] = 0.0f64 - 100.0f64
+    var edge_taken: [2]u8 = zero
+    var edge_order: [2]usize = zero
+    var edge_current: [2]u8 = zero
+    let (negative_best, negative_error) = combopt.knapsack_branch_and_bound(edge_weights[..], edge_values[..], 10.0f64, edge_taken[..], edge_order[..], edge_current[..])
+    if negative_error != ok || negative_best != 5.0f64 || edge_taken[0usize] != 1u8 || edge_taken[1usize] != 0u8 { os.exit(3i32) }
+    edge_weights[0usize] = 0.0f64
+    edge_values[0usize] = 5.0f64
+    let (free_best, free_error) = combopt.knapsack_branch_and_bound(edge_weights[..1usize], edge_values[..1usize], 0.0f64, edge_taken[..1usize], edge_order[..1usize], edge_current[..1usize])
+    if free_error != ok || free_best != 5.0f64 || edge_taken[0usize] != 1u8 { os.exit(3i32) }
     var assign = Assign { cost: zero, chosen: zero, used: zero, best: zero }
     let costs = "9 2 7 6 4 3 8 8 1"
     at = 0usize

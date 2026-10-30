@@ -81,9 +81,19 @@ fn knapsack_fractional(weights: []const f64, values: []const f64, capacity: f64,
     var room = capacity
     var total = 0.0f64
     i = 0usize
-    while i < n && room > 0.0f64 {
+    while i < n {
         let k = order[i]
-        if weights[k] <= room {
+        // A non-positive item can only lower (or leave unchanged) the result.
+        // The density order puts all profitable items before it, so no later
+        // item can improve the fractional solution.
+        if values[k] <= 0.0f64 { break }
+        // Zero-weight profitable items are selected even when capacity is
+        // exhausted; they consume no room and are still part of the optimum.
+        if weights[k] == 0.0f64 {
+            total += values[k]
+        } else if room <= 0.0f64 {
+            break
+        } else if weights[k] <= room {
             total += values[k]
             room -= weights[k]
         } else if weights[k] > 0.0f64 {

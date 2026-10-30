@@ -45,6 +45,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     fv[2usize] = 120.0f64
     let (frac, frac_error) = dp.knapsack_fractional(fw[..], fv[..], 50.0f64, scratch[..])
     if frac_error != ok || frac != 240.0f64 { os.exit(1i32) }
+    // Zero-weight gains remain available with no capacity, while negative
+    // values must never be taken merely because room remains.
+    var free_weight: [1]f64 = zero
+    var free_value: [1]f64 = zero
+    free_value[0usize] = 5.0f64
+    let (free_fraction, free_fraction_error) = dp.knapsack_fractional(free_weight[..], free_value[..], 0.0f64, scratch[..])
+    if free_fraction_error != ok || free_fraction != 5.0f64 { os.exit(1i32) }
+    var signed_weights: [2]f64 = zero
+    signed_weights[0usize] = 1.0f64
+    signed_weights[1usize] = 1.0f64
+    var signed_values: [2]f64 = zero
+    signed_values[0usize] = 5.0f64
+    signed_values[1usize] = 0.0f64 - 3.0f64
+    let (positive_fraction, positive_fraction_error) = dp.knapsack_fractional(signed_weights[..], signed_values[..], 2.0f64, scratch[..])
+    if positive_fraction_error != ok || positive_fraction != 5.0f64 { os.exit(1i32) }
 
     // 2: subsequences.
     var seq: [8]i64 = zero

@@ -477,9 +477,22 @@ fn knapsack_bound(weights: []const f64, values: []const f64, capacity: f64, orde
     var room = capacity - weight
     var bound = value
     var i = from
-    while i < order.len && room > 0.0f64 {
+    while i < order.len {
         let item = order[i]
-        if weights[item] <= room {
+        // Negative and zero values cannot raise the optimum.  Omitting them
+        // keeps this a true upper bound instead of allowing a negative item to
+        // prune a profitable branch.
+        if values[item] <= 0.0f64 {
+            i += 1usize
+            continue
+        }
+        // A zero-weight profitable item remains available even at capacity
+        // zero, so account for it before requiring positive remaining room.
+        if weights[item] == 0.0f64 {
+            bound += values[item]
+        } else if room <= 0.0f64 {
+            // Later zero-weight positive items may still raise the bound.
+        } else if weights[item] <= room {
             room -= weights[item]
             bound += values[item]
         } else {
