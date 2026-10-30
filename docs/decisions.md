@@ -43425,3 +43425,12 @@ visible key only after the write succeeds. On Windows, a sibling rename uses the
 simple-name, null-root `FILE_RENAME_INFORMATION` form and passes the complete native
 record. Listing derives paths relative to the configured root and preserves lexical
 prefix results when its output buffer is short.
+
+## D5923 — D-Bus builder and reply storage
+
+`RequestName` and `AddMatch` fill caller-provided `Value` slots, and their `Message`
+bodies borrow those slots through encoding. `hello_reply` validates and retires a
+`Hello` reply, then stores `unique_name` as a borrow of that reply's decoded body;
+callers retain that storage while using the bus name. `parse_address` remains a syntax
+parser: endpoint/transport availability and multi-entry selection require a
+caller-provided policy.

@@ -850,9 +850,8 @@ fn message_decode(a: *mem.Arena, buf: []const u8) -> (Message, usize, err) {
         at += 1usize
         let (sig, sig_error) = get_signature(buf, &at)
         if sig_error != ok { ret (m, 0usize, sig_error) }
-        if sig.len != 1usize { ret (m, 0usize, Invalid) }
         if code == 5u8 || code == 9u8 {
-            if sig[0usize] != 117u8 { ret (m, 0usize, Invalid) }
+            if sig.len != 1usize || sig[0usize] != 117u8 { ret (m, 0usize, Invalid) }
             let (n, ne) = get_u32(buf, &at, m.little)
             if ne != ok { ret (m, 0usize, ne) }
             if code == 5u8 {
@@ -861,12 +860,12 @@ fn message_decode(a: *mem.Arena, buf: []const u8) -> (Message, usize, err) {
                 m.unix_fds = n
             }
         } else if code == 8u8 {
-            if sig[0usize] != 103u8 { ret (m, 0usize, Invalid) }
+            if sig.len != 1usize || sig[0usize] != 103u8 { ret (m, 0usize, Invalid) }
             let (s, se) = get_signature(buf, &at)
             if se != ok { ret (m, 0usize, se) }
             m.signature = s
         } else if code >= 1u8 && code <= 7u8 {
-            if sig[0usize] != 115u8 && sig[0usize] != 111u8 { ret (m, 0usize, Invalid) }
+            if sig.len != 1usize || (sig[0usize] != 115u8 && sig[0usize] != 111u8) { ret (m, 0usize, Invalid) }
             let (s, se) = get_string(buf, &at, m.little)
             if se != ok { ret (m, 0usize, se) }
             if code == 1u8 {
@@ -884,6 +883,7 @@ fn message_decode(a: *mem.Arena, buf: []const u8) -> (Message, usize, err) {
             }
         } else {
             // An unknown field is skipped by its signature, as the specification asks.
+            if complete_len(sig, 0usize, 0u32, 0u32) != sig.len { ret (m, 0usize, Invalid) }
             let (r, re) = skip_value(buf, &at, m.little, sig, fields_end)
             if re != ok { ret (m, 0usize, re) }
         }
@@ -1047,6 +1047,46 @@ fn hello(b: *Bus) -> (Message, err) {
     ret (m, e)
 }
 
+
+// Builds RequestName using two caller-owned value slots. The returned message
+// borrows `body`, which must remain live through message_encode.
+fn request_name(b: *Bus, name: str, request_flags: u32, body: []Value) -> (Message, err) {
+    var m: Message = zero
+    if body.len < 2usize { ret (m, TooSmall) }
+    body[0usize] = Value { Str: name }
+    body[1usize] = Value { U32: request_flags }
+    let (built, built_error) = call(
+        b,
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "RequestName",
+        "su",
+        body[0usize..2usize],
+        0u8,
+    )
+    ret (built, built_error)
+}
+
+// Builds AddMatch using one caller-owned value slot. The returned message
+// borrows `body`, which must remain live through message_encode.
+fn add_match(b: *Bus, rule: str, body: []Value) -> (Message, err) {
+    var m: Message = zero
+    if body.len == 0usize { ret (m, TooSmall) }
+    body[0usize] = Value { Str: rule }
+    let (built, built_error) = call(
+        b,
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "AddMatch",
+        "s",
+        body[0usize..1usize],
+        0u8,
+    )
+    ret (built, built_error)
+}
+
 // Whether a reply or error answers a pending call; the call is retired. Signals and incoming calls are not replies.
 fn retire(b: *Bus, m: *const Message) -> bool {
     if m.kind != METHOD_RETURN && m.kind != ERROR { ret false }
@@ -1059,6 +1099,21 @@ fn retire(b: *Bus, m: *const Message) -> bool {
         i += 1usize
     }
     ret false
+}
+
+
+// Stores the unique name from a successful Hello reply and retires its call.
+// `unique_name` borrows the reply body, so its decoded storage must outlive `b`'s use of it.
+fn hello_reply(b: *Bus, reply: *const Message) -> err {
+    if reply.kind != METHOD_RETURN || reply.body.len != 1usize || !str.eq(reply.signature, "s") { ret Invalid }
+    switch reply.body[0usize] {
+    case .Str as unique:
+        if unique.len == 0usize || !retire(b, reply) { ret Invalid }
+        b.unique_name = unique
+        ret ok
+    default:
+        ret Invalid
+    }
 }
 
 // --- match rules -------------------------------------------------------------------------------------------------
@@ -1099,21 +1154,143 @@ fn kind_name(kind: u8) -> str {
 
 // Whether `m` matches `rule` (a comma-separated list of `key='value'`): type, sender, interface, member, path,
 // path_namespace, destination and `argN` for string arguments; every key present must match.
+// Compares a quoted rule value with `want` while decoding apostrophes without
+// allocating. Both \' inside a quote and the adjacent quoted-segment form
+// '\'' contribute one apostrophe to the value.
+fn rule_value_equal(rule: str, key: str, want: str) -> (bool, bool) {
+    var at = 0usize
+    while at < rule.len {
+        let name_start = at
+        while at < rule.len && rule[at] != 61u8 && rule[at] != 44u8 { at += 1usize }
+        if at == name_start || at >= rule.len || rule[at] != 61u8 { ret (false, false) }
+        let matched_key = str.eq(rule[name_start..at], key)
+        at += 1usize
+        if at >= rule.len || rule[at] != 39u8 { ret (false, false) }
+        at += 1usize
+        var want_at = 0usize
+        var same = true
+        var closed = false
+        while at < rule.len && !closed {
+            var value_byte = 0u8
+            var has_byte = false
+            if rule[at] == 92u8 {
+                if at + 1usize >= rule.len || (rule[at + 1usize] != 39u8 && rule[at + 1usize] != 92u8) { ret (false, false) }
+                value_byte = rule[at + 1usize]
+                at += 2usize
+                has_byte = true
+            } else if rule[at] == 39u8 {
+                at += 1usize
+                if at + 2usize < rule.len && rule[at] == 92u8 && rule[at + 1usize] == 39u8 && rule[at + 2usize] == 39u8 {
+                    value_byte = 39u8
+                    at += 3usize
+                    has_byte = true
+                } else {
+                    closed = true
+                }
+            } else {
+                value_byte = rule[at]
+                at += 1usize
+                has_byte = true
+            }
+            if has_byte && matched_key {
+                if want_at >= want.len || want[want_at] != value_byte { same = false }
+                want_at += 1usize
+            }
+        }
+        if !closed { ret (false, false) }
+        if matched_key {
+            if want_at != want.len { same = false }
+            ret (same, true)
+        }
+        if at == rule.len { ret (false, false) }
+        if rule[at] != 44u8 { ret (false, false) }
+        at += 1usize
+        if at == rule.len { ret (false, false) }
+    }
+    ret (false, false)
+}
+
+// The path_namespace form needs the decoded value as a prefix, so compare it
+// to `path` one byte at a time instead of materializing an escaped string.
+fn rule_value_path_under(rule: str, key: str, path: str) -> (bool, bool) {
+    var at = 0usize
+    while at < rule.len {
+        let name_start = at
+        while at < rule.len && rule[at] != 61u8 && rule[at] != 44u8 { at += 1usize }
+        if at == name_start || at >= rule.len || rule[at] != 61u8 { ret (false, false) }
+        let matched_key = str.eq(rule[name_start..at], key)
+        at += 1usize
+        if at >= rule.len || rule[at] != 39u8 { ret (false, false) }
+        at += 1usize
+        var value_len = 0usize
+        var first_byte = 0u8
+        var prefix = true
+        var closed = false
+        while at < rule.len && !closed {
+            var value_byte = 0u8
+            var has_byte = false
+            if rule[at] == 92u8 {
+                if at + 1usize >= rule.len || (rule[at + 1usize] != 39u8 && rule[at + 1usize] != 92u8) { ret (false, false) }
+                value_byte = rule[at + 1usize]
+                at += 2usize
+                has_byte = true
+            } else if rule[at] == 39u8 {
+                at += 1usize
+                if at + 2usize < rule.len && rule[at] == 92u8 && rule[at + 1usize] == 39u8 && rule[at + 2usize] == 39u8 {
+                    value_byte = 39u8
+                    at += 3usize
+                    has_byte = true
+                } else {
+                    closed = true
+                }
+            } else {
+                value_byte = rule[at]
+                at += 1usize
+                has_byte = true
+            }
+            if has_byte && matched_key {
+                if value_len == 0usize { first_byte = value_byte }
+                if value_len >= path.len || path[value_len] != value_byte { prefix = false }
+                value_len += 1usize
+            }
+        }
+        if !closed { ret (false, false) }
+        if matched_key {
+            var same_path = false
+            if value_len == 1usize && first_byte == 47u8 {
+                same_path = true
+            } else if prefix && value_len == path.len {
+                same_path = true
+            } else if prefix && value_len < path.len && path[value_len] == 47u8 {
+                same_path = true
+            }
+            ret (same_path, true)
+        }
+        if at == rule.len { ret (false, false) }
+        if rule[at] != 44u8 { ret (false, false) }
+        at += 1usize
+        if at == rule.len { ret (false, false) }
+    }
+    ret (false, false)
+}
+
+// Whether `m` matches `rule` (a comma-separated list of `key='value'`): type, sender, interface, member, path,
+// path_namespace, destination and `argN` for string arguments; every key present must match.
 fn rule_matches(rule: str, m: *const Message) -> bool {
-    let (t, has_type) = rule_value(rule, "type")
-    if has_type && !str.eq(t, kind_name(m.kind)) { ret false }
-    let (sender, has_sender) = rule_value(rule, "sender")
-    if has_sender && !str.eq(sender, m.sender) { ret false }
-    let (interface, has_interface) = rule_value(rule, "interface")
-    if has_interface && !str.eq(interface, m.interface) { ret false }
-    let (member, has_member) = rule_value(rule, "member")
-    if has_member && !str.eq(member, m.member) { ret false }
-    let (path, has_path) = rule_value(rule, "path")
-    if has_path && !str.eq(path, m.path) { ret false }
-    let (namespace, has_namespace) = rule_value(rule, "path_namespace")
-    if has_namespace && !path_under(namespace, m.path) { ret false }
-    let (destination, has_destination) = rule_value(rule, "destination")
-    if has_destination && !str.eq(destination, m.destination) { ret false }
+    let (type_matches, has_type) = rule_value_equal(rule, "type", kind_name(m.kind))
+    if has_type && !type_matches { ret false }
+    let (sender_matches, has_sender) = rule_value_equal(rule, "sender", m.sender)
+    if has_sender && !sender_matches { ret false }
+    let (interface_matches, has_interface) = rule_value_equal(rule, "interface", m.interface)
+    if has_interface && !interface_matches { ret false }
+    let (member_matches, has_member) = rule_value_equal(rule, "member", m.member)
+    if has_member && !member_matches { ret false }
+    let (path_matches, has_path) = rule_value_equal(rule, "path", m.path)
+    if has_path && !path_matches { ret false }
+    let (namespace_matches, has_namespace) = rule_value_path_under(rule, "path_namespace", m.path)
+    if has_namespace && !namespace_matches { ret false }
+    let (destination_matches, has_destination) = rule_value_equal(rule, "destination", m.destination)
+    if has_destination && !destination_matches { ret false }
     var n = 0usize
     while n < 64usize {
         var key: [8]u8 = zero
@@ -1128,17 +1305,21 @@ fn rule_matches(rule: str, m: *const Message) -> bool {
         key[len] = 48u8 + u8(n % 10usize)
         len += 1usize
         let name: str = key[0usize..len]
-        let (want, has_arg) = rule_value(rule, name)
-        if has_arg {
-            if n >= m.body.len { ret false }
+        if n < m.body.len {
             switch m.body[n] {
             case .Str as s:
-                if !str.eq(s, want) { ret false }
+                let (argument_matches, has_arg) = rule_value_equal(rule, name, s)
+                if has_arg && !argument_matches { ret false }
             case .Path as s:
-                if !str.eq(s, want) { ret false }
+                let (argument_matches, has_arg) = rule_value_equal(rule, name, s)
+                if has_arg && !argument_matches { ret false }
             default:
-                ret false
+                let (_, has_arg) = rule_value_equal(rule, name, "")
+                if has_arg { ret false }
             }
+        } else {
+            let (_, has_arg) = rule_value_equal(rule, name, "")
+            if has_arg { ret false }
         }
         n += 1usize
     }

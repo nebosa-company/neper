@@ -574,6 +574,70 @@ fn auth_address_regressions() -> bool {
     ret true
 }
 
+fn unknown_header_regression() -> bool {
+    // A METHOD_RETURN with reply_serial=1 and an unknown `as` header field.
+    // Unknown compound fields must be skipped, not rejected for sig.len != 1.
+    var raw: [40]u8 = zero
+    raw[0usize] = 108u8
+    raw[1usize] = dbus.METHOD_RETURN
+    raw[3usize] = 1u8
+    raw[8usize] = 2u8
+    raw[12usize] = 20u8
+    raw[16usize] = 5u8
+    raw[17usize] = 1u8
+    raw[18usize] = 117u8
+    raw[20usize] = 1u8
+    raw[24usize] = 42u8
+    raw[25usize] = 2u8
+    raw[26usize] = 97u8
+    raw[27usize] = 115u8
+    var storage: [128]u8 = zero
+    var arena = mem.arena_from(storage[..])
+    let (decoded, used, decode_error) = dbus.message_decode(&arena, raw[..])
+    ret decode_error == ok && used == 40usize && decoded.reply_serial == 1u32
+}
+
+fn bus_builder_regressions() -> bool {
+    var slots: [4]dbus.Pending = zero
+    var bus = dbus.bus_new(slots[..])
+    var name_body: [2]dbus.Value = zero
+    let (request, request_error) = dbus.request_name(&bus, "org.example.App", 4u32, name_body[..])
+    if request_error != ok || !str.eq(request.member, "RequestName") || !str.eq(request.signature, "su") || request.body.len != 2usize { ret false }
+    switch name_body[0usize] {
+    case .Str as value:
+        if !str.eq(value, "org.example.App") { ret false }
+    default:
+        ret false
+    }
+    var match_body: [1]dbus.Value = zero
+    let (match_call, match_error) = dbus.add_match(&bus, "type='signal'", match_body[..])
+    if match_error != ok || !str.eq(match_call.member, "AddMatch") || !str.eq(match_call.signature, "s") || match_call.body.len != 1usize { ret false }
+    var hello_body: [1]dbus.Value = zero
+    let (hello_call, hello_error) = dbus.hello(&bus)
+    if hello_error != ok { ret false }
+    hello_body[0usize] = dbus.Value { Str: ":1.42" }
+    var reply = dbus.message(dbus.METHOD_RETURN, 9u32)
+    reply.reply_serial = hello_call.serial
+    reply.signature = "s"
+    reply.body = hello_body[..]
+    if dbus.hello_reply(&bus, &reply) != ok || !str.eq(bus.unique_name, ":1.42") || slots[2usize].used { ret false }
+    var too_small: [1]dbus.Value = zero
+    let (_, short_error) = dbus.request_name(&bus, "org.example.App", 0u32, too_small[..])
+    ret short_error == dbus.TooSmall
+}
+
+fn rule_escape_regressions() -> bool {
+    var m = dbus.message(dbus.SIGNAL, 1u32)
+    var body: [1]dbus.Value = zero
+    body[0usize] = dbus.Value { Str: "it's" }
+    m.body = body[..]
+    if !dbus.rule_matches("type='signal',arg0='it'\\''s'", &m) { ret false }
+    if dbus.rule_matches("type='signal',arg0='it'\\''x'", &m) { ret false }
+    body[0usize] = dbus.Value { Str: "prefix,member='wrong'" }
+    if !dbus.rule_matches("arg0='prefix,member=\\'wrong\\''", &m) { ret false }
+    ret true
+}
+
 fn message_safety_regressions() -> bool {
     // A chain of variants is valid wire framing but must hit the same nesting
     // bound while skip_value counts array members or skips unknown fields.
@@ -631,6 +695,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_22()) != 0u8 { os.exit(122i32) }
     if !serial_wrap_regression() { os.exit(123i32) }
     if !auth_address_regressions() { os.exit(190i32) }
+    if !unknown_header_regression() { os.exit(192i32) }
+    if !bus_builder_regressions() { os.exit(193i32) }
+    if !rule_escape_regressions() { os.exit(194i32) }
     if !message_safety_regressions() { os.exit(191i32) }
     try io.print("dbus ok")
     ret ok
