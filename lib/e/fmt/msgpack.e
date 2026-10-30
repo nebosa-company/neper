@@ -8,6 +8,7 @@
 // exactly; nothing is buffered, so a stream can be read piecemeal by the caller.
 
 use e.io
+use e.data.list as list
 use e.mem
 use e.meta
 use e.str
@@ -189,34 +190,43 @@ fn read_ext(a: *mem.Arena, s: *State, count: usize) -> (Ext, err) {
 fn read_array(a: *mem.Arena, s: *State, count: usize, depth: u16) -> ([]const Value, err) {
     if depth >= s.max_depth { ret (zero, TooDeep) }
     if count > 16777216usize { ret (zero, TooLarge) }
-    let (items, items_error) = mem.alloc[Value](a, count)
+    // The count comes from an unbuffered stream. Start small and grow only after
+    // an item has actually arrived, so a truncated array32 header cannot reserve
+    // its declared maximum before its first byte is available.
+    var capacity = count
+    if capacity > 8usize { capacity = 8usize }
+    let (items0, items_error) = list.init[Value](a, capacity)
     if items_error != ok { ret (zero, items_error) }
+    var items = items0
     var at = 0usize
     while at < count {
         let (item, item_error) = read_depth(a, s, depth + 1u16)
         if item_error != ok { ret (zero, item_error) }
-        items[at] = item
+        try list.push[Value](&items, item)
         at += 1usize
     }
-    ret (items[0..], ok)
+    ret (list.slice_const[Value](&items), ok)
 }
 
 fn read_map(a: *mem.Arena, s: *State, count: usize, depth: u16) -> ([]const Pair, err) {
     if depth >= s.max_depth { ret (zero, TooDeep) }
     if count > 16777216usize { ret (zero, TooLarge) }
-    let (pairs, pairs_error) = mem.alloc[Pair](a, count)
+    // Match arrays: the header alone must not dictate an arena reservation.
+    var capacity = count
+    if capacity > 8usize { capacity = 8usize }
+    let (pairs0, pairs_error) = list.init[Pair](a, capacity)
     if pairs_error != ok { ret (zero, pairs_error) }
+    var pairs = pairs0
     var at = 0usize
     while at < count {
         let (key, key_error) = read_depth(a, s, depth + 1u16)
         if key_error != ok { ret (zero, key_error) }
         let (value, value_error) = read_depth(a, s, depth + 1u16)
         if value_error != ok { ret (zero, value_error) }
-        pairs[at].key = key
-        pairs[at].value = value
+        try list.push[Pair](&pairs, Pair { key: key, value: value })
         at += 1usize
     }
-    ret (pairs[0..], ok)
+    ret (list.slice_const[Pair](&pairs), ok)
 }
 
 fn write_be(writer: *io.Writer, value: u64, width: usize) -> err {

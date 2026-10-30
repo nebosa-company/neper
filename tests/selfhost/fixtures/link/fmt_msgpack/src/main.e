@@ -199,6 +199,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var map32_writer = io.slice_writer(&map32_state)
     if msgpack.write_map_header(&map32_writer, 65536usize) != ok { os.exit(29) }
     if map32_state.off != 5usize || map32_bytes[0usize] != 223u8 || map32_bytes[1usize] != 0u8 || map32_bytes[2usize] != 1u8 || map32_bytes[3usize] != 0u8 || map32_bytes[4usize] != 0u8 { os.exit(30) }
+
+    // Array32/map32 headers do not reserve their declared count before an item
+    // arrives. A tiny arena must reach the source EOF rather than Exhausted.
+    let huge_array: [5]u8 = [5]u8{ 221u8, 1u8, 0u8, 0u8, 0u8 }
+    var array_budget: [1024]u8 = zero
+    var array_arena = mem.arena_from(array_budget[..])
+    var huge_array_state: io.SliceReader = zero
+    huge_array_state.data = huge_array[..]
+    let (huge_array_reader, huge_array_reader_error) = msgpack.reader(&array_arena, io.slice_reader(&huge_array_state), 8u16)
+    if huge_array_reader_error != ok { os.exit(31) }
+    var huge_array_read = huge_array_reader
+    let (_, huge_array_error) = msgpack.read_value(&array_arena, &huge_array_read)
+    if huge_array_error != io.End { os.exit(32) }
+    let huge_map: [5]u8 = [5]u8{ 223u8, 1u8, 0u8, 0u8, 0u8 }
+    var map_budget: [1024]u8 = zero
+    var map_arena = mem.arena_from(map_budget[..])
+    var huge_map_state: io.SliceReader = zero
+    huge_map_state.data = huge_map[..]
+    let (huge_map_reader, huge_map_reader_error) = msgpack.reader(&map_arena, io.slice_reader(&huge_map_state), 8u16)
+    if huge_map_reader_error != ok { os.exit(33) }
+    var huge_map_read = huge_map_reader
+    let (_, huge_map_error) = msgpack.read_value(&map_arena, &huge_map_read)
+    if huge_map_error != io.End { os.exit(34) }
     os.exit(0)
     ret ok
 }
