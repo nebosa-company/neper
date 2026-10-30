@@ -130,9 +130,9 @@ fn now_ms() -> f64 {
 }
 
 // One frame of page work: timers and scripts, a navigation the page asked for, and a link the view reports as followed.
-fn pump_page(m: *Model) {
+fn pump_page(m: *Model) -> bool {
     let t = shell.active_tab(m.sh)
-    if !t.loaded { ret }
+    if !t.loaded { ret false }
     let more = page.tick(t.pg, now_ms() - m.start_ms)
     let moved = shell.follow_pending(m.sh, t)
     let (link, tapped) = view.take_activated(t.pg.view)
@@ -143,12 +143,14 @@ fn pump_page(m: *Model) {
             m.shown_url = ""
         }
     }
+    // A timer still pending keeps frames coming; an idle window would never run it.
+    ret page.next_wakeup(t.pg) >= 0.0f64
 }
 
 fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     mem.reset(&m.frame, m.frame_mark)
     let f = &m.frame
-    pump_page(m)
+    if pump_page(m) { widget.request_animation_frame(ctx.runtime) }
     sync_omni(m)
     let sh = m.sh
     let t = shell.active_tab(sh)

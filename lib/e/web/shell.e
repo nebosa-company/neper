@@ -23,7 +23,8 @@ error NoSuchTab
 error BadProfile
 
 const MAX_TABS: usize = 16usize
-const TAB_ARENA_BYTES: usize = 134217728usize
+// A page's scripts (the DOM runtime is parsed into the tab arena) need more than 128 MB: below it they silently never run.
+const TAB_ARENA_BYTES: usize = 536870912usize
 const VIEW_BYTES: usize = 33554432usize
 fn search_url() -> str { ret "https://duckduckgo.com/?q=" }
 
