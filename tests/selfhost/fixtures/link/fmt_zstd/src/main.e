@@ -110,6 +110,85 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e18 != zstd.Unsupported { os.exit(24) }
     let (n12, e19) = inflate(storage, level3, out, 9000usize, 1000u64)
     if e19 != zstd.Invalid { os.exit(25) }
+
+    // A forward FSE description must not consume virtual zero bytes past its input.
+    var fse_counts: [64]i32 = zero
+    let (_, _, _, fse_error) = zstd.fse_read_counts("\xb0\x01", fse_counts[..], 13usize, 6u32)
+    if fse_error != zstd.Invalid { os.exit(28) }
+    // An all-low-probability distribution fills every cell without underflowing the
+    // final high-cell cursor in either the decoder or encoder table builder.
+    var low_counts: [32]i32 = zero
+    var low_at = 0usize
+    while low_at < low_counts.len {
+        low_counts[low_at] = -1i32
+        low_at += 1usize
+    }
+    var low_table: [128]u8 = zero
+    if zstd.fse_build(low_table[..], low_counts[..], 32usize, 5u32) != ok { os.exit(29) }
+    var enc_states: [512]u32 = zero
+    var enc_bits: [64]i64 = zero
+    var enc_find: [64]i64 = zero
+    var encoder = zstd.FseEncoder { next_state: enc_states[..], delta_bits: enc_bits[..], delta_find: enc_find[..], accuracy: 0u32 }
+    zstd.fse_encoder_build(&encoder, low_counts[..], 32usize, 5u32)
+
+    // Frame history cannot cross a concatenation boundary. The second frame has one
+    // offset-four match and no literals, so it would otherwise reproduce `abcd`.
+    let cross_frame = "\x28\xb5\x2f\xfd\x20\x04\x21\x00\x00abcd\x28\xb5\x2f\xfd\x20\x04\x3d\x00\x00\x00\x01\x54\x00\x02\x01\x07"
+    let (_, cross_frame_error) = inflate(storage, cross_frame, out, 9000usize, 10000000u64)
+    if cross_frame_error != zstd.Invalid { os.exit(30) }
+
+    // A sequence may not expand a compressed block beyond 128 KiB before the caller
+    // receives its failure. The first 65539-byte match is retained; the second is
+    // rejected before it can be copied.
+    let (amp_history, amp_history_error) = mem.alloc[u8](a, 262144usize)
+    if amp_history_error != ok { os.exit(31) }
+    var amp: zstd.State = zero
+    amp.history = amp_history
+    amp.history[0usize] = 65u8
+    amp.hist_len = 1usize
+    amp.ll.rle = true
+    amp.ll.rle_symbol = 0u32
+    amp.of.rle = true
+    amp.of.rle_symbol = 2u32
+    amp.ml.rle = true
+    amp.ml.rle_symbol = 52u32
+    let amp_error = zstd.run_sequences(&amp, "\x03\x54\x00\x02\x34\x00\x00\x00\x00\x00\x00\x40", 0usize)
+    if amp_error != zstd.Invalid || amp.hist_len != 65540usize { os.exit(32) }
+
+    // The whole-buffer convenience decoder grows its retained history past one raw
+    // block when its output budget permits the frame's 131073-byte single segment.
+    let (wide_frame, wide_frame_error) = mem.alloc[u8](a, 131088usize)
+    if wide_frame_error != ok { os.exit(33) }
+    wide_frame[0usize] = 40u8
+    wide_frame[1usize] = 181u8
+    wide_frame[2usize] = 47u8
+    wide_frame[3usize] = 253u8
+    wide_frame[4usize] = 160u8
+    wide_frame[5usize] = 1u8
+    wide_frame[6usize] = 0u8
+    wide_frame[7usize] = 2u8
+    wide_frame[8usize] = 0u8
+    wide_frame[9usize] = 0u8
+    wide_frame[10usize] = 0u8
+    wide_frame[11usize] = 16u8
+    var wide_at = 0usize
+    while wide_at < 131072usize {
+        wide_frame[12usize + wide_at] = u8(wide_at & 255usize)
+        wide_at += 1usize
+    }
+    wide_frame[131084usize] = 9u8
+    wide_frame[131085usize] = 0u8
+    wide_frame[131086usize] = 0u8
+    wide_frame[131087usize] = 42u8
+    let (wide_out, wide_error) = zstd.decode(a, wide_frame, 200000u64)
+    if wide_error != ok || wide_out.len != 131073usize || wide_out[0usize] != 0u8 || wide_out[131071usize] != 255u8 || wide_out[131072usize] != 42u8 { os.exit(34) }
+
+    // A non-single-segment frame can declare a larger window than its immediate
+    // payload. Whole-buffer decoding derives enough retained history from its cap.
+    let large_window_frame = "\x28\xb5\x2f\xfd\x00\x58\x09\x00\x00A"
+    let (large_window_out, large_window_error) = zstd.decode(a, large_window_frame, 2097152u64)
+    if large_window_error != ok || large_window_out.len != 1usize || large_window_out[0usize] != 65u8 { os.exit(35) }
+
     let (none, e20) = zstd.reader_storage(0usize)
     if e20 != zstd.Invalid { os.exit(26) }
     ret ok
