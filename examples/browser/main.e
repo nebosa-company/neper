@@ -135,7 +135,12 @@ fn pump_page(m: *Model) -> bool {
     if !t.loaded { ret false }
     let more = page.tick(t.pg, now_ms() - m.start_ms)
     let moved = shell.follow_pending(m.sh, t)
-    let (link, tapped) = view.take_activated(t.pg.view)
+    // A tap reaches the page's click handlers first; one that cancels the click also cancels the link.
+    let (tx, ty, has_tap) = view.take_tap(t.pg.view)
+    var allowed = true
+    if has_tap { allowed = page.click(t.pg, tx, ty) }
+    let (link, tapped0) = view.take_activated(t.pg.view)
+    let tapped = tapped0 && allowed
     if tapped {
         let (abs, good) = page.resolve_against(m.a, &t.pg.base, link)
         if good {

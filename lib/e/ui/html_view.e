@@ -39,7 +39,8 @@ type View = struct {
     complete_sheets: bool, tree: dom.Dom, styles: []style.Style, lay: layout.Layout, host: measure.Host,
     width: f32, height: f32, scroll_x: f32, scroll_y: f32, origin_x: f32, origin_y: f32,
     revision: u64, layout_mark: usize, frame_mark: usize,
-    activated: str, has_activated: bool, hover_link: str, has_hover: bool, opened: bool
+    activated: str, has_activated: bool, hover_link: str, has_hover: bool, opened: bool,
+    tap_x: f32, tap_y: f32, has_tap: bool
 }
 
 error EmptyFontSet
@@ -124,6 +125,7 @@ fn open_tree(a: *mem.Arena, tree: dom.Dom, source: str, sheets: []const str, com
     v.scroll_y = 0.0
     v.revision = 1u64
     v.has_activated = false
+    v.has_tap = false
     v.has_hover = false
     v.layout_mark = mem.mark(a)
     v.frame_mark = mem.mark(a)
@@ -238,6 +240,9 @@ fn gesture_view(ctx: *void, g: widget.Gesture) -> err {
     case .Wheel as w:
         scroll_by(v, 0.0, 0.0 - w.notches * wheel_step())
     case .Tap as p:
+        v.tap_x = p.x - v.origin_x
+        v.tap_y = p.y - v.origin_y
+        v.has_tap = true
         let (href, has) = link_at(v, p.x - v.origin_x, p.y - v.origin_y)
         if has {
             v.activated = href
@@ -258,6 +263,13 @@ fn gesture_view(ctx: *void, g: widget.Gesture) -> err {
 // Wheel scrolling, taps (links) and hover over the canvas: wrap it in `widget.region(key, region(v), style, canvas)`.
 fn region(v: *View) -> widget.Region {
     ret widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](v), invoke: gesture_view }, gestures: widget.GESTURE_TAP | widget.GESTURE_HOVER | widget.GESTURE_WHEEL, enabled: true, focusable: false }
+}
+
+// The viewport position of the last tap (cleared by reading it), for the page's own click handlers.
+fn take_tap(v: *View) -> (f32, f32, bool) {
+    if !v.has_tap { ret (0.0, 0.0, false) }
+    v.has_tap = false
+    ret (v.tap_x, v.tap_y, true)
 }
 
 // The link the last tap activated (cleared by reading it).
