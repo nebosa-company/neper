@@ -165,12 +165,12 @@ fn write_key(w: *io.Writer, number: u32, wire: WireType) -> err {
 fn write_i64(w: *io.Writer, value: i64) -> err {
     if value >= 0i64 { ret write_u64(w, u64(value)) }
     // The ten-byte two's complement form.
-    ret write_u64(w, 18446744073709551615u64 - u64(0i64 - value - 1i64))
+    ret write_u64(w, 18446744073709551615u64 - u64(0i64 - (value + 1i64)))
 }
 
 fn write_sint64(w: *io.Writer, value: i64) -> err {
     if value >= 0i64 { ret write_u64(w, u64(value) << 1u32) }
-    ret write_u64(w, (u64(0i64 - value - 1i64) << 1u32) | 1u64)
+    ret write_u64(w, (u64(0i64 - (value + 1i64)) << 1u32) | 1u64)
 }
 
 fn write_fixed32(w: *io.Writer, value: u32) -> err {
@@ -260,7 +260,7 @@ fn decode_zigzag(raw: u64) -> i64 {
 
 fn encode_zigzag(value: i64) -> u64 {
     if value >= 0i64 { ret u64(value) << 1u32 }
-    ret (u64(0i64 - value - 1i64) << 1u32) | 1u64
+    ret (u64(0i64 - (value + 1i64)) << 1u32) | 1u64
 }
 
 fn encode(w: *io.Writer, fields: []const Field) -> err {
