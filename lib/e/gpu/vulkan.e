@@ -9,6 +9,7 @@
 
 use e.mem
 use e.os
+use e.sync
 
 error NoLoader
 error NoDevice
@@ -123,6 +124,8 @@ var api: Api = zero
 var loader: os.Lib = zero
 var loaded: bool = zero
 var instance: usize = zero
+// Device enumeration can be called by several application threads.
+var loader_locks: [1]sync.Mutex = zero
 
 fn library_name() -> str {
     if os.NATIVE_SEPARATOR == 92u8 { ret "vulkan-1.dll" }
@@ -179,6 +182,8 @@ fn put_const_pointer(bytes: []u8, at: usize, pointee: []const u8) {
 
 // The loader and every entry point this runtime calls, once per process.
 fn load(a: *mem.Arena) -> err {
+    sync.mutex_lock(&loader_locks[0usize])
+    defer sync.mutex_unlock(&loader_locks[0usize])
     if loaded { ret ok }
     let (library, library_error) = os.dlopen(a, library_name())
     if library_error != ok { ret NoLoader }
@@ -202,6 +207,14 @@ fn load(a: *mem.Arena) -> err {
     let (p18, e18) = os.dlsym[fn(usize, usize)](a, library, "vkUnmapMemory")
     let (p19, e19) = os.dlsym[fn(usize, *u8) -> u64](a, library, "vkGetBufferDeviceAddress")
     let (p20, e20) = os.dlsym[fn(usize) -> i32](a, library, "vkDeviceWaitIdle")
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok {
+        let closed = os.dlclose(library)
+        ret NoLoader
+    }
+    if e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok || e20 != ok {
+        let closed = os.dlclose(library)
+        ret NoLoader
+    }
     let dispatch_error = load_dispatch(a, library)
     if dispatch_error != ok {
         let closed = os.dlclose(library)
@@ -212,20 +225,27 @@ fn load(a: *mem.Arena) -> err {
         let closed = os.dlclose(library)
         ret cache_error
     }
-    loader = library
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret NoLoader }
-    if e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok || e20 != ok { ret NoLoader }
     api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, unmap_memory: p18, get_buffer_device_address: p19, device_wait_idle: p20, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_pipeline_cache: api.create_pipeline_cache, get_pipeline_cache_data: api.get_pipeline_cache_data, destroy_pipeline_cache: api.destroy_pipeline_cache, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle }
     // One instance for the process: the application record, then the instance's.
     let (application, application_error) = record(a, 48usize)
-    if application_error != ok { ret application_error }
+    if application_error != ok {
+        let closed = os.dlclose(library)
+        ret application_error
+    }
     put32(application, 44usize, usize(API_VERSION))
     let (create, create_error) = record(a, 64usize)
-    if create_error != ok { ret create_error }
+    if create_error != ok {
+        let closed = os.dlclose(library)
+        ret create_error
+    }
     put32(create, 0usize, 1usize)
     put_pointer(create, 24usize, application)
     var made = 0usize
-    if api.create_instance(&create[0usize], 0usize, &made) != 0i32 { ret NoLoader }
+    if api.create_instance(&create[0usize], 0usize, &made) != 0i32 {
+        let closed = os.dlclose(library)
+        ret NoLoader
+    }
+    loader = library
     instance = made
     loaded = true
     ret ok

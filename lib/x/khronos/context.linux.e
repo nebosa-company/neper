@@ -6,6 +6,7 @@
 // since a window id is the server's and not the connection's. The variants for other hosts keep
 // the same declarations.
 
+use e.atomic
 use e.mem
 use e.os
 use x.khronos.egl
@@ -22,12 +23,15 @@ type Context = struct { egl_state: eglcontext.State, dispatch: gl.Dispatch, x_di
 type OpenDisplay = fn(*const u8) -> usize
 type CloseDisplay = fn(usize) -> i32
 type Xlib = struct { open_display: OpenDisplay, close_display: CloseDisplay }
+type XlibLoader = struct { state: [1]Atomic[u32], waiters: [1]Atomic[u32], library: os.Lib, api: Xlib }
 type PointerPun = union { pointer: *void, bits: usize }
 type BytesPun = union { pointer: *u8, bits: usize }
 
-var xlib_loaded: bool = false
-var xlib_library: os.Lib = zero
-var xlib: Xlib = zero
+const XLIB_IDLE: u32 = 0u32
+const XLIB_FILLING: u32 = 1u32
+const XLIB_READY: u32 = 2u32
+const XLIB_FAILED: u32 = 3u32
+var xlib_loader: XlibLoader = zero
 
 fn profile_of(options: Options) -> gl.Profile { ret eglcontext.profile_of(options) }
 
@@ -74,20 +78,98 @@ fn headless(a: *mem.Arena, options: Options) -> (Context, err) {
     ret (c, outcome)
 }
 
-fn open_xlib(a: *mem.Arena) -> err {
-    if xlib_loaded { ret ok }
+fn initialize_xlib(a: *mem.Arena) -> err {
     let (library, library_error) = os.dlopen(a, "libX11.so.6")
-    if library_error != ok { ret Unsupported }
+    if library_error != ok { ret library_error }
     let (open_display, open_error) = os.dlsym[OpenDisplay](a, library, "XOpenDisplay")
     let (close_display, close_error) = os.dlsym[CloseDisplay](a, library, "XCloseDisplay")
+    if open_error == os.OutOfMemory || close_error == os.OutOfMemory {
+        let closed = os.dlclose(library)
+        ret os.OutOfMemory
+    }
     if open_error != ok || close_error != ok {
         let closed = os.dlclose(library)
         ret Unsupported
     }
-    xlib_library = library
-    xlib = Xlib { open_display: open_display, close_display: close_display }
-    xlib_loaded = true
+    xlib_loader.library = library
+    xlib_loader.api = Xlib { open_display: open_display, close_display: close_display }
     ret ok
+}
+
+fn increment_xlib_waiters() {
+    while true {
+        let current = atomic.load(&xlib_loader.waiters[0usize], .Acquire)
+        let (changed, seen) = atomic.cas(&xlib_loader.waiters[0usize], current, current + 1u32, .AcqRel, .Acquire)
+        if changed {
+            os.wake_all_u32(&xlib_loader.waiters[0usize])
+            ret
+        }
+    }
+}
+
+fn decrement_xlib_waiters() {
+    while true {
+        let current = atomic.load(&xlib_loader.waiters[0usize], .Acquire)
+        let (changed, seen) = atomic.cas(&xlib_loader.waiters[0usize], current, current - 1u32, .AcqRel, .Acquire)
+        if changed {
+            os.wake_all_u32(&xlib_loader.waiters[0usize])
+            ret
+        }
+    }
+}
+
+// The acquire and publish steps are shared with the deterministic loader-race fixture.
+fn begin_xlib_load() {
+    while true {
+        let state = atomic.load(&xlib_loader.state[0usize], .Acquire)
+        if state == XLIB_READY { ret }
+        if state == XLIB_FAILED { ret }
+        if state == XLIB_FILLING {
+            increment_xlib_waiters()
+            let ignored = os.wait_u32(&xlib_loader.state[0usize], XLIB_FILLING, -1i64)
+            decrement_xlib_waiters()
+            continue
+        }
+        let (won, seen) = atomic.cas(&xlib_loader.state[0usize], XLIB_IDLE, XLIB_FILLING, .Acquire, .Acquire)
+        if !won { continue }
+        ret
+    }
+}
+
+fn finish_xlib_load(result: err) {
+    var published = XLIB_IDLE
+    if result == ok { published = XLIB_READY }
+    if result == Unsupported { published = XLIB_FAILED }
+    atomic.store(&xlib_loader.state[0usize], published, .Release)
+    os.wake_all_u32(&xlib_loader.state[0usize])
+    ret
+}
+
+// These narrow hooks let the Linux fixture hold an initialization lease at the
+// same publication boundary used by the real dlopen/dlsym path.
+fn test_begin_xlib_load() -> bool {
+    begin_xlib_load()
+    ret atomic.load(&xlib_loader.state[0usize], .Acquire) == XLIB_FILLING
+}
+
+fn test_finish_xlib_load(result: err) { finish_xlib_load(result) }
+
+fn test_wait_for_xlib_waiter(timeout_ns: i64) -> err {
+    if atomic.load(&xlib_loader.waiters[0usize], .Acquire) != 0u32 { ret ok }
+    let waited = os.wait_u32(&xlib_loader.waiters[0usize], 0u32, timeout_ns)
+    if waited != ok { ret waited }
+    if atomic.load(&xlib_loader.waiters[0usize], .Acquire) == 0u32 { ret os.Timeout }
+    ret ok
+}
+
+fn open_xlib(a: *mem.Arena) -> err {
+    begin_xlib_load()
+    let state = atomic.load(&xlib_loader.state[0usize], .Acquire)
+    if state == XLIB_READY { ret ok }
+    if state == XLIB_FAILED { ret Unsupported }
+    let result = initialize_xlib(a)
+    finish_xlib_load(result)
+    ret result
 }
 
 // A context drawing into `w`'s client area, current on the calling thread.
@@ -111,7 +193,7 @@ fn for_window(a: *mem.Arena, w: os.Window, options: Options) -> (Context, err) {
         ret (c, outcome)
     }
     if egl.load(a, "") != ok || open_xlib(a) != ok { ret (c, Unsupported) }
-    let x_display = xlib.open_display(nil)
+    let x_display = xlib_loader.api.open_display(nil)
     if x_display == 0usize { ret (c, Unsupported) }
     c.x_display = x_display
     c.window = window_id
@@ -262,7 +344,7 @@ fn close(c: *Context) -> err {
     let closed = eglcontext.close(&c.egl_state)
     gl.release(&c.dispatch)
     if c.x_display != 0usize {
-        let gone = xlib.close_display(c.x_display)
+        let gone = xlib_loader.api.close_display(c.x_display)
         c.x_display = 0usize
     }
     ret ok

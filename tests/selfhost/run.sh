@@ -3306,6 +3306,11 @@ khronos_window_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$khronos_window_written" = 'executable written' ]
 chmod +x "$test_build/x-khronos-gl-window-selfhost"
 "$test_build/x-khronos-gl-window-selfhost"
+# The barrier fixture holds a fake Xlib initializer open until the second caller is in the wait path.
+xlib_loader_race_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_xlib_loader_race/src/main.e" "$repo" x64 linux "$test_build/x-khronos-xlib-loader-race-selfhost")
+[ "$xlib_loader_race_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-xlib-loader-race-selfhost"
+"$test_build/x-khronos-xlib-loader-race-selfhost"
 # (D5899) Twelve resizes from outside, each frame drawn and read back at its new size.
 khronos_resize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_resize/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-resize-selfhost")
 [ "$khronos_resize_written" = 'executable written' ]
