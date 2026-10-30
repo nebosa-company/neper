@@ -675,7 +675,13 @@ type Birch = struct { child: []u32, child_count: []u32, height: []u32, cf_n: []f
 // absorbs a point while its radius stays within `threshold`.
 fn birch(a: *mem.Arena, room: usize, d: usize, branching: usize, threshold: f64) -> (Birch, err) {
     if room < 2usize || d == 0usize || branching < 2usize || threshold < 0.0f64 || room > 4000000000usize { ret (zero, Invalid) }
-    let (child, child_error) = mem.alloc[u32](a, room * (branching + 1usize))
+    let maximum = 18446744073709551615usize
+    if branching == maximum { ret (zero, Invalid) }
+    let stride = branching + 1usize
+    if room > maximum / stride || room > maximum / d { ret (zero, Invalid) }
+    let child_slots = room * stride
+    let linear_slots = room * d
+    let (child, child_error) = mem.alloc[u32](a, child_slots)
     if child_error != ok { ret (zero, child_error) }
     let (child_count, count_error) = mem.alloc[u32](a, room)
     if count_error != ok { ret (zero, count_error) }
@@ -683,7 +689,7 @@ fn birch(a: *mem.Arena, room: usize, d: usize, branching: usize, threshold: f64)
     if height_error != ok { ret (zero, height_error) }
     let (cf_n, n_error) = mem.alloc[f64](a, room)
     if n_error != ok { ret (zero, n_error) }
-    let (cf_ls, ls_error) = mem.alloc[f64](a, room * d)
+    let (cf_ls, ls_error) = mem.alloc[f64](a, linear_slots)
     if ls_error != ok { ret (zero, ls_error) }
     let (cf_ss, ss_error) = mem.alloc[f64](a, room)
     if ss_error != ok { ret (zero, ss_error) }

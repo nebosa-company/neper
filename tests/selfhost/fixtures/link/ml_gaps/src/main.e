@@ -285,6 +285,10 @@ fn check_density() {
 
 // 7: BIRCH with branching 3 and threshold 1 over wide blobs.
 fn check_birch(a: *mem.Arena) {
+    let (_, max_branching_error) = cluster.birch(a, 2usize, 1usize, 18446744073709551615usize, 1.0f64)
+    if max_branching_error != cluster.Invalid { os.exit(7i32) }
+    let (_, wide_feature_error) = cluster.birch(a, 2usize, 18446744073709551615usize, 2usize, 1.0f64)
+    if wide_feature_error != cluster.Invalid { os.exit(7i32) }
     var x: [90]f64 = zero
     blobs(777u64, 45usize, 1.5f64, x[..])
     var path: [200]usize = zero
