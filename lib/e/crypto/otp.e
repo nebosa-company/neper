@@ -177,12 +177,14 @@ fn same_text(a: str, b: str) -> bool {
 }
 
 fn parse_number(text: str) -> (u64, bool) {
-    if text.len == 0usize || text.len > 18usize { ret (0u64, false) }
+    if text.len == 0usize || text.len > 20usize { ret (0u64, false) }
     var v = 0u64
     var i = 0usize
     while i < text.len {
         if text[i] < 48u8 || text[i] > 57u8 { ret (0u64, false) }
-        v = v * 10u64 + u64(text[i] - 48u8)
+        let digit = u64(text[i] - 48u8)
+        if v > (COUNTER_MAX - digit) / 10u64 { ret (0u64, false) }
+        v = v * 10u64 + digit
         i += 1usize
     }
     ret (v, true)

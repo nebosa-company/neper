@@ -275,6 +275,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if u2_error != ok || u2.algorithm != .Sha256 || u2.digits != 8u32 || u2.period != 60u32 || !otp.same_text(u2.issuer, "Bank") { try report("uri", 3usize) }
     let (u3, u3_error) = otp.parse_uri("otpauth://hotp/Mail:carol?secret=JBSWY3DPEHPK3PXP&issuer=Mail&counter=7")
     if u3_error != ok || u3.totp || u3.counter != 7u64 { try report("uri", 4usize) }
+    let (u3_max, u3_max_error) = otp.parse_uri("otpauth://hotp/x?secret=AAAA&counter=18446744073709551615")
+    if u3_max_error != ok || u3_max.counter != 18446744073709551615u64 { try report("uri", 9usize) }
+    let (u3_over, u3_over_error) = otp.parse_uri("otpauth://hotp/x?secret=AAAA&counter=18446744073709551616")
+    if u3_over_error != otp.Invalid { try report("uri", 10usize) }
     let (u4, u4_error) = otp.parse_uri("otpauth://totp/x?issuer=Y")
     if u4_error != otp.Invalid { try report("uri", 5usize) }
     let (u5, u5_error) = otp.parse_uri("otpauth://hotp/x?secret=AAAA")
