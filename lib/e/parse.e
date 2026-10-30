@@ -283,6 +283,11 @@ fn ast_child(t: *const Ast, node: u32, which: usize) -> u32 {
 // (higher binds tighter; a PREFIX entry binds tighter than an INFIX entry of
 // the same `prec`); `(` `)` group. Answers the root node.
 fn pratt(tokens: []const Token, text: str, ops: []const Op, t: *Ast) -> (u32, err) {
+    var i = 0usize
+    while i < ops.len {
+        if ops[i].prec >= 128u8 || (ops[i].kind == INFIX && ops[i].right && ops[i].prec == 0u8) { ret (0u32, Invalid) }
+        i += 1usize
+    }
     var p = Parser { tokens: tokens, text: text, ops: ops, pos: 0usize }
     let (root, e) = pratt_expr(&p, t, 0u8)
     if e != ok { ret (0u32, e) }

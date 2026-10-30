@@ -127,6 +127,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_rd) = parse.recursive_descent(tokens[..bad_n], "(1 + 2", &t2)
     if bad_rd != parse.Invalid { os.exit(5i32) }
     if parse.ast_child(&t2, 1u32, 0usize) != 0u32 { os.exit(4i32) }
+    var zero_right_ops: [1]parse.Op = zero
+    zero_right_ops[0usize] = parse.Op { text: "^", kind: parse.INFIX, prec: 0u8, right: true }
+    let (zero_right_n, zero_right_lex_error) = parse.lex("1 ^ 2", operators[..0usize], tokens[..])
+    if zero_right_lex_error != ok { os.exit(156i32) }
+    var zero_right_ast = parse.ast(kind[..], left[..], right[..], tok[..])
+    let (_, zero_right_error) = parse.pratt(tokens[..zero_right_n], "1 ^ 2", zero_right_ops[..], &zero_right_ast)
+    if zero_right_error != parse.Invalid { os.exit(157i32) }
 
     // 6: CYK on the toy grammar and on parenthesis strings.
     let toy_lhs = [8]u32 { 5u32, 6u32, 7u32, 8u32, 8u32, 9u32, 9u32, 10u32 }
