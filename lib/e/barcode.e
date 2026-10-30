@@ -1428,6 +1428,7 @@ fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u
                             let ux_y = ry / span
                             let uy_x = (list[down].x - list[corner].x) / span
                             let uy_y = (list[down].y - list[corner].y) / span
+                            let candidate_mark = mem.mark(a)
                             let (grid, grid_error) = mem.alloc[u8](a, n * n)
                             if grid_error == ok {
                                 var row = 0usize
@@ -1450,6 +1451,7 @@ fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u
                                 let (found, found_error) = qr_decode(a, Matrix { size: n, modules: grid })
                                 if found_error == ok { ret (found, ok) }
                             }
+                            mem.reset(a, candidate_mark)
                         }
                         attempt += 1usize
                     }
