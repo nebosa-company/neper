@@ -138,20 +138,21 @@ fn next(s: Schedule, after: time.Timestamp) -> (time.Timestamp, err) {
     let offset = i64(s.offset_minutes) * MINUTE
     if (offset > 0i64 && first > MAX_I64 - offset) || (offset < 0i64 && first < MIN_I64 - offset) { ret (zero, Invalid) }
     let first_day = floor_div(first + offset, DAY)
+    let min_day = floor_div(MIN_I64, DAY)
+    let max_day = floor_div(MAX_I64, DAY)
     var day_offset = 0i64
     while day_offset < 146097i64 {
         let day_number = first_day + day_offset
-        if day_number < -106751i64 {
+        if day_number < min_day {
             day_offset += 1i64
             continue
         }
-        if day_number > 106750i64 { break }
-        let local_midnight = day_number * DAY
-        if (offset > 0i64 && local_midnight < MIN_I64 + offset) || (offset < 0i64 && local_midnight > MAX_I64 + offset) { break }
-        let utc_midnight = local_midnight - offset
-        if utc_midnight > MAX_I64 - DAY { break }
-        let day_probe = time.Timestamp { nanos: utc_midnight }
-        let date = time.to_date_at(day_probe, s.offset_minutes)
+        if day_number > max_day { break }
+        // The first and last calendar days are partial. Use a representable point
+        // on the day to identify it instead of forming the minimum day's midnight.
+        var day_probe_nanos = MIN_I64
+        if day_number != min_day { day_probe_nanos = day_number * DAY }
+        let date = time.to_date(time.Timestamp { nanos: day_probe_nanos })
         if (s.months & (1u16 << u16(date.month))) != 0u16 {
             var weekday = (day_number + 4i64) % 7i64
             if weekday < 0i64 { weekday += 7i64 }
@@ -171,8 +172,15 @@ fn next(s: Schedule, after: time.Timestamp) -> (time.Timestamp, err) {
                                 var second = 0u32
                                 while second < 60u32 {
                                     if (s.seconds & (1u64 << second)) != 0u64 {
-                                        let candidate = utc_midnight + i64(hour) * 3600i64 * SECOND + i64(minute) * 60i64 * SECOND + i64(second) * SECOND
-                                        if candidate >= first { ret (time.Timestamp { nanos: candidate }, ok) }
+                                        let clock = time.Time { hour: u8(hour), minute: u8(minute), second: u8(second), nanos: 0u32 }
+                                        let (local_candidate, candidate_error) = time.from_civil(date, clock)
+                                        if candidate_error == ok {
+                                            let local_nanos = local_candidate.nanos
+                                            if !(offset > 0i64 && local_nanos < MIN_I64 + offset) && !(offset < 0i64 && local_nanos > MAX_I64 + offset) {
+                                                let candidate = local_nanos - offset
+                                                if candidate >= first { ret (time.Timestamp { nanos: candidate }, ok) }
+                                            }
+                                        }
                                     }
                                     second += 1u32
                                 }
