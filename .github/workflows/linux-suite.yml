@@ -111,7 +111,7 @@ jobs:
         run: bash /tmp/probe.sh n20 || true
   suite:
     if: ${{ inputs.only == '' || inputs.only == 'suite' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
@@ -133,7 +133,7 @@ jobs:
       - name: Database servers and client libraries (tests/selfhost/db_servers.sh starts throwaway servers from these)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql mysql-server unixodbc odbc-postgresql libpq5 libmysqlclient21 xvfb xauth mesa-vulkan-drivers libvulkan1 vulkan-tools
+          sudo apt-get install -y --no-install-recommends postgresql mysql-server unixodbc odbc-postgresql libpq5 libmysqlclient21 xvfb xauth mesa-vulkan-drivers libvulkan1 vulkan-tools valgrind
           ls -d /usr/lib/postgresql/*/bin /usr/sbin/mysqld /usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so
       - name: Whole suite (traced, and the last commands it ran are printed when it stops)
         env:
