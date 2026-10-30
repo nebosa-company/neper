@@ -236,7 +236,7 @@ fn apply(db: *Db, payload: str) -> err {
         let (name_a, name_b) = rd_span(payload, &r)
         let name = payload[name_a..name_b]
         let seq = rd_u64(payload, &r)
-        if r.bad || r.pos != payload.len || ns > NS_SUBSCRIPTION { ret Corrupt }
+        if r.bad || r.pos != payload.len || ns > NS_SUBSCRIPTION || seq > u64(db.nevents) { ret Corrupt }
         let (at, found) = find_mark(db, ns, name)
         if found {
             db.marks[at].seq = seq
@@ -457,6 +457,7 @@ fn read_stream(db: *Db, stream: str, from_version: u32, out: []Event) -> usize {
 
 // The events after global sequence `after_seq`, in order, into `out`; how many.
 fn read_all(db: *Db, after_seq: u64, out: []Event) -> usize {
+    if after_seq > u64(db.nevents) { ret 0usize }
     var n = 0usize
     var i = usize(after_seq)
     while i < db.nevents && n < out.len {
@@ -476,6 +477,7 @@ fn mark_of(db: *Db, ns: u8, name: str) -> u64 {
 }
 
 fn set_mark(db: *Db, ns: u8, name: str, seq: u64) -> err {
+    if seq > u64(db.nevents) { ret Invalid }
     let (start, room) = begin(db)
     if !room { ret Full }
     let wrote = w_byte(db, KIND_MARK) && w_byte(db, ns) && w_str(db, name) && w_u64(db, seq)
@@ -488,6 +490,7 @@ fn set_mark(db: *Db, ns: u8, name: str, seq: u64) -> err {
 fn project(db: *Db, p: Projection, limit: usize) -> (usize, err) {
     if p.name.len == 0usize { ret (0usize, Invalid) }
     let from = mark_of(db, NS_PROJECTION, p.name)
+    if from > u64(db.nevents) { ret (0usize, Invalid) }
     var applied = 0usize
     var seq = from
     while usize(seq) < db.nevents && applied < limit {
