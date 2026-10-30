@@ -700,9 +700,13 @@ fn namespaces_push(ns: *Namespaces, attributes: []const Attribute) -> err {
             if attributes[i].value.len == 0usize || str.eq(prefix, "xmlns") { ret Invalid }
         }
         if declares {
+            let uri = attributes[i].value
+            if str.eq(prefix, "xml") && !str.eq(uri, "http://www.w3.org/XML/1998/namespace") { ret Invalid }
+            if !str.eq(prefix, "xml") && str.eq(uri, "http://www.w3.org/XML/1998/namespace") { ret Invalid }
+            if str.eq(uri, "http://www.w3.org/2000/xmlns/") { ret Invalid }
             if ns.count >= ns.prefixes.len { ret TooDeep }
             ns.prefixes[ns.count] = prefix
-            ns.uris[ns.count] = attributes[i].value
+            ns.uris[ns.count] = uri
             ns.count += 1usize
         }
         i += 1usize

@@ -130,6 +130,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var bad_attributes: [1]xml.Attribute = zero
     bad_attributes[0] = xml.Attribute { name: "xmlns:p", value: "" }
     if xml.namespaces_push(&ns, bad_attributes[0..]) != xml.Invalid { os.exit(14) }
+    var canonical_xml_binding: [1]xml.Attribute = zero
+    canonical_xml_binding[0] = xml.Attribute { name: "xmlns:xml", value: "http://www.w3.org/XML/1998/namespace" }
+    let (canonical_xml_ns0, canonical_xml_ns_error) = xml.namespaces(a, 1usize, 1usize)
+    if canonical_xml_ns_error != ok { os.exit(113) }
+    var canonical_xml_ns = canonical_xml_ns0
+    if xml.namespaces_push(&canonical_xml_ns, canonical_xml_binding[0..]) != ok { os.exit(114) }
+    let (canonical_uri, canonical_uri_error) = xml.resolve(&canonical_xml_ns, "xml")
+    if canonical_uri_error != ok || !str.eq(canonical_uri, "http://www.w3.org/XML/1998/namespace") || xml.namespaces_pop(&canonical_xml_ns) != ok { os.exit(115) }
+    var bad_xml_binding: [1]xml.Attribute = zero
+    bad_xml_binding[0] = xml.Attribute { name: "xmlns:xml", value: "urn:evil" }
+    let (bad_xml_ns0, bad_xml_ns_error) = xml.namespaces(a, 1usize, 1usize)
+    if bad_xml_ns_error != ok { os.exit(116) }
+    var bad_xml_ns = bad_xml_ns0
+    if xml.namespaces_push(&bad_xml_ns, bad_xml_binding[0..]) != xml.Invalid { os.exit(117) }
+    var xml_uri_binding: [1]xml.Attribute = zero
+    xml_uri_binding[0] = xml.Attribute { name: "xmlns:p", value: "http://www.w3.org/XML/1998/namespace" }
+    let (xml_uri_ns0, xml_uri_ns_error) = xml.namespaces(a, 1usize, 1usize)
+    if xml_uri_ns_error != ok { os.exit(118) }
+    var xml_uri_ns = xml_uri_ns0
+    if xml.namespaces_push(&xml_uri_ns, xml_uri_binding[0..]) != xml.Invalid { os.exit(119) }
+    var xmlns_uri_binding: [1]xml.Attribute = zero
+    xmlns_uri_binding[0] = xml.Attribute { name: "xmlns:p", value: "http://www.w3.org/2000/xmlns/" }
+    let (xmlns_uri_ns0, xmlns_uri_ns_error) = xml.namespaces(a, 1usize, 1usize)
+    if xmlns_uri_ns_error != ok { os.exit(120) }
+    var xmlns_uri_ns = xmlns_uri_ns0
+    if xml.namespaces_push(&xmlns_uri_ns, xmlns_uri_binding[0..]) != xml.Invalid { os.exit(121) }
     let (tree, e3) = xml.parse(a, doc)
     if e3 != ok { os.exit(15) }
     if tree.nodes.len != 24usize || tree.root != 1u32 || !str.eq(tree.nodes[1].name, "lib") { os.exit(16) }
