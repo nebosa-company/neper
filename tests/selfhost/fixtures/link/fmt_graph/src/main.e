@@ -225,5 +225,59 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let subedges = gr.Document { graphs: subedges_graphs[0..] }
     let (subedges_gexf, subedges_error) = gr.write_gexf(a, subedges)
     if subedges_error != gr.Unsupported { os.exit(145) }
+
+    // GML writer identity fields are structural. User attributes cannot shadow
+    // them later in the same list and change what a reader resolves.
+    let node_id_attr = [1]gr.Attr{ gr.Attr { name: "id", kind: .String, value: "wrong" } }
+    let node_id_nodes = [1]gr.Node{ gr.Node { id: "one", attrs: node_id_attr[0usize..], subgraph: 4294967295u32 } }
+    let node_id_graphs = [1]gr.Graph{ gr.Graph { id: "", directed: true, nodes: node_id_nodes[0usize..], edges: zero, attrs: zero } }
+    let node_id_document = gr.Document { graphs: node_id_graphs[0usize..] }
+    let (_, node_id_error) = gr.write_gml(a, node_id_document)
+    if node_id_error != gr.BadName { os.exit(146) }
+    let endpoint_attr = [1]gr.Attr{ gr.Attr { name: "source", kind: .String, value: "wrong" } }
+    let endpoint_nodes = [2]gr.Node{ gr.Node { id: "one", attrs: zero, subgraph: 4294967295u32 }, gr.Node { id: "two", attrs: zero, subgraph: 4294967295u32 } }
+    let endpoint_edges = [1]gr.Edge{ gr.Edge { id: "", source: "one", target: "two", directed: true, attrs: endpoint_attr[0usize..] } }
+    let endpoint_graphs = [1]gr.Graph{ gr.Graph { id: "", directed: true, nodes: endpoint_nodes[0usize..], edges: endpoint_edges[0usize..], attrs: zero } }
+    let endpoint_document = gr.Document { graphs: endpoint_graphs[0usize..] }
+    let (_, endpoint_error) = gr.write_gml(a, endpoint_document)
+    if endpoint_error != gr.BadName { os.exit(147) }
+    let directed_attr = [1]gr.Attr{ gr.Attr { name: "directed", kind: .String, value: "0" } }
+    let directed_graphs = [1]gr.Graph{ gr.Graph { id: "", directed: true, nodes: endpoint_nodes[0usize..], edges: zero, attrs: directed_attr[0usize..] } }
+    let directed_document = gr.Document { graphs: directed_graphs[0usize..] }
+    let (_, directed_error) = gr.write_gml(a, directed_document)
+    if directed_error != gr.BadName { os.exit(148) }
+
+    // GEXF edges may be held at the root while their endpoints live in a
+    // nested node group. GML output and CSR both resolve that hierarchy.
+    let (hier_gml, hier_gml_error) = gr.write_gml(a, hier)
+    if hier_gml_error != ok { os.exit(149) }
+    let (hier_gml_back, hier_gml_back_error) = gr.read_gml(a, hier_gml)
+    if hier_gml_back_error != ok || hier_gml_back.graphs.len != 2usize { os.exit(150) }
+    if hier_gml_back.graphs[0usize].edges.len != 1usize || !str.eq(hier_gml_back.graphs[0usize].edges[0usize].source, "1") || !str.eq(hier_gml_back.graphs[0usize].edges[0usize].target, "3") { os.exit(151) }
+    let (hier_csr, hier_csr_error) = gr.to_csr(a, hier, 0usize)
+    if hier_csr_error != ok || hier_csr.node_count != 3usize || hier_csr.edges.len != 1usize { os.exit(152) }
+    if hier_csr.edges[0usize].from != 2u32 || hier_csr.edges[0usize].to != 1u32 || hier_csr.edges[0usize].value != 3.0f64 { os.exit(153) }
+
+    // Seven-digit numeric references are valid Unicode scalar values and are
+    // emitted by the GML writer for non-BMP UTF-8 text.
+    let (gml_scalar, gml_scalar_error) = gr.read_gml(a, "graph [ node [ id 1 label \"&#1000000;\" ] ]")
+    if gml_scalar_error != ok || gml_scalar.graphs[0usize].nodes.len != 1usize || !str.eq(gml_scalar.graphs[0usize].nodes[0usize].id, "\xf3\xb4\x89\x80") { os.exit(154) }
+
+    // XML normalizes raw whitespace in attributes and CR in text. The writers
+    // use numeric references so GraphML and GEXF preserve each byte.
+    let control_attrs = [2]gr.Attr{ gr.Attr { name: "label", kind: .String, value: "label\t\r\n" }, gr.Attr { name: "note", kind: .String, value: "value\t\r\n" } }
+    let control_nodes = [1]gr.Node{ gr.Node { id: "node\t\r\n", attrs: control_attrs[0usize..], subgraph: 4294967295u32 } }
+    let control_graphs = [1]gr.Graph{ gr.Graph { id: "graph\t\r\n", directed: true, nodes: control_nodes[0usize..], edges: zero, attrs: zero } }
+    let control_document = gr.Document { graphs: control_graphs[0usize..] }
+    let (control_graphml, control_graphml_error) = gr.write_graphml(a, control_document)
+    if control_graphml_error != ok { os.exit(155) }
+    let (control_graphml_back, control_graphml_back_error) = gr.read_graphml(a, control_graphml)
+    if control_graphml_back_error != ok || !str.eq(control_graphml_back.graphs[0usize].id, "graph\t\r\n") || !str.eq(control_graphml_back.graphs[0usize].nodes[0usize].id, "node\t\r\n") { os.exit(156) }
+    if control_graphml_back.graphs[0usize].nodes[0usize].attrs.len != 2usize || !same_attr(control_graphml_back.graphs[0usize].nodes[0usize].attrs[0usize], "label", .String, "label\t\r\n") || !same_attr(control_graphml_back.graphs[0usize].nodes[0usize].attrs[1usize], "note", .String, "value\t\r\n") { os.exit(157) }
+    let (control_gexf, control_gexf_error) = gr.write_gexf(a, control_document)
+    if control_gexf_error != ok { os.exit(158) }
+    let (control_gexf_back, control_gexf_back_error) = gr.read_gexf(a, control_gexf)
+    if control_gexf_back_error != ok || !str.eq(control_gexf_back.graphs[0usize].id, "graph\t\r\n") || !str.eq(control_gexf_back.graphs[0usize].nodes[0usize].id, "node\t\r\n") { os.exit(159) }
+    if control_gexf_back.graphs[0usize].nodes[0usize].attrs.len != 2usize || !same_attr(control_gexf_back.graphs[0usize].nodes[0usize].attrs[0usize], "label", .String, "label\t\r\n") || !same_attr(control_gexf_back.graphs[0usize].nodes[0usize].attrs[1usize], "note", .String, "value\t\r\n") { os.exit(160) }
     ret ok
 }
