@@ -87,17 +87,25 @@ fn block_of_png(d: []const u8) -> ([]const u8, err) {
 fn block_of_webp(d: []const u8) -> ([]const u8, err) {
     var nothing: []const u8 = zero
     if d.len < 12usize || !begins(d, 0usize, "RIFF") || !begins(d, 8usize, "WEBP") { ret (nothing, Invalid) }
+    let riff_size = usize(d[4usize]) | (usize(d[5usize]) << 8u32) | (usize(d[6usize]) << 16u32) | (usize(d[7usize]) << 24u32)
+    if riff_size < 4usize || riff_size > d.len - 8usize { ret (nothing, Invalid) }
+    let riff_end = 8usize + riff_size
     var at = 12usize
-    while at + 8usize <= d.len {
+    while at < riff_end {
+        if riff_end - at < 8usize { ret (nothing, Invalid) }
         let length = usize(d[at + 4usize]) | (usize(d[at + 5usize]) << 8u32) | (usize(d[at + 6usize]) << 16u32) | (usize(d[at + 7usize]) << 24u32)
-        if length > d.len - at - 8usize { ret (nothing, Invalid) }
+        let payload = at + 8usize
+        if length > riff_end - payload { ret (nothing, Invalid) }
+        let end = payload + length
+        let padding = length & 1usize
+        if padding > riff_end - end { ret (nothing, Invalid) }
         if begins(d, at, "EXIF") {
-            var start = at + 8usize
+            var start = payload
             // some writers keep the "Exif\0\0" prefix of the JPEG form
             if length >= 6usize && begins(d, start, "Exif\x00\x00") { start += 6usize }
-            ret (d[start..at + 8usize + length], ok)
+            ret (d[start..end], ok)
         }
-        at += 8usize + length + (length & 1usize)
+        at = end + padding
     }
     ret (nothing, NotFound)
 }
@@ -214,22 +222,41 @@ fn find(all: []const Tag, ifd: u8, tag: u16) -> (Tag, bool) {
     ret (none, false)
 }
 
+// The offset of one public Tag element, after proving its byte range lies in `e`.
+fn element_offset(e: *const Exif, t: Tag, index: usize, width: usize) -> (usize, err) {
+    if index >= usize(t.count) || t.at > e.data.len || width == 0usize { ret (0usize, Invalid) }
+    let remaining = e.data.len - t.at
+    if width > remaining || index > (remaining - width) / width { ret (0usize, Invalid) }
+    ret (t.at + index * width, ok)
+}
+
 // One BYTE, SHORT or LONG value (signed kinds are returned as their bit pattern).
 fn value_u32(e: *const Exif, t: Tag, index: usize) -> (u32, err) {
-    if u32(index) >= t.count { ret (0u32, Invalid) }
     let kind = u32(t.kind)
-    if kind == 1u32 || kind == 7u32 || kind == 6u32 { ret (u32(e.data[t.at + index]), ok) }
-    if kind == 3u32 || kind == 8u32 { ret (rd16(e, t.at + index * 2usize), ok) }
-    if kind == 4u32 || kind == 9u32 { ret (rd32(e, t.at + index * 4usize), ok) }
+    if kind == 1u32 || kind == 7u32 || kind == 6u32 {
+        let (at, at_error) = element_offset(e, t, index, 1usize)
+        if at_error != ok { ret (0u32, at_error) }
+        ret (u32(e.data[at]), ok)
+    }
+    if kind == 3u32 || kind == 8u32 {
+        let (at, at_error) = element_offset(e, t, index, 2usize)
+        if at_error != ok { ret (0u32, at_error) }
+        ret (rd16(e, at), ok)
+    }
+    if kind == 4u32 || kind == 9u32 {
+        let (at, at_error) = element_offset(e, t, index, 4usize)
+        if at_error != ok { ret (0u32, at_error) }
+        ret (rd32(e, at), ok)
+    }
     ret (0u32, Invalid)
 }
 
 // One RATIONAL or SRATIONAL: numerator and denominator as read (an SRATIONAL's are two's
 // complement bit patterns).
 fn value_rational(e: *const Exif, t: Tag, index: usize) -> (u32, u32, err) {
-    if u32(index) >= t.count { ret (0u32, 0u32, Invalid) }
     if t.kind != 5u16 && t.kind != 10u16 { ret (0u32, 0u32, Invalid) }
-    let p = t.at + index * 8usize
+    let (p, p_error) = element_offset(e, t, index, 8usize)
+    if p_error != ok { ret (0u32, 0u32, p_error) }
     ret (rd32(e, p), rd32(e, p + 4usize), ok)
 }
 
@@ -237,6 +264,7 @@ fn value_rational(e: *const Exif, t: Tag, index: usize) -> (u32, u32, err) {
 fn value_text(e: *const Exif, t: Tag) -> (str, err) {
     if t.kind != 2u16 { ret ("", Invalid) }
     var n = usize(t.count)
+    if t.at > e.data.len || n > e.data.len - t.at { ret ("", Invalid) }
     var i = 0usize
     while i < n {
         if e.data[t.at + i] == 0u8 {

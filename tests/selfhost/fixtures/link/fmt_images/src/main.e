@@ -756,9 +756,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // it must not make `block_of_jpeg` slice past the APP1 payload.
     let (_, short_app1_error) = exif.block_of_jpeg("\xff\xd8\xff\xe1\x00\x02Exif\x00\x00")
     if short_app1_error == ok { die(183i32) }
-    // Likewise, an EXIF chunk may be empty even when later bytes begin `Exif`.
-    let (short_webp, short_webp_error) = exif.block_of_webp("RIFF\x00\x00\x00\x00WEBPEXIF\x00\x00\x00\x00Exif\x00\x00")
-    if short_webp_error != ok || short_webp.len != 0usize { die(184i32) }
+    // A RIFF size smaller than the WEBP form field is invalid, rather than a
+    // zero-length container that can scan physically trailing bytes.
+    let (_, short_webp_error) = exif.block_of_webp("RIFF\x00\x00\x00\x00WEBPEXIF\x00\x00\x00\x00Exif\x00\x00")
+    if short_webp_error != exif.Invalid { die(184i32) }
+    let (empty_webp, empty_webp_error) = exif.block_of_webp("RIFF\x0c\x00\x00\x00WEBPEXIF\x00\x00\x00\x00")
+    if empty_webp_error != ok || empty_webp.len != 0usize { die(185i32) }
+    // Bytes physically following the declared RIFF container are not chunks.
+    let (_, trailing_webp_error) = exif.block_of_webp("RIFF\x04\x00\x00\x00WEBPEXIF\x00\x00\x00\x00Exif\x00\x00")
+    if trailing_webp_error != exif.NotFound { die(186i32) }
+    // Odd-size chunks require their padding byte within the RIFF boundary.
+    let (_, missing_pad_error) = exif.block_of_webp("RIFF\x0d\x00\x00\x00WEBPVP8X\x01\x00\x00\x00x")
+    if missing_pad_error != exif.Invalid { die(187i32) }
+    let (_, long_riff_error) = exif.block_of_webp("RIFF\x0d\x00\x00\x00WEBP")
+    if long_riff_error != exif.Invalid { die(188i32) }
+    // Public Tags must prove their whole requested ranges before dereferencing.
+    let access = exif.Exif { data: "\x01\x02\x03\x04\x05\x06\x07\x08", big: false, ifd0: 0usize }
+    let one_long = exif.Tag { ifd: 0u8, tag: 0u16, kind: 4u16, count: 1u32, at: 0usize }
+    let (_, outside_u_error) = exif.value_u32(&access, one_long, 1usize)
+    if outside_u_error != exif.Invalid { die(189i32) }
+    let one_ratio = exif.Tag { ifd: 0u8, tag: 0u16, kind: 5u16, count: 1u32, at: 1usize }
+    let (_, _, outside_ratio_error) = exif.value_rational(&access, one_ratio, 0usize)
+    if outside_ratio_error != exif.Invalid { die(190i32) }
+    let malformed_text = exif.Tag { ifd: 0u8, tag: 0u16, kind: 2u16, count: 9u32, at: 0usize }
+    let (_, malformed_text_error) = exif.value_text(&access, malformed_text)
+    if malformed_text_error != exif.Invalid { die(191i32) }
     try io.print("fmt images ok\n")
     ret ok
 }
