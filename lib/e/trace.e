@@ -260,6 +260,7 @@ fn tracestate_set(state: str, key: str, value: str, out: []u8) -> (usize, err) {
         let (k, v, next_at, found) = member(state, at)
         if !found { break }
         at = next_at
+        if !valid_tracestate_key(k) || !valid_tracestate_value(v) { ret (0usize, Invalid) }
         if str.eq(k, key) { continue }
         let (m1, f1) = append(out, n, ",")
         if f1 != ok { ret (0usize, f1) }

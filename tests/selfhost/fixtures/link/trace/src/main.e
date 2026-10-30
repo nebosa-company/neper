@@ -120,6 +120,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     bad_value[2usize] = 32u8
     let (_, e5r) = trace.tracestate_set("", "a", bad_value[..3usize], big[..])
     if e5n != trace.Invalid || e5o != trace.Invalid || e5p != trace.Invalid || e5q != trace.Invalid || e5r != trace.Invalid { os.exit(5i32) }
+    // A valid new member must not serialize a malformed inherited member.
+    let (_, e5s) = trace.tracestate_set("bad=evil\nnext", "ok", "v", big[..])
+    let (_, e5t) = trace.tracestate_set("Upper=v", "ok", "v", big[..])
+    if e5s != trace.Invalid || e5t != trace.Invalid { os.exit(5i32) }
 
     // 6: thirty-two members k0=v0,...,k31=v31; setting x drops the last.
     var list: [512]u8 = zero
