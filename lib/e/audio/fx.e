@@ -50,6 +50,7 @@ fn compressor_gain(level_db: f64, threshold_db: f64, ratio: f64, knee_db: f64) -
 // curve, the gain reduction is smoothed in the log domain with `attack` when
 // it grows and `release` when it shrinks, then `makeup_db` is added.
 fn compressor(x: []const f64, threshold_db: f64, ratio: f64, attack: f64, release: f64, knee_db: f64, makeup_db: f64, sample_rate: f64, out: []f64) -> err {
+    if !dsp.finite_f64(threshold_db) || !dsp.finite_f64(ratio) || !dsp.finite_f64(attack) || !dsp.finite_f64(release) || !dsp.finite_f64(knee_db) || !dsp.finite_f64(makeup_db) || !dsp.finite_f64(sample_rate) { ret Invalid }
     if ratio <= 0.0f64 || knee_db < 0.0f64 || sample_rate <= 0.0f64 { ret Invalid }
     if out.len < x.len { ret TooSmall }
     let a = coefficient(attack, sample_rate)
@@ -74,6 +75,7 @@ fn compressor(x: []const f64, threshold_db: f64, ratio: f64, attack: f64, releas
 // ponytail: the peak search is O(lookahead) per sample; a monotonic deque
 // makes it O(1) if the look-ahead grows long.
 fn limiter(x: []const f64, ceiling: f64, lookahead: usize, release: f64, sample_rate: f64, out: []f64) -> err {
+    if !dsp.finite_f64(ceiling) || !dsp.finite_f64(release) || !dsp.finite_f64(sample_rate) { ret Invalid }
     if ceiling <= 0.0f64 || sample_rate <= 0.0f64 { ret Invalid }
     if out.len < x.len { ret TooSmall }
     let r = coefficient(release, sample_rate)
@@ -100,6 +102,7 @@ fn limiter(x: []const f64, ceiling: f64, lookahead: usize, release: f64, sample_
 // `threshold_db` opens the gate, whose gain moves between 0 and 1 with
 // `attack` and `release`.
 fn gate(x: []const f64, threshold_db: f64, attack: f64, release: f64, sample_rate: f64, out: []f64) -> err {
+    if !dsp.finite_f64(threshold_db) || !dsp.finite_f64(attack) || !dsp.finite_f64(release) || !dsp.finite_f64(sample_rate) { ret Invalid }
     if sample_rate <= 0.0f64 { ret Invalid }
     if out.len < x.len { ret TooSmall }
     let a = coefficient(attack, sample_rate)
@@ -125,7 +128,7 @@ fn gate(x: []const f64, threshold_db: f64, attack: f64, release: f64, sample_rat
 // Cascaded peaking biquads, one per `(frequency_hz, gain_db, q)` triple of
 // `bands`; `scratch.len >= x.len + 2`.
 fn equalizer(x: []const f64, bands: []const f64, sample_rate: f64, out: []f64, scratch: []f64) -> err {
-    if bands.len % 3usize != 0usize || sample_rate <= 0.0f64 { ret Invalid }
+    if bands.len % 3usize != 0usize || !dsp.finite_f64(sample_rate) || sample_rate <= 0.0f64 { ret Invalid }
     if out.len < x.len || scratch.len < x.len + 2usize { ret TooSmall }
     var n = 0usize
     while n < x.len {
@@ -136,6 +139,7 @@ fn equalizer(x: []const f64, bands: []const f64, sample_rate: f64, out: []f64, s
     var section: [6]f64 = zero
     var band = 0usize
     while band < bands.len {
+        if !dsp.finite_f64(bands[band]) || !dsp.finite_f64(bands[band + 1usize]) || !dsp.finite_f64(bands[band + 2usize]) { ret Invalid }
         let frequency = bands[band] / (sample_rate / 2.0f64)
         if frequency <= 0.0f64 || frequency >= 1.0f64 || bands[band + 2usize] <= 0.0f64 { ret Invalid }
         let design_error = dsp.biquad_peak(frequency, bands[band + 2usize], bands[band + 1usize], section[..])
@@ -156,7 +160,7 @@ fn equalizer(x: []const f64, bands: []const f64, sample_rate: f64, out: []f64, s
 // left holding the echo path estimate) tracks `mic` from `reference`; `out`
 // is the residual `mic - estimated echo`.
 fn echo_cancel(mic: []const f64, reference: []const f64, mu: f64, w: []f64, out: []f64) -> err {
-    if mu <= 0.0f64 { ret Invalid }
+    if !dsp.finite_f64(mu) || mu <= 0.0f64 { ret Invalid }
     if mic.len < reference.len { ret TooSmall }
     ret dsp.nlms(reference, mic, mu, 1.0e-6f64, w, out)
 }
@@ -184,7 +188,7 @@ fn allpass_step(buffer: []f64, n: usize, input: f64) -> f64 {
 // signal only; `scratch.len >= 5934`, cleared by the call.
 // ponytail: the delays are Freeverb's 44.1 kHz constants at any sample rate.
 fn reverb_schroeder(x: []const f64, feedback: f64, damp: f64, out: []f64, scratch: []f64) -> err {
-    if feedback < 0.0f64 || feedback >= 1.0f64 || damp < 0.0f64 || damp > 1.0f64 { ret Invalid }
+    if !dsp.finite_f64(feedback) || !dsp.finite_f64(damp) || feedback < 0.0f64 || feedback >= 1.0f64 || damp < 0.0f64 || damp > 1.0f64 { ret Invalid }
     if out.len < x.len || scratch.len < 5934usize { ret TooSmall }
     dsp.clear(scratch[..5934usize])
     var store: [4]f64 = zero
@@ -215,7 +219,7 @@ fn reverb_schroeder(x: []const f64, feedback: f64, damp: f64, out: []f64, scratc
 // `feedback` plus the input; `delays` has four positive lengths and
 // `scratch.len >= delays[0] + ... + delays[3]`, cleared by the call.
 fn reverb_fdn(x: []const f64, delays: []const usize, feedback: f64, out: []f64, scratch: []f64) -> err {
-    if delays.len < 4usize || feedback < 0.0f64 || feedback >= 1.0f64 { ret Invalid }
+    if delays.len < 4usize || !dsp.finite_f64(feedback) || feedback < 0.0f64 || feedback >= 1.0f64 { ret Invalid }
     var total = 0usize
     var i = 0usize
     while i < 4usize {
@@ -274,17 +278,20 @@ fn reverb_convolution(x: []const f64, impulse: []const f64, out: []f64) -> (usiz
 
 fn wrap_phase(p: f64) -> f64 { ret p - 6.283185307179586f64 * math.round[f64](p / 6.283185307179586f64) }
 
-fn synthesis_hop(hop: usize, ratio: f64) -> usize { ret usize(math.round[f64](f64(hop) * ratio)) }
+fn synthesis_hop(hop: usize, ratio: f64) -> usize {
+    if !dsp.finite_f64(ratio) { ret 0usize }
+    ret usize(math.round[f64](f64(hop) * ratio))
+}
 
 // The output length of `time_stretch`.
 fn time_stretch_len(x_len: usize, ratio: f64, frame: usize, hop: usize) -> usize {
-    if hop == 0usize || frame == 0usize || x_len < frame { ret 0usize }
+    if hop == 0usize || frame == 0usize || x_len < frame || !dsp.finite_f64(ratio) { ret 0usize }
     ret ((x_len - frame) / hop) * synthesis_hop(hop, ratio) + frame
 }
 
 // The scratch `time_stretch` needs for these arguments.
 fn time_stretch_scratch(x_len: usize, ratio: f64, frame: usize, hop: usize) -> usize {
-    if hop == 0usize || frame == 0usize || x_len < frame { ret 0usize }
+    if hop == 0usize || frame == 0usize || x_len < frame || !dsp.finite_f64(ratio) { ret 0usize }
     let frames = (x_len - frame) / hop + 1usize
     ret (2usize * frames + 5usize) * frame + time_stretch_len(x_len, ratio, frame, hop)
 }
@@ -297,7 +304,7 @@ fn time_stretch_scratch(x_len: usize, ratio: f64, frame: usize, hop: usize) -> u
 // ponytail: no phase locking across bins (Laroche and Dolson 1999), so
 // transients smear a little; add identity phase locking if that matters.
 fn time_stretch(x: []const f64, ratio: f64, frame: usize, hop: usize, out: []f64, scratch: []f64) -> (usize, err) {
-    if hop == 0usize || frame < 2usize || x.len < frame || ratio <= 0.0f64 { ret (0usize, Invalid) }
+    if hop == 0usize || frame < 2usize || x.len < frame || !dsp.finite_f64(ratio) || ratio <= 0.0f64 { ret (0usize, Invalid) }
     let hop_s = synthesis_hop(hop, ratio)
     if hop_s == 0usize { ret (0usize, Invalid) }
     let frames = (x.len - frame) / hop + 1usize
@@ -345,7 +352,9 @@ fn time_stretch(x: []const f64, ratio: f64, frame: usize, hop: usize, out: []f64
 // windowed-sinc resample back to `x.len` samples into `out`; `scratch.len >=
 // time_stretch_scratch + time_stretch_len` for `ratio = 2^(semitones / 12)`.
 fn pitch_shift(x: []const f64, semitones: f64, frame: usize, hop: usize, out: []f64, scratch: []f64) -> err {
+    if !dsp.finite_f64(semitones) { ret Invalid }
     let ratio = math.exp2[f64](semitones / 12.0f64)
+    if !dsp.finite_f64(ratio) || ratio <= 0.0f64 { ret Invalid }
     let n_stretched = time_stretch_len(x.len, ratio, frame, hop)
     if n_stretched == 0usize { ret Invalid }
     if out.len < x.len || scratch.len < n_stretched + time_stretch_scratch(x.len, ratio, frame, hop) { ret TooSmall }
@@ -360,7 +369,7 @@ fn pitch_shift(x: []const f64, semitones: f64, frame: usize, hop: usize, out: []
 // moves by `ratio`); `marks` ascending, the period of a mark the distance to
 // the next; `out.len >= x.len`, cleared by the call.
 fn psola(x: []const f64, marks: []const usize, ratio: f64, out: []f64) -> err {
-    if marks.len < 2usize || ratio <= 0.0f64 { ret Invalid }
+    if marks.len < 2usize || !dsp.finite_f64(ratio) || ratio <= 0.0f64 { ret Invalid }
     if out.len < x.len { ret TooSmall }
     var j = 0usize
     while j + 1usize < marks.len {
