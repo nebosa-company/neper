@@ -1,0 +1,71 @@
+{
+  "voice": "Microsoft George",
+  "note": "Local Windows voice. Neper is spelled Nee-per for the synthesizer only; captions use the real spelling. The timings in scenes.html are seconds into each scene, set from this voice's measured lengths, so regenerating with another voice means retiming them.",
+  "scenes": [
+    {
+      "id": "hook",
+      "caption": "A program should be able to take memory when it needs it, pay only for what it uses, and give it back. In Neper it can. The default ceiling is 1 TiB, and it costs 3 MiB. A million-line build peaks at 605 MB.",
+      "say": "A program should be able to take memory when it needs it, pay only for what it uses, and give it back. In Nee-per, it can. The default ceiling is one terabyte, and it costs three megabytes. A million line build peaks at six hundred and five megabytes."
+    },
+    {
+      "id": "reserve",
+      "caption": "A Neper program gets one arena. At startup it reserves a range of addresses, not memory. A real page arrives the first time the program writes to it. So the size of an arena is a ceiling, not a cost.",
+      "say": "A Nee-per program gets one arena. At startup, it reserves a range of addresses, not memory. A real page arrives the first time the program writes to it. So the size of an arena is a ceiling, not a cost."
+    },
+    {
+      "id": "grow",
+      "caption": "This program uses no flag. It starts at 3 MiB, and as it writes, RAM follows, up to 1.5 GiB. Its first allocation stays where it was. Nothing moves.",
+      "say": "This program uses no flag. It starts at three megabytes, and as it writes, RAM follows, up to one and a half gigabytes. Its first allocation stays where it was. Nothing moves."
+    },
+    {
+      "id": "touch",
+      "caption": "Allocating is not touching. 16 GiB allocated and 1,000 places written: 7 MiB of RAM, though Windows charges about 1 GB of commit. Ten thousand frames with mark and reset: 10 GB allocated, 4 MiB of RAM.",
+      "say": "Allocating is not touching. Sixteen gigabytes allocated, and a thousand places written, take seven megabytes of RAM, though Windows charges about one gigabyte of commit. Ten thousand frames with mark and reset allocate ten gigabytes, in four megabytes of RAM."
+    },
+    {
+      "id": "back",
+      "caption": "Memory goes back too. A reset that frees 512 MiB or more returns the rest to the system, with nothing asked for and no background thread. After a 2 GiB spike, 132 MiB stay in RAM. A smaller reset makes no system call.",
+      "say": "Memory goes back, too. A reset that frees five hundred and twelve megabytes or more returns the rest to the system, with nothing asked for, and no background thread. After a two gigabyte spike, one hundred and thirty-two megabytes stay in RAM. A smaller reset makes no system call."
+    },
+    {
+      "id": "heap",
+      "caption": "When lifetimes overlap, a heap frees one object at a time, and it is passed like an arena, so nothing allocates in secret. A block used after it was freed, freed twice, or never freed does not compile. Two gigabytes went through it in 50 milliseconds.",
+      "say": "When lifetimes overlap, a heap frees one object at a time. It is passed like an arena, so nothing allocates in secret. A block used after it was freed, freed twice, or never freed, does not compile. Two gigabytes went through it in fifty milliseconds."
+    },
+    {
+      "id": "compiler",
+      "caption": "The compiler is a Neper program too. It sizes its tables generously and touches what it needs. A million lines compile in 3.6 seconds. The arenas reached 4.4 GB of addresses. RAM peaked at 605 MB.",
+      "say": "The compiler is a Nee-per program too. It sizes its tables generously, and touches what it needs. A million lines compile in three point six seconds. The arenas reached four point four gigabytes of addresses. RAM peaked at six hundred and five megabytes."
+    },
+    {
+      "id": "debug",
+      "caption": "Touch everything, as a debug-built compiler does when it fills each allocation, and 339 MB becomes 3.4 GB. Build your compiler with --release.",
+      "say": "Touch everything, as a debug built compiler does when it fills each allocation, and three hundred and thirty-nine megabytes becomes three point four gigabytes. Build your compiler with release."
+    },
+    {
+      "id": "why32",
+      "caption": "An arena cannot move, so it needs one unbroken range. Our first try, 64 GiB, would not start under valgrind, which leaves a program about that much on any machine. So now a size the host refuses is halved, and asked for again. The program simply gets less.",
+      "say": "An arena cannot move, so it needs one unbroken range. Our first try, sixty-four gigabytes, would not start under valgrind, which leaves a program about that much on any machine. So now, a size the host refuses is halved, and asked for again. The program simply gets less."
+    },
+    {
+      "id": "runout",
+      "caption": "Running out is an answer. pages.ensure says the memory is not there while the program can still act. On Windows, a refused commit is asked again for two seconds. Then the process says it is out of memory, not that it had a wild pointer.",
+      "say": "Running out is an answer. Pages dot ensure says the memory is not there, while the program can still act. On Windows, a refused commit is asked again for two seconds. Then the process says it is out of memory, not that it had a wild pointer."
+    },
+    {
+      "id": "compare",
+      "caption": "Go and Node collect memory for you, which is less to think about. Rust and Neper refuse a use after free when they compile. Neper adds no collector, no pauses, and allocation that is one bump. These comparisons come from documentation, not measurement.",
+      "say": "Go and Node collect memory for you, which is less to think about. Rust and Nee-per refuse a use after free when they compile. Nee-per adds no collector, no pauses, and allocation that is one bump. These comparisons come from documentation, not measurement."
+    },
+    {
+      "id": "limits",
+      "caption": "The limits. A runaway program commits until the system pushes back; --arena sets a hard cap. Repeated spikes past 512 MiB pay about 100 milliseconds a round. A program may get less than it asked for. WebAssembly has 4 GiB at most. The x64 macOS run was under Rosetta.",
+      "say": "The limits. A runaway program commits until the system pushes back; the arena flag sets a hard cap. Repeated spikes past five hundred and twelve megabytes pay about a hundred milliseconds a round. A program may get less than it asked for. WebAssembly has four gigabytes at most. The x64 mac O S run was under Rosetta."
+    },
+    {
+      "id": "close",
+      "caption": "Neper. Ask for what you might need. Pay for what you touch. Give it back.",
+      "say": "Nee-per. Ask for what you might need. Pay for what you touch. Give it back."
+    }
+  ]
+}

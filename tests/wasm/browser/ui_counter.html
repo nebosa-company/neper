@@ -22,6 +22,13 @@
   const out = { exitCode: null, stdout: '', error: null, isolated: crossOriginIsolated }
   window.neperResult = out
   const shown = document.getElementById('stdout')
+  if (query.has('events')) {
+    const trace = document.createElement('pre')
+    const lines = []
+    document.body.append(trace)
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'contextmenu', 'touchstart', 'touchend', 'focusin', 'keydown', 'beforeinput', 'input', 'compositionstart', 'compositionend'])
+      document.addEventListener(type, (e) => { lines.push(`${Math.round(performance.now())} ${type} ${e.target?.tagName ?? ''} ${e.pointerType ?? e.inputType ?? ''} key=${e.key ?? ''} data=${e.data ?? ''} kc=${e.keyCode ?? ''} dp=${e.defaultPrevented} mods=${+!!e.shiftKey}${+!!e.ctrlKey}${+!!e.altKey}${+!!e.metaKey}`); trace.textContent = lines.slice(-24).join('\n') })
+  }
   const decoder = new TextDecoder()
   const stdout = (bytes) => {
     if (!bytes) return

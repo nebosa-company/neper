@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 typedef struct { unsigned char *base; size_t cap; size_t off; } NpArena;
 typedef struct { const unsigned char *ptr; size_t len; } NpStr;

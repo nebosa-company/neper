@@ -4138,6 +4138,54 @@ fn argument_can_change(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     ret false
 }
 
+// (D5935) A kernel call cannot fault a page in, so on Windows what it writes must be committed
+// first (D428). When the argument is `&slice[i]` through a writable pointer the length is in
+// reach, and the slice is touched here, as `os.touch` would. A pointer from anywhere else, and
+// a loop that wants to touch once, are still the program's own to handle.
+fn touch_import_buffer(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, child_index: usize, parameter_type: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
+    if !windows_target(c) || parameter_type.kind != .Pointer || parameter_type.is_const { ret ok }
+    let node = tree.nodes[child_index]
+    if node.kind != .UnaryExpr || c.tokens[usize(node.token_start)].kind != .PunctAmp { ret ok }
+    let (place_index, has_place) = check.first_node_child(tree, node)
+    if !has_place || tree.nodes[place_index].kind != .BracketPostfix { ret ok }
+    let (slice_index, has_slice) = check.first_node_child(tree, tree.nodes[place_index])
+    if !has_slice { ret ok }
+    let slice_kind = tree.nodes[slice_index].kind
+    if slice_kind != .NameExpr && slice_kind != .FieldExpr { ret ok }
+    let (slice_type, slice_type_error) = check.check_expr(c, g, tree, module_index, slice_index, check.invalid_type())
+    if slice_type_error != ok || slice_type.kind != .Slice { ret ok }
+    let (element_type, element_type_error) = check.index_element_type(c, slice_type, module_index)
+    if element_type_error != ok { ret element_type_error }
+    let (element_info, element_info_error) = layout.type_info(c, element_type)
+    if element_info_error != ok { ret element_info_error }
+    let token = c.tokens[usize(node.token_start)]
+    let length_type = check.make_type(.Integer, "usize", module_index)
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let (base, base_type, base_error) = lower_expression(c, g, tree, module_index, slice_index, slice_type, builder, bindings, binding_count)
+    if base_error != ok { ret base_error }
+    let (pointer_load, pointer, pointer_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
+    if pointer_error != ok { ret pointer_error }
+    try nir.add_operand(builder, pointer_load, base)
+    let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, length_type, true, 8usize, token)
+    if length_address_error != ok { ret length_address_error }
+    try nir.add_operand(builder, length_address_instruction, base)
+    let (length_load, length, length_error) = nir.emit(builder, .Load, length_type, true, 8usize, token)
+    if length_error != ok { ret length_error }
+    try nir.add_operand(builder, length_load, length_address)
+    let (size_constant, size, size_error) = nir.emit(builder, .ConstInteger, length_type, true, element_info.size, token)
+    if size_error != ok { ret size_error }
+    let (product, bytes, bytes_error) = nir.emit(builder, .MultiplyWrap, length_type, true, 0usize, token)
+    if bytes_error != ok { ret bytes_error }
+    try nir.add_operand(builder, product, length)
+    try nir.add_operand(builder, product, size)
+    let (touch_ref, touch_ref_error) = nir.intern_function(builder, module_index, "neper_os_touch", 0usize)
+    if touch_ref_error != ok { ret touch_ref_error }
+    let (touch_call, touch_ignored, touch_error) = nir.emit(builder, .Call, zero, false, touch_ref, token)
+    if touch_error != ok { ret touch_error }
+    try nir.add_operand(builder, touch_call, pointer)
+    ret nir.add_operand(builder, touch_call, bytes)
+}
+
 fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, captured: bool, call_out: *check.CallInfo, callee_out: *usize, arguments: []usize, argument_count: *usize) -> err {
     let (call, call_error) = check.check_call(c, g, tree, module_index, node)
     if call_error != ok { ret call_error }
@@ -4234,6 +4282,9 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                 }
                 lowered += 1usize
                 if into_c {
+                    if call.function.import_library.len != 0usize && !variadic_extra {
+                        try touch_import_buffer(c, g, tree, module_index, child_index, parameter_type, builder, bindings, binding_count)
+                    }
                     var crossing_type = parameter_type
                     if variadic_extra { crossing_type = value_type }
                     try c_argument(c, &passing, crossing_type, value, builder, c.tokens[usize(node.token_start)], arguments, argument_count)

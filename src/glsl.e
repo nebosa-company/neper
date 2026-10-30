@@ -1,4 +1,4 @@
-// The GLSL emitter (C215, D5878, D5888): the program's kernels, lowered for the device as the SPIR-V and MSL emitters take
+// The GLSL emitter (C215, D5941, D5888): the program's kernels, lowered for the device as the SPIR-V and MSL emitters take
 // them (`builder.spirv`), written as GLSL 4.30 compute shaders for an OpenGL 4.3 device -- one shader a kernel, each after a
 // `//entry:module_name` line, because a GLSL shader has one `main`.
 //
@@ -399,7 +399,7 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
                                 *message = "a helper call has no GLSL body"
                                 ret (no_bytes, Unsupported)
                             }
-                            // math.fma is written in place (D5901), never as a helper of its own.
+                            // math.fma is written in place (D5946), never as a helper of its own.
                             if !reachable[callee] && !same(builder.functions[callee].name, "fma") {
                                 reachable[callee] = true
                                 changed = true
@@ -1319,7 +1319,7 @@ fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: 
     let (callee, found) = callee_of(builder, instruction)
     if !found || callee >= m.signatures.count { ret fail(m, "a helper call has no GLSL body") }
     let callee_function = builder.functions[callee]
-    // GLSL's fma need not round once, so `math.fma` is f32_fma on the bits (D5901), one of the exact sequences.
+    // GLSL's fma need not round once, so `math.fma` is f32_fma on the bits (D5946), one of the exact sequences.
     if same(callee_function.name, "fma") {
         if instruction.operand_count != 3usize { ret fail(m, "math.fma takes three operands") }
         let first = operand(builder, instruction, 0usize)

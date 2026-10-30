@@ -58,6 +58,7 @@ def main(argv):
         names = sorted(n for n in os.listdir(LINK) if n.startswith('gpu_') and not n.startswith('gpu_gl')
                        and os.path.isfile(os.path.join(LINK, n, 'src', 'main.e'))
                        and '.Vulkan' in open(os.path.join(LINK, n, 'src', 'main.e'), encoding='utf-8').read()
+                       and n != 'gpu_staging'  # Vulkan staging limits: a heap queue copies directly, as the CPU's does
                        and 'x.khronos.compute' not in open(os.path.join(LINK, n, 'src', 'main.e'), encoding='utf-8').read())
     out = os.path.join(REPO, 'build', 'gl-fixtures', target + ('-es' if es else '') + ('-ui' if ui else ''))
     failed = 0

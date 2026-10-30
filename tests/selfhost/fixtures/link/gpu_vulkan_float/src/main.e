@@ -87,7 +87,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     inputs(numerators, denominators)
     try run(a, .Cpu, 0u32, numerators, denominators, cpu)
     if digest(cpu) != 6270548297220908228u64 { os.exit(2i32) }
-    // (D5901) Every Vulkan device, and every OpenGL one when built with `--gpu glsl`, that keeps denormals.
+    // (D5946) Every Vulkan device, and every OpenGL one when built with `--gpu glsl`, that keeps denormals.
     compute.install()
     var ran = 0usize
     for backend in [_]gpu.Backend{ .Vulkan, .Gl } {

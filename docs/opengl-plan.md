@@ -1,6 +1,6 @@
 # Neper OpenGL and OpenGL ES design
 
-Decisions D5877–D5884. The work items, with their acceptance criteria, models and
+Decisions D5940–D5884. The work items, with their acceptance criteria, models and
 thinking levels, are the `OpenGL` group in `docs/work-queue.json` (C214–C220,
 L172–L182, T044–T049). This file holds only the design and the order.
 
@@ -9,12 +9,12 @@ L172–L182, T044–T049). This file holds only the design and the order.
 1. **A binding** — `x.khronos.gl` and `x.khronos.egl`, loaded at run time like
    `e.gpu.vulkan`. Programs draw with GLSL strings. This is how Neper reaches graphics
    (vertex and fragment stages) without changing the language; §10's compute-only
-   `@gpu` stands (D5877).
+   `@gpu` stands (D5940).
 2. **Presentation** — `e.ui` uploads its finished CPU frame as a texture and swaps with
    vsync. The CPU renderer stays the one renderer.
 3. **Compute** — `e.gpu`'s `Backend.Gl` runs kernels on GL 4.3 or GLES 3.1 where there is
    no Vulkan. It uses Metal's model: one SSBO heap, with a device address as a byte
-   offset into it, emitted by `src/glsl.e` (D5878).
+   offset into it, emitted by `src/glsl.e` (D5941).
 
 Profiles, contexts, threading, exactness, generation and the mobile plan are D5879–D5884.
 

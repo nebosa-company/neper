@@ -208,7 +208,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (gl_out, gl_error) = mem.alloc[u32](a, 15usize * N + 256usize)
     if cpu_error != ok || gl_error != ok { os.exit(8i32) }
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
-    if found_error == gpu.Unsupported {
+    if found_error == gpu.Unsupported || found_error == gpu.NoDevice {
         let printed = io.print("no OpenGL compute device; nothing checked\n")
         ret ok
     }
@@ -257,7 +257,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
 fn check_es(a: *mem.Arena, cpu_out: []u32, es_out: []u32) -> err {
     compute.install_es()
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
-    if found_error == gpu.Unsupported {
+    if found_error == gpu.Unsupported || found_error == gpu.NoDevice {
         let printed = io.print("no OpenGL ES 3.1 compute device with precise; ES not checked\n")
         ret ok
     }

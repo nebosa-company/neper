@@ -15,11 +15,13 @@
 // The entry: the root arena mapped (its size the literal the linker patches), the
 // arguments copied into it as a table of slices, `main(&arena, &args)` called, and the
 // program ended with exit_group -- status 1 when main returned an error, 111 when the
-// arena could not be had. x29 is zero in main's caller: the end of the frame chain.
+// arena could not be had. A size the host refuses is halved down to a mebibyte (D5930).
+// x29 is zero in main's caller: the end of the frame chain.
 .global neper_start
 neper_start:
     mov x19, sp
     ldr x20, .Lstart_arena
+.Lstart_reserve:
     mov x0, #0
     mov x1, x20
     mov x2, #3
@@ -28,7 +30,12 @@ neper_start:
     mov x5, #0
     mov x8, #222
     svc #0
-    tbnz x0, #63, .Lstart_fail
+    tbz x0, #63, .Lstart_mapped
+    lsr x20, x20, #1
+    cmp x20, #0x100000
+    b.hs .Lstart_reserve
+    b .Lstart_fail
+.Lstart_mapped:
     mov x21, x0
     ldr x22, [x19]
     lsl x23, x22, #4
@@ -205,9 +212,35 @@ neper_mem_mark:
     ldr x0, [x0, #16]
     ret
 
+// (D5931) A reset that frees 512 MiB or more hands back all but the first 128 MiB of it, a
+// whole mebibyte at a time, inside what the arena held. The checker refuses a slice past its
+// reset, so nothing checked can see it; anything less costs this one compare and no call.
 .global neper_mem_reset
 neper_mem_reset:
+.Lreset:
+    ldr x2, [x0, #16]
     str x1, [x0, #16]
+    sub x2, x2, x1
+    mov x3, #0x20000000
+    cmp x2, x3
+    b.hi .Lreset_trim
+    ret
+.Lreset_trim:
+    ldr x3, [x0]
+    add x1, x1, x3
+    add x2, x2, x1
+    and x2, x2, #-0x100000
+    mov x3, #0x8000000
+    add x0, x1, x3
+    add x0, x0, #0xff, lsl #12
+    add x0, x0, #0xfff
+    and x0, x0, #-0x100000
+    subs x1, x2, x0
+    b.ls .Lreset_done
+    mov x2, #4
+    mov x8, #233
+    svc #0
+.Lreset_done:
     ret
 
 // The other debug fill (D217): what the reset gives back is 0xDD before the offset moves.
@@ -225,8 +258,7 @@ neper_mem_reset_fill:
     cmp x4, x5
     b.lo .Lreset_fill_byte
 .Lreset_fill_store:
-    str x1, [x0, #16]
-    ret
+    b .Lreset
 
 .global neper_mem_stats
 neper_mem_stats:
@@ -1175,6 +1207,7 @@ neper_os_syscall:
     .word 10, 226
     .word 11, 215
     .word 26, 227
+    .word 28, 233
     .word 32, 23
     .word 35, 101
     .word 39, 172

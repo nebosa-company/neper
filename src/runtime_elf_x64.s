@@ -160,9 +160,31 @@ neper_mem_mark:
     mov rax,QWORD PTR [rdi+0x10]
     ret
 
+# (D5931) A reset that frees 512 MiB or more hands back all but the first 128 MiB of it, a
+# whole mebibyte at a time, inside what the arena held. The checker refuses a slice past its
+# reset, so nothing checked can see it; anything less costs this one compare and no call.
 .global neper_mem_reset
 neper_mem_reset:
+.Lreset:
+    mov rax,QWORD PTR [rdi+0x10]
     mov QWORD PTR [rdi+0x10],rsi
+    sub rax,rsi
+    cmp rax,0x20000000
+    ja .Lreset_trim
+    ret
+.Lreset_trim:
+    add rsi,QWORD PTR [rdi]
+    add rax,rsi
+    and rax,-0x100000
+    lea rdi,[rsi+0x80FFFFF]
+    and rdi,-0x100000
+    mov rsi,rax
+    sub rsi,rdi
+    jbe .Lreset_done
+    mov edx,4
+    mov eax,28
+    syscall
+.Lreset_done:
     ret
 
 # The other debug fill (D217): what the reset gives back is 0xDD before the offset
@@ -181,8 +203,7 @@ neper_mem_reset_fill:
     rep stosb
     mov rdi,r8
 .Lreset_fill_store:
-    mov QWORD PTR [rdi+0x10],rsi
-    ret
+    jmp .Lreset
 
 .global neper_mem_stats
 neper_mem_stats:

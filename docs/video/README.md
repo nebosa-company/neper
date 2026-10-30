@@ -66,3 +66,40 @@ credit needed):
 ```powershell
 python docs/video/neper-promo/build.py
 ```
+
+# Neper WebAssembly (about 2 min 24 s)
+
+`neper-wasm/` builds the video for the post `docs/blog/neper-webassembly.html`: a hook, one command, the emitter,
+the sweep, the compiler running as `neper.wasm`, a phone, and the limits.
+
+- `narration.json` holds the eight passages. The voice is Microsoft George, a local Windows OneCore voice (male,
+  en-GB), generated with `make-audio-winrt.ps1` from Windows PowerShell 5.1: `powershell.exe -File
+  make-audio-winrt.ps1 -Voice 'Microsoft George' -Out audio`. Neper is spelled Nee-per for the synthesizer only.
+  `cueSeconds` is each passage's measured length, which `scenes.html` uses to time what appears on screen.
+- `scenes.html` draws every scene frame by frame; the screenshots it shows are
+  `docs/blog/img/wasm-gallery-fields.png` (Chrome, a 6.5 MB release module) and `wasm-ios-simulator.png` (the
+  `ios-sim` workflow's run 40531327417, iOS 17.5).
+- `build.mjs` renders the frames with Playwright and muxes the narration with FFmpeg into `neper-wasm.mp4`.
+  The numbers on screen are the ones in the post. MP4 and WAV files are not committed; the audio is regenerated from the
+  text.
+- `youtube-description.txt` is the title, description and chapter list for the upload.
+
+From the repository root, with Playwright, FFmpeg and Windows PowerShell on the machine (`PLAYWRIGHT_MODULE`, `FFMPEG`,
+`FRAMES` and `OUT` override the paths):
+
+```powershell
+powershell.exe -File docs/video/neper-wasm/make-audio-winrt.ps1 -Voice 'Microsoft George' -Out docs/video/neper-wasm/audio
+node docs/video/neper-wasm/build.mjs
+```
+
+# Neper memory (about 3 min 41 s)
+
+`neper-memory/` builds the video for the post `docs/blog/compiler-memory.html`, the same way as `neper-wasm/`: the same
+voice (Microsoft George), `make-audio-winrt.ps1` and `build.mjs`, with `narration.json`, `scenes.html` and
+`youtube-description.txt` of its own. The timings in `scenes.html` are seconds into each scene, set from this voice's
+measured lengths, and the numbers on screen are the ones in the post. MP4 and WAV files are not committed.
+
+```powershell
+powershell.exe -File docs/video/neper-memory/make-audio-winrt.ps1 -Voice 'Microsoft George' -Out docs/video/neper-memory/audio
+node docs/video/neper-memory/build.mjs
+```

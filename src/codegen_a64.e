@@ -1171,7 +1171,7 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
             try read_into(allocations, builder.operands[instruction.first_operand + 1usize], A64_S1, output)
             let (desired, desired_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], A64_S2, output)
             if desired_error != ok { ret desired_error }
-            // (D5900) An exclusive loop, not CASAL: x2 the store's status, x4 the expected
+            // (D5945) An exclusive loop, not CASAL: x2 the store's status, x4 the expected
             // value as the exclusive load answers it, zero-extended. x0-x7 hold nothing
             // inside an instruction.
             try emit_a64.extend_integer(output, 4usize, A64_S1, width, false)
@@ -1189,7 +1189,7 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
             if instruction.opcode != .AtomicRmw || instruction.operand_count != 2usize { ret codegen_x64.Unsupported }
             let (operand, operand_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], A64_S2, output)
             if operand_error != ok { ret operand_error }
-            // nir's kinds: xchg, add, sub, and, or, xor, min, max. (D5900) The new value in
+            // nir's kinds: xchg, add, sub, and, or, xor, min, max. (D5945) The new value in
             // x3, the store's status in x2; min and max compare at the width, so both sides
             // are extended, the operand once into x4.
             let kind = instruction.immediate / 8usize

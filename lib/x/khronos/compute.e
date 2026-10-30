@@ -688,8 +688,9 @@ fn save_program(a: *mem.Arena, path: str, program: u32) {
 
 fn destroy_here(pipeline: mtl.Pipeline) { gl.delete_program(u32(pipeline.state & 4294967295usize)) }
 
+// The launcher hands the argument block and then every heap (D5878: up to four on Metal); OpenGL has one heap, the second buffer.
 fn dispatch_begin_here(handle: mtl.Context, pipeline: mtl.Pipeline, buffers: []const mtl.Buffer, groups: mtl.Size, per_group: mtl.Size, shared_bytes: usize) -> (usize, err) {
-    if slot_of(handle) == MAX_DEVICES || buffers.len != 2usize { ret (0usize, Unsupported) }
+    if slot_of(handle) == MAX_DEVICES || buffers.len < 2usize { ret (0usize, Unsupported) }
     gl.bind_buffer_base(gl.SHADER_STORAGE_BUFFER, 0u32, u32(buffers[0usize].handle & 4294967295usize))
     gl.bind_buffer_base(gl.SHADER_STORAGE_BUFFER, 1u32, u32(buffers[1usize].handle & 4294967295usize))
     gl.use_program(u32(pipeline.state & 4294967295usize))

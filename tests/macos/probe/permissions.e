@@ -11,6 +11,7 @@ fn say(text: str) {
 fn name(p: shell.Permission) -> str {
     if p == .Granted { ret "granted" }
     if p == .Denied { ret "denied" }
+    if p == .NotDetermined { ret "not-determined" }
     ret "unavailable"
 }
 

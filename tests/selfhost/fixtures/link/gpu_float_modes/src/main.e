@@ -320,7 +320,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     fill(ta, tx, ty, td)
     if bits(unfused(ta[0usize], tx[0usize], ty[0usize])) == bits(math.fma[f32](ta[0usize], tx[0usize], ty[0usize])) { os.exit(1i32) }
     try check_device(a, .Cpu, 0u32, 10i32)
-    // (D5901) Every Vulkan device, and every OpenGL one when built with `--gpu glsl`.
+    // (D5946) Every Vulkan device, and every OpenGL one when built with `--gpu glsl`.
     compute.install()
     var ran = 0usize
     var any = false

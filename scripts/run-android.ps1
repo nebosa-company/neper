@@ -1,4 +1,4 @@
-# Build link fixtures for `x64 android` or, with -Arch aarch64, `aarch64 android` (C219, D5896, D5900), push them to the
+# Build link fixtures for `x64 android` or, with -Arch aarch64, `aarch64 android` (C219, D5896, D5945), push them to the
 # device or emulator adb sees, and run each under `adb shell` from /data/local/tmp; an x86_64 emulator runs arm64 images
 # through its translator. A fixture whose name starts with gpu_gl is built with `--gpu glsl`. Exit 1 when any fixture
 # exits non-zero.

@@ -1,7 +1,10 @@
 #include <metal_stdlib>
 using namespace metal;
 
-kernel void float_exact(device const uchar* args [[buffer(0)]], device uchar* heap [[buffer(1)]], uint3 gid3 [[thread_position_in_grid]], uint3 lid3 [[thread_position_in_threadgroup]], uint3 wgid3 [[threadgroup_position_in_grid]], uint sid [[thread_index_in_simdgroup]], uint sgw [[threads_per_simdgroup]]) {
+// A device address: the heap in its top byte, the offset in the rest (D5877).
+#define HP(a) ((((a) >> 56) == 0ul ? heap : ((a) >> 56) == 1ul ? heap1 : ((a) >> 56) == 2ul ? heap2 : heap3) + ((a) & 0xFFFFFFFFFFFFFFul))
+
+kernel void float_exact(device const uchar* args [[buffer(0)]], device uchar* heap [[buffer(1)]], device uchar* heap1 [[buffer(2)]], device uchar* heap2 [[buffer(3)]], device uchar* heap3 [[buffer(4)]], uint3 gid3 [[thread_position_in_grid]], uint3 lid3 [[thread_position_in_threadgroup]], uint3 wgid3 [[threadgroup_position_in_grid]], uint sid [[thread_index_in_simdgroup]], uint sgw [[threads_per_simdgroup]]) {
   thread ulong fr_words[6];
   thread uchar* fr = (thread uchar*)fr_words;
   for (uint z = 0u; z < 6u; z += 1u) fr_words[z] = 0ul;
@@ -149,7 +152,7 @@ kernel void float_exact(device const uchar* args [[buffer(0)]], device uchar* he
         return;
       }
       v26 = v23 + (ulong)v21 * 4ul;
-      v27 = *(device float*)(heap + v26);
+      v27 = *(device float*)HP(v26);
       v28 = (uint)v7;
       v30 = *(thread ulong*)(fr + 16u);
       v32 = *(thread uint*)(fr + 24u);
@@ -170,9 +173,9 @@ kernel void float_exact(device const uchar* args [[buffer(0)]], device uchar* he
         return;
       }
       v33 = v30 + (ulong)v28 * 4ul;
-      v34 = *(device float*)(heap + v33);
+      v34 = *(device float*)HP(v33);
       v35 = precise::divide(v27, v34);
-      *(device float*)(heap + v20) = v35;
+      *(device float*)HP(v20) = v35;
       v36 = (uint)v7;
       v37 = (uint)2u;
       v38 = (uint)(v36 * v37);
@@ -270,9 +273,9 @@ kernel void float_exact(device const uchar* args [[buffer(0)]], device uchar* he
         return;
       }
       v57 = v54 + (ulong)v52 * 4ul;
-      v58 = *(device float*)(heap + v57);
+      v58 = *(device float*)HP(v57);
       v59 = precise::sqrt(v58);
-      *(device float*)(heap + v51) = v59;
+      *(device float*)HP(v51) = v59;
       return;
     }
     default: return;

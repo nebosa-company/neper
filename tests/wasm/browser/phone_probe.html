@@ -12,7 +12,7 @@
 const log = [], out = document.getElementById('out'), field = document.getElementById('field')
 const note = (s) => { log.push(s); out.textContent = log.slice(-40).join('\n') }
 for (const t of ['keydown', 'beforeinput', 'input', 'compositionstart', 'compositionupdate', 'compositionend', 'paste'])
-  field.addEventListener(t, (e) => note(`${t} key=${e.key ?? ''} data=${JSON.stringify(e.data ?? '')} inputType=${e.inputType ?? ''} composing=${e.isComposing ?? ''}`))
+  field.addEventListener(t, (e) => note(`${t} key=${e.key ?? ''} data=${JSON.stringify(e.data ?? '')} inputType=${e.inputType ?? ''} composing=${e.isComposing ?? ''} value=${JSON.stringify(field.value)}`))
 window.visualViewport?.addEventListener('resize', () => note(`visualViewport ${Math.round(visualViewport.width)}x${Math.round(visualViewport.height)} scale=${visualViewport.scale}`))
 window.addEventListener('scroll', () => note(`page scrolled to ${scrollY}`))
 document.getElementById('copy').onclick = () => navigator.clipboard?.writeText(field.value).then(() => note('clipboard write ok'), (e) => note('clipboard write ' + e.name))

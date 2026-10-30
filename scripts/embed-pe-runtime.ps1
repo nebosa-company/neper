@@ -63,7 +63,7 @@ for ($index = 0; $index -lt $symbolCount;) {
     $index += 1 + $auxiliaryCount
 }
 
-$imports = @('AddVectoredExceptionHandler','VirtualQuery','CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile','GetSystemTimeAsFileTime','QueryPerformanceCounter','QueryPerformanceFrequency','CreateProcessW','SetHandleInformation','WaitForSingleObject','GetExitCodeProcess','SetFilePointerEx','CreateThread','GetModuleHandleW','GetProcAddress')
+$imports = @('AddVectoredExceptionHandler','VirtualQuery','VirtualFree','Sleep','CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile','GetSystemTimeAsFileTime','QueryPerformanceCounter','QueryPerformanceFrequency','CreateProcessW','SetHandleInformation','WaitForSingleObject','GetExitCodeProcess','SetFilePointerEx','CreateThread','GetModuleHandleW','GetProcAddress')
 $relocations = @()
 for ($index = 0; $index -lt $text.RelocationCount; $index++) {
     $offset = $text.Relocations + $index * 10

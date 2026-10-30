@@ -229,7 +229,7 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     }
     m.checked = !builder.nocheck && reachable_checked(builder, first)
     *has_checks = m.checked
-    put(&m.body, "#include <metal_stdlib>\nusing namespace metal;\n\n")
+    put(&m.body, "#include <metal_stdlib>\nusing namespace metal;\n\n// A device address: the heap in its top byte, the offset in the rest (D5877).\n#define HP(a) ((((a) >> 56) == 0ul ? heap : ((a) >> 56) == 1ul ? heap1 : ((a) >> 56) == 2ul ? heap2 : heap3) + ((a) & 0xFFFFFFFFFFFFFFul))\n\n")
     function_at = first
     while function_at < builder.function_count {
         let function = builder.functions[function_at]
@@ -374,7 +374,7 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     // The kernel: signature, variables, then the dispatch.
     put(&m.body, "kernel void ")
     put_entry_name(&m.body, g, kernel)
-    put(&m.body, "(device const uchar* args [[buffer(0)]], device uchar* heap [[buffer(1)]], uint3 gid3 [[thread_position_in_grid]], uint3 lid3 [[thread_position_in_threadgroup]], uint3 wgid3 [[threadgroup_position_in_grid]], uint sid [[thread_index_in_simdgroup]], uint sgw [[threads_per_simdgroup]]")
+    put(&m.body, "(device const uchar* args [[buffer(0)]], device uchar* heap [[buffer(1)]], device uchar* heap1 [[buffer(2)]], device uchar* heap2 [[buffer(3)]], device uchar* heap3 [[buffer(4)]], uint3 gid3 [[thread_position_in_grid]], uint3 lid3 [[thread_position_in_threadgroup]], uint3 wgid3 [[threadgroup_position_in_grid]], uint sid [[thread_index_in_simdgroup]], uint sgw [[threads_per_simdgroup]]")
     if m.has_shared { put(&m.body, ", threadgroup uchar* tg [[threadgroup(0)]]") }
     put(&m.body, ") {\n")
     if m.frame_bytes != 0usize {
@@ -894,7 +894,7 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     put_number(t, result)
     put(t, " = *(device ")
     put(t, type_name(ty))
-    put(t, "*)(heap + v")
+    put(t, "*)HP(v")
     put_number(t, address)
     put(t, ");\n")
     ret ok
@@ -940,7 +940,7 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     if (ty == T_BOOL) { ret fail(m, "a bool in device memory is not a device storage type") }
     put(t, "      *(device ")
     put(t, type_name(ty))
-    put(t, "*)(heap + v")
+    put(t, "*)HP(v")
     put_number(t, address)
     put(t, ") = v")
     put_number(t, value)
@@ -1104,7 +1104,7 @@ fn put_atomic_pointer(m: *Module, values: *Values, address: usize, ty: u8) -> er
     if (values.kind[address] == KIND_SCALAR) {
         put(t, "(device ")
         put(t, atomic_type(ty))
-        put(t, "*)(heap + v")
+        put(t, "*)HP(v")
         put_number(t, address)
         put(t, ")")
         ret ok

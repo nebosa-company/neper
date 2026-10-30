@@ -42914,11 +42914,11 @@ Windows has `window_on_resize` (D5856): the window procedure's `WM_SIZE` branch,
 
 `scripts/macos-bundle.sh` takes `--entitlements FILE` (handed to `codesign` with the hardened runtime) and `--notarize PROFILE`, which needs `--sign` (refused otherwise, at argument time) and then submits a zip of the signed app with `xcrun notarytool submit --keychain-profile PROFILE --wait`, requires `status: Accepted`, staples the ticket with `xcrun stapler staple` and checks it with `spctl -a -vv -t exec`. Both options are opt-in; the default bundle path is unchanged (`BUNDLE PASS` on aarch64 and x64 in the macOS corpus, 1132/1132). They follow the tools' documented command lines and have never run against Apple's service: this repository has no Developer ID, so C191's finish line, a notarized bundle opened on a clean Mac, is still open and the header of the script says so.
 
-## D5877 — OpenGL is a library, not a language feature
+## D5940 — OpenGL is a library, not a language feature
 
 Neper gains OpenGL and OpenGL ES in three layers, each usable without the next: a binding (`x.khronos.gl`, `x.khronos.egl`) loaded at run time the way `e.gpu.vulkan` and `x.sqlite` are, through which a program draws with GLSL strings; an `e.ui` presentation path that hands the CPU renderer's finished frame to GL as a texture; and an `e.gpu` compute backend, `Backend.Gl`. Spec §10's "no graphics pipeline, and none is planned" stands: graphics reach a program through the binding, and `@gpu` gains no vertex or fragment stages. The work is queued as the OpenGL group, C214-C220, L172-L182 and T044-T049, each with its own model and thinking level; `docs/opengl-plan.md` holds the design and the order.
 
-## D5878 — GL compute uses Metal's heap model
+## D5941 — GL compute uses Metal's heap model
 
 GLSL has no pointers, and §10 requires a device slice to be a `{ptr, len}` pair. The GL backend meets that requirement the way Metal does (D5838, D5839): one SSBO heap, `uint heap[]`, in which a device address is a byte offset and a kernel is a switch state machine over heap offsets. The emitter is `src/glsl.e`, a sibling of `src/msl.e`, and the GL code goes into its own `K$glsl` section, selected with `--gpu glsl` (C214), because Vulkan and GL share Windows and Linux targets where Metal had macOS to itself. §10's Platforms table gains a GL row and §13 gains the target.
 
@@ -43026,13 +43026,13 @@ Metal's backend already worked over one host-visible heap whose ranges are the b
 
 `gpu_gl` (built with `--gpu glsl`) runs saxpy, u8 and i16 stores racing their neighbours, signed `/` and `%` by a negative divisor, and a 2-D grid's ids. Every word equals the CPU backend's on Intel Iris Xe (the `ftz` saxpy) and on Mesa llvmpipe (the plain one), and a checked overrun comes back as a `Bounds` fault. The CPU and Vulkan fixtures (`gpu_cpu`, `gpu_fault_bounds`, `gpu_devices`, `gpu_shared`, `gpu_ftz_ops`, `gpu_present`, `gpu_vulkan_*`) still pass, including Vulkan launches from a `--gpu glsl` build.
 
-## D5890 — The GLES compute profile is ES 3.2, from the same shaders
+## D5942 — The GLES compute profile is ES 3.2, from the same shaders
 
 `x.khronos.compute.install_es()` makes `.Gl` open OpenGL ES 3.2 contexts instead of GL 4.3 core ones (Mesa's EGL on Linux, ANGLE's `libEGL.dll` on Windows). The emitter is unchanged. At compile time the shader's `#version 430` line gives way to `#version 320 es` with `precision highp float; precision highp int;`, passed as a second string to `glShaderSource`, so nothing is copied.
 
 The floor is ES 3.2 rather than the 3.1 the plan named, because 3.2 is the first ES with `precise`: without it a multiply and an add may be fused, and the words would no longer be the CPU's. A device that answers below 3.2 is not opened. ANGLE on D3D11, which stops at 3.1, is therefore refused rather than run inexactly. ES has `glBufferStorage` only as `GL_EXT_buffer_storage`, which the driver calls through `glBufferStorageEXT` when the core entry is absent. `gpu_gl` runs every kernel a second time through ES and is word-equal to the CPU on Mesa llvmpipe's GLES 3.2.
 
-## D5891 — Exact f32 division and square root in GLSL are integer sequences
+## D5943 — Exact f32 division and square root in GLSL are integer sequences
 
 GLSL lets division be 2.5 ULP off and `sqrt` looser still. Its `fma` is not promised to round once, so a Newton correction cannot be trusted. The GLSL emitter therefore writes `f32_div` and `f32_sqrt` into each shader that needs them, and they work on the bits:
 - **Division.** Unpack and normalise subnormals, long-divide the two 24-bit mantissas to 26 quotient bits plus a sticky bit, and round to nearest-even in one `f32_round`. That covers subnormal results (shifted, with the shifted-out bits sticky) and overflow to infinity.
@@ -43043,7 +43043,7 @@ The first run found the CPU returning 0x7FC00000 where the sequence followed x86
 
 `gpu_gl_exact` divides and takes square roots of 65,536 operand pairs from a fixed xorshift. The pairs include every special value in either place and divisors at the dividend's scale, so rounding is decided in the last bits. Every word equals the CPU's on Intel (the `ftz` kernel) and on Mesa llvmpipe (the plain one, with subnormal results).
 
-## D5892 — A helper the kernel calls is a GLSL function, in every kernel's shader
+## D5944 — A helper the kernel calls is a GLSL function, in every kernel's shader
 
 The GLSL emitter used to refuse any kernel that calls a helper (the MSL emitter still does). Helpers now go the way the SPIR-V emitter takes them:
 - **Which helpers.** Every function the kernels reach through `Call` is found from the resolved references, as `spirv.e` finds them.
@@ -43123,7 +43123,7 @@ D5881 as built. `x.khronos.compute.open` gives the device a slot with a mutex, t
 
 Both hosts now pass all twelve steps. Windows' minimum window width (about 176 px with a caption) is why the fixture asks for 200 px or more.
 
-## D5900 — `aarch64 android`, and arm64 atomics as exclusive loops
+## D5945 — `aarch64 android`, and arm64 atomics as exclusive loops
 
 `aarch64 android` is `aarch64 linux` typed `ET_DYN` for `/system/bin/linker64`, with D5896's Bionic library names; `link_elf.e`'s `executable_type` and `builder.android` serve both writers. Android images also name `liblog.so`, Android's logger, beside `libdl.so`.
 
@@ -43135,7 +43135,7 @@ A third fault was the per-module linker. `em_link.e` chose a64's call patching o
 
 `scripts/run-android.ps1 -Arch aarch64` builds and runs fixtures as arm64. On the x86_64 Android 15 emulator, both architectures pass `hello`, `advanced`, `gpu_cpu`, `gpu_fault_bounds`, `x_khronos_gl_load`, `x_khronos_gl_headless` (GLES 3.0 draws), `atomic_ops`, `atomic_threads` and `channel_threads`. `atomic_ops` and `atomic_threads` built for `aarch64 linux` pass under `qemu-aarch64 -cpu cortex-a53`.
 
-## D5901 — `math.fma` in GLSL, and the float fixtures on every GL device
+## D5946 — `math.fma` in GLSL, and the float fixtures on every GL device
 
 GLSL's `fma` need not round once, so the emitter refused kernels that call `math.fma`. It is now the fourth exact sequence beside `f32_div` and `f32_sqrt`, written in the shader as `f32_fma` on the bits:
 - **Product.** `umulExtended` gives the 48-bit product exactly, and it is moved so its top bit is bit 61 of a `uvec2`.
@@ -43169,13 +43169,13 @@ It needs only GLSL 4.30 and ES 3.10 built-ins, and no `int64` or `fp64`. The cal
 - **Arithmetic.** `+ - * /` and `sqrt` are GLSL's own.
 - **NaNs.** Every NaN result, including a converted one, is section 11's canonical NaN of its width (`0x7FF8000000000000`, or `0x7FC00000` after narrowing). Before this, narrowing a NaN kept its payload.
 
-`x.khronos.compute` reports `.Float64` on desktop contexts; ES has no doubles. Unlike f32 (D5891), the double operations are not written as integer sequences. GLSL promises them only single precision, so the driver's arithmetic is trusted where `gpu_gl_f64` passes. That fixture covers 65,536 pairs of random patterns and special values through every operation and narrowing, and is word-equal to the CPU on llvmpipe. Intel cannot run an f64 kernel at all: it flushes denormals, so only `ftz` kernels launch there, and an `ftz` kernel cannot hold f64. If a device ever fails that fixture, the integer sequences are the fix: 53-bit mantissas over `uvec2` words, as `f32_fma` does for 48 bits.
+`x.khronos.compute` reports `.Float64` on desktop contexts; ES has no doubles. Unlike f32 (D5943), the double operations are not written as integer sequences. GLSL promises them only single precision, so the driver's arithmetic is trusted where `gpu_gl_f64` passes. That fixture covers 65,536 pairs of random patterns and special values through every operation and narrowing, and is word-equal to the CPU on llvmpipe. Intel cannot run an f64 kernel at all: it flushes denormals, so only `ftz` kernels launch there, and an `ftz` kernel cannot hold f64. If a device ever fails that fixture, the integer sequences are the fix: 53-bit mantissas over `uvec2` words, as `f32_fma` does for 48 bits.
 
 A workgroup longer along an axis than `MAX_COMPUTE_WORK_GROUP_SIZE`, or shared memory past `MAX_COMPUTE_SHARED_MEMORY_SIZE`, used to fail in the driver's compiler and answer `Unsupported`. GL's `compile` now reads the shader's declared `local_size_*` and `tg[]` size against those limits first. Over a limit, it returns a pipeline of no threads, which `e.gpu`'s existing invocation check turns into `TooLarge`, the CPU's and Vulkan's answer. `gpu_gl_limits` checks both: a mebibyte of shared memory is `TooLarge` everywhere, and a 1×1×1024 workgroup is `TooLarge` on Intel (64 along z) and runs correctly on llvmpipe.
 
 ## D5904 — OpenGL ES 3.1 devices where `gpu_shader5` gives them `precise`
 
-D5890 put the ES floor at 3.2 because 3.2 is the first ES with `precise`, and without it a driver may fuse an f32 multiply and add, breaking word equality. ES 3.1 drivers often have `GL_EXT_gpu_shader5` or `GL_OES_gpu_shader5`, which brings the same keyword. `x.khronos.compute` now asks for ES 3.1 or later:
+D5942 put the ES floor at 3.2 because 3.2 is the first ES with `precise`, and without it a driver may fuse an f32 multiply and add, breaking word equality. ES 3.1 drivers often have `GL_EXT_gpu_shader5` or `GL_OES_gpu_shader5`, which brings the same keyword. `x.khronos.compute` now asks for ES 3.1 or later:
 - **3.1 with either extension.** The device is taken, and its shaders start `#version 310 es` with that extension required and every precision high.
 - **3.1 without either.** The device is refused, as ANGLE on D3D11 still is.
 - **3.2 and later.** These keep 3.2's header.
@@ -43287,7 +43287,7 @@ The status bar overlaps the top of the window, since the window is drawn edge to
 
 `x_khronos_gl_dpi` sends its own window `WM_DPICHANGED` at 144 dpi with the frame half as large again, as Windows does for a 150% monitor. The client area must grow by exactly that share less the frame (200×150 to 311×253 on Intel), `window_metrics` must report it, and a GL frame cleared at the new size must reach its far corner. Before this change the message went unhandled and the window kept its size. The machine has one display, so a real crossing between monitors of different scales is not exercised. The fixture sends the message Windows sends for that crossing.
 
-## D5912 — The root arena's default ceiling is 64 GiB, 4 GiB on Android
+## D5947 — The root arena's default ceiling is 64 GiB, 4 GiB on Android
 
 A program that outgrew its root arena stopped with `E-TYPE-9999` at 1 GiB unless it was linked with `--arena`, the compiler included. The arena cannot grow by moving: it hands out pointers, and nothing moves under one (D351). It does not need to. Since D133 and D340 the arena is a reservation committed as it is touched, so its size is a ceiling on address space, not a charge on memory. Raising the default ceiling gives every program, and the compiler, the memory it needs when it needs it.
 
@@ -43321,12 +43321,12 @@ Considered and not done: F16C for x64-v3 (the integer sequence is identical on e
 
 The CPU code generators (D5913) hold an f16 or bf16 as its sixteen bits, widen to f32, operate, and round once to nearest-even. `glsl.e` does the same, with every conversion in integer code, so no driver conversion or rounding mode is in the answer (`packHalf2x16` is left alone):
 - **Representation.** A narrow value is a `uint` of sixteen bits, loaded and stored by the narrow-integer paths that already existed (D5888).
-- **Arithmetic.** `+ - *` widen both operands, take the f32 result, and round it. `/` and `sqrt` use the exact f32 sequences of D5891, since the CPU divides in f32 exactly and rounds again. `math.fma[F]` is `f32_fma` on widened values, rounded once. Negation flips bit 15, and a NaN becomes canonical. The six comparisons widen and compare in f32.
+- **Arithmetic.** `+ - *` widen both operands, take the f32 result, and round it. `/` and `sqrt` use the exact f32 sequences of D5943, since the CPU divides in f32 exactly and rounds again. `math.fma[F]` is `f32_fma` on widened values, rounded once. Negation flips bit 15, and a NaN becomes canonical. The six comparisons widen and compare in f32.
 - **Conversions.** Each is one rounding of the value, as on the CPU. A narrow value widens exactly; any NaN becomes the target's canonical one (0x7E00, 0x7FC0, 0x7FC00000, 0x7FF8000000000000). Narrow to narrow goes through f32. f32 to narrow is the usual add-half-and-shift. f64 to narrow rounds the 53-bit significand once, with its lost bits jammed into bit 0, so it needs no int64. An integer of 32 bits or fewer is exact in f64, so it rounds once from its magnitude.
 - **Not written:** a 64-bit integer to narrow, since the CPU rounds it to f64 first; a subgroup add, min or max of narrow values; and an out-of-range narrow-to-integer conversion, which keeps whatever the f32 one does.
 - **Capability.** The GL device reports `.Float16`, since none of this needs an extension.
 
-**What `ftz` does here.** `gpu_gl_narrow` found that the CPU's `math.fma` never flushes a denormal operand under `ftz`: `fma(0x0019, 1.0, 0x0019)` in bf16 is 50, not 0, and the same holds for f32. That is the spec's own rule ("FTZ and DAZ around the CPU build's run"): `fma_bits` is software, and those flags don't govern it. `f32_fma` therefore no longer flushes under `ftz`, which changes D5891's f32 `fma` on Intel. Division, square root and the hardware operations keep flushing. A bf16 denormal widens to an f32 denormal, so under `ftz` its `+ - *` flush, as the CPU's do. An f16 denormal widens to a normal f32.
+**What `ftz` does here.** `gpu_gl_narrow` found that the CPU's `math.fma` never flushes a denormal operand under `ftz`: `fma(0x0019, 1.0, 0x0019)` in bf16 is 50, not 0, and the same holds for f32. That is the spec's own rule ("FTZ and DAZ around the CPU build's run"): `fma_bits` is software, and those flags don't govern it. `f32_fma` therefore no longer flushes under `ftz`, which changes D5943's f32 `fma` on Intel. Division, square root and the hardware operations keep flushing. A bf16 denormal widens to an f32 denormal, so under `ftz` its `+ - *` flush, as the CPU's do. An f16 denormal widens to a normal f32.
 
 `gpu_gl_narrow` (generated by `scripts/gen_gpu_gl_narrow.py`) runs 13 streams of 4,096 words per type on the CPU and the GL device: `+ - * /`, `sqrt`, negation and `fma` in one stream; the comparison mask; widening to f32; the other narrow type; f32, i32 and u32 to narrow; and, where the device has Float64 and keeps denormals, f64 to and from narrow. All are word-equal on Intel Iris Xe (`ftz` kernels) and on llvmpipe (plain kernels, f64 included).
 
@@ -43434,3 +43434,131 @@ bodies borrow those slots through encoding. `hello_reply` validates and retires 
 callers retain that storage while using the bus name. `parse_address` remains a syntax
 parser: endpoint/transport availability and multi-entry selection require a
 caller-provided policy.
+## D5877 — System information reaches a WebAssembly module through neper_host, and the Windows rows are confirmed
+`proc_sys` stayed an expected difference (D5872, D5873) because the module could not read `/proc`, and preopening `/proc` for every module would hand each one the host's whole tree. Two `neper_host` functions replace that: `sys_text(kind)` answers the text `e.proc.sys.format` already parses (`/proc/stat`, `meminfo`, `uptime`, the runner's pid, and a process table of stat lines that leads with the runner's own process so the output cap cannot cut it off) and `sys_disk(dirfd, path)` answers `statfs` of a path under a preopen as "total free used". A Linux runner reads the real files; any other composes the same shapes from Node's `os` module, with the runner's process as the whole table. The module's `process_id` is the runner's pid, `self_memory` is the memory the module holds (as `peak_memory`), and `disk_usage` checks the path with `os.stat` first (a missing path stays `NotFound`) and measures the first preopen's volume, so an absolute path outside the working directory reports that volume. A host without the imports (the page's, ENOSYS) keeps the old answers: `Unsupported`, one CPU, the monotonic uptime. The fixture passes plain and threaded on Windows; the row is gone from `sweep-expected.tsv`.
+
+The Windows rows of that file were swept with a compiler built from the current tree: all 23 `windows` and `*` rows come out `expected`. Three plain-build rows (`runtime_gaps` 42, `proc_output` 20, `gpu_device_lock` 1) are the same on Windows as on Linux, so their host is now `*`; the threaded build keeps the Windows rows (`proc_output` 112, `gpu_device_lock` 0/0).
+
+## D5878 — Metal device memory is up to four heaps, an address names its heap in the top byte
+
+D5853 found that one heap larger than 256 MiB read back wrong on the macos-14 runners, so `e.gpu` on Metal now makes up to `METAL_HEAPS` (4) heaps of 256 MiB, each as the buffers need it: `alloc` takes the first gap that holds the buffer in an existing heap and otherwise makes the next heap, so a buffer still lives whole in one heap (a single buffer is at most a little under 256 MiB) but the device holds about 1 GiB. A device address is the heap's number in bits 56 and up and the offset below; `launch_view` hands that on, the kernel's `HP(a)` macro in the emitted MSL picks `heap`, `heap1`, `heap2` or `heap3` (buffers 1 to 4, a heap not made yet is heap 0 again) and adds the masked offset, and index arithmetic on an address stays in the low bits. The launch's argument block and fault block stay in heap 0. `macos_gpu_metal` allocates three 200 MiB buffers, writes the last word of each from one kernel and reads them back, then releases them and allocates again: aarch64 and x64. The MSL goldens in tests/conformance/msl changed with the kernel header. Not done: a single buffer above 256 MiB.
+
+## D5890 — A virtual keyboard's edits are read from the field's value, not counted from its events
+`phone_probe.html` on Android Chrome (Gboard, Bulgarian) showed that letters arrive as `keydown` with `key=Unidentified` (keyCode 229) and only `beforeinput` carries the text; Backspace and Enter are real keys; and a tapped suggestion or autocorrect is ONE `deleteContentBackward` that removes the whole typed word (`outdige` to `out`), then `insertText` of the replacement, with no composition events. `window.js` turned each delete event into one Backspace, so a correction left the old word's letters in the program. The invisible textarea now keeps what was typed since the last line break; `beforeinput` records its value and `input` diffs it against the new one (`edits`, in code points), sending that many Backspaces and the inserted text. A real Backspace or Enter key trims or clears the copy so it matches the program. A canvas used as its own sink (no document, Node) keeps the old per-event path. Paste, the clipboard (HTTP is not a secure context) and a composing CJK keyboard are still unprobed on a phone.
+
+## D5891 — A touch hold selects a word, drags to extend, and offers a toolbar
+On a phone a finger has no right button and `e.ui`'s plain text field has no context menu to open with one (a simulated right-click only selects the word), so `window.js` gives touch its own. A finger held still for 400 ms (or Chrome's own `contextmenu` for the hold, whichever is first) sends a release and a double press that stays down: the word under it is selected and the finger moving on extends the selection. On lift the page shows a toolbar of Cut, Copy, Paste and Select all, each sending the Ctrl shortcut the program already reads (Paste first reads the clipboard, which needs a secure context and may ask); a tap elsewhere removes it. The canvas takes `touch-action: none` and no text selection so the browser neither scrolls nor selects under the finger. A program with a context menu of its own does not get it from a touch hold. Draggable handles at the ends of a selection are `e.ui`'s (its header lists touch handles as not yet built) and are not done here. Confirmed by hand on Android Chrome over a secure origin (the flag "Insecure origins treated as secure", since the window needs cross-origin isolation); `ui_counter.html?events=1` shows the pointer events.
+
+## D5892 — Metal launches overlap: up to four in flight, one fault block each
+
+D5875 let the CPU run while a Metal launch did; this lets the launches themselves queue up. `launch_run` takes its queue through `queue_state_launch`, which does not finish the launches before it, so a run of `gpu.launch` calls commits up to `METAL_PENDING` (4) command buffers, in order, on the device's one command queue (Metal runs a queue's command buffers in order and tracks the hazards on the heap buffers, so each sees the writes of the one before). Each pending launch has its argument block and a 32-byte fault block at slot * 32 in heap 0's first 128 bytes, cleared when it is queued; a fifth launch finishes the four first. Every other entry into the device (`queue_state`, `state_of`, `token_device`: writes, downloads, releases, `sync`, tokens, close) still finishes all of them first, in order, reading each fault block into its queue (`metal_fault`), the first fault of a queue kept, and a command the device failed is `Lost` once as in D5875. `macos_gpu_metal` launches saxpy seven times in a row with no download and checks the exact sum, then runs saxpy, a bounds-faulting kernel, saxpy, and checks that the download reports `Fault` once with the launches around it correct: aarch64 and x64, the full macOS corpus (1132/1132), and the Windows and Linux suites on the branch. The GPU still runs the launches one after another; what overlaps is the CPU's queueing with them.
+
+## D5900 — The counter window is driven in Mobile Safari on an iPhone simulator
+`.github/workflows/ios-sim.yml` (manual) builds `ui_counter.wasm` on Linux, then on a macOS 14 runner boots an iPhone simulator, serves the page on localhost (a secure origin, so it is cross-origin isolated) and `tests/wasm/ios/drive.mjs` drives Mobile Safari through Appium 2 and the XCUITest 7 driver (Appium 3 and the 8.x driver fail to build WebDriverAgent under Xcode 15.4). The simulator runtime must match the Xcode SDK (iOS 17.x). It taps the Name field, types on the soft keyboard, presses Backspace, holds on the text and reads the program's own "name TEXT" output; all pass on iOS 17.5. Two traps in the harness, not the page: a touch sent through Appium lands about 59 px high in the web view (the driver measures it on empty page first), and the canvas scales differently across and down on a phone. A real iPhone, a composing keyboard and a tapped suggestion are not covered (the simulator's keyboard is tapped key by key).
+
+## D5901 — shell.Permission has NotDetermined; the macOS location permission can be asked for
+
+`shell.Permission` was `{ Granted, Denied, Unavailable }` and a macOS status of "no one has been asked" was folded into `Unavailable`, so a program could not tell a missing capability from one it had yet to request. It gains a fourth member, `NotDetermined`, on every host's `e.os.shell` (the type lives in each host's file and in the `e.os.shell` fence): only macOS answers it, as AVFoundation's and CoreLocation's status 0 where there is a capture device or location services at all (otherwise `Unavailable` as before), and the other hosts never do. `permission_request` asks only about a `NotDetermined` status, and for the location now does it: `permission_location_request` calls `CLLocationManager requestWhenInUseAuthorization` on a kept manager and polls the status for up to a minute while the run loop turns, since the answer is the status changing and not a callback this library takes. The runners' answers did not change (camera unavailable, microphone granted, location unavailable: no device, no location services) and nothing hangs, so the prompt itself, like the camera's, is a check only a person can make (C192, `tests/macos/manual`). The macOS corpus (1132/1132 on both architectures) and the Windows and Linux suites pass on the branch.
+
+## D5912 — The root arena's default ceiling is 32 GiB
+
+A program that outgrew its root arena stopped with `E-TYPE-9999` at 1 GiB unless it was linked with `--arena`, the compiler included. The arena cannot grow by moving: it hands out pointers, and nothing moves under one (D351). It does not need to. Since D133 and D340 the arena is a reservation committed as it is touched, so its size is a ceiling on address space, not a charge on memory. Raising the default ceiling gives every program, and the compiler, the memory it needs when it needs it.
+
+The default now lives in the compiler (`nir.root_arena_bytes`), and every hosted linker patches it into the image: the PE word, the ELF x64 stub's four immediates, the ELF arm64 and Mach-O literals. It is 32 GiB on Windows, Linux and macOS, x64 and arm64. `--arena` still sets it either way.
+
+Why 32 and not 64. 64 GiB was chosen first, and the Linux suite refused it: valgrind 3.22 gives the program it runs a bounded address space, and a 64 GiB arena did not fit, so `literal_padding` under valgrind exited 111 before `main`. The same fixture runs under valgrind at every size from 1 to 56 GiB. 32 GiB leaves valgrind room, and keeps the compiler's nine worker reservations (288 GiB) inside a 39-bit host's 512 GiB. Any address-space limit below the ceiling still fails at startup, as `ulimit -v 8000000` does with it; the fix for that is a startup that halves the reservation and retries, which is not done. A wasm32 module (linear memory) and a NeperOS image keep their own sizes. The runtimes' built-in word is now always overwritten.
+
+Android is to get 4 GiB, because some arm64 kernels give a process only 39 bits of address space. The Android target (C219) is not on this branch; when it lands, `root_arena_bytes` answers 4 GiB for `builder.android`. There is no native iOS target to give a default to.
+
+Considered and not done: chaining regions, so an exhausted arena reserves another and continues. That is growth without a ceiling, but it changes the 24-byte arena layout every runtime reads (D552) and makes `mark` and `reset` span regions; on a 64-bit host the bigger reservation gives the same behaviour.
+
+What it costs: a runaway program is no longer stopped at 1 GiB. It commits until the OS pushes back (pagefile, OOM killer), as a C or Go program does; `--arena` is the hard cap. The compiler's workers each reserve the root's size less a page (D339), so `-j 8` reserves about 288 GiB of address space, free on a 47-bit host and inside a 39-bit one. The C bootstrap keeps its own default.
+
+Checked: `link/arena_size` now also requires the default build's capacity to be at least 32 GiB. It failed on the old compiler (exit 1) and passes on Windows and Linux x64, and the `--arena 8m` build is still refused. Against the old compiler, the images for x64 Windows, x64 and arm64 Linux and both macOS targets differ only in the arena word (and the Mach-O signature over it). A 64 GiB compiler built itself at a peak working set of 2.9 GB, the same as a 1 GiB one, and stage 2 equals stage 3 at `-j 8` and `-j 1`.
+
+## D5930 — A size the host refuses is halved, and the default ceiling is 1 TiB
+
+D5912 set the default to 32 GiB because 64 GiB would not start under valgrind, and left two holes: a default build stopped at 32 GiB on a machine with more RAM, and any limit on address space below the ceiling ended the program before `main` with a silent exit 111. Both come from one thing, a startup that treats a refused reservation as fatal.
+
+The startup now halves the size and asks again, down to a mebibyte, the smallest `--arena` takes, and the arena's capacity is what was granted. All five hosted entries do it: `runtime_pe_x64.asm`, `startup_elf_x64.s`, `runtime_elf_a64.s`, `runtime_macos_a64.s` and `runtime_macos_x64.s`. The x64 ELF stub existed only as bytes in `link_elf.e`, with four patched copies of the size; it now has a source file, keeps the size in `rbp` and has one immediate. An `--arena` size is treated the same way, because it is a ceiling and halving never exceeds it. A wasm32 module, a NeperOS image and the C bootstrap are unchanged.
+
+With that, nothing needs the default to be low, so it is 1 TiB. The value is not a limit a program should meet: it is more RAM than this project's machines have, an address space of 47 bits holds about a hundred of them, and a host that gives less gives what it has. Android needs no default of its own. The compiler's workers each reserve about the root's size, so `-j 8` asks for about 9 TiB of addresses, and a worker's reservation is halved the same way (`graph.reserve_arena`), since a root that took all of a smaller address space would leave none for its workers.
+
+Why not retry upward, or chain regions: the first has nothing to ask, and the second is the layout change D5912 refused.
+
+What was wrong in D5912's reasoning: valgrind's limit is its own. It puts its tool at `vStart = 0x1002000000` whatever the machine, which leaves a program about 64 GiB; this WSL2 kernel maps 1 TiB natively. So a program under valgrind now simply gets 32 GiB.
+
+Checked: `link/arena_retry`, built with `--arena 1048576g` (a pebibyte, which no 47-bit address space holds), failed with exit 111 and now starts on Windows x64, Linux x64 and Linux arm64 under qemu-aarch64; on Linux it also runs under `ulimit -v 8000000`, and under `ulimit -v 200000`. The same run under valgrind passes at the default. `link/arena_size` requires the default build to report 1 TiB. The macOS corpus takes a fixture's flags from an `emit-flags` file so that it builds the retry too, and both fixtures pass there on GitHub's `macos-14` runners: 1,133 passed and none failed, on Apple Silicon and on x64, the x64 run under Rosetta 2 and not on an Intel Mac. The same program prints a ceiling of 1 TiB natively, 32 GiB under valgrind and 4 GiB under `ulimit -v 8000000`. Both full suites pass. Two self-tests had the old stub's layout written into them and caught the moved call sites first; `link_elf`'s now reads `STARTUP_MAIN_CALL`.
+
+Cost, measured on Windows at 8 workers with a release compiler: nothing. Compiling sc1m peaks at 606 MB of working set and 946 MB of commit, against 606 and 943 at 32 GiB; the compiler building itself at 339 and 693 MB, against 338 and 695. A small program starts and exits in 5.4 to 5.7 ms at 1 TiB and 5.4 to 5.5 ms at 1 GiB, 41 runs each, twice. Stage 2 equals stage 3 at `-j 8` and `-j 1`.
+
+What stays: a program that really does run away commits until the operating system pushes back, and `--arena` is the hard cap (D5912). A program can no longer assume it got the size it asked for, so one that needs a minimum checks `mem.stats`. If even a mebibyte is refused the exit is still 111 with no message. Nothing here has filled more than this machine's RAM.
+
+## D5931 — A large `mem.reset` gives memory back
+
+An arena never gave memory back: `reset` moved an offset, and a spike stayed in RAM until the process ended. That is the one column where Go, Node and usually Rust and C++ were plainly better, and it matters most to the programs that run longest.
+
+`mem.reset` now hands pages back on its own when it frees a lot. A reset that frees 512 MiB or more gives back all but the first 128 MiB of what it freed, in whole mebibytes strictly inside what the arena held; anything less is one compare more than before and makes no system call. `e.mem`'s surface does not change and no program has to ask. Linux uses `MADV_DONTNEED`, Windows `MEM_DECOMMIT`, and macOS a fresh mapping over the range, since madvise there keeps the pages counted. A refusal is not an error: the memory stays where it was. wasm32 and NeperOS have nothing to give back.
+
+This is sound because of what the checker already refuses. A slice into a reset region is `E-SAFETY-0013`, and a debug build fills those bytes, so the bytes were gone by the language's rules before this change. `link/mem_trim` has to go around the checker on purpose, through `mem.view`, to see the zeroes. The range ends on a mebibyte inside the old offset, so an arena over a caller's buffer gives back nothing outside it, which the fixture checks.
+
+The first thresholds were wrong, and the measurement said so. At 128 MiB and 64 MiB, fifty rounds of 200 MiB went from 37 ms to 1,432 ms on Windows, and from about 50 ms to about 2,600 ms on Linux: thrashing, in a size ordinary programs reach. At 512 MiB and 128 MiB the same rounds take 48 and 54 ms. What remains is the worst case by construction: ten rounds of 600 MiB, touching one byte a page, take 23 ms before and about 1,000 to 1,400 ms now. That is about 100 ms a round, and a program that really fills 600 MiB a round spends that much writing it. A stack of resets each under 512 MiB gives nothing back; the fixed thresholds are stateless, since the arena's layout has no room for a high-water mark and D552 keeps it that way.
+
+Measured: after a 2 GiB spike and a reset, resident memory is 132 MiB on Windows and 129 MiB on Linux, from 2,051 and 2,048 before. 2,000 rounds of 4 MiB take the same 8 to 12 ms. The compiler builds itself at the same 339 MB and no slower.
+
+## D5932 — `e.mem.pages`: `ensure` answers before the page fault does
+
+With a 1 TiB ceiling `mem.Exhausted` almost never fires, so running out of real memory is the OOM killer on Linux and a crash on Windows. Rust has `try_reserve`. A commit-on-touch arena cannot answer at `alloc`, by design, since most of what it allocates is never written (D340).
+
+`pages.ensure(a, n)` asks ahead, and allocates nothing. On Windows it commits the bytes, a promise from the system that no later touch can fail, which is stronger than `try_reserve` on an overcommitting Linux. On Linux it checks `MemAvailable`, capped by the cgroup's room, and then populates the pages with `MADV_POPULATE_WRITE`, writing them one by one on a kernel older than 5.14. On macOS, which compresses and swaps rather than refuse, it answers against the machine's memory and writes them, which is the weakest of the three. `pages.discard(bytes)` is the explicit form of D5931 for what a reset does not cover, and `pages.reserve` is a range of its own, halved until the host gives it.
+
+The module is new rather than part of `e.os` or `e.mem`: `e.mem` stays free of the operating system, and `e.os`'s interface hash is in every host's goldens.
+
+## D5933 — `e.mem.heap`: one object at a time, checked at compile time
+
+An arena cannot free one object. `Pool`, `Slab` and `Buddy` could, over storage the program sized up front. With reserved ranges that sizing no longer costs anything, so `e.mem.heap` is the two together: an eighth of a range is a `Slab` for sizes up to 4 KiB, the rest a `Buddy` above that, and a freed block of 1 MiB or more goes back to the operating system through `pages.discard`.
+
+D1655 refused a general-purpose manager because a global heap would break D3, that no function allocates in secret. This one is not global. A `Heap` is a value that is passed, so a function that takes none allocates from none.
+
+A `Block` is a resource owed to `free`, and that is the part other languages' heaps do not have without a borrow checker: the checker refuses a block used after it was freed, freed twice or never freed, at no cost when the program runs, which `check/heap_use_after_free`, `check/heap_double_free` and `check/heap_leak` pin. `alloc` beside an `err` must be tested before the block is used.
+
+Two shapes were tried first and refused by what they would have cost. A `Heap` passed as `*Heap` made `free` of one block invalidate every other block's slice, by the rule that a call through a mutable pointer that returns no pointer changes the container (E-SAFETY-0014); that is why a `Heap` is a handle, passed by value. And `free(block: own []u8)` compiled a use after free without complaint, since `own` on a slice tracks nothing; hence the resource. A block in an array is tracked by element position rather than by index, so a program that keeps blocks in an array moves them through a slice it passes down, as `link/mem_heap` does, and keeps its own record of which are live.
+
+Measured: two gibibytes through 64 live slots in no stack order, sizes from one byte to a mebibyte, take about 50 ms with the peak under the fixture's 256 MB bound.
+
+## D5934 — A refused commit is asked again, and then called what it is
+
+On Windows a page is committed by the fault handler (D340), and when the system refused, the handler reported `fatal: access violation` and exit 139. So a program that ran out of memory was told it had a wild pointer, which is what the suite's intermittent failures looked like on a loaded machine (C221).
+
+A commit is often refused only for a moment: the pagefile is growing behind the request, or another process is exiting. The handler now asks again every 100 ms for two seconds, which is what Firefox found reduces its out-of-memory crashes on this system, and nothing of this runs unless the first answer was no. If the system still refuses, the process ends with `fatal: out of memory: the system refused to commit at 0x...` and status 137, as Linux's OOM killer leaves it. An access violation outside reserved memory is unchanged.
+
+`link/mem_commit_refused` runs in a job with a 256 MiB commit limit, the one way to make Windows refuse on demand (`tests/selfhost/job-commit-limit.ps1`): `pages.ensure` answers `mem.Exhausted` while the program can act on it, and writing on regardless ends with 137 after about two seconds.
+
+The wild-pointer report of those suite failures is not proved to have been commit failures; nothing recorded them at the time.
+
+## D5935 — The compiler touches `&slice[i]` given to an import
+
+A kernel call cannot fault a page in, so on Windows what it writes must be committed first. D428 put that on whoever writes the import, and the failure only appears in a release build, because a debug build's fill commits everything: the worst kind of bug to leave to a person.
+
+When an argument to an `@import` is `&slice[i]`, through a writable pointer, the length is in reach, and lowering now emits `os.touch` over the slice, on Windows only. `*const` parameters are not touched, so an input buffer costs nothing. That is the shape of the fifty such calls in `e.os` and of nearly every call anyone writes. `link/import_touch` reads into a fresh 8 MiB slice with `ReadFile` in a release build: the program failed before this and passes now. A pointer from anywhere else is still the program's to touch, as the spec says.
+
+Earlier notes described this rule as applying to buffers of 4 MiB or more. That was D340's rule; D428 replaced it, and it covered any size.
+
+## D5948 — Eight decision numbers were allocated twice; the OpenGL group's moved
+
+The Mac and Android work and the OpenGL group each allocated decisions from D5877 on without seeing the other, so merging `opengl-group` into `origin/master` found eight numbers used for two decisions each. The numbers already on `origin/master` keep their meaning. The OpenGL group's, and one local duplicate of the root-arena decision, are renumbered:
+
+| Was | Now | Decision |
+|---|---|---|
+| D5877 | D5940 | OpenGL is a library, not a language feature |
+| D5878 | D5941 | GL compute uses Metal's heap model |
+| D5890 | D5942 | The GLES compute profile is ES 3.2, from the same shaders |
+| D5891 | D5943 | Exact f32 division and square root in GLSL are integer sequences |
+| D5892 | D5944 | A helper the kernel calls is a GLSL function, in every kernel's shader |
+| D5900 | D5945 | `aarch64 android`, and arm64 atomics as exclusive loops |
+| D5901 | D5946 | `math.fma` in GLSL, and the float fixtures on every GL device |
+| D5912 | D5947 | The root arena's default ceiling is 64 GiB, 4 GiB on Android (superseded by D5930) |
+
+References in files that `origin/master` did not already contain were updated with them. Text written before this merge (earlier commit messages, the memory notes, and the blog) still says the old numbers; read an old D5877, D5878, D5890, D5891, D5892, D5900, D5901 or D5912 in OpenGL context as the new one above.
+
+The merge itself kept `origin`'s Metal heaps (up to four, an address names its heap) and launches (up to four in flight, one fault block each) and put them behind the `HeapDriver` table, so OpenGL shares the launcher: GL has one heap, so a second heap is `OutOfMemory`, a launch passes the block and every heap and GL binds the first two, and the heap's size is its mapping's. It also kept `origin`'s root arena (1 TiB, halved when refused, D5930) over the 64 GiB and Android 4 GiB of D5912.

@@ -12566,7 +12566,7 @@ type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFi
 type ActivationKind = enum u8 { Launch, File, Url }
 type Activation = struct { kind: ActivationKind, payload: str, args: []const str }
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
-type Permission = enum u8 { Granted, Denied, Unavailable }
+type Permission = enum u8 { Granted, Denied, Unavailable, NotDetermined }
 type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
 type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
 type PrintPage = struct { width: u32, height: u32, dpi_x: u32, dpi_y: u32 }
@@ -28777,6 +28777,32 @@ fn mac_address(a: *mem.Arena) -> (str, err)
 ```
 
 Who and where this process is: `hostname`, `user_name`, `locale_name` (a BCP 47 tag) and `time_zone_id`, per-target variants only (`ident.windows.e`, `ident.linux.e`). Windows reads kernel32/advapi32 (`GetComputerNameExW` DNS host name, `GetUserNameW`, `GetUserDefaultLocaleName`, `GetDynamicTimeZoneInformation`'s `TimeZoneKeyName`, a Windows id that `e.tz.winzones` maps to IANA); Linux reads `/proc/sys/kernel/hostname` and the environment (`USER`/`LOGNAME`; `LC_ALL`/`LC_MESSAGES`/`LANG` rewritten `de_DE.UTF-8` to `de-DE`, `C`/`POSIX` unset; `TZ` then `/etc/timezone`), so the user, locale and zone may answer `NotFound` there. `mac_address` is the hardware address of the uplink as `aa:bb:cc:dd:ee:ff` (Windows: `GetAdaptersInfo`, the first IPv4 adapter with a gateway, else with an address, else any, loopback and tunnels skipped; Linux: the first non-loopback interface of `/proc/net/dev` with a non-zero `/sys/class/net/<name>/address`), `NotFound` when none. Results are arena-owned. Not here: the user database (`getpwuid`), or the full locale-variable cascade.
+
+### `e.mem.pages`
+
+```neper
+fn discard(bytes: []u8) -> err
+fn ensure(a: *mem.Arena, n: usize) -> err
+fn reserve(capacity: usize) -> ([]u8, err)
+fn release(bytes: []u8) -> err
+```
+
+An arena's pages and the operating system (D5932). `discard` gives the whole pages inside `bytes` back; they read as zero or as they were, the slice stays usable, and a refusal is not an error. `ensure` answers `mem.Exhausted` when the arena's next `n` bytes are not there, the answer a page fault would otherwise give later as the end of the process, and allocates nothing: on Windows it commits them, which no later touch can fail; on Linux it checks what is available, capped by the cgroup, and populates them; on macOS it answers against the machine's memory and writes them. `reserve` is a range of its own, halved until the host gives it, charged as it is touched. On a wasm32 module and NeperOS `discard` has nothing to give back, `ensure` answers only for the ceiling and `reserve` is `os.Unsupported`.
+
+### `e.mem.heap`
+
+```neper
+type Heap = struct { state: *State }
+type Block = resource(free) struct { state: *State, bytes: []u8 }
+fn over(storage: []u8) -> (Heap, err)
+fn open(capacity: usize) -> (Heap, err)
+fn close(h: Heap) -> err
+fn alloc(h: Heap, size: usize) -> (Block, err)
+fn bytes(block: *const Block) -> []u8
+fn free(block: own Block)
+```
+
+Objects freed one at a time, for what an arena's stack of lifetimes does not fit (D5933). Not global: nothing reaches a heap unless it is passed, so a function that takes none allocates from none. A `Block` is a resource owed to `free`, so the checker refuses one never freed, freed twice or used after it was freed, at no cost when the program runs. Up to 4 KiB comes from a `Slab` and above that from a `Buddy`, both over a range that is only addresses until written; a freed block of 1 MiB or more goes back to the operating system. One thread's, as an arena is. Not here: moving a block, or giving back the pages of small blocks.
 
 ### `e.fmt.json5`
 

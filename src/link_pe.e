@@ -669,10 +669,10 @@ fn self_test() -> err {
     // the first import the entry reaches is the first in the list: `patch_import` writes
     // the displacement from the instruction after it.
     // The thunk sits two bytes later since D225: the arena size is read from a word
-    // rather than an immediate.
-    let first_import = import_address_address - 4138usize
+    // rather than an immediate, and three more since D5930: it stands in a register.
+    let first_import = import_address_address - 4141usize
     if executable.bytes[512usize] != 83u8 { ret InvalidExecutable }
-    if executable.bytes[550usize] != u8(first_import % 256usize) || executable.bytes[551usize] != u8((first_import / 256usize) % 256usize) { ret InvalidExecutable }
+    if executable.bytes[553usize] != u8(first_import % 256usize) || executable.bytes[554usize] != u8((first_import / 256usize) % 256usize) { ret InvalidExecutable }
     if executable.bytes[code_at] != 195u8 { ret InvalidExecutable }
     // The import directory's first name RVA, which points 40 bytes into idata.
     let first_name_rva = import_lookup_address(&builder, idata_address, 0usize)

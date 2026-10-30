@@ -24,6 +24,8 @@ ONE_HOST = {
     "os_atspi": "sh",
     "os_window_buttons": "sh",
     "os_window_resize": "ps1",
+    "import_touch": "ps1",
+    "mem_commit_refused": "ps1",
 }
 
 failures = []

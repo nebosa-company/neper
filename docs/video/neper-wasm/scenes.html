@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Neper WebAssembly video</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0c0e14; }
+  body { position: relative; color: #e1e2e9; font: 400 30px/1.35 "Segoe UI", system-ui, sans-serif; }
+  .mono { font-family: "Cascadia Code", Consolas, monospace; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .brand { position: absolute; left: 80px; top: 52px; display: flex; align-items: center; gap: 16px; font-weight: 600; font-size: 30px; letter-spacing: 1px; }
+  .brand img { width: 48px; height: 48px; }
+  .title { position: absolute; left: 80px; top: 130px; font: 600 64px/1.1 "Segoe UI", sans-serif; color: #fff; }
+  .title small { display: block; margin-top: 12px; font: 400 28px/1.3 "Segoe UI", sans-serif; color: #8d909e; }
+  #caption { position: absolute; left: 160px; right: 160px; bottom: 86px; text-align: center; font-size: 32px; line-height: 1.35; color: #fff; padding: 18px 32px; border-radius: 20px; background: #0c0e14cc; }
+  #foot { position: absolute; left: 80px; right: 80px; bottom: 26px; font-size: 20px; color: #8d909e; text-align: center; }
+  .panel { position: absolute; border: 2px solid #39475f; border-radius: 22px; background: #12141b; padding: 26px 32px; }
+  .term { font: 400 26px/1.5 "Cascadia Code", Consolas, monospace; white-space: pre; color: #e1e2e9; }
+  .term .p { color: #b3c5ff; } .term .ok { color: #7bd88f; } .term .d { color: #8d909e; }
+  .box { position: absolute; border: 2px solid #39475f; border-radius: 18px; background: #12141b; padding: 18px 22px; text-align: center; opacity: 0; }
+  .box b { display: block; font: 600 34px "Segoe UI", sans-serif; color: #fff; }
+  .box span { display: block; font-size: 24px; color: #c3c6d5; margin-top: 4px; }
+  .box.n { border-color: #b3c5ff; background: #0f1b33; }
+  .tile { position: absolute; width: 410px; height: 250px; border: 2px solid #39475f; border-radius: 22px; padding: 24px 28px; background: #12141b; opacity: 0; }
+  .tile h3 { margin: 0 0 12px; font: 600 34px/1.2 "Segoe UI", sans-serif; color: #b3c5ff; }
+  .tile p { margin: 0; font-size: 25px; line-height: 1.35; color: #c3c6d5; }
+  .chip { position: absolute; font: 600 30px "Cascadia Code", Consolas, monospace; color: #e1e2e9; border: 2px solid #39475f; border-radius: 999px; padding: 8px 24px; background: #12141b; opacity: 0; white-space: nowrap; }
+  .chip s { text-decoration-thickness: 4px; text-decoration-color: #ffb692; }
+  .big { position: absolute; font: 600 120px "Cascadia Code", Consolas, monospace; color: #b3c5ff; opacity: 0; white-space: nowrap; }
+  .lbl { position: absolute; font-size: 28px; color: #c3c6d5; white-space: nowrap; opacity: 0; }
+  .seg { position: absolute; top: 450px; height: 70px; opacity: 0; }
+  .shot { position: absolute; border: 2px solid #39475f; border-radius: 16px; opacity: 0; }
+  .row { position: absolute; left: 160px; font: 600 44px "Segoe UI", sans-serif; color: #e1e2e9; opacity: 0; white-space: nowrap; }
+  .row i { font-style: normal; color: #ffb692; margin-right: 24px; }
+  .formula { font: 400 84px "Cambria Math", "STIX Two Math", Cambria, serif; color: #b3c5ff; }
+</style>
+</head>
+<body>
+<div class="brand"><img src="../../gtm/logo/neper-icon.svg" alt=""><span>NEPER</span></div>
+
+<div id="hook" class="scene">
+  <div class="title">A WebAssembly target<small>what usually comes with one, and what Neper writes itself</small></div>
+  <div class="box" id="h1" style="left:80px;top:360px;width:420px"><b>back end</b><span>such as LLVM</span></div>
+  <div class="box" id="h2" style="left:80px;top:520px;width:420px"><b>linker</b><span>wasm-ld or similar</span></div>
+  <div class="box" id="h3" style="left:80px;top:680px;width:420px"><b>loader</b><span>glue to run the module</span></div>
+  <div class="box n" id="n1" style="left:620px;top:420px;width:330px"><b>your program</b><span>.e source</span></div>
+  <div class="box n" id="n2" style="left:1040px;top:420px;width:330px"><b>NIR</b><span>one typed IR</span></div>
+  <div class="box n" id="n3" style="left:1460px;top:420px;width:380px"><b>.wasm</b><span>written by Neper</span></div>
+  <div class="chip" id="x1" style="left:620px;top:700px"><s>LLVM</s></div>
+  <div class="chip" id="x2" style="left:830px;top:700px"><s>Emscripten</s></div>
+  <div class="chip" id="x3" style="left:1150px;top:700px"><s>separate linker</s></div>
+</div>
+
+<div id="hello" class="scene">
+  <div class="title">One command<small>hello.e, a release build, measured on Windows</small></div>
+  <div class="panel term" id="hterm" style="left:80px;top:280px;width:1760px;height:280px"></div>
+  <div class="box" id="s1" style="left:80px;top:620px;width:380px"><b class="mono">18,250 B</b><span>hello.wasm</span></div>
+  <div class="box" id="s2" style="left:500px;top:620px;width:380px"><b class="mono">7,060 B</b><span>gzipped</span></div>
+  <div class="box" id="s3" style="left:920px;top:620px;width:380px"><b class="mono">≈ 400 ms</b><span>to write it</span></div>
+  <div class="box" id="s4" style="left:1340px;top:620px;width:500px"><b class="mono">12,600 B</b><span>the native Windows exe, for scale</span></div>
+</div>
+
+<div id="inside" class="scene">
+  <div class="title">Inside the emitter<small>src/wasm.e, lib/e/os.wasi.e</small></div>
+  <div class="tile" id="t1" style="left:80px;top:300px"><h3>Whole program</h3><p>One module from NIR, with a name section so a trap names the Neper function.</p></div>
+  <div class="tile" id="t2" style="left:520px;top:300px"><h3>Structured</h3><p>Loops and blocks, no goto. All 3,330 functions of the compiler come out this way.</p></div>
+  <div class="tile" id="t3" style="left:960px;top:300px"><h3>8-byte pointers</h3><p>The data layout does not change; an address is wrapped to i32 at each access.</p></div>
+  <div class="tile" id="t4" style="left:1400px;top:300px"><h3>neper_host</h3><p>What WASI lacks: supplied by the runner.</p></div>
+  <div class="chip" id="k1" style="left:1400px;top:580px">sockets</div>
+  <div class="chip" id="k2" style="left:1620px;top:580px">poller</div>
+  <div class="chip" id="k3" style="left:1400px;top:650px">processes</div>
+  <div class="chip" id="k4" style="left:1640px;top:650px">threads</div>
+  <div class="chip" id="k5" style="left:1400px;top:720px">system info</div>
+</div>
+
+<div id="checked" class="scene">
+  <div class="title">Checked against native<small>the sweep builds every link fixture twice and compares the runs</small></div>
+  <div class="panel term" style="left:80px;top:290px;width:700px;height:390px" id="cmp"></div>
+  <div class="big" id="n1075" style="left:860px;top:290px;font-size:130px">1,075</div>
+  <div class="lbl" id="n1142" style="left:860px;top:440px;font-size:36px">of 1,142 fixtures matched (threaded sweep, last full count)</div>
+  <div class="chip" id="c1" style="left:860px;top:560px">no mmap</div>
+  <div class="chip" id="c2" style="left:1090px;top:560px">no file locks</div>
+  <div class="chip" id="c3" style="left:1390px;top:560px">no signals</div>
+  <div class="chip" id="c4" style="left:1630px;top:560px">no dlopen</div>
+  <div class="lbl" id="cnote" style="left:860px;top:660px;opacity:0">each one is a row in tests/wasm/sweep-expected.tsv, with its cause</div>
+</div>
+
+<div id="compiler" class="scene">
+  <div class="title">The compiler as WebAssembly<small>src/main.e written for wasm32-wasi, run under Node 24</small></div>
+  <div class="box n" id="m1" style="left:80px;top:290px;width:520px"><b class="mono">neper.wasm</b><span>4.7 MB · 3,330 functions</span></div>
+  <div class="lbl" id="m2" style="left:660px;top:318px;opacity:0">wrote 2,266 executables:</div>
+  <div class="seg" id="g1" style="left:80px;background:#b3c5ff"></div>
+  <div class="seg" id="g2" style="background:#ffb692"></div>
+  <div class="seg" id="g3" style="background:#7bd88f"></div>
+  <div class="seg" id="g4" style="background:#e5484d"></div>
+  <div class="lbl" id="gl1" style="left:80px;top:540px;color:#b3c5ff;font-size:34px">2,196 byte-identical to the native compiler's</div>
+  <div class="lbl" id="gl2" style="left:80px;top:590px;font-size:26px;color:#8d909e">58 differ only in the embedded compiler identity · 10 refused the same way · 2 differ in one constant the native compiler gets wrong at its default worker count</div>
+  <div class="lbl" id="fx" style="left:80px;top:680px;font-size:36px;color:#fff">neper.wasm → neper.wasm: <span style="color:#7bd88f">the same bytes</span> (a fixed point)</div>
+  <div class="lbl" id="tm" style="left:80px;top:760px;font-size:32px;color:#c3c6d5">writing the compiler for x64 Windows: native <b style="color:#fff">1.6 s</b> · as WebAssembly <b style="color:#ffb692">5.6 s</b></div>
+</div>
+
+<div id="browser" class="scene">
+  <div class="title">In a canvas, on a phone<small>the same e.ui widgets, drawn by one .wasm file</small></div>
+  <img class="shot" id="gal" src="../../blog/img/wasm-gallery-fields.png" style="left:80px;top:250px;width:640px">
+  <div class="panel term" id="fix" style="left:80px;top:712px;width:640px;height:104px;font-size:22px;padding:14px 20px"></div>
+  <img class="shot" id="ios" src="../../blog/img/wasm-ios-simulator.png" style="left:1480px;top:215px;height:590px">
+  <div class="lbl" id="iosl" style="left:790px;top:470px;width:640px;white-space:normal;font-size:28px;color:#b3c5ff">iPhone simulator, iOS 17.5: typing, Backspace, hold toolbar</div>
+  <div class="lbl" id="andl" style="left:790px;top:330px;width:640px;white-space:normal;font-size:28px;color:#ffb692">Android Chrome, by hand</div>
+</div>
+
+<div id="limits" class="scene">
+  <div class="title">Where it stops</div>
+  <div class="row" id="r1" style="top:300px"><i>✗</i>not yet on a real iPhone</div>
+  <div class="row" id="r2" style="top:400px"><i>✗</i>no composing keyboards tried (Japanese, Chinese)</div>
+  <div class="row" id="r3" style="top:500px"><i>✗</i>no draggable selection handles</div>
+  <div class="row" id="r4" style="top:600px"><i>✗</i>a page has no sockets or processes</div>
+  <div class="row" id="r5" style="top:700px"><i>✗</i>a module gets 4 GiB at most</div>
+</div>
+
+<div id="close" class="scene">
+  <div style="position:absolute;left:0;right:0;top:250px;text-align:center"><img src="../../gtm/logo/neper-icon.svg" style="width:160px;height:160px" alt=""></div>
+  <div id="c1x" style="position:absolute;left:0;right:0;top:450px;text-align:center;font:600 84px 'Segoe UI',sans-serif;color:#fff">One compiler. Every target.</div>
+  <div id="c2x" style="position:absolute;left:0;right:0;top:560px;text-align:center;font:600 84px 'Segoe UI',sans-serif;color:#ffb692">Now WebAssembly too.</div>
+  <div id="c3x" class="formula" style="position:absolute;left:0;right:0;top:720px;text-align:center;font-size:72px">e = lim<sub style="font-size:30px">n→∞</sub> (1 + n<sup style="font-size:34px">−1</sup>)<sup style="font-size:44px">n</sup></div>
+  <div id="c4x" class="mono" style="position:absolute;left:0;right:0;top:870px;text-align:center;font-size:34px;color:#8d909e">neper.dev</div>
+</div>
+
+<div id="caption"></div>
+<div id="foot"></div>
+
+<script>
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (p) => 1 - Math.pow(1 - clamp(p), 3);
+const prog = (t, a, d = 0.5) => clamp((t - a) / d);
+const $ = (id) => document.getElementById(id);
+function fadeIn(el, t, a, d = 0.5, rise = 18) { const p = ease(prog(t, a, d)); el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * rise}px)`; }
+function typed(text, t, a, cps) { return text.slice(0, Math.max(0, Math.floor((t - a) * cps))); }
+
+function render(t, scenes) {
+  const cap = $('caption'), foot = $('foot');
+  let active = null;
+  scenes.forEach((sc) => {
+    const el = $(sc.id);
+    const lt = t - sc.start;
+    const fin = prog(lt, 0, 0.5), fout = 1 - prog(lt, sc.dur - 0.5, 0.5);
+    el.style.opacity = (lt >= 0 && lt < sc.dur) ? Math.min(fin, fout) : 0;
+    if (lt >= 0 && lt < sc.dur) { active = sc; sc.lt = lt; }
+  });
+  if (!active) return;
+  const lt = active.lt * (active.speed || 1), id = active.id;
+  cap.textContent = active.caption;
+  cap.style.opacity = id === 'close' ? 0 : ease(prog(lt, 0.5, 0.5));
+  foot.textContent = '';
+
+  if (id === 'hook') {
+    ['h1', 'h2', 'h3'].forEach((b, i) => {
+      const el = $(b); fadeIn(el, lt, 1.2 + i * 1.5, 0.5);
+      if (lt > 6.4) el.style.opacity = Math.max(0.18, 1 - ease(prog(lt, 6.4, 0.6)));
+    });
+    ['n1', 'n2', 'n3'].forEach((b, i) => fadeIn($(b), lt, 7.2 + i * 1.6, 0.6));
+    ['x1', 'x2', 'x3'].forEach((b, i) => fadeIn($(b), lt, 13.6 + i * 1.6, 0.5, 12));
+  }
+  if (id === 'hello') {
+    const cmd = 'neper emit-executable hello.e . wasm32 wasi hello.wasm --release';
+    const run = 'node lib/wasm/run-wasm.mjs hello.wasm';
+    let out = '<span class="p">$</span> ' + typed(cmd, lt, 1.0, 22);
+    if (lt > 4.4) out += '\n<span class="ok">executable written</span>';
+    if (lt > 10.6) out += '\n<span class="p">$</span> ' + typed(run, lt, 10.6, 24);
+    if (lt > 12.4) out += '\nhello, neper';
+    $('hterm').innerHTML = out;
+    fadeIn($('s1'), lt, 5.4); fadeIn($('s2'), lt, 7.0); fadeIn($('s3'), lt, 8.4); fadeIn($('s4'), lt, 9.6);
+    foot.textContent = 'Three runs: 497, 409 and 339 ms. Release build; sizes are file bytes. Node 24 runs the module.';
+    foot.style.opacity = 1;
+  }
+  if (id === 'inside') {
+    [[1, 0.4], [2, 3.4], [3, 8.8], [4, 14.4]].forEach(([n, a]) => fadeIn($('t' + n), lt, a, 0.6));
+    for (let k = 1; k <= 5; k++) fadeIn($('k' + k), lt, 15.6 + (k - 1) * 0.95, 0.4, 10);
+  }
+  if (id === 'checked') {
+    const rows = ['', 'native build', 'wasm32-wasi build', '', 'compare:', '  exit status   ✓', '  standard out  ✓', '  standard err  ✓'];
+    let out = '';
+    const shown = Math.floor(prog(lt, 3.0, 5.6) * 8);
+    for (let i = 0; i < shown; i++) out += rows[i].replace('✓', '<span class="ok">✓</span>') + '\n';
+    $('cmp').innerHTML = out;
+    fadeIn($('n1075'), lt, 10.0, 0.6); fadeIn($('n1142'), lt, 11.0, 0.6);
+    ['c1', 'c2', 'c3', 'c4'].forEach((c, i) => fadeIn($(c), lt, 14.6 + i * 0.7, 0.4, 10));
+    fadeIn($('cnote'), lt, 16.6, 0.6);
+  }
+  if (id === 'compiler') {
+    fadeIn($('m1'), lt, 3.2, 0.6); fadeIn($('m2'), lt, 8.2, 0.5);
+    const W = 1760, tot = 2266, parts = [2196, 58, 10, 2];
+    let x = 80;
+    parts.forEach((p, i) => {
+      const el = $('g' + (i + 1));
+      const w = Math.max(6, p / tot * W);
+      el.style.left = x + 'px'; el.style.width = (w * ease(prog(lt, 8.8, 1.4))) + 'px'; el.style.opacity = ease(prog(lt, 8.8, 0.4));
+      x += w;
+    });
+    fadeIn($('gl1'), lt, 11.0, 0.6); fadeIn($('gl2'), lt, 12.6, 0.6);
+    fadeIn($('fx'), lt, 15.6, 0.6); fadeIn($('tm'), lt, 19.2, 0.6);
+  }
+  if (id === 'browser') {
+    fadeIn($('gal'), lt, 0.4, 0.8);
+    const fx = 'outdige  → one delete event removes 4 letters\n         → insert "side "   = outside';
+    const f = $('fix'); f.style.opacity = ease(prog(lt, 4.4, 0.5)); f.textContent = typed(fx, lt, 5.0, 14);
+    fadeIn($('andl'), lt, 4.4, 0.5); fadeIn($('ios'), lt, 11.0, 0.8); fadeIn($('iosl'), lt, 11.6, 0.6);
+    foot.textContent = 'The gallery is a 6.5 MB release module drawn in Chrome. The iPhone is a simulator on a macOS runner, driven through Appium.';
+    foot.style.opacity = 1;
+  }
+  if (id === 'limits') {
+    [1.0, 3.0, 4.8, 6.6, 9.4].forEach((a, i) => fadeIn($('r' + (i + 1)), lt, a, 0.5, 14));
+  }
+  if (id === 'close') {
+    fadeIn($('c1x'), lt, 0.5); fadeIn($('c2x'), lt, 1.5); fadeIn($('c3x'), lt, 2.6, 0.8); fadeIn($('c4x'), lt, 3.6);
+  }
+}
+</script>
+</body>
+</html>

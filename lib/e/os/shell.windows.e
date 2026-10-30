@@ -46,7 +46,7 @@ type Activation = struct { kind: ActivationKind, payload: str, args: []const str
 // A global shortcut: the modifiers and the host's key code; a permission the
 // host answers for background work; the lifecycle events a session sends.
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
-type Permission = enum u8 { Granted, Denied, Unavailable }
+type Permission = enum u8 { Granted, Denied, Unavailable, NotDetermined }
 type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume, Overflow }
 // A printer opened for a job, the page a printer draws in device pixels, a
 // page setup in hundredths of a millimetre, and a job in progress.

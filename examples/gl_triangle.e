@@ -1,4 +1,4 @@
-// A window with one colour-blended triangle, drawn through x.khronos.gl (D5877): OpenGL 3.3
+// A window with one colour-blended triangle, drawn through x.khronos.gl (D5940): OpenGL 3.3
 // core, or OpenGL ES 3.0 with `--es` (ANGLE's libEGL.dll on Windows, Mesa's EGL on Linux).
 // It redraws at the display's rate until the window is closed, or for `--frames N` frames.
 //

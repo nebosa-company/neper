@@ -71,3 +71,6 @@ web_request_clone_body
 web_storage_numeric_key
 web_xml_entity_errors
 gpu_ftz_ops
+mem_heap
+mem_pages
+mem_trim

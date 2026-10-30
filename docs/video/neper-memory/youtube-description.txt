@@ -1,0 +1,51 @@
+TITLE
+A 1 TiB ceiling that costs 3 MiB: how Neper takes memory and gives it back
+
+DESCRIPTION
+A Neper program gets one arena, and the arena reserves addresses, not memory. Real pages arrive the first time a program writes to them, so an arena's size is a ceiling and not a cost. This video shows what follows: a program that grows with no flag, memory going back after a spike, objects freed one at a time with use after free refused at compile time, what happens when memory really runs out, and how it compares with Go, Rust, C++ and Node.js. Every Neper number was measured, and the limits are on screen.
+
+Neper is a native language whose compiler is also its linker. There is no garbage collector and no hidden heap: a function that allocates takes what it allocates from as an argument.
+
+CHAPTERS
+0:00 Memory on demand
+0:17 Reserved is not allocated
+0:33 A program that grows with no flag
+0:48 Allocating is not touching
+1:06 Memory goes back
+1:25 Freeing one object
+1:44 The compiler: a million lines in 605 MB
+2:02 Touch everything: release and debug compilers
+2:15 When the host says no
+2:35 Running out is an answer
+2:52 How it compares
+3:10 Where it stops
+3:33 Ask for what you might need. Pay for what you touch. Give it back.
+
+WHAT THE VIDEO SHOWS
+- grow.e allocates six blocks of 256 MiB with no flag. It starts at 3 MiB of RAM on Windows under a 1 TiB ceiling and ends at 1,539 MiB. Its first allocation never moves.
+- sparse.e allocates 16 GiB and writes to 1,000 places: 7 MiB of RAM, though Windows charges 1,006 MB of commit. frames.e allocates 10,000 MiB in total with mem.mark and mem.reset, in 4 MiB of RAM.
+- A reset that frees 512 MiB or more returns all but 128 MiB of it. After a 2 GiB spike, 132 MiB stay in RAM on Windows and 129 MiB on Linux, from 2,051 and 2,048. A smaller reset is one compare and no system call.
+- e.mem.heap frees one object at a time. A block used after it was freed, freed twice, or never freed is a compile error, at no cost when the program runs. 2 GiB through 64 live slots, in no stack order, took about 50 ms.
+- A release compiler compiles sc1m (920,554 generated lines) in 3.6 s (runs of 3.5, 3.6 and 3.7 s) at a peak of 605 MB and 940 MB of commit, and the program prints the expected 108474335. Its arenas reached 4,423 MB of addresses. The compiler building itself peaks at 339 MB release-built and 3,425 MB debug-built, because a debug build fills every allocation.
+- Our first default of 64 GiB would not start under valgrind 3.22, which leaves a program about 64 GiB on any machine. So the startup halves a size the host refuses, down to 1 MiB. The same program gets 1 TiB natively, 32 GiB under valgrind and 4 GiB under ulimit -v 8000000. That costs nothing we can measure.
+- pages.ensure answers mem.Exhausted while the program can still act. On Windows a refused commit is retried for two seconds, then ends with "fatal: out of memory" and exit 137, not an access violation.
+
+THE HONEST PART
+- A program that repeatedly spikes past 512 MiB pays about 100 ms a round in page faults: 10 rounds of 600 MiB went from 23 ms to about 1,000 ms when only one byte per page is written.
+- A runaway program commits until the system pushes back. --arena sets a hard cap, and the error is a value, mem.Exhausted.
+- A program may get less than it asked for, even with --arena, so one that needs a minimum reads mem.stats(a).capacity.
+- Picking an arena or a heap is a decision you make per lifetime, that a garbage collector makes for you.
+- The pages of small heap blocks are reused, not returned. A stair of resets each under 512 MiB returns nothing.
+- Windows and Linux passed both full suites. macOS ran 1,136 fixtures on GitHub's macos-14 runners with none failing; the x64 run was under Rosetta 2 on Apple Silicon, not an Intel Mac. The memory numbers were measured on Windows and Linux only. arm64 Linux ran under qemu. Nothing here has filled more than this machine's 16 GB of RAM.
+- On macOS pages.ensure only knows total memory. A WebAssembly module has at most 4 GiB.
+- The comparison with Go, Rust, C++ and Node.js comes from documentation, not measurement.
+- The narration is a synthetic voice (Microsoft George).
+
+THE FULL WRITE-UP
+The programs, the tables, the commands and the sources: https://neper.dev/blog/compiler-memory.html
+
+LINKS
+Neper: https://neper.dev
+Source (MIT licensed): https://github.com/nebosa-company/neper
+
+#Neper #Compiler #MemoryManagement #ProgrammingLanguages #SystemsProgramming

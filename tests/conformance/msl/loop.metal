@@ -1,7 +1,10 @@
 #include <metal_stdlib>
 using namespace metal;
 
-kernel void loop_fill(device const uchar* args [[buffer(0)]], device uchar* heap [[buffer(1)]], uint3 gid3 [[thread_position_in_grid]], uint3 lid3 [[thread_position_in_threadgroup]], uint3 wgid3 [[threadgroup_position_in_grid]], uint sid [[thread_index_in_simdgroup]], uint sgw [[threads_per_simdgroup]]) {
+// A device address: the heap in its top byte, the offset in the rest (D5877).
+#define HP(a) ((((a) >> 56) == 0ul ? heap : ((a) >> 56) == 1ul ? heap1 : ((a) >> 56) == 2ul ? heap2 : heap3) + ((a) & 0xFFFFFFFFFFFFFFul))
+
+kernel void loop_fill(device const uchar* args [[buffer(0)]], device uchar* heap [[buffer(1)]], device uchar* heap1 [[buffer(2)]], device uchar* heap2 [[buffer(3)]], device uchar* heap3 [[buffer(4)]], uint3 gid3 [[thread_position_in_grid]], uint3 lid3 [[thread_position_in_threadgroup]], uint3 wgid3 [[threadgroup_position_in_grid]], uint sid [[thread_index_in_simdgroup]], uint sgw [[threads_per_simdgroup]]) {
   thread ulong fr_words[7];
   thread uchar* fr = (thread uchar*)fr_words;
   for (uint z = 0u; z < 7u; z += 1u) fr_words[z] = 0ul;
@@ -452,7 +455,7 @@ kernel void loop_fill(device const uchar* args [[buffer(0)]], device uchar* heap
       }
       v96 = v93 + (ulong)v91 * 4ul;
       v97 = *(thread uint*)(fr + 16u);
-      *(device uint*)(heap + v96) = v97;
+      *(device uint*)HP(v96) = v97;
       return;
     }
     default: return;

@@ -2,7 +2,7 @@
 // Edit the generator or scripts/khronos/gl.prelude.e, never this file.
 
 // `x.khronos.gl`: OpenGL 3.3 to 4.6 core and OpenGL ES 3.0 to 3.2 as one table of entry points
-// (D5877, D5883, D5885). A context module makes a context current and hands `load` its way of
+// (D5940, D5883, D5885). A context module makes a context current and hands `load` its way of
 // finding an entry point by C name; `load` fills the table and checks that every entry the
 // profile requires was found. An entry outside the profile is filled when the driver has it and
 // left 0 when it does not, and calling a 0 entry faults, as it does in C.

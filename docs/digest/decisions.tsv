@@ -2955,8 +2955,8 @@ D5873	970	Permission bits through neper_host, and a link mid-path refused
 D5874	1365	window_on_resize on Windows, and the uses goldens become per-host
 D5875	1352	A Metal launch is committed and not waited for
 D5876	867	macos-bundle.sh can sign with entitlements and notarize, unrun
-D5877	764	OpenGL is a library, not a language feature
-D5878	630	GL compute uses Metal's heap model
+D5940	764	OpenGL is a library, not a language feature
+D5941	630	GL compute uses Metal's heap model
 D5879	324	OpenGL floors
 D5880	576	Where a GL context comes from
 D5881	279	One thread owns a GL device
@@ -2968,9 +2968,9 @@ D5886	2962	x.khronos.context: one EGL path, WGL without a throwaway window
 D5887	1505	e.ui presents through a hook; x.khronos.present is the GL one
 D5888	2929	`--gpu glsl`: GLSL after the SPIR-V, from src/glsl.e
 D5889	2246	e.gpu's heap backends share one driver table; x.khronos.compute is GL's
-D5890	1031	The GLES compute profile is ES 3.2, from the same shaders
-D5891	1685	Exact f32 division and square root in GLSL are integer sequences
-D5892	1498	A helper the kernel calls is a GLSL function, in every kernel's shader
+D5942	1031	The GLES compute profile is ES 3.2, from the same shaders
+D5943	1685	Exact f32 division and square root in GLSL are integer sequences
+D5944	1498	A helper the kernel calls is a GLSL function, in every kernel's shader
 D5893	1215	64-bit integers in GLSL through GL_ARB_gpu_shader_int64
 D5894	978	gl.load asks for an entry's ARB, KHR and EXT spellings before calling it missing
 D5895	1192	The browser host presents through WebGL2 where the page has it
@@ -2978,8 +2978,8 @@ D5896	2488	`x64 android`: the Linux image, typed ET_DYN for /system/bin/linker64
 D5897	1421	Each GL compute device runs on a thread of its own
 D5898	969	Linked GL programs are cached as program binaries
 D5899	1303	A resized X11 window's GL surface is swapped once before its next frame
-D5900	2043	`aarch64 android`, and arm64 atomics as exclusive loops
-D5901	1836	`math.fma` in GLSL, and the float fixtures on every GL device
+D5945	2043	`aarch64 android`, and arm64 atomics as exclusive loops
+D5946	1836	`math.fma` in GLSL, and the float fixtures on every GL device
 D5902	2139	Subgroups in GLSL, at the width the workgroup was cut into
 D5903	1898	f64 as GLSL's `double`, and the GL device's limits as `TooLarge`
 D5904	1092	OpenGL ES 3.1 devices where `gpu_shader5` gives them `precise`
@@ -2990,13 +2990,29 @@ D5908	2299	`@export("Name")` and `emit-shared-library`
 D5909	1342	A neper NativeActivity app, packed into an APK
 D5910	2730	e.ui apps on Android: `x.android.activity` as `e.os`'s window host
 D5911	1312	`WM_DPICHANGED`: a per-monitor-aware window takes the suggested rectangle
-D5912	2511	The root arena's default ceiling is 64 GiB, 4 GiB on Android
+D5947	2511	The root arena's default ceiling is 64 GiB, 4 GiB on Android
 D5913	3725	f16 and bf16 on the CPU code generators: widen to f32, operate, round once, in integer instructions
 D5914	2685	f16 and bf16 in GLSL, word-equal to the CPU's
 D5915	1243	Presenter ownership ends at fallback, replacement and window close
-D5916	1245	GL dispatch follows the current context, not the process
+D5916	1246	GL dispatch follows the current context, not the process
+D5917	1113	Special-function limits and signed extended gcd boundaries
 D5919	387	WASI permission paths stay inside a preopen
-D5920	737	A failed presentation retires its acquisition, not its image serial
-D5921	416	JMESPath function arguments require separators
-D5922	742	Portable store keys and atomic filesystem replacement
+D5920	738	A failed presentation retires its acquisition, not its image serial
+D5921	417	JMESPath function arguments require separators
+D5922	743	Portable store keys and atomic filesystem replacement
 D5923	483	D-Bus builder and reply storage
+D5877	1702	System information reaches a WebAssembly module through neper_host, and the Windows rows are confirmed
+D5878	1202	Metal device memory is up to four heaps, an address names its heap in the top byte
+D5890	1123	A virtual keyboard's edits are read from the field's value, not counted from its events
+D5891	1264	A touch hold selects a word, drags to extend, and offers a toolbar
+D5892	1474	Metal launches overlap: up to four in flight, one fault block each
+D5900	1021	The counter window is driven in Mobile Safari on an iPhone simulator
+D5901	1356	shell.Permission has NotDetermined; the macOS location permission can be asked for
+D5912	3080	The root arena's default ceiling is 32 GiB
+D5930	3718	A size the host refuses is halved, and the default ceiling is 1 TiB
+D5931	2320	A large `mem.reset` gives memory back
+D5932	1207	`e.mem.pages`: `ensure` answers before the page fault does
+D5933	1929	`e.mem.heap`: one object at a time, checked at compile time
+D5934	1335	A refused commit is asked again, and then called what it is
+D5935	1032	The compiler touches `&slice[i]` given to an import
+D5948	1921	Eight decision numbers were allocated twice; the OpenGL group's moved

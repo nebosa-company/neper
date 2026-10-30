@@ -25,6 +25,18 @@ fn keep(x: []const f32, y: []f32) {
     y[i] = x[i] + 0.0
 }
 
+@gpu(1, ftz)
+fn poke3(a: []u32, b: []u32, c: []u32, small: []u32) {
+    if gpu.gid.x == 0u32 {
+        a[a.len - 1usize] = 11u32
+        b[b.len - 1usize] = 22u32
+        c[c.len - 1usize] = 33u32
+        small[0usize] = a[a.len - 1usize]
+        small[1usize] = b[b.len - 1usize]
+        small[2usize] = c[c.len - 1usize]
+    }
+}
+
 fn run(q: *gpu.Queue, x: []const f32, y: []f32) -> err {
     let (dx, dx_error) = gpu.upload[f32](q, x)
     if dx_error != ok { os.exit(51i32) }
@@ -94,6 +106,62 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (dout, dout_error) = gpu.upload[f32](q, out[0..])
     if dt_error != ok || dout_error != ok { os.exit(12i32) }
     if gpu.launch[keep](q, gpu.grid1(64usize), dt, dout) != gpu.Unsupported { os.exit(13i32) }
+    // More than one heap's worth (256 MiB) of buffers: three of 200 MiB live in their own heaps and all are reachable (D5877).
+    let (ba, ba_error) = gpu.alloc[u32](q, 50000000usize)
+    let (bb, bb_error) = gpu.alloc[u32](q, 50000000usize)
+    let (bc, bc_error) = gpu.alloc[u32](q, 50000000usize)
+    if ba_error != ok || bb_error != ok || bc_error != ok { os.exit(20i32) }
+    var three: [3]u32 = zero
+    let (dthree, dthree_error) = gpu.upload[u32](q, three[0..])
+    if dthree_error != ok { os.exit(21i32) }
+    if gpu.launch[poke3](q, gpu.grid1(1usize), ba, bb, bc, dthree) != ok { os.exit(22i32) }
+    if gpu.download(q, dthree, three[0..]) != ok { os.exit(23i32) }
+    if three[0] != 11u32 || three[1] != 22u32 || three[2] != 33u32 { os.exit(24i32) }
+    // Released, their room is taken again.
+    let freed_a = gpu.release(q, ba)
+    let freed_b = gpu.release(q, bb)
+    let freed_c = gpu.release(q, bc)
+    let (again_big, again_error) = gpu.alloc[u32](q, 50000000usize)
+    if again_error != ok { os.exit(25i32) }
+    // Launches in a row without a download between them stay in flight (D5879), more than the four the device keeps: each sees the
+    // last one's writes, and the sum is exact.
+    var run_x: [1000]f32 = zero
+    var run_y: [1000]f32 = zero
+    var j = 0usize
+    while j < 1000usize {
+        run_x[j] = f32(j)
+        run_y[j] = 1.0
+        j += 1usize
+    }
+    let (px, px_error) = gpu.upload[f32](q, run_x[0..])
+    let (py, py_error) = gpu.upload[f32](q, run_y[0..])
+    if px_error != ok || py_error != ok { os.exit(30i32) }
+    var rounds = 0usize
+    while rounds < 7usize {
+        if gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, px, py) != ok { os.exit(31i32) }
+        rounds += 1usize
+    }
+    if gpu.download(q, py, run_y[0..]) != ok { os.exit(32i32) }
+    j = 0usize
+    while j < 1000usize {
+        if run_y[j] != 1.0 + 14.0*f32(j) { os.exit(33i32) }
+        j += 1usize
+    }
+    // A fault in the middle of a run is reported once, from the next call that waits, and the launches around it still ran.
+    var flags: [64]u32 = zero
+    let (pf, pf_error) = gpu.upload[u32](q, flags[0..])
+    if pf_error != ok { os.exit(34i32) }
+    run_y[0] = 1.0
+    let (py2, py2_error) = gpu.upload[f32](q, run_y[0..])
+    if py2_error != ok { os.exit(35i32) }
+    if gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, px, py2) != ok { os.exit(36i32) }
+    if gpu.launch[outside](q, gpu.grid1(64usize), pf) != ok { os.exit(37i32) }
+    if gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, px, py2) != ok { os.exit(38i32) }
+    if gpu.download(q, py2, run_y[0..]) != gpu.Fault { os.exit(39i32) }
+    let (record_again, had_again) = gpu.last_fault(q)
+    if !had_again || record_again.kind != .Bounds { os.exit(40i32) }
+    if gpu.download(q, py2, run_y[0..]) != ok { os.exit(41i32) }
+    if run_y[3] != 43.0 + 12.0 { os.exit(42i32) }
     let closed = gpu.close(dev)
     ret ok
 }

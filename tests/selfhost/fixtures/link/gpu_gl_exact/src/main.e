@@ -1,9 +1,9 @@
-// Exact f32 division and square root on e.gpu's `.Gl` backend (C217, D5891), built with `--gpu glsl`: GLSL rounds neither
+// Exact f32 division and square root on e.gpu's `.Gl` backend (C217, D5943), built with `--gpu glsl`: GLSL rounds neither
 // correctly, so the emitter writes both as integer sequences, and every result word must equal the CPU backend's. 65,536
 // operand pairs from a fixed xorshift: random bit patterns over every exponent, the special values (zeros, infinities, NaNs,
 // the largest and smallest normals, subnormals) in both positions, and quotients that land in the subnormal range and past
 // the largest finite. A device that keeps denormals runs the plain kernels; one that flushes them (Intel) the `ftz` ones,
-// which the CPU flushes too. The same pairs check `math.fma` (D5901), whose addend is either another operand or the
+// which the CPU flushes too. The same pairs check `math.fma` (D5946), whose addend is either another operand or the
 // product's negation, where only a single rounding leaves the right residual. A host without an OpenGL compute device
 // exits 0 having printed why.
 

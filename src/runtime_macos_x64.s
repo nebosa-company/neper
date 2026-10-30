@@ -32,6 +32,8 @@ neper_start:
     mov r12, rdi
     mov r13, rsi
     mov r14, QWORD PTR [rip+.Lstart_arena]
+    # A size the host refuses is halved down to a mebibyte (D5930).
+.Lstart_reserve:
     xor edi, edi
     mov rsi, r14
     mov edx, 3
@@ -41,7 +43,12 @@ neper_start:
     mov eax, 0x20000c5
     darwin_syscall
     test rax, rax
-    js .Lstart_fail
+    jns .Lstart_mapped
+    shr r14, 1
+    cmp r14, 0x100000
+    jae .Lstart_reserve
+    jmp .Lstart_fail
+.Lstart_mapped:
     mov r15, rax
     mov rbx, r12
     shl rbx, 4
@@ -261,9 +268,34 @@ neper_mem_mark:
     mov rax,QWORD PTR [rdi+0x10]
     ret
 
+# (D5931) A reset that frees 512 MiB or more hands back all but the first 128 MiB of it, a
+# whole mebibyte at a time, inside what the arena held: a fresh mapping over it, since
+# madvise here keeps the pages counted. Anything less costs this one compare and no call.
 .global neper_mem_reset
 neper_mem_reset:
+.Lreset:
+    mov rax,QWORD PTR [rdi+0x10]
     mov QWORD PTR [rdi+0x10],rsi
+    sub rax,rsi
+    cmp rax,0x20000000
+    ja .Lreset_trim
+    ret
+.Lreset_trim:
+    add rsi,QWORD PTR [rdi]
+    add rax,rsi
+    and rax,-0x100000
+    lea rdi,[rsi+0x80FFFFF]
+    and rdi,-0x100000
+    mov rsi,rax
+    sub rsi,rdi
+    jbe .Lreset_done
+    mov edx,3
+    mov r10d,0x1012
+    mov r8,-1
+    xor r9d,r9d
+    mov eax,0x20000c5
+    darwin_syscall
+.Lreset_done:
     ret
 
 # The other debug fill (D217): what the reset gives back is 0xDD before the offset
@@ -282,8 +314,7 @@ neper_mem_reset_fill:
     rep stosb
     mov rdi,r8
 .Lreset_fill_store:
-    mov QWORD PTR [rdi+0x10],rsi
-    ret
+    jmp .Lreset
 
 .global neper_mem_stats
 neper_mem_stats:
