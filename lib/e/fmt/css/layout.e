@@ -9309,6 +9309,15 @@ fn layout_abs(l: *Layout, b: u32) {
             if s.width.kind == .MinContent { cw = mn } else if s.width.kind == .MaxContent { cw = mx } else { cw = minf(maxf(mn, room), mx) }
         }
     }
+    if w_auto && !ratio_w && s.height.kind == .Auto && s.max_height.kind != .Auto && bb.inner != .Replaced {
+        // The ratio hands a `max-height` that cuts the box's height to its width.
+        let (mxh, has_mxh) = resolve_len(s.max_height, cb_h)
+        let (rhh, has_rhh) = ratio_height(l, b, cw)
+        if has_mxh && has_rhh && s.max_height.kind == .Px && rhh > to_content_h(l, b, mxh) {
+            let (rwm, has_rwm) = ratio_width(l, b, to_content_h(l, b, mxh))
+            if has_rwm && rwm < cw { cw = rwm }
+        }
+    }
     cw = maxf(0.0f64, clamp_width(l, b, cw, cb_w))
     if has_l && has_r && !w_auto {
         let rest = cb_w - lv - rv - cw - extras_h - ml - mr
