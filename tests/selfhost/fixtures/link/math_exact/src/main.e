@@ -225,7 +225,7 @@ fn main(a: *mem.Arena) -> err {
     // naive differs
     if bits32(math.fma[f32](f32_of(1176548043u32), f32_of(959246085u32), f32_of(901255351u32))) != 1071193184u32 { os.exit(255i32) }
     // naive differs
-    if bits32(math.fma[f32](f32_of(3108304580u32), f32_of(1233458520u32), f32_of(941449614u32))) != 3276589373u32 { os.exit(256i32) }
+    if bits32(math.fma[f32](f32_of(3108304580u32), f32_of(1233458520u32), f32_of(941449614u32))) != 3276589373u32 { os.exit(263i32) }
     // naive differs
     if bits32(math.fma[f32](f32_of(1159893265u32), f32_of(911875485u32), f32_of(3160020012u32))) != 3147768747u32 { os.exit(257i32) }
     // naive differs

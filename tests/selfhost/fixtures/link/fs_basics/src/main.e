@@ -700,7 +700,7 @@ fn main(a: *mem.Arena) -> err {
     if moved_in_root.size != 2u64 { os.exit(254i32) }
     let (scratch_gone, scratch_gone_error) = fs.exists(a, "np-fs/scratch.txt")
     if scratch_gone_error != ok { os.exit(255i32) }
-    if scratch_gone { os.exit(256i32) }
+    if scratch_gone { os.exit(263i32) }
 
     // A name that would leave the root is refused by both of them as well.
     if fs.remove_at(a, &root_holder, "../np-fs", true) != fs.Denied { os.exit(257i32) }
