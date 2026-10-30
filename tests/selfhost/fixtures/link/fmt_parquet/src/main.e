@@ -64,8 +64,18 @@ fn check_table(file: []const u8, code: i32) {
     let (_, offset_error) = parquet.decode(file, &m, 0usize, &v, scratch[..])
     if offset_error != parquet.Malformed { os.exit(code) }
     m.columns[0usize].data_page_offset = saved_offset
+    let saved_size = m.columns[0usize].total_compressed_size
+    m.columns[0usize].total_compressed_size = 1i64
+    let (_, short_chunk_error) = parquet.decode(file, &m, 0usize, &v, scratch[..])
+    if short_chunk_error != parquet.Malformed { os.exit(code) }
+    m.columns[0usize].total_compressed_size = saved_size
 
     // +1: int32 with nulls, PLAIN.
+    var seeded = 0usize
+    while seeded < ints.len {
+        ints[seeded] = 991i64
+        seeded += 1usize
+    }
     let (n0, e0) = parquet.decode(file, &m, 0usize, &v, scratch[..])
     if e0 != ok || n0 != 9usize || v.count != 9usize { os.exit(code + 1i32) }
     let i32_valid: [9]u8 = [9]u8{ 1, 0, 1, 1, 0, 1, 1, 1, 1 }
@@ -198,6 +208,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var overflowing_reader = parquet.thrift(overflowing_field[..], 0usize)
     let (_, _, overflowing_error) = parquet.thrift_field(&overflowing_reader, 32760i16)
     if overflowing_error != parquet.Malformed { os.exit(34i32) }
+
+    // Definition-level nulls must overwrite caller storage in PLAIN, dictionary
+    // and floating paths, not retain a value from the preceding row group.
+    let levels_and_plain: [10]u8 = [10]u8{ 2u8, 0u8, 0u8, 0u8, 3u8, 1u8, 123u8, 0u8, 0u8, 0u8 }
+    var null_header: parquet.PageHeader = zero
+    null_header.num_values = 2i32
+    null_header.encoding = 0i32
+    null_header.definition_level_encoding = 3i32
+    var null_ints: [2]i64 = [2]i64{ 991i64, 991i64 }
+    var null_floats: [2]f64 = zero
+    var null_offsets: [3]u32 = zero
+    var null_data: [1]u8 = zero
+    var null_valid: [2]u8 = zero
+    var null_values = parquet.Values { ints: null_ints[..], floats: null_floats[..], offsets: null_offsets[..], data: null_data[..], valid: null_valid[..], count: 0usize, data_len: 0usize }
+    if parquet.data_page(&null_values, 0usize, &null_header, levels_and_plain[..], 1i32, 1u32, zero, 0usize) != ok { os.exit(35i32) }
+    if null_ints[0usize] != 123i64 || null_ints[1usize] != 0i64 || null_valid[0usize] != 1u8 || null_valid[1usize] != 0u8 { os.exit(36i32) }
+    let levels_and_dictionary: [8]u8 = [8]u8{ 2u8, 0u8, 0u8, 0u8, 3u8, 1u8, 0u8, 2u8 }
+    let dictionary: [4]u8 = [4]u8{ 77u8, 0u8, 0u8, 0u8 }
+    null_header.encoding = 2i32
+    null_ints[0usize] = 991i64
+    null_ints[1usize] = 991i64
+    if parquet.data_page(&null_values, 0usize, &null_header, levels_and_dictionary[..], 1i32, 1u32, dictionary[..], 1usize) != ok { os.exit(37i32) }
+    if null_ints[0usize] != 77i64 || null_ints[1usize] != 0i64 || null_valid[0usize] != 1u8 || null_valid[1usize] != 0u8 { os.exit(38i32) }
+    let levels_and_double: [14]u8 = [14]u8{ 2u8, 0u8, 0u8, 0u8, 3u8, 1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 248u8, 63u8 }
+    null_header.encoding = 0i32
+    null_floats[0usize] = 9.0f64
+    null_floats[1usize] = 9.0f64
+    if parquet.data_page(&null_values, 0usize, &null_header, levels_and_double[..], 5i32, 1u32, zero, 0usize) != ok { os.exit(39i32) }
+    if null_floats[0usize] != 1.5f64 || null_floats[1usize] != 0.0f64 || null_valid[0usize] != 1u8 || null_valid[1usize] != 0u8 { os.exit(40i32) }
 
     try io.print("fmt parquet ok\n")
     ret ok
