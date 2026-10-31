@@ -107,7 +107,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, lost: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
@@ -936,6 +936,17 @@ fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo
 }
 
 fn state_of(device: *Device) -> (*DeviceState, err) {
+    let (found, found_error) = state_lookup(device)
+    if found_error != ok { ret (found, found_error) }
+    if metal_finish(found) {
+        unlock_state(found)
+        ret (found, Lost)
+    }
+    ret (found, ok)
+}
+
+// The device locked, whatever its health: `close` comes through here so a device that failed still releases its resources.
+fn state_lookup(device: *Device) -> (*DeviceState, err) {
     let pointer = mem.cast[*DeviceState](device.state)
     let wanted = mem.address_of(pointer)
     locks.mutex_lock(&registry_locks[0usize])
@@ -956,8 +967,6 @@ fn state_of(device: *Device) -> (*DeviceState, err) {
         unlock_state(found)
         ret (found, InvalidHandle)
     }
-    // Not reported here: `close` and the queries come through this door, and a device that failed must still close.
-    let failed = metal_finish(found)
     ret (found, ok)
 }
 
@@ -1070,6 +1079,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     state.lock_owner = atomic.init(0usize)
     state.lock_depth = 0usize
     state.closed = false
+    state.lost = false
     state.buffers = buffers
     state.queues = 0u32
     state.backend = backend
@@ -1227,9 +1237,10 @@ fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
 }
 
 fn close(device: *Device) -> err {
-    let (state, state_error) = state_of(device)
+    let (state, state_error) = state_lookup(device)
     if state_error != ok { ret state_error }
     defer unlock_state(state)
+    let drained = metal_finish(state)
     state.closed = true
     var i = 0usize
     while i < state.buffers.len {
@@ -2168,22 +2179,21 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
 }
 
 // Waits for the launches `launch_metal` left running, in order, and reads each one's fault block as the Vulkan path reads its
-// buffer; called with the device locked at every entry that could see their effects. True when the device failed one.
+// buffer; called with the device locked at every entry that could see their effects. True once the device has failed a
+// command: the loss is kept, so whichever entry waits first, every later one reports it.
 fn metal_finish(device: *DeviceState) -> bool {
-    if !heap_backend(device.backend) || device.pending_count == 0usize { ret false }
+    if !heap_backend(device.backend) || device.pending_count == 0usize { ret device.lost }
     let driver = driver_of(device.backend)
-    var failed = false
     var slot = 0usize
     while slot < device.pending_count {
         let waited = driver.dispatch_wait(device.pending_commands[slot])
         driver.free(device.pending_blocks[slot])
-        // A command the device failed is `Lost`, once, at the call that waited for it (a launch used to say so itself).
-        if waited != ok { failed = true }
+        if waited != ok { device.lost = true }
         if waited == ok && device.pending_checks[slot] { metal_fault(device, slot) }
         slot += 1usize
     }
     device.pending_count = 0usize
-    ret failed
+    ret device.lost
 }
 
 // One launch's fault block (32 bytes at slot * 32 in heap 0) into its queue's record; the first fault a queue sees is kept.
