@@ -3515,6 +3515,22 @@ fn size_contained(l: *const Layout, b: u32) -> (bool, f64, f64) {
         let (len, good) = style.parse_len(&ctx, cv.lower(l.a, cv.trim_ws(strip_auto_kw(ih))), s.font_size, 0u32)
         if good && len.kind == .Px { h = len.px }
     }
+    // The logical forms: inline is the width in a horizontal writing mode and the height in a vertical one.
+    let vertical = mode_code(s) != 0u8
+    let (iis, has_iis) = extra_text(s, "contain-intrinsic-inline-size")
+    if has_iis {
+        let (len, good) = style.parse_len(&ctx, cv.lower(l.a, cv.trim_ws(strip_auto_kw(iis))), s.font_size, 0u32)
+        if good && len.kind == .Px {
+            if vertical { h = len.px } else { w = len.px }
+        }
+    }
+    let (ibs, has_ibs) = extra_text(s, "contain-intrinsic-block-size")
+    if has_ibs {
+        let (len, good) = style.parse_len(&ctx, cv.lower(l.a, cv.trim_ws(strip_auto_kw(ibs))), s.font_size, 0u32)
+        if good && len.kind == .Px {
+            if vertical { w = len.px } else { h = len.px }
+        }
+    }
     ret (true, w, h)
 }
 
@@ -3895,6 +3911,9 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
     if is_bfc_root(l, c) { ret false }
     let (ratio_known, has_ratio) = box_ratio(l, c)
     if has_ratio { ret false }
+    // Size containment stands in an intrinsic height for the (empty) content.
+    let (contained, cw0, ch0) = size_contained(l, c)
+    if contained && ch0 > 0.0f64 { ret false }
     if s.height.kind == .Px {
         let (hv, good) = resolve_len(s.height, -1.0f64)
         // A percentage height may resolve to a real height against a definite container.
@@ -4203,6 +4222,8 @@ fn layout_contents_height(l: *Layout, b: u32, cw: f64, cbh: f64) {
     let first_line = l.lines.len
     let auto_h = layout_in_new_bfc(l, b, cw, spec)
     var h = auto_h
+    let (sc_h, sc_hw, sc_hh) = size_contained(l, b)
+    if sc_h { h = sc_hh }
     if spec >= 0.0f64 { h = spec }
     if ratio_h >= 0.0f64 && s.overflow_x == .Visible && s.overflow_y == .Visible { h = maxf(ratio_h, auto_h) }
     h = maxf(0.0f64, clamp_height_auto(l, b, h, cbh, auto_h))
@@ -5910,6 +5931,8 @@ fn flex_place_item(l: *Layout, id: u32, w: f64, hspec: f64) {
     }
     let auto_h = layout_in_new_bfc(l, id, w, spec)
     var h = auto_h
+    let (sc_f, sc_fw, sc_fh) = size_contained(l, id)
+    if sc_f { h = sc_fh }
     if spec >= 0.0f64 { h = spec }
     if ratio_h >= 0.0f64 { h = maxf(ratio_h, auto_h) }
     h = maxf(0.0f64, clamp_height_auto(l, id, h, -1.0f64, auto_h))
