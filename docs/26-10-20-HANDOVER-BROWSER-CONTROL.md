@@ -9,7 +9,7 @@ The other handover documents were reviewed and are different streams, left untou
 ```bash
 cd D:/repos/neper-wt-browser            # a worktree of D:/repos/neper on branch browser-conformance
 git status --short | grep -v '^??'      # expect nothing (section 2)
-git log --oneline -3                    # head was 8b9725731 (size containment) before this handover edit
+git log --oneline -3                    # head was 5e6923d83 (the second merge of origin/master) before this handover edit
 gh auth status | grep -B1 Active        # must be nebosa-company; oboobortot gets a 403 on this repository
 D:/repos/neper/build/windows/neper-self.exe emit-executable tests/browser/wpt/run.e . x64 windows build/windows/run-wpt<N>.exe
 ```
@@ -18,15 +18,18 @@ Compilers live in the **main checkout** (`D:/repos/neper/build/windows/`); the w
 
 ## 1. State
 
-- **Branch** `browser-conformance`, pushed to `origin/browser-conformance`, **88 commits ahead of `origin/master` and 902 behind** (checked 2026-10-31 after `git fetch`). `origin/master` was merged in once on 2026-10-30 (4a7eb5077, clean for source, only shared docs conflicted); since then master took the shared tree's ~898 local commits and more (head `6129398db`, "Merge opengl-group into master"). **A second merge is not clean:** `git merge-tree` reports 12 conflicts: `docs/decisions.md`, `docs/digest/decisions.tsv`, `docs/digest/queue.tsv`, `docs/progress.html`, `docs/work-evidence.md`, `docs/work-queue.json` (shared docs, resolve as in the first merge: take master's, re-add the browser's records, rerun `scripts/render_digest.py` and `scripts/render_progress.py`) and **six source files**: `lib/e/fmt/css/layout.e`, `lib/e/fmt/css/paint.e`, `lib/e/gfx/scene.e`, `lib/e/web/page.e`, `tests/selfhost/fixtures/link/css_layout/src/main.e`, `tests/selfhost/fixtures/link/web_shell/src/main.e`. Master changed 34 files under `lib/e/fmt/css`, `lib/e/web`, `lib/e/ui/html_view.e` and `examples/browser` (about +1835/-754), so another stream is changing the same browser code. **No pull request exists.** Do the merge in a scratch branch, resolve the source conflicts by hand, rebuild, and re-gate every suite before pushing (the gate numbers below are for the pre-merge tree).
-- **Last gated numbers** (runner `tests/browser/wpt/run.e`, build `run-wpt195` = commit 8b9725731, 2026-10-31; CSS2 5152, flexbox 634, grid 719, writing-modes 622, multicol 182, overflow 274, lists 99 are unchanged from `run-wpt190`):
+- **Branch** `browser-conformance`, pushed to `origin/browser-conformance`, **90 commits ahead of `origin/master`, 15 behind** (after `git fetch`, 2026-10-31). `origin/master` was merged in twice: 2026-10-30 (4a7eb5077, clean for source) and 2026-10-31 (**5e6923d83**, 12 conflicts resolved: six shared docs, `layout.e`, `paint.e`, `scene.e`, `page.e` and two selfhost fixtures). How the source conflicts went: the browser's `list_ordinal` and bidi code were kept (they cover master's value-reset and Open/Close cases), master's run-in guard and `Tab` piece/tab stops were taken (bidi leaves a line with a tab alone), the renderer holds 32 fonts. **Master's own tree did not build the browser** (`page.e` called `url.zero_buf`/`url.buf_take` after `e.fmt.url` changed its API, `shell.e` assigned `t.pg = zero`), fixed in the merge with `url_buf`, `url_take` and `null_page` helpers. **No pull request exists.** Merge again before a PR: `git merge origin/master` on a scratch branch, resolve, rebuild all three targets, re-run the css_layout and web_shell fixtures (`NEPER_COMPILER=<compiler built with --arena 6g> scripts/check-fixture.sh <name>`) and the CSS gate.
+- **15 newer master commits conflict again (trial merge, 8 files):** the six shared docs again (`docs/decisions.md`, `docs/digest/decisions.tsv`, `docs/digest/queue.tsv`, `docs/progress.html`, `docs/work-evidence.md`, `docs/work-queue.json`: take master's, re-add the browser's L183-L185 records and D5949-D5951, rerun `scripts/render_digest.py` and `scripts/render_progress.py`) and two source files, `lib/e/gfx/scene.e` and `lib/e/web/page.e`. Layout, paint and the other browser files merge clean. Decision and queue numbers may have moved again; check master's maximum first.
+- **Renumbered after master took the numbers:** the browser's queue items L172 (visit history), L173 (ad and tracker blocking) and L174 (certificate validation) are now **L183, L184, L185** (master uses L172-L182 for OpenGL); decisions D5940-D5942 are now **D5949, D5950, D5951** (master had D5940-D5948). The text of this handover below that says D5940/D5941/D5942 means D5949/D5950/D5951.
+- **Fixture edits the merge needed (review them):** `css_layout` kept both sides' cases (master's #109 became #135, master's `css_issue_regressions` exits +50) and its #1198 bidi check accepts the first word's fragment with or without a trailing space (our bidi emits the space as its own fragment, visual order is right); `web_shell` runs master's frame-registry check first and wraps its two scripts in blocks (they both declared a global `const frame`, which our engine now rejects as a redeclaration, as a browser would), and master's tab-reuse exit codes became 80-86.
+- **Last gated numbers** (runner `tests/browser/wpt/run.e`, build `run-wpt196` = the merged tree before the `shell.e` and fixture edits, 2026-10-31):
 
 | Suite | Passing | Note |
 |---|---|---|
-| css/CSS2 | 5152 / 5829 | was 5118 on 2026-10-20 |
+| css/CSS2 | 5167 / 5829 | 5152 before the second merge; 5118 on 2026-10-20 |
 | css-flexbox | 634 / 908 | |
 | css-grid | 719 / 1545 | |
-| css-writing-modes | 622 / 995 | |
+| css-writing-modes | 625 / 995 | 622 before the second merge |
 | css-sizing | 328 / 457 | 311 at the start of the session; 318 before 8b9725731 |
 | css-multicol | 182 / 402 | 157 before D5940 |
 | css-overflow | 274 / 501 | line-clamp is the biggest cluster (113 failing), then scroll-markers (44) |
@@ -59,7 +62,7 @@ D:/Temp/neper-big.exe emit-executable examples/browser/main.e . wasm32 wasi buil
 - **Linux:** verified on a virtual display (rendering, wheel scroll, a real click on an `onclick` div, `rules.html` combo toggle). Recipe: WSL has `Xvfb` and `xdotool`; WSLg mounts `/tmp/.X11-unix` read-only, so run `wsl -u root -e unshare -m bash script.sh` where the script does `mount -t tmpfs none /tmp/.X11-unix`, `export HOME=/home/gaddl`, starts `Xvfb :99 -ac -screen 0 1280x900x24`, serves the page with `python3 -m http.server`, runs the binary with `DISPLAY=:99`, drives it with `xdotool` (`click 5` is wheel down), and `xwd -root -display :99 -out f.xwd`. Convert XWD (25 big-endian header words, 32-bit BGRA) with PIL. Fonts: DejaVu files are in the face list. The Linux binary was not re-run after the last font edit (4a19b7a85) or after the merge.
 - **Web (wasm32-wasi):** `tests/wasm/browser/neper_browser.html` runs the app on a canvas; serve with `node scripts/serve-wasm.mjs --isolated --port 8765` (the window needs a cross-origin isolated page) and open `/tests/wasm/browser/neper_browser.html?url=<encoded data: URL>`. Verified once in the Browser pane with a `data:` page. **Not verified on the web:** scripts, clicks, scrolling. The host (`lib/wasm/neper-host.js`) has no sockets, so only `data:` pages and seeded files load; web networking needs a host bridge. Fonts are the two Jost files the page seeds (`jost-regular.ttf`, `jost-bold.ttf`); there is no italic.
 
-Things that silently broke pages before, all fixed and recorded in D5941: a 128 MB tab arena starved the page's JS runtime (now 512 MB, so about 7 tabs fit a 4 GB arena); a pending timer never ran in an idle window; a tap reached links only, never `onclick`; the renderer held 16 fonts and dropped the rest (now 32).
+Things that silently broke pages before, all fixed and recorded in D5941: a 128 MB tab arena starved the page's JS runtime (now 256 MB, about 15 tabs in a 4 GB arena; 512 MB made the web_shell fixture's default arena run out); a pending timer never ran in an idle window; a tap reached links only, never `onclick`; the renderer held 16 fonts and dropped the rest (now 32).
 
 ## 4. The loop that works
 
@@ -94,7 +97,7 @@ Things that silently broke pages before, all fixed and recorded in D5941: a 128 
 
 The shared tree was landed since the 2026-10-30 check: **local `master` is now 0 ahead and 26 behind `origin/master`** (it was 898 ahead), and the unmerged local branches fell from 87 to **25**. What is still unmerged:
 
-- **Mine:** `browser-conformance` (88 ahead, 902 behind; also `origin/browser-conformance`; no PR; the second merge needs source conflict resolution, section 1).
+- **Mine:** `browser-conformance` (90 ahead, 15 behind; also `origin/browser-conformance`; no PR; a trial merge with the 15 newer master commits reports 8 conflicts, listed in the last line of section 1).
 - **Issue-fix branches, 8** (2026-10-28, one commit each): `codex/fix-1258-wasi-proc-reap`, `codex/fix-182-gfx-paint`, `fix-1167-remote`, `fix-1256-remote`, `fix-1257-window-bounds`, `fix-438-metal-device`, `fix-478-wasi-args`, `fix-644-gpu-lost`. The other 58 were merged.
 - **Older streams:** `g001/g23/g4/g5/g6/g6b/g6c/g6d/g6e-on-origin` and `grid-docs-on-origin` (the data grid, 2026-10-12), `blog-agent-loop`, `blog-cleartype`, `blog-cleartype-on-origin`, `blog-update`, `looks46-d`, `shell-baseline` (marked TEMPORARY), and the remote-only `origin/backup/origin-master-2026-10-22`.
 - Agent worktrees remain under `D:/repos/neper/.claude/worktrees/` (28 on 2026-10-30) and `C:/Users/gaddl/.codex/worktrees/`.
