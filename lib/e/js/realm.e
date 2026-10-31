@@ -752,8 +752,10 @@ fn function_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js
         if src.len > 0usize { ret (js.str_value(src), ok) }
     }
     var name = ""
-    let (nv, ne) = js.get_prop(it, fo, js.key_of("name"), this_val)
-    if ne == ok && js.is_string(nv) { name = js.value_str(nv) }
+    if fo.class != js.C_BOUND {
+        let (nv, ne) = js.get_prop(it, fo, js.key_of("name"), this_val)
+        if ne == ok && js.is_string(nv) { name = js.value_str(nv) }
+    }
     ret (js.str_value(js.str_concat3(it, "function ", name, "() { [native code] }")), ok)
 }
 
@@ -796,7 +798,9 @@ fn dynamic_function(it: *js.Interp, args: []const js.Value, kind: u8) -> (js.Val
         fallback = it.protos.async_gen_function
     }
     let src = js.str_concat(it, js.str_concat(it, js.str_concat(it, js.str_concat(it, prefix, params), "\n) {\n"), body), "\n})")
-    // Taking the prototype from new.target happens before the code is compiled.
+    // The code is compiled first; only then is the prototype taken from new.target.
+    let (v, e) = js.eval_source(it, src)
+    if e != ok { ret (js.undefv(), e) }
     var proto = fallback
     var custom = false
     if it.has_new_target {
@@ -806,8 +810,6 @@ fn dynamic_function(it: *js.Interp, args: []const js.Value, kind: u8) -> (js.Val
         proto = pv
         custom = true
     }
-    let (v, e) = js.eval_source(it, src)
-    if e != ok { ret (js.undefv(), e) }
     if custom && js.is_object(v) {
         let fo = js.as_object(v)
         fo.proto = proto

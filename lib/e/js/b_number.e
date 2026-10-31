@@ -2,6 +2,7 @@
 
 use e.data.list as list
 use e.js.bigint as bigint
+use e.js.fdlibm as fdlibm
 use e.js.interp as js
 use e.math
 use e.mem
@@ -763,19 +764,15 @@ fn math_exp(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
         if x < 0.0f64 { ret (js.num_value(0.0f64), ok) }
         ret (js.num_value(x), ok)
     }
+    // exp(1) is E to the last bit, as the specification's E is.
+    if x == 1.0f64 { ret (js.num_value(2.718281828459045f64), ok) }
     ret (js.num_value(math.exp(x)), ok)
 }
 
 fn math_expm1(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
-    if js.is_nan(x) || x == 0.0f64 { ret (js.num_value(x), ok) }
-    if js.is_infinite(x) {
-        if x < 0.0f64 { ret (js.num_value(-1.0f64), ok) }
-        ret (js.num_value(x), ok)
-    }
-    if x > -1e-5f64 && x < 1e-5f64 { ret (js.num_value(x + x * x / 2.0f64 + x * x * x / 6.0f64), ok) }
-    ret (js.num_value(math.exp(x) - 1.0f64), ok)
+    ret (js.num_value(fdlibm.expm1_64(x)), ok)
 }
 
 fn math_log(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -876,60 +873,37 @@ fn math_atan2(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
 fn math_sinh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
-    if !js.is_finite(x) || x == 0.0f64 { ret (js.num_value(x), ok) }
-    if x > -1e-5f64 && x < 1e-5f64 { ret (js.num_value(x + x * x * x / 6.0f64), ok) }
-    ret (js.num_value((math.exp(x) - math.exp(-x)) / 2.0f64), ok)
+    ret (js.num_value(fdlibm.sinh64(x)), ok)
 }
 
 fn math_cosh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
-    if js.is_nan(x) { ret (js.num_value(x), ok) }
-    if js.is_infinite(x) { ret (js.num_value(js.infinity()), ok) }
-    ret (js.num_value((math.exp(x) + math.exp(-x)) / 2.0f64), ok)
+    ret (js.num_value(fdlibm.cosh64(x)), ok)
 }
 
 fn math_tanh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
-    if js.is_nan(x) || x == 0.0f64 { ret (js.num_value(x), ok) }
-    if x > 20.0f64 { ret (js.num_value(1.0f64), ok) }
-    if x < -20.0f64 { ret (js.num_value(-1.0f64), ok) }
-    if x > -1e-5f64 && x < 1e-5f64 { ret (js.num_value(x - x * x * x / 3.0f64), ok) }
-    let a = math.exp(x)
-    let b = math.exp(-x)
-    ret (js.num_value((a - b) / (a + b)), ok)
+    ret (js.num_value(fdlibm.tanh64(x)), ok)
 }
 
 fn math_asinh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
-    if !js.is_finite(x) || x == 0.0f64 { ret (js.num_value(x), ok) }
-    var ax = x
-    if ax < 0.0f64 { ax = -ax }
-    var r = 0.0f64
-    if ax < 1e-5f64 { r = ax - ax * ax * ax / 6.0f64 } else { r = math.log(ax + math.sqrt[f64](ax * ax + 1.0f64)) }
-    if x < 0.0f64 { r = -r }
-    ret (js.num_value(r), ok)
+    ret (js.num_value(fdlibm.asinh64(x)), ok)
 }
 
 fn math_acosh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
-    if js.is_nan(x) || x < 1.0f64 { ret (js.num_value(js.nan()), ok) }
-    if js.is_infinite(x) { ret (js.num_value(x), ok) }
-    ret (js.num_value(math.log(x + math.sqrt[f64](x * x - 1.0f64))), ok)
+    ret (js.num_value(fdlibm.acosh64(x)), ok)
 }
 
 fn math_atanh(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (x, e) = m1(it, args)
     if e != ok { ret (js.undefv(), e) }
-    if js.is_nan(x) || x > 1.0f64 || x < -1.0f64 { ret (js.num_value(js.nan()), ok) }
-    if x == 0.0f64 { ret (js.num_value(x), ok) }
-    if x == 1.0f64 { ret (js.num_value(js.infinity()), ok) }
-    if x == -1.0f64 { ret (js.num_value(-js.infinity()), ok) }
-    if x > -1e-5f64 && x < 1e-5f64 { ret (js.num_value(x + x * x * x / 3.0f64), ok) }
-    ret (js.num_value(0.5f64 * math.log((1.0f64 + x) / (1.0f64 - x))), ok)
+    ret (js.num_value(fdlibm.atanh64(x)), ok)
 }
 
 fn math_hypot(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
