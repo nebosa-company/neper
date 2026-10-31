@@ -7,7 +7,7 @@ a sweep in the background. Counts of passing tests are in the tracker, not here.
 
 | Run | Tests | Wall time | How |
 |---|---|---|---|
-| Core: `language`, `built-ins`, `annexB`, `staging` | 50,253 listed (50,142 run) | 44 min (2026-10-31) | chunks of 100, 6 chunks in parallel, 16 logical cores, nothing else heavy running |
+| Core: `language`, `built-ins`, `annexB`, `staging` | 50,253 listed (50,142 run) | 46 min (2026-10-31, second run) | chunks of 100, 6 chunks in parallel, 16 logical cores, nothing else heavy running |
 | Temporal sweep: `intl402/Temporal`, `built-ins/Temporal/Duration`, `built-ins/Temporal/ZonedDateTime` | 3470 | 15 min (2026-10-31, 18:27 to 18:42) | chunks of 100, 3 chunks in parallel, 16 logical cores, nothing else heavy running |
 
 ## Observed while developing (not timed)
