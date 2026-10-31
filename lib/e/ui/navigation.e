@@ -9293,21 +9293,21 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
     let (core, core_error) = mem.alloc[widget.Node](a, 1usize)
     if core_error != ok { ret (zero, TooLarge) }
     core[0usize] = widget.box(0u64, fill, zero)
-    var dark = 12500670u32
-    var light = 13816530u32
+    var dark = 10526880u32
+    var light = 16777215u32
     var x2: widget.Node = zero
     var x3: widget.Node = zero
     if menu {
-        dark = 12369084u32
-        light = 14606046u32
-        let (a3, e3) = windows_layer(a, 16119285u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
+        dark = 10526880u32
+        light = 16777215u32
+        let (a3, e3) = windows_layer(a, 15790320u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
         if e3 != ok { ret (zero, e3) }
         x3 = a3
         let (a2, e2) = windows_layer(a, 16777215u32, 1.0, 1.0, 0.0, 0.0, x3)
         if e2 != ok { ret (zero, e2) }
         x2 = a2
     } else {
-        let (a3, e3) = windows_layer(a, 16119285u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
+        let (a3, e3) = windows_layer(a, 15790320u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
         if e3 != ok { ret (zero, e3) }
         x3 = a3
         let (a2, e2) = windows_layer(a, lead, 1.0, 0.0, 0.0, 0.0, x3)
@@ -9358,7 +9358,7 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
         while edge < 2usize {
             let x = 6.0 + 3.0 * f32(edge)
             if menu {
-                parts[n] = windows_rect(x, top, 1.0, 1.0, 12303291u32)
+                parts[n] = windows_rect(x, top, 1.0, 1.0, 10526880u32)
                 parts[n + 1usize] = windows_rect(x, top + 1.0, 1.0, rows - 1.0, shade)
                 n += 2usize
             } else {
@@ -9371,12 +9371,10 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
         }
     }
     if menu && grip {
-        // (looks4-f) the main menu's grip starts with a soft top (measured: #FA, #F5 beside the lines).
-        parts[n] = windows_rect(4.0, 2.0, 2.0, 1.0, 16448250u32)
-        parts[n + 1usize] = windows_rect(7.0, 2.0, 2.0, 1.0, 16448250u32)
-        parts[n + 2usize] = windows_rect(5.0, 3.0, 1.0, 1.0, 16119285u32)
-        parts[n + 3usize] = windows_rect(8.0, 3.0, 1.0, 1.0, 16119285u32)
-        n += 4usize
+        // The main menu's grip: both white columns are two px wide on its first row (the 1:1 capture).
+        parts[n] = windows_rect(4.0, 2.0, 2.0, 1.0, 16777215u32)
+        parts[n + 1usize] = windows_rect(7.0, 2.0, 2.0, 1.0, 16777215u32)
+        n += 2usize
     }
     if closed && width > 0.0 {
         n = windows_toolbar_edges(parts, n, bar_k, width, height)
@@ -10755,131 +10753,22 @@ fn windows_menu_under() -> f32 { ret 2.0 }
 // the live captures (states/main-window-rest, where the pointer rested on View, and
 // states/menu-bar-open-title-*). `bw` is the title's width; each fills `parts` and answers how many.
 fn windows_title_box_hot(parts: []widget.Node, bw: f32, along: f32) -> usize {
-    // (looks5-f) every grey drifts along the bar as the open box's do (windows_open_drift): read from the ten hot-title grabs
-    // (states/hover-menubar-title-*), which also fill the box's right edge and the extra column past it.
-    let l_top = windows_open_drift(along, "222111000", 248.0)
-    let left = windows_open_drift(along, "443322210", 251.0)
-    let c1_top = windows_open_drift(along, "000111222", 245.0)
-    let c1 = windows_open_drift(along, "001122234", 240.0)
-    let l21 = windows_open_drift(along, "01234679;", 193.0)
-    let c1_21 = windows_open_drift(along, "000000011", 188.0)
-    let l22 = windows_open_drift(along, "001223456", 213.0)
-    let r_top = windows_open_drift(along, "024579;<?", 188.0)
-    let r_second = windows_open_drift(along, "02579<>AE", 162.0)
-    let r_mid = windows_open_drift(along, "02469;=?C", 162.0)
-    let r21 = windows_open_drift(along, "001233456", 161.0)
-    let e_top = windows_open_drift(along, "=;:975420", 226.0)
-    let e_mid = windows_open_drift(along, "CA?=:8530", 219.0)
-    let e22 = windows_open_drift(along, "665433210", 233.0)
-    parts[0usize] = windows_rect(0.0, 0.0, 1.0, 1.0, l_top * 65793u32)
-    parts[1usize] = windows_rect(1.0, 0.0, bw - 2.0, 1.0, 16448250u32)
-    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 1.0, r_top * 65793u32)
-    parts[3usize] = windows_rect(bw, 0.0, 1.0, 1.0, e_top * 65793u32)
-    parts[4usize] = windows_rect(0.0, 1.0, 1.0, 18.0, left * 65793u32)
-    parts[5usize] = windows_rect(1.0, 1.0, 1.0, 1.0, c1_top * 65793u32)
-    parts[6usize] = windows_rect(2.0, 1.0, bw - 3.0, 1.0, 16119285u32)
-    parts[7usize] = windows_rect(bw - 1.0, 1.0, 1.0, 1.0, r_second * 65793u32)
-    parts[8usize] = windows_rect(bw, 1.0, 1.0, 19.0, e_mid * 65793u32)
-    parts[9usize] = windows_rect(1.0, 2.0, 1.0, 17.0, c1 * 65793u32)
-    parts[10usize] = windows_rect(bw - 1.0, 2.0, 1.0, 17.0, r_mid * 65793u32)
-    parts[11usize] = windows_rect(0.0, 19.0, 1.0, 1.0, l21 * 65793u32)
-    parts[12usize] = windows_rect(1.0, 19.0, 1.0, 1.0, c1_21 * 65793u32)
-    parts[13usize] = windows_rect(2.0, 19.0, bw - 3.0, 1.0, 12303291u32)
-    parts[14usize] = windows_rect(bw - 1.0, 19.0, 1.0, 1.0, r21 * 65793u32)
-    parts[15usize] = windows_rect(0.0, 20.0, 1.0, 1.0, l22 * 65793u32)
-    parts[16usize] = windows_rect(1.0, 20.0, bw - 1.0, 1.0, 13948116u32)
-    parts[17usize] = windows_rect(bw, 20.0, 1.0, 1.0, e22 * 65793u32)
-    ret 18usize
+    // The raised box of the 1:1 captures: #FFFFFF top and left, #A0A0A0 right and bottom, one px, nothing around it.
+    parts[0usize] = windows_rect(0.0, 0.0, bw - 1.0, 1.0, 16777215u32)
+    parts[1usize] = windows_rect(0.0, 1.0, 1.0, 18.0, 16777215u32)
+    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 20.0, 10526880u32)
+    parts[3usize] = windows_rect(0.0, 19.0, bw - 1.0, 1.0, 10526880u32)
+    ret 4usize
 }
 
-// (looks5-f) A grey that drifts along the bar: `table` holds one digit per measured open title (File, Cards,
-// Search, View, Card Art, Online, Reports, Tools, Help: their box left edges at along 0, 29, 70, 119, 158, 215,
-// 261, 315, 402) as an offset from `base`; between the titles it interpolates, past them it holds.
-fn windows_open_drift(along: f32, table: str, base: f32) -> u32 {
-    var k = 0usize
-    var x0: f32 = 0.0
-    var x1: f32 = 29.0
-    if along >= 29.0 {
-        k = 1usize
-        x0 = 29.0
-        x1 = 70.0
-    }
-    if along >= 70.0 {
-        k = 2usize
-        x0 = 70.0
-        x1 = 119.0
-    }
-    if along >= 119.0 {
-        k = 3usize
-        x0 = 119.0
-        x1 = 158.0
-    }
-    if along >= 158.0 {
-        k = 4usize
-        x0 = 158.0
-        x1 = 215.0
-    }
-    if along >= 215.0 {
-        k = 5usize
-        x0 = 215.0
-        x1 = 261.0
-    }
-    if along >= 261.0 {
-        k = 6usize
-        x0 = 261.0
-        x1 = 315.0
-    }
-    if along >= 315.0 {
-        k = 7usize
-        x0 = 315.0
-        x1 = 402.0
-    }
-    var frac = (along - x0) / (x1 - x0)
-    if frac < 0.0 { frac = 0.0 }
-    if frac > 1.0 { frac = 1.0 }
-    let v0 = f32(u32(table[k]) - 48u32)
-    let v1 = f32(u32(table[k + 1usize]) - 48u32)
-    ret u32(base + v0 + (v1 - v0) * frac + 0.5)
-}
-
-// The open (sunken) title's box, every grey read from the nine live open-title captures (states/menu-bar-open-title-*):
-// the left line #A1 to #B4 with the line beside it 400 less that, the top left corner, the right line and the extra
-// column past it (#F0 to #F4) all drift along the window, and so do the corner pixels of the foot.
+// The open (sunken) title's box (states/menu-bar-open-title-*, 1:1).
 fn windows_title_box_open(parts: []widget.Node, bw: f32, along: f32) -> usize {
-    let left = 161u32 + u32(along * 0.0473 + 0.5)
-    let beside = 400u32 - left
-    let corner = windows_open_drift(along, "0124578:=", 187.0)
-    let beside_top = windows_open_drift(along, "=<;986530", 200.0)
-    let foot_left = windows_open_drift(along, "011223345", 222.0)
-    let foot_beside = windows_open_drift(along, "765543210", 243.0)
-    let right_top = windows_open_drift(along, "@><;97530", 233.0)
-    let right_second = windows_open_drift(along, ":98754320", 244.0)
-    let right = windows_open_drift(along, "433222110", 251.0)
-    let right_foot = windows_open_drift(along, "111000000", 254.0)
-    let extra = windows_open_drift(along, "011222334", 240.0)
-    let extra_top = windows_open_drift(along, "001112223", 240.0)
-    let extra_last = windows_open_drift(along, "000111111", 240.0)
-    var last_left = 245u32
-    if along >= 190.0 { last_left = 244u32 }
-    parts[0usize] = windows_rect(1.0, 0.0, bw - 2.0, 1.0, 12303291u32)
-    parts[1usize] = windows_rect(0.0, 0.0, 1.0, 1.0, corner * 65793u32)
-    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 1.0, right_top * 65793u32)
-    parts[3usize] = windows_rect(bw, 0.0, 1.0, 1.0, extra_top * 65793u32)
-    parts[4usize] = windows_rect(0.0, 1.0, 1.0, 18.0, left * 65793u32)
-    parts[5usize] = windows_rect(1.0, 1.0, 1.0, 1.0, beside_top * 65793u32)
-    parts[6usize] = windows_rect(2.0, 1.0, bw - 3.0, 1.0, 14013909u32)
-    parts[7usize] = windows_rect(bw - 1.0, 1.0, 1.0, 1.0, right_second * 65793u32)
-    parts[8usize] = windows_rect(bw, 1.0, 1.0, 19.0, extra * 65793u32)
-    parts[9usize] = windows_rect(1.0, 2.0, 1.0, 17.0, beside * 65793u32)
-    parts[10usize] = windows_rect(bw - 1.0, 2.0, 1.0, 17.0, right * 65793u32)
-    parts[11usize] = windows_rect(bw - 1.0, 19.0, 1.0, 1.0, right_foot * 65793u32)
-    parts[12usize] = windows_rect(0.0, 19.0, 1.0, 1.0, foot_left * 65793u32)
-    parts[13usize] = windows_rect(1.0, 19.0, 1.0, 1.0, foot_beside * 65793u32)
-    parts[14usize] = windows_rect(2.0, 19.0, bw - 3.0, 1.0, 16448250u32)
-    parts[15usize] = windows_rect(0.0, 20.0, bw, 1.0, 16119285u32)
-    parts[16usize] = windows_rect(0.0, 20.0, 1.0, 1.0, last_left * 65793u32)
-    parts[17usize] = windows_rect(bw, 20.0, 1.0, 1.0, extra_last * 65793u32)
-    ret 18usize
+    // The sunken box of the 1:1 captures: #A0A0A0 top and left, #FFFFFF right and bottom, one px, nothing around it.
+    parts[0usize] = windows_rect(0.0, 0.0, bw - 1.0, 1.0, 10526880u32)
+    parts[1usize] = windows_rect(0.0, 1.0, 1.0, 18.0, 10526880u32)
+    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 20.0, 16777215u32)
+    parts[3usize] = windows_rect(0.0, 19.0, bw - 1.0, 1.0, 16777215u32)
+    ret 4usize
 }
 
 // (looks4-f) A bar separator as the live toolbar draws it: 6 x 22 (2 air, a dark and a light
