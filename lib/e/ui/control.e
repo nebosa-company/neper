@@ -37,6 +37,7 @@ use e.ui.winhint
 use e.ui.winedit
 use e.ui.winmark
 use e.ui.winnative
+use e.ui.winradio
 use e.ui.wintile
 use e.ui.winpageicon
 use e.ui.wintoolicon
@@ -4241,7 +4242,7 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
 // pixels (121 to 135 levels over 130 px) and why the offset depends on where the control stands. The other
 // windows' rectangles are drawn without the scale (crisp dots of 90 and 165 levels).
 // `lw`, `tw`: the window coordinates of the rectangle's left column and top row (negative: unknown, no scale).
-type Dotted = struct { color: paint.Color, s: f32, line: f32, lw: f32, tw: f32, span: f32 }
+type Dotted = struct { color: paint.Color, s: f32, line: f32, lw: f32, tw: f32, span: f32, whole: bool }
 // The dots are the inverse of the face (DrawFocusRect's XOR): a dot over a face of 240 is 15, over 249 it is 6.
 
 // A rectangle `w` x `h` at (x, y) as the pixels it covers, each filled with its share of the colour's alpha (the
@@ -4301,6 +4302,30 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Dotted](ctx)
     let x0 = f32(i32(area.x + 0.01))
     let y0 = f32(i32(area.y + 0.01))
+    if d.whole {
+        // DrawFocusRect, an XOR: every other pixel of a one pixel line, the pixels with x + y odd from the corner; 15 rows, `span` + 1 columns.
+        // The origin rounds as the mark's tile does (a row that stands on a half pixel goes down with its mark).
+        let wx = f32(i32(area.x + 0.5))
+        let wy = f32(i32(area.y + 0.5))
+        let last = i32(d.span)
+        var cx: i32 = 1
+        while cx < last {
+            if cx % 2 == 1 {
+                try winpx.fill(b, wx + f32(cx), wy, 1.0, 1.0, d.color)
+                try winpx.fill(b, wx + f32(cx), wy + 14.0, 1.0, 1.0, d.color)
+            }
+            cx += 1
+        }
+        var cy: i32 = 1
+        while cy < 14 {
+            if cy % 2 == 1 {
+                try winpx.fill(b, wx, wy + f32(cy), 1.0, 1.0, d.color)
+                try winpx.fill(b, wx + d.span, wy + f32(cy), 1.0, 1.0, d.color)
+            }
+            cy += 1
+        }
+        ret ok
+    }
     var lw = d.lw
     var tw = d.tw
     var s = d.s
@@ -4336,14 +4361,15 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 
 // Where a rectangle stands: the window coordinates of its left column and top row (negative: unknown), the window's
 // scale and its line offset (see `Dotted`).
-type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32 }
+// `whole` (the radio of the 1:1 captures, `set_radio_crisp`): DrawFocusRect's dots on whole pixels, the underline on a whole row.
+type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32, whole: bool }
 
 // The dotted focus rectangle as a node `width` x `height` (the rectangle is `width` wide: its right line sits 2 in).
 fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom: DotGeom) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[Dotted](a, 1usize)
     if dots_error != ok { ret (zero, TooLarge) }
     let ink = (255.0 - geom.face) / 255.0
-    dots[0usize] = Dotted { color: paint.rgba(ink, ink, ink, 1.0), s: geom.s, line: geom.line, lw: geom.lw, tw: geom.tw, span: width - 2.0 }
+    dots[0usize] = Dotted { color: paint.rgba(ink, ink, ink, 1.0), s: geom.s, line: geom.line, lw: geom.lw, tw: geom.tw, span: width - 2.0, whole: geom.whole }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: mark_measure, paint: dotted_paint, state: widget.bytes_of[Dotted](&dots[0usize]) } }, style: sized_style(width, height), children: none }, ok)
 }
@@ -4354,7 +4380,28 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom
 // scripts/gen_winmark.py for the contexts).
 type Phase = struct { context: u32, x: f32, y: f32 }
 
+// Windows light radio marks as the true 1:1 captures show them (e.ui.winradio): off, on, on under the pointer or pressed, off pressed; the same
+// at every position, so no sub-pixel phase. Opt in like `group_crisp`, set by the sheets of the radio controls; other sheets keep the old marks.
+var radio_crisp: bool = false
+fn set_radio_crisp(on: bool) { radio_crisp = on }
+
 fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
+    if radio_crisp && round && t.tokens.palette == .Light && !state.disabled && !mixed {
+        var tile = winradio.radio_off()
+        if chosen {
+            tile = winradio.radio_on()
+            if state.pressed { tile = winradio.radio_onpressed() }
+        } else if state.pressed {
+            tile = winradio.radio_offpressed()
+        }
+        let (crisp_mark, crisp_error) = wintile.tile_node(a, 13usize, 13usize, tile[0usize..169usize])
+        if crisp_error != ok { ret (zero, crisp_error) }
+        let (crisp_cell, crisp_cell_error) = mem.alloc[widget.Node](a, 1usize)
+        if crisp_cell_error != ok { ret (zero, TooLarge) }
+        crisp_cell[0usize] = widget.positioned(0u64, 0.0, f32(i32((high - 14.0) * 0.5 + 0.5)), style.defaults(), mem_one_node(a, crisp_mark))
+        // the 1:1 captures start the caption at 14 (the old layout 13)
+        ret (widget.stack(0u64, sized_style(14.0, high), crisp_cell[0usize..1usize]), ok)
+    }
     // round 10: the native Windows 11 marks (docs/ui/looks/ref/windows-native, e.ui.winnative). Dark: every state (hover is the rest
     // look natively). Light: the states v3 never showed, disabled and indeterminate; v3's own captures keep the rest.
     if t.tokens.palette == .Dark || (t.tokens.palette == .Light && (state.disabled || mixed)) {
@@ -4575,7 +4622,9 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
     if focused {
         let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 3.0, 16.0, geom)
         if dots_error != ok { ret (zero, dots_error) }
-        parts[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), mem_one_node(a, dots))
+        var dots_x: f32 = 2.0
+        if geom.whole { dots_x = 1.0 }
+        parts[1usize] = widget.positioned(0u64, dots_x, 1.0, style.defaults(), mem_one_node(a, dots))
         n = 2usize
     }
     if mark_at < shown.len {
@@ -4627,7 +4676,11 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if dialog_error != ok { ret (zero, dialog_error) }
     // looks5: where the focus rectangle stands in its window (the caption is 2 right of the mark's 13, the check box's row
     // 2 in; the rectangle 1 under the caption's top) and which window's scale it is drawn at.
-    var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0 }
+    var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0, whole: false }
+    if radio_crisp && round && t.tokens.palette == .Light {
+        geom.whole = true
+        geom.line = 0.0
+    }
     if phase.context == 4u32 || phase.context == 5u32 { geom.face = 249.0 }
     // Dark: the dots are the XOR of the page, #202020 (the tab page of the Filter dialog #272727).
     if t.tokens.palette == .Dark {
@@ -4637,6 +4690,10 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if phase.context == 0u32 { geom.s = 0.0007 }
     if phase.context == 6u32 { geom.s = 0.00073 }
     if phase.context == 0u32 || phase.context == 6u32 { geom.line = 0.3125 }
+    if geom.whole {
+        geom.line = 0.0
+        geom.s = 0.0
+    }
     if phase.x >= 0.0 && phase.y >= 0.0 {
         var lead: f32 = 15.0
         if !round && !flush { lead = 17.0 }
@@ -4649,6 +4706,12 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = mark_node
     parts[1usize] = label_node
+    // the 42 high radio rows (the Options pages and the Search dialog): the 1:1 captures put the caption a row higher than the resampled ones
+    if radio_crisp && round && t.tokens.palette == .Light && high > 40.0 {
+        var raised = style.defaults()
+        raised.margin = edges(0.0, 0.0, 0.0, 2.0)
+        parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, raised, mem_one_node(a, label_node))
+    }
     var row_style = style.defaults()
     row_style.min_height = style.Length { Px: high }
     if !round && !flush { row_style.padding = edges(2.0, 0.0, 0.0, 0.0) }
