@@ -7100,7 +7100,10 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
             if adone { break }
             let (abc, abe) = for_body(it, f, n, target_id, av, decl_mode, lexical, flags, saved)
             if abe != ok {
+                // The loop body's own throw wins over anything closing the iterator reports.
+                let saved_thrown = it.thrown
                 let acl = async_iterator_close(it, f, aiter)
+                if abe == Throw { it.thrown = saved_thrown }
                 ret (normal(), abe)
             }
             if !is_empty_value(abc.value) { last = abc.value }
@@ -8481,18 +8484,52 @@ fn async_iterator_step(it: *Interp, f: *Frame, iter: Iter) -> (Value, bool, err)
     let ro = as_object(result)
     let (dv, de) = get_prop(it, ro, key_of("done"), result)
     if de != ok { ret (undefv(), true, de) }
-    if to_boolean(dv) { ret (undefv(), true, ok) }
+    let is_done = to_boolean(dv)
+    if is_done && !iter.sync_wrapped { ret (undefv(), true, ok) }
     let (vv, ve) = get_prop(it, ro, key_of("value"), result)
     if ve != ok { ret (undefv(), true, ve) }
     if iter.sync_wrapped {
-        let (aw2, awe2) = await_value(it, f, vv)
+        // AsyncFromSyncIteratorContinuation: the value is wrapped in a promise whose settlement resolves the promise that is awaited.
+        let (vw, vwe) = promise_resolve_value(it, vv)
+        let (outp, ope) = new_promise(it)
+        if ope != ok { ret (undefv(), true, ope) }
+        if vwe != ok {
+            // The abrupt completion rejects the promise the loop awaits (after the iterator is closed).
+            let rj = promise_reject(it, outp, it.thrown)
+            if !is_done { sync_iter_close_quiet(it, iter) }
+            let (xw, xwe) = await_value(it, f, obj_value(outp))
+            ret (undefv(), true, xwe)
+        }
+        let onf = make_native(it, "", 1u32, afs_fulfilled)
+        onf.data = mem.cast[*void](outp)
+        let onr = make_native(it, "", 1u32, afs_rejected)
+        onr.data = mem.cast[*void](outp)
+        let te = promise_then_raw(it, vw, obj_value(onf), obj_value(onr))
+        let (aw2, awe2) = await_value(it, f, obj_value(outp))
         if awe2 != ok {
-            sync_iter_close_quiet(it, iter)
+            if !is_done { sync_iter_close_quiet(it, iter) }
             ret (undefv(), true, awe2)
         }
+        if is_done { ret (undefv(), true, ok) }
         ret (aw2, false, ok)
     }
     ret (vv, false, ok)
+}
+
+fn afs_fulfilled(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let p = mem.cast[*Obj](it.callee.data)
+    var v = undefv()
+    if args.len > 0usize { v = args[0usize] }
+    let re = promise_resolve_with(it, p, v)
+    ret (undefv(), ok)
+}
+
+fn afs_rejected(it: *Interp, this_val: Value, args: []const Value) -> (Value, err) {
+    let p = mem.cast[*Obj](it.callee.data)
+    var v = undefv()
+    if args.len > 0usize { v = args[0usize] }
+    let re = promise_reject(it, p, v)
+    ret (undefv(), ok)
 }
 
 fn async_iterator_close(it: *Interp, f: *Frame, iter: Iter) -> err {
