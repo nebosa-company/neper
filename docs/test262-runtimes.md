@@ -7,15 +7,15 @@ a sweep in the background. Counts of passing tests are in the tracker, not here.
 
 | Run | Tests | Wall time | How |
 |---|---|---|---|
+| Core: `language`, `built-ins`, `annexB`, `staging` | 50,253 listed (50,142 run) | 44 min (2026-10-31) | chunks of 100, 6 chunks in parallel, 16 logical cores, nothing else heavy running |
 | Temporal sweep: `intl402/Temporal`, `built-ins/Temporal/Duration`, `built-ins/Temporal/ZonedDateTime` | 3470 | 15 min (2026-10-31, 18:27 to 18:42) | chunks of 100, 3 chunks in parallel, 16 logical cores, nothing else heavy running |
 
 ## Observed while developing (not timed)
 
-These are rough, taken from runs that shared the machine with builds and other sweeps, so they run high.
+These are rough, taken from runs that shared the machine with builds and other sweeps, so they run high. The core run once took 1.5 to 2 hours that way.
 
 | Run | Tests | Roughly |
 |---|---|---|
-| Core: `language`, `built-ins`, `annexB`, `staging` | about 45,000 | 1.5 to 2 hours |
 | `intl402` | about 3,400 | 20 to 40 minutes |
 | `built-ins/RegExp/property-escapes` | 613 | up to an hour: every chunk hits the 240 s limit and reruns test by test |
 | Module suite: `language/module-code`, `import`, `export` | 733 | a few minutes |
