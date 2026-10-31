@@ -1137,8 +1137,15 @@ fn array_iterator_next(it: *js.Interp, this_val: js.Value, args: []const js.Valu
     if iter.aux.class == js.C_TYPEDARRAY && js.ta_out_of_bounds(iter.aux) {
         ret (js.undefv(), js.throw_type(it, "Cannot iterate a typed array that is out of bounds"))
     }
-    let (len, le) = js.length_of(it, iter.aux)
-    if le != ok { ret (js.undefv(), le) }
+    // A typed array's length is internal, whatever its "length" property says.
+    var len = 0.0f64
+    if iter.aux.class == js.C_TYPEDARRAY {
+        len = f64(js.ta_length(iter.aux))
+    } else {
+        let (len1, le) = js.length_of(it, iter.aux)
+        if le != ok { ret (js.undefv(), le) }
+        len = len1
+    }
     let idx = iter.num
     if idx >= len {
         iter.aux = js.null_obj()
