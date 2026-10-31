@@ -317,6 +317,8 @@ fn run_all(ctx: *Ctx) {
                 // The calendar sweeps of intl402 walk a century of dates; they need an order of magnitude more.
                 let (ip, is_intl) = str.find(path, "intl402/")
                 if is_intl { it.step_limit = 400000000u64 }
+                let (dp, is_dst) = str.find(path, "dst-offset-caching")
+                if is_dst { it.step_limit = 4000000000u64 }
             }
             if re != ok {
                 why = "realm"
