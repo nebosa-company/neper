@@ -703,7 +703,6 @@ fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind
     let ce = cb_check(it, cb)
     if ce != ok { ret (js.undefv(), ce) }
     let this_arg = arg(args, 1usize)
-    if kind == 1u8 && len > 4294967295.0f64 { ret (js.undefv(), js.throw_range(it, "Invalid array length")) }
     var out = js.new_array(it)
     if kind == 1u8 || kind == 2u8 {
         var want = 0.0f64

@@ -3609,6 +3609,11 @@ fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err {
     }
     if pn.kind == ast.N_MEMBER {
         if mode != 0u8 { ret throw_syntax(it, "Invalid destructuring tgt") }
+        if f.prog.nodes[usize(pn.a)].kind == ast.N_SUPER {
+            let (sb, skv, sk, sre) = prep_target(it, f, pid)
+            if sre != ok { ret sre }
+            ret put_target(it, f, pid, sb, skv, val)
+        }
         let (base, be) = eval(it, f, pn.a)
         if be != ok { ret be }
         let (key, ke) = member_key(it, f, pn)
@@ -4633,9 +4638,9 @@ fn eval_call_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err) 
         let ctor = f.func
         if !ctor.has_proto { ret (undefv(), throw_type(it, "Super constructor is not a constructor")) }
         let parent = obj_value(ctor.proto)
-        if !is_constructor(parent) { ret (undefv(), throw_type(it, "Super constructor is not a constructor")) }
         let (args, ae) = eval_args(it, f, n.b, n.c)
         if ae != ok { ret (undefv(), ae) }
+        if !is_constructor(parent) { ret (undefv(), throw_type(it, "Super constructor is not a constructor")) }
         let (r, re) = construct(it, parent, args, f.new_target)
         if re != ok { ret (undefv(), re) }
         if this_ready(f) { ret (undefv(), throw_reference(it, "Super constructor may only be called once")) }
