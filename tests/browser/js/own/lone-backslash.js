@@ -6,3 +6,7 @@ assert.throws(SyntaxError, function() { Function("for(var w in \\"); });
 assert.sameValue(new Function("return typeof anonymous")(), "undefined");
 assert.throws(SyntaxError, function() { new Function("/*", "*/) {"); });
 assert.throws(SyntaxError, function() { eval("function class() {}"); });
+assert.sameValue(typeof (0, eval)?.("1"), "number");
+function C() {}
+var tagged = function() { return C; };
+assert(new tagged`x` instanceof C);

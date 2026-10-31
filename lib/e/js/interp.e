@@ -4660,7 +4660,7 @@ fn eval_call_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err) 
     if ae2 != ok { ret (undefv(), ae2) }
     if !is_callable(fv) { ret (undefv(), throw_type(it, str_concat(it, describe_callee(f, n.a), " is not a function"))) }
     // Direct eval sees the caller's scope.
-    if callee.kind == ast.N_IDENT && str.eq(callee.text, "eval") && is_object(fv) && as_object(fv) == it.eval_fn {
+    if (n.flags & ast.F_OPTIONAL) == 0u16 && callee.kind == ast.N_IDENT && str.eq(callee.text, "eval") && is_object(fv) && as_object(fv) == it.eval_fn {
         if args2.len == 0usize { ret (undefv(), ok) }
         let (r2, re2) = direct_eval(it, f, args2[0usize])
         ret (r2, re2)

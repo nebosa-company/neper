@@ -1205,6 +1205,13 @@ fn parse_new(p: *Parser) -> (u32, err) {
             node(p, mid2).b = idx
             node(p, mid2).flags = ast.F_COMPUTED
             callee = mid2
+        } else if p.tok.kind == lex.T_TEMPLATE {
+            let tpl = try parse_template(p)
+            let (tid, te) = mk(p, ast.N_TAGGED)
+            if te != ok { ret (ast.NONE, te) }
+            node(p, tid).a = callee
+            node(p, tid).b = tpl
+            callee = tid
         } else {
             break
         }
