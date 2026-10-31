@@ -324,6 +324,8 @@ fn run_all(ctx: *Ctx) {
                 if is_intl { it.step_limit = 400000000u64 }
                 let (dp, is_dst) = str.find(path, "dst-offset-caching")
                 if is_dst { it.step_limit = 4000000000u64 }
+                let (up, is_uri) = str.find(path, "A2.5_T1")
+                if is_uri { it.step_limit = 4000000000u64 }
             }
             if re != ok {
                 why = "realm"

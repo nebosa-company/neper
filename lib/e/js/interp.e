@@ -3318,6 +3318,14 @@ fn call_js(it: *Interp, fo0: *Obj, this0: Value, args0: []const Value, nt0: Valu
     ret (undefv(), ok)
 }
 
+// The checks after a constructor body ran are made once its context is gone, so their errors belong to the calling realm.
+fn throw_in_caller(it: *Interp, type_error: bool, message: str) -> err {
+    var r = it
+    if it.has_caller { r = it.caller }
+    if type_error { ret throw_value(it, make_error(r, r.protos.type_error, message)) }
+    ret throw_value(it, make_error(r, r.protos.reference_error, message))
+}
+
 fn call_js_once(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_target: Value, constructing: bool) -> (Value, err) {
     let n = fo.prog.nodes[usize(fo.node)]
     let is_arrow = (n.flags & ast.F_ARROW) != 0u16 && (n.flags & ast.F_METHOD) == 0u16
@@ -3401,8 +3409,8 @@ fn call_js_once(it: *Interp, fo: *Obj, this_in: Value, args: []const Value, new_
     if constructing {
         if is_object(result) { ret (result, ok) }
         if fo.ctor_kind == K_DERIVED {
-            if !is_undefined(result) { ret (undefv(), throw_type(it, "Derived constructors may only return object or undefined")) }
-            if !this_ready(&f) { ret (undefv(), throw_reference(it, "Must call super constructor in derived class before accessing 'this' or returning from derived constructor")) }
+            if !is_undefined(result) { ret (undefv(), throw_in_caller(it, true, "Derived constructors may only return object or undefined")) }
+            if !this_ready(&f) { ret (undefv(), throw_in_caller(it, false, "Must call super constructor in derived class before accessing 'this' or returning from derived constructor")) }
         }
         ret (this_get(&f), ok)
     }
@@ -9126,6 +9134,12 @@ fn prevent_extensions(it: *Interp, o: *Obj) -> (bool, err) {
         let (r, e) = px_call(it, PX_PREVENT, o, key_of(""), undefv(), undefv())
         if e != ok { ret (false, e) }
         ret (to_boolean(r), ok)
+    }
+    // A typed array whose length can change (length-tracking, or over a resizable buffer) cannot be made non-extensible.
+    if o.class == C_TYPEDARRAY {
+        let ta = ta_of(o)
+        let tb = buf_of(ta.buffer)
+        if ta.tracking || (tb.resizable && !tb.is_shared) { ret (false, ok) }
     }
     o.extensible = false
     ret (true, ok)
