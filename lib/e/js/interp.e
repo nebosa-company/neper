@@ -6940,8 +6940,10 @@ fn exec_for_inner(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
         }
     }
     var last = undefv()
+    var first_pass = true
     while true {
-        if per_iteration && f.env.captured {
+        // CreatePerIterationEnvironment runs once before the first test and then after each body, not again after the update.
+        if per_iteration && f.env.captured && first_pass {
             // A fresh scope per iteration copies the loop variables.
             let fresh = new_env(it, saved)
             presize_env(it, fresh, f.env.vars.len)
@@ -6952,6 +6954,7 @@ fn exec_for_inner(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
             }
             f.env = fresh
         }
+        first_pass = false
         if n.b != ast.NONE {
             let (t, te) = eval(it, f, n.b)
             if te != ok {

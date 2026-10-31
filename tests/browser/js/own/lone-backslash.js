@@ -17,3 +17,6 @@ assert.throws(SyntaxError, function() { eval("new Object?.()"); });
 assert.throws(SyntaxError, function() { eval("class A {} class B extends A { constructor() { super?.(); } }"); });
 assert.throws(SyntaxError, function() { eval("({ __proto__: null, __proto__, __proto__: null })"); });
 assert.sameValue(new Date("1997-3-8 1:1:1.01").getTime(), new Date("1997-03-08T01:01:01.01").getTime());
+var pif = [];
+for (let v = (pif.push(function() { return v; }), 0); v < 2; v++) { v += 0; }
+assert.sameValue(pif[0](), 0);
