@@ -10672,6 +10672,30 @@ fn win5_cell_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 fn image_select_cell(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32, held: bool) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows && t.tokens.palette == .Light {
+        // round 46: drawn from the 1:1 captures (winedit.cell_chrome); the text stands where they put it
+        let (chrome, chrome_error) = winedit.cell_chrome(a, width, held)
+        if chrome_error != ok { ret (zero, chrome_error) }
+        let (light_t, light_error) = win3_dialog_theme(a, t)
+        if light_error != ok { ret (zero, light_error) }
+        var light_words = text_options()
+        light_words.role = .BodyMedium
+        light_words.wrap = .None
+        // the Sort list and its editor set Tahoma 12 px at GDI whole pixel advances (see win_row)
+        let (light_said, _, light_said_error) = win_gdi_glyphs(a, &light_t, light_words, style.color(t.tokens, .Text), label)
+        if light_said_error != ok { ret (zero, light_said_error) }
+        let (light_layers, light_layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if light_layers_error != ok { ret (zero, TooLarge) }
+        let (light_text, light_text_error) = mem.alloc[widget.Node](a, 1usize)
+        if light_text_error != ok { ret (zero, TooLarge) }
+        light_text[0usize] = light_said
+        var light_line = style.defaults()
+        light_line.height = style.Length { Px: 21.0 }
+        light_line.padding = edges(24.0, 0.0, 0.0, 2.0)
+        light_layers[0usize] = chrome
+        light_layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, light_line, light_text[0usize..1usize])
+        ret (widget.stack(key, sized_style(width, 21.0), light_layers[0usize..2usize]), ok)
+    }
     let (cells, cells_error) = mem.alloc[Win5Cell](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
     cells[0usize] = Win5Cell { held: held }
@@ -17002,6 +17026,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     let state = control_state(t, key, enabled, false)
     var c = win_look(t, state.hovered, state.pressed, false, open, enabled, false)
     let dark = t.tokens.palette == .Dark
+    let drawn_light = t.tokens.profile == .Windows && t.tokens.palette == .Light
     // round 10: the native dark list-style combo: white text, #6D6D6D disabled
     if dark {
         c.ink = style.hex_raw(0xFFFFFFu32)
@@ -17032,7 +17057,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var chevron_scale: f32 = 1.0
     // looks5 group d: no chevron change under the pointer (the captured hovers have the rest chevron).
     if !enabled { chevron_scale = 0.5 }
-    if dark { chevron_scale = 0.0 }
+    if dark || drawn_light { chevron_scale = 0.0 }
     let focused = state.focused && enabled
     let (chevron, chevron_error) = win3_chevron(a, c.ink, focused, false, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
@@ -17048,8 +17073,9 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var spread = style.defaults()
     spread.width = style.Length { Px: head_w }
     spread.height = style.Length { Px: text_h }
+    // round 46: the light head's text starts at x 5 of the box in the 1:1 captures
     spread.padding = edges(3.0, 0.0, 0.0, 0.0)
-    if dark { spread.padding = edges(4.0, 0.0, 0.0, 0.0) }
+    if dark || drawn_light { spread.padding = edges(4.0, 0.0, 0.0, 0.0) }
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, spread, bits[0usize..2usize])
     var tone: f32 = 0.0
     if !enabled { tone = 0.5 }
@@ -17066,6 +17092,16 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         if open || state.pressed { native_state = 3u32 }
         if !enabled { native_state = 2u32 }
         let (made_frame, made_error) = winedit.native_combo(a, 1u32, native_state, head_w, text_h)
+        frame = made_frame
+        frame_error = made_error
+    } else if drawn_light {
+        // round 46: the drop-down box is drawn (the button look of the ellipsis over the dialog face) with its chevron
+        var box_style = 0u32
+        if head_look == 4u32 { box_style = 1u32 }
+        if head_look == 1u32 || head_look == 2u32 || head_look == 3u32 { box_style = 2u32 }
+        if box_style == 2u32 && head_look == 1u32 && edge_x >= 10000.0 { box_style = 4u32 }
+        if !enabled { box_style = 3u32 }
+        let (made_frame, made_error) = winedit.combo_chrome(a, box_style, head_w, 21.0)
         frame = made_frame
         frame_error = made_error
     } else {

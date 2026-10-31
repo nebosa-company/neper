@@ -196,17 +196,9 @@ fn lc_spin(b: *scene.Builder, x: f32, y: f32, w: f32, kind: u32, zone: u32, dim:
 // every look of the button.
 fn lc_ell_weights() -> [192]u32 { ret [192]u32{ 0u32, 0u32, 0u32, 32u32, 0u32, 0u32, 191u32, 0u32, 0u32, 239u32, 0u32, 0u32, 32u32, 0u32, 0u32, 239u32, 0u32, 0u32, 127u32, 0u32, 133u32, 14u32, 0u32, 250u32, 174u32, 0u32, 3u32, 111u32, 0u32, 148u32, 0u32, 0u32, 255u32, 0u32, 0u32, 255u32, 255u32, 0u32, 0u32, 16u32, 0u32, 240u32, 0u32, 0u32, 255u32, 0u32, 0u32, 255u32, 255u32, 0u32, 0u32, 175u32, 0u32, 1u32, 32u32, 0u32, 0u32, 0u32, 0u32, 0u32, 14u32, 0u32, 250u32, 112u32, 0u32, 138u32, 239u32, 0u32, 0u32, 32u32, 0u32, 0u32, 0u32, 0u32, 255u32, 0u32, 0u32, 255u32, 128u32, 0u32, 122u32, 190u32, 0u32, 7u32, 0u32, 0u32, 255u32, 0u32, 0u32, 255u32, 16u32, 0u32, 237u32, 239u32, 0u32, 0u32, 239u32, 0u32, 0u32, 16u32, 0u32, 240u32, 0u32, 0u32, 255u32, 0u32, 0u32, 255u32, 191u32, 0u32, 0u32, 122u32, 6u32, 128u32, 0u32, 0u32, 255u32, 0u32, 0u32, 255u32, 29u32, 3u32, 0u32, 239u32, 0u32, 0u32, 113u32, 0u32, 133u32, 16u32, 0u32, 240u32, 0u32, 0u32, 0u32, 29u32, 3u32, 0u32, 28u32, 147u32, 0u32, 12u32, 243u32, 0u32, 0u32, 0u32, 255u32, 0u32, 0u32, 255u32, 15u32, 1u32, 238u32, 255u32, 0u32, 0u32, 0u32, 0u32, 255u32, 0u32, 0u32, 255u32, 109u32, 4u32, 137u32, 175u32, 0u32, 0u32, 16u32, 0u32, 240u32, 124u32, 5u32, 120u32, 239u32, 0u32, 0u32, 29u32, 2u32, 2u32, 0u32, 239u32, 0u32, 55u32, 136u32, 0u32, 29u32, 2u32, 2u32, 0u32, 0u32, 0u32 } }
 
-// style_id: 0 rest, 1 hovered, 2 pressed, 3 disabled. The button is 15 x 17 at (x, y); the three dots sit on row 8 and column 4
-// (a pressed button's one pixel down and right; a disabled one's have a white shadow one pixel down and right).
-fn lc_ellipsis(b: *scene.Builder, x: f32, y: f32, style_id: u32) -> err {
-    let sides = [4]u32{ 0xD0D0D0u32, 0x0078D4u32, 0x005499u32, 0xE9E9E9u32 }
-    let feet = [4]u32{ 0xBABABAu32, 0x006BBEu32, 0x005499u32, 0xE9E9E9u32 }
-    let faces = [4]u32{ 0xFDFDFDu32, 0xE0EEF9u32, 0xCCE4F7u32, 0xF9F9F9u32 }
-    let side = sides[usize(style_id)]
-    let foot = feet[usize(style_id)]
-    let face = faces[usize(style_id)]
-    let w: f32 = 15.0
-    let h: f32 = 17.0
+// A rounded box of w x h at (x, y) in the look of the ellipsis and drop-down buttons: the face, a 1 px line along the top and the sides, the foot line,
+// and the antialiased 4 x 4 corners over a grey `out` (the colour behind it).
+fn lc_round(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, side: u32, foot: u32, face: u32, out: u32) -> err {
     try lc_fill(b, x, y, w, h, face)
     try lc_fill(b, x, y, 1.0, h, side)
     try lc_fill(b, x + w - 1.0, y, 1.0, h, side)
@@ -228,7 +220,7 @@ fn lc_ellipsis(b: *scene.Builder, x: f32, y: f32, style_id: u32) -> err {
             var c = 0u32
             while c < 3u32 {
                 let sh = c * 8u32
-                let o: f32 = 255.0
+                let o: f32 = f32(out & 255u32)
                 let l = f32((side >> sh) & 255u32) - o
                 let e = f32((edge >> sh) & 255u32) - o
                 let f = f32((face >> sh) & 255u32) - o
@@ -243,6 +235,19 @@ fn lc_ellipsis(b: *scene.Builder, x: f32, y: f32, style_id: u32) -> err {
         }
         k += 1usize
     }
+    ret ok
+}
+
+// style_id: 0 rest, 1 hovered, 2 pressed, 3 disabled. The button is 15 x 17 at (x, y); the three dots sit on row 8 and column 4
+// (a pressed button's one pixel down and right; a disabled one's have a white shadow one pixel down and right).
+fn lc_ellipsis(b: *scene.Builder, x: f32, y: f32, style_id: u32) -> err {
+    let sides = [4]u32{ 0xD0D0D0u32, 0x0078D4u32, 0x005499u32, 0xE9E9E9u32 }
+    let feet = [4]u32{ 0xBABABAu32, 0x006BBEu32, 0x005499u32, 0xE9E9E9u32 }
+    let faces = [4]u32{ 0xFDFDFDu32, 0xE0EEF9u32, 0xCCE4F7u32, 0xF9F9F9u32 }
+    let side = sides[usize(style_id)]
+    let foot = feet[usize(style_id)]
+    let face = faces[usize(style_id)]
+    try lc_round(b, x, y, 15.0, 17.0, side, foot, face, 0xFFu32)
     var ink = 0u32
     var dy: f32 = 8.0
     if style_id == 2u32 { dy = 9.0 }
@@ -256,6 +261,150 @@ fn lc_ellipsis(b: *scene.Builder, x: f32, y: f32, style_id: u32) -> err {
         d += 1usize
     }
     ret ok
+}
+
+// ---- the drop-down box of the image combo box ------------------------------------------------------------------------------------
+// The chevron as alpha (0..255), 6 rows of 10, at (W - 14, 8) of the box; the box is the ellipsis button's look over the dialog face.
+fn lc_chevron_alpha() -> [60]u32 { ret [60]u32{ 9u32, 57u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 57u32, 9u32, 11u32, 255u32, 87u32, 0u32, 0u32, 0u32, 0u32, 87u32, 255u32, 12u32, 0u32, 19u32, 255u32, 87u32, 0u32, 0u32, 87u32, 255u32, 19u32, 0u32, 0u32, 0u32, 19u32, 255u32, 87u32, 87u32, 255u32, 19u32, 0u32, 0u32, 0u32, 0u32, 0u32, 19u32, 255u32, 255u32, 19u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 14u32, 14u32, 0u32, 0u32, 0u32, 0u32 } }
+
+type LCombo = struct { style_id: u32, width: f32, height: f32 }
+
+// style_id: 0 rest, 1 pointer over the drop-down part, 2 pressed or open, 3 disabled (a guess: no capture), 4 the first frame after a click.
+fn lc_combo_paint(ctx: *void, b: *scene.Builder, raw: geometry.Rect) -> err {
+    let d = mem.cast[*LCombo](ctx)
+    let x = f32(i32(raw.x + 0.5))
+    let y = f32(i32(raw.y + 0.5))
+    let sides = [4]u32{ 0xD0D0D0u32, 0x0078D4u32, 0x005499u32, 0xE9E9E9u32 }
+    let feet = [4]u32{ 0xBABABAu32, 0x006BBEu32, 0x005499u32, 0xE9E9E9u32 }
+    let faces = [4]u32{ 0xFDFDFDu32, 0xE0EEF9u32, 0xCCE4F7u32, 0xF9F9F9u32 }
+    let inks = [4]u32{ 0x6E6E6Eu32, 0x676B6Du32, 0x62686Du32, 0xA0A0A0u32 }
+    // style 4: the first frame after the click, the pressed look 92 % over the rest one
+    var id = usize(d.style_id)
+    var side = sides[0]
+    var foot = feet[0]
+    var face = faces[0]
+    var ink = inks[0]
+    if id == 4usize {
+        side = lc_mix(sides[0], sides[2], 235u32)
+        foot = lc_mix(feet[0], feet[2], 235u32)
+        face = lc_mix(faces[0], faces[2], 235u32)
+        ink = lc_mix(inks[0], inks[2], 235u32)
+    } else {
+        side = sides[id]
+        foot = feet[id]
+        face = faces[id]
+        ink = inks[id]
+    }
+    try lc_round(b, x, y, d.width, d.height, side, foot, face, 0xF0u32)
+    let t = lc_chevron_alpha()
+    var r = 0usize
+    while r < 6usize {
+        var c = 0usize
+        while c < 10usize {
+            let al = t[r * 10usize + c]
+            if al != 0u32 { try lc_fill(b, x + d.width - 14.0 + f32(c), y + 8.0 + f32(r), 1.0, 1.0, lc_mix(face, ink, al)) }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+fn combo_chrome(a: *mem.Arena, style_id: u32, width: f32, height: f32) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[LCombo](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = LCombo { style_id: style_id, width: width, height: height }
+    var s = style.defaults()
+    s.width = style.Length { Px: width }
+    s.height = style.Length { Px: height }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: wedit_measure, paint: lc_combo_paint, state: widget.bytes_of[LCombo](&made[0usize]) } }, style: s, children: none }, ok)
+}
+
+// ---- the cell editor of the image combo box ---------------------------------------------------------------------------------------
+// The Sort window's editor (a TcxImageComboBox in a grid, ref/windows-1to1/states/image-combo-box-*-sort): the cell's #EFEFEF face between a
+// #DCDCDC line and a white one under it, the focus rectangle's dots (the colour inverse of the face, on offsets where x + y is odd, the left side
+// hidden by the column line) and a 17 x 16 drop button at the end with the chevron. held: the list is open (the button pressed).
+type LCell = struct { width: f32, held: bool }
+
+fn lc_cell_corners_rest() -> [36]u32 { ret [36]u32{ 0xE5E5E5u32, 0xD4D4D4u32, 0xD2D2D2u32, 0xD4D4D4u32, 0xF5F5F5u32, 0xFDFDFDu32, 0xD2D2D2u32, 0xFDFDFDu32, 0xFDFDFDu32, 0xD2D2D2u32, 0xD4D4D4u32, 0xE5E5E5u32, 0xFDFDFDu32, 0xF5F5F5u32, 0xD4D4D4u32, 0xFDFDFDu32, 0xFDFDFDu32, 0xD2D2D2u32, 0xD2D2D2u32, 0xFDFDFDu32, 0xFDFDFDu32, 0xD4D4D4u32, 0xF5F5F5u32, 0xFDFDFDu32, 0xE5E5E5u32, 0xC2C2C2u32, 0xBCBCBCu32, 0xFDFDFDu32, 0xFDFDFDu32, 0xD2D2D2u32, 0xFDFDFDu32, 0xF5F5F5u32, 0xD4D4D4u32, 0xBCBCBCu32, 0xC2C2C2u32, 0xE5E5E5u32 } }
+fn lc_cell_corners_held() -> [36]u32 { ret [36]u32{ 0x9DBDDBu32, 0x126ABBu32, 0x005FB7u32, 0x126ABBu32, 0xA8CDECu32, 0xCCE4F7u32, 0x005FB7u32, 0xCCE4F7u32, 0xCCE4F7u32, 0x005FB7u32, 0x126ABBu32, 0x9DBDDBu32, 0xCCE4F7u32, 0xA8CDECu32, 0x126ABBu32, 0xCCE4F7u32, 0xCCE4F7u32, 0x005FB7u32, 0x005FB7u32, 0xCCE4F7u32, 0xCCE4F7u32, 0x126ABBu32, 0xA8CDECu32, 0xCCE4F7u32, 0x9DBDDBu32, 0x126ABBu32, 0x005FB7u32, 0xCCE4F7u32, 0xCCE4F7u32, 0x005FB7u32, 0xCCE4F7u32, 0xA8CDECu32, 0x126ABBu32, 0x005FB7u32, 0x126ABBu32, 0x9DBDDBu32 } }
+
+fn lc_cell_paint(ctx: *void, b: *scene.Builder, raw: geometry.Rect) -> err {
+    let d = mem.cast[*LCell](ctx)
+    let x = f32(i32(raw.x + 0.5))
+    let y = f32(i32(raw.y + 0.5))
+    let w = d.width
+    try lc_fill(b, x, y, w, 21.0, 0xEFEFEFu32)
+    try lc_fill(b, x, y, w, 1.0, 0xDCDCDCu32)
+    try lc_fill(b, x, y + 19.0, w, 1.0, 0xDCDCDCu32)
+    try lc_fill(b, x, y + 20.0, w, 1.0, 0xFFFFFFu32)
+    var i = 0usize
+    while i < usize(w) {
+        if (i & 1usize) == 0usize { try lc_fill(b, x + f32(i), y + 1.0, 1.0, 1.0, 0x101010u32) }
+        if (i & 1usize) == 1usize { try lc_fill(b, x + f32(i), y + 18.0, 1.0, 1.0, 0x101010u32) }
+        i += 1usize
+    }
+    var j = 3usize
+    while j < 18usize {
+        try lc_fill(b, x + w - 1.0, y + f32(j), 1.0, 1.0, 0x101010u32)
+        j += 2usize
+    }
+    var side = 0xD2D2D2u32
+    var foot = 0xBCBCBCu32
+    var face = 0xFDFDFDu32
+    var ink = 0x6E6E6Eu32
+    if d.held {
+        side = 0x005FB7u32
+        foot = 0x005FB7u32
+        face = 0xCCE4F7u32
+        ink = 0x62686Du32
+    }
+    // the button: a 3 pixel corner (these are the captures' pixels, six per corner differ from the plain lines)
+    let bx = x + w - 18.0
+    try lc_fill(b, bx, y + 2.0, 17.0, 16.0, face)
+    try lc_fill(b, bx, y + 2.0, 1.0, 16.0, side)
+    try lc_fill(b, bx + 16.0, y + 2.0, 1.0, 16.0, side)
+    try lc_fill(b, bx, y + 2.0, 17.0, 1.0, side)
+    try lc_fill(b, bx, y + 17.0, 17.0, 1.0, foot)
+    var corners = lc_cell_corners_rest()
+    if d.held { corners = lc_cell_corners_held() }
+    var k = 0usize
+    while k < 4usize {
+        var cx = bx
+        var cy = y + 2.0
+        if k == 1usize || k == 3usize { cx = bx + 14.0 }
+        if k >= 2usize { cy = y + 2.0 + 13.0 }
+        var q = 0usize
+        while q < 9usize {
+            try lc_fill(b, cx + f32(q % 3usize), cy + f32(q / 3usize), 1.0, 1.0, corners[k * 9usize + q])
+            q += 1usize
+        }
+        k += 1usize
+    }
+    let t = lc_chevron_alpha()
+    var r = 0usize
+    while r < 6usize {
+        var c = 0usize
+        while c < 10usize {
+            let al = t[r * 10usize + c]
+            if al != 0u32 { try lc_fill(b, x + w - 18.0 + 3.0 + f32(c), y + 2.0 + 7.0 + f32(r), 1.0, 1.0, lc_mix(face, ink, al)) }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+fn cell_chrome(a: *mem.Arena, width: f32, held: bool) -> (widget.Node, err) {
+    let (made, made_error) = mem.alloc[LCell](a, 1usize)
+    if made_error != ok { ret (zero, made_error) }
+    made[0usize] = LCell { width: width, held: held }
+    var s = style.defaults()
+    s.width = style.Length { Px: width }
+    s.height = style.Length { Px: 21.0 }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: wedit_measure, paint: lc_cell_paint, state: widget.bytes_of[LCell](&made[0usize]) } }, style: s, children: none }, ok)
 }
 
 fn lc_paint(ctx: *void, b: *scene.Builder, raw: geometry.Rect) -> err {
