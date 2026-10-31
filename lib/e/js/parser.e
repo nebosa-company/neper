@@ -958,6 +958,8 @@ fn parse_primary(p: *Parser) -> (u32, err) {
             if ek == ast.N_ARRAY || ek == ast.N_OBJECT { node(p, e).op = 1u8 }
             // A parenthesised name assigned to takes no inferred function name: `d` = 1 marks it.
             if ek == ast.N_IDENT { node(p, e).d = 1u32 }
+            // A parenthesised assignment is no destructuring element with a default: `d` = 2 marks it for the early error pass.
+            if ek == ast.N_ASSIGN { node(p, e).d = 2u32 }
             try list.push[u32](&p.parens, e)
             ret (e, ok)
         }
@@ -1786,6 +1788,7 @@ fn parse_for(p: *Parser) -> (u32, err) {
     try adv(p)
     var is_await = false
     if is_k(p, "await") {
+        if !(p.in_async || (p.module && !p.in_function)) { ret (ast.NONE, fail(p, "for await is only valid in async functions and modules")) }
         try adv(p)
         is_await = true
         if !p.in_function { p.top_await = true }
@@ -1811,6 +1814,7 @@ fn parse_for(p: *Parser) -> (u32, err) {
         }
     }
     p.no_in = saved
+    if is_await && !(init != ast.NONE && is_k(p, "of")) { ret (ast.NONE, fail(p, "for await needs a for-of loop")) }
     if init != ast.NONE && (is_k(p, "of") || is_k(p, "in")) {
         let of = is_k(p, "of")
         try adv(p)

@@ -314,7 +314,7 @@ fn check_pattern(c: *Ctx, id: u32, binding: bool, allow_cover: bool) -> err {
         ret check_expr(c, id)
     }
     if n.kind == ast.N_ASSIGN {
-        if n.op != ast.O_ASSIGN || (n.flags & ast.F_OPTIONAL) != 0u16 { ret fail(c, id, "Invalid destructuring target") }
+        if n.op != ast.O_ASSIGN || (n.flags & ast.F_OPTIONAL) != 0u16 || n.d == 2u32 { ret fail(c, id, "Invalid destructuring target") }
         try check_pattern(c, n.a, binding, allow_cover)
         ret check_expr(c, n.b)
     }
