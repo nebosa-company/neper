@@ -186,14 +186,50 @@ fn number_to_locale_string(it: *js.Interp, this_val: js.Value, args: []const js.
 
 // The exact-ish decimal digits of |x| rounded half up to `sig` significant digits: (digits, exponent e where value = 0.d1d2.. x
 // 10^(e+1), i.e. d1 is the 10^e place).
+// The exact decimal expansion of a positive double below 1e-90, as "DIGITSe-K" (value = DIGITS * 10^-K): m * 2^-k = m * 5^k / 10^k.
+fn exact_small_text(it: *js.Interp, ax: f64) -> str {
+    let bits = mem.bitcast[u64](ax)
+    let frac = bits & 4503599627370495u64
+    let ex = i64((bits >> 52u64) & 2047u64)
+    var m = frac
+    var kk = 1074i64
+    if ex != 0i64 {
+        m = frac | 4503599627370496u64
+        kk = 1075i64 - ex
+    }
+    let (bm, e1) = bigint.from_u64(it.a, m)
+    let (b5, e2) = bigint.from_u64(it.a, 5u64)
+    let (bk, e3) = bigint.from_i64(it.a, kk)
+    if e1 != ok { ret "1e-1" }
+    if e2 != ok { ret "2e-1" }
+    if e3 != ok { ret "3e-1" }
+    let (p5, e4) = bigint.pow(it.a, b5, bk)
+    if e4 != ok { ret "4e-1" }
+    let (prod, e5) = bigint.mul(it.a, bm, p5)
+    if e5 != ok { ret "5e-1" }
+    let (digits, e6) = bigint.to_string(it.a, prod, 10u32)
+    if e6 != ok { ret "6e-1" }
+    ret js.str_concat3(it, digits, "e-", js.number_to_string(it.a, f64(kk)))
+}
+
 fn sig_digits(it: *js.Interp, x: f64, sig: usize) -> (str, i64) {
     var ax = x
     if ax < 0.0f64 { ax = -ax }
-    let (b, be) = str.builder(it.a, 400usize)
+    // The exact text is built before the builder: a builder must stay on top of the arena.
+    var tiny_text = ""
+    var tiny = false
+    if ax > 0.0f64 && ax < mem.bitcast[f64](3260689527820848751u64) {
+        tiny = true
+        tiny_text = exact_small_text(it, ax)
+    }
+    let (b, be) = str.builder(it.a, 1200usize)
     if be != ok { ret ("", 0i64) }
     var out = b
     var e10 = 0i64
-    if ax < 1e21f64 {
+    // Below 1e-90 the fixed rendering (99 fraction digits) loses digits, so the exact expansion is used.
+    if tiny {
+        let pt = str.push(&out, tiny_text)
+    } else if ax < 1e21f64 {
         let pe = str.push_f64_fixed(&out, ax, 99u8)
     } else {
         // The exact integer value, not the shortest text that reads back as it: rounding to `sig` digits needs every digit.
@@ -319,6 +355,7 @@ fn sig_digits_fixed(it: *js.Interp, x: f64, frac: usize) -> (str, i64) {
         neg = true
         ax = -ax
     }
+    if ax == 0.0f64 { ax = 0.0f64 }
     let (b, be) = str.builder(it.a, 300usize)
     if be != ok { ret ("", 0i64) }
     var out = b
@@ -371,7 +408,7 @@ fn sig_digits_fixed(it: *js.Interp, x: f64, frac: usize) -> (str, i64) {
         if buf[q] != 48u8 { all_zero = false }
         q += 1usize
     }
-    if neg && !(all_zero && !lead_one) && x < 0.0f64 { let pn = str.push_byte(&res, 45u8) }
+    if neg { let pn = str.push_byte(&res, 45u8) }
     if lead_one { let pl = str.push_byte(&res, 49u8) }
     var w = 0usize
     while w < n {

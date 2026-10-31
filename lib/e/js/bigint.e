@@ -666,7 +666,8 @@ fn to_string(a: *mem.Arena, x: Big, radix: u32) -> (str, err) {
         chunk = chunk * radix
         chunk_digits += 1u32
     }
-    let digits = try mem.alloc[u8](a, (x.mag.len + 2usize) * usize(chunk_digits))
+    // A division removes about 29.9 bits (radix 10) from limbs of 32, so a number can take a little over one division per limb.
+    let digits = try mem.alloc[u8](a, (x.mag.len * 2usize + 2usize) * usize(chunk_digits))
     var dn = 0usize
     while n > 0usize {
         let (q, qn, rem, e) = divrem_small(a, cur[0usize..n], chunk)
