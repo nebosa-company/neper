@@ -1321,3 +1321,7 @@ fn contains(id: u32, c: u32) -> bool { ret contains_ranges(table(id), c) }
 
 // Unicode Default_Ignorable_Code_Point, kept alongside its generated property table.
 fn default_ignorable(c: u32) -> bool { ret contains_ranges(t16(), c) }
+
+// ECMAScript identifier characters (ID_Start and ID_Continue).
+fn id_start(c: u32) -> bool { ret contains(71u32, c) }
+fn id_continue(c: u32) -> bool { ret contains(70u32, c) }

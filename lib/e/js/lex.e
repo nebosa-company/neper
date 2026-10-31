@@ -12,7 +12,7 @@
 use e.data.list as list
 use e.mem
 use e.str
-use e.text.unicode as unicode
+use e.text.uprops as uprops
 
 const T_EOF: u8 = 0u8
 const T_IDENT: u8 = 1u8
@@ -90,25 +90,16 @@ fn scalar_at(s: str, at: usize) -> (u32, usize, bool) {
     ret (0u32, 0usize, false)
 }
 
-// ID_Start for non-ASCII scalars: the letter categories and Nl, plus Other_ID_Start.
+// ID_Start / ID_Continue for non-ASCII scalars (ZWNJ and ZWJ are also allowed in identifier parts), from the generated Unicode tables.
 fn id_start_cp(cp: u32) -> bool {
     if cp < 128u32 { ret is_id_start(u8(cp)) }
-    if cp == 11823u32 { ret false }
-    if cp == 8472u32 || cp == 8494u32 || cp == 12443u32 || cp == 12444u32 || cp == 6277u32 || cp == 6278u32 { ret true }
-    let cat = unicode.category(cp)
-    // The bundled Unicode tables define the supported version; unassigned Cn
-    // scalars must not be treated as future identifier characters.
-    ret cat == .Lu || cat == .Ll || cat == .Lt || cat == .Lm || cat == .Lo || cat == .Nl
+    ret uprops.id_start(cp)
 }
 
-// ID_Continue (plus ZWNJ / ZWJ, which identifiers allow).
 fn id_part_cp(cp: u32) -> bool {
     if cp < 128u32 { ret is_id_part(u8(cp)) }
-    if cp == 11823u32 { ret false }
-    if id_start_cp(cp) { ret true }
-    if cp == 8204u32 || cp == 8205u32 || cp == 183u32 || cp == 903u32 || (cp >= 4969u32 && cp <= 4977u32) || cp == 6618u32 || cp == 12539u32 || cp == 65381u32 { ret true }
-    let cat = unicode.category(cp)
-    ret cat == .Mn || cat == .Mc || cat == .Nd || cat == .Pc
+    if cp == 8204u32 || cp == 8205u32 { ret true }
+    ret uprops.id_continue(cp)
 }
 
 fn id_part_len(s: str, at: usize) -> usize {
