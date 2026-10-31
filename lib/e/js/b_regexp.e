@@ -109,8 +109,25 @@ fn escape_source(it: *js.Interp, src: str) -> str {
     while i < src.len {
         let c = src[i]
         if c == 92u8 && i + 1usize < src.len {
+            // A backslash before a line terminator and the terminator become the one escape sequence for it.
+            let nx = src[i + 1usize]
+            if nx == 10u8 {
+                let q1 = str.push(&out, "\\n")
+                i += 2usize
+                continue
+            }
+            if nx == 13u8 {
+                let q2 = str.push(&out, "\\r")
+                i += 2usize
+                continue
+            }
+            if nx == 226u8 && i + 3usize < src.len && src[i + 2usize] == 128u8 && (src[i + 3usize] == 168u8 || src[i + 3usize] == 169u8) {
+                if src[i + 3usize] == 168u8 { let q3 = str.push(&out, "\\u2028") } else { let q4 = str.push(&out, "\\u2029") }
+                i += 4usize
+                continue
+            }
             let pe = str.push_byte(&out, c)
-            let pe2 = str.push_byte(&out, src[i + 1usize])
+            let pe2 = str.push_byte(&out, nx)
             i += 2usize
             continue
         }
@@ -182,34 +199,26 @@ fn regexp_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
             if js.is_object(pc) && js.as_object(pc) == it.callee { ret (pattern, ok) }
         }
     }
+    // P and F are chosen first; the prototype is read from new.target; only then are they converted to strings.
     var source = ""
     var flags = ""
+    var p_val = pattern
+    var f_val = flags_arg
+    var from_regexp = false
     if is_regexp_obj(pattern) {
         let c = compiled_of(js.as_object(pattern))
         source = c.source
+        from_regexp = true
         if js.is_undefined(flags_arg) { flags = c.flags }
     } else if pattern_is_regexp {
         let (sv, se) = js.get_prop(it, js.as_object(pattern), js.key_of("source"), pattern)
         if se != ok { ret (js.undefv(), se) }
-        let (ss, sse) = js.to_string(it, sv)
-        if sse != ok { ret (js.undefv(), sse) }
-        source = ss
+        p_val = sv
         if js.is_undefined(flags_arg) {
             let (fv, fe) = js.get_prop(it, js.as_object(pattern), js.key_of("flags"), pattern)
             if fe != ok { ret (js.undefv(), fe) }
-            let (fs, fse) = js.to_string(it, fv)
-            if fse != ok { ret (js.undefv(), fse) }
-            flags = fs
+            f_val = fv
         }
-    } else if !js.is_undefined(pattern) {
-        let (ps, pse) = js.to_string(it, pattern)
-        if pse != ok { ret (js.undefv(), pse) }
-        source = ps
-    }
-    if !js.is_undefined(flags_arg) {
-        let (fs2, fse2) = js.to_string(it, flags_arg)
-        if fse2 != ok { ret (js.undefv(), fse2) }
-        flags = fs2
     }
     var proto = it.protos.regexp
     if it.has_new_target {
@@ -217,6 +226,16 @@ fn regexp_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
         let (p, pe) = js.proto_value_of(it, nto, it.protos.regexp)
         if pe != ok { ret (js.undefv(), pe) }
         proto = p
+    }
+    if !from_regexp && !js.is_undefined(p_val) {
+        let (ps, pse) = js.to_string(it, p_val)
+        if pse != ok { ret (js.undefv(), pse) }
+        source = ps
+    }
+    if !js.is_undefined(f_val) && !(from_regexp && js.is_undefined(flags_arg)) {
+        let (fs2, fse2) = js.to_string(it, f_val)
+        if fse2 != ok { ret (js.undefv(), fse2) }
+        flags = fs2
     }
     var legacy = true
     if it.has_new_target { legacy = js.as_object(it.new_target) == it.regexp_ctor }

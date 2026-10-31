@@ -1912,6 +1912,22 @@ fn canon(m: *const M, c: u32, ic: bool) -> u32 {
     ret u
 }
 
+// Whether the span [a, b) of the input starts or ends between the two halves of a surrogate pair.
+fn splits_pair(m: *const M, a: i64, b: i64) -> bool {
+    let n = i64(m.input.len)
+    if a > 0i64 && a < n {
+        let hi = u32(m.input[usize(a) - 1usize])
+        let lo = u32(m.input[usize(a)])
+        if hi >= 55296u32 && hi <= 56319u32 && lo >= 56320u32 && lo <= 57343u32 { ret true }
+    }
+    if b > 0i64 && b < n {
+        let hi2 = u32(m.input[usize(b) - 1usize])
+        let lo2 = u32(m.input[usize(b)])
+        if hi2 >= 55296u32 && hi2 <= 56319u32 && lo2 >= 56320u32 && lo2 <= 57343u32 { ret true }
+    }
+    ret false
+}
+
 fn is_word(c: u32) -> bool { ret (c >= 48u32 && c <= 57u32) || (c >= 65u32 && c <= 90u32) || (c >= 97u32 && c <= 122u32) || c == 95u32 }
 
 fn is_line_term(c: u32) -> bool { ret c == 10u32 || c == 13u32 || c == 8232u32 || c == 8233u32 }
@@ -2297,6 +2313,7 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
                 if canon(m, u32(m.input[usize(s + i2)]), eff_i(m, &n)) != canon(m, u32(m.input[usize(pos - len + i2)]), eff_i(m, &n)) { ret false }
                 i2 += 1i64
             }
+            if m.re.unicode && len > 0i64 && splits_pair(m, pos - len, pos) { ret false }
             ret call_cont(m, k, pos - len)
         }
         if pos + len > i64(m.input.len) { ret false }
@@ -2305,6 +2322,7 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
             if canon(m, u32(m.input[usize(s + i3)]), eff_i(m, &n)) != canon(m, u32(m.input[usize(pos + i3)]), eff_i(m, &n)) { ret false }
             i3 += 1i64
         }
+        if m.re.unicode && len > 0i64 && splits_pair(m, pos, pos + len) { ret false }
         ret call_cont(m, k, pos + len)
     }
     if kind == R_LOOK {
