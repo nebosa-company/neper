@@ -265,10 +265,10 @@ fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     bn[2usize] = b3
     var fo = control.field_options()
     fo.placeholder = "Search or enter address"
+    fo.fill = true
     var field_style = style.defaults()
     field_style.width = style.Length { Flex: 1.0 }
     field_style.min_width = style.Length { Px: 0.0 }
-    field_style.overflow = .Clip
     let (omni_field, oe) = control.text_field(f, 14u64, &theme, "Address", m.omni, m.omni_len, widget.Change[str] { ctx: mem.cast[*void](m), invoke: on_omni_change }, submit_of(m, on_omni_submit), fo)
     if oe != ok { ret (zero, oe) }
     let (wrap_nodes, we) = mem.alloc[widget.Node](f, 1usize)

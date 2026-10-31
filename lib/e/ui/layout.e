@@ -125,10 +125,25 @@ fn flex(a: *mem.Arena, spec: Flex, limits: Constraints, children: []const Child)
     if used > bound && bounded(main_max) {
         if gaps > bound { ret (zero, Overflow) }
         let room = bound - gaps
+        // The flexible children give the excess back first, so a field that asks for the whole row leaves its fixed neighbours whole.
+        var flexible_desired: f32 = 0.0
         i = 0usize
         while i < n {
-            if desired > 0.0 { sizes[i] = sizes[i] * room / desired }
+            if children[i].flex > 0.0 { flexible_desired += sizes[i] }
             i += 1usize
+        }
+        let excess = used - bound
+        i = 0usize
+        if flexible_desired >= excess && flexible_desired > 0.0 {
+            while i < n {
+                if children[i].flex > 0.0 { sizes[i] -= excess * sizes[i] / flexible_desired }
+                i += 1usize
+            }
+        } else {
+            while i < n {
+                if desired > 0.0 { sizes[i] = sizes[i] * room / desired }
+                i += 1usize
+            }
         }
         used = bound
     } else if used < bound && total_flex > 0.0 {

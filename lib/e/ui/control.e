@@ -7151,10 +7151,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D1453) `mono` sets the typed text in the theme's fixed-pitch face.
 // (looks) `flat`: under the Windows look, a combo box as a toolbar hosts it (v3's dxBar editors:
 // no rounded native frame, a flat white face and a grey drop button with a black triangle).
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32, classic_bar: bool, on_raised: bool }
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32, classic_bar: bool, on_raised: bool, fill: bool }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32, classic_bar: false, on_raised: false }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32, classic_bar: false, on_raised: false, fill: false }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -7380,6 +7380,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     if !multiline && !options.filled { frame_style.overflow = .Clip }
     var body_height = line
     frame_style.width = style.Length { Px: options.width }
+    if options.fill { frame_style.width = style.Length { Percent: 100.0 } }
     if floated && options.filled { body_height = line + style.text_style(t.tokens, .BodySmall).line_height }
     var pad_top = max_zero((h - body_height) * 0.5)
     var height = h
@@ -7447,15 +7448,18 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         if label_error != ok { ret (zero, label_error) }
         parts[0usize] = label_node
     }
+    if options.fill { boxed.style.width = style.Length { Percent: 100.0 } }
     parts[column_count - 1usize] = boxed
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..column_count])
+    var group_style = style.defaults()
+    if options.fill { group_style.width = style.Length { Percent: 100.0 } }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, group_style, parts[0usize..column_count])
     // The name and the invalid state are the editor's own (D1598): this group
     // only holds the field together.
     var sem: widget.Semantics = zero
     sem.role = 2u8
-    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+    ret (widget.semantics(0u64, sem, group_style, column[0usize..1usize]), ok)
 }
 
 // (D1598) An editor named for the accessibility tree: a TextField wrapper round it
