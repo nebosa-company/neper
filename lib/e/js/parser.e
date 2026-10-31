@@ -1888,6 +1888,15 @@ fn parse_statement(p: *Parser) -> (u32, err) {
     p.sub_flag = false
     if is_p(p, "@") {
         let (sdf, sdc) = try parse_decorators(p)
+        if is_k(p, "export") {
+            // @dec export class C {}: the decorators belong to the exported class.
+            let ex2 = try parse_export_decl(p)
+            let cls = node(p, ex2).a
+            if cls == ast.NONE || p.nodes.items[usize(cls)].kind != ast.N_CLASS { ret (ast.NONE, fail(p, "decorators must precede a class")) }
+            node(p, cls).hoist_first = sdf
+            node(p, cls).hoist_count = sdc
+            ret (ex2, ok)
+        }
         if !is_k(p, "class") { ret (ast.NONE, fail(p, "decorators must precede a class")) }
         let dc2 = try parse_class(p, true, sdf, sdc)
         ret (dc2, ok)
@@ -2348,7 +2357,7 @@ fn parse_export_decl(p: *Parser) -> (u32, err) {
     if is_k(p, "default") {
         try adv(p)
         var is_decl = false
-        if is_k(p, "function") || is_k(p, "class") { is_decl = true }
+        if is_k(p, "function") || is_k(p, "class") || is_p(p, "@") { is_decl = true }
         if is_k(p, "async") {
             let nx = try peek(p)
             if nx.kind == lex.T_IDENT && str.eq(nx.text, "function") && !nx.nl { is_decl = true }
@@ -2445,6 +2454,7 @@ fn parse_export_decl(p: *Parser) -> (u32, err) {
         let nx2 = try peek(p)
         if nx2.kind == lex.T_IDENT && str.eq(nx2.text, "function") && !nx2.nl { allowed = true }
     }
+    if is_p(p, "@") { allowed = true }
     if !allowed { ret (ast.NONE, fail(p, "unexpected token after export")) }
     let d2 = try parse_statement(p)
     node(p, ex).op = ast.X_DECL
