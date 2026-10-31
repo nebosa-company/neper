@@ -1179,6 +1179,72 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Backlog only, nothing to start now. `gh issue list --repo nebosa-company/neper --state open` listed 687 open issues on 2026-10-31 (numbers up to #1620; labels: bug 205, SEO 25, internal 2, the rest unlabelled), most of them against the e.web modules (CSP, page, iframes). Acceptance: every open issue is either fixed with a regression test that fails if it comes back and closed, or closed with a reason; work them in groups by module (read the titles first with `gh issue list --json number,title,labels`), group duplicates, and re-run the issue count at the start of each session because new ones keep arriving."
+    },
+    {
+      "id": "C224",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 295,
+      "title": "Android target: Bionic ELF executables, then a NativeActivity APK built by Neper",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Backlog only; blueprint is docs/os/android.md. First acceptance: an aarch64-android ELF (x18 never allocated, 16 KiB PT_LOAD alignment, BTI note, no DT_TEXTREL, PT_INTERP /system/bin/linker64) pushed to /data/local/tmp runs under adb and prints through __android_log_write; then e.mem/e.io/e.fs/e.time fixtures pass on the emulator or a device. Later phases per the document: AXML manifest encoder, APK v2 signer verified by apksigner, NativeActivity with ANativeWindow, JNI by table slot, pthread-based e.thread. Needs an emulator or device, neither is on this machine yet."
+    },
+    {
+      "id": "C225",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 296,
+      "title": "iOS target: signed arm64 Mach-O, UIKit through the Objective-C runtime, IPA packaging",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Backlog only; blueprint is docs/os/ios.md. First acceptance: a platform-7 (iOS simulator) Mach-O main with an ad-hoc CodeDirectory runs under xcrun simctl spawn and codesign --verify accepts it; then AppDelegate defined through objc_allocateClassPair, UIApplicationMain, a CAMetalLayer view drawing a frame through the existing msl.e backend. Reuses the macOS Mach-O writer and Metal work. Needs a Mac; App Store identity keys and Assets.car are the last milestone and the highest risk."
+    },
+    {
+      "id": "C226",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 297,
+      "title": "FreeBSD target: ELF with the FreeBSD identity, carry-flag syscalls, per-OS constant tables",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Backlog only; blueprint is docs/os/free-bsd.md. First acceptance: an x86_64-freebsd static ELF (EI_OSABI 9, .note.tag ABI note) runs under a FreeBSD 14.x VM, writes and exits; then e.mem/e.io/e.fs/e.time fixtures where each differing constant (CLOCK_MONOTONIC 4, O_CREAT 0x200, EAGAIN 35) has a fixture that fails if the Linux value is used, and a syscall failure fixture proving the carry flag becomes an err. Later: thr_new and _umtx_op threads, kqueue, aarch64, dynamic linking via /libexec/ld-elf.so.1. Syscall numbers come from the target release headers, generated, never hand-typed."
+    },
+    {
+      "id": "C227",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 298,
+      "title": "FreeRTOS target: Thumb-2 back end, relocatable ELF output, C shim for the kernel API",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Backlog only; blueprint is docs/os/free-rtos.md. Blocked first on whether the linker can write ET_REL objects (check before sizing). First acceptance: a thumbv7m object whose main prints through semihosting and exits runs under QEMU (lm3s6965evb or mps2-an385) linked with the FreeRTOS ARM_CM3 port; then known-answer fixtures for __aeabi_uldivmod/ldivmod and memcpy, then the neper_freertos.c shim with e.thread/e.sync/e.time fixtures, then neper size and neper stack-report. Thumb bit, branch range and literal pools are the traps. Later: standalone image with a memory map, thumbv6m/v7em, RV32."
+    },
+    {
+      "id": "C228",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 299,
+      "title": "Zephyr target: Neper as an out-of-tree Zephyr module with a C shim",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Backlog only; blueprint is docs/os/zephyr.md, and it depends on C227 for the Thumb-2 back end (native_sim needs only the existing x86-64 emitter). First acceptance: a neper-zephyr module (zephyr/module.yml, CMake import of libapp.a, Kconfig, neper_zephyr.c) builds for native_sim/native/64 under WSL or Linux CI, and a Neper main prints through the shim and exits; then e.thread/e.sync/e.time fixtures including the reversed-priority and cooperative-priority checks, then qemu_cortex_m3 once C227 delivers the Thumb-2 back end. No Zephyr API is called directly; everything goes through the shim."
+    },
+    {
+      "id": "C229",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 300,
+      "title": "z/OS and CICS target: z/Architecture back end, GOFF linker output, EBCDIC literals, CICS bridge",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Backlog only; blueprint is docs/os/z-os.md. Largest item of the six: a new ISA back end (R1 parameter list, R13 DSA, LE prologue/epilogue), GOFF record output (ESD/TXT/RLD/END) with 8-character member name mangling, IBM-1047 string lowering, e.mem over GETMAIN/FREEMAIN, e.io over CICS queues, and a CICS command wrapper mapping EIB RESP/RESP2 to err. No mainframe or emulator (Hercules, z/PDT) is available here, so the first acceptance is a GOFF byte-level check against IBM's documented record layout and a decision on how code is ever run."
     }
   ]
 }

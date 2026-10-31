@@ -105,4 +105,10 @@ L176	library	0	237	OpenGL 5: CGL context on macOS (GL 4.1 core, presentation onl
 T048	tooling	0	122	OpenGL verify 4 (verify-only): full suites for the shared compiler change	Verify-only turn, no edits.
 C219	compiler	0.9	1380	OpenGL 16: the Android target, executable form	Done 2026-10-27 (D5896, D5900): emit-executable ...
 L184	library	0.95	1871	Browser: ad and tracker blocking on every request	PART: e.net.fetch.Config.block_hosts and allow_hosts (from e.net.policy.parse_filter_list: ||host^ rules and @@||host^ exceptions) refuse any request that has a referrer (a subresource) to a listed ho
-L185	library	0	613	Triage and fix the open GitHub issues of nebosa-company/neper (687 on 2026-10-31)	Backlog only, nothing to start now. `gh issue list --repo nebosa-company/neper --state open` listed 687 open issues on 2
+L185	library	0	613	Triage and fix the open GitHub issues of nebosa-company/neper (687 on 2026-10-31)	Backlog only, nothing to start now.
+C224	compiler	0	574	Android target: Bionic ELF executables, then a NativeActivity APK built by Neper	Backlog only;
+C225	compiler	0	486	iOS target: signed arm64 Mach-O, UIKit through the Objective-C runtime, IPA packaging	Backlog only;
+C226	compiler	0	589	FreeBSD target: ELF with the FreeBSD identity, carry-flag syscalls, per-OS constant tables	Backlog only;
+C227	compiler	0	597	FreeRTOS target: Thumb-2 back end, relocatable ELF output, C shim for the kernel API	Backlog only;
+C228	compiler	0	595	Zephyr target: Neper as an out-of-tree Zephyr module with a C shim	Backlog only;
+C229	compiler	0	543	z/OS and CICS target: z/Architecture back end, GOFF linker output, EBCDIC literals, CICS bridge	Backlog only;
