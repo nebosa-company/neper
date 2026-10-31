@@ -756,6 +756,16 @@ fn function_proto_to_string(it: *js.Interp, this_val: js.Value, args: []const js
         let (nv, ne) = js.get_prop(it, fo, js.key_of("name"), this_val)
         if ne == ok && js.is_string(nv) { name = js.value_str(nv) }
     }
+    // The legacy RegExp accessors are named like "get $&", which is no NativeFunction name.
+    var ni = 0usize
+    while ni < name.len {
+        let nc = name[ni]
+        if nc == 38u8 || nc == 96u8 || nc == 39u8 || nc == 43u8 {
+            name = ""
+            break
+        }
+        ni += 1usize
+    }
     ret (js.str_value(js.str_concat3(it, "function ", name, "() { [native code] }")), ok)
 }
 
@@ -796,6 +806,15 @@ fn dynamic_function(it: *js.Interp, args: []const js.Value, kind: u8) -> (js.Val
     } else if kind == 3u8 {
         prefix = "(async function* anonymous("
         fallback = it.protos.async_gen_function
+    }
+    // The parameters and the body must each be well formed on their own, not only joined.
+    if params.len > 0usize {
+        let (pv, pe) = js.eval_source(it, js.str_concat3(it, prefix, params, "\n) {\n})"))
+        if pe != ok { ret (js.undefv(), pe) }
+    }
+    if str.contains(body, "}") {
+        let (bv, be2) = js.eval_source(it, js.str_concat3(it, prefix, "\n) {\n", js.str_concat(it, body, "\n})")))
+        if be2 != ok { ret (js.undefv(), be2) }
     }
     let src = js.str_concat(it, js.str_concat(it, js.str_concat(it, js.str_concat(it, prefix, params), "\n) {\n"), body), "\n})")
     // The code is compiled first; only then is the prototype taken from new.target.
