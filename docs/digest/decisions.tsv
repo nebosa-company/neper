@@ -3015,4 +3015,5 @@ D5932	1207	`e.mem.pages`: `ensure` answers before the page fault does
 D5933	1929	`e.mem.heap`: one object at a time, checked at compile time
 D5934	1335	A refused commit is asked again, and then called what it is
 D5935	1032	The compiler touches `&slice[i]` given to an import
-D5948	1921	Eight decision numbers were allocated twice; the OpenGL group's moved
+D5948	1922	Eight decision numbers were allocated twice; the OpenGL group's moved
+D5949	807	A heap-backed device that lost a command stays lost

@@ -43562,3 +43562,11 @@ The Mac and Android work and the OpenGL group each allocated decisions from D587
 References in files that `origin/master` did not already contain were updated with them. Text written before this merge (earlier commit messages, the memory notes, and the blog) still says the old numbers; read an old D5877, D5878, D5890, D5891, D5892, D5900, D5901 or D5912 in OpenGL context as the new one above.
 
 The merge itself kept `origin`'s Metal heaps (up to four, an address names its heap) and launches (up to four in flight, one fault block each) and put them behind the `HeapDriver` table, so OpenGL shares the launcher: GL has one heap, so a second heap is `OutOfMemory`, a launch passes the block and every heap and GL binds the first two, and the heap's size is its mapping's. It also kept `origin`'s root arena (1 TiB, halved when refused, D5930) over the 64 GiB and Android 4 GiB of D5912.
+
+## D5949 — A heap-backed device that lost a command stays lost
+
+`state_of` called `metal_finish` and dropped the answer, and `metal_finish` cleared the pending commands as it waited, so a failed Metal or OpenGL command was reported once, by whichever entry waited first. If `info` or `has` came first, the loss vanished and later queue calls ran on a device that had failed.
+
+`DeviceState.lost` now keeps it. `metal_finish` sets it when a wait fails and returns it from every later call, so every entry that already asked reports `Lost`, including `state_of`. `close` goes through `state_lookup`, which does not ask, drains the pending commands itself and releases the device, so a lost device still closes.
+
+`has` on a lost device answers false. Nothing makes a lost device usable again; open a new one.
