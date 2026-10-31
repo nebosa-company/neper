@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 198761)
+    var b = try str.builder(a, 198878)
     try str.push(&b, "// The Temporal built-ins (ISO 8601 calendar; UTC and fixed-offset time zones), evaluated into the main realm after the prelude\n")
     try str.push(&b, "// (generated into temporal.e by scripts/gen_js_prelude.py). Page scripts cannot change how they behave: intrinsics are captured up front.\n")
     try str.push(&b, "(function (global) {\n")
@@ -401,6 +401,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "    return s !== s ? 0 : s * 1000000000;\n")
     try str.push(&b, "  }\n")
     try str.push(&b, "  function formatOffsetNs(ns, subMinute) {\n")
+    try str.push(&b, "    if (!subMinute) ns = Num(roundNumberToIncrement(Big(ns), NS.min, 'halfExpand'));\n")
     try str.push(&b, "    var sign = ns < 0 ? '-' : '+', a = mathAbs(ns);\n")
     try str.push(&b, "    var h = mathFloor(a / 3600000000000); a -= h * 3600000000000;\n")
     try str.push(&b, "    var m = mathFloor(a / 60000000000); a -= m * 60000000000;\n")
@@ -1279,7 +1280,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "    else throw new RangeErr('unsupported time zone: ' + rec.tz);\n")
     try str.push(&b, "    var behaviour2 = rec.z ? 'exact' : rec.offsetNs !== undefined ? 'option' : 'wall';\n")
     try str.push(&b, "    var dt2 = { date: mkDate(rec.year, rec.month, rec.day), time: mkTime(rec.hour, rec.minute, rec.second, rec.millisecond, rec.microsecond, rec.nanosecond) };\n")
-    try str.push(&b, "    ns = interpretOffset(dt2, behaviour2, rec.offsetNs === undefined ? 0 : rec.offsetNs, tz, 'compatible', 'reject', true);\n")
+    try str.push(&b, "    ns = interpretOffset(dt2, behaviour2, rec.offsetNs === undefined ? 0 : rec.offsetNs, tz, 'compatible', 'reject', !rec.offsetSubMinute);\n")
     try str.push(&b, "    return zonedRelative(ns, tz, scal);\n")
     try str.push(&b, "  }\n")
     try str.push(&b, "  // The start of the local day of a zoned relativeTo has to be representable too.\n")
@@ -3309,7 +3310,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "    offsetOpt = getOffsetOption(options, 'reject');\n")
     try str.push(&b, "    getOverflow(options);\n")
     try str.push(&b, "    var dt2 = { date: mkDate(rec.year, rec.month, rec.day), time: mkTime(rec.hour, rec.minute, rec.second, rec.millisecond, rec.microsecond, rec.nanosecond) };\n")
-    try str.push(&b, "    ns = interpretOffset(dt2, behaviour2, rec.offsetNs === undefined ? 0 : rec.offsetNs, tz, dis, offsetOpt, true);\n")
+    try str.push(&b, "    ns = interpretOffset(dt2, behaviour2, rec.offsetNs === undefined ? 0 : rec.offsetNs, tz, dis, offsetOpt, !rec.offsetSubMinute);\n")
     try str.push(&b, "    return { ns: ns, tz: tz, cal: isIsoCal(scal) ? undefined : scal };\n")
     try str.push(&b, "  }\n")
     try str.push(&b, "  // The wall-clock time of a parsed or constructed-from-fields ZonedDateTime must not precede the earliest instant.\n")
