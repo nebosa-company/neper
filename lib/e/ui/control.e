@@ -7704,6 +7704,8 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     frame_style.width = style.Length { Px: width }
     frame_style.min_height = style.Length { Px: 22.0 }
     if height > 0.0 { frame_style.height = style.Length { Px: height } }
+    // the 1:1 capture's light box is one row shorter than the DFM height + 1 (e.ui.winedit.token_chrome)
+    if height > 0.0 && t.tokens.palette == .Light { frame_style.height = style.Length { Px: height - 1.0 } }
     frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
     if t.tokens.palette == .Dark { frame_style.background = paint.Brush { Solid: style.hex_raw(0x202020u32) } }
     frame_style.border = style.Border { width: 1.0, color: win_rgb(237u32, 237u32, 237u32) }

@@ -549,7 +549,7 @@ fn wtoken_row(b: *scene.Builder, x: f32, y: f32, h: f32, w: f32, p: [5]u32, dark
 fn wtoken_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*TokenChrome](ctx)
     let w = d.width
-    let h = d.height
+    var h = d.height
     // round 10: dark, the token edit's frame is the native dark edit's (no capture of the TdxTokenEdit; the edit is the nearest native look)
     if d.dark {
         var st = 0u32
@@ -557,6 +557,18 @@ fn wtoken_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         ret nedit_frame(b, f32(i32(area.x + 0.5)), f32(i32(area.y + 0.5)), w, h, st)
     }
     let g = wtoken_gray
+    // Light: the true 1:1 capture (docs/ui/looks/ref/windows-1to1/token_edit_dialog) draws one row for each of the top rim, its
+    // highlight and the foot's two rows, on a box one row shorter than the DFM height + 1 that the old rows were fitted to; the resampled
+    // capture blurred each over two rows. The box is `height` - 1 rows (e.ui.control draws the white face the same).
+    h = h - 1.0
+    if !d.focused {
+        let c = h
+        try wtoken_row(b, area.x, area.y, 1.0, w, [5]u32{ g(245u32), g(237u32), g(236u32), g(231u32), g(238u32) }, d.dark)
+        try wtoken_row(b, area.x, area.y + 1.0, 1.0, w, [5]u32{ g(238u32), g(250u32), g(254u32), g(243u32), g(231u32) }, d.dark)
+        try wtoken_row(b, area.x, area.y + 2.0, c - 4.0, w, [5]u32{ g(236u32), g(254u32), g(255u32), g(247u32), g(230u32) }, d.dark)
+        try wtoken_row(b, area.x, area.y + c - 2.0, 1.0, w, [5]u32{ g(237u32), g(221u32), g(254u32), g(221u32), g(232u32) }, d.dark)
+        ret wtoken_row(b, area.x, area.y + c - 1.0, 1.0, w, [5]u32{ g(244u32), g(146u32), g(131u32), g(146u32), g(244u32) }, d.dark)
+    }
     try wtoken_row(b, area.x, area.y, 1.0, w, [5]u32{ g(246u32), g(241u32), g(240u32), g(237u32), g(242u32) }, d.dark)
     try wtoken_row(b, area.x, area.y + 1.0, 1.0, w, [5]u32{ g(240u32), g(246u32), g(248u32), g(239u32), g(233u32) }, d.dark)
     try wtoken_row(b, area.x, area.y + 2.0, 1.0, w, [5]u32{ g(237u32), g(253u32), g(255u32), g(246u32), g(230u32) }, d.dark)
