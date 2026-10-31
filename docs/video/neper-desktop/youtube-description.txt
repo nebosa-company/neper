@@ -1,0 +1,43 @@
+One compiler. Every target. Nothing to install.
+
+Most languages ask you to install a toolchain before you can put a window on screen: Visual Studio's C++ workload, an SDK, a webview, a runtime. Neper asks for one file. This 90-second video shows what that looks like, with every number measured on a Windows machine.
+
+Neper is a native language whose compiler is also its linker. It writes Windows, Linux and macOS executables itself, for x64 and arm64, from any one of them. The programs it produces are small and self-contained, and the compiler keeps only the code your program can actually reach.
+
+CHAPTERS
+0:00 What you install before the first window
+0:17 A project is a file
+0:35 One machine, five targets
+0:50 Only what main reaches (dead code elimination)
+1:11 Self-contained, and small
+1:24 One compiler. Every target. Nothing to install.
+
+WHAT THE VIDEO SHOWS
+- A Neper project is a source file. Hello world is 281 bytes. The compiler is one executable of about 10 MB, written in Neper. After a one-time bootstrap (a small C99 program builds the first compiler, which then builds itself), there is no second toolchain, no SDK and no IDE.
+- Cross-compiling is one command. From a single Windows machine we built hello world for Windows x64, Linux x64, Linux arm64, macOS x64 and macOS arm64. Each build took about half a second, and the results are real PE, ELF and Mach-O files. The Windows build ran natively and the Linux build ran under WSL.
+- Dead code elimination. A program that imports seven modules (about 398 KiB of source) and calls none of them produces a 13.3 KiB executable. Call sha256 and only the code it needs is added: 31.2 KiB, with a digest identical to sha256sum.
+- Self-contained results. A window with the real renderer and widget runtime is 2.7 MiB on Windows. There is no runtime to install, no DLLs to ship and no bundled browser.
+
+MEASURED SIZES (release builds, Windows 11 host)
+- Window program: Windows x64 2.7 MiB, Linux x64 2.8 MiB, macOS arm64 2.3 MiB
+- Console hello: Windows x64 12.3 KiB, Linux x64 9.5 KiB, Linux arm64 11.4 KiB, macOS x64 and arm64 64.7 KiB each
+
+THE HONEST PART
+- The macOS binaries are built and ad-hoc signed by the compiler, but we have not run them on a Mac. There are no .app bundles, Developer ID signing or notarization yet, so shipping a Mac app to other people still needs an Apple Developer account and a manual bundle step, in any language.
+- On Linux, windows are drawn by speaking the X11 protocol directly. Wayland-only sessions are not supported yet.
+- On Windows, the first compiler is built with the MSVC build tools, once.
+- The sizes of other stacks in the chart (Electron, Compose, Qt, Flutter, Wails, Tauri) come from vendor documentation and third-party reports for different kinds of apps. Only the Neper figures were measured by us, so read the comparison as a rough guide, not a like-for-like benchmark.
+- The narration is a synthetic voice.
+
+THE FULL COMPARISON
+We read the official install guides for ten popular desktop languages (C#/.NET, C++, Java, JavaScript/TypeScript, Python, Kotlin, Dart/Flutter, Rust, Go and Swift) and compared what each needs to build, what the user needs to run, and the smallest reported app. Read the article with sources and every limit listed:
+https://neper.dev/blog/desktop-toolchains.html
+
+PLANNED TARGETS
+Not built yet: Android (x86_64 and AArch64), iOS and WebAssembly. Today Neper can run WebAssembly modules through an interpreter, but compiling Neper programs to WebAssembly is a goal, not a feature.
+
+LINKS
+Neper: https://neper.dev
+Source (MIT licensed): https://github.com/nebosa-company/neper
+
+#Neper #ProgrammingLanguages #Compiler #CrossCompilation #DesktopApps

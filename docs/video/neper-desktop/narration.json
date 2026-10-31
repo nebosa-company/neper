@@ -1,0 +1,42 @@
+{
+  "voice": "Microsoft George",
+  "note": "Local Windows voice. Neper is spelled Nee-per for the synthesizer only; captions use the real spelling.",
+  "scenes": [
+    {
+      "id": "hook",
+      "caption": "To put a window on screen, most languages first ask you to install a toolchain. Flutter wants Visual Studio's C++ workload. Tauri wants Rust, C++ build tools and a webview. Neper asks for one file.",
+      "say": "To put a window on screen, most languages first ask you to install a toolchain. Flutter wants Visual Studio's C plus plus workload. Tauri wants Rust, C plus plus build tools and a webview. Nee-per asks for one file.",
+      "cueSeconds": 17.27
+    },
+    {
+      "id": "start",
+      "caption": "A Neper project is a source file. Hello world is 281 bytes. The compiler is one executable of about ten megabytes, written in Neper. After a one-time bootstrap there is no second toolchain, no SDK and no IDE.",
+      "say": "A Nee-per project is a source file. Hello world is two hundred eighty-one bytes. The compiler is one executable of about ten megabytes, written in Nee-per. After a one-time bootstrap, there is no second toolchain, no S D K, and no I D E.",
+      "cueSeconds": 19
+    },
+    {
+      "id": "cross",
+      "caption": "The compiler is also the linker. It writes Windows, Linux and macOS executables itself, for x64 and arm64. From one Windows machine, five targets took about half a second each.",
+      "say": "The compiler is also the linker. It writes Windows, Linux and macOS executables itself, for x sixty-four and arm sixty-four. From one Windows machine, five targets took about half a second each.",
+      "cueSeconds": 15.36
+    },
+    {
+      "id": "dce",
+      "caption": "Neper keeps only what main can reach. This program imports seven modules, 398 KiB of source, and calls none of them: 13.3 KiB. Call sha256, and only the code it needs is added: 31.2 KiB, with the right digest.",
+      "say": "Nee-per keeps only what main can reach. This program imports seven modules, about four hundred kilobytes of source, and calls none of them. The executable is thirteen kilobytes. Call sha two fifty-six, and only the code it needs is added. Thirty-one kilobytes, and the digest is right.",
+      "cueSeconds": 21.69
+    },
+    {
+      "id": "small",
+      "caption": "The result is self-contained. A window with the real renderer and widgets is 2.7 MiB on Windows. No runtime to install, no DLLs to ship, no bundled browser.",
+      "say": "The result is self-contained. A window with the real renderer and widgets is two point seven megabytes on Windows. No runtime to install, no D L Ls to ship, no bundled browser.",
+      "cueSeconds": 13.57
+    },
+    {
+      "id": "close",
+      "caption": "Neper. One compiler. Every target. Nothing to install.",
+      "say": "Nee-per. One compiler. Every target. Nothing to install.",
+      "cueSeconds": 6.69
+    }
+  ]
+}
