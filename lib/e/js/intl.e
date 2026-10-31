@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 190478)
+    var b = try str.builder(a, 190769)
     try str.push(&b, "// The Intl built-ins (ECMA-402), evaluated into the main realm after Temporal (generated into intl.e by scripts/gen_js_prelude.py).\n")
     try str.push(&b, "// Locale data is a compact built-in set (English plus the language tags the algorithms need); intrinsics are captured up front.\n")
     try str.push(&b, "(function (global) {\n")
@@ -1895,12 +1895,13 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "    ZonedDateTime: { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', timeZoneName: 'short' }\n")
     try str.push(&b, "  };\n")
     try str.push(&b, "  // The format settings that apply to a Temporal object's data model, and the calendar fields to format.\n")
-    try str.push(&b, "  function temporalVariant(dt, info) {\n")
+    try str.push(&b, "  function temporalVariant(dt, info, viaToLocaleString) {\n")
     try str.push(&b, "    var type = info.type, allowed = ALLOWED[type], raw = dt.raw, k;\n")
     try str.push(&b, "    var strictCal = type === 'PlainYearMonth' || type === 'PlainMonthDay';\n")
     try str.push(&b, "    if (!(info.cal === dt.calendar || (!strictCal && info.cal === 'iso8601'))) throw new RangeErr('calendars do not match');\n")
     try str.push(&b, "    // A date-only Temporal type needs dateStyle (timeStyle is then ignored); PlainTime needs timeStyle (dateStyle is then ignored).\n")
     try str.push(&b, "    var ds = raw.dateStyle, ts = raw.timeStyle;\n")
+    try str.push(&b, "    if (viaToLocaleString && ds !== undefined && ts !== undefined && (type === 'PlainDate' || type === 'PlainTime' || type === 'PlainYearMonth' || type === 'PlainMonthDay')) throw new TypeErr('dateStyle and timeStyle cannot both be used with ' + type);\n")
     try str.push(&b, "    if (type === 'PlainDate' || type === 'PlainYearMonth' || type === 'PlainMonthDay') {\n")
     try str.push(&b, "      if (ds === undefined && ts !== undefined) throw new TypeErr('timeStyle cannot be used with ' + type);\n")
     try str.push(&b, "      ts = undefined;\n")
@@ -2074,7 +2075,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "    var info = isObject(date) && temporalInfo !== undefined ? temporalInfo(date) : undefined;\n")
     try str.push(&b, "    if (info === undefined) return formatToPartsInternal(dt, timeClip(+date));\n")
     try str.push(&b, "    if (info.type === 'ZonedDateTime' && !viaToLocaleString) throw new TypeErr('format() does not support Temporal.ZonedDateTime');\n")
-    try str.push(&b, "    var v = temporalVariant(dt, info);\n")
+    try str.push(&b, "    var v = temporalVariant(dt, info, viaToLocaleString);\n")
     try str.push(&b, "    if (info.type === 'Instant' || info.type === 'ZonedDateTime') return formatToPartsInternal(v, timeClip(info.epochMs));\n")
     try str.push(&b, "    return formatToPartsInternal(v, 0, isoFieldsOf(info));\n")
     try str.push(&b, "  }\n")
