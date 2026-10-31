@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wasm-host",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/serve-wasm.mjs", "--isolated", "--port", "8790"],
+      "port": 8790
+    },
+    {
+      "name": "docs-site",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "docs"],
+      "port": 8765
+    }
+  ]
+}
