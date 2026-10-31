@@ -1072,6 +1072,7 @@ fn parse_lhs(p: *Parser) -> (u32, err) {
             optional = true
             try adv(p)
             if is_p(p, "(") {
+                if node(p, e).kind == ast.N_SUPER { ret (ast.NONE, fail(p, "invalid optional call on super")) }
                 let args = try parse_arguments(p)
                 let (cid, ce) = mk(p, ast.N_CALL)
                 if ce != ok { ret (ast.NONE, ce) }
@@ -1216,6 +1217,7 @@ fn parse_new(p: *Parser) -> (u32, err) {
             break
         }
     }
+    if is_p(p, "?.") { ret (ast.NONE, fail(p, "invalid optional chain from new expression")) }
     let (nid, ne) = mk(p, ast.N_NEW)
     if ne != ok { ret (ast.NONE, ne) }
     node(p, nid).a = callee

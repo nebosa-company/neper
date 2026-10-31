@@ -10,3 +10,8 @@ assert.sameValue(typeof (0, eval)?.("1"), "number");
 function C() {}
 var tagged = function() { return C; };
 assert(new tagged`x` instanceof C);
+var oc = { x: 1 };
+assert.sameValue(delete oc?.x, true);
+assert.sameValue(oc.x, undefined);
+assert.throws(SyntaxError, function() { eval("new Object?.()"); });
+assert.throws(SyntaxError, function() { eval("class A {} class B extends A { constructor() { super?.(); } }"); });

@@ -5200,6 +5200,21 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
             if !done && f.strict { ret (undefv(), throw_type(it, "Cannot delete property")) }
             ret (bool_value(done), ok)
         }
+        if an2.kind == ast.N_OPTCHAIN && f.prog.nodes[usize(an2.a)].kind == ast.N_MEMBER && f.prog.nodes[usize(f.prog.nodes[usize(an2.a)].a)].kind != ast.N_SUPER {
+            let mn = f.prog.nodes[usize(an2.a)]
+            let (obase, obe) = eval(it, f, mn.a)
+            if obe == OptShort { ret (bool_value(true), ok) }
+            if obe != ok { ret (undefv(), obe) }
+            if (mn.flags & ast.F_OPTIONAL) != 0u16 && is_nullish(obase) { ret (bool_value(true), ok) }
+            let (okey, oke) = member_key(it, f, mn)
+            if oke != ok { ret (undefv(), oke) }
+            let (obo, ooe) = to_object(it, obase)
+            if ooe != ok { ret (undefv(), ooe) }
+            let (odone, odpe) = delete_prop_e(it, obo, okey)
+            if odpe != ok { ret (undefv(), odpe) }
+            if !odone && f.strict { ret (undefv(), throw_type(it, "Cannot delete property")) }
+            ret (bool_value(odone), ok)
+        }
         if an2.kind == ast.N_OPTCHAIN {
             let (r, re) = eval(it, f, n.a)
             if re == OptShort { ret (bool_value(true), ok) }
