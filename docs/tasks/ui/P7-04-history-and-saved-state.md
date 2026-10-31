@@ -4,7 +4,7 @@
 |---|---|
 | phase | P7 — Complete native code editor (docs/code-editor-plan.md) |
 | module | `e.ui.code_editor` |
-| module surface | candidate identity — its fence is not yet in `module-apis.md`; Phase 0 freezes it before any source |
+| module surface | `source`, layer 2, deps `e.mem`, `e.text.regex` |
 | blocked by | `P5`, `next-release` |
 | delivered | 0 of 8 |
 

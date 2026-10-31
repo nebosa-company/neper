@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Self-hosting |
 | score | 0.00 of 1 |
-| queue position | 26 of 45 (only position 1 is eligible for the next session; see README) |
+| queue position | 20 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -24,7 +24,7 @@ tool-complete release gates below pass.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> bootstrap/neper.c still builds stage 0
+> bootstrap/neper.c still builds stage 0. Follow-on (D1898): deletion is also the biggest LLMx lever â€” until it lands, agents write M1 per the docs and compile neper-0 plus quirks, and failures like T021's look like agent error.
 
 ## Remaining work
 

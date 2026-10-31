@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / UI |
-| score | 0.00 of 1 |
-| queue position | 110 of 142 (only position 1 is eligible for the next session; see README) |
+| score | 0.80 of 1 |
+| queue position | 49 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Planning only (D1889). ghostty/wezterm/kitty parity gap (verified: only false-positive matches anywhere): pty ownership, VT/ECMA-48 parser and cell grid with scrollback over e.ui.collection virtualization and text layout. Fixtures replay byte streams into grid assertions; shell integration and GPU rendering stay out.
+> PART (D3200): e.ui.terminal, a superset of e.text.terminal (C120) -- wide cells, DSR/DA replies, OSC titles, origin/insert/tab-stop modes, wrapped flags, DEC line drawing, 1049/47/1047 alt screen, snapshot viewport; ui_terminal fixture: 12 scenarios plus a 4 KB generated stream whose buffer hash, cursor and line count equal an independent Python model fed whole and in 7-byte pieces. Missing: PTY ownership, reflow on resize, mouse and key encoding, selection, the widget over e.ui.collection. PART (D3501): reflow on resize, xterm key/mouse/focus/paste encoding, selection model; ui_terminal_ext 1000 cases vs an independent model. Missing: widget over e.ui.collection, PTY ownership, keypad application mode, mouse 1005/1015, kitty/modifyOtherKeys. PART (D4500-D4502): keypad application mode, modifyOtherKeys, kitty keyboard protocol, mouse 1005/1015, selection edge cases, e.ui.terminal_view scrollback adapter over e.ui.collection; ui_terminal_proto 6,964 cases (model is the lane's reading of the protocol texts; no xterm/kitty on this host), ui_terminal_view. Missing: PTY ownership, per-cell colour drawing in the view.
 
 ## Remaining work
 

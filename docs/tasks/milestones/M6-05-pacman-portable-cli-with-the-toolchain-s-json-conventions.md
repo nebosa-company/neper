@@ -21,8 +21,8 @@ The normative design is `docs/pacman.md`; the `packageManifest` shape is already
 
 ## Code anchors
 
-- `vendor`: `lib/e/os.linux.e`×2‡, `scripts/audit_repo_coverage.py`×2
-- nearest existing implementation: `docs/pacman.md`, `src/project.e`, `src/source.e`, `docs/schemas/neper-v1.schema.json`†, `lib/e/fmt/yaml.e`, `lib/e/crypto` († over 40 KB, ‡ over 120 KB — read by region)
+- `vendor`: `lib/e/algo/timeseries.e`×3, `lib/e/algo/syncpull.e`×2†, `lib/e/gpu/vulkan.e`×2†, `lib/e/os.linux.e`×2‡, `scripts/audit_repo_coverage.py`×2, `lib/e/debug/report.e`×1, `lib/e/fmt/semver.e`×1, `lib/e/gpu.e`×1‡
+- nearest existing implementation: `docs/pacman.md`, `src/project.e`, `src/source.e`, `docs/schemas/neper-v1.schema.json`†, `lib/e/fmt/yaml.e`†, `lib/e/crypto` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session
 

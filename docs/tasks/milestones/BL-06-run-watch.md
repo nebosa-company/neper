@@ -12,7 +12,8 @@
 
 ## Code anchors
 
-- nearest existing implementation: `src/main.e`‡, `lib/e/fs.e` († over 40 KB, ‡ over 120 KB — read by region)
+- `e.fs.watch`: `lib/e/cli/config.e`×1, `lib/e/test/arch.e`×1
+- nearest existing implementation: `src/main.e`‡, `lib/e/fs.e`† († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session
 

@@ -28,22 +28,22 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Spec sections
 
-- `docs/spec.md:971` 5. Declarations
-  - `docs/spec.md:987` Attributes
-  - `docs/spec.md:1050` Local initialisers
-  - `docs/spec.md:1073` Functions
-  - `docs/spec.md:1109` Multiple return values
-  - `docs/spec.md:1174` External functions
-  - `docs/spec.md:1278` `e.os`
-- `docs/spec.md:4192` 13. Toolchain
-  - `docs/spec.md:4307` Diagnostics
-  - `docs/spec.md:4326` Program entry
-  - `docs/spec.md:4366` Testing
-  - `docs/spec.md:4530` Linking
-  - `docs/spec.md:4598` Target CPU levels
-  - `docs/spec.md:4655` Debug information
-  - `docs/spec.md:4749` Editor integration
-  - `docs/spec.md:4775` Standard library
+- `docs/spec.md:975` 5. Declarations
+  - `docs/spec.md:991` Attributes
+  - `docs/spec.md:1056` Local initialisers
+  - `docs/spec.md:1079` Functions
+  - `docs/spec.md:1115` Multiple return values
+  - `docs/spec.md:1180` External functions
+  - `docs/spec.md:1291` `e.os`
+- `docs/spec.md:4229` 13. Toolchain
+  - `docs/spec.md:4354` Diagnostics
+  - `docs/spec.md:4373` Program entry
+  - `docs/spec.md:4413` Testing
+  - `docs/spec.md:4577` Linking
+  - `docs/spec.md:4645` Target CPU levels
+  - `docs/spec.md:4702` Debug information
+  - `docs/spec.md:4796` Editor integration
+  - `docs/spec.md:4822` Standard library
 
 ## Decisions to read first
 
@@ -55,8 +55,11 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `.Vulkan`: `lib/e/gpu.e`×1†
-- `.Cuda`: `lib/e/gpu.e`×1†
+- `PhysicalStorageBuffer64`: `src/spirv.e`×4‡
+- `NoContraction`: `src/spirv.e`×2‡
+- `libvulkan`: `lib/e/gpu/vulkan.e`×2†, `lib/e/os.macos.e`×1‡
+- `.Vulkan`: `lib/e/gpu.e`×17‡, `scripts/run-gl-fixtures.py`×3, `benchmarks/gp/neper/gp10.e`×2, `benchmarks/gp/README.md`×1, `lib/e/gpu/vulkan.e`×1†
+- `.Cuda`: `lib/e/gpu.e`×5‡, `lib/e/gpu/cuda.e`×1
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

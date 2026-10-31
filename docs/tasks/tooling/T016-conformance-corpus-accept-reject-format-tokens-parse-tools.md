@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | tooling / Tooling |
-| score | 0.90 of 1 |
-| queue position | 42 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.95 of 1 |
+| queue position | 24 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -15,13 +15,13 @@ The contract is `docs/tooling.md`, section `## 9. Conformance and compatibility`
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> All six corpus roots of tooling.md section 9 exist with byte-exact expected output the suites compare on both platforms: tokens/ and parse/ (D227), accept/ and reject/ (D228), tools/ -- one `info` stream per host (D229), a build and a rejected build (D230), a program run (D231) and a trapping one (D253), a symbol index (D232, D251), a disassembly per host (D233), a canonical format and a `--check` rejection (D234, D244), a build manifest per host (D238), a test run and a timed-out one (D240, D246) -- and format/ (D255): a non-canonical source beside what `fmt` makes of it, the canonical side also passing `--check`. Every `.jsonl` golden validates against the v1 schema (D250). Every root has at least two fixtures (D284: accept/aggregate -- structs, an enum, a generic and a switch -- and format/types, whose first draft found `fmt` writing `case.Red` and mis-indenting `case` labels). Every registered code the compiler can raise today has a reject fixture pinning its stream (D297): ten more -- E-MODULE-0001/0002/9999 (the last two as two-module projects under reject/), E-NAME-0002/0003, E-ERROR-9999, E-MEM-9999, E-TYPE-0001/0003/9999 -- beside the six already pinned, leaving E-LINK-9999 (an error-hash collision no small fixture produces) and the codes whose subjects do not yet diagnose (E-GPU, E-SAFETY, E-TOOL-9999). reject/nesting pins section 3's 128-level nesting bound (D341), which a mutation-and-depth fuzzer (benchmarks/fuzz) guards beside the artifact readers
+> All six corpus roots of tooling.md section 9 exist with byte-exact expected output the suites compare on both platforms: tokens/ and parse/ (D227), accept/ and reject/ (D228), tools/ -- one `info` stream per host (D229), a build and a rejected build (D230), a program run (D231) and a trapping one (D253), a symbol index (D232, D251), a disassembly per host (D233), a canonical format and a `--check` rejection (D234, D244), a build manifest per host (D238), a test run and a timed-out one (D240, D246) -- and format/ (D255): a non-canonical source beside what `fmt` makes of it, the canonical side also passing `--check`. Every `.jsonl` golden validates against the v1 schema (D250). Every root has at least two fixtures (D284: accept/aggregate -- structs, an enum, a generic and a switch -- and format/types, whose first draft found `fmt` writing `case.Red` and mis-indenting `case` labels). Every registered code the compiler can raise today has a reject fixture pinning its stream (D297): ten more -- E-MODULE-0001/0002/9999 (the last two as two-module projects under reject/), E-NAME-0002/0003, E-ERROR-9999, E-MEM-9999, E-TYPE-0001/0003/9999 -- beside the six already pinned, leaving E-LINK-9999 (an error-hash collision no small fixture produces) and the codes whose subjects do not yet diagnose (E-GPU, E-SAFETY, E-TOOL-9999). reject/nesting pins section 3's 128-level nesting bound (D341), which a mutation-and-depth fuzzer (benchmarks/fuzz) guards beside the artifact readers. Missing: a live model pass rate (provider and budget).
 
 ## Remaining work
 
 The queue's own gap clause, split into checklist lines. Each line is one session's target.
 
-- [ ] the generated-code benchmark report section 9 asks for
+- [ ] the generated-code benchmark report section 9 asks for PART (D4302): the generated-code benchmark report section 9 asks for exists and runs in both suites over the reference corpus
 
 ## Decisions to read first
 
@@ -51,7 +51,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `.jsonl`: `scripts/render_progress.py`×3, `scripts/validate_stream.py`×3, `benchmarks/baseline/rename.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/check_stats_record.py`×1, `scripts/render_card.py`×1
+- `.jsonl`: `scripts/render_progress.py`×3, `scripts/validate_stream.py`×3, `scripts/freeze_llm_protocol.py`×2, `scripts/lang-stats.py`×2†, `benchmarks/baseline/rename.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `lib/e/log/rotate.e`×1, `scripts/check_stats_record.py`×1
 
 ## Verification
 

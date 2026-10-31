@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.95 of 1 |
-| queue position | 37 of 45 (only position 1 is eligible for the next session; see README) |
+| queue position | 22 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | low — rated for a small model; a whole checklist line per session is realistic |
 
 ## Definition of done
@@ -15,14 +15,13 @@ The contract is `docs/tooling.md`, section `## 1. Version and stream envelope` (
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `info --json` (D229): the header, one `info` record -- tool version, the one language profile, the commands the stream reaches (`check`, `info`, `parse`, `tokens`), the host target, both build targets, the one CPU level the emitter honours -- every collection sorted by bytes, and a result; tests/conformance/tools pins it per host. `commands` names every section 1 command the stream reaches -- build, check, dis, fmt, index, info, parse, run, test, tokens -- sorted by UTF-8 bytes (D259); it had stopped at the four of D229. `--language-version MAJOR.MINOR` on any command selects the one advertised profile, 0.1, and is taken off the arguments; another version is E-CLI-9999 before any source is read, as a stream whose header names the command (D283, tests/conformance/tools/info_version)
+> `info --json` (D229): the header, one `info` record -- tool version, the one language profile, the commands the stream reaches (`check`, `info`, `parse`, `tokens`), the host target, both build targets, the one CPU level the emitter honours -- every collection sorted by bytes, and a result; tests/conformance/tools pins it per host. `commands` names every section 1 command the stream reaches -- build, check, dis, fmt, index, info, parse, run, test, tokens -- sorted by UTF-8 bytes (D259); it had stopped at the four of D229. `--language-version MAJOR.MINOR` on any command selects the one advertised profile, 0.1, and is taken off the arguments; another version is E-CLI-9999 before any source is read, as a stream whose header names the command (D283, tests/conformance/tools/info_version). `info` now lists `cpu_levels` `x64-v1`..`x64-v3` (the `--cpu` levels of D765) and `features: ["tls"]` with the TLS profile, per the per-host goldens
 
 ## Remaining work
 
 The queue's own gap clause, split into checklist lines. Each line is one session's target.
 
-- [ ] a `features` list beyond empty
-- [ ] the other CPU levels of the spec's table
+- [ ] the spec table's other levels -- `x64-v4`, `aarch64-*`, `x86-*`, `sm_*` -- which the emitter does not produce
 
 ## Decisions to read first
 
@@ -31,12 +30,16 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 - `D229` — `info --json` is the capability query, pinned per host (`docs/decisions.md:4158`)
 - `D259` — `info` names every command the stream reaches (`docs/decisions.md:4925`)
 - `D283` — `--language-version` selects the advertised profile, or refuses before reading (`docs/decisions.md:5588`)
+- `D765` — `--cpu x64-v3`: the packed forms over ymm (`docs/decisions.md:14321`)
 
 ## Code anchors
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `language-version`: `src/main.e`×2‡, `scripts/render_card.py`×1
+- `cpu_levels`: `src/tool.e`×1‡, `tests/conformance/tools/info.x64-linux.expected.jsonl`×1, `tests/conformance/tools/info.x64-windows.expected.jsonl`×1
+- `x64-v1`: `src/main.e`×2‡, `src/tool.e`×2‡, `src/codegen_x64.e`×1‡, `src/nir.e`×1†, `tests/conformance/tools/info.x64-linux.expected.jsonl`×1, `tests/conformance/tools/info.x64-windows.expected.jsonl`×1, `tests/conformance/tools/manifest.x64-linux.expected.jsonl`×1, `tests/conformance/tools/manifest.x64-windows.expected.jsonl`×1
+- `x64-v3`: `benchmarks/gp/results/linux-wsl.json`×3, `src/main.e`×2‡, `src/tool.e`×2‡, `benchmarks/gp/run.py`×1, `scripts/build-docs-pdf.py`×1†, `src/codegen_x64.e`×1‡, `src/emit_x64.e`×1†, `src/lower.e`×1‡
 
 ## Verification
 

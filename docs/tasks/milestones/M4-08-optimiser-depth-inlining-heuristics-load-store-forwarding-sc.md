@@ -8,16 +8,21 @@
 
 ## Definition of done
 
-> Optimiser depth: better inlining heuristics, load/store forwarding, scheduling; cross-`.em` inlining stays under the M2 cap
+> Optimiser depth: better inlining heuristics, load/store forwarding, scheduling; cross-`.em` inlining stays under the M2 cap; a vector register class whose ABI is section 5's `xmm`/`ymm` convention for `Vec`/`Mask` (D786, D1524), measured against GP-09 once that workload exists
 
 **Done when:** every promised M4 target passes the applicable language/tooling corpus
 and bidirectional C ABI fixtures; clean and incremental outputs remain deterministic;
 the native debug path agrees with standard debugger locations on shared fixtures; and
 GP-09/GP-10 have been rerun for every new applicable backend.
 
+## Decisions to read first
+
+- `D786` — `Vec`/`Mask` cross a call by copied storage until there is a vector register class (`docs/decisions.md:14930`)
+
 ## Code anchors
 
-- nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/regalloc.e`, `src/em_link.e`† († over 40 KB, ‡ over 120 KB — read by region)
+- `Mask`: `lib/e/simd.e`×22, `src/check.e`×17‡, `scripts/khronos/glcorearb.h`×12‡, `lib/e/gfx/dwtext.e`×9, `lib/x/khronos/gl.e`×6‡, `scripts/khronos/gl32.h`×6‡, `src/main.e`×5‡, `lib/e/gfx/chart.e`×3‡
+- nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/regalloc.e`†, `src/em_link.e`† († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session
 

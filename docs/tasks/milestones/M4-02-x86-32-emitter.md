@@ -17,7 +17,7 @@ GP-09/GP-10 have been rerun for every new applicable backend.
 
 ## Code anchors
 
-- nearest existing implementation: `src/emit_x64.e`†, `src/codegen_x64.e`‡, `src/regalloc.e`, `src/object_coff.e`, `src/link_pe.e` († over 40 KB, ‡ over 120 KB — read by region)
+- nearest existing implementation: `src/emit_x64.e`†, `src/codegen_x64.e`‡, `src/regalloc.e`†, `src/object_coff.e`, `src/link_pe.e` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session
 

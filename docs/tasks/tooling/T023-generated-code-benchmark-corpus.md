@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | tooling / Tooling |
-| score | 0.50 of 1 |
-| queue position | 45 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.85 of 1 |
+| queue position | 26 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -15,7 +15,7 @@ A committed corpus of generated-code benchmarks (`benchmarks/llm_edit`, spec §1
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> benchmarks/llm_edit
+> benchmarks/llm_edit PART (D4302): benchmarks/llm_gen/report.py scores a candidates directory with parse-file, check-file, fmt --check, build and run against expected output, with repair rate and thresholds; wired into both suites over the 10 references (100/100/100, correct 100%). Missing: a live model's numbers (needs a provider and budget; T027).
 
 ## Remaining work
 

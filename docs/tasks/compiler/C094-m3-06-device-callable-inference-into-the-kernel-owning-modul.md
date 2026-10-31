@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | compiler / Back end |
-| score | 0.00 of 1 |
-| queue position | 23 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.95 of 1 |
+| queue position | 16 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> 
+>  PART (D4201): a second oracle pass flattens every kernel-reached plain function into Builder.device_entries so the kernel module's .em carries the device code; a 3-module chain with a 2-result helper runs on both Vulkan devices in debug and release (gpu_device_edit). Missing: generic and function-pointer helpers, constants read from a third module. PART (D4702): three faults fixed (inlined BranchIf merge block, generic instance body edges, constants read by an inlined body in its edge hash -- a master correctness bug where incremental --release kept an old constant); gpu_device_helpers and release_const_edge pass. Missing: function-pointer helpers.
 
 ## Remaining work
 
