@@ -779,10 +779,15 @@ fn ta_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
         if fin2 > cur { fin2 = cur }
         var k = first
         var n = 0.0f64
+        let same_kind = r.class == js.C_TYPEDARRAY && js.ta_of(r).kind == js.ta_of(o).kind
         while k < fin2 {
-            let v = js.ta_get_index(it, o, usize(k))
-            let ee = js.set_index(it, r, n, v)
-            if ee != ok { ret (js.undefv(), ee) }
+            if same_kind {
+                js.ta_copy_raw(it, r, usize(n), o, usize(k))
+            } else {
+                let v = js.ta_get_index(it, o, usize(k))
+                let ee = js.set_index(it, r, n, v)
+                if ee != ok { ret (js.undefv(), ee) }
+            }
             k += 1.0f64
             n += 1.0f64
         }

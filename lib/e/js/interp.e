@@ -8951,6 +8951,15 @@ fn ta_get_index(it: *Interp, o: *Obj, idx: usize) -> Value {
     ret raw_to_value(it, t.kind, read_unit(b.bytes, t.offset + idx * size, size))
 }
 
+// Copies one element's bytes between two typed arrays of the same element type (keeps NaN payloads).
+fn ta_copy_raw(it: *Interp, dst: *Obj, di: usize, src: *Obj, si: usize) {
+    let t = ta_of(src)
+    let b = buf_of(t.buffer)
+    if si >= ta_length(src) { ret }
+    let size = ta_elem_size(t.kind)
+    ta_set_raw(it, dst, di, read_unit(b.bytes, t.offset + si * size, size))
+}
+
 fn ta_set_raw(it: *Interp, o: *Obj, idx: usize, raw: u64) {
     let t = ta_of(o)
     let b = buf_of(t.buffer)
