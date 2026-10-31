@@ -166,7 +166,7 @@ fn array_from_fn(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     if !js.is_nullish(m) {
         let (out, oe) = array_target(it, this_val, false, 0.0f64)
         if oe != ok { ret (js.undefv(), oe) }
-        let (iter, ie) = js.get_iterator(it, src)
+        let (iter, ie) = js.get_iterator_from(it, src, m)
         if ie != ok { ret (js.undefv(), ie) }
         while true {
             let (v, done, se) = js.iterator_step(it, iter)

@@ -1730,7 +1730,6 @@ fn delete_prop(it: *Interp, o: *Obj, key: Key) -> bool {
     }
     if o.class == C_ARRAY || o.class == C_ARGUMENTS {
         if key.idx >= 0i64 && key.idx < i64(o.elems.len) && !is_hole(it, o.elems.items[usize(key.idx)]) {
-            if o.class == C_ARRAY && o.text.len == 1usize { ret false }
             if o.class == C_ARGUMENTS { arg_unmap(o, key) }
             if usize(key.idx) + 1usize == o.elems.len && o.class != C_ARRAY {
                 o.elems.len -= 1usize
