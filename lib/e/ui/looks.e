@@ -855,3 +855,16 @@ fn run_linux(a: *mem.Arena, s: *const Sheet) -> err {
     }
     ret ok
 }
+
+// A control of `w` x `h` on whole pixels in a `cell_w` x `cell_h` cell: the sheet centres a node, so a box of the other parity lands on a half
+// pixel. The node is held at the top left of a holder of the cell's parity (one more wide or high when the room would leave a half).
+fn pin(a: *mem.Arena, node: widget.Node, w: f32, h: f32, cell_w: f32, cell_h: f32) -> (widget.Node, err) {
+    var hw = w
+    if (u32(cell_w) + u32(hw)) % 2u32 == 1u32 { hw += 1.0 }
+    var hh = h
+    if (u32(cell_h) + u32(hh)) % 2u32 == 1u32 { hh += 1.0 }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, inner_error) }
+    inner[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), control.mem_one_node(a, node))
+    ret (widget.stack(0u64, control.sized_style(hw, hh), inner[0usize..1usize]), ok)
+}

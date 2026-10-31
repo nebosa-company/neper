@@ -54,7 +54,9 @@ type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Fon
 // window that has just opened has its default button focused: v3's About), for the looks sheets. `ring_x`, `ring_y` (looks9) the exact
 // phase at the top left of the ring (`ring_x2`, `ring_y2` at the right and bottom edge, else it grows by 0.00074 per pixel)
 // of the ring of such a button (the native ring drawn at a fractional position); when both are zero `shift_x`, `shift_y` serve.
-type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, circular: bool }
+// `crisp` (Windows light): the ring and focus rectangle of the true 1:1 v3 captures (docs/ui/looks/ref/windows-1to1): a box W - 2 by H - 2,
+// one pixel rails, no sub-pixel phase (every shift above is ignored), the focus dots the face inverted on alternate pixels.
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, circular: bool, crisp: bool }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
 // (D1458) `size`, when above 0, sets the text's size in place of its role's,
@@ -2404,7 +2406,7 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // ------------------------------------------------------- the button family (D818, P1-06)
 
 fn button_options() -> ButtonOptions {
-    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false, ring_x: 0.0, ring_y: 0.0, ring_x2: 0.0, ring_y2: 0.0, circular: false }
+    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false, ring_x: 0.0, ring_y: 0.0, ring_x2: 0.0, ring_y2: 0.0, circular: false, crisp: false }
 }
 
 // The control state of a keyed element under the page's runtime, with what the
@@ -2593,7 +2595,7 @@ fn windows_dots(a: *mem.Arena, color: paint.Color, width: f32, height: f32) -> (
 // with the dotted focus rectangle laid over it while the keyboard has the focus. `ring` below 3 is the
 // pixel-exact native ring (e.ui.winbutton) drawn under everything in the whole box, and the focus rectangle
 // is then v3's: the control rect (the box plus 1 above and left) less 3 on every side.
-fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32, shift_x: f32, shift_y: f32, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32) -> (widget.Node, err) {
+fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32, shift_x: f32, shift_y: f32, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, crisp: bool) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = row
@@ -2625,7 +2627,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     if ringed {
         // a button of a DPI-scaled form draws its focus rectangle with the ring, shifted with it
         var dots_kind = 0u32
-        if focus && (shift_x != 0.0 || shift_y != 0.0) && t.tokens.palette != .Dark {
+        if focus && (shift_x != 0.0 || shift_y != 0.0) && t.tokens.palette != .Dark && !crisp {
             dots_kind = 1u32
             if state.pressed { dots_kind = 2u32 }
         }
@@ -2635,7 +2637,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
             phase_x = ring_x
             phase_y = ring_y
         }
-        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, phase_x, phase_y, ring_x2, ring_y2, dots_kind, t.tokens.palette == .Dark)
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, phase_x, phase_y, ring_x2, ring_y2, dots_kind, t.tokens.palette == .Dark, crisp)
         if face_error != ok { ret (zero, face_error) }
         layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
         n += 1usize
@@ -2643,8 +2645,8 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     layers[n] = centred
     n += 1usize
     if focus {
-        if ringed && ((shift_x == 0.0 && shift_y == 0.0) || t.tokens.palette == .Dark) {
-            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark)
+        if ringed && ((shift_x == 0.0 && shift_y == 0.0) || t.tokens.palette == .Dark || crisp) {
+            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark, crisp, face)
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
             n += 1usize
@@ -2677,6 +2679,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     }
     var look = style.windows_resolve(t.tokens, variant, state)
     look.corners = corners
+    let crisp = options.crisp && t.tokens.palette == .Light
     if !show_label { look.min_width = 29.33 }
     // The native ring (looks3 group a): a whole button, not a split's head, not the plain one.
     var rk: u32 = 9u32
@@ -2699,13 +2702,17 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         look.min_width = 73.0
         if !show_label { look.min_width = 29.0 }
         look.min_height = 22.0
+        if crisp { look.min_height = 21.0 }
         if options.width > 0.0 { look.min_width = options.width - 2.0 }
         if options.height > 0.0 { look.min_height = options.height - 1.0 }
+        if crisp && options.height > 0.0 { look.min_height = options.height - 2.0 }
     }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
     var ink = look.foreground
+    // the 1:1 captures show a disabled caption in #838383 where it is solid (the resampled ones blurred it to #878787)
+    if crisp && state.disabled { ink = style.hex(0x838383u32) }
     if options.loading { ink.alpha = 0.0 }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -2715,6 +2722,9 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     // to its right (the caption's middle 11.5 px right of the face's); the picture is not part of the caption row
     let dark_picture = has_icon && !options.loading && t.tokens.palette == .Dark && t.tokens.profile == .Windows && corners.top_left == 0.0
     var shift_caption = options.shift_x
+    if crisp { shift_caption = 0.0 }
+    // v3 centres a picture and its caption by integer arithmetic: a half pixel of room goes to the left
+    if crisp && has_icon { shift_caption = 1.0 }
     if dark_picture { shift_caption = 23.0 }
     if has_icon && !options.loading && !dark_picture {
         parts[count] = picture
@@ -2807,7 +2817,19 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         row = widget.stack(0u64, style.defaults(), layers[1usize..3usize])
         states = accessibility.STATE_BUSY
     }
-    let (shown_plain, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, shift_caption, options.shift_y, options.ring_x, options.ring_y, options.ring_x2, options.ring_y2)
+    var shift_y_used = options.shift_y
+    var ring_x_used = options.ring_x
+    var ring_y_used = options.ring_y
+    var ring_x2_used = options.ring_x2
+    var ring_y2_used = options.ring_y2
+    if crisp {
+        shift_y_used = 0.0
+        ring_x_used = 0.0
+        ring_y_used = 0.0
+        ring_x2_used = 0.0
+        ring_y2_used = 0.0
+    }
+    let (shown_plain, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, shift_caption, shift_y_used, ring_x_used, ring_y_used, ring_x2_used, ring_y2_used, crisp)
     if shown_error != ok { ret (zero, shown_error) }
     var shown = shown_plain
     if dark_picture {
@@ -2919,7 +2941,7 @@ fn windows_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ac
     look.padding = 3.0
     let (chevron, chevron_error) = icon_square(a, look.foreground, .ChevronDown, 12.0)
     if chevron_error != ok { ret (zero, chevron_error) }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false)
     if shown_error != ok { ret (zero, shown_error) }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }

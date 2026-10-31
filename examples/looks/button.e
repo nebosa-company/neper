@@ -11,8 +11,17 @@ use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
+// The Windows light button is a box of whole pixels (W - 2 by H - 2 of its control rect, e.ui.winbutton): held on whole pixels in the 133 x 40
+// cell. Every other look keeps the node as it was.
+fn on_pixels(a: *mem.Arena, t: *const control.Theme, node: widget.Node, w: f32, h: f32) -> (widget.Node, err) {
+    if t.tokens.profile != .Windows || t.tokens.palette != .Light { ret (node, ok) }
+    let (pinned, pinned_error) = looks.pin(a, node, w, h, 133.0, 40.0)
+    ret (pinned, pinned_error)
+}
+
 fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: widget.Key, caption: str, variant: style.ControlVariant, enabled: bool, wide: bool) -> (widget.Node, err) {
     var options = control.button_options()
+    options.crisp = true
     options.variant = variant
     options.enabled = enabled
     if wide {
@@ -20,7 +29,15 @@ fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key
         options.height = 25.0
     }
     let (node, node_error) = control.button(a, key, t, caption, action, options)
-    ret (node, node_error)
+    if node_error != ok { ret (node, node_error) }
+    var box_w: f32 = 73.0
+    var box_h: f32 = 21.0
+    if wide {
+        box_w = 83.0
+        box_h = 23.0
+    }
+    let (pinned, pinned_error) = on_pixels(a, t, node, box_w, box_h)
+    ret (pinned, pinned_error)
 }
 
 // Twelve cells. The plain button at rest (v3's Cancel, 75 x 23), the default (OK), a caption with a mnemonic
@@ -69,13 +86,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 // (borderless) button. Pictures are drawn glyphs; v3's are bitmaps from its image list.
 fn kind(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, i: usize) -> (widget.Node, looks.Drive, str, err) {
     var options = control.button_options()
+    options.crisp = true
     let key = u64((i + 1usize) * 10usize)
     if i < 5usize {
         options.width = 125.0
         options.height = 25.0
         options.enabled = i != 1usize
         let words = [5]str{ "&New Rule...", "&Delete Rule", "&New Rule...", "&New Rule...", "&New Rule..." }
-        let (node, node_error) = control.button_with_glyph(a, key, t, .Refresh, words[i], action, options)
+        let (glyph_node, glyph_error) = control.button_with_glyph(a, key, t, .Refresh, words[i], action, options)
+        if glyph_error != ok { ret (glyph_node, looks.Drive.None, "", glyph_error) }
+        let (node, node_error) = on_pixels(a, t, glyph_node, 123.0, 23.0)
         var drive: looks.Drive = .None
         if i == 2usize { drive = .Hover }
         if i == 3usize { drive = .Press }
@@ -87,14 +107,23 @@ fn kind(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, i:
         options.width = 30.0
         options.height = 25.0
         options.enabled = i != 7usize
-        let (node, node_error) = control.button_with_glyph(a, key, t, .Refresh, "", action, options)
-        // an even box in an odd cell: a 29 wide holder keeps it on whole pixels
-        var holder = style.defaults()
-        holder.width = style.Length { Px: 29.0 }
-        let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
-        if parts_error != ok { ret (node, looks.Drive.None, "", parts_error) }
-        parts[0usize] = node
-        let held = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, holder, parts[0usize..1usize])
+        let (glyph_node, glyph_error) = control.button_with_glyph(a, key, t, .Refresh, "", action, options)
+        if glyph_error != ok { ret (glyph_node, looks.Drive.None, "", glyph_error) }
+        var held = glyph_node
+        var node_error: err = ok
+        if t.tokens.profile == .Windows && t.tokens.palette == .Light {
+            let (pinned, pinned_error) = on_pixels(a, t, glyph_node, 28.0, 23.0)
+            held = pinned
+            node_error = pinned_error
+        } else {
+            // an even box in an odd cell: a 29 wide holder keeps it on whole pixels
+            var holder = style.defaults()
+            holder.width = style.Length { Px: 29.0 }
+            let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize)
+            if parts_error != ok { ret (glyph_node, looks.Drive.None, "", parts_error) }
+            parts[0usize] = glyph_node
+            held = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, holder, parts[0usize..1usize])
+        }
         var drive: looks.Drive = .None
         if i == 6usize { drive = .Hover }
         let captions = [3]str{ "Icon only", "Hover", "Disabled" }
