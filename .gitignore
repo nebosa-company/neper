@@ -19,4 +19,5 @@ tests/m0/*.exe
 /.venv-docs-pdf/
 /docs/neper.pdf
 .neper/
-.metrics/tmp/
+.metrics
+/tmp/
