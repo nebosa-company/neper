@@ -18170,14 +18170,21 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         var count = 1usize
         if state.focused {
             // looks9: on the chosen row the live list's rectangle is 20 tall in the fill-tinted greys (win_list_dots).
-            let (dots, dots_error) = win_list_dots(a, max_zero(width - 2.0), 20.0)
+            var dot_ground = style.hex(16777215u32)
+            if i == selected && list_focused { dot_ground = style.hex(14281721u32) }
+            let (dots, dots_error) = win_lb_dots(a, paint.rgba(1.0 - dot_ground.red, 1.0 - dot_ground.green, 1.0 - dot_ground.blue, 1.0), 1u32, max_zero(width - 2.0), 19.0)
             if dots_error != ok { ret (zero, dots_error) }
             layers[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, dots))
             count = 2usize
         }
         var row_style = style.defaults()
-        row_style.width = style.Length { Percent: 100.0 }
+        // the chosen row's fill runs to the list's inner right line, the other rows stop short of it
+        var row_w = max_zero(width - 3.0)
+        if i == selected && list_focused { row_w = max_zero(width - 2.0) }
+        row_style.width = style.Length { Px: row_w }
         row_style.height = style.Length { Px: 19.0 }
+        // the rows are white on the list's #F0F0F0 face (it shows below the last one)
+        row_style.background = paint.Brush { Solid: style.hex(16777215u32) }
         if i == selected && list_focused { row_style.background = paint.Brush { Solid: style.hex(14281721u32) } }
         if t.tokens.palette == .Dark && i == selected && list_focused { row_style.background = paint.Brush { Solid: style.hex_raw(0x0078D7u32) } }
         var stack_style = style.defaults()
@@ -18202,12 +18209,14 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         i += 1usize
     }
     var view_style = style.defaults()
-    view_style.width = style.Length { Px: max_zero(width - 3.0) }
+    view_style.width = style.Length { Px: max_zero(width - 2.0) }
     view_style.height = style.Length { Px: f32(rows) * 19.0 }
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
     if view_error != ok { ret (zero, TooLarge) }
-    let (lines, lines_error) = win3_lines(a)
+    var shown_rows = options.len
+    if shown_rows > usize(rows) { shown_rows = usize(rows) }
+    let (lines, lines_error) = win_lb_frame(a, f32(shown_rows) * 19.0)
     if lines_error != ok { ret (zero, lines_error) }
     let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
     if stacked_error != ok { ret (zero, TooLarge) }
@@ -18224,6 +18233,65 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     sem.label = label
     sem.row_count = u32(options.len)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+
+// ---- round 46: the Windows light list box as the 1:1 captures show it ---------------------------------------------------------------
+// v3's list box has a flat sunken edge: a #A0A0A0 line along the top and the left, a #E5E5E5 one inside the right and the foot and a white one
+// outside them (docs/ui/looks/ref/windows-1to1/states/list-box-*): the frame paints over the #F0F0F0 face. The chosen row's fill runs to the inner
+// right line and its XOR focus rectangle, one pixel dots where (x + y + the row's index) is even, is the colour inverse of what it lies on.
+type WinLbDots = struct { ink: paint.Color, parity: u32 }
+
+fn win_lb_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let w = area.width
+    let h = area.height
+    try win3_rect(b, area.x, area.y, w, h, style.hex(15790320u32))
+    try win3_rect(b, area.x, area.y, w - 1.0, 1.0, style.hex(10526880u32))
+    try win3_rect(b, area.x, area.y + 1.0, 1.0, h - 2.0, style.hex(10526880u32))
+    try win3_rect(b, area.x + 1.0, area.y + h - 2.0, w - 2.0, 1.0, style.hex(15066597u32))
+    // the inner right line runs beside the rows only (`shade` is their height); the face shows below them
+    let m = mem.cast[*Win3Lines](ctx)
+    try win3_rect(b, area.x + w - 2.0, area.y + 1.0, 1.0, m.shade, style.hex(15066597u32))
+    try win3_rect(b, area.x + w - 1.0, area.y, 1.0, h, style.hex(16777215u32))
+    ret win3_rect(b, area.x, area.y + h - 1.0, w, 1.0, style.hex(16777215u32))
+}
+
+fn win_lb_frame(a: *mem.Arena, rows_h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win3Lines { shade: rows_h }
+    var none: []const widget.Node = zero
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_lb_frame_paint, state: widget.bytes_of[Win3Lines](&cells[0usize]) } }, style: fill, children: none }, ok)
+}
+
+fn win_lb_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*WinLbDots](ctx)
+    let w = u32(area.width)
+    let h = u32(area.height)
+    var i = 0u32
+    while i < w {
+        if ((i + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y, 1.0, 1.0, m.ink) }
+        if ((i + h - 1u32 + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h - 1u32), 1.0, 1.0, m.ink) }
+        i += 1u32
+    }
+    var j = 1u32
+    while j + 1u32 < h {
+        if ((j + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x, area.y + f32(j), 1.0, 1.0, m.ink) }
+        if ((w - 1u32 + j + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(w - 1u32), area.y + f32(j), 1.0, 1.0, m.ink) }
+        j += 1u32
+    }
+    ret ok
+}
+
+fn win_lb_dots(a: *mem.Arena, ink: paint.Color, parity: u32, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[WinLbDots](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = WinLbDots { ink: ink, parity: parity }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_lb_dots_paint, state: widget.bytes_of[WinLbDots](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
 
 // ---- looks3-e: the Windows dialog font ---------------------------------------------------------
