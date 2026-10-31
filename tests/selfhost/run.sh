@@ -5952,6 +5952,12 @@ ui_layout_primary_written=$($test_build/neper-self emit-executable "$repo/tests/
 chmod +x "$test_build/ui-layout-primary-selfhost"
 ui_layout_primary_output=$("$test_build/ui-layout-primary-selfhost")
 [ "$ui_layout_primary_output" = 'ui layout primary ok' ]
+# A row over its bound shrinks its flexible child first (the browser's address field).
+ui_layout_fill_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_layout_fill/src/main.e" "$repo" x64 linux "$test_build/ui-layout-fill-selfhost")
+[ "$ui_layout_fill_written" = 'executable written' ]
+chmod +x "$test_build/ui-layout-fill-selfhost"
+ui_layout_fill_output=$("$test_build/ui-layout-fill-selfhost")
+[ "$ui_layout_fill_output" = 'ui layout fill ok' ]
 # Layout adapters (D816, widget plan P1-04): centred, padded, spacer, constrained,
 # aspect, fitted and responsive.
 ui_layout_adapters_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_layout_adapters/src/main.e" "$repo" x64 linux "$test_build/ui-layout-adapters-selfhost")

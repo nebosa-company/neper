@@ -6408,6 +6408,12 @@ $uiLayoutPrimaryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $uiLayoutPrimaryWritten -ne 'executable written') { throw 'ui_layout_primary emission failed' }
 $uiLayoutPrimaryOutput = & $uiLayoutPrimaryPath
 if ($LASTEXITCODE -ne 0 -or $uiLayoutPrimaryOutput -ne 'ui layout primary ok') { throw "the primary layouts answered wrongly: exit $LASTEXITCODE" }
+# A row over its bound shrinks its flexible child first (the browser's address field).
+$uiLayoutFillPath = Join-Path $testBuild 'ui-layout-fill-selfhost.exe'
+$uiLayoutFillWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_layout_fill\src\main.e') $repo 'x64' 'windows' $uiLayoutFillPath
+if ($LASTEXITCODE -ne 0 -or $uiLayoutFillWritten -ne 'executable written') { throw 'ui_layout_fill emission failed' }
+$uiLayoutFillOutput = & $uiLayoutFillPath
+if ($LASTEXITCODE -ne 0 -or $uiLayoutFillOutput -ne 'ui layout fill ok') { throw "the filling row answered wrongly: exit $LASTEXITCODE" }
 # Layout adapters (D816, widget plan P1-04): centred, padded, spacer, constrained,
 # aspect, fitted and responsive.
 $uiLayoutAdaptersPath = Join-Path $testBuild 'ui-layout-adapters-selfhost.exe'
