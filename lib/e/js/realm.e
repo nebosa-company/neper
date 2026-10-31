@@ -795,16 +795,16 @@ fn dynamic_function(it: *js.Interp, args: []const js.Value, kind: u8) -> (js.Val
         if be != ok { ret (js.undefv(), be) }
         body = b
     }
-    var prefix = "(function anonymous("
+    var prefix = "(function("
     var fallback = it.protos.function
     if kind == 1u8 {
-        prefix = "(function* anonymous("
+        prefix = "(function*("
         fallback = it.protos.gen_function
     } else if kind == 2u8 {
-        prefix = "(async function anonymous("
+        prefix = "(async function("
         fallback = it.protos.async_function
     } else if kind == 3u8 {
-        prefix = "(async function* anonymous("
+        prefix = "(async function*("
         fallback = it.protos.async_gen_function
     }
     // The parameters and the body must each be well formed on their own, not only joined.
@@ -820,6 +820,12 @@ fn dynamic_function(it: *js.Interp, args: []const js.Value, kind: u8) -> (js.Val
     // The code is compiled first; only then is the prototype taken from new.target.
     let (v, e) = js.eval_source(it, src)
     if e != ok { ret (js.undefv(), e) }
+    // The function has no binding for its own name; it only prints and is named "anonymous".
+    if js.is_object(v) {
+        let fo0 = js.as_object(v)
+        fo0.text = js.str_concat(it, js.str_concat(it, js.str_concat(it, js.str_concat(it, js.str_concat(it, prefix[1usize..prefix.len - 1usize], " anonymous("), params), "\n) {\n"), body), "\n}")
+        let ne = js.define_data(it, fo0, js.key_of("name"), js.str_value("anonymous"), js.P_CONFIGURABLE)
+    }
     var proto = fallback
     var custom = false
     if it.has_new_target {
